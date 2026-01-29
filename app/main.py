@@ -4,6 +4,8 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from app.config import settings
 from app.routes import join, member, admin
+from fastapi import Request
+from fastapi.responses import HTMLResponse
 import os
 from contextlib import asynccontextmanager
 
@@ -28,6 +30,6 @@ app.include_router(join.router)
 app.include_router(member.router)
 app.include_router(admin.router)
 
-@app.get("/")
-def read_root():
-    return {"message": "Welcome to the Association Member Portal"}
+@app.get("/", response_class=HTMLResponse)
+def read_root(request: Request):
+    return templates.TemplateResponse("home.html", {"request": request})

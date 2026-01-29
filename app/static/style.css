@@ -24,6 +24,8 @@ header {
     padding-top: 30px;
     min-height: 70px;
     border-bottom: #77aaff 3px solid;
+    position: relative;
+    z-index: 100;
 }
 
 header a {
@@ -74,7 +76,7 @@ header nav {
     background: #555;
 }
 
-input[type="text"], input[type="email"], input[type="tel"] {
+input[type="text"], input[type="email"], input[type="tel"], input[type="number"], input[type="password"] {
     width: 100%;
     padding: 10px;
     margin: 8px 0;
@@ -109,4 +111,76 @@ th, td {
 
 th {
     background-color: #f2f2f2;
+}
+
+/* Hero Section Styles */
+.hero {
+    height: 100vh;
+    width: 100%;
+    background-image: url('https://images.unsplash.com/photo-1497366216548-37526070297c?ixlib=rb-1.2.1&auto=format&fit=crop&w=1920&q=80');
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: -103px; /* Offset header height to be full screen behind transparent header if wanted, but here header is solid. Let's keep it separate or adjust. Request said "Full viewport height". Let's assume under header or inclusive. I will reset margin to 0 for body and hero takes full height below header, or absolute. Given existing header is solid block, let's make hero 100vh minus header or just 100vh and scroll. I'll make it 100vh. */
+    margin-top: 0;
+}
+
+.hero-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 1;
+}
+
+.hero-content {
+    position: relative;
+    z-index: 2;
+    color: #fff;
+    text-align: center;
+    padding: 20px;
+    max-width: 1200px;
+}
+
+.hero h1 {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: clamp(4rem, 10vw, 8rem);
+    font-weight: 800;
+    letter-spacing: 5px;
+    margin: 0 0 20px 0;
+    line-height: 1.1;
+    text-transform: uppercase;
+}
+
+.hero .subtitle {
+    font-family: Georgia, 'Times New Roman', Times, serif;
+    font-size: clamp(1.2rem, 2vw, 1.8rem);
+    font-weight: 300;
+    margin: 0 auto 40px auto;
+    max-width: 800px;
+    line-height: 1.4;
+    opacity: 0.9;
+}
+
+.hero-cta {
+    background-color: #fff;
+    color: #000;
+    font-weight: bold;
+    text-transform: uppercase;
+    padding: 15px 40px;
+    font-size: 1rem;
+    border-radius: 2px;
+    letter-spacing: 1px;
+    transition: all 0.3s ease;
+}
+
+.hero-cta:hover {
+    background-color: #ddd;
+    color: #000;
+    transform: translateY(-2px);
 }
