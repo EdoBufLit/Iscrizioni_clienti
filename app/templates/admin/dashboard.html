@@ -20,10 +20,8 @@
 
     <h3>Add Card Batch</h3>
     <form action="/admin/inventory" method="post" style="border: 1px solid #ddd; padding: 10px;">
-        <label>Start No:</label>
-        <input type="number" name="start_no" required>
-        <label>End No:</label>
-        <input type="number" name="end_no" required>
+        <label>Quantity:</label>
+        <input type="number" name="quantity" min="1" required>
         <button type="submit">Add Batch</button>
     </form>
 

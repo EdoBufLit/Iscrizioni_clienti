@@ -108,12 +108,11 @@ async def join_continue_submit(
         if assigned:
             member.status = MemberStatus.ACTIVE
             member.joined_at = datetime.utcnow()
+            # Mark token used only if successful? Or generally?
+            # If card exhausted, we might want to let them login to see "Waiting for card".
+            # So enable login by consuming token.
         else:
-            # Keep in PENDING_DOCS or move to PENDING_VERIFICATION to indicate docs are there but no card?
-            # Or just log it. Status is already PENDING_DOCS (from join_submit).
-            # Let's assume PENDING_DOCS implies "Waiting for something (docs or card)".
-            # Or better, PENDING_VERIFICATION to differentiate from "No docs uploaded yet".
-            member.status = MemberStatus.PENDING_VERIFICATION
+            member.status = MemberStatus.PENDING_CARDS
             logger.warning(f"Member {member.id} completed upload but no cards available.")
 
         # Mark token used
@@ -128,6 +127,9 @@ async def join_continue_submit(
             subject=f"Welcome to {org.name}",
             body=f"Your registration is complete. You can now login at {settings.BASE_URL}/member/login"
         )
+
+        if not assigned:
+             return HTMLResponse(content="<h1>Registration Complete</h1><p>Your documents have been uploaded. We are currently waiting for new membership cards. You will be assigned one automatically when available.</p>")
 
     except HTTPException as e:
         # Cleanup uploads

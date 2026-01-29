@@ -17,6 +17,7 @@
                 <th>Email</th>
                 <th>Status</th>
                 <th>Card No</th>
+                <th>Docs</th>
                 <th>Action</th>
             </tr>
         </thead>
@@ -28,6 +29,11 @@
                 <td>{{ m.email }}</td>
                 <td>{{ m.status }}</td>
                 <td>{{ m.card_no or '-' }}</td>
+                <td>
+                    {% for doc in m.documents %}
+                    <span title="{{ doc.doc_type }}: {{ doc.status }}" style="color: {% if doc.status == 'approved' %}green{% elif doc.status == 'rejected' %}red{% else %}gray{% endif %};">●</span>
+                    {% endfor %}
+                </td>
                 <td><a href="/admin/members/{{ m.id }}">Manage</a></td>
             </tr>
             {% endfor %}

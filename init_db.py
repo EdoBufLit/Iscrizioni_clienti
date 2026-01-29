@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from app.db import SessionLocal, engine
 from app.models import Organization, AdminUser, AdminRole, CardBatch
+from app.security import get_password_hash
 
 def init_db():
     db = SessionLocal()
@@ -28,7 +29,7 @@ def init_db():
         print("Creating admin user...")
         admin = AdminUser(
             email="admin@example.com",
-            password_hash="admin", # Plain for MVP
+            password_hash=get_password_hash("admin"),
             role=AdminRole.ORG_ADMIN,
             org_id=org.id
         )
@@ -36,7 +37,12 @@ def init_db():
         db.commit()
         print("Admin user created (admin@example.com / admin).")
     else:
-        print("Admin user already exists.")
+        # Check if we need to upgrade to hash (if it was plain "admin")
+        # For simplicity in this task, if it exists, we assume it's good or we just update it.
+        # Let's update it to ensure it's hashed for this task run.
+        print("Updating admin user password...")
+        admin.password_hash = get_password_hash("admin")
+        db.commit()
 
     # Check if batch exists
     batch = db.query(CardBatch).filter(CardBatch.org_id == org.id).first()

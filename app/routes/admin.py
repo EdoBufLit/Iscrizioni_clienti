@@ -7,6 +7,7 @@ from app.db import get_db
 from app.models import AdminUser, Member, CardBatch, MemberDocument, DocStatus, MemberStatus, Organization
 from app.services.card import assign_next_card
 from app.config import settings
+from app.security import verify_password
 from datetime import datetime
 import os
 
@@ -25,13 +26,8 @@ def admin_login_page(request: Request):
 
 @router.post("/login", response_class=HTMLResponse)
 def admin_login_submit(request: Request, email: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
-    # Simple auth for MVP (plain password or simple hash comparison)
-    # In real app, verify hash. Assuming seeded admin has plain "admin" or similar for now.
-    # Let's assume seeded admin uses simple string comparison or we implement proper hashing.
-    # For this task, "minimal", let's match what we seed.
-
     admin = db.query(AdminUser).filter(AdminUser.email == email).first()
-    if not admin or admin.password_hash != password: # Using plain match for MVP simplicity as per "minimal"
+    if not admin or not verify_password(password, admin.password_hash):
         return templates.TemplateResponse("admin/login.html", {"request": request, "error": "Invalid credentials"})
 
     request.session["admin_id"] = admin.id
@@ -75,10 +71,18 @@ def admin_dashboard(request: Request, db: Session = Depends(get_db)):
     })
 
 @router.post("/inventory")
-def add_batch(request: Request, start_no: int = Form(...), end_no: int = Form(...), db: Session = Depends(get_db)):
+def add_batch(request: Request, quantity: int = Form(...), db: Session = Depends(get_db)):
     admin = get_current_admin(request, db)
     if not admin:
         return RedirectResponse(url="/admin/login")
+
+    if quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be positive")
+
+    # Compute start_no based on max end_no
+    last_end = db.query(func.max(CardBatch.end_no)).filter(CardBatch.org_id == admin.org_id).scalar() or 0
+    start_no = last_end + 1
+    end_no = last_end + quantity
 
     batch = CardBatch(
         org_id=admin.org_id,

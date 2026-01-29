@@ -6,7 +6,8 @@ from .db import Base
 
 class MemberStatus(str, enum.Enum):
     PENDING_VERIFICATION = "pending_verification"
-    PENDING_DOCS = "pending_docs" # Added
+    PENDING_DOCS = "pending_docs"
+    PENDING_CARDS = "pending_cards" # Added
     ACTIVE = "active"
 
 class DocStatus(str, enum.Enum):

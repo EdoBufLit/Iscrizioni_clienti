@@ -13,6 +13,7 @@
                 {{ member.status.upper() }}
             </span>
         </p>
+        <p><strong>Card Number:</strong> {{ member.card_no or 'Waiting for card assignment' }}</p>
         <p><strong>Joined At:</strong> {{ member.joined_at.strftime('%Y-%m-%d %H:%M:%S') if member.joined_at else 'Pending' }}</p>
         <p><strong>Accepted Statute Version:</strong> {{ member.accepted_statute_version }} ({{ member.accepted_statute_at.strftime('%Y-%m-%d') }})</p>
         <p><strong>Accepted Privacy Version:</strong> {{ member.accepted_privacy_version }} ({{ member.accepted_privacy_at.strftime('%Y-%m-%d') }})</p>
