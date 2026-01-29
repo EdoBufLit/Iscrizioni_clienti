@@ -13,4 +13,6 @@ class Settings:
 
     TOKEN_EXPIRE_MINUTES: int = 15
 
+    BASE_URL: str = "http://localhost:8000"
+
 settings = Settings()

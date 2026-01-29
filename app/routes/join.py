@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from app.db import get_db
 from app.models import Organization, Member, MemberStatus, Token, TokenType, MemberDocument
-from app.utils import generate_token, send_email_simulation, save_upload_file
+from app.utils import generate_token, send_email_simulation, save_upload_file, hash_token
 from app.config import settings
 import logging
 import os
@@ -20,8 +20,9 @@ templates = Jinja2Templates(directory="app/templates")
 @router.get("/join/continue", response_class=HTMLResponse)
 def join_continue_page(request: Request, token: str, db: Session = Depends(get_db)):
     # Validate token
+    token_hash = hash_token(token)
     token_entry = db.query(Token).filter(
-        Token.token_hash == token,
+        Token.token_hash == token_hash,
         Token.purpose == TokenType.SIGNUP_CONTINUE,
         Token.expires_at > datetime.utcnow()
     ).first()
@@ -51,8 +52,9 @@ async def join_continue_submit(
     db: Session = Depends(get_db)
 ):
     # Validate token again
+    token_hash = hash_token(token)
     token_entry = db.query(Token).filter(
-        Token.token_hash == token,
+        Token.token_hash == token_hash,
         Token.purpose == TokenType.SIGNUP_CONTINUE,
         Token.expires_at > datetime.utcnow()
     ).first()
@@ -110,19 +112,6 @@ async def join_continue_submit(
         # Remove the previous one too? Not strictly required for MVP but good practice.
         return HTMLResponse(content="Fiscal Code Document too large (Max 5MB).", status_code=400)
 
-    doc_id = MemberDocument(
-        member_id=member.id,
-        doc_type="identity",
-        rel_path=rel_path_id,
-        original_filename=id_document.filename,
-        mime_type=id_document.content_type,
-        size_bytes=size_id,
-        sha256=sha_id
-    )
-    db.add(doc_id)
-
-    # Process Fiscal Code Document
-    rel_path_fc, size_fc, sha_fc = await save_upload_file(fiscal_code_document)
     doc_fc = MemberDocument(
         member_id=member.id,
         doc_type="fiscal_code",
@@ -147,7 +136,7 @@ async def join_continue_submit(
     send_email_simulation(
         to_email=member.email,
         subject=f"Welcome to {member.organization.name}",
-        body=f"Your registration is complete. You can now login at http://localhost:8000/member/login"
+        body=f"Your registration is complete. You can now login at {settings.BASE_URL}/member/login"
     )
 
     return HTMLResponse(content="<h1>Registration Complete!</h1><p>You can now <a href='/member/login'>login</a>.</p>")
@@ -208,14 +197,14 @@ def join_submit(
     token = Token(
         member_id=member.id,
         purpose=TokenType.SIGNUP_CONTINUE,
-        token_hash=token_str, # Storing plain token for now
+        token_hash=hash_token(token_str),
         expires_at=datetime.utcnow() + timedelta(minutes=settings.TOKEN_EXPIRE_MINUTES)
     )
     db.add(token)
     db.commit()
 
     # Send Email
-    link = f"http://localhost:8000/join/continue?token={token_str}"
+    link = f"{settings.BASE_URL}/join/continue?token={token_str}"
     send_email_simulation(
         to_email=email,
         subject=f"Complete your registration for {org.name}",

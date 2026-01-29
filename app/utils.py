@@ -11,6 +11,10 @@ def generate_token() -> str:
     """Generates a secure random token."""
     return secrets.token_urlsafe(32)
 
+def hash_token(token: str) -> str:
+    """Hashes a token using SHA256 and the secret key."""
+    return hashlib.sha256(f"{token}{settings.SECRET_KEY}".encode()).hexdigest()
+
 def compute_sha256(file_path: str) -> str:
     """Computes SHA256 hash of a file."""
     sha256_hash = hashlib.sha256()

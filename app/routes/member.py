@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from app.db import get_db
 from app.models import Member, Token, TokenType, MemberDocument, MemberStatus
-from app.utils import generate_token, send_email_simulation
+from app.utils import generate_token, send_email_simulation, hash_token
 from app.config import settings
 import os
 
@@ -32,13 +32,13 @@ def login_submit(request: Request, email: str = Form(...), db: Session = Depends
         token = Token(
             member_id=member.id,
             purpose=TokenType.LOGIN_MAGIC_LINK,
-            token_hash=token_str,
+            token_hash=hash_token(token_str),
             expires_at=datetime.utcnow() + timedelta(minutes=settings.TOKEN_EXPIRE_MINUTES)
         )
         db.add(token)
         db.commit()
 
-        link = f"http://localhost:8000/member/auth?token={token_str}"
+        link = f"{settings.BASE_URL}/member/auth?token={token_str}"
         send_email_simulation(
             to_email=email,
             subject="Login to Member Portal",
@@ -50,8 +50,9 @@ def login_submit(request: Request, email: str = Form(...), db: Session = Depends
 
 @router.get("/member/auth")
 def auth_magic_link(request: Request, token: str, db: Session = Depends(get_db)):
+    token_hash = hash_token(token)
     token_entry = db.query(Token).filter(
-        Token.token_hash == token,
+        Token.token_hash == token_hash,
         Token.purpose == TokenType.LOGIN_MAGIC_LINK,
         Token.expires_at > datetime.utcnow()
     ).first()
@@ -61,6 +62,10 @@ def auth_magic_link(request: Request, token: str, db: Session = Depends(get_db))
 
     if token_entry.used_at:
         return HTMLResponse(content="Link already used", status_code=400)
+
+    member = db.query(Member).filter(Member.id == token_entry.member_id).first()
+    if not member or member.status != MemberStatus.ACTIVE:
+        return HTMLResponse(content="Account not active or does not exist", status_code=400)
 
     # Mark token used
     token_entry.used_at = datetime.utcnow()
@@ -75,6 +80,8 @@ def auth_magic_link(request: Request, token: str, db: Session = Depends(get_db))
 def member_portal(request: Request, db: Session = Depends(get_db)):
     member = get_current_member(request, db)
     if not member:
+        if request.session.get("member_id"):
+            request.session.clear()
         return RedirectResponse(url="/member/login")
 
     documents = db.query(MemberDocument).filter(MemberDocument.member_id == member.id).all()
