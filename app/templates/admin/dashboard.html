@@ -1,0 +1,36 @@
+{% extends "admin/base.html" %}
+
+{% block admin_content %}
+    <h2>Dashboard - {{ admin.email }}</h2>
+
+    <div style="display: flex; gap: 20px;">
+        <div class="card" style="flex: 1; padding: 15px; background: #eee;">
+            <h3>Members</h3>
+            <p>Total: {{ total_members }}</p>
+            <p>Active: {{ active_members }}</p>
+            <p>Pending: {{ pending_members }}</p>
+        </div>
+        <div class="card" style="flex: 1; padding: 15px; background: #eee;">
+            <h3>Inventory</h3>
+            <p>Total Cards: {{ total_cards }}</p>
+            <p>Used: {{ used_cards }}</p>
+            <p>Remaining: {{ remaining_cards }}</p>
+        </div>
+    </div>
+
+    <h3>Add Card Batch</h3>
+    <form action="/admin/inventory" method="post" style="border: 1px solid #ddd; padding: 10px;">
+        <label>Start No:</label>
+        <input type="number" name="start_no" required>
+        <label>End No:</label>
+        <input type="number" name="end_no" required>
+        <button type="submit">Add Batch</button>
+    </form>
+
+    <h3>Batches</h3>
+    <ul>
+    {% for batch in batches %}
+        <li>Batch #{{ batch.id }}: {{ batch.start_no }} - {{ batch.end_no }} (Next: {{ batch.next_no }})</li>
+    {% endfor %}
+    </ul>
+{% endblock %}

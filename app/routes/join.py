@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from app.db import get_db
 from app.models import Organization, Member, MemberStatus, Token, TokenType, MemberDocument
 from app.utils import generate_token, send_email_simulation, save_upload_file, hash_token
+from app.services.card import assign_next_card
 from app.config import settings
 import logging
 import os
@@ -95,9 +96,25 @@ async def join_continue_submit(
         )
         db.add(doc_fc)
 
-        # Update Member
-        member.status = MemberStatus.ACTIVE
-        member.joined_at = datetime.utcnow()
+        # Assign Card
+        # Try to assign a card. If successful, auto-activate.
+        # If no cards, remain PENDING_DOCS (or VERIFICATION) and let admin handle it?
+        # Requirement: "If all batches exhausted, show 'No cards available' and keep member in pending state."
+        # We also need to verify docs potentially? Prompt says "on successful signup completion (or on doc approval)".
+        # We'll try to assign card.
+
+        assigned = assign_next_card(db, member.id, member.org_id)
+
+        if assigned:
+            member.status = MemberStatus.ACTIVE
+            member.joined_at = datetime.utcnow()
+        else:
+            # Keep in PENDING_DOCS or move to PENDING_VERIFICATION to indicate docs are there but no card?
+            # Or just log it. Status is already PENDING_DOCS (from join_submit).
+            # Let's assume PENDING_DOCS implies "Waiting for something (docs or card)".
+            # Or better, PENDING_VERIFICATION to differentiate from "No docs uploaded yet".
+            member.status = MemberStatus.PENDING_VERIFICATION
+            logger.warning(f"Member {member.id} completed upload but no cards available.")
 
         # Mark token used
         token_entry.used_at = datetime.utcnow()
@@ -183,7 +200,7 @@ def join_submit(
         email=email,
         phone=phone,
         fiscal_code=fiscal_code,
-        status=MemberStatus.PENDING_VERIFICATION,
+        status=MemberStatus.PENDING_DOCS,
         accepted_statute_at=datetime.utcnow(),
         accepted_statute_version=org.statute_version,
         accepted_privacy_at=datetime.utcnow(),

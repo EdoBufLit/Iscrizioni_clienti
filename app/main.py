@@ -3,7 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from app.config import settings
-from app.routes import join, member
+from app.routes import join, member, admin
 import os
 from contextlib import asynccontextmanager
 
@@ -26,6 +26,7 @@ templates = Jinja2Templates(directory="app/templates")
 
 app.include_router(join.router)
 app.include_router(member.router)
+app.include_router(admin.router)
 
 @app.get("/")
 def read_root():

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Base{% endblock %}
+
+{% block content %}
+    <div style="margin-bottom: 20px;">
+        <a href="/admin/dashboard">Dashboard</a> |
+        <a href="/admin/members">Members</a> |
+        <a href="/admin/logout">Logout</a>
+    </div>
+    <div style="border-top: 1px solid #ccc; padding-top: 20px;">
+        {% block admin_content %}{% endblock %}
+    </div>
+{% endblock %}

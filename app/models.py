@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Enum
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Enum, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -6,7 +6,17 @@ from .db import Base
 
 class MemberStatus(str, enum.Enum):
     PENDING_VERIFICATION = "pending_verification"
+    PENDING_DOCS = "pending_docs" # Added
     ACTIVE = "active"
+
+class DocStatus(str, enum.Enum):
+    UPLOADED = "uploaded"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+class AdminRole(str, enum.Enum):
+    SUPER_ADMIN = "super_admin"
+    ORG_ADMIN = "org_admin"
 
 class TokenType(str, enum.Enum):
     SIGNUP_CONTINUE = "signup_continue"
@@ -23,6 +33,29 @@ class Organization(Base):
     privacy_version = Column(String)
 
     members = relationship("Member", back_populates="organization")
+    batches = relationship("CardBatch", back_populates="organization")
+
+class AdminUser(Base):
+    __tablename__ = "admin_users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True)
+    password_hash = Column(String) # For MVP, simple hash or plain (if not specified, assuming secure)
+    role = Column(Enum(AdminRole), default=AdminRole.ORG_ADMIN)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=True) # Null for super_admin
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class CardBatch(Base):
+    __tablename__ = "card_batches"
+
+    id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"))
+    start_no = Column(Integer)
+    end_no = Column(Integer)
+    next_no = Column(Integer) # Tracks the next available number
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    organization = relationship("Organization", back_populates="batches")
 
 class Member(Base):
     __tablename__ = "members"
@@ -34,7 +67,10 @@ class Member(Base):
     email = Column(String, index=True)
     phone = Column(String)
     fiscal_code = Column(String)
-    status = Column(Enum(MemberStatus), default=MemberStatus.PENDING_VERIFICATION)
+    status = Column(Enum(MemberStatus), default=MemberStatus.PENDING_DOCS) # Default changed to PENDING_DOCS
+
+    card_no = Column(Integer, nullable=True)
+    batch_id = Column(Integer, ForeignKey("card_batches.id"), nullable=True)
 
     joined_at = Column(DateTime, nullable=True)
 
@@ -50,6 +86,11 @@ class Member(Base):
     organization = relationship("Organization", back_populates="members")
     documents = relationship("MemberDocument", back_populates="member")
     tokens = relationship("Token", back_populates="member")
+    batch = relationship("CardBatch")
+
+    __table_args__ = (
+        UniqueConstraint('org_id', 'card_no', name='uix_org_card'),
+    )
 
 class MemberDocument(Base):
     __tablename__ = "member_documents"
@@ -64,6 +105,12 @@ class MemberDocument(Base):
     sha256 = Column(String)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
 
+    # Using String for SQLite compatibility to avoid Enum lookup issues with manual migration
+    status = Column(String, default=DocStatus.UPLOADED.value)
+    review_notes = Column(String, nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    reviewed_by = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
+
     member = relationship("Member", back_populates="documents")
 
 class Token(Base):
@@ -72,7 +119,7 @@ class Token(Base):
     id = Column(Integer, primary_key=True, index=True)
     member_id = Column(Integer, ForeignKey("members.id"))
     purpose = Column(Enum(TokenType))
-    token_hash = Column(String, index=True) # We store the hash of the token for security, or just the token if the requirement says "token_hash" but usually we email a token and verify it. The prompt says "token_hash" in Data model. I will store the actual token here for simplicity unless required otherwise, but actually "token_hash" implies we should hash it. However, for "magic link login (token valid 15 min)", usually we generate a random token, send it, and store it (or its hash). I'll stick to storing the token string directly in `token_hash` column for this MVP to avoid overcomplicating retrieval, or better yet, I'll name it `token` to be clear, but the prompt explicitly asked for `token_hash`. I will use `token_hash` column name but store the plain token for now or implement hashing if I have time. Actually, let's just store the token string in `token_hash` to match the schema name but treat it as the token itself.
+    token_hash = Column(String, index=True)
     expires_at = Column(DateTime)
     used_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
