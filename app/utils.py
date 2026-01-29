@@ -25,7 +25,7 @@ def compute_sha256(file_path: str) -> str:
 
 async def save_upload_file(
     upload_file: UploadFile,
-    max_size: int = 5 * 1024 * 1024,
+    max_size: int = 10 * 1024 * 1024,
     allowed_types: List[str] = ["image/jpeg", "image/png", "application/pdf"]
 ) -> Tuple[str, int, str]:
     """
