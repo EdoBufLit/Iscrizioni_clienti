@@ -6,19 +6,25 @@
     <h2>Complete Your Registration</h2>
     <p>Welcome, {{ member.first_name }} {{ member.last_name }}. To activate your membership, please upload the required documents.</p>
 
+    {% if error %}
+    <div style="background-color: #ffcccc; color: #cc0000; padding: 10px; margin-bottom: 20px; border: 1px solid #cc0000; border-radius: 4px;">
+        {{ error }}
+    </div>
+    {% endif %}
+
     <form action="/join/continue" method="post" enctype="multipart/form-data">
         <input type="hidden" name="token" value="{{ token }}">
 
         <div class="form-group">
             <label for="id_document">ID Document (Front/Back or Single PDF)</label><br>
-            <input type="file" id="id_document" name="id_document" required>
+            <input type="file" id="id_document" name="id_document" required accept=".pdf,.jpg,.jpeg,.png">
         </div>
 
         <div class="form-group">
             <label for="fiscal_code_document">Fiscal Code / Tessera Sanitaria</label><br>
-            <input type="file" id="fiscal_code_document" name="fiscal_code_document" required>
+            <input type="file" id="fiscal_code_document" name="fiscal_code_document" required accept=".pdf,.jpg,.jpeg,.png">
         </div>
 
-        <button type="submit" class="button">Complete Registration</button>
+        <button type="submit" class="button">Complete registration</button>
     </form>
 {% endblock %}

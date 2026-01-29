@@ -6,12 +6,24 @@
     <h2>Member Login</h2>
     <p>Enter your email address to receive a magic login link.</p>
 
+    {% if message %}
+    <div style="background-color: #ccffcc; color: #006600; padding: 10px; margin-bottom: 20px; border: 1px solid #006600; border-radius: 4px;">
+        {{ message }}
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div style="background-color: #ffcccc; color: #cc0000; padding: 10px; margin-bottom: 20px; border: 1px solid #cc0000; border-radius: 4px;">
+        {{ error }}
+    </div>
+    {% endif %}
+
     <form action="/member/login" method="post">
         <div class="form-group">
             <label for="email">Email</label>
             <input type="email" id="email" name="email" required>
         </div>
 
-        <button type="submit" class="button">Send Magic Link</button>
+        <button type="submit" class="button">Send magic link</button>
     </form>
 {% endblock %}

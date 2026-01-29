@@ -4,8 +4,9 @@
 
 {% block content %}
     <h2>Member Portal</h2>
-    <div class="card">
+    <div class="card" style="background: #fff; padding: 20px; border-radius: 5px; box-shadow: 0 0 5px rgba(0,0,0,0.1); margin-bottom: 20px;">
         <h3>Membership Details</h3>
+        <p><strong>Member Name:</strong> {{ member.first_name }} {{ member.last_name }}</p>
         <p><strong>Organization:</strong> {{ organization.name }}</p>
         <p><strong>Status:</strong>
             <span style="color: {% if member.status == 'active' %}green{% else %}orange{% endif %}; font-weight: bold;">
@@ -13,7 +14,6 @@
             </span>
         </p>
         <p><strong>Joined At:</strong> {{ member.joined_at.strftime('%Y-%m-%d %H:%M:%S') if member.joined_at else 'Pending' }}</p>
-        <p><strong>Fiscal Code:</strong> {{ member.fiscal_code }}</p>
         <p><strong>Accepted Statute Version:</strong> {{ member.accepted_statute_version }} ({{ member.accepted_statute_at.strftime('%Y-%m-%d') }})</p>
         <p><strong>Accepted Privacy Version:</strong> {{ member.accepted_privacy_version }} ({{ member.accepted_privacy_at.strftime('%Y-%m-%d') }})</p>
     </div>

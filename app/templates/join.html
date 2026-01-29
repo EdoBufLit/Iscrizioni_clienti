@@ -6,6 +6,19 @@
     <h2>Join {{ org.name }}</h2>
     <p>Please fill out the form below to become a member.</p>
 
+    {% if error %}
+    <div style="background-color: #ffcccc; color: #cc0000; padding: 10px; margin-bottom: 20px; border: 1px solid #cc0000; border-radius: 4px;">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    <div style="margin-bottom: 20px; padding: 10px; background-color: #eef; border-radius: 4px;">
+        <strong>Statute Version:</strong> {{ org.statute_version }}
+        {% if org.statute_pdf_path %}
+            <br><a href="{{ org.statute_pdf_path }}" target="_blank">Download Statute (PDF)</a>
+        {% endif %}
+    </div>
+
     <form action="/join/{{ org.slug }}" method="post">
         <div class="form-group">
             <label for="first_name">First Name</label>
@@ -24,12 +37,12 @@
 
         <div class="form-group">
             <label for="phone">Phone</label>
-            <input type="tel" id="phone" name="phone" required>
+            <input type="tel" id="phone" name="phone">
         </div>
 
         <div class="form-group">
             <label for="fiscal_code">Fiscal Code</label>
-            <input type="text" id="fiscal_code" name="fiscal_code" required>
+            <input type="text" id="fiscal_code" name="fiscal_code">
         </div>
 
         <div class="form-group">
