@@ -25,7 +25,13 @@ def list_associazioni(request: Request, q: str = None, db: Session = Depends(get
         "q": q
     })
 
-@router.get("/associazioni/{slug}")
-def associazioni_detail(slug: str):
-    # For now, redirect to the join page as the "public profile"
-    return RedirectResponse(url=f"/join/{slug}")
+@router.get("/associazioni/{slug}", response_class=HTMLResponse)
+def associazioni_detail(request: Request, slug: str, db: Session = Depends(get_db)):
+    org = db.query(Organization).filter(Organization.slug == slug).first()
+    if not org:
+        return HTMLResponse("Organization not found", status_code=404)
+
+    return templates.TemplateResponse("associazione_detail.html", {
+        "request": request,
+        "org": org
+    })
