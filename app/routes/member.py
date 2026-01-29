@@ -4,7 +4,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from app.db import get_db
-from app.models import Member, Token, TokenType, MemberDocument, MemberStatus
+from app.models import Member, Token, TokenType, MemberDocument, MemberStatus, Organization
 from app.utils import generate_token, send_email_simulation, hash_token
 from app.config import settings
 import os
@@ -19,12 +19,23 @@ def get_current_member(request: Request, db: Session):
     return db.query(Member).filter(Member.id == member_id).first()
 
 @router.get("/member/login", response_class=HTMLResponse)
-def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request})
+def login_page(request: Request, org: str = None, db: Session = Depends(get_db)):
+    organization = None
+    if org:
+        organization = db.query(Organization).filter(Organization.slug == org).first()
+
+    return templates.TemplateResponse("login.html", {
+        "request": request,
+        "org": organization
+    })
 
 @router.post("/member/login", response_class=HTMLResponse)
-def login_submit(request: Request, email: str = Form(...), db: Session = Depends(get_db)):
+def login_submit(request: Request, email: str = Form(...), org: str = Form(None), db: Session = Depends(get_db)):
     member = db.query(Member).filter(Member.email == email).first()
+
+    organization = None
+    if org:
+        organization = db.query(Organization).filter(Organization.slug == org).first()
 
     if member:
         # Generate Magic Link
@@ -46,7 +57,8 @@ def login_submit(request: Request, email: str = Form(...), db: Session = Depends
         )
 
     # Always return same message for security
-    return HTMLResponse(content="<h1>Check your email</h1><p>If an account exists, we sent a magic link.</p>")
+    org_msg = f" di {organization.name}" if organization else ""
+    return HTMLResponse(content=f"<h1>Check your email</h1><p>If an account exists, we sent a magic link to access the member portal{org_msg}.</p>")
 
 @router.get("/member/auth")
 def auth_magic_link(request: Request, token: str, db: Session = Depends(get_db)):
