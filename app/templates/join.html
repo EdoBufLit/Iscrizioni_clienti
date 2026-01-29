@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Join {{ org.name }}{% endblock %}
+
+{% block content %}
+    <h2>Join {{ org.name }}</h2>
+    <p>Please fill out the form below to become a member.</p>
+
+    <form action="/join/{{ org.slug }}" method="post">
+        <div class="form-group">
+            <label for="first_name">First Name</label>
+            <input type="text" id="first_name" name="first_name" required>
+        </div>
+
+        <div class="form-group">
+            <label for="last_name">Last Name</label>
+            <input type="text" id="last_name" name="last_name" required>
+        </div>
+
+        <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" required>
+        </div>
+
+        <div class="form-group">
+            <label for="phone">Phone</label>
+            <input type="tel" id="phone" name="phone" required>
+        </div>
+
+        <div class="form-group">
+            <label for="fiscal_code">Fiscal Code</label>
+            <input type="text" id="fiscal_code" name="fiscal_code" required>
+        </div>
+
+        <div class="form-group">
+            <input type="checkbox" id="accept_statute" name="accept_statute" value="true" required>
+            <label for="accept_statute">I accept the Statute (Version {{ org.statute_version }})</label>
+        </div>
+
+        <div class="form-group">
+            <input type="checkbox" id="accept_privacy" name="accept_privacy" value="true" required>
+            <label for="accept_privacy">I accept the Privacy Policy (Version {{ org.privacy_version }})</label>
+        </div>
+
+        <button type="submit" class="button">Continue</button>
+    </form>
+{% endblock %}

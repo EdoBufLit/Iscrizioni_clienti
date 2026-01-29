@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.env
+data/uploads/
+data/app.db
+*.log
+verification/
+dummy_*.txt
+server.pid
