@@ -117,7 +117,7 @@ th {
 .hero {
     height: 100vh;
     width: 100%;
-    background-image: url('https://images.unsplash.com/photo-1497366216548-37526070297c?ixlib=rb-1.2.1&auto=format&fit=crop&w=1920&q=80');
+    background-image: url('/static/img/hero-office.jpg');
     background-size: cover;
     background-position: center;
     position: relative;
@@ -125,38 +125,50 @@ th {
     justify-content: center;
     align-items: center;
     margin-top: 0;
+    overflow: hidden;
 }
 
-.hero-overlay {
+.hero__overlay {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.55);
     z-index: 1;
 }
 
-.hero-content {
+.hero__content {
     position: relative;
     z-index: 2;
     color: #fff;
     text-align: center;
     padding: 20px;
+    width: 100%;
     max-width: 1200px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
-.hero h1 {
+.hero__title {
+    width: 100%;
+    max-width: 1200px;
+    height: auto;
+    max-height: 40vh; /* Prevent overflowing vertically on mobile landscape */
+    margin-bottom: 20px;
+}
+
+.hero__title-text {
+    fill: #fff;
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    font-size: clamp(4rem, 10vw, 8rem);
     font-weight: 800;
-    letter-spacing: 5px;
-    margin: 0 0 20px 0;
-    line-height: 1.1;
+    font-size: 140px; /* Base size relative to viewBox */
+    letter-spacing: 10px;
     text-transform: uppercase;
 }
 
-.hero .subtitle {
+.hero__subtitle {
     font-family: Georgia, 'Times New Roman', Times, serif;
     font-size: clamp(1.2rem, 2vw, 1.8rem);
     font-weight: 300;
@@ -166,7 +178,8 @@ th {
     opacity: 0.9;
 }
 
-.hero-cta {
+.hero__cta {
+    display: inline-block;
     background-color: #fff;
     color: #000;
     font-weight: bold;
@@ -175,10 +188,11 @@ th {
     font-size: 1rem;
     border-radius: 2px;
     letter-spacing: 1px;
+    text-decoration: none;
     transition: all 0.3s ease;
 }
 
-.hero-cta:hover {
+.hero__cta:hover {
     background-color: #ddd;
     color: #000;
     transform: translateY(-2px);

@@ -4,11 +4,20 @@
 
 {% block hero %}
 <section class="hero">
-    <div class="hero-overlay"></div>
-    <div class="hero-content">
-        <h1>ASSO.N.A.M.</h1>
-        <p class="subtitle">Associazione Nazionale per la consulenza fiscale, amministrativa e gestionale delle associazioni affiliate</p>
-        <a href="/associazioni" class="button hero-cta">Scopri le associazioni affiliate</a>
+    <div class="hero__overlay"></div>
+    <div class="hero__content">
+        <svg class="hero__title" viewBox="0 0 1200 320" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <path id="curve" d="M 120 240 Q 600 70 1080 240" fill="transparent"/>
+            </defs>
+            <text width="1200">
+                <textPath href="#curve" startOffset="50%" text-anchor="middle" class="hero__title-text">
+                    ASSO.N.A.M.
+                </textPath>
+            </text>
+        </svg>
+        <p class="hero__subtitle">Associazione Nazionale Arti e Mestieri</p>
+        <a class="hero__cta" href="/associazioni">Scopri le associazioni affiliate</a>
     </div>
 </section>
 {% endblock %}
