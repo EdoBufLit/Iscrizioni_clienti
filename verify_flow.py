@@ -34,10 +34,10 @@ def get_token_from_log(purpose="registration"):
     return None
 
 def create_dummy_files():
-    with open("dummy_id.pdf", "w") as f:
-        f.write("This is a dummy ID document.")
-    with open("dummy_fc.pdf", "w") as f:
-        f.write("This is a dummy Fiscal Code document.")
+    with open("dummy_id.pdf", "wb") as f:
+        f.write(b"%PDF-1.4\nThis is a dummy ID document.")
+    with open("dummy_fc.pdf", "wb") as f:
+        f.write(b"%PDF-1.4\nThis is a dummy Fiscal Code document.")
 
 def run_verification():
     create_dummy_files()

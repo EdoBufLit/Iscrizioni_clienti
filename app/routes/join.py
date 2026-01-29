@@ -62,82 +62,85 @@ async def join_continue_submit(
     if not token_entry:
         return HTMLResponse(content="Invalid or expired token", status_code=400)
 
-    # Validate Files
-    ALLOWED_TYPES = ["image/jpeg", "image/png", "application/pdf"]
-    MAX_SIZE = 5 * 1024 * 1024 # 5MB
-
-    if id_document.content_type not in ALLOWED_TYPES or fiscal_code_document.content_type not in ALLOWED_TYPES:
-        return HTMLResponse(content="Invalid file type. Only PDF, JPEG, PNG allowed.", status_code=400)
-
-    # Check size (rough check via seek/tell or assuming Content-Length header,
-    # but strictly we should read chunks. For MVP, relying on UploadFile details or checking after read is easier
-    # but `save_upload_file` saves it. Let's check size inside `save_upload_file` or check `id_document.size` if available (Starlette doesn't expose it directly until read).
-    # We can check file.size if spooled, but let's just rely on a check during save or before.)
-
-    # We'll check sizes by reading the file object cursor end? No, let's just proceed to save but check size there or check request headers.
-    # Actually, let's implement validation logic.
-
-    # Simple check on content-length header if present
-    content_length = request.headers.get('content-length')
-    if content_length and int(content_length) > MAX_SIZE * 3: # Rough estimate for multipart overhead
-         return HTMLResponse(content="Files too large.", status_code=400)
-
     member = db.query(Member).filter(Member.id == token_entry.member_id).first()
 
-    # Process ID Document
-    rel_path_id, size_id, sha_id = await save_upload_file(id_document)
+    # Process Files with transactional cleanup on failure
+    rel_path_id = None
+    rel_path_fc = None
 
-    if size_id > MAX_SIZE:
-        # Cleanup
-        os.remove(os.path.join(settings.UPLOAD_DIR, rel_path_id))
-        return HTMLResponse(content="ID Document too large (Max 5MB).", status_code=400)
+    try:
+        # Process ID Document
+        rel_path_id, size_id, sha_id = await save_upload_file(id_document)
+        doc_id = MemberDocument(
+            member_id=member.id,
+            doc_type="identity",
+            rel_path=rel_path_id,
+            original_filename=id_document.filename,
+            mime_type=id_document.content_type,
+            size_bytes=size_id,
+            sha256=sha_id
+        )
+        db.add(doc_id)
 
-    doc_id = MemberDocument(
-        member_id=member.id,
-        doc_type="identity",
-        rel_path=rel_path_id,
-        original_filename=id_document.filename,
-        mime_type=id_document.content_type,
-        size_bytes=size_id,
-        sha256=sha_id
-    )
-    db.add(doc_id)
+        # Process Fiscal Code Document
+        rel_path_fc, size_fc, sha_fc = await save_upload_file(fiscal_code_document)
+        doc_fc = MemberDocument(
+            member_id=member.id,
+            doc_type="fiscal_code",
+            rel_path=rel_path_fc,
+            original_filename=fiscal_code_document.filename,
+            mime_type=fiscal_code_document.content_type,
+            size_bytes=size_fc,
+            sha256=sha_fc
+        )
+        db.add(doc_fc)
 
-    # Process Fiscal Code Document
-    rel_path_fc, size_fc, sha_fc = await save_upload_file(fiscal_code_document)
+        # Update Member
+        member.status = MemberStatus.ACTIVE
+        member.joined_at = datetime.utcnow()
 
-    if size_fc > MAX_SIZE:
-        # Cleanup ID doc too? strictly yes, but let's just error.
-        os.remove(os.path.join(settings.UPLOAD_DIR, rel_path_fc))
-        # Remove the previous one too? Not strictly required for MVP but good practice.
-        return HTMLResponse(content="Fiscal Code Document too large (Max 5MB).", status_code=400)
+        # Mark token used
+        token_entry.used_at = datetime.utcnow()
 
-    doc_fc = MemberDocument(
-        member_id=member.id,
-        doc_type="fiscal_code",
-        rel_path=rel_path_fc,
-        original_filename=fiscal_code_document.filename,
-        mime_type=fiscal_code_document.content_type,
-        size_bytes=size_fc,
-        sha256=sha_fc
-    )
-    db.add(doc_fc)
+        db.commit()
 
-    # Update Member
-    member.status = MemberStatus.ACTIVE
-    member.joined_at = datetime.utcnow()
+        # Send Welcome Email
+        org = db.query(Organization).filter(Organization.id == member.org_id).first()
+        send_email_simulation(
+            to_email=member.email,
+            subject=f"Welcome to {org.name}",
+            body=f"Your registration is complete. You can now login at {settings.BASE_URL}/member/login"
+        )
 
-    # Mark token used
-    token_entry.used_at = datetime.utcnow()
-
-    db.commit()
-
-    # Send Welcome Email
-    send_email_simulation(
-        to_email=member.email,
-        subject=f"Welcome to {member.organization.name}",
-        body=f"Your registration is complete. You can now login at {settings.BASE_URL}/member/login"
-    )
+    except HTTPException as e:
+        # Cleanup uploads
+        if rel_path_id:
+            try:
+                os.remove(os.path.join(settings.UPLOAD_DIR, rel_path_id))
+            except OSError:
+                pass
+        if rel_path_fc:
+            try:
+                os.remove(os.path.join(settings.UPLOAD_DIR, rel_path_fc))
+            except OSError:
+                pass
+        db.rollback()
+        return HTMLResponse(content=f"Upload Failed: {e.detail}", status_code=400)
+    except Exception as e:
+        # Cleanup uploads
+        if rel_path_id:
+            try:
+                os.remove(os.path.join(settings.UPLOAD_DIR, rel_path_id))
+            except OSError:
+                pass
+        if rel_path_fc:
+            try:
+                os.remove(os.path.join(settings.UPLOAD_DIR, rel_path_fc))
+            except OSError:
+                pass
+        db.rollback()
+        logger.error(f"Error during file upload: {e}")
+        return HTMLResponse(content="Internal Server Error during upload.", status_code=500)
 
     return HTMLResponse(content="<h1>Registration Complete!</h1><p>You can now <a href='/member/login'>login</a>.</p>")
 
