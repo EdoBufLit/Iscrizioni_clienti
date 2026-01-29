@@ -7,6 +7,8 @@ body {
     color: #333;
 }
 
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;800&display=swap');
+
 .container {
     width: 80%;
     margin: auto;
@@ -117,7 +119,7 @@ th {
 .hero {
     height: 100vh;
     width: 100%;
-    background-image: url('/static/img/hero-office.jpg');
+    background-image: url('/static/img/hero-background.jpg');
     background-size: cover;
     background-position: center;
     position: relative;
@@ -149,6 +151,7 @@ th {
     display: flex;
     flex-direction: column;
     align-items: center;
+    animation: breathe 6s ease-in-out infinite, drift 8s ease-in-out infinite;
 }
 
 .hero__title {
@@ -161,11 +164,29 @@ th {
 
 .hero__title-text {
     fill: #fff;
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-family: 'Montserrat', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     font-weight: 800;
     font-size: 140px; /* Base size relative to viewBox */
     letter-spacing: 10px;
     text-transform: uppercase;
+    filter: url(#glow);
+}
+
+@keyframes breathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.01); }
+}
+
+@keyframes drift {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+}
+
+@media (prefers-reduced-motion) {
+    .hero__content, .hero__title, .hero__cta {
+        animation: none !important;
+        transition: none !important;
+    }
 }
 
 .hero__subtitle {
