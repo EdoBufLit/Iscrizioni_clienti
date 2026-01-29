@@ -124,7 +124,6 @@ th {
     display: flex;
     justify-content: center;
     align-items: center;
-    margin-top: -103px; /* Offset header height to be full screen behind transparent header if wanted, but here header is solid. Let's keep it separate or adjust. Request said "Full viewport height". Let's assume under header or inclusive. I will reset margin to 0 for body and hero takes full height below header, or absolute. Given existing header is solid block, let's make hero 100vh minus header or just 100vh and scroll. I'll make it 100vh. */
     margin-top: 0;
 }
 
@@ -183,4 +182,85 @@ th {
     background-color: #ddd;
     color: #000;
     transform: translateY(-2px);
+}
+
+/* Associazioni Grid */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.search-form {
+    display: flex;
+    gap: 10px;
+}
+
+.search-form input {
+    margin: 0;
+    width: auto;
+}
+
+.associazioni-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+}
+
+@media (min-width: 600px) {
+    .associazioni-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (min-width: 992px) {
+    .associazioni-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (min-width: 1200px) {
+    .associazioni-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+.org-card {
+    display: block;
+    background: #fff;
+    border: 1px solid #eee;
+    border-radius: 4px;
+    padding: 25px;
+    text-decoration: none;
+    color: #333;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.org-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    border-color: #ddd;
+}
+
+.org-card h3 {
+    margin-top: 0;
+    font-family: Georgia, 'Times New Roman', Times, serif;
+    font-size: 1.4rem;
+    color: #222;
+}
+
+.org-desc {
+    color: #666;
+    font-size: 0.95rem;
+    margin-bottom: 15px;
+}
+
+.org-meta {
+    font-size: 0.85rem;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
 }

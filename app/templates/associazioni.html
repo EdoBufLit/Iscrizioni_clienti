@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Associazioni Affiliate{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Associazioni Affiliate</h2>
+    <form action="/associazioni" method="get" class="search-form">
+        <input type="text" name="q" placeholder="Cerca associazione..." value="{{ q or '' }}">
+        <button type="submit" class="button">Cerca</button>
+    </form>
+</div>
+
+<div class="associazioni-grid">
+    {% for org in orgs %}
+    <a href="/associazioni/{{ org.slug }}" class="org-card">
+        <h3>{{ org.name }}</h3>
+        <p class="org-desc">Associazione affiliata per la consulenza e gestione.</p>
+        <p class="org-meta">Territorio nazionale</p>
+    </a>
+    {% else %}
+    <p>Nessuna associazione trovata.</p>
+    {% endfor %}
+</div>
+{% endblock %}
