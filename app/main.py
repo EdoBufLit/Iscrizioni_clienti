@@ -4,8 +4,16 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from app.config import settings
 from app.routes import join, member
+import os
+from contextlib import asynccontextmanager
 
-app = FastAPI(title=settings.PROJECT_NAME, version=settings.PROJECT_VERSION)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Ensure upload directory exists
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    yield
+
+app = FastAPI(title=settings.PROJECT_NAME, version=settings.PROJECT_VERSION, lifespan=lifespan)
 
 # Add Session Middleware
 app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)

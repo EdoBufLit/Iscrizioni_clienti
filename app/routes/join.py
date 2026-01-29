@@ -198,7 +198,7 @@ def join_submit(
         member_id=member.id,
         purpose=TokenType.SIGNUP_CONTINUE,
         token_hash=hash_token(token_str),
-        expires_at=datetime.utcnow() + timedelta(minutes=settings.TOKEN_EXPIRE_MINUTES)
+        expires_at=datetime.utcnow() + timedelta(minutes=settings.JOIN_TOKEN_EXPIRE_MINUTES)
     )
     db.add(token)
     db.commit()

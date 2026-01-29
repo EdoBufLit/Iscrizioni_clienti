@@ -33,7 +33,7 @@ def login_submit(request: Request, email: str = Form(...), db: Session = Depends
             member_id=member.id,
             purpose=TokenType.LOGIN_MAGIC_LINK,
             token_hash=hash_token(token_str),
-            expires_at=datetime.utcnow() + timedelta(minutes=settings.TOKEN_EXPIRE_MINUTES)
+            expires_at=datetime.utcnow() + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES)
         )
         db.add(token)
         db.commit()
