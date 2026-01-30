@@ -135,6 +135,30 @@
   if (initialHash) setActive(initialHash);
 })();
 </script>
+<script>
+  (function () {
+    const header = document.querySelector('.site-header');
+    if (!header) return;
+
+    let lastY = window.scrollY || 0;
+
+    const update = () => {
+      const y = window.scrollY || 0;
+
+      // show header after a small scroll
+      const show = y > 40;
+
+      // optional: only show when scrolling up (more "premium")
+      // const show = y > 80 && y < lastY;
+
+      header.classList.toggle('is-visible', show);
+      lastY = y;
+    };
+
+    update();
+    window.addEventListener('scroll', update, { passive: true });
+  })();
+</script>
 
 </body>
 </html>
