@@ -1,60 +1,121 @@
 {% extends "base.html" %}
 
-{% block title %}Join {{ org.name }}{% endblock %}
+{% block title %}Iscrizione · {{ org.name }}{% endblock %}
 
 {% block content %}
-    <h2>Join {{ org.name }}</h2>
-    <p>Please fill out the form below to become a member.</p>
+<section class="section" style="padding-top: 34px;">
+  <div class="flow-wrap">
+    <div class="flow-head">
+      <div class="flow-title">
+        <p class="section-title" style="margin:0;">ISCRIZIONE</p>
+        <h1 class="flow-h1">{{ org.name }}</h1>
+        <p class="muted" style="margin:10px 0 0; line-height:1.7;">
+          Compila i dati e accetta Statuto e Privacy. Poi procederai al caricamento dei documenti richiesti.
+        </p>
+      </div>
+      <a href="/associazioni/{{ org.slug }}" class="btn btn-ghost">← Scheda associazione</a>
+    </div>
 
     {% if error %}
-    <div style="background-color: #ffcccc; color: #cc0000; padding: 10px; margin-bottom: 20px; border: 1px solid #cc0000; border-radius: 4px;">
-        {{ error }}
-    </div>
+      <div class="flash error" style="margin-top: 14px;">{{ error }}</div>
     {% endif %}
 
-    <div style="margin-bottom: 20px; padding: 10px; background-color: #eef; border-radius: 4px;">
-        <strong>Statute Version:</strong> {{ org.statute_version }}
+    <div class="flow-grid">
+      <!-- Left: form -->
+      <div class="surface-soft">
+        <h3 class="flow-h3">Dati anagrafici</h3>
+
+        <form action="/join/{{ org.slug }}" method="post" class="flow-form">
+          <div class="form-row">
+            <div>
+              <label class="label" for="first_name">Nome</label>
+              <input class="input" type="text" id="first_name" name="first_name" required>
+            </div>
+            <div>
+              <label class="label" for="last_name">Cognome</label>
+              <input class="input" type="text" id="last_name" name="last_name" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div>
+              <label class="label" for="email">Email</label>
+              <input class="input" type="email" id="email" name="email" required>
+            </div>
+            <div>
+              <label class="label" for="phone">Telefono</label>
+              <input class="input" type="tel" id="phone" name="phone" placeholder="+39 …">
+            </div>
+          </div>
+
+          <div>
+            <label class="label" for="fiscal_code">Codice fiscale</label>
+            <input class="input" type="text" id="fiscal_code" name="fiscal_code" placeholder="Facoltativo (se previsto)">
+          </div>
+
+          <div class="consents">
+            <label class="check">
+              <input type="checkbox" id="accept_statute" name="accept_statute" value="true" required>
+              <span>
+                Accetto lo <strong>Statuto</strong> (Versione {{ org.statute_version }})
+              </span>
+            </label>
+
+            <label class="check">
+              <input type="checkbox" id="accept_privacy" name="accept_privacy" value="true" required>
+              <span>
+                Accetto la <strong>Privacy</strong> (Versione {{ org.privacy_version }})
+              </span>
+            </label>
+          </div>
+
+          <div class="actions" style="justify-content:flex-end;">
+            <button type="submit" class="btn btn-primary">Continua</button>
+          </div>
+
+          <p class="muted" style="margin-top: 10px; font-size: 13px; line-height:1.6;">
+            Proseguendo, ti verrà richiesto il caricamento dei documenti (PDF/JPG/PNG).
+          </p>
+        </form>
+      </div>
+
+      <!-- Right: statute/privacy panel -->
+      <div class="surface-soft">
+        <h3 class="flow-h3">Documenti di riferimento</h3>
+        <p class="muted" style="line-height:1.7;">
+          Versioni attive per questa associazione. Se disponibili, puoi scaricare lo Statuto.
+        </p>
+
+        <div class="kv" style="margin-top: 14px;">
+          <div class="kv-k">Statuto</div>
+          <div class="kv-v">v{{ org.statute_version }}</div>
+        </div>
+
+        <div class="kv" style="margin-top: 10px;">
+          <div class="kv-k">Privacy</div>
+          <div class="kv-v">v{{ org.privacy_version }}</div>
+        </div>
+
         {% if org.statute_pdf_path %}
-            <br><a href="{{ org.statute_pdf_path }}" target="_blank">Download Statute (PDF)</a>
+          <div style="margin-top: 14px;">
+            <a class="btn btn-ghost" href="{{ org.statute_pdf_path }}" target="_blank" rel="noopener">
+              Scarica Statuto (PDF)
+            </a>
+          </div>
         {% endif %}
+
+        <div class="flow-note">
+          <div class="pill pill-gold">Nota</div>
+          <p class="muted" style="margin: 10px 0 0; line-height: 1.7;">
+            Se hai dubbi sul flusso, puoi contattare lo studio dalla sezione “Contatti” in home.
+          </p>
+          <div style="margin-top: 12px;">
+            <a class="btn btn-ghost" href="/#contatti">Vai ai contatti</a>
+          </div>
+        </div>
+      </div>
     </div>
-
-    <form action="/join/{{ org.slug }}" method="post">
-        <div class="form-group">
-            <label for="first_name">First Name</label>
-            <input type="text" id="first_name" name="first_name" required>
-        </div>
-
-        <div class="form-group">
-            <label for="last_name">Last Name</label>
-            <input type="text" id="last_name" name="last_name" required>
-        </div>
-
-        <div class="form-group">
-            <label for="email">Email</label>
-            <input type="email" id="email" name="email" required>
-        </div>
-
-        <div class="form-group">
-            <label for="phone">Phone</label>
-            <input type="tel" id="phone" name="phone">
-        </div>
-
-        <div class="form-group">
-            <label for="fiscal_code">Fiscal Code</label>
-            <input type="text" id="fiscal_code" name="fiscal_code">
-        </div>
-
-        <div class="form-group">
-            <input type="checkbox" id="accept_statute" name="accept_statute" value="true" required>
-            <label for="accept_statute">I accept the Statute (Version {{ org.statute_version }})</label>
-        </div>
-
-        <div class="form-group">
-            <input type="checkbox" id="accept_privacy" name="accept_privacy" value="true" required>
-            <label for="accept_privacy">I accept the Privacy Policy (Version {{ org.privacy_version }})</label>
-        </div>
-
-        <button type="submit" class="button">Continue</button>
-    </form>
+  </div>
+</section>
 {% endblock %}
+
