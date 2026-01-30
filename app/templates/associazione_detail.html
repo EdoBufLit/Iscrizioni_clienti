@@ -3,26 +3,69 @@
 {% block title %}{{ org.name }}{% endblock %}
 
 {% block content %}
-<div class="org-detail-container">
+<section class="section" style="padding-top: 34px;">
+  <div class="org-detail-container">
     <div class="org-header">
-        <h1>{{ org.name }}</h1>
-        <p class="org-meta-detail">Associazione Affiliata</p>
+      <div class="org-header-left">
+        <div class="asso-mark asso-mark-lg" aria-hidden="true"></div>
+        <div>
+          <p class="section-title" style="margin:0;">ASSOCIAZIONE</p>
+          <h1 class="org-h1">{{ org.name }}</h1>
+          <div class="org-badges">
+            <span class="pill pill-gold">Affiliata</span>
+            {% if org.statute_version %}
+              <span class="pill">Statuto v{{ org.statute_version }}</span>
+            {% endif %}
+            {% if org.privacy_version %}
+              <span class="pill">Privacy v{{ org.privacy_version }}</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <a href="/associazioni" class="btn btn-ghost">← Torna all’elenco</a>
     </div>
 
     <div class="org-body">
-        <div class="org-info">
-            <h3>Informazioni</h3>
-            <p><strong>Descrizione:</strong> Associazione operante nel settore della consulenza e gestione amministrativa per i propri soci. Impegnata nel rispetto dello statuto e delle normative vigenti.</p>
-            <p><strong>Territorio:</strong> Nazionale</p>
-            <p><strong>Contatti:</strong> Disponibili nell'area soci.</p>
+      <div class="org-info surface-soft">
+        <h3 class="org-h3">Informazioni</h3>
+        <p class="muted" style="line-height: 1.7;">
+          Associazione affiliata. Da qui puoi avviare l’iscrizione o accedere all’area soci.
+        </p>
+
+        <div class="org-kv">
+          <div class="kv">
+            <div class="kv-k">Territorio</div>
+            <div class="kv-v">Nazionale</div>
+          </div>
+          <div class="kv">
+            <div class="kv-k">Documenti</div>
+            <div class="kv-v">Guidati nel flusso di iscrizione</div>
+          </div>
+          <div class="kv">
+            <div class="kv-k">Accesso</div>
+            <div class="kv-v">Area riservata per i soci</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="org-actions-card surface-soft">
+        <h3 class="org-h3">Azioni</h3>
+        <p class="muted" style="line-height: 1.7;">
+          Vuoi diventare socio o entrare nell’area riservata?
+        </p>
+
+        <div class="org-actions">
+          <a href="/join/{{ org.slug }}" class="btn btn-primary">Iscriviti come socio</a>
+          <a href="/member/login?org={{ org.slug }}" class="btn btn-ghost">Area soci / Login</a>
         </div>
 
-        <div class="org-actions-card">
-            <h3>Azioni</h3>
-            <p>Vuoi diventare socio o accedere ai servizi?</p>
-            <a href="/join/{{ org.slug }}" class="button primary-action">Iscriviti come socio</a>
-            <a href="/member/login?org={{ org.slug }}" class="button secondary-action">Area soci / Login</a>
-        </div>
+        <p class="muted" style="margin-top: 14px; font-size: 13px;">
+          Se hai già un account, usa “Area soci / Login”.
+        </p>
+      </div>
     </div>
-</div>
+  </div>
+</section>
 {% endblock %}
+
