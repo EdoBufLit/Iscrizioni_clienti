@@ -3,23 +3,57 @@
 {% block title %}Associazioni Affiliate{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <h2>Associazioni Affiliate</h2>
-    <form action="/associazioni" method="get" class="search-form">
-        <input type="text" name="q" placeholder="Cerca associazione..." value="{{ q or '' }}">
-        <button type="submit" class="button">Cerca</button>
-    </form>
-</div>
+<section class="section" style="padding-top: 34px;">
+  <div class="page-header">
+    <div class="stack-8">
+      <p class="section-title" style="margin:0;">ASSOCIAZIONI</p>
+      <h2 style="margin:0; font-family: var(--font-display); font-size: 28px;">Associazioni affiliate</h2>
+      <p class="muted" style="margin:0; max-width: 820px; line-height: 1.6;">
+        Seleziona l’associazione corretta per avviare l’iscrizione o accedere all’area riservata.
+      </p>
+    </div>
 
-<div class="associazioni-grid">
+    <form action="/associazioni" method="get" class="search-form">
+      <input type="text" name="q" placeholder="Cerca associazione..." value="{{ q or '' }}">
+      <button type="submit" class="button primary-action">Cerca</button>
+    </form>
+  </div>
+
+  <div class="associazioni-grid asso-grid">
     {% for org in orgs %}
-    <a href="/associazioni/{{ org.slug }}" class="org-card">
-        <h3>{{ org.name }}</h3>
-        <p class="org-desc">Associazione affiliata per la consulenza e gestione.</p>
-        <p class="org-meta">Territorio nazionale</p>
+    <a href="/associazioni/{{ org.slug }}" class="org-card asso-card">
+      <div class="asso-card-top">
+        <div class="asso-mark" aria-hidden="true"></div>
+        <div class="asso-titleWrap">
+          <h3 class="asso-title">{{ org.name }}</h3>
+          <div class="asso-badges">
+            <span class="pill pill-gold">Affiliata</span>
+            {% if org.statute_version %}
+              <span class="pill">Statuto v{{ org.statute_version }}</span>
+            {% endif %}
+            {% if org.privacy_version %}
+              <span class="pill">Privacy v{{ org.privacy_version }}</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <p class="org-desc asso-desc">
+        Percorso guidato per iscrizione socio, caricamento documenti e accesso area riservata.
+      </p>
+
+      <div class="asso-card-bottom">
+        <span class="org-meta asso-meta">Territorio nazionale</span>
+        <span class="asso-cta">Apri scheda →</span>
+      </div>
     </a>
     {% else %}
-    <p>Nessuna associazione trovata.</p>
+      <div class="flat-card" style="grid-column: 1 / -1;">
+        <h3 style="margin:0 0 8px; font-family: var(--font-display);">Nessuna associazione trovata</h3>
+        <p class="muted" style="margin:0;">Prova a cambiare ricerca oppure torna all’elenco completo.</p>
+      </div>
     {% endfor %}
-</div>
+  </div>
+</section>
 {% endblock %}
+
