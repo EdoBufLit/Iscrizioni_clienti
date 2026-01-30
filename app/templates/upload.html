@@ -1,30 +1,85 @@
 {% extends "base.html" %}
 
-{% block title %}Complete Registration{% endblock %}
+{% block title %}Caricamento documenti{% endblock %}
 
 {% block content %}
-    <h2>Complete Your Registration</h2>
-    <p>Welcome, {{ member.first_name }} {{ member.last_name }}. To activate your membership, please upload the required documents.</p>
+<section class="section" style="padding-top: 34px;">
+  <div class="flow-wrap">
+    <div class="flow-head">
+      <div class="flow-title">
+        <p class="section-title" style="margin:0;">COMPLETA ISCRIZIONE</p>
+        <h1 class="flow-h1">Caricamento documenti</h1>
+        <p class="muted" style="margin:10px 0 0; line-height:1.7;">
+          Benvenuto/a, {{ member.first_name }} {{ member.last_name }}. Per attivare l’iscrizione, carica i documenti richiesti.
+        </p>
+      </div>
+      <a class="btn btn-ghost" href="/associazioni">← Torna alle associazioni</a>
+    </div>
 
     {% if error %}
-    <div style="background-color: #ffcccc; color: #cc0000; padding: 10px; margin-bottom: 20px; border: 1px solid #cc0000; border-radius: 4px;">
-        {{ error }}
-    </div>
+      <div class="flash error" style="margin-top: 14px;">{{ error }}</div>
     {% endif %}
 
-    <form action="/join/continue" method="post" enctype="multipart/form-data">
-        <input type="hidden" name="token" value="{{ token }}">
+    <div class="flow-grid">
+      <div class="surface-soft">
+        <h3 class="flow-h3">Documenti richiesti</h3>
+        <p class="muted" style="margin-top: 0; line-height:1.7;">
+          Formati ammessi: <strong>PDF, JPG, JPEG, PNG</strong>.
+        </p>
 
-        <div class="form-group">
-            <label for="id_document">ID Document (Front/Back or Single PDF)</label><br>
-            <input type="file" id="id_document" name="id_document" required accept=".pdf,.jpg,.jpeg,.png">
-        </div>
+        <form action="/join/continue" method="post" enctype="multipart/form-data" class="upload-form">
+          <input type="hidden" name="token" value="{{ token }}">
 
-        <div class="form-group">
-            <label for="fiscal_code_document">Fiscal Code / Tessera Sanitaria</label><br>
-            <input type="file" id="fiscal_code_document" name="fiscal_code_document" required accept=".pdf,.jpg,.jpeg,.png">
-        </div>
+          <div class="upload-row">
+            <div class="upload-field">
+              <label class="label" for="id_document">Documento d’identità</label>
+              <div class="filebox">
+                <input class="file" type="file" id="id_document" name="id_document" required accept=".pdf,.jpg,.jpeg,.png">
+                <div class="filehint">
+                  <div class="pill pill-gold">Obbligatorio</div>
+                  <div class="muted" style="font-size:13px; line-height:1.6;">
+                    Fronte/retro oppure PDF unico.
+                  </div>
+                </div>
+              </div>
+            </div>
 
-        <button type="submit" class="button">Complete registration</button>
-    </form>
-{% endblock %}
+            <div class="upload-field">
+              <label class="label" for="fiscal_code_document">Codice fiscale / Tessera sanitaria</label>
+              <div class="filebox">
+                <input class="file" type="file" id="fiscal_code_document" name="fiscal_code_document" required accept=".pdf,.jpg,.jpeg,.png">
+                <div class="filehint">
+                  <div class="pill pill-gold">Obbligatorio</div>
+                  <div class="muted" style="font-size:13px; line-height:1.6;">
+                    Scansione leggibile, anche foto.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="actions" style="justify-content:flex-end;">
+            <button type="submit" class="btn btn-primary">Completa registrazione</button>
+          </div>
+
+          <p class="muted" style="margin-top: 12px; font-size:13px; line-height:1.6;">
+            Caricando i file confermi che i documenti sono tuoi e che le informazioni fornite sono corrette.
+          </p>
+        </form>
+      </div>
+
+      <div class="surface-soft">
+        <h3 class="flow-h3">Suggerimenti</h3>
+        <div class="tips">
+          <div class="tip">
+            <span class="dot dot-gold"></span>
+            <div>
+              <div class="b-title">Leggibilità</div>
+              <div class="muted b-text">Evita riflessi e sfocature. Se possibile, usa PDF.</div>
+            </div>
+          </div>
+          <div class="tip">
+            <span class="dot dot-blue"></span>
+            <div>
+              <div class="b-title">Privacy</div>
+
