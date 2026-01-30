@@ -3,121 +3,146 @@
 {% block title %}Portale · {{ organization.name }}{% endblock %}
 
 {% block content %}
-
-  <div class="page-header">
-    <div>
-      <h2 style="margin:0;">Portale socio</h2>
-      <p class="muted" style="margin:6px 0 0;">
-        {{ organization.name }} · Stato: <strong style="color: rgba(255,255,255,0.92);">{{ member.status.upper() }}</strong>
-      </p>
-    </div>
-
-    <div class="actions" style="margin:0;">
-      <a class="btn btn-ghost" href="/associazioni">Torna alle associazioni</a>
-    </div>
-  </div>
-
-  <div class="card" style="margin-bottom: 14px;">
-    <h3 style="margin:0 0 10px;">Dati iscrizione</h3>
-
-    <div class="form-row">
-      <div>
-        <p class="muted" style="margin:0 0 6px;">Data iscrizione</p>
-        <p style="margin:0;">
-          {{ member.joined_at.strftime('%Y-%m-%d %H:%M:%S') if member.joined_at else 'In attesa' }}
+<section class="section" style="padding-top: 34px;">
+  <div class="portal-wrap">
+    <div class="page-header">
+      <div class="stack-8">
+        <p class="section-title" style="margin:0;">PORTALE SOCIO</p>
+        <h2 class="portal-h2">{{ organization.name }}</h2>
+        <p class="muted" style="margin:0;">
+          Stato iscrizione:
+          <span class="pill {% if member.status == 'approved' %}pill-gold{% endif %}">
+            {{ member.status.upper() }}
+          </span>
         </p>
       </div>
 
-      <div>
-        <p class="muted" style="margin:0 0 6px;">Codice fiscale</p>
-        <p style="margin:0;">{{ member.fiscal_code }}</p>
+      <div class="actions" style="margin:0;">
+        <a class="btn btn-ghost" href="/associazioni">Associazioni</a>
       </div>
     </div>
 
-    <div class="form-row" style="margin-top: 12px;">
-      <div>
-        <p class="muted" style="margin:0 0 6px;">Statuto accettato</p>
-        <p style="margin:0;">
-          v{{ member.accepted_statute_version }}
-          <span class="muted">({{ member.accepted_statute_at.strftime('%Y-%m-%d') }})</span>
-        </p>
-      </div>
+    <div class="portal-grid">
+      <!-- Status / Info -->
+      <div class="surface-soft">
+        <h3 class="portal-h3">Riepilogo</h3>
 
-      <div>
-        <p class="muted" style="margin:0 0 6px;">Privacy accettata</p>
-        <p style="margin:0;">
-          v{{ member.accepted_privacy_version }}
-          <span class="muted">({{ member.accepted_privacy_at.strftime('%Y-%m-%d') }})</span>
-        </p>
-      </div>
-    </div>
-  </div>
-
-  <div class="card" style="margin-bottom: 14px;">
-    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
-      <h3 style="margin:0;">I miei documenti</h3>
-      <p class="muted" style="margin:0;">Carica file richiesti dall’associazione.</p>
-    </div>
-
-    {% if documents %}
-      <div style="margin-top: 12px; overflow:auto;">
-        <table>
-          <thead>
-            <tr>
-              <th>Tipo</th>
-              <th>File</th>
-              <th>Caricato</th>
-              <th>Azione</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for doc in documents %}
-              <tr>
-                <td>{{ doc.doc_type }}</td>
-                <td>{{ doc.original_filename }}</td>
-                <td>{{ doc.uploaded_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-                <td>
-                  <a class="btn btn-ghost" href="/member/download/{{ doc.id }}">Download</a>
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    {% else %}
-      <p class="muted" style="margin:12px 0 0;">Nessun documento caricato.</p>
-    {% endif %}
-  </div>
-
-  <div class="card">
-    <h3 style="margin:0 0 10px;">Aggiorna documenti</h3>
-    <p class="muted" style="margin:0 0 14px;">
-      Seleziona il tipo documento e carica un file (PDF/JPG/PNG, secondo le regole previste).
-    </p>
-
-    <form action="/member/documents/upload" method="post" enctype="multipart/form-data">
-      <div class="form-row">
-        <div>
-          <label for="doc_type">Tipo documento</label>
-          <select id="doc_type" name="doc_type" required>
-            <option value="" selected disabled>Seleziona…</option>
-            <option value="ID">Documento d’identità</option>
-            <option value="FISCAL_CODE">Codice fiscale</option>
-            <option value="OTHER">Altro</option>
-          </select>
+        <div class="kv" style="margin-top: 12px;">
+          <div class="kv-k">Data iscrizione</div>
+          <div class="kv-v">
+            {{ member.joined_at.strftime('%Y-%m-%d %H:%M:%S') if member.joined_at else 'In attesa' }}
+          </div>
         </div>
 
-        <div>
-          <label for="file">File</label>
-          <input id="file" name="file" type="file" required />
+        <div class="kv" style="margin-top: 10px;">
+          <div class="kv-k">Codice fiscale</div>
+          <div class="kv-v">{{ member.fiscal_code }}</div>
+        </div>
+
+        <div class="kv" style="margin-top: 10px;">
+          <div class="kv-k">Statuto accettato</div>
+          <div class="kv-v">
+            v{{ member.accepted_statute_version }}
+            <span class="muted" style="font-weight:700; font-size:12px;">
+              ({{ member.accepted_statute_at.strftime('%Y-%m-%d') }})
+            </span>
+          </div>
+        </div>
+
+        <div class="kv" style="margin-top: 10px;">
+          <div class="kv-k">Privacy accettata</div>
+          <div class="kv-v">
+            v{{ member.accepted_privacy_version }}
+            <span class="muted" style="font-weight:700; font-size:12px;">
+              ({{ member.accepted_privacy_at.strftime('%Y-%m-%d') }})
+            </span>
+          </div>
+        </div>
+
+        <div class="flow-note" style="margin-top: 16px;">
+          <div class="pill">Nota</div>
+          <p class="muted" style="margin: 10px 0 0; line-height: 1.7;">
+            Qui trovi i documenti caricati e puoi aggiungerne di nuovi se richiesto.
+          </p>
         </div>
       </div>
 
-      <div class="actions">
-        <button type="submit" class="btn btn-primary">Carica documento</button>
-      </div>
-    </form>
-  </div>
+      <!-- Documents list -->
+      <div class="surface-soft">
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+          <div>
+            <h3 class="portal-h3" style="margin-bottom: 6px;">I miei documenti</h3>
+            <p class="muted" style="margin:0;">Scarica i file già caricati.</p>
+          </div>
+        </div>
 
+        {% if documents %}
+          <div style="margin-top: 12px; overflow:auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Tipo</th>
+                  <th>File</th>
+                  <th>Caricato</th>
+                  <th>Azione</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for doc in documents %}
+                  <tr>
+                    <td>{{ doc.doc_type }}</td>
+                    <td>{{ doc.original_filename }}</td>
+                    <td>{{ doc.uploaded_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td>
+                      <a class="btn btn-ghost" href="/member/download/{{ doc.id }}">Download</a>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="muted" style="margin:12px 0 0;">Nessun documento caricato.</p>
+        {% endif %}
+      </div>
+
+      <!-- Upload -->
+      <div class="surface-soft" style="grid-column: 1 / -1;">
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+          <div>
+            <h3 class="portal-h3" style="margin-bottom: 6px;">Carica un documento</h3>
+            <p class="muted" style="margin:0;">Seleziona tipo e file (PDF/JPG/PNG).</p>
+          </div>
+        </div>
+
+        <form action="/member/documents/upload" method="post" enctype="multipart/form-data" style="margin-top: 14px;">
+          <div class="portal-upload">
+            <div>
+              <label class="label" for="doc_type">Tipo documento</label>
+              <select id="doc_type" name="doc_type" required>
+                <option value="" selected disabled>Seleziona…</option>
+                <option value="ID">Documento d’identità</option>
+                <option value="FISCAL_CODE">Codice fiscale</option>
+                <option value="OTHER">Altro</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="label" for="file">File</label>
+              <input id="file" name="file" type="file" required />
+              <div class="help">Consigliato PDF. Foto ben leggibili ok.</div>
+            </div>
+          </div>
+
+          <div class="actions" style="justify-content:flex-end;">
+            <button type="submit" class="btn btn-primary">Carica documento</button>
+          </div>
+        </form>
+      </div>
+
+    </div>
+  </div>
+</section>
 {% endblock %}
+
 
