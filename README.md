@@ -1,4 +1,4 @@
-# Association Self-Serve Member Signup & Portals
+# Association Self-Serve Member Signup & Portal
 
 A minimal web application for association member signup, document upload, and member status verification.
 
