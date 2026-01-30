@@ -1,18 +1,16 @@
-
-
-
 {% extends "base.html" %}
 
-{% block title %}Home · ASSO.N.A.M.{% endblock %}
+{% block title %}ASSO.N.A.M. · Portale{% endblock %}
 
 {% block hero %}
-<section class="hero">
+<section class="hero" id="top">
   <div class="hero-inner">
     <div class="hero-card">
-      <p class="hero-kicker">WE’RE ASSO.N.A.M.</p>
-      <h1 class="hero-title">Iscrizioni, portale soci e documenti</h1>
+      <p class="hero-kicker">ASSO.N.A.M.</p>
+      <h1 class="hero-title">Iscrizioni e portale soci.</h1>
       <p class="hero-sub">
-        Trova la tua associazione affiliata, completa l’iscrizione e accedi all’area riservata per consultare lo stato e i documenti.
+        Trova la tua associazione affiliata, completa l’iscrizione e accedi all’area riservata
+        per consultare lo stato e i documenti.
       </p>
 
       <div class="actions" style="justify-content:center;">
@@ -30,7 +28,7 @@
 
 {% block content %}
 
-<section class="section">
+<section class="section" id="service">
   <p class="section-title">SERVICE</p>
   <h2 class="section-h">Un flusso semplice e guidato</h2>
   <p class="section-p">
@@ -39,18 +37,18 @@
 
   <div class="grid-3">
     <div class="flat-card">
-      <h3>1) Scegli l’associazione</h3>
-      <p>Consulta l’elenco delle affiliate e apri la pagina dell’associazione corretta.</p>
+      <h3>Trova l’associazione</h3>
+      <p>Consulta l’elenco delle affiliate e apri la pagina corretta.</p>
       <a class="btn btn-ghost" href="/associazioni">Vedi elenco</a>
     </div>
 
     <div class="flat-card">
-      <h3>2) Completa l’iscrizione</h3>
-      <p>Compila i dati e carica i documenti richiesti in modo chiaro e guidato.</p>
+      <h3>Iscriviti</h3>
+      <p>Compila i dati e carica i documenti richiesti in modo chiaro.</p>
     </div>
 
     <div class="flat-card">
-      <h3>3) Accedi al portale socio</h3>
+      <h3>Gestisci dal portale</h3>
       <p>Controlla lo stato e scarica i documenti disponibili (se previsti).</p>
       {% if request.session.get("member_id") %}
         <a class="btn btn-primary" href="/member/portal">Apri portale</a>
@@ -61,4 +59,53 @@
   </div>
 </section>
 
+<section class="section" id="how">
+  <p class="section-title">HOW</p>
+  <h2 class="section-h">Come funziona</h2>
+  <p class="section-p">
+    Pensato per ridurre errori e rendere tutto tracciabile: dati, accettazioni (privacy/statuto) e documenti.
+  </p>
+
+  <div class="grid-3">
+    <div class="flat-card">
+      <h3>Step 1</h3>
+      <p>Scegli l’associazione affiliata dall’elenco.</p>
+    </div>
+    <div class="flat-card">
+      <h3>Step 2</h3>
+      <p>Completa il form e carica i documenti richiesti.</p>
+    </div>
+    <div class="flat-card">
+      <h3>Step 3</h3>
+      <p>Accedi all’area riservata per verificare stato e documenti.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="faq">
+  <p class="section-title">FAQ</p>
+  <h2 class="section-h">Domande frequenti</h2>
+  <p class="section-p">Le risposte rapide alle domande più comuni.</p>
+
+  <div class="grid-3">
+    <div class="flat-card">
+      <h3>Serve un account?</h3>
+      <p>Sì, per accedere al portale e consultare stato/documenti.</p>
+    </div>
+    <div class="flat-card">
+      <h3>Che documenti devo caricare?</h3>
+      <p>Dipende dall’associazione: il percorso ti guiderà con i campi richiesti.</p>
+    </div>
+    <div class="flat-card">
+      <h3>Posso modificare i dati?</h3>
+      <p>Dal portale puoi verificare lo stato. Estensioni per modifiche avanzate possono essere aggiunte.</p>
+    </div>
+  </div>
+
+  <div class="actions" style="justify-content:center; margin-top: 18px;">
+    <a class="btn btn-primary" href="/associazioni">Inizia ora</a>
+  </div>
+</section>
+
 {% endblock %}
+
