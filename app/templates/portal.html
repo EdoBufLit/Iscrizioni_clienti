@@ -1,51 +1,123 @@
 {% extends "base.html" %}
 
-{% block title %}Member Portal{% endblock %}
+{% block title %}Portale · {{ organization.name }}{% endblock %}
 
 {% block content %}
-    <h2>Member Portal</h2>
-    <div class="card" style="background: #fff; padding: 20px; border-radius: 5px; box-shadow: 0 0 5px rgba(0,0,0,0.1); margin-bottom: 20px;">
-        <h3>Membership Details</h3>
-        <p><strong>Member Name:</strong> {{ member.first_name }} {{ member.last_name }}</p>
-        <p><strong>Organization:</strong> {{ organization.name }}</p>
-        <p><strong>Status:</strong>
-            <span style="color: {% if member.status == 'active' %}green{% else %}orange{% endif %}; font-weight: bold;">
-                {{ member.status.upper() }}
-            </span>
-        </p>
-        <p><strong>Card Number:</strong> {{ member.card_no or 'Waiting for card assignment' }}</p>
-        <p><strong>Joined At:</strong> {{ member.joined_at.strftime('%Y-%m-%d %H:%M:%S') if member.joined_at else 'Pending' }}</p>
-        <p><strong>Accepted Statute Version:</strong> {{ member.accepted_statute_version }} ({{ member.accepted_statute_at.strftime('%Y-%m-%d') }})</p>
-        <p><strong>Accepted Privacy Version:</strong> {{ member.accepted_privacy_version }} ({{ member.accepted_privacy_at.strftime('%Y-%m-%d') }})</p>
+
+  <div class="page-header">
+    <div>
+      <h2 style="margin:0;">Portale socio</h2>
+      <p class="muted" style="margin:6px 0 0;">
+        {{ organization.name }} · Stato: <strong style="color: rgba(255,255,255,0.92);">{{ member.status.upper() }}</strong>
+      </p>
     </div>
 
-    <h3>My Documents</h3>
+    <div class="actions" style="margin:0;">
+      <a class="btn btn-ghost" href="/associazioni">Torna alle associazioni</a>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom: 14px;">
+    <h3 style="margin:0 0 10px;">Dati iscrizione</h3>
+
+    <div class="form-row">
+      <div>
+        <p class="muted" style="margin:0 0 6px;">Data iscrizione</p>
+        <p style="margin:0;">
+          {{ member.joined_at.strftime('%Y-%m-%d %H:%M:%S') if member.joined_at else 'In attesa' }}
+        </p>
+      </div>
+
+      <div>
+        <p class="muted" style="margin:0 0 6px;">Codice fiscale</p>
+        <p style="margin:0;">{{ member.fiscal_code }}</p>
+      </div>
+    </div>
+
+    <div class="form-row" style="margin-top: 12px;">
+      <div>
+        <p class="muted" style="margin:0 0 6px;">Statuto accettato</p>
+        <p style="margin:0;">
+          v{{ member.accepted_statute_version }}
+          <span class="muted">({{ member.accepted_statute_at.strftime('%Y-%m-%d') }})</span>
+        </p>
+      </div>
+
+      <div>
+        <p class="muted" style="margin:0 0 6px;">Privacy accettata</p>
+        <p style="margin:0;">
+          v{{ member.accepted_privacy_version }}
+          <span class="muted">({{ member.accepted_privacy_at.strftime('%Y-%m-%d') }})</span>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom: 14px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+      <h3 style="margin:0;">I miei documenti</h3>
+      <p class="muted" style="margin:0;">Carica file richiesti dall’associazione.</p>
+    </div>
+
     {% if documents %}
-    <table>
-        <thead>
+      <div style="margin-top: 12px; overflow:auto;">
+        <table>
+          <thead>
             <tr>
-                <th>Type</th>
-                <th>Filename</th>
-                <th>Uploaded At</th>
-                <th>Action</th>
+              <th>Tipo</th>
+              <th>File</th>
+              <th>Caricato</th>
+              <th>Azione</th>
             </tr>
-        </thead>
-        <tbody>
+          </thead>
+          <tbody>
             {% for doc in documents %}
-            <tr>
+              <tr>
                 <td>{{ doc.doc_type }}</td>
                 <td>{{ doc.original_filename }}</td>
                 <td>{{ doc.uploaded_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-                <td><a href="/member/download/{{ doc.id }}" target="_blank">Download</a></td>
-            </tr>
+                <td>
+                  <a class="btn btn-ghost" href="/member/download/{{ doc.id }}">Download</a>
+                </td>
+              </tr>
             {% endfor %}
-        </tbody>
-    </table>
+          </tbody>
+        </table>
+      </div>
     {% else %}
-    <p>No documents uploaded.</p>
+      <p class="muted" style="margin:12px 0 0;">Nessun documento caricato.</p>
     {% endif %}
+  </div>
 
-    <div style="margin-top: 20px;">
-        <button class="button" disabled title="Not implemented in MVP">Update Documents</button>
-    </div>
+  <div class="card">
+    <h3 style="margin:0 0 10px;">Aggiorna documenti</h3>
+    <p class="muted" style="margin:0 0 14px;">
+      Seleziona il tipo documento e carica un file (PDF/JPG/PNG, secondo le regole previste).
+    </p>
+
+    <form action="/member/documents/upload" method="post" enctype="multipart/form-data">
+      <div class="form-row">
+        <div>
+          <label for="doc_type">Tipo documento</label>
+          <select id="doc_type" name="doc_type" required>
+            <option value="" selected disabled>Seleziona…</option>
+            <option value="ID">Documento d’identità</option>
+            <option value="FISCAL_CODE">Codice fiscale</option>
+            <option value="OTHER">Altro</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="file">File</label>
+          <input id="file" name="file" type="file" required />
+        </div>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="btn btn-primary">Carica documento</button>
+      </div>
+    </form>
+  </div>
+
 {% endblock %}
+
