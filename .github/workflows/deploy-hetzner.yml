@@ -19,7 +19,9 @@ jobs:
             set -e
             cd ${{ secrets.APP_PATH }}
             git fetch --all
-            git checkout -B "$GITHUB_REF_NAME" "origin/$GITHUB_REF_NAME"
-            git reset --hard "origin/$GITHUB_REF_NAME"
+            BRANCH="${{ github.ref_name }}"
+            git checkout -B "$BRANCH" "origin/$BRANCH"
+            git reset --hard "origin/$BRANCH"
             docker compose up -d --build
             docker image prune -f || true
+
