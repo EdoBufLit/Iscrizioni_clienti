@@ -9,21 +9,26 @@
 
 <body>
   <header class="site-header">
-    <div class="header-inner">
+    <div class="header-inner header-landing">
+      <!-- Left: Brand -->
       <a class="brand" href="/">ASSO.N.A.M.</a>
 
-      <nav class="nav">
+      <!-- Center: Landing sections -->
+      <nav class="nav nav-center">
         <a href="/#service">Service</a>
         <a href="/#how">How</a>
         <a href="/#faq">FAQ</a>
+      </nav>
 
+      <!-- Right: CTA -->
+      <div class="nav nav-right">
         {% if request.session.get("member_id") %}
-          <a href="/member/portal">Portale</a>
+          <a href="/member/portal" class="btn btn-primary">Portale</a>
           <a href="/member/logout" class="btn btn-ghost">Logout</a>
         {% else %}
-          <a href="/member/login" class="btn btn-ghost">Login</a>
+          <a href="/member/login" class="btn btn-primary">Login</a>
         {% endif %}
-      </nav>
+      </div>
     </div>
   </header>
 
