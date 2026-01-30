@@ -3,25 +3,27 @@
 {% block title %}Home · ASSO.N.A.M.{% endblock %}
 
 {% block hero %}
-<section class="hero" style="--hero-bg: none;">
+<section class="hero">
   <div class="hero-inner">
     <div class="hero-card">
       <h1 class="hero-title">ASSO.N.A.M.</h1>
       <p class="hero-sub">Associazione Nazionale Arti e Mestieri</p>
 
-      <div class="actions" style="justify-content:center;">
-        <a class="btn btn-primary" href="/associazioni">Scopri le associazioni affiliate</a>
+      <div class="actions">
+        <a class="btn btn-primary" href="/associazioni">
+          Scopri le associazioni affiliate
+        </a>
+
         {% if not request.session.get("member_id") %}
-          <a class="btn btn-ghost" href="/member/login">Area riservata</a>
+          <a class="btn btn-ghost" href="/member/login">
+            Area riservata
+          </a>
         {% endif %}
       </div>
-
-      <p class="muted mt-3" style="margin-bottom:0;">
-        Se sei già iscritto, accedi per gestire i tuoi dati e le tue richieste.
-      </p>
     </div>
   </div>
 </section>
+
 {% endblock %}
 
 {% block content %}
