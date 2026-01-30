@@ -1,20 +1,21 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from starlette.middleware.sessions import SessionMiddleware
-from app.config import settings
-from app.db import Base, engine
-from app import models
-from app.routes import join, member, admin, public
-from fastapi import Request
 from fastapi.responses import HTMLResponse
-import os
+from starlette.middleware.sessions import SessionMiddleware
 from contextlib import asynccontextmanager
+import os
+
+from app.config import settings
+from app.routes import join, member, admin, public
+from init_db import init_db
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Ensure upload directory exists
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    init_db()
     yield
 
 app = FastAPI(title=settings.PROJECT_NAME, version=settings.PROJECT_VERSION, lifespan=lifespan)
@@ -32,10 +33,6 @@ app.include_router(join.router)
 app.include_router(member.router)
 app.include_router(admin.router)
 app.include_router(public.router)
-
-@app.on_event("startup")
-def on_startup() -> None:
-    Base.metadata.create_all(bind=engine)
 
 @app.get("/", response_class=HTMLResponse)
 def read_root(request: Request):
