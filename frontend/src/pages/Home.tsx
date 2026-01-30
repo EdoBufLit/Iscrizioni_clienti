@@ -1,5 +1,5 @@
-// frontend/src/pages/Home.tsx
-import React from "react";
+// (no React import needed with modern TS/JSX)
+
 
 type QuickLink = {
   title: string;
