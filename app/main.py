@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 import os
 
 from app.config import settings
+from app.db import init_db
 from app.routes import join, member, admin, public
 from init_db import init_db
 

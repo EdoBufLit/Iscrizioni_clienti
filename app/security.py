@@ -1,7 +1,8 @@
 import hashlib
 from passlib.context import CryptContext
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# bcrypt has 72-byte input limit; bcrypt_sha256 avoids this and is more robust in containers.
+pwd_context = CryptContext(schemes=["bcrypt_sha256", "bcrypt"], deprecated="auto")
 
 def _bcrypt_safe(password: str) -> str:
     # bcrypt max 72 bytes → pre-hash always
