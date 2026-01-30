@@ -353,3 +353,137 @@ th {
 .secondary-action:hover {
     background-color: #eee;
 }
+
+/* =========================
+   HEADER FIX (no white box)
+   ========================= */
+.site-header {
+  background: #121212;
+  border-bottom: 3px solid #2a6bff;
+  padding: 18px 0;
+}
+
+.header-inner {
+  width: min(1100px, 92%);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.site-header #branding h1 {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: 0.5px;
+}
+
+.site-header nav ul {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+}
+
+.site-header nav li {
+  float: none;
+  padding: 0;
+}
+
+.site-header a {
+  color: rgba(255,255,255,0.9);
+  text-decoration: none;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  font-size: 13px;
+}
+
+.site-header a:hover {
+  color: #ffffff;
+}
+
+/* =========================
+   PAGE HEADER + SEARCH
+   ========================= */
+.page-header {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.page-header h2 {
+  margin: 0;
+}
+
+.search-form {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: min(520px, 100%);
+}
+
+.search-form input[type="text"] {
+  margin: 0;
+}
+
+/* =========================
+   CARDS GRID (associazioni)
+   ========================= */
+.associazioni-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 10px;
+}
+
+@media (max-width: 1000px) {
+  .associazioni-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .associazioni-grid { grid-template-columns: 1fr; }
+}
+
+.org-card {
+  display: block;
+  padding: 18px;
+  border-radius: 14px;
+  text-decoration: none;
+  border: 1px solid rgba(0,0,0,0.08);
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  color: #111;
+}
+
+.org-card h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+}
+
+.org-desc {
+  margin: 0 0 10px 0;
+  color: rgba(0,0,0,0.65);
+}
+
+.org-meta {
+  margin: 0;
+  font-size: 13px;
+  color: rgba(0,0,0,0.55);
+}
+
+.org-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 34px rgba(0,0,0,0.10);
+  border-color: rgba(42,107,255,0.35);
+}
+
+/* =========================
+   CONTAINER (content only)
+   ========================= */
+/* Se vuoi un look più “premium”, aumenta un filo il max-width */
+.container {
+  width: min(1100px, 92%);
+}
+
