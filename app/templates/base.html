@@ -3,18 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{% block title %}Association Portal{% endblock %}</title>
+  <title>{% block title %}ASSO.N.A.M.{% endblock %}</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 
 <body>
   <header class="site-header">
     <div class="header-inner">
-      <a class="brand" href="/">Association Portal</a>
+      <a class="brand" href="/">ASSO.N.A.M.</a>
 
       <nav class="nav">
+        <a href="/#service">Service</a>
+        <a href="/#how">How</a>
+        <a href="/#faq">FAQ</a>
+
         {% if request.session.get("member_id") %}
-          <a href="/member/portal">Portal</a>
+          <a href="/member/portal">Portale</a>
           <a href="/member/logout" class="btn btn-ghost">Logout</a>
         {% else %}
           <a href="/member/login" class="btn btn-ghost">Login</a>
