@@ -859,3 +859,306 @@ h1, h2, h3,
   margin-top: 12px;
 }
 
+/* =====================================================
+   AUTH / JOIN / PORTAL UI
+   Coherent with ASSO.N.A.M. design system
+   ===================================================== */
+
+/* ---------- Page wrapper ---------- */
+.page-auth,
+.page-portal {
+  width: min(1120px, 92%);
+  margin: 0 auto;
+  padding: 40px 0 60px;
+}
+
+/* ---------- Auth / Join Card ---------- */
+.auth-card {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 34px 28px;
+  border-radius: var(--r-xl);
+  background: var(--surface0);
+  border: 1px solid var(--border);
+  box-shadow: var(--sh-md);
+  position: relative;
+  overflow: hidden;
+}
+
+/* soft glow */
+.auth-card::before {
+  content: "";
+  position: absolute;
+  inset: -80px -80px auto -80px;
+  height: 260px;
+  background:
+    radial-gradient(160px 120px at 30% 30%, rgba(245,194,26,0.18), transparent 60%),
+    radial-gradient(220px 160px at 70% 40%, rgba(27,42,166,0.28), transparent 65%);
+  filter: blur(8px);
+  opacity: .9;
+  pointer-events: none;
+}
+
+/* ---------- Auth titles ---------- */
+.auth-title {
+  position: relative;
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-size: clamp(24px, 3vw, 32px);
+  line-height: 1.2;
+}
+
+.auth-sub {
+  position: relative;
+  margin: 0 0 22px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* ---------- Auth form ---------- */
+.auth-form {
+  position: relative;
+  display: grid;
+  gap: 16px;
+}
+
+.auth-form .form-row {
+  display: grid;
+  gap: 6px;
+}
+
+.auth-form label {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .3px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.auth-form input,
+.auth-form select,
+.auth-form textarea {
+  height: 46px;
+  font-size: 15px;
+}
+
+/* ---------- Auth actions ---------- */
+.auth-actions {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.auth-actions .btn {
+  width: 100%;
+}
+
+.auth-footer {
+  margin-top: 18px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.auth-footer a {
+  font-weight: 900;
+  color: var(--text);
+}
+.auth-footer a:hover {
+  text-decoration: underline;
+}
+
+/* =====================================================
+   PORTAL (area riservata)
+   ===================================================== */
+
+.portal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+
+.portal-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(26px, 3vw, 36px);
+}
+
+.portal-sub {
+  margin-top: 6px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+/* ---------- Portal grid ---------- */
+.portal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+@media (max-width: 1000px) {
+  .portal-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+  .portal-grid { grid-template-columns: 1fr; }
+}
+
+/* ---------- Portal cards ---------- */
+.portal-card {
+  padding: 22px;
+  border-radius: var(--r-xl);
+  background: var(--surface0);
+  border: 1px solid var(--border);
+  box-shadow: var(--sh-sm);
+  position: relative;
+  overflow: hidden;
+}
+
+.portal-card::before {
+  content: "";
+  position: absolute;
+  inset: -60px -60px auto -60px;
+  height: 160px;
+  background:
+    radial-gradient(140px 90px at 25% 25%, rgba(27,42,166,0.18), transparent 60%);
+  filter: blur(6px);
+  opacity: .7;
+  pointer-events: none;
+}
+
+.portal-card h3 {
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-size: 18px;
+}
+
+.portal-card p {
+  margin: 0 0 14px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+/* ---------- Status badge (portal) ---------- */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .2px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+}
+
+.status-ok {
+  border-color: rgba(61,220,151,0.45);
+  background: rgba(61,220,151,0.12);
+}
+.status-warn {
+  border-color: rgba(245,194,26,0.45);
+  background: rgba(245,194,26,0.14);
+}
+.status-error {
+  border-color: rgba(255,82,82,0.45);
+  background: rgba(255,82,82,0.14);
+}
+
+/* ---------- Portal list ---------- */
+.portal-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.portal-list li {
+  padding: 12px 14px;
+  border-radius: var(--r-lg);
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.portal-list li span {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* =====================================================
+   JOIN PAGE (multi-step feel, even if backend is simple)
+   ===================================================== */
+
+.join-wrapper {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.join-header {
+  margin-bottom: 22px;
+}
+
+.join-title {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-size: clamp(26px, 3vw, 38px);
+}
+
+.join-sub {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+/* fake stepper (purely visual) */
+.join-steps {
+  display: flex;
+  gap: 10px;
+  margin: 22px 0;
+}
+
+.join-step {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  overflow: hidden;
+}
+
+.join-step.active {
+  background: linear-gradient(
+    90deg,
+    var(--brand-gold),
+    var(--brand-gold-dark)
+  );
+}
+
+/* join form */
+.join-card {
+  padding: 26px;
+  border-radius: var(--r-xl);
+  background: var(--surface0);
+  border: 1px solid var(--border);
+  box-shadow: var(--sh-sm);
+}
+
+.join-actions {
+  margin-top: 18px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.join-actions .btn {
+  min-width: 160px;
+}
