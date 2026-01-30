@@ -976,3 +976,47 @@ html{
   }
 }
 
+/* =========================
+   NAV — underline animata
+   ========================= */
+
+.nav-center a{
+  position: relative;
+  padding: 6px 0;
+  text-decoration: none;
+  font-weight: 600;
+  color: var(--text);
+  opacity: 0.78;
+  transition: opacity 160ms ease;
+}
+
+.nav-center a:hover{
+  opacity: 1;
+}
+
+/* underline */
+.nav-center a::after{
+  content:"";
+  position:absolute;
+  left: 0;
+  bottom: -6px;
+  width: 100%;
+  height: 2px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 220ms ease;
+}
+
+/* hover animation */
+.nav-center a:hover::after{
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+/* active section (solo CSS fallback)
+   se vuoi lo stato attivo reale serve JS */
+.nav-center a:focus-visible::after{
+  transform: scaleX(1);
+  transform-origin: left;
+}
