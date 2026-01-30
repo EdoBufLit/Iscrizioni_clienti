@@ -1020,3 +1020,14 @@ html{
   transform: scaleX(1);
   transform-origin: left;
 }
+
+/* Active section */
+.nav-center a.is-active{
+  opacity: 1;
+}
+
+.nav-center a.is-active::after{
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
