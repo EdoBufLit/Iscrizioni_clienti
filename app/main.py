@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 async def lifespan(app: FastAPI):
     # Ensure upload directory exists
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    init_db()
     yield
 
 app = FastAPI(title=settings.PROJECT_NAME, version=settings.PROJECT_VERSION, lifespan=lifespan)
@@ -31,10 +32,6 @@ app.include_router(join.router)
 app.include_router(member.router)
 app.include_router(admin.router)
 app.include_router(public.router)
-
-@app.on_event("startup")
-def on_startup() -> None:
-    init_db()
 
 @app.get("/", response_class=HTMLResponse)
 def read_root(request: Request):
