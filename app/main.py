@@ -1,14 +1,16 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
 from starlette.middleware.sessions import SessionMiddleware
+from contextlib import asynccontextmanager
+import os
+
 from app.config import settings
 from init_db import init_db
 from app.routes import join, member, admin, public
-from fastapi import Request
-from fastapi.responses import HTMLResponse
-import os
-from contextlib import asynccontextmanager
+from init_db import init_db
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
