@@ -155,12 +155,20 @@ a:hover{ color: #fff; }
   content:"";
   position:absolute;
   inset:0;
-  background-image: var(--hero-bg);
-  background-position:center;
-  background-size:cover;
-  opacity: 0.45;
-  filter: saturate(0.9) contrast(1.05);
+
+  background-image:
+    var(--hero-bg),
+    radial-gradient(800px 500px at 20% 10%, rgba(42,107,255,0.30), transparent 60%),
+    radial-gradient(700px 500px at 80% 30%, rgba(99,102,241,0.22), transparent 60%);
+
+  background-position: center;
+  background-size: cover;
+
+  opacity: 0.6;
+  filter: saturate(0.95) contrast(1.05);
 }
+
+
 
 .hero::after{
   content:"";
@@ -178,27 +186,70 @@ a:hover{ color: #fff; }
 }
 
 .hero-card{
-  width: min(760px, 100%);
-  background: rgba(255,255,255,0.06);
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  padding: 30px 22px;
-  backdrop-filter: blur(10px);
-  box-shadow: var(--shadow);
-  text-align:center;
+  width: min(720px, 100%);
+  padding: 32px 28px;
+
+  /* Glass pulito */
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255,255,255,0.14),
+      rgba(255,255,255,0.06)
+    );
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 20px;
+  backdrop-filter: blur(14px);
+
+  box-shadow:
+    0 30px 60px rgba(0,0,0,0.45),
+    inset 0 1px 0 rgba(255,255,255,0.10);
+
+  text-align: center;
 }
 
+/* Titolo */
 .hero-title{
-  margin: 0 0 10px;
-  font-size: clamp(28px, 4vw, 48px);
-  letter-spacing: 1px;
+  margin: 0 0 12px;
+  font-size: clamp(32px, 4vw, 48px);
+  font-weight: 900;
+  letter-spacing: 1.2px;
 }
 
+/* Sottotitolo */
 .hero-sub{
-  margin: 0 0 18px;
-  color: var(--muted);
-  line-height: 1.5;
+  margin: 0 0 22px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: rgba(255,255,255,0.72);
 }
+
+/* CTA area */
+.hero-card .actions{
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+/* CTA primary */
+.hero-card .btn-primary{
+  padding: 12px 18px;
+  font-size: 14px;
+}
+
+/* CTA secondary */
+.hero-card .btn-ghost{
+  padding: 12px 18px;
+  font-size: 14px;
+}
+
+/* Mobile tuning */
+@media (max-width: 560px){
+  .hero-card{
+    padding: 26px 20px;
+  }
+}
+
 
 /* =========================
    MAIN spacing
