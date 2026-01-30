@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse
 from starlette.middleware.sessions import SessionMiddleware
 from contextlib import asynccontextmanager
 import os
+from pathlib import Path
 
 from app.config import settings
 from init_db import init_db
@@ -31,6 +32,11 @@ app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+# Serve the React SPA build (when available)
+frontend_dist = Path("frontend/dist")
+if frontend_dist.exists():
+    app.mount("/app", StaticFiles(directory=frontend_dist, html=True), name="frontend")
 
 # Templates
 templates = Jinja2Templates(directory="app/templates")

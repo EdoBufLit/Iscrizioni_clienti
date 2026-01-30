@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+}
+
+.container-shell {
+  @apply mx-auto w-full max-w-6xl px-6;
+}
+
+.section-title {
+  @apply text-xs font-semibold uppercase tracking-[0.25em] text-neutral-500;
+}
+
+.section-heading {
+  @apply text-3xl font-semibold text-neutral-900 md:text-4xl;
+}
+
+.section-subtitle {
+  @apply mt-3 max-w-3xl text-base leading-7 text-neutral-600;
+}
+
+.surface {
+  @apply rounded-lg border border-neutral-100 bg-white shadow-subtle;
+}
+
+.link-muted {
+  @apply text-sm font-medium text-neutral-600 hover:text-neutral-900;
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-md bg-brand px-5 py-2 text-sm font-semibold text-white transition hover:bg-brand-dark;
+}
+
+.btn-ghost {
+  @apply inline-flex items-center justify-center rounded-md border border-neutral-200 px-5 py-2 text-sm font-semibold text-neutral-700 transition hover:border-neutral-300 hover:text-neutral-900;
+}
+
+.grid-cards {
+  @apply grid gap-6 md:grid-cols-2 lg:grid-cols-3;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
