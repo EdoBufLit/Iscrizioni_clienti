@@ -3,45 +3,74 @@
 {% block title %}Home · ASSO.N.A.M.{% endblock %}
 
 {% block hero %}
-<section class="hero">
+<section class="hero" style="--hero-bg: none;">
   <div class="hero-inner">
     <div class="hero-card">
       <h1 class="hero-title">ASSO.N.A.M.</h1>
       <p class="hero-sub">Associazione Nazionale Arti e Mestieri</p>
 
-      <div class="actions">
-        <a class="btn btn-primary" href="/associazioni">
-          Scopri le associazioni affiliate
-        </a>
-
-        {% if not request.session.get("member_id") %}
-          <a class="btn btn-ghost" href="/member/login">
-            Area riservata
-          </a>
+      <div class="actions" style="justify-content:center;">
+        <a class="btn btn-primary" href="/associazioni">Trova un’associazione</a>
+        {% if request.session.get("member_id") %}
+          <a class="btn btn-ghost" href="/member/portal">Vai al portale</a>
+        {% else %}
+          <a class="btn btn-ghost" href="/member/login">Area riservata</a>
         {% endif %}
       </div>
     </div>
   </div>
 </section>
-
 {% endblock %}
 
 {% block content %}
-  <div class="card">
-    <h2 style="margin:0 0 10px;">Benvenuti nel portale</h2>
-    <p class="muted" style="margin:0 0 14px;">
-      Trova la tua associazione, completa l’iscrizione e accedi all’area riservata.
-    </p>
+  <div class="card welcome" style="margin-bottom: 14px;">
+    <div>
+      <h2 style="margin:0 0 8px;">Benvenuti nel portale</h2>
+      <p class="muted" style="margin:0;">
+        Trova la tua associazione, completa l’iscrizione e accedi all’area riservata.
+      </p>
+    </div>
 
-    <div class="form-row">
-      <a class="btn btn-primary" href="/associazioni" style="width:100%; text-align:center;">Cerca un’associazione</a>
-
+    <div class="actions">
+      <a class="btn btn-primary" href="/associazioni">Cerca un’associazione</a>
       {% if request.session.get("member_id") %}
-        <a class="btn btn-ghost" href="/member/portal" style="width:100%; text-align:center;">Vai al tuo portale</a>
+        <a class="btn btn-ghost" href="/member/portal">Portale</a>
       {% else %}
-        <a class="btn btn-ghost" href="/member/login" style="width:100%; text-align:center;">Accedi</a>
+        <a class="btn btn-ghost" href="/member/login">Accedi</a>
       {% endif %}
     </div>
   </div>
+
+  <div class="section">
+    <h3 class="section-title">Cosa puoi fare qui</h3>
+
+    <div class="grid-3">
+      <div class="feature">
+        <h3>1) Scegli l’associazione</h3>
+        <p>Visualizza l’elenco e apri la pagina della tua associazione affiliata.</p>
+        <div class="actions">
+          <a class="btn btn-ghost" href="/associazioni">Vedi elenco</a>
+        </div>
+      </div>
+
+      <div class="feature">
+        <h3>2) Completa l’iscrizione</h3>
+        <p>Inserisci i dati richiesti e carica i documenti necessari in modo guidato.</p>
+      </div>
+
+      <div class="feature">
+        <h3>3) Accedi al portale socio</h3>
+        <p>Controlla lo stato e scarica i documenti già caricati (se previsti).</p>
+        <div class="actions">
+          {% if request.session.get("member_id") %}
+            <a class="btn btn-primary" href="/member/portal">Apri portale</a>
+          {% else %}
+            <a class="btn btn-primary" href="/member/login">Login</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
 {% endblock %}
+
 
