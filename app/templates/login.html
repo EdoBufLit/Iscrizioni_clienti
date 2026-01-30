@@ -1,36 +1,79 @@
 {% extends "base.html" %}
 
-{% block title %}Member Login{% endblock %}
+{% block title %}Area soci · Login{% endblock %}
 
 {% block content %}
-    <h2>Member Login</h2>
-    {% if org %}
-        <h4 style="margin-top: -15px; color: #666;">Area soci — {{ org.name }}</h4>
-    {% endif %}
-    <p>Enter your email address to receive a magic login link.</p>
+<section class="section" style="padding-top: 34px;">
+  <div class="auth-wrap">
+    <div class="auth-card surface-soft">
+      <div class="auth-head">
+        <div class="asso-mark asso-mark-lg" aria-hidden="true"></div>
+        <div>
+          <p class="section-title" style="margin:0;">AREA RISERVATA</p>
+          <h1 class="auth-title">Login socio</h1>
+          {% if org %}
+            <p class="muted" style="margin:8px 0 0;">{{ org.name }}</p>
+          {% else %}
+            <p class="muted" style="margin:8px 0 0;">Ricevi un link di accesso via email.</p>
+          {% endif %}
+        </div>
+      </div>
 
-    {% if message %}
-    <div style="background-color: #ccffcc; color: #006600; padding: 10px; margin-bottom: 20px; border: 1px solid #006600; border-radius: 4px;">
-        {{ message }}
-    </div>
-    {% endif %}
+      {% if message %}
+        <div class="flash success" style="margin-top: 14px;">{{ message }}</div>
+      {% endif %}
+      {% if error %}
+        <div class="flash error" style="margin-top: 14px;">{{ error }}</div>
+      {% endif %}
 
-    {% if error %}
-    <div style="background-color: #ffcccc; color: #cc0000; padding: 10px; margin-bottom: 20px; border: 1px solid #cc0000; border-radius: 4px;">
-        {{ error }}
-    </div>
-    {% endif %}
-
-    <form action="/member/login" method="post">
+      <form action="/member/login" method="post" class="auth-form" style="margin-top: 14px;">
         {% if org %}
-        <input type="hidden" name="org" value="{{ org.slug }}">
+          <input type="hidden" name="org" value="{{ org.slug }}">
         {% endif %}
 
-        <div class="form-group">
-            <label for="email">Email</label>
-            <input type="email" id="email" name="email" required>
+        <div>
+          <label class="label" for="email">Email</label>
+          <input class="input" type="email" id="email" name="email" placeholder="nome@dominio.it" required>
+          <div class="help">Ti invieremo un link “magic” valido per l’accesso.</div>
         </div>
 
-        <button type="submit" class="button">Send magic link</button>
-    </form>
+        <div class="actions" style="justify-content:flex-end; margin-top: 16px;">
+          <button type="submit" class="btn btn-primary">Invia link</button>
+        </div>
+
+        <div class="auth-foot">
+          <a class="btn btn-ghost" href="/associazioni">← Vai alle associazioni</a>
+          <a class="btn btn-ghost" href="/#contatti">Contatti</a>
+        </div>
+      </form>
+    </div>
+
+    <div class="auth-side">
+      <div class="side-card">
+        <h3 class="side-title">Accesso ordinato, stile “studio”.</h3>
+        <p class="muted" style="line-height: 1.7;">
+          L’area riservata permette di consultare lo stato, i documenti caricati e scaricare ciò che è disponibile.
+        </p>
+
+        <div class="side-bullets">
+          <div class="bullet">
+            <span class="dot dot-gold"></span>
+            <div>
+              <div class="b-title">Sicurezza</div>
+              <div class="muted b-text">Link di accesso via email, senza password.</div>
+            </div>
+          </div>
+          <div class="bullet">
+            <span class="dot dot-blue"></span>
+            <div>
+              <div class="b-title">Tracciabilità</div>
+              <div class="muted b-text">Stato e documenti disponibili in un’unica vista.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
 {% endblock %}
