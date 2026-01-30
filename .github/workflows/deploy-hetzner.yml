@@ -2,7 +2,8 @@ name: Deploy to Hetzner
 
 on:
   push:
-    branches: [ "association-signup-feature-1416851812972636353" ]
+    branches:
+      - association-signup-feature-1416851812972636353
 
 jobs:
   deploy:
@@ -18,6 +19,7 @@ jobs:
             set -e
             cd ${{ secrets.APP_PATH }}
             git fetch --all
-            git reset --hard origin/main
+            git checkout -B "$GITHUB_REF_NAME" "origin/$GITHUB_REF_NAME"
+            git reset --hard "origin/$GITHUB_REF_NAME"
             docker compose up -d --build
             docker image prune -f || true
