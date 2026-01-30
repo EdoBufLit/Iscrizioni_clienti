@@ -1,26 +1,32 @@
 {% extends "base.html" %}
 
-{% block title %}ASSO.N.A.M. · Portale{% endblock %}
+{% block title %}ASSO.N.A.M. · Studio & Portale{% endblock %}
 
 {% block hero %}
 <section class="hero" id="top">
   <div class="hero-inner">
     <div class="hero-card">
-      <p class="hero-kicker">ASSO.N.A.M.</p>
-      <h1 class="hero-title">Iscrizioni e portale soci.</h1>
+      <p class="hero-kicker">STUDIO CONTABILE · ASSO.N.A.M.</p>
+
+      <h1 class="hero-title">Gestione associativa, contabilità e adempimenti.<br>Con un portale soci integrato.</h1>
+
       <p class="hero-sub">
-        Trova la tua associazione affiliata, completa l’iscrizione e accedi all’area riservata
-        per consultare lo stato e i documenti.
+        Supporto operativo per associazioni e realtà affiliate: iscrizioni digitali, raccolta documenti,
+        tracciabilità e area riservata per i soci. Tutto in modo ordinato e verificabile.
       </p>
 
       <div class="actions" style="justify-content:center;">
-        <a class="btn btn-primary" href="/associazioni">Explore</a>
+        <a class="btn btn-primary" href="/associazioni">Vai alle associazioni</a>
         {% if request.session.get("member_id") %}
-          <a class="btn btn-ghost" href="/member/portal">Portale socio</a>
+          <a class="btn btn-ghost" href="/member/portal">Apri portale socio</a>
         {% else %}
           <a class="btn btn-ghost" href="/member/login">Area riservata</a>
         {% endif %}
       </div>
+
+      <p class="muted" style="position:relative; margin-top:14px; font-size:13px;">
+        Se devi iscriverti a un’associazione affiliata, parti da “Associazioni”.
+      </p>
     </div>
   </div>
 </section>
@@ -28,28 +34,26 @@
 
 {% block content %}
 
-<section class="section" id="service">
-  <p class="section-title">SERVICE</p>
-  <h2 class="section-h">Un flusso semplice e guidato</h2>
+<!-- SERVIZI -->
+<section class="section" id="servizi">
+  <p class="section-title">SERVIZI</p>
+  <h2 class="section-h">Un’impostazione “da studio”, non da app.</h2>
   <p class="section-p">
-    In pochi passaggi l’utente sceglie l’associazione, inserisce i dati richiesti, carica i documenti e accede al proprio portale.
+    L’obiettivo è ridurre errori, richieste incomplete e documenti persi: con un flusso guidato e controllabile.
   </p>
 
   <div class="grid-3">
     <div class="flat-card">
-      <h3>Trova l’associazione</h3>
-      <p>Consulta l’elenco delle affiliate e apri la pagina corretta.</p>
-      <a class="btn btn-ghost" href="/associazioni">Vedi elenco</a>
+      <h3>Adempimenti e gestione</h3>
+      <p>Gestione dati, tracciabilità e supporto operativo per le attività associative.</p>
     </div>
-
     <div class="flat-card">
-      <h3>Iscriviti</h3>
-      <p>Compila i dati e carica i documenti richiesti in modo chiaro.</p>
+      <h3>Iscrizioni digitali</h3>
+      <p>Compilazione dati, accettazioni (privacy/statuto) e caricamento documenti in un percorso unico.</p>
     </div>
-
     <div class="flat-card">
-      <h3>Gestisci dal portale</h3>
-      <p>Controlla lo stato e scarica i documenti disponibili (se previsti).</p>
+      <h3>Portale soci</h3>
+      <p>Accesso riservato per consultare stato iscrizione e documenti disponibili (se previsti).</p>
       {% if request.session.get("member_id") %}
         <a class="btn btn-primary" href="/member/portal">Apri portale</a>
       {% else %}
@@ -59,51 +63,123 @@
   </div>
 </section>
 
-<section class="section" id="how">
-  <p class="section-title">HOW</p>
-  <h2 class="section-h">Come funziona</h2>
+<!-- METODO -->
+<section class="section" id="metodo">
+  <p class="section-title">METODO</p>
+  <h2 class="section-h">Come funziona (senza frizioni)</h2>
   <p class="section-p">
-    Pensato per ridurre errori e rendere tutto tracciabile: dati, accettazioni (privacy/statuto) e documenti.
+    Un processo semplice, ma “studio-proof”: ogni dato e documento viene acquisito in modo coerente e tracciabile.
   </p>
 
   <div class="grid-3">
     <div class="flat-card">
-      <h3>Step 1</h3>
-      <p>Scegli l’associazione affiliata dall’elenco.</p>
+      <h3>1) Seleziona l’associazione</h3>
+      <p>Apri la pagina dell’affiliata corretta e avvia la richiesta.</p>
     </div>
     <div class="flat-card">
-      <h3>Step 2</h3>
-      <p>Completa il form e carica i documenti richiesti.</p>
+      <h3>2) Compila e carica</h3>
+      <p>Inserisci i dati, carica i documenti richiesti e invia.</p>
     </div>
     <div class="flat-card">
-      <h3>Step 3</h3>
-      <p>Accedi all’area riservata per verificare stato e documenti.</p>
+      <h3>3) Area riservata</h3>
+      <p>Accedi per verificare lo stato e consultare la documentazione disponibile.</p>
     </div>
   </div>
 </section>
 
+<!-- ASSOCIAZIONI (teaser simpatico) -->
+<section class="section" id="associazioni-preview">
+  <p class="section-title">ASSOCIAZIONI</p>
+  <h2 class="section-h">Trova la tua affiliata</h2>
+  <p class="section-p">
+    Entra nell’elenco e scegli l’associazione corretta: ogni scheda ti porta al percorso di iscrizione.
+  </p>
+
+  <div class="grid-3">
+    <a class="org-card" href="/associazioni">
+      <h3>Esplora l’elenco</h3>
+      <p class="org-desc">Ricerca rapida e schede chiare per partire subito.</p>
+      <p class="org-meta">Apri /associazioni →</p>
+    </a>
+
+    <div class="flat-card">
+      <h3>Cards “simpatica” ma seria</h3>
+      <p>Preview pulite, micro-dettagli e CTA chiare (senza effetto “dashboard”).</p>
+    </div>
+
+    <div class="flat-card">
+      <h3>Iscrizione guidata</h3>
+      <p>Il percorso si adatta ai documenti richiesti dall’associazione.</p>
+    </div>
+  </div>
+
+  <div class="actions" style="justify-content:center; margin-top:18px;">
+    <a class="btn btn-primary" href="/associazioni">Vai alle associazioni</a>
+  </div>
+</section>
+
+<!-- FAQ -->
 <section class="section" id="faq">
   <p class="section-title">FAQ</p>
   <h2 class="section-h">Domande frequenti</h2>
-  <p class="section-p">Le risposte rapide alle domande più comuni.</p>
+  <p class="section-p">Risposte rapide per evitare dubbi e “giri a vuoto”.</p>
 
   <div class="grid-3">
     <div class="flat-card">
       <h3>Serve un account?</h3>
-      <p>Sì, per accedere al portale e consultare stato/documenti.</p>
+      <p>Sì, per accedere all’area riservata e consultare stato/documenti.</p>
     </div>
     <div class="flat-card">
-      <h3>Che documenti devo caricare?</h3>
-      <p>Dipende dall’associazione: il percorso ti guiderà con i campi richiesti.</p>
+      <h3>Quali documenti servono?</h3>
+      <p>Dipende dall’associazione: il flusso ti mostra solo ciò che è richiesto.</p>
     </div>
     <div class="flat-card">
-      <h3>Posso modificare i dati?</h3>
-      <p>Dal portale puoi verificare lo stato. Estensioni per modifiche avanzate possono essere aggiunte.</p>
+      <h3>Come vengo aggiornato?</h3>
+      <p>Lo stato è visibile in area riservata. (Notifiche possono essere attivate.)</p>
     </div>
   </div>
+</section>
 
-  <div class="actions" style="justify-content:center; margin-top: 18px;">
-    <a class="btn btn-primary" href="/associazioni">Inizia ora</a>
+<!-- CONTATTI -->
+<section class="section" id="contatti" style="padding-bottom: 20px;">
+  <p class="section-title">CONTATTI</p>
+  <h2 class="section-h">Parliamo di operatività</h2>
+  <p class="section-p">
+    Se sei un’associazione o un referente e vuoi capire come strutturare il flusso, contattaci.
+  </p>
+
+  <div class="grid-2">
+    <div class="flat-card">
+      <h3>Studio</h3>
+      <p>Inserisci qui indirizzo / email / telefono quando vuoi.</p>
+      <p class="muted">Suggerimento: metti contatti reali + orari.</p>
+    </div>
+    <div class="flat-card">
+      <h3>Per i soci</h3>
+      <p>Per iscrizioni: vai su “Associazioni” e scegli quella corretta.</p>
+      <a class="btn btn-primary" href="/associazioni">Apri elenco</a>
+    </div>
+  </div>
+</section>
+
+<!-- Footer minimale (monocromatico) -->
+<section class="footer">
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <img class="footer-logo" src="/static/img/asso-logo-mono-white.png" alt="ASSO.N.A.M.">
+      <div>
+        <div class="footer-title">ASSO.N.A.M.</div>
+        <div class="muted" style="font-size:13px; margin-top:4px;">Studio contabile · Portale associativo</div>
+      </div>
+    </div>
+
+    <div class="footer-links">
+      <a href="/#servizi">Servizi</a>
+      <a href="/#metodo">Metodo</a>
+      <a href="/associazioni">Associazioni</a>
+      <a href="/#faq">FAQ</a>
+      <a href="/#contatti">Contatti</a>
+    </div>
   </div>
 </section>
 
