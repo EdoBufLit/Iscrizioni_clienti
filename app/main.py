@@ -3,6 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from app.config import settings
+from init_db import init_db
 from app.routes import join, member, admin, public
 from fastapi import Request
 from fastapi.responses import HTMLResponse
@@ -13,6 +14,12 @@ from contextlib import asynccontextmanager
 async def lifespan(app: FastAPI):
     # Ensure upload directory exists
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    try:
+        init_db()
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("Database initialization failed.")
     yield
 
 app = FastAPI(title=settings.PROJECT_NAME, version=settings.PROJECT_VERSION, lifespan=lifespan)
