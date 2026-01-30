@@ -1,51 +1,45 @@
 {% extends "base.html" %}
 
-{% block title %}ASSO.N.A.M.{% endblock %}
+{% block title %}Home · ASSO.N.A.M.{% endblock %}
 
 {% block hero %}
-<section class="hero">
-    <div class="hero__overlay"></div>
-    <div class="hero__content">
-        <svg class="hero__title" viewBox="0 0 1200 320" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-                <!-- Desktop Curve: Higher Arc -->
-                <path id="curveDesktop" d="M 120 280 Q 600 20 1080 280" fill="transparent"/>
-                <!-- Mobile Curve: Flatter Arc -->
-                <path id="curveMobile" d="M 120 280 Q 600 120 1080 280" fill="transparent"/>
+<section class="hero" style="--hero-bg: none;">
+  <div class="hero-inner">
+    <div class="hero-card">
+      <h1 class="hero-title">ASSO.N.A.M.</h1>
+      <p class="hero-sub">Associazione Nazionale Arti e Mestieri</p>
 
-                <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feGaussianBlur stdDeviation="2" result="blur"/>
-                    <feComposite in="SourceGraphic" in2="blur" operator="over"/>
-                </filter>
-            </defs>
-            <text width="1200">
-                <textPath id="heroTextPath" href="#curveDesktop" startOffset="50%" text-anchor="middle" class="hero__title-text">
-                    ASSO.N.A.M.
-                </textPath>
-            </text>
-        </svg>
-        <p class="hero__subtitle">Associazione Nazionale Arti e Mestieri</p>
-        <a class="hero__cta" href="/associazioni">Scopri le associazioni affiliate</a>
+      <div class="actions" style="justify-content:center;">
+        <a class="btn btn-primary" href="/associazioni">Scopri le associazioni affiliate</a>
+        {% if not request.session.get("member_id") %}
+          <a class="btn btn-ghost" href="/member/login">Area riservata</a>
+        {% endif %}
+      </div>
+
+      <p class="muted mt-3" style="margin-bottom:0;">
+        Se sei già iscritto, accedi per gestire i tuoi dati e le tue richieste.
+      </p>
     </div>
+  </div>
 </section>
-
-<script>
-    (function() {
-        const textPath = document.querySelector('#heroTextPath');
-        const updateCurve = () => {
-            const isDesktop = window.matchMedia('(min-width: 768px)').matches;
-            textPath.setAttribute('href', isDesktop ? '#curveDesktop' : '#curveMobile');
-        };
-        window.addEventListener('resize', updateCurve);
-        // Initial call
-        updateCurve();
-    })();
-</script>
 {% endblock %}
 
 {% block content %}
-<div style="text-align: center; padding: 50px;">
-    <h2>Benvenuti nel portale</h2>
-    <p>Utilizza il menu in alto per accedere ai servizi.</p>
-</div>
+  <div class="card">
+    <h2 style="margin:0 0 10px;">Benvenuti nel portale</h2>
+    <p class="muted" style="margin:0 0 14px;">
+      Trova la tua associazione, completa l’iscrizione e accedi all’area riservata.
+    </p>
+
+    <div class="form-row">
+      <a class="btn btn-primary" href="/associazioni" style="width:100%; text-align:center;">Cerca un’associazione</a>
+
+      {% if request.session.get("member_id") %}
+        <a class="btn btn-ghost" href="/member/portal" style="width:100%; text-align:center;">Vai al tuo portale</a>
+      {% else %}
+        <a class="btn btn-ghost" href="/member/login" style="width:100%; text-align:center;">Accedi</a>
+      {% endif %}
+    </div>
+  </div>
 {% endblock %}
+
