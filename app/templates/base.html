@@ -7,23 +7,31 @@
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <header>
-        <div class="container">
-            <div id="branding">
-                <h1>Association Portal</h1>
-            </div>
-            <nav>
-                <ul>
-                    {% if request.session.get("member_id") %}
-                        <li><a href="/member/portal">Portal</a></li>
-                        <li><a href="/member/logout">Logout</a></li>
-                    {% else %}
-                        <li><a href="/member/login">Login</a></li>
-                    {% endif %}
-                </ul>
-            </nav>
-        </div>
-    </header>
+    <header class="site-header">
+  <div class="header-inner">
+    <div id="branding">
+      <h1>Association Portal</h1>
+    </div>
+
+    <nav>
+      <ul>
+        {% if request.session.get("member_id") %}
+          <li><a href="/member/portal">Portal</a></li>
+          <li><a href="/member/logout">Logout</a></li>
+        {% else %}
+          <li><a href="/member/login">Login</a></li>
+        {% endif %}
+      </ul>
+    </nav>
+  </div>
+</header>
+
+{% block hero %}{% endblock %}
+
+<main class="container">
+  {% block content %}{% endblock %}
+</main>
+
 
     {% block hero %}{% endblock %}
 
