@@ -918,4 +918,8 @@ body{
   line-height: 1.65;
 }
 
+html{
+  scroll-behavior: smooth;
+  scroll-padding-top: 90px; /* offset per header sticky */
+}
 
