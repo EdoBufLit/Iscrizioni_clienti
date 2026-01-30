@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 import os
 
 from app.config import settings
-from app.db import init_db
+from init_db import init_db
 from app.routes import join, member, admin, public
 from init_db import init_db
 
@@ -16,7 +16,12 @@ from init_db import init_db
 async def lifespan(app: FastAPI):
     # Ensure upload directory exists
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-    init_db()
+    try:
+        init_db()
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("Database initialization failed.")
     yield
 
 app = FastAPI(title=settings.PROJECT_NAME, version=settings.PROJECT_VERSION, lifespan=lifespan)
