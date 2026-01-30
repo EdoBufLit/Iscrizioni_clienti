@@ -601,3 +601,261 @@ body {
   font-size: 14px;
 }
 .footer-links a:hover{ color: var(--text-main); }
+
+/* =========================
+   ASSO — Associations UI polish
+   (append to end of style.css)
+   ========================= */
+
+/* Make titles consistently "istituzionali" */
+h1, h2, h3,
+.hero-title, .section-h,
+.org-card h3, .flat-card h3 {
+  font-family: var(--font-display);
+}
+
+/* Compatibility: existing .button classes (templates use them) */
+.button{
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  padding: 12px 18px;
+  font-weight: 900;
+  letter-spacing: 0.2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+  user-select: none;
+  white-space: nowrap;
+  background: transparent;
+  color: var(--text);
+}
+.button:active{ transform: translateY(1px); }
+
+.button.primary-action{
+  background: linear-gradient(180deg, var(--brand-gold), var(--brand-gold-dark));
+  color: #151515;
+  border-color: rgba(245,194,26,0.55);
+  box-shadow: 0 10px 34px rgba(245,194,26,0.10);
+}
+.button.primary-action:hover{
+  border-color: rgba(245,194,26,0.85);
+  box-shadow: 0 14px 46px rgba(245,194,26,0.14);
+}
+.button.secondary-action{
+  background: transparent;
+}
+.button.secondary-action:hover{
+  background: var(--surface1);
+  border-color: var(--border2);
+}
+
+/* Search input polish */
+.search-form input[type="text"]{
+  height: 44px;
+  border-radius: var(--r-md);
+}
+
+/* Pills / badges */
+.pill{
+  display:inline-flex;
+  align-items:center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.2px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.84);
+  white-space: nowrap;
+}
+.pill-gold{
+  border-color: rgba(245,194,26,0.40);
+  background: rgba(245,194,26,0.12);
+  color: rgba(255,255,255,0.92);
+}
+
+/* Fun “mark” for cards (no extra assets) */
+.asso-mark{
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background:
+    radial-gradient(circle at 30% 30%, rgba(245,194,26,0.85), rgba(245,194,26,0.0) 55%),
+    radial-gradient(circle at 70% 70%, rgba(27,42,166,0.85), rgba(27,42,166,0.0) 60%),
+    rgba(255,255,255,0.03);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+  flex: 0 0 auto;
+}
+.asso-mark-lg{
+  width: 54px;
+  height: 54px;
+  border-radius: 18px;
+}
+
+/* Associations grid + card layout */
+.asso-grid{ margin-top: 18px; }
+
+.asso-card{
+  padding: 18px;
+  border-radius: var(--r-xl);
+  position: relative;
+  overflow: hidden;
+}
+
+.asso-card::before{
+  content:"";
+  position:absolute;
+  inset: -40px -40px auto -40px;
+  height: 180px;
+  background:
+    radial-gradient(180px 120px at 22% 20%, rgba(245,194,26,0.16), transparent 60%),
+    radial-gradient(240px 160px at 70% 35%, rgba(27,42,166,0.22), transparent 65%);
+  filter: blur(8px);
+  opacity: 0.85;
+  pointer-events:none;
+}
+
+.asso-card-top{
+  position: relative;
+  display:flex;
+  gap: 14px;
+  align-items:flex-start;
+  margin-bottom: 10px;
+}
+
+.asso-titleWrap{ min-width: 0; }
+
+.asso-title{
+  margin: 0 0 8px;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.asso-badges{
+  display:flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.asso-desc{
+  position: relative;
+  margin: 0 0 14px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.asso-card-bottom{
+  position: relative;
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.asso-cta{
+  font-weight: 900;
+  color: rgba(255,255,255,0.82);
+}
+.asso-card:hover .asso-cta{ color: #fff; }
+
+/* Detail page layout */
+.org-detail-container{
+  width: min(1120px, 92%);
+  margin: 0 auto;
+}
+
+.org-header{
+  display:flex;
+  align-items:flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.org-header-left{
+  display:flex;
+  align-items:flex-start;
+  gap: 14px;
+}
+
+.org-h1{
+  margin: 6px 0 10px;
+  font-size: clamp(26px, 3.2vw, 40px);
+  line-height: 1.15;
+}
+
+.org-badges{
+  display:flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.org-body{
+  display:grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 18px;
+}
+@media (max-width: 980px){
+  .org-body{ grid-template-columns: 1fr; }
+}
+
+.surface-soft{
+  background: var(--surface0);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  box-shadow: var(--sh-sm);
+  padding: 22px;
+}
+
+.org-h3{
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+
+.org-kv{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.kv{
+  display:flex;
+  align-items:flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 12px;
+  border-radius: var(--r-lg);
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+}
+.kv-k{
+  color: var(--faint);
+  font-weight: 900;
+  letter-spacing: 0.2px;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+.kv-v{
+  color: rgba(255,255,255,0.88);
+  font-weight: 700;
+  font-size: 13px;
+  text-align:right;
+}
+
+.org-actions{
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
