@@ -4,12 +4,15 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from app.db import get_db
 from app.models import Member, Token, TokenType, MemberDocument, MemberStatus, Organization
-from app.utils import generate_token, send_email_simulation, hash_token
+from app.utils import generate_token, send_email, hash_token
 from app.security import get_password_hash, verify_password
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
 from app import audit
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -125,11 +128,12 @@ def api_auth_login(request: Request, email: str = Form(...), password: str = For
         db.commit()
 
         link = f"{settings.BASE_URL}/member/auth?token={token_str}"
-        send_email_simulation(
+        if not send_email(
             to_email=email,
             subject="Accesso Area Riservata - ASSO.N.A.M.",
             body=f"Clicca qui per accedere alla tua area riservata: {link}\n\nIl link scade tra {settings.LOGIN_TOKEN_EXPIRE_MINUTES} minuti."
-        )
+        ):
+             logger.warning("Failed to send magic link email to %s", email)
 
     audit.member_magic_link_requested(email=email, ip=get_client_ip(request))
     return {"status": "ok", "message": "If an account exists, a magic link has been sent."}

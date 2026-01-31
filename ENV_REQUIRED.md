@@ -30,7 +30,7 @@ When `SMTP_HOST` is empty the application falls back to writing emails to `email
 | `SMTP_HOST` | **Yes** (prod) | _(empty)_ | SMTP server hostname (e.g. `smtp.gmail.com`). |
 | `SMTP_PORT` | No | `587` | SMTP server port. |
 | `SMTP_USER` | **Yes** (prod) | _(empty)_ | SMTP authentication username. |
-| `SMTP_PASS` | **Yes** (prod) | _(empty)_ | SMTP authentication password or app-specific password. |
+| `SMTP_PASSWORD` | **Yes** (prod) | _(empty)_ | SMTP authentication password or app-specific password. |
 | `SMTP_FROM` | No | `noreply@assonam.it` | Sender address for outgoing emails. |
 | `SMTP_USE_TLS` | No | `true` | Enable STARTTLS (`true`, `1`, or `yes` to enable). |
 

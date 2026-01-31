@@ -9,7 +9,7 @@ from sqlalchemy import func
 from app.db import get_db
 from app.models import AdminUser, AdminRole, Organization, OrgAdminToken, CardBatch, CardMovement
 from app.security import verify_password
-from app.utils import generate_token, hash_token, send_email_simulation, send_email
+from app.utils import generate_token, hash_token, send_email
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
 from app import audit
@@ -140,11 +140,12 @@ def create_org_admin(
     db.commit()
 
     link = f"{settings.BASE_URL}/api/org-admin/auth/verify?token={token_str}"
-    send_email_simulation(
+    if not send_email(
         to_email=body.email,
         subject="Invito area amministrazione associazione",
         body=f"Sei stato invitato come amministratore di {org.name}.\nAccedi qui: {link}",
-    )
+    ):
+         logger.warning("Failed to send org admin invite to %s", body.email)
 
     return {
         "id": admin.id,

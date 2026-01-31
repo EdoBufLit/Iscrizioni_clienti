@@ -10,10 +10,13 @@ from typing import Optional
 
 from app.db import get_db
 from app.models import AdminUser, AdminRole, OrgAdminToken, Member, MemberStatus, CardBatch, CardMovement
-from app.utils import generate_token, hash_token, send_email_simulation
+from app.utils import generate_token, hash_token, send_email
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
 from app import audit
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/org-admin")
 
@@ -62,11 +65,12 @@ def request_magic_link(
         db.commit()
 
         link = f"{settings.BASE_URL}/api/org-admin/auth/verify?token={token_str}"
-        send_email_simulation(
+        if not send_email(
             to_email=email,
             subject="Accesso area amministrazione associazione",
             body=f"Clicca qui per accedere: {link}",
-        )
+        ):
+             logger.warning("Failed to send org admin magic link to %s", email)
 
     audit.org_admin_magic_link_requested(email=email, ip=get_client_ip(request))
     return {"ok": True}
