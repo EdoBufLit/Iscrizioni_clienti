@@ -65,6 +65,8 @@ export type OrganizationDetail = {
   logo_url: string | null;
   is_active: boolean;
   statute_version?: string;
+  statute_url?: string;
+  has_statute: boolean;
   privacy_version?: string;
 };
 
@@ -130,6 +132,7 @@ export async function joinOrganization(
     phone: string;
     fiscal_code: string;
     accept_statute: boolean;
+    accepted_statute_version: string | null;
     accept_privacy: boolean;
   },
 ): Promise<{ status: string; organization: string }> {
@@ -140,6 +143,9 @@ export async function joinOrganization(
   body.append("phone", data.phone);
   body.append("fiscal_code", data.fiscal_code);
   body.append("accept_statute", String(data.accept_statute));
+  if (data.accepted_statute_version) {
+    body.append("accepted_statute_version", data.accepted_statute_version);
+  }
   body.append("accept_privacy", String(data.accept_privacy));
   const res = await fetch(`/api/join/${encodeURIComponent(orgSlug)}`, {
     method: "POST",
