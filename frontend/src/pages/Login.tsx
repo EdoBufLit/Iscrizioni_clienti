@@ -68,7 +68,7 @@ const Login = () => {
     return (
       <section className="flex min-h-[70vh] items-center justify-center py-16">
         <div className="container-shell">
-          <div className="mx-auto grid max-w-4xl overflow-hidden rounded-lg border border-neutral-100 bg-white shadow-elevated md:grid-cols-2">
+          <div className="mx-auto grid max-w-4xl overflow-hidden surface-strong md:grid-cols-2">
             <div className="flex flex-col justify-center px-8 py-12 sm:px-12">
               <div className="flex items-center gap-3">
                 <img src={`${import.meta.env.BASE_URL}logo.jpg`} alt="ASSO.N.A.M." className="h-10 rounded" />
@@ -98,7 +98,7 @@ const Login = () => {
   return (
     <section className="flex min-h-[70vh] items-center justify-center py-16">
       <div className="container-shell">
-        <div className="mx-auto grid max-w-4xl overflow-hidden rounded-lg border border-neutral-100 bg-white shadow-elevated md:grid-cols-2">
+        <div className="mx-auto grid max-w-4xl overflow-hidden surface-strong md:grid-cols-2">
           <div className="flex flex-col justify-center px-8 py-12 sm:px-12">
             <div className="flex items-center gap-3">
               <img src={`${import.meta.env.BASE_URL}logo.jpg`} alt="ASSO.N.A.M." className="h-10 rounded" />
