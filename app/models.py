@@ -130,3 +130,16 @@ class Token(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     member = relationship("Member", back_populates="tokens")
+
+
+class OrgAdminToken(Base):
+    __tablename__ = "org_admin_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=False)
+    token_hash = Column(String, index=True)
+    expires_at = Column(DateTime)
+    used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    admin = relationship("AdminUser")

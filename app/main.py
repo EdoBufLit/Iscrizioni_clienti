@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
-from app.routes import admin, join, member, public
+from app.routes import admin, join, member, org_admin, public
 from app.spa import SPAStaticFiles
 from init_db import init_db
 
@@ -58,6 +58,7 @@ else:
 app.include_router(join.router)
 app.include_router(member.router)
 app.include_router(admin.router)
+app.include_router(org_admin.router)
 app.include_router(public.router)
 
 
