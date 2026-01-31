@@ -1,14 +1,15 @@
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import Organization
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
 
-@router.get("/associazioni", response_class=HTMLResponse)
+
+# ── Legacy HTML redirects ─────────────────────────────────────────
+
+@router.get("/associazioni")
 def list_associazioni(request: Request, q: str = None, db: Session = Depends(get_db)):
     query = db.query(Organization).order_by(Organization.name)
 
@@ -19,19 +20,44 @@ def list_associazioni(request: Request, q: str = None, db: Session = Depends(get
 
     orgs = query.all()
 
-    return templates.TemplateResponse("associazioni.html", {
-        "request": request,
-        "orgs": orgs,
-        "q": q
-    })
+    return RedirectResponse(url="/app/associazioni")
 
-@router.get("/associazioni/{slug}", response_class=HTMLResponse)
+
+@router.get("/associazioni/{slug}")
 def associazioni_detail(request: Request, slug: str, db: Session = Depends(get_db)):
     org = db.query(Organization).filter(Organization.slug == slug).first()
     if not org:
-        return HTMLResponse("Organization not found", status_code=404)
+        return RedirectResponse(url="/app/associazioni")
 
-    return templates.TemplateResponse("associazione_detail.html", {
-        "request": request,
-        "org": org
-    })
+    return RedirectResponse(url=f"/app/associazioni/{slug}")
+
+
+# ── Public JSON API ───────────────────────────────────────────────
+
+def _org_to_dict(org: Organization) -> dict:
+    return {
+        "id": org.id,
+        "name": org.name,
+        "slug": org.slug,
+    }
+
+
+@router.get("/api/organizations")
+def api_list_organizations(q: str = None, db: Session = Depends(get_db)):
+    query = db.query(Organization).order_by(Organization.name)
+
+    if q:
+        search = f"%{q}%"
+        query = query.filter(Organization.name.ilike(search))
+
+    orgs = query.all()
+    return [_org_to_dict(o) for o in orgs]
+
+
+@router.get("/api/organizations/{slug}")
+def api_organization_detail(slug: str, db: Session = Depends(get_db)):
+    org = db.query(Organization).filter(Organization.slug == slug).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    return _org_to_dict(org)

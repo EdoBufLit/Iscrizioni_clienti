@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, status
-from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
-from fastapi.templating import Jinja2Templates
+from fastapi.responses import RedirectResponse, FileResponse
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from app.db import get_db
@@ -10,7 +9,7 @@ from app.config import settings
 import os
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
+
 
 def get_current_member(request: Request, db: Session):
     member_id = request.session.get("member_id")
@@ -18,47 +17,17 @@ def get_current_member(request: Request, db: Session):
         return None
     return db.query(Member).filter(Member.id == member_id).first()
 
-@router.get("/member/login", response_class=HTMLResponse)
+
+# ── Legacy HTML redirects ─────────────────────────────────────────
+
+@router.get("/member/login")
 def login_page(request: Request, org: str = None, db: Session = Depends(get_db)):
     organization = None
     if org:
         organization = db.query(Organization).filter(Organization.slug == org).first()
 
-    return templates.TemplateResponse("login.html", {
-        "request": request,
-        "org": organization
-    })
+    return RedirectResponse(url="/app/login")
 
-@router.post("/member/login", response_class=HTMLResponse)
-def login_submit(request: Request, email: str = Form(...), org: str = Form(None), db: Session = Depends(get_db)):
-    member = db.query(Member).filter(Member.email == email).first()
-
-    organization = None
-    if org:
-        organization = db.query(Organization).filter(Organization.slug == org).first()
-
-    if member:
-        # Generate Magic Link
-        token_str = generate_token()
-        token = Token(
-            member_id=member.id,
-            purpose=TokenType.LOGIN_MAGIC_LINK,
-            token_hash=hash_token(token_str),
-            expires_at=datetime.utcnow() + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES)
-        )
-        db.add(token)
-        db.commit()
-
-        link = f"{settings.BASE_URL}/member/auth?token={token_str}"
-        send_email_simulation(
-            to_email=email,
-            subject="Login to Member Portal",
-            body=f"Click here to login: {link}"
-        )
-
-    # Always return same message for security
-    org_msg = f" di {organization.name}" if organization else ""
-    return HTMLResponse(content=f"<h1>Check your email</h1><p>If an account exists, we sent a magic link to access the member portal{org_msg}.</p>")
 
 @router.get("/member/auth")
 def auth_magic_link(request: Request, token: str, db: Session = Depends(get_db)):
@@ -70,14 +39,14 @@ def auth_magic_link(request: Request, token: str, db: Session = Depends(get_db))
     ).first()
 
     if not token_entry:
-        return HTMLResponse(content="Invalid or expired login link", status_code=400)
+        return RedirectResponse(url="/app/login")
 
     if token_entry.used_at:
-        return HTMLResponse(content="Link already used", status_code=400)
+        return RedirectResponse(url="/app/login")
 
     member = db.query(Member).filter(Member.id == token_entry.member_id).first()
     if not member or member.status != MemberStatus.ACTIVE:
-        return HTMLResponse(content="Account not active or does not exist", status_code=400)
+        return RedirectResponse(url="/app/login")
 
     # Mark token used
     token_entry.used_at = datetime.utcnow()
@@ -86,25 +55,30 @@ def auth_magic_link(request: Request, token: str, db: Session = Depends(get_db))
     # Log user in
     request.session["member_id"] = token_entry.member_id
 
-    return RedirectResponse(url="/member/portal", status_code=status.HTTP_302_FOUND)
+    return RedirectResponse(url="/app/dashboard", status_code=status.HTTP_302_FOUND)
 
-@router.get("/member/portal", response_class=HTMLResponse)
+
+@router.get("/member/portal")
 def member_portal(request: Request, db: Session = Depends(get_db)):
     member = get_current_member(request, db)
     if not member:
         if request.session.get("member_id"):
             request.session.clear()
-        return RedirectResponse(url="/member/login")
+        return RedirectResponse(url="/app/login")
 
     documents = db.query(MemberDocument).filter(MemberDocument.member_id == member.id).all()
     org = member.organization
 
-    return templates.TemplateResponse("portal.html", {
-        "request": request,
-        "member": member,
-        "organization": org,
-        "documents": documents
-    })
+    return RedirectResponse(url="/app/dashboard")
+
+
+@router.get("/member/logout")
+def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse(url="/app/login")
+
+
+# ── File download (non-HTML, kept as-is) ──────────────────────────
 
 @router.get("/member/download/{doc_id}")
 def download_document(request: Request, doc_id: int, db: Session = Depends(get_db)):
@@ -122,7 +96,62 @@ def download_document(request: Request, doc_id: int, db: Session = Depends(get_d
 
     return FileResponse(file_path, filename=doc.original_filename, media_type=doc.mime_type)
 
-@router.get("/member/logout")
-def logout(request: Request):
+
+# ── JSON API ──────────────────────────────────────────────────────
+
+@router.post("/api/auth/login")
+def api_auth_login(request: Request, email: str = Form(...), db: Session = Depends(get_db)):
+    """Send a magic-link email. Always returns 200 for security (no user enumeration)."""
+    member = db.query(Member).filter(Member.email == email).first()
+
+    if member:
+        token_str = generate_token()
+        token = Token(
+            member_id=member.id,
+            purpose=TokenType.LOGIN_MAGIC_LINK,
+            token_hash=hash_token(token_str),
+            expires_at=datetime.utcnow() + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES)
+        )
+        db.add(token)
+        db.commit()
+
+        link = f"{settings.BASE_URL}/member/auth?token={token_str}"
+        send_email_simulation(
+            to_email=email,
+            subject="Login to Member Portal",
+            body=f"Click here to login: {link}"
+        )
+
+    return {"status": "ok", "message": "If an account exists, a magic link has been sent."}
+
+
+@router.post("/api/auth/logout")
+def api_auth_logout(request: Request):
     request.session.clear()
-    return RedirectResponse(url="/member/login")
+    return {"status": "ok"}
+
+
+@router.get("/api/auth/me")
+def api_auth_me(request: Request, db: Session = Depends(get_db)):
+    member = get_current_member(request, db)
+    if not member:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    org = member.organization
+
+    return {
+        "id": member.id,
+        "first_name": member.first_name,
+        "last_name": member.last_name,
+        "email": member.email,
+        "phone": member.phone,
+        "fiscal_code": member.fiscal_code,
+        "status": member.status.value,
+        "card_no": member.card_no,
+        "joined_at": member.joined_at.isoformat() if member.joined_at else None,
+        "organization": {
+            "id": org.id,
+            "name": org.name,
+            "slug": org.slug,
+        } if org else None,
+    }

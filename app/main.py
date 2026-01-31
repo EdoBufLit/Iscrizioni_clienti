@@ -1,16 +1,21 @@
-from fastapi import FastAPI, Request
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse
-from starlette.middleware.sessions import SessionMiddleware
-from contextlib import asynccontextmanager
+import logging
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
+from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
+
 from app.config import settings
+from app.routes import admin, join, member, public
+from app.spa import SPAStaticFiles
 from init_db import init_db
-from app.routes import join, member, admin, public
-from init_db import init_db
+
+logger = logging.getLogger(__name__)
+
+SPA_DIR = os.getenv("SPA_DIR", "frontend/dist")
 
 
 @asynccontextmanager
@@ -20,32 +25,42 @@ async def lifespan(app: FastAPI):
     try:
         init_db()
     except Exception:
-        import logging
-
-        logging.getLogger(__name__).exception("Database initialization failed.")
+        logger.exception("Database initialization failed.")
     yield
 
-app = FastAPI(title=settings.PROJECT_NAME, version=settings.PROJECT_VERSION, lifespan=lifespan)
+
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    version=settings.PROJECT_VERSION,
+    lifespan=lifespan,
+)
 
 # Add Session Middleware
 app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
 
-# Mount static files
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+# Backend static assets (favicons, images)
+_static_path = Path("app/static")
+if _static_path.is_dir():
+    app.mount("/static", StaticFiles(directory=_static_path), name="static")
 
-# Serve the React SPA build (when available)
-frontend_dist = Path("frontend/dist")
-if frontend_dist.exists():
-    app.mount("/app", StaticFiles(directory=frontend_dist, html=True), name="frontend")
-
-# Templates
-templates = Jinja2Templates(directory="app/templates")
+# Serve the React SPA build with client-side routing fallback
+_spa_path = Path(SPA_DIR)
+if _spa_path.is_dir() and (_spa_path / "index.html").is_file():
+    app.mount("/app", SPAStaticFiles(directory=_spa_path, html=True), name="frontend")
+    logger.info("SPA mounted at /app from %s", _spa_path.resolve())
+else:
+    logger.warning(
+        "SPA directory not found or missing index.html: %s — "
+        "/app will not be available. Run the frontend build first.",
+        _spa_path.resolve(),
+    )
 
 app.include_router(join.router)
 app.include_router(member.router)
 app.include_router(admin.router)
 app.include_router(public.router)
 
-@app.get("/", response_class=HTMLResponse)
-def read_root(request: Request):
-    return templates.TemplateResponse("home.html", {"request": request})
+
+@app.get("/")
+def read_root():
+    return RedirectResponse(url="/app/")

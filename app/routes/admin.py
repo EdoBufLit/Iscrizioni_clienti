@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, status
-from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
-from fastapi.templating import Jinja2Templates
+from fastapi.responses import RedirectResponse, FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.db import get_db
@@ -12,7 +11,7 @@ from datetime import datetime
 import os
 
 router = APIRouter(prefix="/admin")
-templates = Jinja2Templates(directory="app/templates")
+
 
 def get_current_admin(request: Request, db: Session):
     admin_id = request.session.get("admin_id")
@@ -20,32 +19,37 @@ def get_current_admin(request: Request, db: Session):
         return None
     return db.query(AdminUser).filter(AdminUser.id == admin_id).first()
 
-@router.get("/login", response_class=HTMLResponse)
-def admin_login_page(request: Request):
-    return templates.TemplateResponse("admin/login.html", {"request": request})
 
-@router.post("/login", response_class=HTMLResponse)
+# ── Legacy HTML redirects ─────────────────────────────────────────
+
+@router.get("/login")
+def admin_login_page(request: Request):
+    return RedirectResponse(url="/app/admin")
+
+
+@router.post("/login")
 def admin_login_submit(request: Request, email: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
     admin = db.query(AdminUser).filter(AdminUser.email == email).first()
     if not admin or not verify_password(password, admin.password_hash):
-        return templates.TemplateResponse("admin/login.html", {"request": request, "error": "Invalid credentials"})
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
     request.session["admin_id"] = admin.id
-    return RedirectResponse(url="/admin/dashboard", status_code=status.HTTP_302_FOUND)
+    return RedirectResponse(url="/app/admin", status_code=status.HTTP_302_FOUND)
+
 
 @router.get("/logout")
 def logout(request: Request):
     request.session.pop("admin_id", None)
-    return RedirectResponse(url="/admin/login")
+    return RedirectResponse(url="/app/admin")
 
-@router.get("/dashboard", response_class=HTMLResponse)
+
+@router.get("/dashboard")
 def admin_dashboard(request: Request, db: Session = Depends(get_db)):
     admin = get_current_admin(request, db)
     if not admin:
-        return RedirectResponse(url="/admin/login")
+        return RedirectResponse(url="/app/admin")
 
     # Stats for Org
-    # Assuming Org Admin for now
     org_id = admin.org_id
 
     total_members = db.query(Member).filter(Member.org_id == org_id).count()
@@ -58,17 +62,8 @@ def admin_dashboard(request: Request, db: Session = Depends(get_db)):
     remaining_cards = sum([max(0, b.end_no - b.next_no + 1) for b in batches])
     used_cards = total_cards - remaining_cards
 
-    return templates.TemplateResponse("admin/dashboard.html", {
-        "request": request,
-        "admin": admin,
-        "total_members": total_members,
-        "active_members": active_members,
-        "pending_members": pending_members,
-        "total_cards": total_cards,
-        "used_cards": used_cards,
-        "remaining_cards": remaining_cards,
-        "batches": batches
-    })
+    return RedirectResponse(url="/app/admin")
+
 
 @router.post("/inventory")
 def add_batch(request: Request, quantity: int = Form(...), db: Session = Depends(get_db)):
@@ -94,11 +89,12 @@ def add_batch(request: Request, quantity: int = Form(...), db: Session = Depends
     db.commit()
     return RedirectResponse(url="/admin/dashboard", status_code=status.HTTP_302_FOUND)
 
-@router.get("/members", response_class=HTMLResponse)
+
+@router.get("/members")
 def list_members(request: Request, status: str = None, db: Session = Depends(get_db)):
     admin = get_current_admin(request, db)
     if not admin:
-        return RedirectResponse(url="/admin/login")
+        return RedirectResponse(url="/app/admin")
 
     query = db.query(Member).filter(Member.org_id == admin.org_id)
     if status:
@@ -106,28 +102,21 @@ def list_members(request: Request, status: str = None, db: Session = Depends(get
 
     members = query.all()
 
-    return templates.TemplateResponse("admin/members.html", {
-        "request": request,
-        "admin": admin,
-        "members": members,
-        "filter_status": status
-    })
+    return RedirectResponse(url="/app/admin/affiliazioni")
 
-@router.get("/members/{member_id}", response_class=HTMLResponse)
+
+@router.get("/members/{member_id}")
 def member_detail(request: Request, member_id: int, db: Session = Depends(get_db)):
     admin = get_current_admin(request, db)
     if not admin:
-        return RedirectResponse(url="/admin/login")
+        return RedirectResponse(url="/app/admin")
 
     member = db.query(Member).filter(Member.id == member_id, Member.org_id == admin.org_id).first()
     if not member:
-        raise HTTPException(status_code=404, detail="Member not found")
+        return RedirectResponse(url="/app/admin/affiliazioni")
 
-    return templates.TemplateResponse("admin/member_detail.html", {
-        "request": request,
-        "admin": admin,
-        "member": member
-    })
+    return RedirectResponse(url="/app/admin")
+
 
 @router.post("/members/{member_id}/assign_card")
 def assign_card_manual(request: Request, member_id: int, db: Session = Depends(get_db)):
@@ -139,6 +128,7 @@ def assign_card_manual(request: Request, member_id: int, db: Session = Depends(g
         db.commit()
 
     return RedirectResponse(url=f"/admin/members/{member_id}", status_code=status.HTTP_302_FOUND)
+
 
 @router.post("/members/{member_id}/edit")
 def edit_member(
@@ -168,11 +158,12 @@ def edit_member(
 
     return RedirectResponse(url=f"/admin/members/{member_id}", status_code=status.HTTP_302_FOUND)
 
+
 @router.get("/download/{doc_id}")
 def admin_download_document(request: Request, doc_id: int, db: Session = Depends(get_db)):
     admin = get_current_admin(request, db)
     if not admin:
-        return RedirectResponse(url="/admin/login")
+        return RedirectResponse(url="/app/admin")
 
     doc = db.query(MemberDocument).filter(MemberDocument.id == doc_id).first()
     if not doc:
@@ -188,6 +179,7 @@ def admin_download_document(request: Request, doc_id: int, db: Session = Depends
         raise HTTPException(status_code=404, detail="File not found on server")
 
     return FileResponse(file_path, filename=doc.original_filename, media_type=doc.mime_type)
+
 
 @router.post("/members/{member_id}/docs/{doc_id}/review")
 def review_doc(request: Request, member_id: int, doc_id: int, action: str = Form(...), notes: str = Form(None), db: Session = Depends(get_db)):

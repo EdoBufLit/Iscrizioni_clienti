@@ -1,6 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile, File, status
-from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile, File
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from app.db import get_db
@@ -11,16 +10,16 @@ from app.config import settings
 import logging
 import os
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
 
-@router.get("/join/continue", response_class=HTMLResponse)
+
+# ── Legacy HTML redirects ─────────────────────────────────────────
+
+@router.get("/join/continue")
 def join_continue_page(request: Request, token: str, db: Session = Depends(get_db)):
-    # Validate token
     token_hash = hash_token(token)
     token_entry = db.query(Token).filter(
         Token.token_hash == token_hash,
@@ -29,151 +28,30 @@ def join_continue_page(request: Request, token: str, db: Session = Depends(get_d
     ).first()
 
     if not token_entry:
-        return HTMLResponse(content="Invalid or expired token", status_code=400)
+        return RedirectResponse(url="/app/")
 
     if token_entry.used_at:
-         return HTMLResponse(content="Token already used", status_code=400)
+         return RedirectResponse(url="/app/")
 
     member = db.query(Member).filter(Member.id == token_entry.member_id).first()
     organization = db.query(Organization).filter(Organization.id == member.org_id).first()
 
-    return templates.TemplateResponse("upload.html", {
-        "request": request,
-        "token": token,
-        "member": member,
-        "organization": organization
-    })
-
-@router.post("/join/continue", response_class=HTMLResponse)
-async def join_continue_submit(
-    request: Request,
-    token: str = Form(...),
-    id_document: UploadFile = File(...),
-    fiscal_code_document: UploadFile = File(...),
-    db: Session = Depends(get_db)
-):
-    # Validate token again
-    token_hash = hash_token(token)
-    token_entry = db.query(Token).filter(
-        Token.token_hash == token_hash,
-        Token.purpose == TokenType.SIGNUP_CONTINUE,
-        Token.expires_at > datetime.utcnow()
-    ).first()
-
-    if not token_entry:
-        return HTMLResponse(content="Invalid or expired token", status_code=400)
-
-    member = db.query(Member).filter(Member.id == token_entry.member_id).first()
-
-    # Process Files with transactional cleanup on failure
-    rel_path_id = None
-    rel_path_fc = None
-
-    try:
-        # Process ID Document
-        rel_path_id, size_id, sha_id = await save_upload_file(id_document)
-        doc_id = MemberDocument(
-            member_id=member.id,
-            doc_type="identity",
-            rel_path=rel_path_id,
-            original_filename=id_document.filename,
-            mime_type=id_document.content_type,
-            size_bytes=size_id,
-            sha256=sha_id
-        )
-        db.add(doc_id)
-
-        # Process Fiscal Code Document
-        rel_path_fc, size_fc, sha_fc = await save_upload_file(fiscal_code_document)
-        doc_fc = MemberDocument(
-            member_id=member.id,
-            doc_type="fiscal_code",
-            rel_path=rel_path_fc,
-            original_filename=fiscal_code_document.filename,
-            mime_type=fiscal_code_document.content_type,
-            size_bytes=size_fc,
-            sha256=sha_fc
-        )
-        db.add(doc_fc)
-
-        # Assign Card
-        # Try to assign a card. If successful, auto-activate.
-        # If no cards, remain PENDING_DOCS (or VERIFICATION) and let admin handle it?
-        # Requirement: "If all batches exhausted, show 'No cards available' and keep member in pending state."
-        # We also need to verify docs potentially? Prompt says "on successful signup completion (or on doc approval)".
-        # We'll try to assign card.
-
-        assigned = assign_next_card(db, member.id, member.org_id)
-
-        if assigned:
-            member.status = MemberStatus.ACTIVE
-            member.joined_at = datetime.utcnow()
-            # Mark token used only if successful? Or generally?
-            # If card exhausted, we might want to let them login to see "Waiting for card".
-            # So enable login by consuming token.
-        else:
-            member.status = MemberStatus.PENDING_CARDS
-            logger.warning(f"Member {member.id} completed upload but no cards available.")
-
-        # Mark token used
-        token_entry.used_at = datetime.utcnow()
-
-        db.commit()
-
-        # Send Welcome Email
-        org = db.query(Organization).filter(Organization.id == member.org_id).first()
-        send_email_simulation(
-            to_email=member.email,
-            subject=f"Welcome to {org.name}",
-            body=f"Your registration is complete. You can now login at {settings.BASE_URL}/member/login"
-        )
-
-        if not assigned:
-             return HTMLResponse(content="<h1>Registration Complete</h1><p>Your documents have been uploaded. We are currently waiting for new membership cards. You will be assigned one automatically when available.</p>")
-
-    except HTTPException as e:
-        # Cleanup uploads
-        if rel_path_id:
-            try:
-                os.remove(os.path.join(settings.UPLOAD_DIR, rel_path_id))
-            except OSError:
-                pass
-        if rel_path_fc:
-            try:
-                os.remove(os.path.join(settings.UPLOAD_DIR, rel_path_fc))
-            except OSError:
-                pass
-        db.rollback()
-        return HTMLResponse(content=f"Upload Failed: {e.detail}", status_code=400)
-    except Exception as e:
-        # Cleanup uploads
-        if rel_path_id:
-            try:
-                os.remove(os.path.join(settings.UPLOAD_DIR, rel_path_id))
-            except OSError:
-                pass
-        if rel_path_fc:
-            try:
-                os.remove(os.path.join(settings.UPLOAD_DIR, rel_path_fc))
-            except OSError:
-                pass
-        db.rollback()
-        logger.error(f"Error during file upload: {e}")
-        return HTMLResponse(content="Internal Server Error during upload.", status_code=500)
-
-    return HTMLResponse(content="<h1>Registration Complete!</h1><p>You can now <a href='/member/login'>login</a>.</p>")
+    return RedirectResponse(url="/app/")
 
 
-@router.get("/join/{org_slug}", response_class=HTMLResponse)
+@router.get("/join/{org_slug}")
 def join_page(request: Request, org_slug: str, db: Session = Depends(get_db)):
     org = db.query(Organization).filter(Organization.slug == org_slug).first()
     if not org:
-        raise HTTPException(status_code=404, detail="Organization not found")
+        return RedirectResponse(url="/app/associazioni")
 
-    return templates.TemplateResponse("join.html", {"request": request, "org": org})
+    return RedirectResponse(url=f"/app/associazioni/{org_slug}/iscrizione")
 
-@router.post("/join/{org_slug}", response_class=HTMLResponse)
-def join_submit(
+
+# ── JSON API ──────────────────────────────────────────────────────
+
+@router.post("/api/join/{org_slug}")
+def api_join_start(
     request: Request,
     org_slug: str,
     first_name: str = Form(...),
@@ -189,11 +67,9 @@ def join_submit(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    # Create Member
-    # Check if email already exists for this org?
     existing_member = db.query(Member).filter(Member.email == email, Member.org_id == org.id).first()
     if existing_member:
-        return HTMLResponse("Member with this email already exists.", status_code=400)
+        raise HTTPException(status_code=409, detail="Member with this email already exists")
 
     member = Member(
         org_id=org.id,
@@ -233,4 +109,107 @@ def join_submit(
         body=f"Click here to upload documents and complete registration: {link}"
     )
 
-    return HTMLResponse(content="<h1>Registration Started</h1><p>Please check your email to complete the registration.</p>")
+    return {
+        "status": "started",
+        "member_id": member.id,
+        "organization": org.name,
+    }
+
+
+@router.post("/api/join/continue")
+async def api_join_continue(
+    request: Request,
+    token: str = Form(...),
+    id_document: UploadFile = File(...),
+    fiscal_code_document: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    # Validate token
+    token_hash = hash_token(token)
+    token_entry = db.query(Token).filter(
+        Token.token_hash == token_hash,
+        Token.purpose == TokenType.SIGNUP_CONTINUE,
+        Token.expires_at > datetime.utcnow()
+    ).first()
+
+    if not token_entry:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+
+    if token_entry.used_at:
+        raise HTTPException(status_code=400, detail="Token already used")
+
+    member = db.query(Member).filter(Member.id == token_entry.member_id).first()
+
+    # Process Files with transactional cleanup on failure
+    rel_path_id = None
+    rel_path_fc = None
+
+    try:
+        # Process ID Document
+        rel_path_id, size_id, sha_id = await save_upload_file(id_document)
+        doc_id = MemberDocument(
+            member_id=member.id,
+            doc_type="identity",
+            rel_path=rel_path_id,
+            original_filename=id_document.filename,
+            mime_type=id_document.content_type,
+            size_bytes=size_id,
+            sha256=sha_id
+        )
+        db.add(doc_id)
+
+        # Process Fiscal Code Document
+        rel_path_fc, size_fc, sha_fc = await save_upload_file(fiscal_code_document)
+        doc_fc = MemberDocument(
+            member_id=member.id,
+            doc_type="fiscal_code",
+            rel_path=rel_path_fc,
+            original_filename=fiscal_code_document.filename,
+            mime_type=fiscal_code_document.content_type,
+            size_bytes=size_fc,
+            sha256=sha_fc
+        )
+        db.add(doc_fc)
+
+        # Assign Card
+        assigned = assign_next_card(db, member.id, member.org_id)
+
+        if assigned:
+            member.status = MemberStatus.ACTIVE
+            member.joined_at = datetime.utcnow()
+        else:
+            member.status = MemberStatus.PENDING_CARDS
+            logger.warning(f"Member {member.id} completed upload but no cards available.")
+
+        # Mark token used
+        token_entry.used_at = datetime.utcnow()
+
+        db.commit()
+
+        # Send Welcome Email
+        org = db.query(Organization).filter(Organization.id == member.org_id).first()
+        send_email_simulation(
+            to_email=member.email,
+            subject=f"Welcome to {org.name}",
+            body=f"Your registration is complete. You can now login at {settings.BASE_URL}/member/login"
+        )
+
+        return {
+            "status": "complete",
+            "assigned_card": bool(assigned),
+            "member_status": member.status.value,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Cleanup uploads
+        for rel_path in (rel_path_id, rel_path_fc):
+            if rel_path:
+                try:
+                    os.remove(os.path.join(settings.UPLOAD_DIR, rel_path))
+                except OSError:
+                    pass
+        db.rollback()
+        logger.error(f"Error during file upload: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error during upload")
