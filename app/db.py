@@ -3,7 +3,11 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////app/data/app.db")
+_default_db = "sqlite:///data/app.db"
+if os.path.isdir("/app"):
+    _default_db = "sqlite:////app/data/app.db"
+
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", _default_db)
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}

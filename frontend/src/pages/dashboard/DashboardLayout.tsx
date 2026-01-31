@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
-import { fetchMe, AuthError, type MemberProfile } from "../../lib/api";
+import { fetchMe, apiLogout, AuthError, type MemberProfile } from "../../lib/api";
 import Skeleton from "../../components/ui/Skeleton";
 
 export type DashboardContext = {
@@ -121,6 +121,26 @@ const DashboardLayout = () => {
                     <p className="mt-1 text-sm text-neutral-500">{orgName}</p>
                   )}
                 </>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-3">
+              <Link
+                className="hidden text-sm font-medium text-neutral-500 transition hover:text-neutral-700 sm:block"
+                to="/"
+              >
+                Torna al sito
+              </Link>
+              {!loading && user && (
+                <button
+                  className="rounded-md border border-neutral-200 px-3 py-1.5 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900"
+                  type="button"
+                  onClick={async () => {
+                    await apiLogout();
+                    navigate("/login", { replace: true });
+                  }}
+                >
+                  Esci
+                </button>
               )}
             </div>
           </div>

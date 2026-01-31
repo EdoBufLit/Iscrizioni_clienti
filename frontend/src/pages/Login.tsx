@@ -31,8 +31,13 @@ const Login = () => {
         await requestMagicLink(email.trim());
         setSent(true);
       }
-    } catch {
-      setError("Credenziali non valide o errore di connessione.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.includes("429") || msg.toLowerCase().includes("too many")) {
+        setError("Troppi tentativi. Attendi un minuto e riprova.");
+      } else {
+        setError("Credenziali non valide o errore di connessione.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -175,14 +180,19 @@ const Login = () => {
               )}
             </div>
 
-            <div className="mt-6 rounded-lg border border-neutral-100 bg-neutral-25 px-5 py-4">
+            <div className="mt-6 rounded-lg border border-brand/15 bg-brand/[0.03] px-5 py-4">
               <p className="text-sm font-medium text-neutral-700">Non hai un account?</p>
               <p className="mt-1 text-xs leading-5 text-neutral-500">
-                Registrati tramite la pagina delle associazioni per diventare socio.
+                Crea un account per accedere ai servizi associativi.
               </p>
-              <Link className="mt-3 inline-flex text-sm font-medium text-brand transition hover:text-brand-dark" to="/associazioni">
-                Vai alle associazioni &rarr;
-              </Link>
+              <div className="mt-3 flex flex-wrap gap-3">
+                <Link className="btn-primary text-xs px-4 py-1.5" to="/registrati">
+                  Registrati
+                </Link>
+                <Link className="text-sm font-medium text-brand transition hover:text-brand-dark" to="/associazioni">
+                  Vai alle associazioni &rarr;
+                </Link>
+              </div>
             </div>
 
             <div className="mt-6 border-t border-neutral-100 pt-4">

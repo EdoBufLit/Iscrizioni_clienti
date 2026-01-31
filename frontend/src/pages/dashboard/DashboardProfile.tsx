@@ -1,5 +1,7 @@
+import { FormEvent, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import Skeleton from "../../components/ui/Skeleton";
+import { changePassword } from "../../lib/api";
 import type { DashboardContext } from "./DashboardLayout";
 
 const PERSONAL_FIELDS = [
@@ -121,6 +123,119 @@ const DashboardProfile = () => {
             </div>
           </>
         )}
+      </div>
+
+      {/* Password section */}
+      {!loading && user && <ChangePasswordSection />}
+    </div>
+  );
+};
+
+const ChangePasswordSection = () => {
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState("");
+  const [error, setError] = useState("");
+
+  const canSubmit = newPw.length >= 8 && newPw === confirmPw && !submitting;
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!canSubmit) return;
+    setError("");
+    setSuccess("");
+    setSubmitting(true);
+    try {
+      await changePassword(newPw);
+      setSuccess("Password aggiornata con successo.");
+      setNewPw("");
+      setConfirmPw("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore nel cambio password.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="surface mt-8 overflow-hidden">
+      <div className="border-b border-neutral-100 bg-neutral-25 px-7 py-4">
+        <div className="flex items-center gap-2.5">
+          <svg
+            className="h-4 w-4 text-neutral-400"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+          </svg>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-400">
+            Sicurezza
+          </p>
+        </div>
+      </div>
+      <div className="p-7">
+        <p className="text-sm text-neutral-600">
+          Imposta o modifica la tua password per accedere senza magic link.
+        </p>
+
+        {success && (
+          <div className="mt-4 rounded-md border border-emerald-200/60 bg-emerald-50 px-4 py-3">
+            <p className="text-sm text-emerald-700">{success}</p>
+          </div>
+        )}
+        {error && (
+          <div className="mt-4 rounded-md border border-red-200/60 bg-red-50 px-4 py-3">
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        )}
+
+        <form className="mt-5 grid gap-4 sm:grid-cols-2 sm:items-end" onSubmit={handleSubmit}>
+          <div>
+            <label htmlFor="new-pw" className="block text-xs font-medium text-neutral-600">
+              Nuova password
+            </label>
+            <input
+              id="new-pw"
+              className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+              type="password"
+              autoComplete="new-password"
+              placeholder="Minimo 8 caratteri"
+              value={newPw}
+              onChange={(e) => setNewPw(e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor="confirm-pw" className="block text-xs font-medium text-neutral-600">
+              Conferma password
+            </label>
+            <input
+              id="confirm-pw"
+              className={`mt-1 w-full rounded-md border bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:ring-2 ${
+                confirmPw && confirmPw !== newPw
+                  ? "border-red-300 focus:border-red-400 focus:ring-red-200/40"
+                  : "border-neutral-200 focus:border-brand focus:ring-brand/20"
+              }`}
+              type="password"
+              autoComplete="new-password"
+              value={confirmPw}
+              onChange={(e) => setConfirmPw(e.target.value)}
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <button
+              className="inline-flex items-center justify-center rounded-md bg-brand px-5 py-2 text-sm font-semibold text-white shadow-subtle transition hover:-translate-y-px hover:bg-brand-dark hover:shadow-card active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-subtle"
+              type="submit"
+              disabled={!canSubmit}
+            >
+              {submitting ? "Salvataggio…" : "Salva password"}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

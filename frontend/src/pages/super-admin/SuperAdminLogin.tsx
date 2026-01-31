@@ -21,9 +21,17 @@ const SuperAdminLogin = () => {
       navigate("/super-admin/org-admins", { replace: true });
     } catch (err) {
       if (err instanceof AuthError) {
-        setError("Credenziali non valide.");
+        setError("Credenziali non valide. Verifica email e password.");
       } else {
-        setError("Si è verificato un errore. Riprova più tardi.");
+        const msg = err instanceof Error ? err.message : "";
+        if (msg.includes("429") || msg.toLowerCase().includes("too many")) {
+          setError("Troppi tentativi. Attendi un minuto e riprova.");
+        } else {
+          setError(
+            "Errore di connessione al server. Verifica che il backend sia avviato e che le credenziali " +
+            "siano configurate nelle variabili d'ambiente (SUPER_ADMIN_EMAIL, SUPER_ADMIN_PASSWORD)."
+          );
+        }
       }
     } finally {
       setSubmitting(false);

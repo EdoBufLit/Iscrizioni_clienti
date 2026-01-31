@@ -203,6 +203,23 @@ def api_auth_logout(request: Request):
     return {"status": "ok"}
 
 
+@router.post("/api/auth/change-password")
+def api_auth_change_password(
+    request: Request,
+    new_password: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Set or change password for the authenticated member."""
+    member = get_current_member(request, db)
+    if not member:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if len(new_password) < 8:
+        raise HTTPException(status_code=400, detail="La password deve avere almeno 8 caratteri.")
+    member.password_hash = get_password_hash(new_password)
+    db.commit()
+    return {"status": "ok", "message": "Password aggiornata."}
+
+
 @router.get("/api/auth/me")
 def api_auth_me(request: Request, db: Session = Depends(get_db)):
     member = get_current_member(request, db)

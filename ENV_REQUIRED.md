@@ -8,7 +8,9 @@ All environment variables used by the application. Variables marked **required**
 |---|---|---|---|
 | `SECRET_KEY` | **Yes** | `supersecretkey` | Secret key for signing session cookies and tokens. Use a long random string in production. |
 | `BASE_URL` | **Yes** | `http://localhost:8000` | Public base URL of the application (e.g. `https://app.assonam.it`). Used for generating magic link URLs in emails. |
+| `DATABASE_URL` | No | `sqlite:///data/app.db` (local) or `sqlite:////app/data/app.db` (Docker) | SQLAlchemy database URL. Auto-detected based on environment. |
 | `UPLOAD_DIR` | No | `<project_root>/data/uploads` | Directory for storing uploaded member documents. |
+| `SPA_DIR` | No | `frontend/dist` | Path to the built frontend SPA directory. |
 
 ## Super Admin Credentials
 

@@ -131,6 +131,21 @@ export async function fetchMe(): Promise<MemberProfile> {
   return res.json();
 }
 
+export async function changePassword(
+  newPassword: string,
+): Promise<{ status: string; message: string }> {
+  const body = new FormData();
+  body.append("new_password", newPassword);
+  const res = await fetch("/api/auth/change-password", { method: "POST", body });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 400) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.detail ?? "Dati non validi");
+  }
+  if (!res.ok) throw new Error("Errore nel cambio password");
+  return res.json();
+}
+
 export async function apiLogout(): Promise<void> {
   await fetch("/api/auth/logout", { method: "POST" });
 }

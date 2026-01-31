@@ -126,12 +126,18 @@ const Associazioni = () => {
                     <h3 className="mt-4 text-base font-semibold text-neutral-900">
                       {org.name}
                     </h3>
-                    <div className="mt-auto flex items-center gap-3 pt-5">
+                    <div className="mt-auto flex flex-wrap items-center gap-3 pt-5">
                       <Link
                         className="btn-primary"
                         to={`/associazioni/${org.slug}/iscrizione`}
                       >
                         Diventa Socio
+                      </Link>
+                      <Link
+                        className="text-sm font-medium text-brand/70 transition hover:text-brand"
+                        to={`/registrati?org=${encodeURIComponent(org.slug)}`}
+                      >
+                        Registrati
                       </Link>
                       <Link
                         className="link-muted"

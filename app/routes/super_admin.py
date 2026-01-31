@@ -14,6 +14,10 @@ from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
 from app import audit
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/super-admin")
 auth_router = APIRouter(prefix="/auth")
 
@@ -47,12 +51,25 @@ def super_admin_login(
         AdminUser.email == body.email,
         AdminUser.role == AdminRole.SUPER_ADMIN,
     ).first()
-    if not admin or not admin.password_hash or not verify_password(body.password, admin.password_hash):
+
+    if not admin:
+        logger.warning("super_admin_login: no admin found for email (hash=%s)", body.email[:3] + "***")
+        audit.super_admin_login_failed(ip=get_client_ip(request))
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    if not admin.password_hash:
+        logger.warning("super_admin_login: admin id=%d has empty password_hash", admin.id)
+        audit.super_admin_login_failed(ip=get_client_ip(request))
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    if not verify_password(body.password, admin.password_hash):
+        logger.warning("super_admin_login: password mismatch for admin id=%d", admin.id)
         audit.super_admin_login_failed(ip=get_client_ip(request))
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     request.session["admin_id"] = admin.id
     audit.super_admin_login(admin_id=admin.id, ip=get_client_ip(request))
+    logger.info("super_admin_login: success for admin id=%d", admin.id)
     return {"ok": True}
 
 

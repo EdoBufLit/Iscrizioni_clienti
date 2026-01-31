@@ -15,8 +15,8 @@ Quick-reference for running builds, tests, and local verification.
 ```bash
 cd frontend
 npm ci
-npm run typecheck        # tsc -b --noEmit
-npm run build            # tsc -b && vite build
+npx tsc --noEmit           # typecheck
+npx vite build             # production build
 ```
 
 **Expected:** zero errors, `dist/` directory with `index.html` + `assets/`.
@@ -68,6 +68,8 @@ python -m pytest tests/ -v
 export DATABASE_URL="sqlite:///data/app.db"
 export SECRET_KEY="your-secret"
 export BASE_URL="http://localhost:8000"
+export SUPER_ADMIN_EMAIL="admin@assonam.it"
+export SUPER_ADMIN_PASSWORD="admin"
 
 uvicorn app.main:app --reload --port 8000
 ```
@@ -82,9 +84,8 @@ cd frontend
 npm run dev
 ```
 
-Opens Vite dev server (typically port 5173). API calls proxy to the
-backend at port 8000 if configured, otherwise use the built SPA served
-by uvicorn.
+Opens Vite dev server (typically port 5173). **API calls are proxied** to
+the backend at `http://localhost:8000` via `vite.config.ts` proxy settings.
 
 ## 6. Docker Build & Run
 
@@ -97,21 +98,63 @@ docker compose up -d
 - SPA at http://localhost:8000/app/
 - Deep-link refresh (e.g. `/app/associazioni`) works via SPA fallback
 
-## 7. Manual Frontend Checks
+## 7. Manual Smoke Tests
 
-These should be verified visually after starting the app:
-
-- [ ] Home page loads at `/app/`
+### Public Pages
+- [ ] Home page loads at `/app/` with hero image, alternating section backgrounds
 - [ ] Navigation links work (Lo Studio, Servizi, Associazioni, Contatti)
-- [ ] `/app/associazioni` shows association cards with "Diventa Socio" CTA
-- [ ] Clicking "Diventa Socio" navigates to `/app/associazioni/{slug}/iscrizione`
-- [ ] `/app/login` renders the member login form
-- [ ] `/app/org-admin/login` renders the org admin login form
-- [ ] `/app/super-admin/login` renders the super admin login form
-- [ ] `/app/dashboard` redirects or shows unauthenticated state
-- [ ] `/app/nonexistent` shows 404 page
-- [ ] Logo in header links to home
 - [ ] Mobile navigation menu works
+- [ ] Logo in header links to home
+- [ ] `/app/nonexistent` shows 404 page
+
+### Associations & Registration
+- [ ] `/app/associazioni` shows association cards with "Diventa Socio" and "Registrati" links
+- [ ] Clicking "Diventa Socio" navigates to `/app/associazioni/{slug}/iscrizione`
+- [ ] Clicking "Registrati" navigates to `/app/registrati?org={slug}`
+- [ ] `/app/registrati` form renders, validates, submits successfully
+- [ ] Registration auto-logs in and redirects to `/app/dashboard`
+
+### Member Auth
+- [ ] `/app/login` renders with password mode by default
+- [ ] "Registrati" button visible on login page
+- [ ] Password login with correct creds → redirects to `/app/dashboard`
+- [ ] Password login with wrong creds → falls back to magic link sent
+- [ ] "Password dimenticata?" switches to magic link mode
+- [ ] Magic link toggle works (password ↔ magic link)
+- [ ] Logout button in dashboard works
+
+### Member Dashboard
+- [ ] `/app/dashboard` shows status cards (redirects to login if unauthenticated)
+- [ ] `/app/dashboard/profilo` shows personal data + change password section
+- [ ] Password change form validates min 8 chars and confirm match
+- [ ] `/app/dashboard/documenti` shows empty state
+
+### Org Admin
+- [ ] `/app/org-admin/login` renders with side image
+- [ ] Magic link flow works (request → email → callback → dashboard)
+- [ ] `/app/org-admin` shows metrics cards and onboarding checklist
+- [ ] `/app/org-admin/soci` shows member table with search/filter
+- [ ] `/app/org-admin/tessere` shows card stock and movements
+- [ ] Logout button works
+
+### Super Admin
+- [ ] `/app/super-admin/login` renders with side image and env var hint
+- [ ] Correct creds → redirects to org-admins page
+- [ ] Wrong creds → shows "Credenziali non valide" (not generic error)
+- [ ] Server error → shows diagnostic message mentioning env vars
+- [ ] Create org admin sends invite email
+- [ ] Toggle active/inactive works
+- [ ] Card stock increase with confirmation dialog
+
+### Card Limits
+- [ ] Exhausted stock shows red warning in org admin dashboard
+- [ ] Low stock (≤10) shows amber warning
+- [ ] New batch from super admin reflects in org admin view
+
+### Email
+- [ ] SMTP configured → emails sent via real SMTP
+- [ ] SMTP not configured → emails logged to `email_log.txt`
+- [ ] Magic link URLs use `BASE_URL` (not localhost in production)
 
 ## 8. API Contract Reference
 
@@ -124,6 +167,8 @@ All frontend API calls and their backend handlers:
 | `POST /api/join/{org_slug}` | `join.py` | None (rate-limited) |
 | `POST /api/join/continue` | `join.py` | Token |
 | `POST /api/auth/login` | `member.py` | None (rate-limited) |
+| `POST /api/auth/register` | `member.py` | None (rate-limited) |
+| `POST /api/auth/change-password` | `member.py` | Session (`member_id`) |
 | `POST /api/auth/logout` | `member.py` | None |
 | `GET /api/auth/me` | `member.py` | Session (`member_id`) |
 | `POST /api/org-admin/auth/magic-link` | `org_admin.py` | None (rate-limited) |
@@ -132,6 +177,7 @@ All frontend API calls and their backend handlers:
 | `POST /api/org-admin/auth/logout` | `org_admin.py` | None |
 | `GET /api/org-admin/metrics` | `org_admin.py` | Session (`org_admin_id`) |
 | `GET /api/org-admin/members` | `org_admin.py` | Session (`org_admin_id`) |
+| `GET /api/org-admin/members.csv` | `org_admin.py` | Session (`org_admin_id`) |
 | `GET /api/org-admin/cards` | `org_admin.py` | Session (`org_admin_id`) |
 | `GET /api/org-admin/cards/movements` | `org_admin.py` | Session (`org_admin_id`) |
 | `POST /api/super-admin/auth/login` | `super_admin.py` | Credentials |
@@ -141,6 +187,7 @@ All frontend API calls and their backend handlers:
 | `POST /api/super-admin/org-admins` | `super_admin.py` | Session (`admin_id` + SUPER_ADMIN) |
 | `PATCH /api/super-admin/org-admins/{id}` | `super_admin.py` | Session (`admin_id` + SUPER_ADMIN) |
 | `POST /api/super-admin/orgs/{id}/cards/increase` | `super_admin.py` | Session (`admin_id` + SUPER_ADMIN) |
+| `POST /api/super-admin/test-email` | `super_admin.py` | Session (`admin_id` + SUPER_ADMIN) |
 | `GET /health` | `main.py` | None |
 | `GET /version` | `main.py` | None |
 
