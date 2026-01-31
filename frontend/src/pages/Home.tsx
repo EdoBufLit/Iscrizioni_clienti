@@ -1,14 +1,11 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
 
 const Home = () => {
-  const [imgError, setImgError] = useState(false);
-
   return (
     <div>
-      <section className="bg-white py-16" id="top">
+      <section className="bg-white py-20 md:py-28" id="top">
         <div className="container-shell">
-          <div className="items-center gap-12 md:grid md:grid-cols-2">
+          <div className="items-center gap-16 md:grid md:grid-cols-2">
             <div className="text-center md:text-left">
               <img
                 src="/favicon.svg"
@@ -26,7 +23,7 @@ const Home = () => {
                 iscrizioni digitali, raccolta documenti, tracciabilità e area
                 riservata per i soci. Tutto in modo ordinato e verificabile.
               </p>
-              <div className="mt-6 flex flex-wrap justify-center gap-3 md:justify-start">
+              <div className="mt-8 flex flex-wrap justify-center gap-3 md:justify-start">
                 <Link className="btn-primary" to="/associazioni">
                   Vai alle associazioni
                 </Link>
@@ -34,26 +31,19 @@ const Home = () => {
                   Area riservata
                 </Link>
               </div>
-              <p className="mt-4 text-xs text-neutral-500">
+              <p className="mt-5 text-xs text-neutral-500">
                 Se devi iscriverti a un'associazione affiliata, parti da
                 "Associazioni".
               </p>
-              <p className="mt-2 text-xs text-neutral-400">
-                Le informazioni inserite saranno trattate secondo normativa
-                vigente.
-              </p>
             </div>
 
-            {!imgError && (
-              <div className="mt-10 md:mt-0">
-                <img
-                  src="/hero-office.avif"
-                  alt=""
-                  className="w-full rounded-lg border border-neutral-100 opacity-95 shadow-subtle"
-                  onError={() => setImgError(true)}
-                />
-              </div>
-            )}
+            <div className="mt-12 md:mt-0">
+              <img
+                src="/hero-office.avif"
+                alt="Scrivania e documenti presso lo studio"
+                className="aspect-[4/3] w-full rounded-xl border border-neutral-100 object-cover"
+              />
+            </div>
           </div>
         </div>
       </section>
