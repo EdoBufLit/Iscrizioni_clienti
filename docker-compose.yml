@@ -7,8 +7,26 @@ services:
       - "8000:8000"
     volumes:
       - ./data:/app/data
+
     environment:
-      DATABASE_URL: sqlite:////app/data/app.db
-    env_file:
-      - .env
+      # DB
+      DATABASE_URL: ${DATABASE_URL}
+
+      # Super admin
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD}
+
+      # SMTP
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_FROM: ${SMTP_FROM}
+      SMTP_USE_TLS: ${SMTP_USE_TLS}
+
+      # App / misc
+      BASE_URL: ${BASE_URL}
+      SECRET_KEY: ${SECRET_KEY}
+
     restart: always
+
