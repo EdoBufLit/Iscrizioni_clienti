@@ -137,6 +137,47 @@ export type OrgAdminMembersResponse = {
   total: number;
 };
 
+export type CardStock = {
+  total: number;
+  used: number;
+  remaining: number;
+};
+
+export async function fetchCardStock(): Promise<CardStock> {
+  const res = await fetch("/api/org-admin/cards");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error("Failed to fetch card stock");
+  return res.json();
+}
+
+export type CardMovement = {
+  id: number;
+  card_no: number | null;
+  delta: number;
+  reason: string;
+  created_at: string | null;
+  member_name: string | null;
+};
+
+export type CardMovementsResponse = {
+  items: CardMovement[];
+  total: number;
+};
+
+export async function fetchCardMovements(params?: {
+  limit?: number;
+  offset?: number;
+}): Promise<CardMovementsResponse> {
+  const sp = new URLSearchParams();
+  if (params?.limit != null) sp.set("limit", String(params.limit));
+  if (params?.offset != null) sp.set("offset", String(params.offset));
+  const qs = sp.toString();
+  const res = await fetch(`/api/org-admin/cards/movements${qs ? `?${qs}` : ""}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error("Failed to fetch card movements");
+  return res.json();
+}
+
 export async function fetchOrgAdminMembers(params?: {
   q?: string;
   status?: string;

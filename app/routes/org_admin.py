@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from app.db import get_db
-from app.models import AdminUser, AdminRole, OrgAdminToken, Member, MemberStatus, CardBatch
+from app.models import AdminUser, AdminRole, OrgAdminToken, Member, MemberStatus, CardBatch, CardMovement
 from app.utils import generate_token, hash_token, send_email_simulation
 from app.config import settings
 
@@ -262,3 +262,60 @@ def export_members_csv(
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": "attachment; filename=soci.csv"},
     )
+
+
+@router.get("/cards")
+def card_stock(request: Request, db: Session = Depends(get_db)):
+    """Return card stock summary scoped to the org admin's organization."""
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    batches = db.query(CardBatch).filter(CardBatch.org_id == admin.org_id).all()
+
+    if not batches:
+        return {"total": 0, "used": 0, "remaining": 0}
+
+    total = sum(b.end_no - b.start_no + 1 for b in batches)
+    remaining = sum(max(b.end_no - b.next_no + 1, 0) for b in batches)
+    used = total - remaining
+
+    return {"total": total, "used": used, "remaining": remaining}
+
+
+@router.get("/cards/movements")
+def card_movements(
+    request: Request,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    """Return card movements scoped to the org admin's organization."""
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    query = db.query(CardMovement).filter(CardMovement.org_id == admin.org_id)
+    total = query.count()
+    movements = (
+        query.order_by(CardMovement.created_at.desc())
+        .offset(offset)
+        .limit(min(limit, 100))
+        .all()
+    )
+
+    items = []
+    for mv in movements:
+        item = {
+            "id": mv.id,
+            "card_no": mv.card_no,
+            "delta": mv.delta,
+            "reason": mv.reason,
+            "created_at": mv.created_at.isoformat() if mv.created_at else None,
+            "member_name": None,
+        }
+        if mv.member:
+            item["member_name"] = f"{mv.member.first_name} {mv.member.last_name}"
+        items.append(item)
+
+    return {"items": items, "total": total}

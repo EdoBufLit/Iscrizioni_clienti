@@ -132,6 +132,21 @@ class Token(Base):
     member = relationship("Member", back_populates="tokens")
 
 
+class CardMovement(Base):
+    __tablename__ = "card_movements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
+    member_id = Column(Integer, ForeignKey("members.id"), nullable=True)
+    card_no = Column(Integer, nullable=True)
+    delta = Column(Integer, nullable=False)
+    reason = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    organization = relationship("Organization")
+    member = relationship("Member")
+
+
 class OrgAdminToken(Base):
     __tablename__ = "org_admin_tokens"
 
