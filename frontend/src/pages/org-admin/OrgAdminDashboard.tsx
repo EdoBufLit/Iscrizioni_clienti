@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   fetchOrgAdminMetrics,
   AuthError,
@@ -137,31 +137,172 @@ const OrgAdminDashboard = () => {
         </div>
       )}
 
-      {!isLoading && !metricsError && (
-        <div className="mt-6 rounded-lg border border-neutral-100 bg-neutral-25 px-7 py-5">
-          <div className="flex gap-4">
-            <svg
-              className="mt-0.5 h-5 w-5 shrink-0 text-neutral-400"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
-            </svg>
-            <div>
-              <p className="text-sm font-medium text-neutral-700">
-                Area in fase di attivazione
-              </p>
-              <p className="mt-1 text-sm leading-6 text-neutral-500">
-                Le funzionalità di gestione soci, tessere e documenti saranno
-                progressivamente disponibili in questa area. I dati mostrati
-                sono indicativi.
-              </p>
-            </div>
-          </div>
+      {!isLoading && !metricsError && admin && (
+        <OnboardingChecklist orgId={admin.org_id} />
+      )}
+    </div>
+  );
+};
+
+// ── Onboarding checklist ─────────────────────────────────────────
+
+type CheckKey = "verify_data" | "first_member" | "verify_stock" | "contacts";
+type CheckState = Record<CheckKey, boolean>;
+
+const CHECKLIST_ITEMS: {
+  key: CheckKey;
+  label: string;
+  hint: string;
+  link?: { to: string; label: string };
+}[] = [
+  {
+    key: "verify_data",
+    label: "Verifica dati associazione",
+    hint: "Controlla che nome, slug e versioni statuto/privacy siano corretti.",
+  },
+  {
+    key: "first_member",
+    label: "Primo socio o import soci",
+    hint: "Registra almeno un socio oppure prepara un import, se previsto.",
+    link: { to: "/org-admin/soci", label: "Vai ai soci" },
+  },
+  {
+    key: "verify_stock",
+    label: "Tessere: verifica stock",
+    hint: "Assicurati di avere tessere disponibili per le nuove iscrizioni.",
+    link: { to: "/org-admin/tessere", label: "Vai alle tessere" },
+  },
+  {
+    key: "contacts",
+    label: "Contatti e PEC",
+    hint: "Verifica che i recapiti dell'associazione e la PEC siano aggiornati.",
+  },
+];
+
+const STORAGE_PREFIX = "onboarding_checklist_";
+
+function loadChecks(orgId: number): CheckState {
+  try {
+    const raw = localStorage.getItem(`${STORAGE_PREFIX}${orgId}`);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    /* ignore corrupt data */
+  }
+  return { verify_data: false, first_member: false, verify_stock: false, contacts: false };
+}
+
+function saveChecks(orgId: number, state: CheckState) {
+  localStorage.setItem(`${STORAGE_PREFIX}${orgId}`, JSON.stringify(state));
+}
+
+const OnboardingChecklist = ({ orgId }: { orgId: number }) => {
+  const [checks, setChecks] = useState<CheckState>(() => loadChecks(orgId));
+
+  const toggle = useCallback(
+    (key: CheckKey) => {
+      setChecks((prev) => {
+        const next = { ...prev, [key]: !prev[key] };
+        saveChecks(orgId, next);
+        return next;
+      });
+    },
+    [orgId],
+  );
+
+  const done = Object.values(checks).filter(Boolean).length;
+  const total = CHECKLIST_ITEMS.length;
+  const allDone = done === total;
+
+  return (
+    <div className="surface mt-8 p-7">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-sm font-semibold text-neutral-900">
+            Checklist di attivazione
+          </h3>
+          <p className="mt-1 text-sm text-neutral-500">
+            Completa questi passaggi per rendere operativa l'associazione.
+          </p>
+        </div>
+        <span
+          className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+            allDone
+              ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border border-neutral-200 bg-neutral-50 text-neutral-600"
+          }`}
+        >
+          {done}/{total}
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-neutral-100">
+        <div
+          className="h-full rounded-full bg-brand transition-all duration-300"
+          style={{ width: `${(done / total) * 100}%` }}
+        />
+      </div>
+
+      <ul className="mt-5 divide-y divide-neutral-100">
+        {CHECKLIST_ITEMS.map((item) => {
+          const checked = checks[item.key];
+          return (
+            <li key={item.key} className="flex items-start gap-3 py-3.5">
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={checked}
+                onClick={() => toggle(item.key)}
+                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border transition ${
+                  checked
+                    ? "border-brand bg-brand text-white"
+                    : "border-neutral-300 bg-white hover:border-brand/50"
+                }`}
+              >
+                {checked && (
+                  <svg
+                    className="h-3 w-3"
+                    viewBox="0 0 12 12"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M2.5 6l2.5 2.5 4.5-5" />
+                  </svg>
+                )}
+              </button>
+              <div className="min-w-0 flex-1">
+                <p
+                  className={`text-sm font-medium ${
+                    checked ? "text-neutral-400 line-through" : "text-neutral-800"
+                  }`}
+                >
+                  {item.label}
+                </p>
+                <p className="mt-0.5 text-sm leading-6 text-neutral-500">
+                  {item.hint}
+                </p>
+                {item.link && !checked && (
+                  <Link
+                    to={item.link.to}
+                    className="mt-1 inline-block text-sm font-medium text-brand hover:text-brand-dark"
+                  >
+                    {item.link.label} &rarr;
+                  </Link>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+
+      {allDone && (
+        <div className="mt-4 rounded-md border border-emerald-200/60 bg-emerald-50 px-4 py-3">
+          <p className="text-sm text-emerald-700">
+            Tutti i passaggi completati. L'associazione è pronta.
+          </p>
         </div>
       )}
     </div>
