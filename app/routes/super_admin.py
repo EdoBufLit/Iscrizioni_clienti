@@ -9,6 +9,7 @@ from app.models import AdminUser, AdminRole, Organization, OrgAdminToken
 from app.security import verify_password
 from app.utils import generate_token, hash_token, send_email_simulation
 from app.config import settings
+from app.middleware import auth_limiter, get_client_ip
 
 router = APIRouter(prefix="/api/super-admin")
 auth_router = APIRouter(prefix="/auth")
@@ -38,6 +39,7 @@ def super_admin_login(
     body: LoginBody,
     db: Session = Depends(get_db),
 ):
+    auth_limiter.check(get_client_ip(request))
     admin = db.query(AdminUser).filter(
         AdminUser.email == body.email,
         AdminUser.role == AdminRole.SUPER_ADMIN,

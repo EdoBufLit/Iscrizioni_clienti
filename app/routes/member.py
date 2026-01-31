@@ -6,6 +6,7 @@ from app.db import get_db
 from app.models import Member, Token, TokenType, MemberDocument, MemberStatus, Organization
 from app.utils import generate_token, send_email_simulation, hash_token
 from app.config import settings
+from app.middleware import auth_limiter, get_client_ip
 import os
 
 router = APIRouter()
@@ -31,6 +32,7 @@ def login_page(request: Request, org: str = None, db: Session = Depends(get_db))
 
 @router.get("/member/auth")
 def auth_magic_link(request: Request, token: str, db: Session = Depends(get_db)):
+    auth_limiter.check(get_client_ip(request))
     token_hash = hash_token(token)
     token_entry = db.query(Token).filter(
         Token.token_hash == token_hash,
@@ -102,6 +104,7 @@ def download_document(request: Request, doc_id: int, db: Session = Depends(get_d
 @router.post("/api/auth/login")
 def api_auth_login(request: Request, email: str = Form(...), db: Session = Depends(get_db)):
     """Send a magic-link email. Always returns 200 for security (no user enumeration)."""
+    auth_limiter.check(get_client_ip(request))
     member = db.query(Member).filter(Member.email == email).first()
 
     if member:

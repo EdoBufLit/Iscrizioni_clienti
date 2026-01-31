@@ -4,11 +4,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
+from app.middleware import SecurityHeadersMiddleware
 from app.routes import admin, join, member, org_admin, public, super_admin
 from app.spa import SPAStaticFiles
 from init_db import init_db
@@ -16,6 +18,8 @@ from init_db import init_db
 logger = logging.getLogger(__name__)
 
 SPA_DIR = os.getenv("SPA_DIR", "frontend/dist")
+
+_is_https = settings.BASE_URL.startswith("https")
 
 
 @asynccontextmanager
@@ -33,10 +37,34 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.PROJECT_VERSION,
     lifespan=lifespan,
+    docs_url=None if _is_https else "/docs",
+    redoc_url=None if _is_https else "/redoc",
+    openapi_url=None if _is_https else "/openapi.json",
 )
 
-# Add Session Middleware
-app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
+# ── Middleware stack (last added = outermost) ─────────────────────
+
+# 1. Session — innermost, closest to route handlers
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.SECRET_KEY,
+    same_site="lax",
+    https_only=_is_https,
+)
+
+# 2. CORS — restrict cross-origin requests to our own domain
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[settings.BASE_URL],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type"],
+    allow_credentials=True,
+)
+
+# 3. Security headers — outermost, applies to every response
+app.add_middleware(SecurityHeadersMiddleware)
+
+# ── Static files ──────────────────────────────────────────────────
 
 # Backend static assets (favicons, images)
 _static_path = Path("app/static")
@@ -54,6 +82,8 @@ else:
         "/app will not be available. Run the frontend build first.",
         _spa_path.resolve(),
     )
+
+# ── Routers ───────────────────────────────────────────────────────
 
 app.include_router(join.router)
 app.include_router(member.router)

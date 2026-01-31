@@ -7,6 +7,7 @@ from app.models import Organization, Member, MemberStatus, Token, TokenType, Mem
 from app.utils import generate_token, send_email_simulation, save_upload_file, hash_token
 from app.services.card import assign_next_card
 from app.config import settings
+from app.middleware import join_limiter, get_client_ip
 import logging
 import os
 
@@ -63,13 +64,23 @@ def api_join_start(
     accept_privacy: bool = Form(...),
     db: Session = Depends(get_db)
 ):
+    join_limiter.check(get_client_ip(request))
+
     org = db.query(Organization).filter(Organization.slug == org_slug).first()
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
     existing_member = db.query(Member).filter(Member.email == email, Member.org_id == org.id).first()
     if existing_member:
-        raise HTTPException(status_code=409, detail="Member with this email already exists")
+        # Return identical response to prevent email enumeration.
+        # Notify the existing member instead.
+        send_email_simulation(
+            to_email=email,
+            subject=f"Registrazione presso {org.name}",
+            body=f"Risulta già una richiesta di iscrizione a {org.name} con questo indirizzo email. "
+                 f"Se non hai effettuato questa richiesta, puoi ignorare questo messaggio.",
+        )
+        return {"status": "started", "organization": org.name}
 
     member = Member(
         org_id=org.id,
@@ -109,11 +120,7 @@ def api_join_start(
         body=f"Click here to upload documents and complete registration: {link}"
     )
 
-    return {
-        "status": "started",
-        "member_id": member.id,
-        "organization": org.name,
-    }
+    return {"status": "started", "organization": org.name}
 
 
 @router.post("/api/join/continue")

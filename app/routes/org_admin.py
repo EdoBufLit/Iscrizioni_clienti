@@ -12,6 +12,7 @@ from app.db import get_db
 from app.models import AdminUser, AdminRole, OrgAdminToken, Member, MemberStatus, CardBatch, CardMovement
 from app.utils import generate_token, hash_token, send_email_simulation
 from app.config import settings
+from app.middleware import auth_limiter, get_client_ip
 
 router = APIRouter(prefix="/api/org-admin")
 
@@ -41,6 +42,7 @@ def request_magic_link(
     Send a magic-link email to an active org admin.
     Always returns 200 to prevent email enumeration.
     """
+    auth_limiter.check(get_client_ip(request))
     admin = db.query(AdminUser).filter(
         AdminUser.email == email,
         AdminUser.role == AdminRole.ORG_ADMIN,
@@ -75,6 +77,7 @@ def verify_magic_link(
     db: Session = Depends(get_db),
 ):
     """Verify a magic-link token and create an org-admin session."""
+    auth_limiter.check(get_client_ip(request))
     token_hash = hash_token(token)
     token_entry = db.query(OrgAdminToken).filter(
         OrgAdminToken.token_hash == token_hash,
