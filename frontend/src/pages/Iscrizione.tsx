@@ -1,5 +1,6 @@
 import { ChangeEvent, FormEvent, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { requestMagicLink } from "../lib/api";
 
 const associationNames: Record<string, string> = {
   "lodi-artigiani": "Associazione Artigiani Lodigiani",
@@ -183,6 +184,10 @@ const Iscrizione = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState(false);
 
+  const [linkSending, setLinkSending] = useState(false);
+  const [linkSent, setLinkSent] = useState(false);
+  const [linkError, setLinkError] = useState("");
+
   if (!associationName) {
     return (
       <section className="py-16">
@@ -257,6 +262,20 @@ const Iscrizione = () => {
 
   /* ── Success ──────────────────────────────────────────────────── */
 
+  const handleMagicLink = async () => {
+    if (linkSending || linkSent) return;
+    setLinkError("");
+    setLinkSending(true);
+    try {
+      await requestMagicLink(form.email.trim());
+      setLinkSent(true);
+    } catch {
+      setLinkError("Invio non riuscito. Riprova o accedi dalla pagina di login.");
+    } finally {
+      setLinkSending(false);
+    }
+  };
+
   if (submitted) {
     return (
       <section className="flex min-h-[60vh] items-center justify-center py-16">
@@ -295,12 +314,55 @@ const Iscrizione = () => {
                   giorni lavorativi. Ti contatteremo in caso di necessità.
                 </p>
               </div>
-              <div className="mt-8 flex flex-wrap justify-center gap-3">
+
+              {/* Magic-link access section */}
+              <div className="mt-6 rounded-lg border border-neutral-200 bg-white px-6 py-5 text-left">
+                <p className="text-sm font-semibold text-neutral-900">
+                  Accedi alla tua area riservata
+                </p>
+                <p className="mt-1 text-xs leading-5 text-neutral-500">
+                  Ricevi un link di accesso direttamente nella tua casella email
+                  per consultare lo stato della richiesta.
+                </p>
+
+                {linkSent ? (
+                  <div className="mt-4 rounded-md border border-emerald-200/60 bg-emerald-50 px-4 py-3">
+                    <p className="text-sm text-emerald-700">
+                      Link inviato a{" "}
+                      <span className="font-medium">{form.email}</span>.
+                      Controlla la tua casella di posta.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mt-3 flex items-center gap-3">
+                      <div className="min-w-0 flex-1 rounded-md border border-neutral-200 bg-neutral-25 px-3.5 py-2.5">
+                        <p className="truncate text-sm text-neutral-700">
+                          {form.email}
+                        </p>
+                      </div>
+                      <button
+                        className="inline-flex shrink-0 items-center justify-center rounded-md bg-brand px-4 py-2.5 text-sm font-semibold text-white shadow-subtle transition hover:-translate-y-px hover:bg-brand-dark hover:shadow-card active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-subtle"
+                        type="button"
+                        disabled={linkSending}
+                        onClick={handleMagicLink}
+                      >
+                        {linkSending ? "Invio…" : "Ricevi link di accesso"}
+                      </button>
+                    </div>
+                    {linkError && (
+                      <p className="mt-2 text-xs text-red-600">{linkError}</p>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <div className="mt-6 flex flex-wrap justify-center gap-3">
                 <Link className="btn-primary" to="/associazioni">
                   Torna alle associazioni
                 </Link>
-                <Link className="btn-ghost" to="/">
-                  Vai alla home
+                <Link className="btn-ghost" to="/login">
+                  Vai al login
                 </Link>
               </div>
             </div>
