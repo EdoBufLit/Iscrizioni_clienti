@@ -13,7 +13,7 @@ const Home = () => {
                 className="mx-auto mb-6 h-10 md:mx-0"
               />
               <p className="section-title">STUDIO CONTABILE · ASSO.N.A.M.</p>
-              <h1 className="section-heading">
+              <h1 className="mt-2 section-heading">
                 Gestione associativa, contabilità e adempimenti.
                 <br />
                 Con un portale soci integrato.
@@ -48,15 +48,15 @@ const Home = () => {
         </div>
       </section>
 
-      <section className="py-16" id="servizi">
+      <section className="bg-neutral-50 py-20" id="servizi">
         <div className="container-shell">
           <p className="section-title">SERVIZI</p>
-          <h2 className="section-heading">Approccio da studio, non da app.</h2>
+          <h2 className="mt-2 section-heading">Approccio da studio, non da app.</h2>
           <p className="section-subtitle">
             Ridurre errori, richieste incomplete e documenti persi: con un flusso
             guidato e controllabile.
           </p>
-          <div className="mt-10 grid gap-8 md:grid-cols-3">
+          <div className="mt-12 grid gap-8 md:grid-cols-3">
             {[
               {
                 icon: "M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2m-6 9 2 2 4-4",
@@ -100,15 +100,15 @@ const Home = () => {
         </div>
       </section>
 
-      <section className="bg-white py-16" id="metodo">
+      <section className="bg-white py-20" id="metodo">
         <div className="container-shell">
           <p className="section-title">METODO</p>
-          <h2 className="section-heading">Come funziona</h2>
+          <h2 className="mt-2 section-heading">Come funziona</h2>
           <p className="section-subtitle">
             Ogni dato e documento viene acquisito in modo coerente e
             tracciabile.
           </p>
-          <div className="mt-10 grid gap-8 md:grid-cols-3">
+          <div className="mt-12 grid gap-8 md:grid-cols-3">
             {[
               {
                 step: "01",
@@ -158,14 +158,14 @@ const Home = () => {
         </div>
       </section>
 
-      <section className="py-16" id="associazioni-preview">
+      <section className="bg-neutral-50 py-20" id="associazioni-preview">
         <div className="container-shell">
           <p className="section-title">ACCESSO RAPIDO</p>
-          <h2 className="section-heading">Accedi ai servizi</h2>
+          <h2 className="mt-2 section-heading">Accedi ai servizi</h2>
           <p className="section-subtitle">
             Seleziona l'area di interesse per procedere.
           </p>
-          <div className="mt-10 grid gap-8 md:grid-cols-3">
+          <div className="mt-12 grid gap-8 md:grid-cols-3">
             <Link
               className="surface flex flex-col p-7 text-left transition hover:border-neutral-200"
               to="/associazioni"
@@ -213,14 +213,14 @@ const Home = () => {
         </div>
       </section>
 
-      <section className="bg-white py-16" id="faq">
+      <section className="bg-white py-20" id="faq">
         <div className="container-shell">
           <p className="section-title">FAQ</p>
-          <h2 className="section-heading">Domande frequenti</h2>
+          <h2 className="mt-2 section-heading">Domande frequenti</h2>
           <p className="section-subtitle">
             Risposte rapide per evitare dubbi e richieste incomplete.
           </p>
-          <div className="mt-10 grid gap-8 md:grid-cols-3">
+          <div className="mt-12 grid gap-8 md:grid-cols-3">
             {[
               {
                 title: "Serve un account?",
@@ -248,14 +248,14 @@ const Home = () => {
         </div>
       </section>
 
-      <section className="py-16" id="contatti">
+      <section className="bg-neutral-50 py-20" id="contatti">
         <div className="container-shell">
           <p className="section-title">CONTATTI</p>
-          <h2 className="section-heading">Riferimenti</h2>
+          <h2 className="mt-2 section-heading">Riferimenti</h2>
           <p className="section-subtitle">
             Per informazioni sui servizi o sullo stato di una pratica.
           </p>
-          <div className="mt-10 grid gap-8 md:grid-cols-2">
+          <div className="mt-12 grid gap-8 md:grid-cols-2">
             <div className="surface p-7">
               <h3 className="text-base font-semibold text-neutral-900">
                 Studio
