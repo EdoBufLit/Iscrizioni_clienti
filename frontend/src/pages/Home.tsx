@@ -68,8 +68,9 @@ const Home = () => {
       </section>
 
       {/* ── Servizi ──────────────────────────────────────────────── */}
-      <section className="bg-warm-50 py-24" id="servizi">
+      <section className="py-24" id="servizi">
         <div className="container-shell">
+          <div className="surface-strong p-8 md:p-10">
           <p className="section-title">SERVIZI</p>
           <h2 className="mt-2 section-heading">Approccio da studio, non da app.</h2>
           <p className="section-subtitle">
@@ -117,12 +118,14 @@ const Home = () => {
               </div>
             ))}
           </div>
+          </div>
         </div>
       </section>
 
       {/* ── Metodo + immagine ────────────────────────────────────── */}
-      <section className="bg-white py-24" id="metodo">
+      <section className="py-24" id="metodo">
         <div className="container-shell">
+          <div className="surface-strong p-8 md:p-10">
           <div className="grid items-center gap-12 md:grid-cols-2">
             <div>
               <p className="section-title">METODO</p>
@@ -173,12 +176,14 @@ const Home = () => {
               />
             </div>
           </div>
+          </div>
         </div>
       </section>
 
       {/* ── Accesso rapido ───────────────────────────────────────── */}
-      <section className="bg-warm-100 py-24" id="associazioni-preview">
+      <section className="py-24" id="associazioni-preview">
         <div className="container-shell">
+          <div className="surface-strong p-8 md:p-10">
           <p className="section-title">ACCESSO RAPIDO</p>
           <h2 className="mt-2 section-heading">Accedi ai servizi</h2>
           <p className="section-subtitle">
@@ -229,12 +234,14 @@ const Home = () => {
               </p>
             </div>
           </div>
+          </div>
         </div>
       </section>
 
       {/* ── FAQ ──────────────────────────────────────────────────── */}
-      <section className="bg-white py-24" id="faq">
+      <section className="py-24" id="faq">
         <div className="container-shell">
+          <div className="surface-strong p-8 md:p-10">
           <p className="section-title">FAQ</p>
           <h2 className="mt-2 section-heading">Domande frequenti</h2>
           <p className="section-subtitle">
@@ -265,12 +272,14 @@ const Home = () => {
               </div>
             ))}
           </div>
+          </div>
         </div>
       </section>
 
       {/* ── Contatti ─────────────────────────────────────────────── */}
-      <section className="bg-warm-50 py-24" id="contatti">
+      <section className="py-24" id="contatti">
         <div className="container-shell">
+          <div className="surface-strong p-8 md:p-10">
           <p className="section-title">CONTATTI</p>
           <h2 className="mt-2 section-heading">Riferimenti</h2>
           <p className="section-subtitle">
@@ -305,6 +314,7 @@ const Home = () => {
                 </Link>
               </div>
             </div>
+          </div>
           </div>
         </div>
       </section>
