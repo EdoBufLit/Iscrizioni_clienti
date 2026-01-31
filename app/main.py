@@ -11,8 +11,9 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
+from app.bootstrap import bootstrap_super_admin
 from app.config import settings
-from app.db import get_db
+from app.db import get_db, SessionLocal
 from app.middleware import SecurityHeadersMiddleware
 from app.routes import admin, join, member, org_admin, public, super_admin
 from app.spa import SPAStaticFiles
@@ -31,6 +32,12 @@ async def lifespan(app: FastAPI):
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     try:
         init_db()
+        # Bootstrap super admin after DB init
+        db = SessionLocal()
+        try:
+            bootstrap_super_admin(db)
+        finally:
+            db.close()
     except Exception:
         logger.exception("Database initialization failed.")
     yield

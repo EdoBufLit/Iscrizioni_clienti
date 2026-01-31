@@ -8,7 +8,7 @@ email-validator
 requests
 itsdangerous
 passlib
-bcrypt
+bcrypt==4.0.1
 pytest
 httpx
 alembic
