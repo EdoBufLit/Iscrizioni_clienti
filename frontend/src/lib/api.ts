@@ -227,15 +227,14 @@ export async function requestOrgAdminMagicLink(
 export async function verifyOrgAdminToken(
   token: string,
 ): Promise<void> {
+  // Use default redirect behavior to ensure cookies are set correctly by the browser
   const res = await fetch(
-    `/api/org-admin/auth/verify?token=${encodeURIComponent(token)}`,
-    { redirect: "manual" },
+    `/api/org-admin/auth/verify?token=${encodeURIComponent(token)}`
   );
-  // The backend returns a 302 redirect on success.
-  // With redirect: "manual", a redirect becomes an opaque response (type "opaqueredirect").
-  // Any non-error response means the session cookie was set.
-  if (res.type === "opaqueredirect" || res.ok || res.status === 302) return;
-  throw new Error("Invalid or expired token");
+
+  // If successful, the backend redirects to the dashboard (200 OK HTML)
+  // If failed, it returns 400 or similar
+  if (!res.ok) throw new Error("Invalid or expired token");
 }
 
 export async function verifyMemberToken(token: string): Promise<void> {

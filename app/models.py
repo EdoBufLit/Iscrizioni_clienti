@@ -108,7 +108,7 @@ class Member(Base):
     phone = Column(String)
     fiscal_code = Column(String)
     password_hash = Column(String, nullable=True)
-    status = Column(Enum(MemberStatus), default=MemberStatus.PENDING_DOCS) # Default changed to PENDING_DOCS
+    status = Column(Enum(MemberStatus, values_callable=lambda x: [e.value for e in x]), default=MemberStatus.PENDING_DOCS) # Default changed to PENDING_DOCS
 
     card_no = Column(Integer, nullable=True)
     batch_id = Column(Integer, ForeignKey("card_batches.id"), nullable=True)
