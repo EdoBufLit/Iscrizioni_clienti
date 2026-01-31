@@ -399,6 +399,63 @@ def download_document(
     )
 
 
+class MemberDecisionBody(BaseModel):
+    decision: str
+    notes: Optional[str] = None
+
+
+@router.post("/members/{member_id}/decision")
+def member_decision(
+    request: Request,
+    member_id: int,
+    body: MemberDecisionBody,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    if body.decision not in ["approve", "reject"]:
+        raise HTTPException(status_code=400, detail="Invalid decision")
+
+    member = db.query(Member).filter(Member.id == member_id).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    if member.org_id != admin.org_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Apply decision
+    if body.decision == "approve":
+        member.status = MemberStatus.ACTIVE
+        # Trigger joined_at if not set (first activation)
+        if not member.joined_at:
+            member.joined_at = datetime.utcnow()
+    else:
+        member.status = MemberStatus.REJECTED
+
+    member.decision_at = datetime.utcnow()
+    member.decision_by_admin_id = admin.id
+    member.decision_notes = body.notes
+
+    db.commit()
+
+    audit.log_operation(
+        db,
+        action="member.decision",
+        entity_type="member",
+        entity_id=member.id,
+        actor_admin_id=admin.id,
+        actor_role="org_admin",
+        metadata={"decision": body.decision, "notes": body.notes, "new_status": member.status.value},
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent")
+    )
+    db.commit()
+
+    return {"ok": True, "status": member.status.value}
+
+
 class ReviewBody(BaseModel):
     status: str
     notes: Optional[str] = None

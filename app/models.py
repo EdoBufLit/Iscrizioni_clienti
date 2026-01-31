@@ -124,6 +124,10 @@ class Member(Base):
     signup_ip = Column(String, nullable=True)
     signup_user_agent = Column(String, nullable=True)
 
+    decision_at = Column(DateTime, nullable=True)
+    decision_by_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
+    decision_notes = Column(Text, nullable=True)
+
     organization = relationship("Organization", back_populates="members")
     documents = relationship("MemberDocument", back_populates="member")
     tokens = relationship("Token", back_populates="member")
