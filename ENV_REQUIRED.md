@@ -1,0 +1,42 @@
+# Environment Variables
+
+All environment variables used by the application. Variables marked **required** must be set in production.
+
+## Application
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `SECRET_KEY` | **Yes** | `supersecretkey` | Secret key for signing session cookies and tokens. Use a long random string in production. |
+| `BASE_URL` | **Yes** | `http://localhost:8000` | Public base URL of the application (e.g. `https://app.assonam.it`). Used for generating magic link URLs in emails. |
+| `UPLOAD_DIR` | No | `<project_root>/data/uploads` | Directory for storing uploaded member documents. |
+
+## Super Admin Credentials
+
+The super admin account is bootstrapped from environment variables (no database record).
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `SUPER_ADMIN_EMAIL` | **Yes** | `admin@assonam.it` | Email address for the super admin login. |
+| `SUPER_ADMIN_PASSWORD` | **Yes** | `admin` | Password for the super admin login. Must be changed in production. |
+
+## SMTP (Email)
+
+When `SMTP_HOST` is empty the application falls back to writing emails to `email_log.txt` instead of sending them. Configure all SMTP variables for production email delivery.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `SMTP_HOST` | **Yes** (prod) | _(empty)_ | SMTP server hostname (e.g. `smtp.gmail.com`). |
+| `SMTP_PORT` | No | `587` | SMTP server port. |
+| `SMTP_USER` | **Yes** (prod) | _(empty)_ | SMTP authentication username. |
+| `SMTP_PASS` | **Yes** (prod) | _(empty)_ | SMTP authentication password or app-specific password. |
+| `SMTP_FROM` | No | `noreply@assonam.it` | Sender address for outgoing emails. |
+| `SMTP_USE_TLS` | No | `true` | Enable STARTTLS (`true`, `1`, or `yes` to enable). |
+
+## Build Metadata (optional)
+
+Set automatically by CI/CD pipelines. Not required for local development.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `GIT_SHA` | No | _(empty)_ | Git commit SHA, shown in the admin footer. |
+| `BUILD_TIME` | No | _(empty)_ | ISO 8601 build timestamp. |

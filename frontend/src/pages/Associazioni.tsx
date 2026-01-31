@@ -114,24 +114,32 @@ const Associazioni = () => {
               {orgs.map((org) => (
                 <div
                   key={org.slug}
-                  className="surface flex flex-col p-7 transition-[border-color,box-shadow] duration-150 hover:border-neutral-200 hover:shadow-[0_2px_6px_rgba(15,23,42,0.1)]"
+                  className="surface flex flex-col overflow-hidden transition-[border-color,box-shadow] duration-150 hover:border-neutral-200 hover:shadow-[0_2px_6px_rgba(15,23,42,0.1)]"
                 >
-                  <h3 className="text-base font-semibold text-neutral-900">
-                    {org.name}
-                  </h3>
-                  <div className="mt-auto flex items-center gap-3 pt-5">
-                    <Link
-                      className="btn-primary"
-                      to={`/associazioni/${org.slug}/iscrizione`}
-                    >
-                      Diventa Socio
-                    </Link>
-                    <Link
-                      className="link-muted"
-                      to={`/associazioni/${org.slug}`}
-                    >
-                      Dettagli
-                    </Link>
+                  <div className="h-1 bg-gradient-to-r from-brand to-brand-dark" />
+                  <div className="flex flex-1 flex-col p-7">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand/10">
+                      <svg className="h-[18px] w-[18px] text-brand" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+                      </svg>
+                    </div>
+                    <h3 className="mt-4 text-base font-semibold text-neutral-900">
+                      {org.name}
+                    </h3>
+                    <div className="mt-auto flex items-center gap-3 pt-5">
+                      <Link
+                        className="btn-primary"
+                        to={`/associazioni/${org.slug}/iscrizione`}
+                      >
+                        Diventa Socio
+                      </Link>
+                      <Link
+                        className="link-muted"
+                        to={`/associazioni/${org.slug}`}
+                      >
+                        Dettagli
+                      </Link>
+                    </div>
                   </div>
                 </div>
               ))}

@@ -156,7 +156,7 @@ const Login = () => {
               </button>
             </form>
 
-            <div className="mt-4 text-center">
+            <div className="mt-4 flex items-center justify-between">
               <button
                 className="text-xs font-medium text-neutral-500 transition hover:text-neutral-700"
                 type="button"
@@ -164,6 +164,15 @@ const Login = () => {
               >
                 {mode === "password" ? "Accedi con link via email" : "Accedi con password"}
               </button>
+              {mode === "password" && (
+                <button
+                  className="text-xs font-medium text-brand/70 transition hover:text-brand"
+                  type="button"
+                  onClick={() => setMode("magic")}
+                >
+                  Password dimenticata?
+                </button>
+              )}
             </div>
 
             <div className="mt-6 rounded-lg border border-neutral-100 bg-neutral-25 px-5 py-4">

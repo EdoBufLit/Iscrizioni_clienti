@@ -39,14 +39,11 @@ const AdminLayout = () => {
         <div className="container-shell py-8">
           <div className="flex items-start gap-5">
             <div className="hidden shrink-0 sm:block">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-brand/10">
-                <img
-                  src={`${import.meta.env.BASE_URL}favicon.svg`}
-                  alt=""
-                  className="h-6"
-                  aria-hidden="true"
-                />
-              </div>
+              <img
+                src={`${import.meta.env.BASE_URL}logo.jpg`}
+                alt="ASSO.N.A.M."
+                className="h-12 rounded"
+              />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2.5">
