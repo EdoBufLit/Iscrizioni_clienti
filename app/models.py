@@ -47,6 +47,7 @@ class AdminUser(Base):
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=True) # Null for super_admin
     is_active = Column(Boolean, default=True, nullable=False, server_default="1")
     created_at = Column(DateTime, default=datetime.utcnow)
+    deleted_at = Column(DateTime, nullable=True)
 
     organization = relationship("Organization", back_populates="admins")
 

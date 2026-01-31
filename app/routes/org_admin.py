@@ -32,6 +32,7 @@ def _get_current_org_admin(request: Request, db: Session):
         AdminUser.id == admin_id,
         AdminUser.role == AdminRole.ORG_ADMIN,
         AdminUser.is_active.is_(True),
+        AdminUser.deleted_at.is_(None), # Added deleted_at filter
     ).first()
     return admin
 
@@ -51,6 +52,7 @@ def request_magic_link(
         AdminUser.email == email,
         AdminUser.role == AdminRole.ORG_ADMIN,
         AdminUser.is_active.is_(True),
+        AdminUser.deleted_at.is_(None), # Added deleted_at filter
         AdminUser.org_id.isnot(None),
     ).first()
 
@@ -97,6 +99,7 @@ def verify_magic_link(
     admin = db.query(AdminUser).filter(
         AdminUser.id == token_entry.admin_id,
         AdminUser.is_active.is_(True),
+        AdminUser.deleted_at.is_(None), # Added deleted_at filter
     ).first()
 
     if not admin:
