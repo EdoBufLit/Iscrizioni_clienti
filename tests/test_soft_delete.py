@@ -47,22 +47,36 @@ def test_soft_delete_flow(client):
     assert admin1_id not in admin_ids
     assert admin2_id in admin_ids
 
-    # 6. Verify Admin 1 cannot request magic link (we can check that we get 200 but maybe check logs if possible,
-    # or just trust the code changes. For integration test, verifying response is 200 is correct behavior per spec)
+    # 6. Verify Admin 1 cannot request magic link
     ml_res = client.post("/api/org-admin/auth/magic-link", data={"email": admin1_email})
     assert ml_res.status_code == 200
 
-    # 7. Restore Admin 1
-    restore_res = client.post(f"/api/super-admin/org-admins/{admin1_id}/restore")
+    # 7. Restore Admin 1 via create endpoint (NEW TEST CASE)
+    restore_res = client.post("/api/super-admin/org-admins", json={
+        "email": admin1_email,
+        "org_id": org_id
+    })
     assert restore_res.status_code == 200
+    data = restore_res.json()
+    assert data["restored"] is True
+    assert data["id"] == admin1_id
+    assert data["is_active"] is True
 
-    # 8. Verify Admin 1 IS in the list
+    # 8. Verify Admin 1 IS in the list again
     list_res_2 = client.get("/api/super-admin/org-admins", params={"org_id": org_id})
     assert list_res_2.status_code == 200
     admin_ids_2 = [a["id"] for a in list_res_2.json()]
     assert admin1_id in admin_ids_2
 
-    # 9. Test "Last Admin" protection
+    # 9. Test "admin_exists" conflict
+    conflict_res = client.post("/api/super-admin/org-admins", json={
+        "email": admin1_email,
+        "org_id": org_id
+    })
+    assert conflict_res.status_code == 409
+    assert conflict_res.json()["detail"] == "admin_exists"
+
+    # 10. Test "Last Admin" protection
     # Delete Admin 1 again
     client.delete(f"/api/super-admin/org-admins/{admin1_id}")
     # Now try to delete Admin 2 (should fail as it is the last one)

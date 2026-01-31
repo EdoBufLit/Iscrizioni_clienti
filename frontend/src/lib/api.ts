@@ -312,6 +312,8 @@ export type OrgAdmin = {
   org_name: string | null;
   is_active: boolean;
   created_at: string | null;
+  restored?: boolean;
+  created?: boolean;
 };
 
 export async function fetchOrgAdmins(
@@ -334,7 +336,11 @@ export async function createOrgAdmin(
     body: JSON.stringify({ email, org_id: orgId }),
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
-  if (res.status === 409) throw new Error("Email già registrata");
+  if (res.status === 409) {
+    const data = await res.json().catch(() => null);
+    if (data?.detail === "admin_exists") throw new Error("admin_exists");
+    throw new Error("Email già registrata");
+  }
   if (res.status === 404) throw new Error("Organizzazione non trovata");
   if (!res.ok) throw new Error("Failed to create org admin");
   return res.json();

@@ -113,17 +113,25 @@ const SuperAdminOrgAdmins = () => {
     setCreateSuccess("");
     setCreating(true);
     try {
-      await createOrgAdmin(newEmail.trim(), newOrgId);
-      setCreateSuccess(`Invito inviato a ${newEmail.trim()}`);
+      const result = await createOrgAdmin(newEmail.trim(), newOrgId);
+      if (result.restored) {
+        setCreateSuccess("Admin ripristinato. Ora puoi inviare il magic link.");
+      } else {
+        setCreateSuccess(`Invito inviato a ${newEmail.trim()}`);
+      }
       setNewEmail("");
       const updated = await fetchOrgAdmins(
         selectedOrg !== "" ? selectedOrg : undefined,
       );
       setAdmins(updated);
     } catch (err) {
-      setCreateError(
-        err instanceof Error ? err.message : "Errore nella creazione.",
-      );
+      if (err instanceof Error && err.message === "admin_exists") {
+        setCreateError("Esiste già un admin con questa email.");
+      } else {
+        setCreateError(
+          err instanceof Error ? err.message : "Errore nella creazione.",
+        );
+      }
     } finally {
       setCreating(false);
     }

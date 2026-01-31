@@ -113,14 +113,36 @@ def create_org_admin(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
+    email_norm = body.email.strip().lower()
     existing = db.query(AdminUser).filter(
-        AdminUser.email == body.email,
+        func.lower(AdminUser.email) == email_norm,
     ).first()
+
     if existing:
-        raise HTTPException(status_code=409, detail="Email already registered")
+        if existing.deleted_at is not None:
+             # Restore
+             existing.deleted_at = None
+             existing.is_active = True
+             existing.password_hash = "" # Reset credentials
+             existing.org_id = body.org_id
+             db.commit()
+
+             audit.org_admin_restored_on_create(admin_id=existing.id, org_id=existing.org_id, email_hash=audit._hash_email(email_norm))
+
+             return {
+                 "id": existing.id,
+                 "email": existing.email,
+                 "org_id": existing.org_id,
+                 "org_name": org.name,
+                 "is_active": existing.is_active,
+                 "created_at": existing.created_at.isoformat() if existing.created_at else None,
+                 "restored": True
+             }
+        else:
+             raise HTTPException(status_code=409, detail="admin_exists")
 
     admin = AdminUser(
-        email=body.email,
+        email=email_norm,
         password_hash="",
         role=AdminRole.ORG_ADMIN,
         org_id=body.org_id,
@@ -141,11 +163,13 @@ def create_org_admin(
 
     link = f"{settings.BASE_URL}/api/org-admin/auth/verify?token={token_str}"
     if not send_email(
-        to_email=body.email,
+        to_email=email_norm,
         subject="Invito area amministrazione associazione",
         body=f"Sei stato invitato come amministratore di {org.name}.\nAccedi qui: {link}",
     ):
-         logger.warning("Failed to send org admin invite to %s", body.email)
+         logger.warning("Failed to send org admin invite to %s", email_norm)
+
+    audit.org_admin_created(admin_id=admin.id, org_id=admin.org_id, email_hash=audit._hash_email(email_norm))
 
     return {
         "id": admin.id,
@@ -154,6 +178,7 @@ def create_org_admin(
         "org_name": org.name,
         "is_active": admin.is_active,
         "created_at": admin.created_at.isoformat() if admin.created_at else None,
+        "created": True
     }
 
 
