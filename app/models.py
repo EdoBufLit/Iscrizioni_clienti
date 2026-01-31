@@ -31,6 +31,7 @@ class Organization(Base):
     slug = Column(String, unique=True, index=True)
     statute_version = Column(String)
     statute_pdf_path = Column(String, nullable=True) # Path relative to static or uploads
+    statute_updated_at = Column(DateTime, nullable=True)
     privacy_version = Column(String)
 
     # Extended details
@@ -53,7 +54,7 @@ class Organization(Base):
 
     members = relationship("Member", back_populates="organization")
     batches = relationship("CardBatch", back_populates="organization")
-    admins = relationship("AdminUser", back_populates="organization", foreign_keys="[AdminUser.org_id]")
+    admins = relationship("AdminUser", back_populates="organization", foreign_keys="AdminUser.org_id")
 
 class OperationLog(Base):
     __tablename__ = "operation_logs"

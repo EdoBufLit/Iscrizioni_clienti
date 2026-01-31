@@ -64,6 +64,9 @@ def _org_to_dict_detail(org: Organization) -> dict:
         "website": org.website,
         "logo_url": f"/api/organizations/{org.slug}/logo" if org.logo_path else None,
         "is_active": org.is_active,
+        "statute_version": org.statute_version,
+        "statute_url": f"/api/organizations/{org.slug}/statute" if org.statute_pdf_path else None,
+        "has_statute": bool(org.statute_pdf_path),
     }
 
 
@@ -101,3 +104,17 @@ def get_organization_logo(slug: str, db: Session = Depends(get_db)):
          raise HTTPException(status_code=404, detail="File missing on disk")
 
     return FileResponse(full_path)
+
+
+@router.get("/api/organizations/{slug}/statute")
+def get_organization_statute(slug: str, db: Session = Depends(get_db)):
+    org = db.query(Organization).filter(Organization.slug == slug).first()
+    if not org or not org.statute_pdf_path:
+        raise HTTPException(status_code=404, detail="Statute not found")
+
+    # statute_pdf_path is relative to UPLOAD_DIR
+    full_path = os.path.join(settings.UPLOAD_DIR, org.statute_pdf_path)
+    if not os.path.exists(full_path):
+         raise HTTPException(status_code=404, detail="File missing on disk")
+
+    return FileResponse(full_path, media_type="application/pdf", filename=f"statuto_{org.slug}.pdf")

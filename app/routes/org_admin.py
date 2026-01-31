@@ -8,9 +8,10 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import Optional
 
+from fastapi import UploadFile, File
 from app.db import get_db
-from app.models import AdminUser, AdminRole, OrgAdminToken, Member, MemberStatus, CardBatch, CardMovement
-from app.utils import generate_token, hash_token, send_email
+from app.models import AdminUser, AdminRole, OrgAdminToken, Member, MemberStatus, CardBatch, CardMovement, Organization
+from app.utils import generate_token, hash_token, send_email, save_upload_file
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
 from app import audit
@@ -152,6 +153,87 @@ def me(request: Request, db: Session = Depends(get_db)):
 
 
 router.include_router(auth_router)
+
+
+@router.get("/organization")
+def get_organization_detail(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    org = admin.organization
+    return {
+        "id": org.id,
+        "name": org.name,
+        "slug": org.slug,
+        "statute_version": org.statute_version,
+        "statute_updated_at": org.statute_updated_at,
+        "has_statute": bool(org.statute_pdf_path),
+    }
+
+
+@router.post("/organization/statute")
+async def upload_statute(
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    # Max 10MB
+    rel_path, size, sha = await save_upload_file(
+        file,
+        allowed_types=["application/pdf"],
+        max_size=10 * 1024 * 1024
+    )
+
+    org = admin.organization
+
+    # Increment version logic
+    new_version = "v1"
+    if org.statute_version:
+        # Try parsing as vN
+        if org.statute_version.startswith("v") and org.statute_version[1:].isdigit():
+             ver_num = int(org.statute_version[1:])
+             new_version = f"v{ver_num + 1}"
+        else:
+             # Fallback or manual handling if it was custom
+             new_version = f"{org.statute_version}_new"
+
+    org.statute_pdf_path = rel_path
+    org.statute_version = new_version
+    org.statute_updated_at = datetime.utcnow()
+
+    db.commit()
+
+    audit.log_operation(
+        db,
+        action="org.statute.upload",
+        entity_type="organization",
+        entity_id=org.id,
+        actor_admin_id=admin.id,
+        actor_role="org_admin",
+        metadata={
+            "filename": file.filename,
+            "size": size,
+            "sha256": sha,
+            "version": new_version
+        },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent")
+    )
+    db.commit()
+
+    return {
+        "statute_version": new_version,
+        "updated_at": org.statute_updated_at,
+        "has_statute": True
+    }
 
 
 @router.get("/metrics")
