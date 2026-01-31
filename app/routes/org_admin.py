@@ -1,13 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Form
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 
 from app.db import get_db
-from app.models import AdminUser, AdminRole, OrgAdminToken
+from app.models import AdminUser, AdminRole, OrgAdminToken, Member, MemberStatus, CardBatch
 from app.utils import generate_token, hash_token, send_email_simulation
 from app.config import settings
 
-router = APIRouter(prefix="/api/org-admin/auth")
+router = APIRouter(prefix="/api/org-admin")
+
+auth_router = APIRouter(prefix="/auth")
 
 
 def _get_current_org_admin(request: Request, db: Session):
@@ -23,7 +26,7 @@ def _get_current_org_admin(request: Request, db: Session):
     return admin
 
 
-@router.post("/magic-link")
+@auth_router.post("/magic-link")
 def request_magic_link(
     request: Request,
     email: str = Form(...),
@@ -60,7 +63,7 @@ def request_magic_link(
     return {"ok": True}
 
 
-@router.get("/verify")
+@auth_router.get("/verify")
 def verify_magic_link(
     request: Request,
     token: str,
@@ -96,14 +99,14 @@ def verify_magic_link(
     return RedirectResponse(url="/app/org-admin", status_code=302)
 
 
-@router.post("/logout")
+@auth_router.post("/logout")
 def logout(request: Request):
     """Clear the org-admin session."""
     request.session.pop("org_admin_id", None)
     return {"ok": True}
 
 
-@router.get("/me")
+@auth_router.get("/me")
 def me(request: Request, db: Session = Depends(get_db)):
     """Return the authenticated org admin profile."""
     admin = _get_current_org_admin(request, db)
@@ -120,4 +123,41 @@ def me(request: Request, db: Session = Depends(get_db)):
             "name": admin.organization.name,
             "slug": admin.organization.slug,
         } if admin.organization else None,
+    }
+
+
+router.include_router(auth_router)
+
+
+@router.get("/metrics")
+def org_metrics(request: Request, db: Session = Depends(get_db)):
+    """Return scoped metrics for the authenticated org admin's organization."""
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    org_id = admin.org_id
+
+    members_count = db.query(func.count(Member.id)).filter(
+        Member.org_id == org_id,
+    ).scalar()
+
+    pending_requests_count = db.query(func.count(Member.id)).filter(
+        Member.org_id == org_id,
+        Member.status != MemberStatus.ACTIVE,
+    ).scalar()
+
+    # Cards remaining: sum of (end_no - next_no + 1) across all batches
+    batches = db.query(CardBatch).filter(CardBatch.org_id == org_id).all()
+    if batches:
+        cards_remaining = sum(
+            max(b.end_no - b.next_no + 1, 0) for b in batches
+        )
+    else:
+        cards_remaining = None
+
+    return {
+        "members_count": members_count,
+        "cards_remaining": cards_remaining,
+        "pending_requests_count": pending_requests_count,
     }
