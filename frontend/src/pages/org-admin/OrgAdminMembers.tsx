@@ -188,8 +188,10 @@ const OrgAdminMembers = () => {
                   <th className={thClass}>Nome</th>
                   <th className={thClass}>Email</th>
                   <th className={thClass}>Stato</th>
+                  <th className={thClass}>Documenti</th>
                   <th className={thClass}>Tessera</th>
                   <th className={thClass}>Iscrizione</th>
+                  <th className={thClass}><span className="sr-only">Azioni</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -248,6 +250,15 @@ const OrgAdminMembers = () => {
                           </span>
                         )}
                       </td>
+                      <td className={tdClass}>
+                        {m.docs_count != null ? (
+                          <span className="inline-flex items-center rounded bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-800">
+                            {m.docs_count}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
                       <td className={`${tdClass} tabular-nums`}>
                         {m.card_no ?? "—"}
                       </td>
@@ -255,6 +266,17 @@ const OrgAdminMembers = () => {
                         {m.joined_at
                           ? new Date(m.joined_at).toLocaleDateString("it-IT")
                           : "—"}
+                      </td>
+                      <td className={tdClass}>
+                        <div className="flex justify-end">
+                          <button
+                            className="text-sm font-medium text-brand hover:text-brand-dark"
+                            onClick={() => navigate(`/org-admin/soci/${m.id}`)}
+                            data-testid={`member-open-${m.id}`}
+                          >
+                            Apri
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))

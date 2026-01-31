@@ -61,7 +61,8 @@ async def save_upload_file(
     valid_exts = {
         "image/jpeg": [".jpg", ".jpeg"],
         "image/png": [".png"],
-        "application/pdf": [".pdf"]
+        "application/pdf": [".pdf"],
+        "image/svg+xml": [".svg"],
     }
 
     if file_ext not in valid_exts.get(upload_file.content_type, []):
@@ -89,6 +90,10 @@ async def save_upload_file(
                 raise HTTPException(status_code=400, detail="Invalid JPEG file.")
             elif upload_file.content_type == "image/png" and not chunk.startswith(b"\x89PNG\r\n\x1a\n"):
                 raise HTTPException(status_code=400, detail="Invalid PNG file.")
+            elif upload_file.content_type == "image/svg+xml":
+                s_chunk = chunk.strip()
+                if not (s_chunk.startswith(b"<svg") or s_chunk.startswith(b"<?xml")):
+                    raise HTTPException(status_code=400, detail="Invalid SVG file.")
 
             # Write first chunk
             buffer.write(chunk)

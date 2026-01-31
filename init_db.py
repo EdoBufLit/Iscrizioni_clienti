@@ -41,7 +41,11 @@ def init_db():
                 name="My Awesome Association",
                 slug="my-association",
                 statute_version="v1.0",
-                privacy_version="v2.023"
+                privacy_version="v2.023",
+                city="Roma",
+                country="Italy",
+                description="Associazione di prova",
+                is_active=True
             )
             db.add(org)
             db.commit()

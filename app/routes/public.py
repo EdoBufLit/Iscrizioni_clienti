@@ -1,8 +1,10 @@
+import os
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, FileResponse
 from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import Organization
+from app.config import settings
 
 router = APIRouter()
 
@@ -34,24 +36,51 @@ def associazioni_detail(request: Request, slug: str, db: Session = Depends(get_d
 
 # ── Public JSON API ───────────────────────────────────────────────
 
-def _org_to_dict(org: Organization) -> dict:
+def _org_to_dict_summary(org: Organization) -> dict:
     return {
         "id": org.id,
         "name": org.name,
         "slug": org.slug,
+        "city": org.city,
+        "province": org.province,
+        "description_short": (org.description or "")[:100] + "..." if org.description and len(org.description) > 100 else org.description,
+        "logo_url": f"/api/organizations/{org.slug}/logo" if org.logo_path else None
+    }
+
+def _org_to_dict_detail(org: Organization) -> dict:
+    return {
+        "id": org.id,
+        "name": org.name,
+        "slug": org.slug,
+        "description": org.description,
+        "address_line1": org.address_line1,
+        "address_line2": org.address_line2,
+        "city": org.city,
+        "province": org.province,
+        "postal_code": org.postal_code,
+        "country": org.country,
+        "email": org.email,
+        "phone": org.phone,
+        "website": org.website,
+        "logo_url": f"/api/organizations/{org.slug}/logo" if org.logo_path else None,
+        "is_active": org.is_active,
+        "statute_version": org.statute_version,
+        "statute_url": f"/api/organizations/{org.slug}/statute" if org.statute_pdf_path else None,
+        "has_statute": bool(org.statute_pdf_path),
     }
 
 
 @router.get("/api/organizations")
 def api_list_organizations(q: str = None, db: Session = Depends(get_db)):
-    query = db.query(Organization).order_by(Organization.name)
+    # Only active organizations
+    query = db.query(Organization).filter(Organization.is_active == True).order_by(Organization.name)
 
     if q:
         search = f"%{q}%"
         query = query.filter(Organization.name.ilike(search))
 
     orgs = query.all()
-    return [_org_to_dict(o) for o in orgs]
+    return [_org_to_dict_summary(o) for o in orgs]
 
 
 @router.get("/api/organizations/{slug}")
@@ -60,4 +89,32 @@ def api_organization_detail(slug: str, db: Session = Depends(get_db)):
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    return _org_to_dict(org)
+    return _org_to_dict_detail(org)
+
+
+@router.get("/api/organizations/{slug}/logo")
+def get_organization_logo(slug: str, db: Session = Depends(get_db)):
+    org = db.query(Organization).filter(Organization.slug == slug).first()
+    if not org or not org.logo_path:
+        raise HTTPException(status_code=404, detail="Logo not found")
+
+    # logo_path is relative to UPLOAD_DIR
+    full_path = os.path.join(settings.UPLOAD_DIR, org.logo_path)
+    if not os.path.exists(full_path):
+         raise HTTPException(status_code=404, detail="File missing on disk")
+
+    return FileResponse(full_path)
+
+
+@router.get("/api/organizations/{slug}/statute")
+def get_organization_statute(slug: str, db: Session = Depends(get_db)):
+    org = db.query(Organization).filter(Organization.slug == slug).first()
+    if not org or not org.statute_pdf_path:
+        raise HTTPException(status_code=404, detail="Statute not found")
+
+    # statute_pdf_path is relative to UPLOAD_DIR
+    full_path = os.path.join(settings.UPLOAD_DIR, org.statute_pdf_path)
+    if not os.path.exists(full_path):
+         raise HTTPException(status_code=404, detail="File missing on disk")
+
+    return FileResponse(full_path, media_type="application/pdf", filename=f"statuto_{org.slug}.pdf")

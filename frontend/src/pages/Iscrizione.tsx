@@ -67,13 +67,13 @@ function validateStep1(f: FormData): Record<string, string> {
   return e;
 }
 
-function validateStep2(f: FormData): Record<string, string> {
+function validateStep2(f: FormData, hasStatute: boolean): Record<string, string> {
   const e: Record<string, string> = {};
   if (!f.documentoIdentita)
     e.documentoIdentita = "Il documento di identità è obbligatorio per completare l'iscrizione.";
   if (!f.privacy)
     e.privacy = "È necessario accettare l'informativa sulla privacy per procedere.";
-  if (!f.statuto)
+  if (hasStatute && !f.statuto)
     e.statuto = "È necessario accettare lo statuto dell'associazione per procedere.";
   return e;
 }
@@ -193,8 +193,13 @@ const Iscrizione = () => {
   const handleCheck = (field: "privacy" | "statuto") => (e: ChangeEvent<HTMLInputElement>) => updateField(field, e.target.checked);
 
   const goNext = () => {
-    const validate = step === 1 ? validateStep1 : validateStep2;
-    const newErrors = validate(form);
+    let newErrors = {};
+    if (step === 1) {
+        newErrors = validateStep1(form);
+    } else if (step === 2) {
+        newErrors = validateStep2(form, !!org?.has_statute);
+    }
+
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
     setErrors({});
     setStep((s) => s + 1);
@@ -216,6 +221,7 @@ const Iscrizione = () => {
         phone: form.telefono,
         fiscal_code: form.codiceFiscale.toUpperCase(),
         accept_statute: form.statuto,
+        accepted_statute_version: org?.has_statute ? (org.statute_version || null) : null,
         accept_privacy: form.privacy,
       });
 
@@ -419,14 +425,26 @@ const Iscrizione = () => {
                   </label>
                   {errors.privacy && <p className="pl-7 text-xs text-red-600">{errors.privacy}</p>}
 
-                  <label className={`flex items-start gap-3 rounded-lg border p-4 transition ${errors.statuto ? "border-red-200 bg-red-50/30" : form.statuto ? "border-brand/20 bg-brand/[0.02]" : "border-neutral-100"}`}>
-                    <input className="mt-0.5 h-4 w-4 shrink-0 rounded border-neutral-300 text-brand focus:ring-brand/30" type="checkbox" checked={form.statuto} onChange={handleCheck("statuto")} />
-                    <div>
-                      <span className="text-sm font-medium leading-6 text-neutral-800">Statuto dell'associazione</span>
-                      <p className="mt-0.5 text-xs leading-5 text-neutral-500">Dichiaro di aver letto e di accettare integralmente lo statuto dell'associazione, impegnandomi a rispettarne le disposizioni.</p>
-                    </div>
-                  </label>
-                  {errors.statuto && <p className="pl-7 text-xs text-red-600">{errors.statuto}</p>}
+                  {org?.has_statute && (
+                    <>
+                      <label className={`flex items-start gap-3 rounded-lg border p-4 transition ${errors.statuto ? "border-red-200 bg-red-50/30" : form.statuto ? "border-brand/20 bg-brand/[0.02]" : "border-neutral-100"}`}>
+                        <input className="mt-0.5 h-4 w-4 shrink-0 rounded border-neutral-300 text-brand focus:ring-brand/30" type="checkbox" checked={form.statuto} onChange={handleCheck("statuto")} />
+                        <div>
+                          <span className="text-sm font-medium leading-6 text-neutral-800">Statuto dell'associazione</span>
+                          <div className="mt-1">
+                             {org.statute_url && (
+                                <a href={org.statute_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline mb-1">
+                                   <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
+                                   Leggi lo statuto (PDF)
+                                </a>
+                             )}
+                             <p className="text-xs leading-5 text-neutral-500">Dichiaro di aver letto e di accettare integralmente lo statuto dell'associazione, impegnandomi a rispettarne le disposizioni.</p>
+                          </div>
+                        </div>
+                      </label>
+                      {errors.statuto && <p className="pl-7 text-xs text-red-600">{errors.statuto}</p>}
+                    </>
+                  )}
                 </div>
 
                 <div className="mt-8 flex items-center justify-between border-t border-neutral-100 pt-5">

@@ -1,3 +1,14 @@
+export type OrganizationListItem = {
+  id: number;
+  name: string;
+  slug: string;
+  city: string | null;
+  province: string | null;
+  description_short: string | null;
+  logo_url: string | null;
+};
+
+// Kept for MemberProfile compatibility
 export type Organization = {
   id: number;
   name: string;
@@ -30,15 +41,32 @@ export class AuthError extends Error {
 
 export async function fetchOrganizations(
   q?: string,
-): Promise<Organization[]> {
+): Promise<OrganizationListItem[]> {
   const params = q ? `?q=${encodeURIComponent(q)}` : "";
   const res = await fetch(`/api/organizations${params}`);
   if (!res.ok) throw new Error("Failed to fetch organizations");
   return res.json();
 }
 
-export type OrganizationDetail = Organization & {
+export type OrganizationDetail = {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  address_line1: string | null;
+  address_line2: string | null;
+  city: string | null;
+  province: string | null;
+  postal_code: string | null;
+  country: string | null;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  logo_url: string | null;
+  is_active: boolean;
   statute_version?: string;
+  statute_url?: string;
+  has_statute: boolean;
   privacy_version?: string;
 };
 
@@ -104,7 +132,9 @@ export async function joinOrganization(
     phone: string;
     fiscal_code: string;
     accept_statute: boolean;
+    accepted_statute_version: string | null;
     accept_privacy: boolean;
+    id_document?: File | null;
   },
 ): Promise<{ status: string; organization: string }> {
   const body = new FormData();
@@ -114,14 +144,31 @@ export async function joinOrganization(
   body.append("phone", data.phone);
   body.append("fiscal_code", data.fiscal_code);
   body.append("accept_statute", String(data.accept_statute));
+  if (data.accepted_statute_version) {
+    body.append("accepted_statute_version", data.accepted_statute_version);
+  }
   body.append("accept_privacy", String(data.accept_privacy));
-  const res = await fetch(`/api/join/${encodeURIComponent(orgSlug)}`, {
-    method: "POST",
-    body,
-  });
-  if (res.status === 404) throw new Error("Organization not found");
-  if (!res.ok) throw new Error("Join failed");
-  return res.json();
+
+  if (data.id_document) {
+    body.append("id_document", data.id_document);
+    // Switch to new endpoint if document is present
+    const res = await fetch(`/api/join/${encodeURIComponent(orgSlug)}/submit`, {
+      method: "POST",
+      body,
+    });
+    if (res.status === 404) throw new Error("Organization not found");
+    if (!res.ok) throw new Error("Join failed");
+    return res.json();
+  } else {
+    // Legacy endpoint
+    const res = await fetch(`/api/join/${encodeURIComponent(orgSlug)}`, {
+        method: "POST",
+        body,
+    });
+    if (res.status === 404) throw new Error("Organization not found");
+    if (!res.ok) throw new Error("Join failed");
+    return res.json();
+  }
 }
 
 export async function fetchMe(): Promise<MemberProfile> {
@@ -180,15 +227,14 @@ export async function requestOrgAdminMagicLink(
 export async function verifyOrgAdminToken(
   token: string,
 ): Promise<void> {
+  // Use default redirect behavior to ensure cookies are set correctly by the browser
   const res = await fetch(
-    `/api/org-admin/auth/verify?token=${encodeURIComponent(token)}`,
-    { redirect: "manual" },
+    `/api/org-admin/auth/verify?token=${encodeURIComponent(token)}`
   );
-  // The backend returns a 302 redirect on success.
-  // With redirect: "manual", a redirect becomes an opaque response (type "opaqueredirect").
-  // Any non-error response means the session cookie was set.
-  if (res.type === "opaqueredirect" || res.ok || res.status === 302) return;
-  throw new Error("Invalid or expired token");
+
+  // If successful, the backend redirects to the dashboard (200 OK HTML)
+  // If failed, it returns 400 or similar
+  if (!res.ok) throw new Error("Invalid or expired token");
 }
 
 export async function verifyMemberToken(token: string): Promise<void> {

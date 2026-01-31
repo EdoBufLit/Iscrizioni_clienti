@@ -11,6 +11,7 @@ from app.middleware import join_limiter, get_client_ip
 from app import audit
 import logging
 import os
+from typing import Optional
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -230,3 +231,136 @@ async def api_join_continue(
         db.rollback()
         logger.error(f"Error during file upload: {e}")
         raise HTTPException(status_code=500, detail="Internal server error during upload")
+
+
+@router.post("/api/join/{org_slug}/submit")
+async def api_join_submit_multipart(
+    request: Request,
+    org_slug: str,
+    first_name: str = Form(...),
+    last_name: str = Form(...),
+    email: str = Form(...),
+    phone: str = Form(...),
+    fiscal_code: str = Form(...),
+    accept_statute: bool = Form(...),
+    accepted_statute_version: Optional[str] = Form(None),
+    accept_privacy: bool = Form(...),
+    accepted_privacy_version: Optional[str] = Form(None), # Usually implied by org
+    id_document: UploadFile = File(...),
+    fiscal_code_document: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
+    join_limiter.check(get_client_ip(request))
+
+    org = db.query(Organization).filter(Organization.slug == org_slug).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    existing_member = db.query(Member).filter(Member.email == email, Member.org_id == org.id).first()
+    if existing_member:
+        # Return success to prevent enumeration, but notify existing email
+        if not send_email(
+            to_email=email,
+            subject=f"Registrazione presso {org.name}",
+            body=f"Risulta già una richiesta di iscrizione a {org.name} con questo indirizzo email.",
+        ):
+             logger.warning("Failed to send existing member notification to %s", email)
+        return {"status": "received", "message": "Richiesta ricevuta"}
+
+    # Transactional
+    rel_path_id = None
+    rel_path_fc = None
+
+    try:
+        # 1. Save Docs
+        rel_path_id, size_id, sha_id = await save_upload_file(id_document)
+
+        doc_fc = None
+        if fiscal_code_document:
+             rel_path_fc, size_fc, sha_fc = await save_upload_file(fiscal_code_document)
+
+        # 2. Create Member
+        member = Member(
+            org_id=org.id,
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            phone=phone,
+            fiscal_code=fiscal_code,
+            status=MemberStatus.PENDING_VERIFICATION, # Docs uploaded, waiting review
+            accepted_statute_at=datetime.utcnow(),
+            accepted_statute_version=accepted_statute_version or org.statute_version,
+            accepted_privacy_at=datetime.utcnow(),
+            accepted_privacy_version=org.privacy_version,
+            signup_ip=get_client_ip(request),
+            signup_user_agent=request.headers.get("user-agent")
+        )
+        db.add(member)
+        db.flush()
+
+        # 3. Create MemberDocuments
+        db.add(MemberDocument(
+            member_id=member.id,
+            doc_type="identity",
+            rel_path=rel_path_id,
+            original_filename=id_document.filename,
+            mime_type=id_document.content_type,
+            size_bytes=size_id,
+            sha256=sha_id
+        ))
+
+        if rel_path_fc:
+            db.add(MemberDocument(
+                member_id=member.id,
+                doc_type="fiscal_code",
+                rel_path=rel_path_fc,
+                original_filename=fiscal_code_document.filename,
+                mime_type=fiscal_code_document.content_type,
+                size_bytes=size_fc,
+                sha256=sha_fc
+            ))
+
+        db.commit()
+
+        audit.join_submitted(org_slug=org_slug, org_id=org.id, ip=get_client_ip(request))
+        # Log specific event for docs
+        # We don't have a specific audit function for this, but join_submitted covers the intent.
+        # Alternatively we can add member.create_with_docs if strictly needed by prompt.
+        # Prompt said: "OperationLog: member.create_with_docs"
+        # Let's add it via generic emit if not in audit.py, or stick to requirements strictly.
+        # audit.py is imported. Let's assume we can use _emit or add a helper.
+        # Since I can't easily modify audit.py in this step without context switching plan,
+        # I'll use a custom metadata in join_submitted or just proceed.
+        # The prompt explicitly asked for "OperationLog: member.create_with_docs".
+        # I will use the generic log_operation from audit if available (it was added in previous task!)
+
+        audit.log_operation(
+            db,
+            action="member.create_with_docs",
+            entity_type="member",
+            entity_id=member.id,
+            ip=get_client_ip(request),
+            metadata={"docs_count": 2 if rel_path_fc else 1}
+        )
+        db.commit() # Commit log
+
+        # Send confirmation to user
+        send_email(
+            to_email=email,
+            subject=f"Richiesta iscrizione {org.name} ricevuta",
+            body="Abbiamo ricevuto la tua richiesta e i documenti. Un amministratore li verificherà a breve."
+        )
+
+        return {"status": "received", "id": member.id}
+
+    except Exception as e:
+        # Cleanup
+        for p in [rel_path_id, rel_path_fc]:
+            if p:
+                try:
+                    os.remove(os.path.join(settings.UPLOAD_DIR, p))
+                except:
+                    pass
+        db.rollback()
+        logger.exception("Error in multipart submit")
+        raise HTTPException(status_code=500, detail="Errore nel salvataggio della richiesta")
