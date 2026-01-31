@@ -53,7 +53,7 @@ const OrgAdminLayout = () => {
               <div className="hidden shrink-0 sm:block">
                 <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-brand/10">
                   <img
-                    src="/favicon.svg"
+                    src={`${import.meta.env.BASE_URL}favicon.svg`}
                     alt=""
                     className="h-6"
                     aria-hidden="true"

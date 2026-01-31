@@ -28,7 +28,7 @@ const Login = () => {
   const imagePanel = (
     <div className="relative hidden overflow-hidden md:block">
       <img
-        src="/studio-commercialista_800x504.jpg"
+        src={`${import.meta.env.BASE_URL}studio-commercialista_800x504.jpg`}
         alt=""
         className="absolute inset-0 h-full w-full object-cover"
         aria-hidden="true"
@@ -61,7 +61,7 @@ const Login = () => {
           <div className="mx-auto grid max-w-4xl overflow-hidden rounded-lg border border-neutral-100 bg-white shadow-elevated md:grid-cols-2">
             <div className="flex flex-col justify-center px-8 py-12 sm:px-12">
               <div className="flex items-center gap-3">
-                <img src="/favicon.svg" alt="ASSO.N.A.M." className="h-8" />
+                <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="ASSO.N.A.M." className="h-8" />
                 <div>
                   <p className="text-sm font-semibold text-neutral-900">
                     ASSO.N.A.M.
@@ -116,7 +116,7 @@ const Login = () => {
         <div className="mx-auto grid max-w-4xl overflow-hidden rounded-lg border border-neutral-100 bg-white shadow-elevated md:grid-cols-2">
           <div className="flex flex-col justify-center px-8 py-12 sm:px-12">
             <div className="flex items-center gap-3">
-              <img src="/favicon.svg" alt="ASSO.N.A.M." className="h-8" />
+              <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="ASSO.N.A.M." className="h-8" />
               <div>
                 <p className="text-sm font-semibold text-neutral-900">
                   ASSO.N.A.M.

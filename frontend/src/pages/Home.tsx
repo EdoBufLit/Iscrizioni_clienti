@@ -6,7 +6,7 @@ const Home = () => {
       <section className="relative overflow-hidden" id="top">
         <div
           className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: "url('/piazza-bologna2.webp')" }}
+          style={{ backgroundImage: `url('${import.meta.env.BASE_URL}piazza-bologna2.webp')` }}
           aria-hidden="true"
         />
         <div
@@ -18,7 +18,7 @@ const Home = () => {
           <div className="container-shell">
             <div className="max-w-2xl text-center md:text-left">
               <img
-                src="/favicon.svg"
+                src={`${import.meta.env.BASE_URL}favicon.svg`}
                 alt=""
                 className="mx-auto mb-6 h-8 brightness-0 invert opacity-90 md:mx-0"
                 aria-hidden="true"

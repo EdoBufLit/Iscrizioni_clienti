@@ -33,7 +33,7 @@ const OrgAdminLogin = () => {
             <div className="surface overflow-hidden">
               <div className="border-b border-neutral-100 bg-gradient-to-b from-neutral-50 to-white px-8 py-6">
                 <div className="flex items-center gap-3">
-                  <img src="/favicon.svg" alt="ASSO.N.A.M." className="h-8" />
+                  <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="ASSO.N.A.M." className="h-8" />
                   <div>
                     <p className="text-sm font-semibold text-neutral-900">
                       ASSO.N.A.M.
@@ -86,7 +86,7 @@ const OrgAdminLogin = () => {
           <div className="surface overflow-hidden">
             <div className="border-b border-neutral-100 bg-gradient-to-b from-neutral-50 to-white px-8 py-6">
               <div className="flex items-center gap-3">
-                <img src="/favicon.svg" alt="ASSO.N.A.M." className="h-8" />
+                <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="ASSO.N.A.M." className="h-8" />
                 <div>
                   <p className="text-sm font-semibold text-neutral-900">
                     ASSO.N.A.M.
