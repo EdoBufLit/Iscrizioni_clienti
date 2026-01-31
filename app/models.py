@@ -9,6 +9,7 @@ class MemberStatus(str, enum.Enum):
     PENDING_DOCS = "pending_docs"
     PENDING_CARDS = "pending_cards" # Added
     ACTIVE = "active"
+    REJECTED = "rejected" # Added for explicit rejection
 
 class DocStatus(str, enum.Enum):
     UPLOADED = "uploaded"

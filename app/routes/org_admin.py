@@ -1,16 +1,18 @@
 import csv
 import io
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Form
-from fastapi.responses import StreamingResponse
+import os
+from fastapi import APIRouter, Depends, HTTPException, Request, Form, Body
+from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import Optional
+from pydantic import BaseModel
 
 from fastapi import UploadFile, File
 from app.db import get_db
-from app.models import AdminUser, AdminRole, OrgAdminToken, Member, MemberStatus, CardBatch, CardMovement, Organization
+from app.models import AdminUser, AdminRole, OrgAdminToken, Member, MemberStatus, CardBatch, CardMovement, Organization, MemberDocument, DocStatus
 from app.utils import generate_token, hash_token, send_email, save_upload_file
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
@@ -320,11 +322,151 @@ def list_org_members(
                 "status": m.status.value if m.status else None,
                 "card_no": m.card_no,
                 "joined_at": m.joined_at.isoformat() if m.joined_at else None,
+                "created_at": m.joined_at.isoformat() if m.joined_at else None, # fallback if no created_at
+                "docs_count": len(m.documents),
             }
             for m in members
         ],
         "total": total,
     }
+
+
+@router.get("/members/{member_id}")
+def get_member_detail(
+    request: Request,
+    member_id: int,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    member = db.query(Member).filter(Member.id == member_id, Member.org_id == admin.org_id).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    return {
+        "id": member.id,
+        "first_name": member.first_name,
+        "last_name": member.last_name,
+        "email": member.email,
+        "phone": member.phone,
+        "fiscal_code": member.fiscal_code,
+        "status": member.status.value if member.status else None,
+        "card_no": member.card_no,
+        "joined_at": member.joined_at.isoformat() if member.joined_at else None,
+        "documents": [
+            {
+                "id": d.id,
+                "type": d.doc_type,
+                "filename": d.original_filename,
+                "uploaded_at": d.uploaded_at.isoformat(),
+                "status": d.status,
+                "review_notes": d.review_notes,
+                "reviewed_at": d.reviewed_at.isoformat() if d.reviewed_at else None,
+            }
+            for d in member.documents
+        ]
+    }
+
+
+@router.get("/documents/{doc_id}")
+def download_document(
+    request: Request,
+    doc_id: int,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    doc = db.query(MemberDocument).filter(MemberDocument.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Check ownership via member
+    if doc.member.org_id != admin.org_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    full_path = os.path.join(settings.UPLOAD_DIR, doc.rel_path)
+    if not os.path.exists(full_path):
+        raise HTTPException(status_code=404, detail="File missing on disk")
+
+    return FileResponse(
+        full_path,
+        filename=doc.original_filename,
+        content_disposition_type="attachment"
+    )
+
+
+class ReviewBody(BaseModel):
+    status: str
+    notes: Optional[str] = None
+
+
+@router.post("/documents/{doc_id}/review")
+def review_document(
+    request: Request,
+    doc_id: int,
+    body: ReviewBody,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    if body.status not in ["approved", "rejected"]:
+        raise HTTPException(status_code=400, detail="Invalid status")
+
+    doc = db.query(MemberDocument).filter(MemberDocument.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if doc.member.org_id != admin.org_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    doc.status = body.status
+    doc.review_notes = body.notes
+    doc.reviewed_at = datetime.utcnow()
+    doc.reviewed_by = admin.id
+
+    # Logic to update Member status
+    # If ANY doc is rejected -> member status REJECTED (or PENDING_FIX if we had it)
+    # If ALL required docs are approved -> member status ACTIVE
+    # (Simplified logic: check all docs for this member)
+
+    member = doc.member
+    all_docs = db.query(MemberDocument).filter(MemberDocument.member_id == member.id).all()
+
+    any_rejected = any(d.status == DocStatus.REJECTED.value for d in all_docs)
+    all_approved = all(d.status == DocStatus.APPROVED.value for d in all_docs)
+
+    if any_rejected:
+        member.status = MemberStatus.REJECTED
+    elif all_approved:
+        # Only if current status is pending verification/docs
+        if member.status in [MemberStatus.PENDING_VERIFICATION, MemberStatus.PENDING_DOCS]:
+             member.status = MemberStatus.ACTIVE
+             # Ideally trigger card assignment here if not done, but usually done at upload or separately
+             if not member.joined_at:
+                 member.joined_at = datetime.utcnow()
+
+    db.commit()
+
+    audit.log_operation(
+        db,
+        action="member_doc.review",
+        entity_type="member_document",
+        entity_id=doc.id,
+        actor_admin_id=admin.id,
+        actor_role="org_admin",
+        metadata={"status": body.status, "notes": body.notes, "member_id": member.id},
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent")
+    )
+    db.commit()
+
+    return {"ok": True, "doc_status": doc.status, "member_status": member.status.value}
 
 
 @router.get("/members.csv")

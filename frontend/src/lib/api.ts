@@ -134,6 +134,7 @@ export async function joinOrganization(
     accept_statute: boolean;
     accepted_statute_version: string | null;
     accept_privacy: boolean;
+    id_document?: File | null;
   },
 ): Promise<{ status: string; organization: string }> {
   const body = new FormData();
@@ -147,13 +148,27 @@ export async function joinOrganization(
     body.append("accepted_statute_version", data.accepted_statute_version);
   }
   body.append("accept_privacy", String(data.accept_privacy));
-  const res = await fetch(`/api/join/${encodeURIComponent(orgSlug)}`, {
-    method: "POST",
-    body,
-  });
-  if (res.status === 404) throw new Error("Organization not found");
-  if (!res.ok) throw new Error("Join failed");
-  return res.json();
+
+  if (data.id_document) {
+    body.append("id_document", data.id_document);
+    // Switch to new endpoint if document is present
+    const res = await fetch(`/api/join/${encodeURIComponent(orgSlug)}/submit`, {
+      method: "POST",
+      body,
+    });
+    if (res.status === 404) throw new Error("Organization not found");
+    if (!res.ok) throw new Error("Join failed");
+    return res.json();
+  } else {
+    // Legacy endpoint
+    const res = await fetch(`/api/join/${encodeURIComponent(orgSlug)}`, {
+        method: "POST",
+        body,
+    });
+    if (res.status === 404) throw new Error("Organization not found");
+    if (!res.ok) throw new Error("Join failed");
+    return res.json();
+  }
 }
 
 export async function fetchMe(): Promise<MemberProfile> {
