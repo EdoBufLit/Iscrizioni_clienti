@@ -8,6 +8,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -16,12 +17,39 @@ jobs:
           username: ${{ secrets.HETZNER_USER }}
           key: ${{ secrets.HETZNER_SSH_KEY }}
           script: |
-            set -e
-            cd ${{ secrets.APP_PATH }}
+            set -euo pipefail
+
+            cd "${{ secrets.APP_PATH }}"
             git fetch --all
+
             BRANCH="${{ github.ref_name }}"
             git checkout -B "$BRANCH" "origin/$BRANCH"
             git reset --hard "origin/$BRANCH"
+
+            # ---- Required env (per ENV_REQUIRED.md) ----
+            export SECRET_KEY='${{ secrets.SECRET_KEY }}'
+            export BASE_URL='${{ secrets.BASE_URL }}'
+            export SUPER_ADMIN_EMAIL='${{ secrets.SUPER_ADMIN_EMAIL }}'
+            export SUPER_ADMIN_PASSWORD='${{ secrets.SUPER_ADMIN_PASSWORD }}'
+
+            # ---- Optional env ----
+            # If not set as secrets, these will just be empty and app uses defaults/fallbacks.
+            export DATABASE_URL='${{ secrets.DATABASE_URL }}'
+            export UPLOAD_DIR='${{ secrets.UPLOAD_DIR }}'
+            export SPA_DIR='${{ secrets.SPA_DIR }}'
+
+            # SMTP (set these secrets only if you want real email sending)
+            export SMTP_HOST='${{ secrets.SMTP_HOST }}'
+            export SMTP_PORT='${{ secrets.SMTP_PORT }}'
+            export SMTP_USER='${{ secrets.SMTP_USER }}'
+            export SMTP_PASS='${{ secrets.SMTP_PASS }}'
+            export SMTP_FROM='${{ secrets.SMTP_FROM }}'
+            export SMTP_USE_TLS='${{ secrets.SMTP_USE_TLS }}'
+
+            # Build metadata
+            export GIT_SHA='${{ github.sha }}'
+            export BUILD_TIME="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+
             docker compose up -d --build
             docker image prune -f || true
 
