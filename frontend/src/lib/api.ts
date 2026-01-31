@@ -112,6 +112,8 @@ export async function orgAdminLogout(): Promise<void> {
 
 export type OrgAdminMetrics = {
   members_count: number;
+  cards_total: number | null;
+  cards_used: number | null;
   cards_remaining: number | null;
   pending_requests_count: number | null;
 };

@@ -158,17 +158,21 @@ def org_metrics(request: Request, db: Session = Depends(get_db)):
         Member.status != MemberStatus.ACTIVE,
     ).scalar()
 
-    # Cards remaining: sum of (end_no - next_no + 1) across all batches
+    # Cards: computed from batches
     batches = db.query(CardBatch).filter(CardBatch.org_id == org_id).all()
     if batches:
-        cards_remaining = sum(
-            max(b.end_no - b.next_no + 1, 0) for b in batches
-        )
+        cards_total = sum(b.end_no - b.start_no + 1 for b in batches)
+        cards_remaining = sum(max(b.end_no - b.next_no + 1, 0) for b in batches)
+        cards_used = cards_total - cards_remaining
     else:
+        cards_total = None
         cards_remaining = None
+        cards_used = None
 
     return {
         "members_count": members_count,
+        "cards_total": cards_total,
+        "cards_used": cards_used,
         "cards_remaining": cards_remaining,
         "pending_requests_count": pending_requests_count,
     }

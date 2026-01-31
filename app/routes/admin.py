@@ -3,7 +3,7 @@ from fastapi.responses import RedirectResponse, FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.db import get_db
-from app.models import AdminUser, Member, CardBatch, MemberDocument, DocStatus, MemberStatus, Organization
+from app.models import AdminUser, AdminRole, Member, CardBatch, MemberDocument, DocStatus, MemberStatus, Organization
 from app.services.card import assign_next_card
 from app.config import settings
 from app.security import verify_password
@@ -71,6 +71,8 @@ def add_batch(request: Request, quantity: int = Form(...), db: Session = Depends
     admin = get_current_admin(request, db)
     if not admin:
         return RedirectResponse(url="/admin/login")
+    if admin.role != AdminRole.SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="Only super-admin can modify card stock")
 
     if quantity <= 0:
         raise HTTPException(status_code=400, detail="Quantity must be positive")
