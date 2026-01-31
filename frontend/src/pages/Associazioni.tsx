@@ -8,6 +8,21 @@ const inputClass =
 
 const DEBOUNCE_MS = 300;
 
+const COVER_PATTERNS = [
+  `radial-gradient(circle at 75% 30%, rgba(255,255,255,0.08) 0%, transparent 50%),
+   radial-gradient(ellipse at 20% 80%, rgba(138,152,128,0.3) 0%, transparent 50%),
+   linear-gradient(135deg, #1a4068 0%, #1f4b7a 40%, #295c94 100%)`,
+  `radial-gradient(circle at 25% 60%, rgba(255,255,255,0.06) 0%, transparent 45%),
+   radial-gradient(ellipse at 85% 20%, rgba(41,92,148,0.4) 0%, transparent 45%),
+   linear-gradient(160deg, #173557 0%, #1f4b7a 60%, #1a4068 100%)`,
+  `radial-gradient(circle at 60% 80%, rgba(255,255,255,0.07) 0%, transparent 40%),
+   radial-gradient(ellipse at 10% 20%, rgba(138,152,128,0.25) 0%, transparent 50%),
+   linear-gradient(145deg, #1f4b7a 0%, #295c94 50%, #173557 100%)`,
+  `radial-gradient(circle at 40% 10%, rgba(255,255,255,0.09) 0%, transparent 55%),
+   radial-gradient(ellipse at 90% 70%, rgba(41,92,148,0.35) 0%, transparent 50%),
+   linear-gradient(170deg, #173557 0%, #1f4b7a 70%, #1a4068 100%)`,
+];
+
 const Associazioni = () => {
   const [search, setSearch] = useState("");
   const [orgs, setOrgs] = useState<OrganizationListItem[]>([]);
@@ -82,9 +97,13 @@ const Associazioni = () => {
         ) : loading ? (
           <div className="mt-6 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="surface p-7">
-                <Skeleton className="h-5 w-48" />
-                <Skeleton className="mt-5 h-8 w-24" />
+              <div key={i} className="surface-strong overflow-hidden">
+                <Skeleton className="h-24 w-full rounded-none" />
+                <div className="p-7 pt-5">
+                  <Skeleton className="h-9 w-9 rounded-lg" />
+                  <Skeleton className="mt-4 h-5 w-48" />
+                  <Skeleton className="mt-5 h-8 w-24" />
+                </div>
               </div>
             ))}
           </div>
@@ -111,13 +130,30 @@ const Associazioni = () => {
                 : `${orgs.length} associazioni trovate`}
             </p>
             <div className="mt-6 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-              {orgs.map((org) => (
+              {orgs.map((org, i) => (
                 <div
                   key={org.slug}
-                  className="surface flex flex-col overflow-hidden transition-[border-color,box-shadow] duration-150 hover:border-neutral-200 hover:shadow-[0_2px_6px_rgba(15,23,42,0.1)]"
+                  className="surface-strong flex flex-col overflow-hidden transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-px hover:shadow-[0_6px_24px_rgba(15,23,42,0.10)]"
                 >
-                  <div className="h-1 bg-gradient-to-r from-brand to-brand-dark" />
-                  <div className="flex flex-1 flex-col p-7">
+                  {/* Cover pattern */}
+                  <div
+                    className="relative h-24"
+                    style={{
+                      background: COVER_PATTERNS[i % COVER_PATTERNS.length],
+                    }}
+                  >
+                    <div
+                      className="absolute inset-0 opacity-[0.07]"
+                      style={{
+                        backgroundImage:
+                          "radial-gradient(circle, #fff 1px, transparent 1px)",
+                        backgroundSize: "14px 14px",
+                      }}
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white/70" />
+                  </div>
+
+                  <div className="flex flex-1 flex-col p-7 pt-5">
                     <div className="flex items-start justify-between">
                       <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-brand/10 overflow-hidden">
                         {org.logo_url ? (
