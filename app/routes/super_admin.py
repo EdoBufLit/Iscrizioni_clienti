@@ -4,8 +4,10 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import Optional
 
+from sqlalchemy import func
+
 from app.db import get_db
-from app.models import AdminUser, AdminRole, Organization, OrgAdminToken
+from app.models import AdminUser, AdminRole, Organization, OrgAdminToken, CardBatch, CardMovement
 from app.security import verify_password
 from app.utils import generate_token, hash_token, send_email_simulation
 from app.config import settings
@@ -187,4 +189,78 @@ def patch_org_admin(
         "email": target.email,
         "org_id": target.org_id,
         "is_active": target.is_active,
+    }
+
+
+# ── Card stock management ────────────────────────────────────────
+
+class IncreaseCards(BaseModel):
+    amount: int
+    reason: Optional[str] = None
+    paid_ref: Optional[str] = None
+
+
+@router.post("/orgs/{org_id}/cards/increase")
+def increase_card_stock(
+    request: Request,
+    org_id: int,
+    body: IncreaseCards,
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+
+    if body.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than zero")
+
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    # Compute next start_no from existing batches for this org
+    last_end = (
+        db.query(func.max(CardBatch.end_no))
+        .filter(CardBatch.org_id == org_id)
+        .scalar()
+    ) or 0
+    start_no = last_end + 1
+    end_no = last_end + body.amount
+
+    batch = CardBatch(
+        org_id=org_id,
+        start_no=start_no,
+        end_no=end_no,
+        next_no=start_no,
+    )
+    db.add(batch)
+    db.flush()
+
+    movement = CardMovement(
+        org_id=org_id,
+        admin_id=admin.id,
+        delta=body.amount,
+        reason=body.reason or "stock_increase",
+        paid_ref=body.paid_ref,
+    )
+    db.add(movement)
+    db.commit()
+
+    audit.card_stock_increased(
+        org_id=org_id,
+        amount=body.amount,
+        admin_id=admin.id,
+        reason=body.reason,
+        paid_ref=body.paid_ref,
+    )
+
+    # Return updated stock summary
+    batches = db.query(CardBatch).filter(CardBatch.org_id == org_id).all()
+    total = sum(b.end_no - b.start_no + 1 for b in batches)
+    remaining = sum(max(b.end_no - b.next_no + 1, 0) for b in batches)
+
+    return {
+        "batch_id": batch.id,
+        "start_no": start_no,
+        "end_no": end_no,
+        "cards_total": total,
+        "cards_remaining": remaining,
     }

@@ -1,6 +1,8 @@
 import logging
 import os
 
+from sqlalchemy import inspect, text
+
 from app.db import Base, SessionLocal, engine
 import app.models
 from app.models import Organization, AdminUser, AdminRole, CardBatch
@@ -8,8 +10,22 @@ from app.security import get_password_hash
 
 logger = logging.getLogger(__name__)
 
+
+def _add_column_if_missing(conn, table: str, column: str, col_type: str):
+    """Add a column to an existing SQLite table if it doesn't exist yet."""
+    cols = {c["name"] for c in inspect(conn).get_columns(table)}
+    if column not in cols:
+        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+        logger.info("Added column %s.%s", table, column)
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
+
+    # Migrate existing tables — add nullable columns that create_all won't add
+    with engine.begin() as conn:
+        _add_column_if_missing(conn, "card_movements", "admin_id", "INTEGER REFERENCES admin_users(id)")
+        _add_column_if_missing(conn, "card_movements", "paid_ref", "TEXT")
     db = SessionLocal()
     admin_password = os.getenv("ADMIN_PASSWORD", "admin")
 

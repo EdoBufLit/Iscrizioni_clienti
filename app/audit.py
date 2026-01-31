@@ -74,3 +74,14 @@ def card_assigned(member_id: int, org_id: int, card_no: int):
 
 def card_batch_added(org_id: int, start_no: int, end_no: int, admin_id: int):
     _emit("card.batch_added", org_id=org_id, start_no=start_no, end_no=end_no, admin_id=admin_id)
+
+
+def card_stock_increased(org_id: int, amount: int, admin_id: int, reason: str | None = None, paid_ref: str | None = None):
+    _emit(
+        "card.stock_increased",
+        org_id=org_id,
+        amount=amount,
+        admin_id=admin_id,
+        reason=reason,
+        paid_ref=paid_ref,
+    )
