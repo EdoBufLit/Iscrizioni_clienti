@@ -1,4 +1,12 @@
 import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
+
+const heroEase = [0.16, 1, 0.3, 1] as const;
+const heroBlur = (delay = 0) => ({
+  initial: { opacity: 0, y: 14, filter: "blur(16px)" },
+  animate: { opacity: 1, y: 0, filter: "blur(0px)" },
+  transition: { duration: 0.9, ease: heroEase, delay },
+});
 
 const Home = () => {
   return (
@@ -27,14 +35,20 @@ const Home = () => {
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
                 Associazione Nazionale Arti e Mestieri
               </p>
-              <h1 className="mt-4 text-4xl font-bold leading-tight text-white md:text-5xl lg:text-[3.5rem]">
+              <motion.h1
+                className="mt-4 text-4xl font-bold leading-tight text-white md:text-5xl lg:text-[3.5rem]"
+                {...heroBlur(0)}
+              >
                 Gestione associativa<br className="hidden md:inline" /> e portale soci integrato.
-              </h1>
-              <p className="mx-auto mt-6 max-w-xl text-base leading-7 text-white/80 md:mx-0 md:text-lg md:leading-8">
+              </motion.h1>
+              <motion.p
+                className="mx-auto mt-6 max-w-xl text-base leading-7 text-white/80 md:mx-0 md:text-lg md:leading-8"
+                {...heroBlur(0.12)}
+              >
                 Iscrizioni digitali, raccolta documenti, contabilità e
                 adempimenti — tutto in un unico portale ordinato e verificabile.
-              </p>
-              <div className="mt-10 flex flex-wrap justify-center gap-4 md:justify-start">
+              </motion.p>
+              <motion.div className="mt-10 flex flex-wrap justify-center gap-4 md:justify-start" {...heroBlur(0.22)}>
                 <Link className="btn-primary px-7 py-3 text-base" to="/associazioni">
                   Diventa socio
                 </Link>
@@ -44,7 +58,7 @@ const Home = () => {
                 >
                   Area riservata
                 </Link>
-              </div>
+              </motion.div>
               <p className="mt-12 text-xs text-white/35">
                 Piazza Bologna, Roma
               </p>
