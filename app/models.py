@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Enum, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Enum, UniqueConstraint, Text, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -33,9 +33,41 @@ class Organization(Base):
     statute_pdf_path = Column(String, nullable=True) # Path relative to static or uploads
     privacy_version = Column(String)
 
+    # Extended details
+    address_line1 = Column(String, nullable=True)
+    address_line2 = Column(String, nullable=True)
+    city = Column(String, index=True, nullable=True)
+    province = Column(String, nullable=True)
+    postal_code = Column(String, nullable=True)
+    country = Column(String, default="Italy")
+    description = Column(Text, nullable=True)
+    email = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    website = Column(String, nullable=True)
+    logo_path = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
+
+    created_by_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
     members = relationship("Member", back_populates="organization")
     batches = relationship("CardBatch", back_populates="organization")
-    admins = relationship("AdminUser", back_populates="organization")
+    admins = relationship("AdminUser", back_populates="organization", foreign_keys="[AdminUser.org_id]")
+
+class OperationLog(Base):
+    __tablename__ = "operation_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    actor_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
+    actor_role = Column(String)
+    action = Column(String, index=True)
+    entity_type = Column(String, index=True)
+    entity_id = Column(Integer, nullable=True)
+    metadata_json = Column(JSON, nullable=True)
+    ip = Column(String, nullable=True)
+    user_agent = Column(String, nullable=True)
 
 class AdminUser(Base):
     __tablename__ = "admin_users"
@@ -49,7 +81,7 @@ class AdminUser(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     deleted_at = Column(DateTime, nullable=True)
 
-    organization = relationship("Organization", back_populates="admins")
+    organization = relationship("Organization", back_populates="admins", foreign_keys=[org_id])
 
 class CardBatch(Base):
     __tablename__ = "card_batches"

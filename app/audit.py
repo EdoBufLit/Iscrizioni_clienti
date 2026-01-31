@@ -8,6 +8,8 @@ import hashlib
 import json
 import logging
 from datetime import datetime, timezone
+from sqlalchemy.orm import Session
+from app.models import OperationLog
 
 _logger = logging.getLogger("audit")
 if not _logger.handlers:
@@ -98,4 +100,42 @@ def card_stock_increased(org_id: int, amount: int, admin_id: int, reason: str | 
         admin_id=admin_id,
         reason=reason,
         paid_ref=paid_ref,
+    )
+
+
+def log_operation(
+    db: Session,
+    action: str,
+    entity_type: str,
+    entity_id: int | None = None,
+    actor_admin_id: int | None = None,
+    actor_role: str | None = None,
+    metadata: dict | None = None,
+    ip: str | None = None,
+    user_agent: str | None = None,
+):
+    """
+    Writes an audit entry to the database and emits to logger.
+    """
+    # 1. DB Log
+    op_log = OperationLog(
+        action=action,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        actor_admin_id=actor_admin_id,
+        actor_role=actor_role,
+        metadata_json=metadata,
+        ip=ip,
+        user_agent=user_agent,
+    )
+    db.add(op_log)
+
+    # 2. File Log (redundancy)
+    _emit(
+        action,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        actor_id=actor_admin_id,
+        ip=ip,
+        metadata=metadata
     )

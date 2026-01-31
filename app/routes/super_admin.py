@@ -1,15 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import Optional
+import re
 
 from sqlalchemy import func
 
 from app.db import get_db
 from app.models import AdminUser, AdminRole, Organization, OrgAdminToken, CardBatch, CardMovement
 from app.security import verify_password
-from app.utils import generate_token, hash_token, send_email
+from app.utils import generate_token, hash_token, send_email, save_upload_file
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
 from app import audit
@@ -38,6 +39,35 @@ def _require_super_admin(request: Request, db: Session) -> AdminUser:
 class LoginBody(BaseModel):
     email: str
     password: str
+
+class CreateOrganization(BaseModel):
+    name: str
+    slug: Optional[str] = None
+    description: Optional[str] = None
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    city: Optional[str] = None
+    province: Optional[str] = None
+    postal_code: Optional[str] = None
+    country: str = "Italy"
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    website: Optional[str] = None
+    is_active: bool = True
+
+class PatchOrganization(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    city: Optional[str] = None
+    province: Optional[str] = None
+    postal_code: Optional[str] = None
+    country: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    website: Optional[str] = None
+    is_active: Optional[bool] = None
 
 
 @auth_router.post("/login")
@@ -304,6 +334,157 @@ def patch_org_admin(
         "org_id": target.org_id,
         "is_active": target.is_active,
     }
+
+
+# ── Organization Management ──────────────────────────────────────
+
+@router.post("/organizations")
+def create_organization(
+    request: Request,
+    body: CreateOrganization,
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+
+    # Slug Logic
+    slug = body.slug
+    if not slug:
+        slug = re.sub(r'[^a-z0-9]+', '-', body.name.lower()).strip('-')
+
+    # Unique check
+    if db.query(Organization).filter(Organization.slug == slug).first():
+            raise HTTPException(status_code=409, detail="Slug already exists")
+
+    org = Organization(
+        name=body.name,
+        slug=slug,
+        description=body.description,
+        address_line1=body.address_line1,
+        address_line2=body.address_line2,
+        city=body.city,
+        province=body.province,
+        postal_code=body.postal_code,
+        country=body.country,
+        email=body.email,
+        phone=body.phone,
+        website=body.website,
+        is_active=body.is_active,
+        created_by_admin_id=admin.id
+    )
+    db.add(org)
+    db.commit()
+    db.refresh(org)
+
+    audit.log_operation(
+        db,
+        action="org.create",
+        entity_type="organization",
+        entity_id=org.id,
+        actor_admin_id=admin.id,
+        actor_role="super_admin",
+        metadata=body.model_dump(exclude_unset=True),
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent")
+    )
+    db.commit()
+    db.refresh(org)
+
+    return org
+
+
+@router.get("/organizations")
+def list_organizations(
+    request: Request,
+    page: int = 1,
+    limit: int = 50,
+    q: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    query = db.query(Organization)
+    if q:
+            search = f"%{q}%"
+            query = query.filter(Organization.name.ilike(search) | Organization.slug.ilike(search))
+
+    total = query.count()
+    orgs = query.order_by(Organization.name).offset((page - 1) * limit).limit(limit).all()
+
+    return {
+        "data": orgs,
+        "meta": {"page": page, "limit": limit, "total": total}
+    }
+
+
+@router.patch("/organizations/{org_id}")
+def update_organization(
+    request: Request,
+    org_id: int,
+    body: PatchOrganization,
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+            raise HTTPException(status_code=404, detail="Organization not found")
+
+    update_data = body.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(org, key, value)
+
+    db.commit()
+
+    audit.log_operation(
+        db,
+        action="org.update",
+        entity_type="organization",
+        entity_id=org.id,
+        actor_admin_id=admin.id,
+        actor_role="super_admin",
+        metadata=update_data,
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent")
+    )
+    db.commit()
+    db.refresh(org)
+
+    return org
+
+
+@router.post("/organizations/{org_id}/logo")
+async def upload_org_logo(
+    request: Request,
+    org_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+            raise HTTPException(status_code=404, detail="Organization not found")
+
+    rel_path, size, sha = await save_upload_file(
+        file,
+        allowed_types=["image/jpeg", "image/png", "image/svg+xml"],
+        max_size=2 * 1024 * 1024
+    )
+
+    org.logo_path = rel_path
+    db.commit()
+
+    audit.log_operation(
+        db,
+        action="org.logo.upload",
+        entity_type="organization",
+        entity_id=org.id,
+        actor_admin_id=admin.id,
+        actor_role="super_admin",
+        metadata={"filename": file.filename, "size": size, "sha256": sha},
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent")
+    )
+    db.commit()
+
+    return {"logo_path": rel_path}
 
 
 # ── Card stock management ────────────────────────────────────────
