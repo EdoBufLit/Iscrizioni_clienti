@@ -35,7 +35,7 @@ const AdminLayout = () => {
   return (
     <div>
       {/* Header band */}
-      <div className="border-b border-neutral-100 bg-gradient-to-b from-neutral-50 to-white">
+      <div className="border-b border-white/60 bg-white/40 backdrop-blur-sm">
         <div className="container-shell py-8">
           <div className="flex items-start gap-5">
             <div className="hidden shrink-0 sm:block">

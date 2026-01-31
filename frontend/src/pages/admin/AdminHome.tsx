@@ -91,7 +91,7 @@ const AdminHome = () => {
 
           <div className="mt-6 grid gap-6 md:grid-cols-2">
             <div className="surface overflow-hidden">
-              <div className="border-b border-neutral-100 bg-neutral-25 px-7 py-4">
+              <div className="border-b border-white/60 bg-white/40 px-7 py-4">
                 <div className="flex items-center gap-2.5">
                   <svg
                     className="h-4 w-4 text-neutral-400"
@@ -117,7 +117,7 @@ const AdminHome = () => {
             </div>
 
             <div className="surface overflow-hidden">
-              <div className="border-b border-neutral-100 bg-neutral-25 px-7 py-4">
+              <div className="border-b border-white/60 bg-white/40 px-7 py-4">
                 <div className="flex items-center gap-2.5">
                   <svg
                     className="h-4 w-4 text-neutral-400"

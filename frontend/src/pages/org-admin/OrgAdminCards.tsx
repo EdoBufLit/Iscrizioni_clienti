@@ -256,7 +256,7 @@ const OrgAdminCards = () => {
             <div className="surface mt-6 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
-                  <thead className="border-b border-neutral-100 bg-neutral-25">
+                  <thead className="border-b border-white/60 bg-white/40">
                     <tr>
                       <th className={thClass}>Data</th>
                       <th className={thClass}>Descrizione</th>
@@ -269,7 +269,7 @@ const OrgAdminCards = () => {
                       <tr
                         key={mv.id}
                         className={`transition hover:bg-brand/[0.02] ${
-                          i % 2 === 1 ? "bg-neutral-25" : ""
+                          i % 2 === 1 ? "bg-white/30" : ""
                         }`}
                       >
                         <td className={`${tdClass} tabular-nums`}>

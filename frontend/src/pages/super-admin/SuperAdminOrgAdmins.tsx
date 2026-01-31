@@ -248,7 +248,7 @@ const SuperAdminOrgAdmins = () => {
   return (
     <div>
       {/* Header band */}
-      <div className="border-b border-neutral-100 bg-gradient-to-b from-neutral-50 to-white">
+      <div className="border-b border-white/60 bg-white/40 backdrop-blur-sm">
         <div className="container-shell py-8">
           <div className="flex items-start gap-5">
             <div className="hidden shrink-0 sm:block">
@@ -381,7 +381,7 @@ const SuperAdminOrgAdmins = () => {
         </div>
 
         {/* Filter */}
-        <div className="mt-8 rounded-lg border border-neutral-100 bg-neutral-25 px-5 py-4">
+        <div className="mt-8 surface px-5 py-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <select
               className="rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20 sm:w-64"
@@ -413,7 +413,7 @@ const SuperAdminOrgAdmins = () => {
         <div className="surface mt-4 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left">
-              <thead className="border-b border-neutral-100 bg-neutral-25">
+              <thead className="border-b border-white/60 bg-white/40">
                 <tr>
                   <th className={thClass}>Email</th>
                   <th className={thClass}>Associazione</th>
@@ -457,7 +457,7 @@ const SuperAdminOrgAdmins = () => {
                     <tr
                       key={a.id}
                       className={`transition hover:bg-brand/[0.02] ${
-                        i % 2 === 1 ? "bg-neutral-25" : ""
+                        i % 2 === 1 ? "bg-white/30" : ""
                       }`}
                     >
                       <td
@@ -513,7 +513,7 @@ const SuperAdminOrgAdmins = () => {
 
         {deleteConfirm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <div className="w-full max-w-md surface-strong p-6 shadow-xl">
               <h3 className="text-lg font-semibold text-neutral-900">
                 Eliminare questo admin?
               </h3>

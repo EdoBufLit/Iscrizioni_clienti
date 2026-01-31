@@ -59,7 +59,7 @@ const AdminAffiliations = () => {
       </p>
 
       {/* Filters surface */}
-      <div className="mt-8 rounded-lg border border-neutral-100 bg-neutral-25 px-5 py-4">
+      <div className="mt-8 surface px-5 py-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <svg
@@ -105,7 +105,7 @@ const AdminAffiliations = () => {
       <div className="surface mt-4 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="border-b border-neutral-100 bg-neutral-25">
+            <thead className="border-b border-white/60 bg-white/40">
               <tr>
                 <th className={thClass}>Nome</th>
                 <th className={thClass}>Provincia</th>
@@ -129,7 +129,7 @@ const AdminAffiliations = () => {
                   <tr
                     key={item.name}
                     className={`transition hover:bg-brand/[0.02] ${
-                      i % 2 === 1 ? "bg-neutral-25" : ""
+                      i % 2 === 1 ? "bg-white/30" : ""
                     }`}
                   >
                     <td className={`${tdClass} font-medium text-neutral-900`}>
