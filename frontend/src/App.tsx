@@ -23,7 +23,9 @@ const AdminAffiliations = lazy(() => import("./pages/admin/AdminAffiliations"));
 
 const OrgAdminLogin = lazy(() => import("./pages/org-admin/OrgAdminLogin"));
 const OrgAdminCallback = lazy(() => import("./pages/org-admin/OrgAdminCallback"));
+const OrgAdminLayout = lazy(() => import("./pages/org-admin/OrgAdminLayout"));
 const OrgAdminDashboard = lazy(() => import("./pages/org-admin/OrgAdminDashboard"));
+const OrgAdminMembers = lazy(() => import("./pages/org-admin/OrgAdminMembers"));
 
 const Loading = () => (
   <div className="flex justify-center py-16">
@@ -57,7 +59,10 @@ const App = () => {
           </Route>
           <Route path="org-admin/login" element={<OrgAdminLogin />} />
           <Route path="org-admin/callback" element={<OrgAdminCallback />} />
-          <Route path="org-admin" element={<OrgAdminDashboard />} />
+          <Route path="org-admin" element={<OrgAdminLayout />}>
+            <Route index element={<OrgAdminDashboard />} />
+            <Route path="soci" element={<OrgAdminMembers />} />
+          </Route>
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>

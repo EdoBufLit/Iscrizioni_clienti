@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Form
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
+from typing import Optional
 
 from app.db import get_db
 from app.models import AdminUser, AdminRole, OrgAdminToken, Member, MemberStatus, CardBatch
@@ -160,4 +161,57 @@ def org_metrics(request: Request, db: Session = Depends(get_db)):
         "members_count": members_count,
         "cards_remaining": cards_remaining,
         "pending_requests_count": pending_requests_count,
+    }
+
+
+@router.get("/members")
+def list_org_members(
+    request: Request,
+    q: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    """Return a paginated list of members scoped to the org admin's organization."""
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    query = db.query(Member).filter(Member.org_id == admin.org_id)
+
+    if q:
+        pattern = f"%{q}%"
+        query = query.filter(
+            or_(
+                Member.first_name.ilike(pattern),
+                Member.last_name.ilike(pattern),
+                Member.email.ilike(pattern),
+            )
+        )
+
+    if status:
+        query = query.filter(Member.status == status)
+
+    total = query.count()
+    members = (
+        query.order_by(Member.id.desc())
+        .offset(offset)
+        .limit(min(limit, 100))
+        .all()
+    )
+
+    return {
+        "items": [
+            {
+                "id": m.id,
+                "name": f"{m.first_name} {m.last_name}",
+                "email": m.email,
+                "status": m.status.value if m.status else None,
+                "card_no": m.card_no,
+                "joined_at": m.joined_at.isoformat() if m.joined_at else None,
+            }
+            for m in members
+        ],
+        "total": total,
     }

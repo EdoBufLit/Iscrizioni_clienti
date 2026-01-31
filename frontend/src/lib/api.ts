@@ -122,3 +122,35 @@ export async function fetchOrgAdminMetrics(): Promise<OrgAdminMetrics> {
   if (!res.ok) throw new Error("Failed to fetch metrics");
   return res.json();
 }
+
+export type OrgAdminMember = {
+  id: number;
+  name: string;
+  email: string;
+  status: string | null;
+  card_no: number | null;
+  joined_at: string | null;
+};
+
+export type OrgAdminMembersResponse = {
+  items: OrgAdminMember[];
+  total: number;
+};
+
+export async function fetchOrgAdminMembers(params?: {
+  q?: string;
+  status?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<OrgAdminMembersResponse> {
+  const sp = new URLSearchParams();
+  if (params?.q) sp.set("q", params.q);
+  if (params?.status) sp.set("status", params.status);
+  if (params?.limit != null) sp.set("limit", String(params.limit));
+  if (params?.offset != null) sp.set("offset", String(params.offset));
+  const qs = sp.toString();
+  const res = await fetch(`/api/org-admin/members${qs ? `?${qs}` : ""}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error("Failed to fetch members");
+  return res.json();
+}

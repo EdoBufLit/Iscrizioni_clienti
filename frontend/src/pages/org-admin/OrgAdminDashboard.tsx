@@ -1,13 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
-  fetchOrgAdminMe,
   fetchOrgAdminMetrics,
-  orgAdminLogout,
   AuthError,
-  type OrgAdminProfile,
   type OrgAdminMetrics,
 } from "../../lib/api";
+import { useOrgAdmin } from "./OrgAdminLayout";
 import Skeleton from "../../components/ui/Skeleton";
 
 const CARD_META: {
@@ -41,18 +39,17 @@ const CARD_META: {
 ];
 
 const OrgAdminDashboard = () => {
-  const [admin, setAdmin] = useState<OrgAdminProfile | null>(null);
+  const { admin, loading: adminLoading } = useOrgAdmin();
   const [metrics, setMetrics] = useState<OrgAdminMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [metricsError, setMetricsError] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchOrgAdminMe()
-      .then((profile) => {
-        setAdmin(profile);
-        return fetchOrgAdminMetrics();
-      })
+    if (adminLoading) return;
+    if (!admin) return;
+
+    fetchOrgAdminMetrics()
       .then(setMetrics)
       .catch((err) => {
         if (err instanceof AuthError) {
@@ -62,178 +59,111 @@ const OrgAdminDashboard = () => {
         }
       })
       .finally(() => setLoading(false));
-  }, [navigate]);
+  }, [admin, adminLoading, navigate]);
 
-  const handleLogout = async () => {
-    await orgAdminLogout();
-    navigate("/org-admin/login", { replace: true });
-  };
+  const isLoading = adminLoading || loading;
 
   return (
-    <div>
-      {/* Header band */}
-      <div className="border-b border-neutral-100 bg-gradient-to-b from-neutral-50 to-white">
-        <div className="container-shell py-8">
-          <div className="flex items-start gap-5">
-            <div className="hidden shrink-0 sm:block">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-brand/10">
-                <img
-                  src="/favicon.svg"
-                  alt=""
-                  className="h-6"
-                  aria-hidden="true"
-                />
-              </div>
+    <div className="container-shell py-10">
+      <h2 className="text-xl font-semibold text-neutral-900">Panoramica</h2>
+      <p className="mt-1 text-sm text-neutral-500">
+        Stato operativo dell'associazione e riepilogo delle attività.
+      </p>
+
+      {isLoading ? (
+        <div className="mt-8 grid gap-6 md:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="surface p-7">
+              <Skeleton className="h-9 w-9 rounded-lg" />
+              <Skeleton className="mt-4 h-3 w-24" />
+              <Skeleton className="mt-3 h-7 w-12" />
+              <Skeleton className="mt-2 h-3 w-32" />
             </div>
-            <div className="min-w-0 flex-1">
-              {loading ? (
-                <>
-                  <Skeleton className="h-5 w-48" />
-                  <Skeleton className="mt-2 h-3.5 w-64" />
-                </>
-              ) : admin ? (
-                <>
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    <h1 className="text-lg font-semibold text-neutral-900">
-                      {admin.organization?.name ?? "Gestione associazione"}
-                    </h1>
-                    <span className="inline-flex items-center rounded-full border border-brand/20 bg-brand/5 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand">
-                      Org Admin
-                    </span>
-                  </div>
-                  <p className="mt-1 text-sm text-neutral-500">
-                    {admin.email}
-                  </p>
-                </>
-              ) : (
-                <h1 className="text-lg font-semibold text-neutral-900">
-                  Gestione associazione
-                </h1>
-              )}
-            </div>
-            <div className="flex shrink-0 items-center gap-3">
-              <Link
-                className="hidden text-sm font-medium text-neutral-500 transition hover:text-neutral-700 sm:block"
-                to="/"
-              >
-                Torna al sito
-              </Link>
-              {!loading && admin && (
-                <button
-                  className="rounded-md border border-neutral-200 px-3 py-1.5 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900"
-                  type="button"
-                  onClick={handleLogout}
-                >
-                  Esci
-                </button>
-              )}
+          ))}
+        </div>
+      ) : metricsError ? (
+        <div className="mt-8 rounded-lg border border-red-200/60 bg-red-50 px-7 py-5">
+          <div className="flex gap-4">
+            <svg
+              className="mt-0.5 h-5 w-5 shrink-0 text-red-400"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-red-700">
+                Impossibile caricare le metriche
+              </p>
+              <p className="mt-1 text-sm leading-6 text-red-600">
+                Si è verificato un errore nel recupero dei dati. Ricarica la
+                pagina per riprovare.
+              </p>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Content */}
-      <div className="container-shell py-10">
-        <h2 className="text-xl font-semibold text-neutral-900">Panoramica</h2>
-        <p className="mt-1 text-sm text-neutral-500">
-          Stato operativo dell'associazione e riepilogo delle attività.
-        </p>
-
-        {loading ? (
-          <div className="mt-8 grid gap-6 md:grid-cols-3">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="surface p-7">
-                <Skeleton className="h-9 w-9 rounded-lg" />
-                <Skeleton className="mt-4 h-3 w-24" />
-                <Skeleton className="mt-3 h-7 w-12" />
-                <Skeleton className="mt-2 h-3 w-32" />
+      ) : (
+        <div className="mt-8 grid gap-6 md:grid-cols-3">
+          {CARD_META.map((card) => (
+            <div key={card.key} className="surface p-7">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand/10">
+                <svg
+                  className="h-[18px] w-[18px] text-brand"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d={card.icon} />
+                </svg>
               </div>
-            ))}
-          </div>
-        ) : metricsError ? (
-          <div className="mt-8 rounded-lg border border-red-200/60 bg-red-50 px-7 py-5">
-            <div className="flex gap-4">
-              <svg
-                className="mt-0.5 h-5 w-5 shrink-0 text-red-400"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
-              </svg>
-              <div>
-                <p className="text-sm font-medium text-red-700">
-                  Impossibile caricare le metriche
-                </p>
-                <p className="mt-1 text-sm leading-6 text-red-600">
-                  Si è verificato un errore nel recupero dei dati. Ricarica la
-                  pagina per riprovare.
-                </p>
-              </div>
+              <p className="mt-4 text-xs font-medium uppercase tracking-[0.2em] text-neutral-400">
+                {card.label}
+              </p>
+              <p className="mt-3 text-2xl font-semibold tabular-nums text-neutral-900">
+                {card.format(metrics?.[card.key] ?? null)}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-neutral-600">
+                {card.description}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!isLoading && !metricsError && (
+        <div className="mt-6 rounded-lg border border-neutral-100 bg-neutral-25 px-7 py-5">
+          <div className="flex gap-4">
+            <svg
+              className="mt-0.5 h-5 w-5 shrink-0 text-neutral-400"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-neutral-700">
+                Area in fase di attivazione
+              </p>
+              <p className="mt-1 text-sm leading-6 text-neutral-500">
+                Le funzionalità di gestione soci, tessere e documenti saranno
+                progressivamente disponibili in questa area. I dati mostrati
+                sono indicativi.
+              </p>
             </div>
           </div>
-        ) : (
-          <div className="mt-8 grid gap-6 md:grid-cols-3">
-            {CARD_META.map((card) => (
-              <div key={card.key} className="surface p-7">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand/10">
-                  <svg
-                    className="h-[18px] w-[18px] text-brand"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d={card.icon} />
-                  </svg>
-                </div>
-                <p className="mt-4 text-xs font-medium uppercase tracking-[0.2em] text-neutral-400">
-                  {card.label}
-                </p>
-                <p className="mt-3 text-2xl font-semibold tabular-nums text-neutral-900">
-                  {card.format(metrics?.[card.key] ?? null)}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-neutral-600">
-                  {card.description}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {!loading && admin && (
-          <div className="mt-6 rounded-lg border border-neutral-100 bg-neutral-25 px-7 py-5">
-            <div className="flex gap-4">
-              <svg
-                className="mt-0.5 h-5 w-5 shrink-0 text-neutral-400"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
-              </svg>
-              <div>
-                <p className="text-sm font-medium text-neutral-700">
-                  Area in fase di attivazione
-                </p>
-                <p className="mt-1 text-sm leading-6 text-neutral-500">
-                  Le funzionalità di gestione soci, tessere e documenti saranno
-                  progressivamente disponibili in questa area. I dati mostrati
-                  sono indicativi.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };
