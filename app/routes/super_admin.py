@@ -133,6 +133,7 @@ def create_org_admin(
         "id": admin.id,
         "email": admin.email,
         "org_id": admin.org_id,
+        "org_name": org.name,
         "is_active": admin.is_active,
         "created_at": admin.created_at.isoformat() if admin.created_at else None,
     }

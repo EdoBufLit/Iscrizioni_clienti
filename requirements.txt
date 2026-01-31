@@ -9,3 +9,5 @@ requests
 itsdangerous
 passlib
 bcrypt
+pytest
+httpx

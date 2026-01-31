@@ -10,3 +10,7 @@ verification/
 frontend/node_modules/
 frontend/.vite/
 frontend/dist/
+frontend/.claude/
+tests/
+.pytest_cache/
+test_qa.db
