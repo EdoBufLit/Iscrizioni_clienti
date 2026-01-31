@@ -1,3 +1,14 @@
+export type OrganizationListItem = {
+  id: number;
+  name: string;
+  slug: string;
+  city: string | null;
+  province: string | null;
+  description_short: string | null;
+  logo_url: string | null;
+};
+
+// Kept for MemberProfile compatibility
 export type Organization = {
   id: number;
   name: string;
@@ -30,14 +41,29 @@ export class AuthError extends Error {
 
 export async function fetchOrganizations(
   q?: string,
-): Promise<Organization[]> {
+): Promise<OrganizationListItem[]> {
   const params = q ? `?q=${encodeURIComponent(q)}` : "";
   const res = await fetch(`/api/organizations${params}`);
   if (!res.ok) throw new Error("Failed to fetch organizations");
   return res.json();
 }
 
-export type OrganizationDetail = Organization & {
+export type OrganizationDetail = {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  address_line1: string | null;
+  address_line2: string | null;
+  city: string | null;
+  province: string | null;
+  postal_code: string | null;
+  country: string | null;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  logo_url: string | null;
+  is_active: boolean;
   statute_version?: string;
   privacy_version?: string;
 };
