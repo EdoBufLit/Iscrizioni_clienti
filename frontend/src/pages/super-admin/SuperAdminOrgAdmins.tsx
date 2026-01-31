@@ -8,11 +8,13 @@ import {
   fetchVersion,
   createOrgAdmin,
   patchOrgAdmin,
+  increaseOrgCardStock,
   AuthError,
   type SuperAdminProfile,
   type Organization,
   type OrgAdmin,
   type VersionInfo,
+  type IncreaseCardsResult,
 } from "../../lib/api";
 import Skeleton from "../../components/ui/Skeleton";
 
@@ -43,6 +45,15 @@ const SuperAdminOrgAdmins = () => {
   // Toggling
   const [toggling, setToggling] = useState<number | null>(null);
   const [ver, setVer] = useState<VersionInfo | null>(null);
+
+  // Card stock form
+  const [cardOrgId, setCardOrgId] = useState<number | "">("");
+  const [cardAmount, setCardAmount] = useState("");
+  const [cardReason, setCardReason] = useState("");
+  const [cardPaidRef, setCardPaidRef] = useState("");
+  const [cardSubmitting, setCardSubmitting] = useState(false);
+  const [cardError, setCardError] = useState("");
+  const [cardSuccess, setCardSuccess] = useState<IncreaseCardsResult | null>(null);
 
   // Initial load: profile + orgs
   useEffect(() => {
@@ -120,6 +131,33 @@ const SuperAdminOrgAdmins = () => {
       // silent
     } finally {
       setToggling(null);
+    }
+  };
+
+  const handleIncreaseCards = async (e: FormEvent) => {
+    e.preventDefault();
+    const amount = parseInt(cardAmount, 10);
+    if (cardOrgId === "" || !amount || amount <= 0 || cardSubmitting) return;
+    setCardError("");
+    setCardSuccess(null);
+    setCardSubmitting(true);
+    try {
+      const result = await increaseOrgCardStock(
+        cardOrgId,
+        amount,
+        cardReason.trim() || undefined,
+        cardPaidRef.trim() || undefined,
+      );
+      setCardSuccess(result);
+      setCardAmount("");
+      setCardReason("");
+      setCardPaidRef("");
+    } catch (err) {
+      setCardError(
+        err instanceof Error ? err.message : "Errore nell'operazione.",
+      );
+    } finally {
+      setCardSubmitting(false);
     }
   };
 
@@ -268,6 +306,122 @@ const SuperAdminOrgAdmins = () => {
               disabled={!newEmail.trim() || newOrgId === "" || creating}
             >
               {creating ? "Invio…" : "Invita"}
+            </button>
+          </form>
+        </div>
+
+        {/* Card stock form */}
+        <div className="surface mt-8 p-7">
+          <h3 className="text-sm font-semibold text-neutral-900">
+            Aggiungi tessere
+          </h3>
+          <p className="mt-1 text-sm text-neutral-500">
+            Incrementa lo stock tessere per un'associazione.
+          </p>
+
+          {cardError && (
+            <div className="mt-4 rounded-md border border-red-200/60 bg-red-50 px-4 py-3">
+              <p className="text-sm text-red-700">{cardError}</p>
+            </div>
+          )}
+          {cardSuccess && (
+            <div className="mt-4 rounded-md border border-emerald-200/60 bg-emerald-50 px-4 py-3">
+              <p className="text-sm text-emerald-700">
+                Aggiunte {cardSuccess.end_no - cardSuccess.start_no + 1} tessere
+                (n. {cardSuccess.start_no}–{cardSuccess.end_no}).
+                Totale: {cardSuccess.cards_total}, rimanenti: {cardSuccess.cards_remaining}.
+              </p>
+            </div>
+          )}
+
+          <form
+            className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto_1fr_1fr_auto]  sm:items-end"
+            onSubmit={handleIncreaseCards}
+          >
+            <div>
+              <label
+                htmlFor="card-org"
+                className="block text-xs font-medium text-neutral-600"
+              >
+                Associazione
+              </label>
+              <select
+                id="card-org"
+                className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                value={cardOrgId}
+                onChange={(e) =>
+                  setCardOrgId(e.target.value ? Number(e.target.value) : "")
+                }
+              >
+                <option value="">Seleziona…</option>
+                {orgs.map((org) => (
+                  <option key={org.id} value={org.id}>
+                    {org.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="sm:w-24">
+              <label
+                htmlFor="card-amount"
+                className="block text-xs font-medium text-neutral-600"
+              >
+                Quantità
+              </label>
+              <input
+                id="card-amount"
+                className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                type="number"
+                min={1}
+                step={1}
+                placeholder="50"
+                value={cardAmount}
+                onChange={(e) => setCardAmount(e.target.value)}
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="card-reason"
+                className="block text-xs font-medium text-neutral-600"
+              >
+                Causale
+              </label>
+              <input
+                id="card-reason"
+                className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                type="text"
+                placeholder="Acquisto tessere extra"
+                value={cardReason}
+                onChange={(e) => setCardReason(e.target.value)}
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="card-paid-ref"
+                className="block text-xs font-medium text-neutral-600"
+              >
+                Rif. pagamento
+              </label>
+              <input
+                id="card-paid-ref"
+                className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                type="text"
+                placeholder="BON-2026-001"
+                value={cardPaidRef}
+                onChange={(e) => setCardPaidRef(e.target.value)}
+              />
+            </div>
+            <button
+              className="inline-flex shrink-0 items-center justify-center rounded-md bg-brand px-5 py-2 text-sm font-semibold text-white shadow-subtle transition hover:-translate-y-px hover:bg-brand-dark hover:shadow-card active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-subtle"
+              type="submit"
+              disabled={
+                cardOrgId === "" ||
+                !cardAmount ||
+                parseInt(cardAmount, 10) <= 0 ||
+                cardSubmitting
+              }
+            >
+              {cardSubmitting ? "Invio…" : "Aggiungi tessere"}
             </button>
           </form>
         </div>

@@ -261,6 +261,38 @@ export async function patchOrgAdmin(
   if (!res.ok) throw new Error("Failed to update org admin");
 }
 
+export type IncreaseCardsResult = {
+  batch_id: number;
+  start_no: number;
+  end_no: number;
+  cards_total: number;
+  cards_remaining: number;
+};
+
+export async function increaseOrgCardStock(
+  orgId: number,
+  amount: number,
+  reason?: string,
+  paidRef?: string,
+): Promise<IncreaseCardsResult> {
+  const body: Record<string, unknown> = { amount };
+  if (reason) body.reason = reason;
+  if (paidRef) body.paid_ref = paidRef;
+  const res = await fetch(`/api/super-admin/orgs/${orgId}/cards/increase`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 400) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.detail ?? "Dati non validi");
+  }
+  if (res.status === 404) throw new Error("Organizzazione non trovata");
+  if (!res.ok) throw new Error("Errore nell'aggiunta tessere");
+  return res.json();
+}
+
 // ── Version ─────────────────────────────────────────────────────
 
 export type VersionInfo = {
