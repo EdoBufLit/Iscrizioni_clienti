@@ -287,15 +287,6 @@ const Home = () => {
           </div>
         </div>
       </section>
-
-      <footer className="border-t border-neutral-100 py-8">
-        <div className="container-shell">
-          <p className="text-xs text-neutral-400">
-            © {new Date().getFullYear()} ASSO.N.A.M. — Tutti i diritti
-            riservati.
-          </p>
-        </div>
-      </footer>
     </div>
   );
 };
