@@ -66,7 +66,14 @@ def request_magic_link(
         db.add(token)
         db.commit()
 
-        link = f"{settings.BASE_URL}/api/org-admin/auth/verify?token={token_str}"
+        frontend_base = settings.FRONTEND_URL.rstrip("/")
+        if not frontend_base:
+            # Fallback: use request base url + /app
+            frontend_base = f"{str(request.base_url).rstrip('/')}/app"
+
+        link = f"{frontend_base}/auth/verify?token={token_str}&role=org_admin"
+        logger.info("Generated org-admin magic link: %s", link.replace(token_str, "***"))
+
         if not send_email(
             to_email=email,
             subject="Accesso area amministrazione associazione",
