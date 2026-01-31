@@ -109,3 +109,16 @@ export async function fetchOrgAdminMe(): Promise<OrgAdminProfile> {
 export async function orgAdminLogout(): Promise<void> {
   await fetch("/api/org-admin/auth/logout", { method: "POST" });
 }
+
+export type OrgAdminMetrics = {
+  members_count: number;
+  cards_remaining: number | null;
+  pending_requests_count: number | null;
+};
+
+export async function fetchOrgAdminMetrics(): Promise<OrgAdminMetrics> {
+  const res = await fetch("/api/org-admin/metrics");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error("Failed to fetch metrics");
+  return res.json();
+}
