@@ -1,4 +1,8 @@
+import csv
+import io
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Form
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
@@ -215,3 +219,46 @@ def list_org_members(
         ],
         "total": total,
     }
+
+
+@router.get("/members.csv")
+def export_members_csv(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Export all members as CSV, scoped to the org admin's organization."""
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    members = (
+        db.query(Member)
+        .filter(Member.org_id == admin.org_id)
+        .order_by(Member.last_name, Member.first_name)
+        .all()
+    )
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        "Nome", "Cognome", "Email", "Codice Fiscale",
+        "Telefono", "Stato", "Tessera", "Data iscrizione",
+    ])
+    for m in members:
+        writer.writerow([
+            m.first_name or "",
+            m.last_name or "",
+            m.email or "",
+            m.fiscal_code or "",
+            m.phone or "",
+            m.status.value if m.status else "",
+            m.card_no if m.card_no is not None else "",
+            m.joined_at.strftime("%Y-%m-%d") if m.joined_at else "",
+        ])
+
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=soci.csv"},
+    )

@@ -84,10 +84,33 @@ const OrgAdminMembers = () => {
 
   return (
     <div className="container-shell py-10">
-      <h2 className="text-xl font-semibold text-neutral-900">Soci</h2>
-      <p className="mt-1 text-sm text-neutral-500">
-        Elenco dei soci iscritti all'associazione.
-      </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-semibold text-neutral-900">Soci</h2>
+          <p className="mt-1 text-sm text-neutral-500">
+            Elenco dei soci iscritti all'associazione.
+          </p>
+        </div>
+        {!adminLoading && admin && (
+          <a
+            href="/api/org-admin/members.csv"
+            className="inline-flex shrink-0 items-center gap-2 rounded-md border border-neutral-200 bg-white px-3.5 py-2 text-sm font-medium text-neutral-700 shadow-subtle transition hover:border-neutral-300 hover:text-neutral-900"
+          >
+            <svg
+              className="h-4 w-4 text-neutral-400"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
+            Scarica CSV
+          </a>
+        )}
+      </div>
 
       {/* Filters */}
       <div className="mt-8 rounded-lg border border-neutral-100 bg-neutral-25 px-5 py-4">
