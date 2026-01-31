@@ -1,14 +1,24 @@
 import { Link, NavLink, Outlet } from "react-router-dom";
 
 const NAV_ITEMS = [
-  { label: "Panoramica", to: "/admin", end: true },
-  { label: "Affiliazioni", to: "/admin/affiliazioni", end: false },
+  {
+    label: "Panoramica",
+    to: "/admin",
+    end: true,
+    icon: "M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z",
+  },
+  {
+    label: "Affiliazioni",
+    to: "/admin/affiliazioni",
+    end: false,
+    icon: "M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21",
+  },
 ];
 
 const sidebarLinkBase =
-  "block rounded-md px-3 py-2 text-sm font-medium transition";
-const sidebarLinkActive = `${sidebarLinkBase} bg-neutral-50 text-brand`;
-const sidebarLinkIdle = `${sidebarLinkBase} text-neutral-600 hover:text-neutral-900`;
+  "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition";
+const sidebarLinkActive = `${sidebarLinkBase} bg-brand/5 text-brand`;
+const sidebarLinkIdle = `${sidebarLinkBase} text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900`;
 
 const tabBase =
   "whitespace-nowrap px-3 py-2 text-sm font-medium transition border-b-2";
@@ -23,48 +33,97 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
 
 const AdminLayout = () => {
   return (
-    <div className="container-shell py-10">
-      <div className="md:flex md:gap-10">
-        <aside className="hidden w-56 shrink-0 md:block">
-          <div className="flex items-center gap-2">
-            <span className="section-title">AMMINISTRAZIONE</span>
-            <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
-              Admin
-            </span>
+    <div>
+      {/* Header band */}
+      <div className="border-b border-neutral-100 bg-gradient-to-b from-neutral-50 to-white">
+        <div className="container-shell py-8">
+          <div className="flex items-start gap-5">
+            <div className="hidden shrink-0 sm:block">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-brand/10">
+                <img
+                  src="/favicon.svg"
+                  alt=""
+                  className="h-6"
+                  aria-hidden="true"
+                />
+              </div>
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h1 className="text-lg font-semibold text-neutral-900">
+                  Amministrazione
+                </h1>
+                <span className="inline-flex items-center rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+                  Admin
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-neutral-500">
+                Gestione associazioni, iscrizioni e pratiche.
+              </p>
+            </div>
           </div>
+        </div>
+      </div>
 
-          <nav className="mt-6 flex flex-col gap-1" aria-label="Amministrazione">
-            {NAV_ITEMS.map((item) => (
-              <NavLink
-                key={item.label}
-                className={linkClass}
-                to={item.to}
-                end={item.end}
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
-
-          <div className="mt-8 border-t border-neutral-100 pt-4">
-            <Link
-              className="text-sm font-medium text-neutral-500 transition hover:text-neutral-700"
-              to="/"
+      {/* Main content */}
+      <div className="container-shell py-10">
+        <div className="md:flex md:gap-10">
+          {/* Sidebar — desktop */}
+          <aside className="hidden w-56 shrink-0 md:block">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-400">
+              Navigazione
+            </p>
+            <nav
+              className="mt-3 flex flex-col gap-0.5"
+              aria-label="Amministrazione"
             >
-              Torna al sito
-            </Link>
-          </div>
-        </aside>
+              {NAV_ITEMS.map((item) => (
+                <NavLink
+                  key={item.label}
+                  className={linkClass}
+                  to={item.to}
+                  end={item.end}
+                >
+                  <svg
+                    className="h-4 w-4 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={1.5}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d={item.icon} />
+                  </svg>
+                  {item.label}
+                </NavLink>
+              ))}
+            </nav>
 
-        <div className="md:hidden">
-          <div className="flex items-center gap-2">
-            <span className="section-title">AMMINISTRAZIONE</span>
-            <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
-              Admin
-            </span>
-          </div>
+            <div className="mt-8 border-t border-neutral-100 pt-4">
+              <Link
+                className="flex items-center gap-2 text-sm font-medium text-neutral-500 transition hover:text-neutral-700"
+                to="/"
+              >
+                <svg
+                  className="h-3.5 w-3.5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+                </svg>
+                Torna al sito
+              </Link>
+            </div>
+          </aside>
+
+          {/* Tabs — mobile */}
           <nav
-            className="mt-4 flex gap-1 border-b border-neutral-100"
+            className="flex gap-1 border-b border-neutral-100 md:hidden"
             aria-label="Amministrazione"
           >
             {NAV_ITEMS.map((item) => (
@@ -78,10 +137,10 @@ const AdminLayout = () => {
               </NavLink>
             ))}
           </nav>
-        </div>
 
-        <div className="mt-6 min-w-0 flex-1 md:mt-0">
-          <Outlet />
+          <div className="mt-6 min-w-0 flex-1 md:mt-0">
+            <Outlet />
+          </div>
         </div>
       </div>
     </div>
