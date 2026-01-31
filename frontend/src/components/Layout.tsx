@@ -36,7 +36,8 @@ const Layout = () => {
   return (
     <MotionProvider>
       <div className="min-h-screen bg-neutral-25 text-neutral-800">
-        <header className="border-b border-neutral-100 bg-white">
+        <div className="h-0.5 bg-gradient-to-r from-brand to-brand-light" aria-hidden="true" />
+        <header className="border-b border-neutral-100 bg-gradient-to-b from-neutral-50 to-white">
           <div className="container-shell flex items-center justify-between py-4">
             <NavLink
               className="flex items-center gap-3"
@@ -135,7 +136,7 @@ const Layout = () => {
           </AnimatePresence>
         </main>
 
-        <footer className="border-t border-neutral-100 py-8">
+        <footer className="border-t border-neutral-100 bg-neutral-50 py-8">
           <div className="container-shell flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <p className="text-xs text-neutral-400">
               © {new Date().getFullYear()} ASSO.N.A.M. — Tutti i diritti

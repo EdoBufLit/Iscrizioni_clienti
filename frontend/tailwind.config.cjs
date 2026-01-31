@@ -12,6 +12,10 @@ module.exports = {
           light: "#295c94",
           dark: "#173557",
         },
+        accent: {
+          DEFAULT: "#8a9880",
+          light: "#eef0ec",
+        },
         neutral: {
           25: "#fcfcfd",
           50: "#f7f8fa",
@@ -32,7 +36,10 @@ module.exports = {
         sm: "6px",
       },
       boxShadow: {
-        subtle: "0 1px 2px rgba(15, 23, 42, 0.08)",
+        subtle: "0 1px 2px rgba(15, 23, 42, 0.06)",
+        card: "0 2px 4px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.06)",
+        elevated:
+          "0 4px 12px rgba(15, 23, 42, 0.06), 0 2px 4px rgba(15, 23, 42, 0.04)",
       },
     },
   },

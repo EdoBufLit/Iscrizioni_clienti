@@ -8,6 +8,8 @@
 
 body {
   font-family: "IBM Plex Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .container-shell {
@@ -27,7 +29,7 @@ body {
 }
 
 .surface {
-  @apply rounded-lg border border-neutral-100 bg-white shadow-subtle;
+  @apply rounded-lg border border-neutral-100 bg-white shadow-card;
 }
 
 .link-muted {
