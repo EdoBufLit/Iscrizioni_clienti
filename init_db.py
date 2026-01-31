@@ -50,41 +50,10 @@ def init_db():
         else:
             logger.info("Organization already exists.")
 
-        # ── Seed super admin ───────────────────────────────────────
-        sa_email = settings.SUPER_ADMIN_EMAIL
-        sa_password = settings.SUPER_ADMIN_PASSWORD
-        super_admin = db.query(AdminUser).filter(
-            AdminUser.email == sa_email,
-            AdminUser.role == AdminRole.SUPER_ADMIN,
-        ).first()
-        if not super_admin:
-            # Check if the email exists as a different role and upgrade
-            existing = db.query(AdminUser).filter(AdminUser.email == sa_email).first()
-            if existing:
-                logger.info("Upgrading existing admin %s to SUPER_ADMIN.", sa_email)
-                existing.role = AdminRole.SUPER_ADMIN
-                existing.password_hash = get_password_hash(sa_password)
-                existing.org_id = None
-                existing.is_active = True
-                db.commit()
-            else:
-                logger.info("Creating super admin user (%s)...", sa_email)
-                super_admin = AdminUser(
-                    email=sa_email,
-                    password_hash=get_password_hash(sa_password),
-                    role=AdminRole.SUPER_ADMIN,
-                    org_id=None,
-                    is_active=True,
-                )
-                db.add(super_admin)
-                db.commit()
-                logger.info("Super admin created (%s).", sa_email)
-        else:
-            logger.info("Updating super admin password...")
-            super_admin.password_hash = get_password_hash(sa_password)
-            db.commit()
+        # ── Seed super admin (Removed in favor of app/bootstrap.py) ─
 
         # Also ensure the old admin@example.com is an org admin if it exists
+        sa_email = settings.SUPER_ADMIN_EMAIL
         old_admin = db.query(AdminUser).filter(
             AdminUser.email == "admin@example.com",
             AdminUser.email != sa_email,
