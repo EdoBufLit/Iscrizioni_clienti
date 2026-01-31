@@ -259,6 +259,20 @@ export async function patchOrgAdmin(
   if (!res.ok) throw new Error("Failed to update org admin");
 }
 
+// ── Version ─────────────────────────────────────────────────────
+
+export type VersionInfo = {
+  version: string;
+  git_sha: string | null;
+  build_time: string | null;
+};
+
+export async function fetchVersion(): Promise<VersionInfo> {
+  const res = await fetch("/version");
+  if (!res.ok) throw new Error("Failed to fetch version");
+  return res.json();
+}
+
 export async function fetchOrgAdminMembers(params?: {
   q?: string;
   status?: string;

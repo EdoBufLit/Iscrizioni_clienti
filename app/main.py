@@ -3,13 +3,16 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
+from app.db import get_db
 from app.middleware import SecurityHeadersMiddleware
 from app.routes import admin, join, member, org_admin, public, super_admin
 from app.spa import SPAStaticFiles
@@ -91,6 +94,25 @@ app.include_router(admin.router)
 app.include_router(org_admin.router)
 app.include_router(super_admin.router)
 app.include_router(public.router)
+
+
+@app.get("/health")
+def health(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("SELECT 1"))
+        db_ok = True
+    except Exception:
+        db_ok = False
+    return {"status": "ok" if db_ok else "degraded", "db": db_ok}
+
+
+@app.get("/version")
+def version():
+    return {
+        "version": settings.PROJECT_VERSION,
+        "git_sha": settings.GIT_SHA or None,
+        "build_time": settings.BUILD_TIME or None,
+    }
 
 
 @app.get("/")

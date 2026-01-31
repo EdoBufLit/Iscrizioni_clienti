@@ -5,12 +5,14 @@ import {
   superAdminLogout,
   fetchOrganizations,
   fetchOrgAdmins,
+  fetchVersion,
   createOrgAdmin,
   patchOrgAdmin,
   AuthError,
   type SuperAdminProfile,
   type Organization,
   type OrgAdmin,
+  type VersionInfo,
 } from "../../lib/api";
 import Skeleton from "../../components/ui/Skeleton";
 
@@ -40,6 +42,7 @@ const SuperAdminOrgAdmins = () => {
 
   // Toggling
   const [toggling, setToggling] = useState<number | null>(null);
+  const [ver, setVer] = useState<VersionInfo | null>(null);
 
   // Initial load: profile + orgs
   useEffect(() => {
@@ -56,6 +59,7 @@ const SuperAdminOrgAdmins = () => {
         }
       })
       .finally(() => setLoading(false));
+    fetchVersion().then(setVer).catch(() => {});
   }, [navigate]);
 
   // Load admins when org filter changes
@@ -392,6 +396,14 @@ const SuperAdminOrgAdmins = () => {
           </div>
         </div>
       </div>
+
+      {/* Version footer */}
+      {ver && (
+        <footer className="container-shell pb-6 pt-12 text-[11px] text-neutral-400">
+          v{ver.version}
+          {ver.git_sha ? ` (${ver.git_sha.slice(0, 7)})` : ""}
+        </footer>
+      )}
     </div>
   );
 };

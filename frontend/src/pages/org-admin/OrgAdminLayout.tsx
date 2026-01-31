@@ -2,9 +2,11 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   fetchOrgAdminMe,
+  fetchVersion,
   orgAdminLogout,
   AuthError,
   type OrgAdminProfile,
+  type VersionInfo,
 } from "../../lib/api";
 import Skeleton from "../../components/ui/Skeleton";
 
@@ -25,6 +27,7 @@ const NAV_ITEMS = [
 const OrgAdminLayout = () => {
   const [admin, setAdmin] = useState<OrgAdminProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [ver, setVer] = useState<VersionInfo | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -36,6 +39,7 @@ const OrgAdminLayout = () => {
         }
       })
       .finally(() => setLoading(false));
+    fetchVersion().then(setVer).catch(() => {});
   }, [navigate]);
 
   const handleLogout = async () => {
@@ -133,6 +137,14 @@ const OrgAdminLayout = () => {
 
         {/* Content */}
         <Outlet />
+
+        {/* Version footer */}
+        {ver && (
+          <footer className="container-shell pb-6 pt-12 text-[11px] text-neutral-400">
+            v{ver.version}
+            {ver.git_sha ? ` (${ver.git_sha.slice(0, 7)})` : ""}
+          </footer>
+        )}
       </div>
     </Ctx.Provider>
   );
