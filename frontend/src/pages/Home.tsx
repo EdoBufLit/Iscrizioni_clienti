@@ -3,22 +3,35 @@ import { Link } from "react-router-dom";
 const Home = () => {
   return (
     <div>
-      <section className="bg-white py-20 md:py-28" id="top">
-        <div className="container-shell">
-          <div className="items-center gap-16 md:grid md:grid-cols-2">
-            <div className="text-center md:text-left">
+      <section className="relative overflow-hidden" id="top">
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: "url('/piazza-bologna2.webp')" }}
+          aria-hidden="true"
+        />
+        <div
+          className="absolute inset-0 bg-gradient-to-t from-neutral-900/80 via-neutral-900/55 to-neutral-900/30"
+          aria-hidden="true"
+        />
+
+        <div className="relative py-28 md:py-40">
+          <div className="container-shell">
+            <div className="max-w-2xl text-center md:text-left">
               <img
                 src="/favicon.svg"
-                alt="ASSO.N.A.M."
-                className="mx-auto mb-6 h-10 md:mx-0"
+                alt=""
+                className="mx-auto mb-6 h-8 brightness-0 invert opacity-90 md:mx-0"
+                aria-hidden="true"
               />
-              <p className="section-title">STUDIO CONTABILE · ASSO.N.A.M.</p>
-              <h1 className="mt-2 section-heading">
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/70">
+                Studio contabile · ASSO.N.A.M.
+              </p>
+              <h1 className="mt-3 text-3xl font-semibold text-white md:text-4xl lg:text-5xl">
                 Gestione associativa, contabilità e adempimenti.
                 <br />
                 Con un portale soci integrato.
               </h1>
-              <p className="mt-5 text-base leading-7 text-neutral-600">
+              <p className="mx-auto mt-5 max-w-xl text-base leading-7 text-white/80 md:mx-0">
                 Supporto operativo per associazioni e realtà affiliate:
                 iscrizioni digitali, raccolta documenti, tracciabilità e area
                 riservata per i soci. Tutto in modo ordinato e verificabile.
@@ -27,22 +40,16 @@ const Home = () => {
                 <Link className="btn-primary" to="/associazioni">
                   Vai alle associazioni
                 </Link>
-                <Link className="btn-ghost" to="/login">
+                <Link
+                  className="inline-flex items-center justify-center rounded-md border border-white/25 px-5 py-2 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-white/10"
+                  to="/login"
+                >
                   Area riservata
                 </Link>
               </div>
-              <p className="mt-5 text-xs text-neutral-500">
-                Se devi iscriverti a un'associazione affiliata, parti da
-                "Associazioni".
+              <p className="mt-10 text-xs text-white/40">
+                Piazza Bologna, Roma
               </p>
-            </div>
-
-            <div className="mt-12 md:mt-0">
-              <img
-                src="/hero-office.avif"
-                alt="Scrivania e documenti presso lo studio"
-                className="aspect-[4/3] w-full rounded-xl border border-neutral-100 object-cover"
-              />
             </div>
           </div>
         </div>
