@@ -7,9 +7,9 @@ from .db import Base
 class MemberStatus(str, enum.Enum):
     PENDING_VERIFICATION = "pending_verification"
     PENDING_DOCS = "pending_docs"
-    PENDING_CARDS = "pending_cards" # Added
+    PENDING_CARDS = "pending_cards"
     ACTIVE = "active"
-    REJECTED = "rejected" # Added for explicit rejection
+    REJECTED = "rejected"
 
 class DocStatus(str, enum.Enum):
     UPLOADED = "uploaded"

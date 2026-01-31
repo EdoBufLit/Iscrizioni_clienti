@@ -22,6 +22,9 @@ interface MemberDetail {
   card_no?: number;
   joined_at?: string;
   documents: Document[];
+  decision_notes?: string;
+  decision_at?: string;
+  decision_by_admin_id?: number;
 }
 
 export default function OrgAdminMemberDetail() {
@@ -31,9 +34,19 @@ export default function OrgAdminMemberDetail() {
   const [error, setError] = useState<string | null>(null);
   const [reviewingDocId, setReviewingDocId] = useState<number | null>(null);
 
+  // Decision state
+  const [decisionNotes, setDecisionNotes] = useState("");
+  const [isSubmittingDecision, setIsSubmittingDecision] = useState(false);
+
   useEffect(() => {
     fetchMember();
   }, [id]);
+
+  useEffect(() => {
+      if (member?.decision_notes) {
+          setDecisionNotes(member.decision_notes);
+      }
+  }, [member]);
 
   const fetchMember = async () => {
     try {
@@ -79,9 +92,47 @@ export default function OrgAdminMemberDetail() {
     }
   };
 
+  const handleDecision = async (decision: "approve" | "reject") => {
+    if (!confirm(`Sei sicuro di voler ${decision === "approve" ? "approvare" : "rifiutare"} questa iscrizione?`)) return;
+
+    setIsSubmittingDecision(true);
+    try {
+      const res = await fetch(`/api/org-admin/members/${id}/decision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision, notes: decisionNotes }),
+      });
+      if (!res.ok) throw new Error("Errore durante il salvataggio della decisione");
+
+      const result = await res.json();
+
+      // Update local state
+      setMember(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          status: result.status,
+          decision_notes: decisionNotes,
+          decision_at: new Date().toISOString() // optimistic update
+        };
+      });
+      alert("Decisione salvata con successo!");
+
+    } catch (err) {
+        alert("Errore: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+        setIsSubmittingDecision(false);
+    }
+  };
+
   if (loading) return <div className="p-8 text-center">Caricamento...</div>;
   if (error) return <div className="p-8 text-center text-red-600">{error}</div>;
   if (!member) return <div className="p-8 text-center">Socio non trovato</div>;
+
+  // Check if all docs are approved (ignoring rejected ones if they are not required? No, usually all must be approved)
+  // Assuming all uploaded docs must be approved.
+  const allDocsApproved = member.documents.length > 0 && member.documents.every(d => d.status === "approved");
+  const isDecisionMade = member.status === "active" || member.status === "rejected";
 
   return (
     <div className="space-y-6">
@@ -136,7 +187,7 @@ export default function OrgAdminMemberDetail() {
                     </div>
                     <div className="flex justify-between">
                         <dt className="text-neutral-500">Tessera N.</dt>
-                        <dd className="font-medium font-mono">{member.card_no || "Non assegnata"}</dd>
+                        <dd className="font-mono font-medium">{member.card_no || "Non assegnata"}</dd>
                     </div>
                     <div className="flex justify-between">
                         <dt className="text-neutral-500">Data Iscrizione</dt>
@@ -189,8 +240,8 @@ export default function OrgAdminMemberDetail() {
                                     <>
                                         <button
                                             onClick={() => handleReview(doc.id, "approved")}
-                                            disabled={reviewingDocId === doc.id}
-                                            className="px-3 py-1.5 bg-green-50 text-green-700 hover:bg-green-100 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors"
+                                            disabled={reviewingDocId === doc.id || isDecisionMade}
+                                            className="px-3 py-1.5 bg-green-50 text-green-700 hover:bg-green-100 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
                                             {/* Check */}
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
@@ -199,8 +250,8 @@ export default function OrgAdminMemberDetail() {
                                         {doc.status !== "rejected" && (
                                             <button
                                                 onClick={() => handleReview(doc.id, "rejected")}
-                                                disabled={reviewingDocId === doc.id}
-                                                className="px-3 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors"
+                                                disabled={reviewingDocId === doc.id || isDecisionMade}
+                                                className="px-3 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 {/* X */}
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -221,6 +272,70 @@ export default function OrgAdminMemberDetail() {
                 ))
             )}
         </div>
+      </div>
+
+      {/* Final Decision Section */}
+      <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+          <h2 className="text-lg font-semibold mb-4">Decisione Iscrizione</h2>
+
+          {!allDocsApproved && !isDecisionMade && (
+              <div className="bg-amber-50 text-amber-800 p-4 rounded-lg text-sm mb-4 border border-amber-100 flex gap-2">
+                 <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                 <p>Non è possibile approvare l'iscrizione finché tutti i documenti non sono stati approvati.</p>
+              </div>
+          )}
+
+          <div className="space-y-4">
+              <div>
+                  <label htmlFor="decisionNotes" className="block text-sm font-medium text-neutral-700 mb-1">
+                      Note decisione (opzionale)
+                  </label>
+                  <textarea
+                      id="decisionNotes"
+                      rows={3}
+                      className="w-full rounded-md border border-neutral-300 shadow-sm focus:border-brand focus:ring-brand sm:text-sm p-2"
+                      placeholder="Inserisci eventuali note per l'approvazione o il rifiuto..."
+                      value={decisionNotes}
+                      onChange={(e) => setDecisionNotes(e.target.value)}
+                      disabled={isDecisionMade || isSubmittingDecision}
+                  />
+              </div>
+
+              {isDecisionMade ? (
+                  <div className={`p-4 rounded-lg border ${member.status === 'active' ? 'bg-green-50 border-green-100 text-green-800' : 'bg-red-50 border-red-100 text-red-800'}`}>
+                      <p className="font-medium">
+                          Decisione presa: {member.status === 'active' ? 'Approvata' : 'Rifiutata'}
+                      </p>
+                      {member.decision_at && (
+                          <p className="text-sm mt-1 opacity-80">
+                              Data: {new Date(member.decision_at).toLocaleString()}
+                          </p>
+                      )}
+                      {member.decision_notes && (
+                          <p className="text-sm mt-2 pt-2 border-t border-black/10">
+                              Note: {member.decision_notes}
+                          </p>
+                      )}
+                  </div>
+              ) : (
+                  <div className="flex gap-4">
+                      <button
+                          onClick={() => handleDecision("approve")}
+                          disabled={!allDocsApproved || isSubmittingDecision}
+                          className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                      >
+                          Approva Iscrizione
+                      </button>
+                      <button
+                          onClick={() => handleDecision("reject")}
+                          disabled={isSubmittingDecision}
+                          className="flex-1 bg-white text-red-600 border border-red-200 px-4 py-2 rounded-lg font-medium hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                      >
+                          Rigetta Iscrizione
+                      </button>
+                  </div>
+              )}
+          </div>
       </div>
     </div>
   );

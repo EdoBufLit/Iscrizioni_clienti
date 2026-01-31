@@ -499,14 +499,15 @@ def review_document(
     all_approved = all(d.status == DocStatus.APPROVED.value for d in all_docs)
 
     if any_rejected:
-        member.status = MemberStatus.REJECTED
+        # If any doc is rejected, we might not want to auto-reject the whole member,
+        # but the prompt implies explicit decision.
+        # However, to be safe, let's keep status as is or move to PENDING_DOCS if they need to re-upload.
+        # But for now, let's NOT change member status automatically on doc review.
+        pass
     elif all_approved:
-        # Only if current status is pending verification/docs
-        if member.status in [MemberStatus.PENDING_VERIFICATION, MemberStatus.PENDING_DOCS]:
-             member.status = MemberStatus.ACTIVE
-             # Ideally trigger card assignment here if not done, but usually done at upload or separately
-             if not member.joined_at:
-                 member.joined_at = datetime.utcnow()
+        # Docs are approved. We DO NOT auto-activate anymore.
+        # Status remains pending (e.g. pending_verification or pending_docs) until final decision.
+        pass
 
     db.commit()
 

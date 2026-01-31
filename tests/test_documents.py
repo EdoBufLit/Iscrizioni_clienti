@@ -124,6 +124,16 @@ def test_document_flow(client, db):
     assert resp.status_code == 200
 
     db.refresh(member)
-    # It should transition to ACTIVE if PENDING_VERIFICATION counts as "pending docs" flow?
-    # The code says: if member.status in [MemberStatus.PENDING_VERIFICATION, MemberStatus.PENDING_DOCS]
+    # It should NOT transition to ACTIVE automatically anymore.
+    # It should wait for explicit decision.
+    assert member.status != MemberStatus.ACTIVE
+
+    # 6. Explicit Decision
+    resp = client.post(
+        f"/api/org-admin/members/{member.id}/decision",
+        json={"decision": "approve", "notes": "Final approval"}
+    )
+    assert resp.status_code == 200
+
+    db.refresh(member)
     assert member.status == MemberStatus.ACTIVE
