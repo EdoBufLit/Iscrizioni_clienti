@@ -7,6 +7,7 @@ from app.models import Member, Token, TokenType, MemberDocument, MemberStatus, O
 from app.utils import generate_token, send_email_simulation, hash_token
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
+from app import audit
 import os
 
 router = APIRouter()
@@ -56,6 +57,7 @@ def auth_magic_link(request: Request, token: str, db: Session = Depends(get_db))
 
     # Log user in
     request.session["member_id"] = token_entry.member_id
+    audit.member_verified(member_id=token_entry.member_id, ip=get_client_ip(request))
 
     return RedirectResponse(url="/app/dashboard", status_code=status.HTTP_302_FOUND)
 
@@ -125,6 +127,7 @@ def api_auth_login(request: Request, email: str = Form(...), db: Session = Depen
             body=f"Click here to login: {link}"
         )
 
+    audit.member_magic_link_requested(email=email, ip=get_client_ip(request))
     return {"status": "ok", "message": "If an account exists, a magic link has been sent."}
 
 

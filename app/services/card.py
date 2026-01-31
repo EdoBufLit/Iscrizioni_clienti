@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import select, update
 from app.models import Member, CardBatch, CardMovement, MemberStatus
+from app import audit
 from sqlalchemy.exc import IntegrityError
 import logging
 import time
@@ -68,6 +69,7 @@ def assign_next_card(db: Session, member_id: int, org_id: int) -> bool:
                         reason="card_assigned",
                     ))
                     db.flush() # Force write to check constraints
+                    audit.card_assigned(member_id=member_id, org_id=org_id, card_no=card_no)
                     return True
                 else:
                     return False

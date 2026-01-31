@@ -7,6 +7,7 @@ from app.models import AdminUser, Member, CardBatch, MemberDocument, DocStatus, 
 from app.services.card import assign_next_card
 from app.config import settings
 from app.security import verify_password
+from app import audit
 from datetime import datetime
 import os
 
@@ -87,6 +88,7 @@ def add_batch(request: Request, quantity: int = Form(...), db: Session = Depends
     )
     db.add(batch)
     db.commit()
+    audit.card_batch_added(org_id=admin.org_id, start_no=start_no, end_no=end_no, admin_id=admin.id)
     return RedirectResponse(url="/admin/dashboard", status_code=status.HTTP_302_FOUND)
 
 

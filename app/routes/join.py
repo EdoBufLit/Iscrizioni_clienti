@@ -8,6 +8,7 @@ from app.utils import generate_token, send_email_simulation, save_upload_file, h
 from app.services.card import assign_next_card
 from app.config import settings
 from app.middleware import join_limiter, get_client_ip
+from app import audit
 import logging
 import os
 
@@ -112,6 +113,8 @@ def api_join_start(
     db.add(token)
     db.commit()
 
+    audit.join_submitted(org_slug=org_slug, org_id=org.id, ip=get_client_ip(request))
+
     # Send Email
     link = f"{settings.BASE_URL}/join/continue?token={token_str}"
     send_email_simulation(
@@ -192,6 +195,10 @@ async def api_join_continue(
         token_entry.used_at = datetime.utcnow()
 
         db.commit()
+
+        audit.join_completed(
+            member_id=member.id, org_id=member.org_id, card_assigned=bool(assigned),
+        )
 
         # Send Welcome Email
         org = db.query(Organization).filter(Organization.id == member.org_id).first()

@@ -10,6 +10,7 @@ from app.security import verify_password
 from app.utils import generate_token, hash_token, send_email_simulation
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
+from app import audit
 
 router = APIRouter(prefix="/api/super-admin")
 auth_router = APIRouter(prefix="/auth")
@@ -45,9 +46,11 @@ def super_admin_login(
         AdminUser.role == AdminRole.SUPER_ADMIN,
     ).first()
     if not admin or not admin.password_hash or not verify_password(body.password, admin.password_hash):
+        audit.super_admin_login_failed(ip=get_client_ip(request))
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     request.session["admin_id"] = admin.id
+    audit.super_admin_login(admin_id=admin.id, ip=get_client_ip(request))
     return {"ok": True}
 
 

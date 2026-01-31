@@ -13,6 +13,7 @@ from app.models import AdminUser, AdminRole, OrgAdminToken, Member, MemberStatus
 from app.utils import generate_token, hash_token, send_email_simulation
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
+from app import audit
 
 router = APIRouter(prefix="/api/org-admin")
 
@@ -67,6 +68,7 @@ def request_magic_link(
             body=f"Clicca qui per accedere: {link}",
         )
 
+    audit.org_admin_magic_link_requested(email=email, ip=get_client_ip(request))
     return {"ok": True}
 
 
@@ -102,6 +104,7 @@ def verify_magic_link(
 
     # Create session
     request.session["org_admin_id"] = admin.id
+    audit.org_admin_verified(admin_id=admin.id, org_id=admin.org_id, ip=get_client_ip(request))
 
     from fastapi.responses import RedirectResponse
     return RedirectResponse(url="/app/org-admin", status_code=302)
