@@ -27,13 +27,6 @@ const prefetchDashboard = () => {
   import("../pages/dashboard/DashboardHome").catch(() => {});
 };
 
-let adminPrefetched = false;
-const prefetchAdmin = () => {
-  if (adminPrefetched) return;
-  adminPrefetched = true;
-  import("../pages/admin/AdminLayout").catch(() => {});
-  import("../pages/admin/AdminHome").catch(() => {});
-};
 
 const Layout = () => {
   const [menuOpen, setMenuOpen] = useState(false);
