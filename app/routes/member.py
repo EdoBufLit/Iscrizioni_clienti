@@ -100,6 +100,8 @@ def download_document(request: Request, doc_id: int, db: Session = Depends(get_d
 
 # ── JSON API ──────────────────────────────────────────────────────
 
+from sqlalchemy import func
+
 @router.post("/api/auth/login")
 def api_auth_login(request: Request, email: str = Form(...), password: str = Form(default=""), db: Session = Depends(get_db)):
     """
@@ -107,7 +109,9 @@ def api_auth_login(request: Request, email: str = Form(...), password: str = For
     Always returns 200 for security (no user enumeration).
     """
     auth_limiter.check(get_client_ip(request))
-    member = db.query(Member).filter(Member.email == email).first()
+
+    email_norm = email.strip().lower()
+    member = db.query(Member).filter(func.lower(Member.email) == email_norm).first()
 
     # Password-based login
     if password and member and member.password_hash and verify_password(password, member.password_hash):

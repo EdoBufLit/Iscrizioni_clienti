@@ -8,6 +8,7 @@ import {
   fetchVersion,
   createOrgAdmin,
   patchOrgAdmin,
+  deleteOrgAdmin,
   increaseOrgCardStock,
   AuthError,
   type SuperAdminProfile,
@@ -45,6 +46,11 @@ const SuperAdminOrgAdmins = () => {
   // Toggling
   const [toggling, setToggling] = useState<number | null>(null);
   const [ver, setVer] = useState<VersionInfo | null>(null);
+
+  // Deletion
+  const [deleting, setDeleting] = useState<number | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<OrgAdmin | null>(null);
+  const [deleteError, setDeleteError] = useState("");
 
   // Card stock form
   const [cardOrgId, setCardOrgId] = useState<number | "">("");
@@ -107,17 +113,25 @@ const SuperAdminOrgAdmins = () => {
     setCreateSuccess("");
     setCreating(true);
     try {
-      await createOrgAdmin(newEmail.trim(), newOrgId);
-      setCreateSuccess(`Invito inviato a ${newEmail.trim()}`);
+      const result = await createOrgAdmin(newEmail.trim(), newOrgId);
+      if (result.restored) {
+        setCreateSuccess("Admin ripristinato. Ora puoi inviare il magic link.");
+      } else {
+        setCreateSuccess(`Invito inviato a ${newEmail.trim()}`);
+      }
       setNewEmail("");
       const updated = await fetchOrgAdmins(
         selectedOrg !== "" ? selectedOrg : undefined,
       );
       setAdmins(updated);
     } catch (err) {
-      setCreateError(
-        err instanceof Error ? err.message : "Errore nella creazione.",
-      );
+      if (err instanceof Error && err.message === "admin_exists") {
+        setCreateError("Esiste già un admin con questa email.");
+      } else {
+        setCreateError(
+          err instanceof Error ? err.message : "Errore nella creazione.",
+        );
+      }
     } finally {
       setCreating(false);
     }
@@ -137,6 +151,33 @@ const SuperAdminOrgAdmins = () => {
     } finally {
       setToggling(null);
     }
+  };
+
+  const handleDeleteClick = (admin: OrgAdmin) => {
+    setDeleteError("");
+    setDeleteConfirm(admin);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirm) return;
+    setDeleting(deleteConfirm.id);
+    setDeleteError("");
+    try {
+      await deleteOrgAdmin(deleteConfirm.id);
+      setAdmins((prev) => prev.filter((a) => a.id !== deleteConfirm.id));
+      setDeleteConfirm(null);
+    } catch (err) {
+      setDeleteError(
+        err instanceof Error ? err.message : "Errore durante l'eliminazione.",
+      );
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteConfirm(null);
+    setDeleteError("");
   };
 
   const handleCardFormSubmit = (e: FormEvent) => {
@@ -454,6 +495,13 @@ const SuperAdminOrgAdmins = () => {
                         >
                           {a.is_active ? "Disattiva" : "Attiva"}
                         </button>
+                        <button
+                          className="ml-2 rounded-md border border-neutral-200 px-3 py-1 text-xs font-medium text-neutral-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+                          type="button"
+                          onClick={() => handleDeleteClick(a)}
+                        >
+                          Elimina
+                        </button>
                       </td>
                     </tr>
                   ))
@@ -462,6 +510,43 @@ const SuperAdminOrgAdmins = () => {
             </table>
           </div>
         </div>
+
+        {deleteConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+              <h3 className="text-lg font-semibold text-neutral-900">
+                Eliminare questo admin?
+              </h3>
+              <p className="mt-2 text-sm text-neutral-600">
+                L’operazione rimuove l’admin{" "}
+                <span className="font-medium">{deleteConfirm.email}</span> dall’accesso.
+                Puoi ripristinarlo in seguito.
+              </p>
+              {deleteError && (
+                <div className="mt-4 rounded-md border border-red-200/60 bg-red-50 px-4 py-3">
+                  <p className="text-sm text-red-700">{deleteError}</p>
+                </div>
+              )}
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  className="rounded-md border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900"
+                  onClick={handleDeleteCancel}
+                >
+                  Annulla
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-subtle transition hover:bg-red-700 disabled:opacity-50"
+                  onClick={handleDeleteConfirm}
+                  disabled={deleting === deleteConfirm.id}
+                >
+                  {deleting === deleteConfirm.id ? "Eliminazione..." : "Elimina"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── Gestione tessere ──────────────────────────────── */}
         <div className="mt-14">

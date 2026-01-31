@@ -31,4 +31,7 @@ class Settings:
     SMTP_FROM: str = os.getenv("SMTP_FROM", "noreply@assonam.it")
     SMTP_USE_TLS: bool = os.getenv("SMTP_USE_TLS", "true").lower() in ("true", "1", "yes")
 
+    # Email mode: "normal" (SMTP) or "test" (in-memory capture)
+    EMAIL_MODE: str = os.getenv("EMAIL_MODE", "normal")
+
 settings = Settings()

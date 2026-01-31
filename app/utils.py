@@ -12,6 +12,18 @@ from .config import settings
 
 logger = logging.getLogger(__name__)
 
+# Global list for email capture in tests
+_captured_emails = []
+
+def get_captured_emails() -> List[dict]:
+    """Return the list of captured emails (for testing)."""
+    return _captured_emails
+
+def clear_captured_emails():
+    """Clear the captured emails list."""
+    global _captured_emails
+    _captured_emails = []
+
 def generate_token() -> str:
     """Generates a secure random token."""
     return secrets.token_urlsafe(32)
@@ -114,6 +126,15 @@ def send_email(to_email: str, subject: str, body: str) -> bool:
     Returns True on success, False on failure.
     """
     logger.info("send_email: to=%s, subject=%s", to_email, subject)
+
+    if settings.EMAIL_MODE == "test":
+        logger.info("send_email: Capturing email in test mode")
+        _captured_emails.append({
+            "to": to_email,
+            "subject": subject,
+            "body": body
+        })
+        return True
 
     if settings.SMTP_HOST and settings.SMTP_USER:
         if not settings.SMTP_PASSWORD:

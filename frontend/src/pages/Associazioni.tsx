@@ -134,12 +134,6 @@ const Associazioni = () => {
                         Diventa Socio
                       </Link>
                       <Link
-                        className="text-sm font-medium text-brand/70 transition hover:text-brand"
-                        to={`/registrati?org=${encodeURIComponent(org.slug)}`}
-                      >
-                        Registrati
-                      </Link>
-                      <Link
                         className="link-muted"
                         to={`/associazioni/${org.slug}`}
                       >

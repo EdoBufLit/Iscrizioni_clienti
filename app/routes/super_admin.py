@@ -113,14 +113,36 @@ def create_org_admin(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
+    email_norm = body.email.strip().lower()
     existing = db.query(AdminUser).filter(
-        AdminUser.email == body.email,
+        func.lower(AdminUser.email) == email_norm,
     ).first()
+
     if existing:
-        raise HTTPException(status_code=409, detail="Email already registered")
+        if existing.deleted_at is not None:
+             # Restore
+             existing.deleted_at = None
+             existing.is_active = True
+             existing.password_hash = "" # Reset credentials
+             existing.org_id = body.org_id
+             db.commit()
+
+             audit.org_admin_restored_on_create(admin_id=existing.id, org_id=existing.org_id, email_hash=audit._hash_email(email_norm))
+
+             return {
+                 "id": existing.id,
+                 "email": existing.email,
+                 "org_id": existing.org_id,
+                 "org_name": org.name,
+                 "is_active": existing.is_active,
+                 "created_at": existing.created_at.isoformat() if existing.created_at else None,
+                 "restored": True
+             }
+        else:
+             raise HTTPException(status_code=409, detail="admin_exists")
 
     admin = AdminUser(
-        email=body.email,
+        email=email_norm,
         password_hash="",
         role=AdminRole.ORG_ADMIN,
         org_id=body.org_id,
@@ -141,11 +163,13 @@ def create_org_admin(
 
     link = f"{settings.BASE_URL}/api/org-admin/auth/verify?token={token_str}"
     if not send_email(
-        to_email=body.email,
+        to_email=email_norm,
         subject="Invito area amministrazione associazione",
         body=f"Sei stato invitato come amministratore di {org.name}.\nAccedi qui: {link}",
     ):
-         logger.warning("Failed to send org admin invite to %s", body.email)
+         logger.warning("Failed to send org admin invite to %s", email_norm)
+
+    audit.org_admin_created(admin_id=admin.id, org_id=admin.org_id, email_hash=audit._hash_email(email_norm))
 
     return {
         "id": admin.id,
@@ -154,6 +178,7 @@ def create_org_admin(
         "org_name": org.name,
         "is_active": admin.is_active,
         "created_at": admin.created_at.isoformat() if admin.created_at else None,
+        "created": True
     }
 
 
@@ -165,7 +190,7 @@ def list_org_admins(
 ):
     _require_super_admin(request, db)
 
-    query = db.query(AdminUser).filter(AdminUser.role == AdminRole.ORG_ADMIN)
+    query = db.query(AdminUser).filter(AdminUser.role == AdminRole.ORG_ADMIN, AdminUser.deleted_at.is_(None))
     if org_id is not None:
         query = query.filter(AdminUser.org_id == org_id)
 
@@ -182,6 +207,76 @@ def list_org_admins(
         }
         for a in admins
     ]
+
+
+@router.delete("/org-admins/{admin_id}")
+def delete_org_admin(
+    request: Request,
+    admin_id: int,
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+
+    target = db.query(AdminUser).filter(
+        AdminUser.id == admin_id,
+        AdminUser.role == AdminRole.ORG_ADMIN,
+    ).first()
+
+    if not target:
+        raise HTTPException(status_code=404, detail="Org admin not found")
+
+    if target.deleted_at is not None:
+        return {"ok": True, "already_deleted": True}
+
+    # Safety check: do NOT allow deleting the last active org-admin for that admin’s organization
+    active_count = db.query(func.count(AdminUser.id)).filter(
+        AdminUser.org_id == target.org_id,
+        AdminUser.role == AdminRole.ORG_ADMIN,
+        AdminUser.deleted_at.is_(None),
+        AdminUser.is_active.is_(True)
+    ).scalar()
+
+    if active_count <= 1 and target.is_active:
+         raise HTTPException(status_code=409, detail="Impossibile eliminare l'ultimo admin attivo dell'organizzazione.")
+
+    target.deleted_at = datetime.utcnow()
+    target.is_active = False
+    db.commit()
+
+    audit.org_admin_deleted(admin_id=target.id, org_id=target.org_id, super_admin_id=admin.id)
+    logger.info("super_admin.org_admin_deleted: admin_id=%d org_id=%d by super_admin=%d", target.id, target.org_id, admin.id)
+
+    return {"ok": True}
+
+
+@router.post("/org-admins/{admin_id}/restore")
+def restore_org_admin(
+    request: Request,
+    admin_id: int,
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+
+    target = db.query(AdminUser).filter(
+        AdminUser.id == admin_id,
+        AdminUser.role == AdminRole.ORG_ADMIN,
+    ).first()
+
+    if not target:
+        raise HTTPException(status_code=404, detail="Org admin not found")
+
+    if target.deleted_at is None:
+        return {"ok": True, "already_active": True}
+
+    target.deleted_at = None
+    target.is_active = True
+    target.password_hash = "" # Reset credentials
+    db.commit()
+
+    audit.org_admin_restored(admin_id=target.id, org_id=target.org_id, super_admin_id=admin.id)
+    logger.info("super_admin.org_admin_restored: admin_id=%d org_id=%d by super_admin=%d", target.id, target.org_id, admin.id)
+
+    return {"ok": True}
 
 
 @router.patch("/org-admins/{admin_id}")

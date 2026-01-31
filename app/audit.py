@@ -56,6 +56,20 @@ def super_admin_login_failed(ip: str):
     _emit("super_admin.login_failed", ip=ip)
 
 
+def org_admin_deleted(admin_id: int, org_id: int, super_admin_id: int):
+    _emit("super_admin.org_admin_deleted", admin_id=admin_id, org_id=org_id, super_admin_id=super_admin_id)
+
+
+def org_admin_restored(admin_id: int, org_id: int, super_admin_id: int):
+    _emit("super_admin.org_admin_restored", admin_id=admin_id, org_id=org_id, super_admin_id=super_admin_id)
+
+def org_admin_restored_on_create(admin_id: int, org_id: int, email_hash: str):
+    _emit("super_admin.org_admin_restored_on_create", admin_id=admin_id, org_id=org_id, email_hash=email_hash)
+
+def org_admin_created(admin_id: int, org_id: int, email_hash: str):
+    _emit("super_admin.org_admin_created", admin_id=admin_id, org_id=org_id, email_hash=email_hash)
+
+
 # ── Join events ───────────────────────────────────────────────────
 
 def join_submitted(org_slug: str, org_id: int, ip: str):
