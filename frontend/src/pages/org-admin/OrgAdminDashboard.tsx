@@ -108,34 +108,104 @@ const OrgAdminDashboard = () => {
         </div>
       ) : (
         <div className="mt-8 grid gap-6 md:grid-cols-3">
-          {CARD_META.map((card) => (
-            <div key={card.key} className="surface p-7">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand/10">
-                <svg
-                  className="h-[18px] w-[18px] text-brand"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+          {CARD_META.map((card) => {
+            const value = metrics?.[card.key] ?? null;
+            const isCards = card.key === "cards_remaining";
+            const exhausted =
+              isCards && value === 0 && metrics?.cards_total != null;
+            return (
+              <div
+                key={card.key}
+                className={`surface p-7 ${exhausted ? "border-red-200 bg-red-50" : ""}`}
+              >
+                <div
+                  className={`flex h-9 w-9 items-center justify-center rounded-lg ${
+                    exhausted ? "bg-red-100" : "bg-brand/10"
+                  }`}
                 >
-                  <path d={card.icon} />
-                </svg>
+                  <svg
+                    className={`h-[18px] w-[18px] ${exhausted ? "text-red-500" : "text-brand"}`}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={1.5}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d={card.icon} />
+                  </svg>
+                </div>
+                <p className="mt-4 text-xs font-medium uppercase tracking-[0.2em] text-neutral-400">
+                  {card.label}
+                </p>
+                <p
+                  className={`mt-3 text-2xl font-semibold tabular-nums ${
+                    exhausted ? "text-red-700" : "text-neutral-900"
+                  }`}
+                >
+                  {card.format(value)}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-neutral-600">
+                  {card.description}
+                </p>
+                {isCards && metrics?.cards_total != null && (
+                  <>
+                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-neutral-100">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          exhausted ? "bg-red-400" : "bg-brand"
+                        }`}
+                        style={{
+                          width: `${
+                            metrics.cards_total > 0
+                              ? ((metrics.cards_used ?? 0) / metrics.cards_total) * 100
+                              : 0
+                          }%`,
+                        }}
+                      />
+                    </div>
+                    <p className="mt-2 text-xs tabular-nums text-neutral-500">
+                      {metrics.cards_used ?? 0} usate su {metrics.cards_total}{" "}
+                      totali
+                    </p>
+                  </>
+                )}
               </div>
-              <p className="mt-4 text-xs font-medium uppercase tracking-[0.2em] text-neutral-400">
-                {card.label}
-              </p>
-              <p className="mt-3 text-2xl font-semibold tabular-nums text-neutral-900">
-                {card.format(metrics?.[card.key] ?? null)}
-              </p>
-              <p className="mt-2 text-sm leading-6 text-neutral-600">
-                {card.description}
-              </p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
+
+      {!isLoading &&
+        !metricsError &&
+        metrics?.cards_remaining === 0 &&
+        metrics.cards_total != null && (
+          <div className="mt-6 rounded-lg border border-red-200/60 bg-red-50 px-7 py-5">
+            <div className="flex gap-4">
+              <svg
+                className="mt-0.5 h-5 w-5 shrink-0 text-red-400"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.5}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126Z" />
+                <path d="M12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+              <div>
+                <p className="text-sm font-medium text-red-700">
+                  Limite tessere raggiunto
+                </p>
+                <p className="mt-1 text-sm leading-6 text-red-600">
+                  Contatta ASSONAM per richiedere l&apos;estensione del
+                  pacchetto tessere.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
       {!isLoading && !metricsError && admin && (
         <OnboardingChecklist orgId={admin.org_id} />

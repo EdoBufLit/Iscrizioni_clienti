@@ -87,6 +87,24 @@ const OrgAdminCards = () => {
         Situazione del magazzino tessere e storico movimenti.
       </p>
 
+      <div className="mt-4 flex items-start gap-3 rounded-md border border-brand/20 bg-brand/5 px-4 py-3">
+        <svg
+          className="mt-0.5 h-4 w-4 shrink-0 text-brand"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+        </svg>
+        <p className="text-sm leading-6 text-brand-dark">
+          Lo stock tessere è gestito centralmente da ASSONAM. Per richiedere un
+          incremento, contatta la segreteria nazionale.
+        </p>
+      </div>
+
       {/* Summary cards */}
       {isLoading ? (
         <div className="mt-8 grid gap-6 md:grid-cols-3">
@@ -125,34 +143,83 @@ const OrgAdminCards = () => {
         </div>
       ) : (
         <div className="mt-8 grid gap-6 md:grid-cols-3">
-          {STAT_CARDS.map((card) => (
-            <div key={card.key} className="surface p-7">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand/10">
-                <svg
-                  className="h-[18px] w-[18px] text-brand"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+          {STAT_CARDS.map((card) => {
+            const value = stock?.[card.key] ?? 0;
+            const exhausted =
+              card.key === "remaining" && value === 0 && (stock?.total ?? 0) > 0;
+            return (
+              <div
+                key={card.key}
+                className={`surface p-7 ${exhausted ? "border-red-200 bg-red-50" : ""}`}
+              >
+                <div
+                  className={`flex h-9 w-9 items-center justify-center rounded-lg ${
+                    exhausted ? "bg-red-100" : "bg-brand/10"
+                  }`}
                 >
-                  <path d={card.icon} />
-                </svg>
+                  <svg
+                    className={`h-[18px] w-[18px] ${exhausted ? "text-red-500" : "text-brand"}`}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={1.5}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d={card.icon} />
+                  </svg>
+                </div>
+                <p className="mt-4 text-xs font-medium uppercase tracking-[0.2em] text-neutral-400">
+                  {card.label}
+                </p>
+                <p
+                  className={`mt-3 text-2xl font-semibold tabular-nums ${
+                    exhausted ? "text-red-700" : "text-neutral-900"
+                  }`}
+                >
+                  {value}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-neutral-600">
+                  {card.description}
+                </p>
               </div>
-              <p className="mt-4 text-xs font-medium uppercase tracking-[0.2em] text-neutral-400">
-                {card.label}
-              </p>
-              <p className="mt-3 text-2xl font-semibold tabular-nums text-neutral-900">
-                {stock?.[card.key] ?? 0}
-              </p>
-              <p className="mt-2 text-sm leading-6 text-neutral-600">
-                {card.description}
-              </p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
+
+      {/* Card limit warning */}
+      {!isLoading &&
+        !error &&
+        stock != null &&
+        stock.remaining === 0 &&
+        stock.total > 0 && (
+          <div className="mt-6 rounded-lg border border-red-200/60 bg-red-50 px-7 py-5">
+            <div className="flex gap-4">
+              <svg
+                className="mt-0.5 h-5 w-5 shrink-0 text-red-400"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.5}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126Z" />
+                <path d="M12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+              <div>
+                <p className="text-sm font-medium text-red-700">
+                  Limite tessere raggiunto
+                </p>
+                <p className="mt-1 text-sm leading-6 text-red-600">
+                  Contatta ASSONAM per richiedere l&apos;estensione del
+                  pacchetto tessere.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
       {/* Movements */}
       {!isLoading && !error && (
