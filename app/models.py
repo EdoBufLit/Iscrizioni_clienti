@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Enum, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Enum, UniqueConstraint, Text, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -7,8 +7,9 @@ from .db import Base
 class MemberStatus(str, enum.Enum):
     PENDING_VERIFICATION = "pending_verification"
     PENDING_DOCS = "pending_docs"
-    PENDING_CARDS = "pending_cards" # Added
+    PENDING_CARDS = "pending_cards"
     ACTIVE = "active"
+    REJECTED = "rejected"
 
 class DocStatus(str, enum.Enum):
     UPLOADED = "uploaded"
@@ -31,11 +32,44 @@ class Organization(Base):
     slug = Column(String, unique=True, index=True)
     statute_version = Column(String)
     statute_pdf_path = Column(String, nullable=True) # Path relative to static or uploads
+    statute_updated_at = Column(DateTime, nullable=True)
     privacy_version = Column(String)
+
+    # Extended details
+    address_line1 = Column(String, nullable=True)
+    address_line2 = Column(String, nullable=True)
+    city = Column(String, index=True, nullable=True)
+    province = Column(String, nullable=True)
+    postal_code = Column(String, nullable=True)
+    country = Column(String, default="Italy")
+    description = Column(Text, nullable=True)
+    email = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    website = Column(String, nullable=True)
+    logo_path = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
+
+    created_by_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     members = relationship("Member", back_populates="organization")
     batches = relationship("CardBatch", back_populates="organization")
-    admins = relationship("AdminUser", back_populates="organization")
+    admins = relationship("AdminUser", back_populates="organization", foreign_keys="AdminUser.org_id")
+
+class OperationLog(Base):
+    __tablename__ = "operation_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    actor_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
+    actor_role = Column(String)
+    action = Column(String, index=True)
+    entity_type = Column(String, index=True)
+    entity_id = Column(Integer, nullable=True)
+    metadata_json = Column(JSON, nullable=True)
+    ip = Column(String, nullable=True)
+    user_agent = Column(String, nullable=True)
 
 class AdminUser(Base):
     __tablename__ = "admin_users"
@@ -49,7 +83,7 @@ class AdminUser(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     deleted_at = Column(DateTime, nullable=True)
 
-    organization = relationship("Organization", back_populates="admins")
+    organization = relationship("Organization", back_populates="admins", foreign_keys=[org_id])
 
 class CardBatch(Base):
     __tablename__ = "card_batches"
@@ -74,7 +108,7 @@ class Member(Base):
     phone = Column(String)
     fiscal_code = Column(String)
     password_hash = Column(String, nullable=True)
-    status = Column(Enum(MemberStatus), default=MemberStatus.PENDING_DOCS) # Default changed to PENDING_DOCS
+    status = Column(Enum(MemberStatus, values_callable=lambda x: [e.value for e in x]), default=MemberStatus.PENDING_DOCS) # Default changed to PENDING_DOCS
 
     card_no = Column(Integer, nullable=True)
     batch_id = Column(Integer, ForeignKey("card_batches.id"), nullable=True)
@@ -89,6 +123,10 @@ class Member(Base):
 
     signup_ip = Column(String, nullable=True)
     signup_user_agent = Column(String, nullable=True)
+
+    decision_at = Column(DateTime, nullable=True)
+    decision_by_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
+    decision_notes = Column(Text, nullable=True)
 
     organization = relationship("Organization", back_populates="members")
     documents = relationship("MemberDocument", back_populates="member")

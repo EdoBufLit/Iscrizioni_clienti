@@ -14,15 +14,19 @@ os.environ.setdefault("UPLOAD_DIR", "data/uploads")
 
 import pytest
 from fastapi.testclient import TestClient
+from unittest.mock import patch
 
 from app.main import app
 
 
 @pytest.fixture(scope="session")
 def client():
-    """Create a TestClient whose lifespan triggers DB init + seed data."""
-    with TestClient(app) as c:
-        yield c
+    """Create a TestClient whose lifespan triggers DB init + seed data.
+    Also patches rate limiter to avoid 429 in tests.
+    """
+    with patch("app.middleware.RateLimiter.check"):
+        with TestClient(app) as c:
+            yield c
 
     # Cleanup
     try:

@@ -1,6 +1,6 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { fetchOrganizations, type Organization } from "../lib/api";
+import { fetchOrganizations, type OrganizationListItem } from "../lib/api";
 import Skeleton from "../components/ui/Skeleton";
 
 const inputClass =
@@ -10,7 +10,7 @@ const DEBOUNCE_MS = 300;
 
 const Associazioni = () => {
   const [search, setSearch] = useState("");
-  const [orgs, setOrgs] = useState<Organization[]>([]);
+  const [orgs, setOrgs] = useState<OrganizationListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -118,15 +118,34 @@ const Associazioni = () => {
                 >
                   <div className="h-1 bg-gradient-to-r from-brand to-brand-dark" />
                   <div className="flex flex-1 flex-col p-7">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand/10">
-                      <svg className="h-[18px] w-[18px] text-brand" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
-                      </svg>
+                    <div className="flex items-start justify-between">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-brand/10 overflow-hidden">
+                        {org.logo_url ? (
+                           <img src={org.logo_url} alt={org.name} className="h-full w-full object-contain" />
+                        ) : (
+                          <svg className="h-6 w-6 text-brand" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+                          </svg>
+                        )}
+                      </div>
+                      {(org.city || org.province) && (
+                        <span className="inline-flex items-center rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-medium text-neutral-800">
+                          {org.city}{org.province ? ` (${org.province})` : ""}
+                        </span>
+                      )}
                     </div>
-                    <h3 className="mt-4 text-base font-semibold text-neutral-900">
+
+                    <h3 className="mt-4 text-lg font-semibold text-neutral-900 leading-snug">
                       {org.name}
                     </h3>
-                    <div className="mt-auto flex flex-wrap items-center gap-3 pt-5">
+
+                    {org.description_short && (
+                       <p className="mt-2 text-sm text-neutral-600 line-clamp-3">
+                         {org.description_short}
+                       </p>
+                    )}
+
+                    <div className="mt-auto flex flex-wrap items-center gap-3 pt-6">
                       <Link
                         className="btn-primary"
                         to={`/associazioni/${org.slug}/iscrizione`}
