@@ -42,7 +42,7 @@ jobs:
             export SMTP_HOST='${{ secrets.SMTP_HOST }}'
             export SMTP_PORT='${{ secrets.SMTP_PORT }}'
             export SMTP_USER='${{ secrets.SMTP_USER }}'
-            export SMTP_PASS='${{ secrets.SMTP_PASS }}'
+            export SMTP_PASSWORD='${{ secrets.SMTP_PASSWORD }}'
             export SMTP_FROM='${{ secrets.SMTP_FROM }}'
             export SMTP_USE_TLS='${{ secrets.SMTP_USE_TLS }}'
 
