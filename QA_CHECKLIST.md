@@ -1,4 +1,4 @@
-# QA Checklist
+# QA Checklis
 
 Quick-reference for running builds, tests, and local verification.
 
