@@ -1,4 +1,4 @@
-# Alembic Database Migration
+# Alembic Database Migrations
 
 Questo progetto utilizza Alembic per gestire le migrazioni del database.
 
