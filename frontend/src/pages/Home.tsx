@@ -12,9 +12,8 @@ const Home = () => {
             <div className="text-center md:text-left">
               <img
                 src="/favicon.svg"
-                alt=""
-                className="mx-auto mb-4 h-6 md:mx-0"
-                aria-hidden="true"
+                alt="ASSO.N.A.M."
+                className="mx-auto mb-6 h-10 md:mx-0"
               />
               <p className="section-title">STUDIO CONTABILE · ASSO.N.A.M.</p>
               <h1 className="section-heading">

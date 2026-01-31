@@ -43,7 +43,7 @@ const Layout = () => {
               to="/"
               onClick={close}
             >
-              <img src="/favicon.svg" alt="ASSO.N.A.M." className="h-7" />
+              <img src="/favicon.svg" alt="ASSO.N.A.M." className="h-9" />
               <div>
                 <p className="text-sm font-semibold text-neutral-900">
                   ASSO.N.A.M.
