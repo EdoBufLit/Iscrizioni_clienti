@@ -35,16 +35,20 @@ class Organization(Base):
 
     members = relationship("Member", back_populates="organization")
     batches = relationship("CardBatch", back_populates="organization")
+    admins = relationship("AdminUser", back_populates="organization")
 
 class AdminUser(Base):
     __tablename__ = "admin_users"
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True)
-    password_hash = Column(String) # For MVP, simple hash or plain (if not specified, assuming secure)
+    password_hash = Column(String)
     role = Column(Enum(AdminRole), default=AdminRole.ORG_ADMIN)
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=True) # Null for super_admin
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    organization = relationship("Organization", back_populates="admins")
 
 class CardBatch(Base):
     __tablename__ = "card_batches"

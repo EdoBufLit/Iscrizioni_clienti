@@ -39,7 +39,8 @@ def init_db():
                 email="admin@example.com",
                 password_hash=get_password_hash(admin_password),
                 role=AdminRole.ORG_ADMIN,
-                org_id=org.id
+                org_id=org.id,
+                is_active=True,
             )
             db.add(admin)
             db.commit()
