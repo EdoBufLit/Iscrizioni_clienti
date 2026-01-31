@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from app.db import get_db
 from app.models import Organization, Member, MemberStatus, Token, TokenType, MemberDocument
-from app.utils import generate_token, send_email_simulation, save_upload_file, hash_token
+from app.utils import generate_token, send_email, save_upload_file, hash_token
 from app.services.card import assign_next_card
 from app.config import settings
 from app.middleware import join_limiter, get_client_ip
@@ -75,12 +75,13 @@ def api_join_start(
     if existing_member:
         # Return identical response to prevent email enumeration.
         # Notify the existing member instead.
-        send_email_simulation(
+        if not send_email(
             to_email=email,
             subject=f"Registrazione presso {org.name}",
             body=f"Risulta già una richiesta di iscrizione a {org.name} con questo indirizzo email. "
                  f"Se non hai effettuato questa richiesta, puoi ignorare questo messaggio.",
-        )
+        ):
+             logger.warning("Failed to send existing member notification to %s", email)
         return {"status": "started", "organization": org.name}
 
     member = Member(
@@ -117,11 +118,12 @@ def api_join_start(
 
     # Send Email
     link = f"{settings.BASE_URL}/join/continue?token={token_str}"
-    send_email_simulation(
+    if not send_email(
         to_email=email,
         subject=f"Complete your registration for {org.name}",
         body=f"Click here to upload documents and complete registration: {link}"
-    )
+    ):
+         logger.warning("Failed to send registration email to %s", email)
 
     return {"status": "started", "organization": org.name}
 
@@ -202,11 +204,12 @@ async def api_join_continue(
 
         # Send Welcome Email
         org = db.query(Organization).filter(Organization.id == member.org_id).first()
-        send_email_simulation(
+        if not send_email(
             to_email=member.email,
             subject=f"Welcome to {org.name}",
             body=f"Your registration is complete. You can now login at {settings.BASE_URL}/member/login"
-        )
+        ):
+             logger.warning("Failed to send welcome email to %s", member.email)
 
         return {
             "status": "complete",

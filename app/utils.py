@@ -116,6 +116,10 @@ def send_email(to_email: str, subject: str, body: str) -> bool:
     logger.info("send_email: to=%s, subject=%s", to_email, subject)
 
     if settings.SMTP_HOST and settings.SMTP_USER:
+        if not settings.SMTP_PASSWORD:
+            logger.error("send_email: SMTP_HOST/USER set but SMTP_PASSWORD is empty. Email NOT sent.")
+            return False
+
         try:
             msg = MIMEMultipart("alternative")
             msg["From"] = settings.SMTP_FROM
@@ -131,20 +135,18 @@ def send_email(to_email: str, subject: str, body: str) -> bool:
                 server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15)
                 server.ehlo()
 
-            server.login(settings.SMTP_USER, settings.SMTP_PASS)
+            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
             server.sendmail(settings.SMTP_FROM, [to_email], msg.as_string())
             server.quit()
             logger.info("send_email: SMTP delivery OK to=%s", to_email)
             return True
         except Exception:
             logger.exception("send_email: SMTP delivery FAILED to=%s", to_email)
-            # Fall through to simulation
+            return False
     else:
         logger.info("send_email: SMTP not configured, using simulation")
-
-    # Simulation fallback
-    _send_email_simulation(to_email, subject, body)
-    return True
+        _send_email_simulation(to_email, subject, body)
+        return True
 
 
 def _send_email_simulation(to_email: str, subject: str, body: str):
@@ -156,9 +158,3 @@ def _send_email_simulation(to_email: str, subject: str, body: str):
             f.write(log_line)
     except OSError:
         pass
-
-
-# Backward compatibility alias
-def send_email_simulation(to_email: str, subject: str, body: str):
-    """Backward-compatible wrapper — routes through real SMTP when configured."""
-    send_email(to_email, subject, body)
