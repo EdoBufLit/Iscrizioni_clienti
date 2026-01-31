@@ -178,6 +178,87 @@ export async function fetchCardMovements(params?: {
   return res.json();
 }
 
+// ── Super Admin ─────────────────────────────────────────────────
+
+export type SuperAdminProfile = {
+  id: number;
+  email: string;
+  role: string;
+};
+
+export async function superAdminLogin(
+  email: string,
+  password: string,
+): Promise<{ ok: boolean }> {
+  const res = await fetch("/api/super-admin/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  if (res.status === 401) throw new AuthError("Invalid credentials");
+  if (!res.ok) throw new Error("Login failed");
+  return res.json();
+}
+
+export async function fetchSuperAdminMe(): Promise<SuperAdminProfile> {
+  const res = await fetch("/api/super-admin/auth/me");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error("Failed to fetch profile");
+  return res.json();
+}
+
+export async function superAdminLogout(): Promise<void> {
+  await fetch("/api/super-admin/auth/logout", { method: "POST" });
+}
+
+export type OrgAdmin = {
+  id: number;
+  email: string;
+  org_id: number;
+  org_name: string | null;
+  is_active: boolean;
+  created_at: string | null;
+};
+
+export async function fetchOrgAdmins(
+  orgId?: number,
+): Promise<OrgAdmin[]> {
+  const qs = orgId != null ? `?org_id=${orgId}` : "";
+  const res = await fetch(`/api/super-admin/org-admins${qs}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error("Failed to fetch org admins");
+  return res.json();
+}
+
+export async function createOrgAdmin(
+  email: string,
+  orgId: number,
+): Promise<OrgAdmin> {
+  const res = await fetch("/api/super-admin/org-admins", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, org_id: orgId }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 409) throw new Error("Email già registrata");
+  if (res.status === 404) throw new Error("Organizzazione non trovata");
+  if (!res.ok) throw new Error("Failed to create org admin");
+  return res.json();
+}
+
+export async function patchOrgAdmin(
+  adminId: number,
+  isActive: boolean,
+): Promise<void> {
+  const res = await fetch(`/api/super-admin/org-admins/${adminId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ is_active: isActive }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error("Failed to update org admin");
+}
+
 export async function fetchOrgAdminMembers(params?: {
   q?: string;
   status?: string;

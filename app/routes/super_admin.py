@@ -6,10 +6,12 @@ from typing import Optional
 
 from app.db import get_db
 from app.models import AdminUser, AdminRole, Organization, OrgAdminToken
+from app.security import verify_password
 from app.utils import generate_token, hash_token, send_email_simulation
 from app.config import settings
 
 router = APIRouter(prefix="/api/super-admin")
+auth_router = APIRouter(prefix="/auth")
 
 
 def _require_super_admin(request: Request, db: Session) -> AdminUser:
@@ -23,6 +25,47 @@ def _require_super_admin(request: Request, db: Session) -> AdminUser:
     if not admin:
         raise HTTPException(status_code=403, detail="Forbidden")
     return admin
+
+
+class LoginBody(BaseModel):
+    email: str
+    password: str
+
+
+@auth_router.post("/login")
+def super_admin_login(
+    request: Request,
+    body: LoginBody,
+    db: Session = Depends(get_db),
+):
+    admin = db.query(AdminUser).filter(
+        AdminUser.email == body.email,
+        AdminUser.role == AdminRole.SUPER_ADMIN,
+    ).first()
+    if not admin or not admin.password_hash or not verify_password(body.password, admin.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    request.session["admin_id"] = admin.id
+    return {"ok": True}
+
+
+@auth_router.get("/me")
+def super_admin_me(request: Request, db: Session = Depends(get_db)):
+    admin = _require_super_admin(request, db)
+    return {
+        "id": admin.id,
+        "email": admin.email,
+        "role": AdminRole.SUPER_ADMIN.value,
+    }
+
+
+@auth_router.post("/logout")
+def super_admin_logout(request: Request):
+    request.session.pop("admin_id", None)
+    return {"ok": True}
+
+
+router.include_router(auth_router)
 
 
 class CreateOrgAdmin(BaseModel):
