@@ -6,6 +6,7 @@ data/app.db
 *.log
 verification/
 dummy_*.txt
+email_log.txt
 server.pid
 frontend/node_modules/
 frontend/dist/

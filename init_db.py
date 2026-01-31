@@ -7,6 +7,7 @@ from app.db import Base, SessionLocal, engine
 import app.models
 from app.models import Organization, AdminUser, AdminRole, CardBatch
 from app.security import get_password_hash
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -26,11 +27,13 @@ def init_db():
     with engine.begin() as conn:
         _add_column_if_missing(conn, "card_movements", "admin_id", "INTEGER REFERENCES admin_users(id)")
         _add_column_if_missing(conn, "card_movements", "paid_ref", "TEXT")
+        # Add password_hash column for members (password-based login)
+        _add_column_if_missing(conn, "members", "password_hash", "TEXT")
+
     db = SessionLocal()
-    admin_password = os.getenv("ADMIN_PASSWORD", "admin")
 
     try:
-        # Check if org exists
+        # ── Seed organization ──────────────────────────────────────
         org = db.query(Organization).filter(Organization.slug == "my-association").first()
         if not org:
             logger.info("Creating seed organization...")
@@ -47,26 +50,54 @@ def init_db():
         else:
             logger.info("Organization already exists.")
 
-        # Check if admin exists
-        admin = db.query(AdminUser).filter(AdminUser.email == "admin@example.com").first()
-        if not admin:
-            logger.info("Creating admin user...")
-            admin = AdminUser(
-                email="admin@example.com",
-                password_hash=get_password_hash(admin_password),
-                role=AdminRole.ORG_ADMIN,
-                org_id=org.id,
-                is_active=True,
-            )
-            db.add(admin)
-            db.commit()
-            logger.info("Admin user created (admin@example.com).")
+        # ── Seed super admin ───────────────────────────────────────
+        sa_email = settings.SUPER_ADMIN_EMAIL
+        sa_password = settings.SUPER_ADMIN_PASSWORD
+        super_admin = db.query(AdminUser).filter(
+            AdminUser.email == sa_email,
+            AdminUser.role == AdminRole.SUPER_ADMIN,
+        ).first()
+        if not super_admin:
+            # Check if the email exists as a different role and upgrade
+            existing = db.query(AdminUser).filter(AdminUser.email == sa_email).first()
+            if existing:
+                logger.info("Upgrading existing admin %s to SUPER_ADMIN.", sa_email)
+                existing.role = AdminRole.SUPER_ADMIN
+                existing.password_hash = get_password_hash(sa_password)
+                existing.org_id = None
+                existing.is_active = True
+                db.commit()
+            else:
+                logger.info("Creating super admin user (%s)...", sa_email)
+                super_admin = AdminUser(
+                    email=sa_email,
+                    password_hash=get_password_hash(sa_password),
+                    role=AdminRole.SUPER_ADMIN,
+                    org_id=None,
+                    is_active=True,
+                )
+                db.add(super_admin)
+                db.commit()
+                logger.info("Super admin created (%s).", sa_email)
         else:
-            logger.info("Updating admin user password...")
-            admin.password_hash = get_password_hash(admin_password)
+            logger.info("Updating super admin password...")
+            super_admin.password_hash = get_password_hash(sa_password)
             db.commit()
 
-        # Check if batch exists
+        # Also ensure the old admin@example.com is an org admin if it exists
+        old_admin = db.query(AdminUser).filter(
+            AdminUser.email == "admin@example.com",
+            AdminUser.email != sa_email,
+        ).first()
+        if old_admin and old_admin.role != AdminRole.SUPER_ADMIN:
+            old_admin.org_id = old_admin.org_id or org.id
+            old_admin.role = AdminRole.ORG_ADMIN
+            old_admin_pw = os.getenv("ADMIN_PASSWORD", "admin")
+            old_admin.password_hash = get_password_hash(old_admin_pw)
+            db.commit()
+            logger.info("Legacy admin@example.com kept as ORG_ADMIN.")
+
+        # ── Seed card batch ────────────────────────────────────────
         batch = db.query(CardBatch).filter(CardBatch.org_id == org.id).first()
         if not batch:
             logger.info("Creating seed card batch...")

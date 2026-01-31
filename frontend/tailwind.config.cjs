@@ -3,6 +3,9 @@ module.exports = {
   content: ["./index.html", "./src/**/*.{ts,tsx}"] ,
   theme: {
     extend: {
+      fontSize: {
+        base: ["0.9375rem", { lineHeight: "1.625" }],
+      },
       fontFamily: {
         sans: ["\"IBM Plex Sans\"", "system-ui", "sans-serif"],
       },
@@ -15,6 +18,10 @@ module.exports = {
         accent: {
           DEFAULT: "#8a9880",
           light: "#eef0ec",
+        },
+        warm: {
+          50: "#faf9f7",
+          100: "#f5f3ef",
         },
         neutral: {
           25: "#fcfcfd",

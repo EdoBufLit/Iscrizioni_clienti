@@ -21,7 +21,7 @@ body {
 }
 
 .section-heading {
-  @apply text-3xl font-semibold text-neutral-900 md:text-4xl;
+  @apply text-3xl font-bold text-neutral-900 md:text-4xl;
 }
 
 .section-subtitle {

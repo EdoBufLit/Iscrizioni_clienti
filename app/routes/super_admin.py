@@ -9,7 +9,7 @@ from sqlalchemy import func
 from app.db import get_db
 from app.models import AdminUser, AdminRole, Organization, OrgAdminToken, CardBatch, CardMovement
 from app.security import verify_password
-from app.utils import generate_token, hash_token, send_email_simulation
+from app.utils import generate_token, hash_token, send_email_simulation, send_email
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
 from app import audit
@@ -264,4 +264,35 @@ def increase_card_stock(
         "end_no": end_no,
         "cards_total": total,
         "cards_remaining": remaining,
+    }
+
+
+# ── Test email ──────────────────────────────────────────────────
+
+class TestEmailBody(BaseModel):
+    to: EmailStr
+
+
+@router.post("/test-email")
+def test_email(
+    request: Request,
+    body: TestEmailBody,
+    db: Session = Depends(get_db),
+):
+    """Send a test email to verify SMTP configuration. Super admin only."""
+    _require_super_admin(request, db)
+    ok = send_email(
+        to_email=body.to,
+        subject="ASSO.N.A.M. — Test Email",
+        body=(
+            "Questa email di test conferma che la configurazione SMTP "
+            f"del portale ASSO.N.A.M. funziona correttamente.\n\n"
+            f"Server: {settings.BASE_URL}\n"
+            f"SMTP Host: {settings.SMTP_HOST or '(simulation)'}"
+        ),
+    )
+    return {
+        "ok": ok,
+        "smtp_configured": bool(settings.SMTP_HOST and settings.SMTP_USER),
+        "to": body.to,
     }

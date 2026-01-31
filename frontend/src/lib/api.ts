@@ -37,6 +37,20 @@ export async function fetchOrganizations(
   return res.json();
 }
 
+export type OrganizationDetail = Organization & {
+  statute_version?: string;
+  privacy_version?: string;
+};
+
+export async function fetchOrganizationDetail(
+  slug: string,
+): Promise<OrganizationDetail> {
+  const res = await fetch(`/api/organizations/${encodeURIComponent(slug)}`);
+  if (res.status === 404) throw new Error("Organization not found");
+  if (!res.ok) throw new Error("Failed to fetch organization");
+  return res.json();
+}
+
 export async function requestMagicLink(
   email: string,
 ): Promise<{ status: string; message: string }> {
@@ -44,6 +58,69 @@ export async function requestMagicLink(
   body.append("email", email);
   const res = await fetch("/api/auth/login", { method: "POST", body });
   if (!res.ok) throw new Error("Request failed");
+  return res.json();
+}
+
+export async function loginWithPassword(
+  email: string,
+  password: string,
+): Promise<{ status: string; message: string; authenticated?: boolean }> {
+  const body = new FormData();
+  body.append("email", email);
+  body.append("password", password);
+  const res = await fetch("/api/auth/login", { method: "POST", body });
+  if (!res.ok) throw new Error("Login failed");
+  return res.json();
+}
+
+export async function registerMember(data: {
+  email: string;
+  password: string;
+  first_name: string;
+  last_name: string;
+  phone?: string;
+  fiscal_code?: string;
+  org_slug?: string;
+}): Promise<{ status: string; message: string; authenticated?: boolean }> {
+  const body = new FormData();
+  body.append("email", data.email);
+  body.append("password", data.password);
+  body.append("first_name", data.first_name);
+  body.append("last_name", data.last_name);
+  if (data.phone) body.append("phone", data.phone);
+  if (data.fiscal_code) body.append("fiscal_code", data.fiscal_code);
+  if (data.org_slug) body.append("org_slug", data.org_slug);
+  const res = await fetch("/api/auth/register", { method: "POST", body });
+  if (!res.ok) throw new Error("Registration failed");
+  return res.json();
+}
+
+export async function joinOrganization(
+  orgSlug: string,
+  data: {
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone: string;
+    fiscal_code: string;
+    accept_statute: boolean;
+    accept_privacy: boolean;
+  },
+): Promise<{ status: string; organization: string }> {
+  const body = new FormData();
+  body.append("first_name", data.first_name);
+  body.append("last_name", data.last_name);
+  body.append("email", data.email);
+  body.append("phone", data.phone);
+  body.append("fiscal_code", data.fiscal_code);
+  body.append("accept_statute", String(data.accept_statute));
+  body.append("accept_privacy", String(data.accept_privacy));
+  const res = await fetch(`/api/join/${encodeURIComponent(orgSlug)}`, {
+    method: "POST",
+    body,
+  });
+  if (res.status === 404) throw new Error("Organization not found");
+  if (!res.ok) throw new Error("Join failed");
   return res.json();
 }
 

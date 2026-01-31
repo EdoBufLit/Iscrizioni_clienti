@@ -72,6 +72,7 @@ class Member(Base):
     email = Column(String, index=True)
     phone = Column(String)
     fiscal_code = Column(String)
+    password_hash = Column(String, nullable=True)
     status = Column(Enum(MemberStatus), default=MemberStatus.PENDING_DOCS) # Default changed to PENDING_DOCS
 
     card_no = Column(Integer, nullable=True)

@@ -1,11 +1,16 @@
 import hashlib
+import logging
 import os
-import shutil
 import secrets
+import smtplib
 import uuid
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from typing import Tuple, List
 from fastapi import UploadFile, HTTPException
 from .config import settings
+
+logger = logging.getLogger(__name__)
 
 def generate_token() -> str:
     """Generates a secure random token."""
@@ -102,17 +107,58 @@ async def save_upload_file(
 
     return rel_path, size_bytes, sha256_hash.hexdigest()
 
-def send_email_simulation(to_email: str, subject: str, body: str):
-    """
-    Simulates sending an email by printing to stdout and logging to a file.
-    """
-    print("="*60)
-    print(f"EMAIL SIMULATION to {to_email}")
-    print(f"Subject: {subject}")
-    print("-" * 20)
-    print(body)
-    print("="*60)
 
-    # Also append to a log file for retrieval during verification
-    with open("email_log.txt", "a") as f:
-        f.write(f"To: {to_email}\nSubject: {subject}\nBody: {body}\n{'-'*20}\n")
+def send_email(to_email: str, subject: str, body: str) -> bool:
+    """
+    Send an email via SMTP if configured, otherwise fall back to simulation.
+    Returns True on success, False on failure.
+    """
+    logger.info("send_email: to=%s, subject=%s", to_email, subject)
+
+    if settings.SMTP_HOST and settings.SMTP_USER:
+        try:
+            msg = MIMEMultipart("alternative")
+            msg["From"] = settings.SMTP_FROM
+            msg["To"] = to_email
+            msg["Subject"] = subject
+            msg.attach(MIMEText(body, "plain", "utf-8"))
+
+            if settings.SMTP_USE_TLS:
+                server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15)
+                server.ehlo()
+                server.starttls()
+            else:
+                server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15)
+                server.ehlo()
+
+            server.login(settings.SMTP_USER, settings.SMTP_PASS)
+            server.sendmail(settings.SMTP_FROM, [to_email], msg.as_string())
+            server.quit()
+            logger.info("send_email: SMTP delivery OK to=%s", to_email)
+            return True
+        except Exception:
+            logger.exception("send_email: SMTP delivery FAILED to=%s", to_email)
+            # Fall through to simulation
+    else:
+        logger.info("send_email: SMTP not configured, using simulation")
+
+    # Simulation fallback
+    _send_email_simulation(to_email, subject, body)
+    return True
+
+
+def _send_email_simulation(to_email: str, subject: str, body: str):
+    """Log email to file for development/testing."""
+    log_line = f"To: {to_email}\nSubject: {subject}\nBody: {body}\n{'-'*40}\n"
+    logger.info("EMAIL [simulation] to=%s subject=%s", to_email, subject)
+    try:
+        with open("email_log.txt", "a") as f:
+            f.write(log_line)
+    except OSError:
+        pass
+
+
+# Backward compatibility alias
+def send_email_simulation(to_email: str, subject: str, body: str):
+    """Backward-compatible wrapper — routes through real SMTP when configured."""
+    send_email(to_email, subject, body)

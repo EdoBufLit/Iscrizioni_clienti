@@ -44,13 +44,13 @@ const Layout = () => {
               to="/"
               onClick={close}
             >
-              <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="ASSO.N.A.M." className="h-9" />
+              <img src={`${import.meta.env.BASE_URL}logo.jpg`} alt="ASSO.N.A.M." className="h-11 rounded" />
               <div>
-                <p className="text-sm font-semibold text-neutral-900">
+                <p className="text-base font-bold tracking-tight text-neutral-900">
                   ASSO.N.A.M.
                 </p>
                 <p className="text-[11px] leading-tight text-neutral-500">
-                  Studio contabile
+                  Associazione Nazionale Arti e Mestieri
                 </p>
               </div>
             </NavLink>
@@ -136,12 +136,14 @@ const Layout = () => {
           </AnimatePresence>
         </main>
 
-        <footer className="border-t border-neutral-100 bg-neutral-50 py-8">
-          <div className="container-shell flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <p className="text-xs text-neutral-400">
-              © {new Date().getFullYear()} ASSO.N.A.M. — Tutti i diritti
-              riservati.
-            </p>
+        <footer className="border-t border-neutral-100 bg-neutral-50 py-10">
+          <div className="container-shell flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-neutral-700">ASSO.N.A.M.</p>
+              <p className="text-xs text-neutral-400">
+                Associazione Nazionale Arti e Mestieri · © {new Date().getFullYear()} Tutti i diritti riservati.
+              </p>
+            </div>
             <div className="flex gap-4 text-xs text-neutral-400">
               <Link
                 className="transition hover:text-neutral-600"

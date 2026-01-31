@@ -48,22 +48,31 @@ const services = [
 const Servizi = () => {
   return (
     <div>
-      <section className="bg-white py-16">
+      <section className="relative overflow-hidden bg-white py-20">
         <div className="container-shell">
-          <div className="max-w-3xl">
-            <p className="section-title">SERVIZI</p>
-            <h1 className="section-heading">Aree operative</h1>
-            <p className="mt-5 text-base leading-7 text-neutral-600">
-              I servizi dello studio sono organizzati per rispondere alle
-              esigenze amministrative e gestionali delle associazioni affiliate.
-              Ogni area è gestita con procedure definite e documentazione
-              tracciabile.
-            </p>
+          <div className="grid items-center gap-12 md:grid-cols-2">
+            <div className="max-w-xl">
+              <p className="section-title">SERVIZI</p>
+              <h1 className="section-heading">Aree operative</h1>
+              <p className="mt-5 text-base leading-7 text-neutral-600">
+                I servizi dello studio sono organizzati per rispondere alle
+                esigenze amministrative e gestionali delle associazioni affiliate.
+                Ogni area è gestita con procedure definite e documentazione
+                tracciabile.
+              </p>
+            </div>
+            <div className="hidden md:block">
+              <img
+                src={`${import.meta.env.BASE_URL}hero-office.avif`}
+                alt="Ufficio professionale"
+                className="rounded-lg shadow-elevated"
+              />
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="py-16">
+      <section className="bg-warm-50 py-20">
         <div className="container-shell">
           <div className="grid gap-8 md:grid-cols-2">
             {services.map((service) => (
