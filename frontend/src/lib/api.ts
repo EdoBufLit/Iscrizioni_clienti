@@ -191,6 +191,19 @@ export async function verifyOrgAdminToken(
   throw new Error("Invalid or expired token");
 }
 
+export async function verifyMemberToken(token: string): Promise<void> {
+  // We use normal fetch which follows redirects.
+  // Success: redirects to /app/dashboard
+  // Failure: redirects to /app/login
+  const res = await fetch(`/member/auth?token=${encodeURIComponent(token)}`);
+
+  if (res.url.includes("/dashboard") || res.url.includes("/app/dashboard")) {
+    return;
+  }
+
+  throw new Error("Link non valido o scaduto");
+}
+
 export async function fetchOrgAdminMe(): Promise<OrgAdminProfile> {
   const res = await fetch("/api/org-admin/auth/me");
   if (res.status === 401) throw new AuthError("Not authenticated");

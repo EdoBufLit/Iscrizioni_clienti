@@ -131,7 +131,13 @@ def api_auth_login(request: Request, email: str = Form(...), password: str = For
         db.add(token)
         db.commit()
 
-        link = f"{settings.BASE_URL}/member/auth?token={token_str}"
+        frontend_base = settings.FRONTEND_URL.rstrip("/")
+        if not frontend_base:
+            frontend_base = f"{str(request.base_url).rstrip('/')}/app"
+
+        link = f"{frontend_base}/auth/verify?token={token_str}&role=member"
+        logger.info("Generated member magic link: %s", link.replace(token_str, "***"))
+
         if not send_email(
             to_email=email,
             subject="Accesso Area Riservata - ASSO.N.A.M.",

@@ -12,6 +12,7 @@ const Iscrizione = lazy(() => import("./pages/Iscrizione"));
 const Contatti = lazy(() => import("./pages/Contatti"));
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
+const MagicLinkVerify = lazy(() => import("./pages/MagicLinkVerify"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const DashboardLayout = lazy(() => import("./pages/dashboard/DashboardLayout"));
@@ -56,6 +57,7 @@ const App = () => {
           <Route path="contatti" element={<Contatti />} />
           <Route path="login" element={<Login />} />
           <Route path="registrati" element={<Register />} />
+          <Route path="auth/verify" element={<MagicLinkVerify />} />
           <Route path="dashboard" element={<DashboardLayout />}>
             <Route index element={<DashboardHome />} />
             <Route path="profilo" element={<DashboardProfile />} />

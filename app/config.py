@@ -15,6 +15,7 @@ class Settings:
     JOIN_TOKEN_EXPIRE_MINUTES: int = 120
 
     BASE_URL: str = os.getenv("BASE_URL", "http://localhost:8000")
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "")
 
     GIT_SHA: str = os.getenv("GIT_SHA", "")
     BUILD_TIME: str = os.getenv("BUILD_TIME", "")
@@ -35,3 +36,9 @@ class Settings:
     EMAIL_MODE: str = os.getenv("EMAIL_MODE", "normal")
 
 settings = Settings()
+
+import logging
+logger = logging.getLogger(__name__)
+
+if settings.SMTP_HOST and not settings.FRONTEND_URL:
+    logger.error("FRONTEND_URL is not set! Magic links will fallback to BASE_URL/app but might be incorrect.")
