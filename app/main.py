@@ -5,7 +5,6 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -81,18 +80,6 @@ _static_path = Path("app/static")
 if _static_path.is_dir():
     app.mount("/static", StaticFiles(directory=_static_path), name="static")
 
-# Serve the React SPA build with client-side routing fallback
-_spa_path = Path(SPA_DIR)
-if _spa_path.is_dir() and (_spa_path / "index.html").is_file():
-    app.mount("/app", SPAStaticFiles(directory=_spa_path, html=True), name="frontend")
-    logger.info("SPA mounted at /app from %s", _spa_path.resolve())
-else:
-    logger.warning(
-        "SPA directory not found or missing index.html: %s — "
-        "/app will not be available. Run the frontend build first.",
-        _spa_path.resolve(),
-    )
-
 # ── Routers ───────────────────────────────────────────────────────
 
 app.include_router(join.router)
@@ -122,6 +109,15 @@ def version():
     }
 
 
-@app.get("/")
-def read_root():
-    return RedirectResponse(url="/app/")
+# ── SPA catch-all (must be LAST to avoid shadowing API routes) ──
+
+_spa_path = Path(SPA_DIR)
+if _spa_path.is_dir() and (_spa_path / "index.html").is_file():
+    app.mount("/", SPAStaticFiles(directory=_spa_path, html=True), name="frontend")
+    logger.info("SPA mounted at / from %s", _spa_path.resolve())
+else:
+    logger.warning(
+        "SPA directory not found or missing index.html: %s — "
+        "/ will not serve the SPA. Run the frontend build first.",
+        _spa_path.resolve(),
+    )

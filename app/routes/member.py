@@ -28,7 +28,7 @@ def get_current_member(request: Request, db: Session):
 
 @router.get("/member/login")
 def login_page(request: Request, org: str = None, db: Session = Depends(get_db)):
-    return RedirectResponse(url="/app/login")
+    return RedirectResponse(url="/login")
 
 
 @router.get("/member/auth")
@@ -42,14 +42,14 @@ def auth_magic_link(request: Request, token: str, db: Session = Depends(get_db))
     ).first()
 
     if not token_entry:
-        return RedirectResponse(url="/app/login")
+        return RedirectResponse(url="/login")
 
     if token_entry.used_at:
-        return RedirectResponse(url="/app/login")
+        return RedirectResponse(url="/login")
 
     member = db.query(Member).filter(Member.id == token_entry.member_id).first()
     if not member:
-        return RedirectResponse(url="/app/login")
+        return RedirectResponse(url="/login")
 
     # Mark token used
     token_entry.used_at = datetime.utcnow()
@@ -59,7 +59,7 @@ def auth_magic_link(request: Request, token: str, db: Session = Depends(get_db))
     request.session["member_id"] = token_entry.member_id
     audit.member_verified(member_id=token_entry.member_id, ip=get_client_ip(request))
 
-    return RedirectResponse(url="/app/dashboard", status_code=status.HTTP_302_FOUND)
+    return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
 
 
 @router.get("/member/portal")
@@ -68,15 +68,15 @@ def member_portal(request: Request, db: Session = Depends(get_db)):
     if not member:
         if request.session.get("member_id"):
             request.session.clear()
-        return RedirectResponse(url="/app/login")
+        return RedirectResponse(url="/login")
 
-    return RedirectResponse(url="/app/dashboard")
+    return RedirectResponse(url="/dashboard")
 
 
 @router.get("/member/logout")
 def logout(request: Request):
     request.session.clear()
-    return RedirectResponse(url="/app/login")
+    return RedirectResponse(url="/login")
 
 
 # ── File download (non-HTML, kept as-is) ──────────────────────────
@@ -133,7 +133,7 @@ def api_auth_login(request: Request, email: str = Form(...), password: str = For
 
         frontend_base = settings.FRONTEND_URL.rstrip("/")
         if not frontend_base:
-            frontend_base = f"{str(request.base_url).rstrip('/')}/app"
+            frontend_base = str(request.base_url).rstrip("/")
 
         link = f"{frontend_base}/auth/verify?token={token_str}&role=member"
         logger.info("Generated member magic link: %s", link.replace(token_str, "***"))

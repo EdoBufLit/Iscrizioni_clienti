@@ -68,8 +68,8 @@ def request_magic_link(
 
         frontend_base = settings.FRONTEND_URL.rstrip("/")
         if not frontend_base:
-            # Fallback: use request base url + /app
-            frontend_base = f"{str(request.base_url).rstrip('/')}/app"
+            # Fallback: use request base url
+            frontend_base = str(request.base_url).rstrip("/")
 
         link = f"{frontend_base}/auth/verify?token={token_str}&role=org_admin"
         logger.info("Generated org-admin magic link: %s", link.replace(token_str, "***"))
@@ -121,7 +121,7 @@ def verify_magic_link(
     audit.org_admin_verified(admin_id=admin.id, org_id=admin.org_id, ip=get_client_ip(request))
 
     from fastapi.responses import RedirectResponse
-    return RedirectResponse(url="/app/org-admin", status_code=302)
+    return RedirectResponse(url="/org-admin", status_code=302)
 
 
 @auth_router.post("/logout")

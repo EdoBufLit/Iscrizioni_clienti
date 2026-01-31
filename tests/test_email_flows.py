@@ -76,7 +76,7 @@ def test_member_magic_link_flow(client):
     # Verify
     verify_res = client.get(f"/member/auth?token={token}", follow_redirects=False)
     assert verify_res.status_code == 302
-    assert verify_res.headers["location"] == "/app/dashboard"
+    assert verify_res.headers["location"] == "/dashboard"
 
     # Check session
     # We need to follow redirects or pass the cookie. TestClient handles cookies automatically.
@@ -114,7 +114,7 @@ def test_org_admin_magic_link_flow(client):
     # 3. Verify
     verify_res = client.get(f"/api/org-admin/auth/verify?token={token}", follow_redirects=False)
     assert verify_res.status_code == 302
-    assert "/app/org-admin" in verify_res.headers["location"]
+    assert "/org-admin" in verify_res.headers["location"]
 
     # 4. Check Session
     me_res = client.get("/api/org-admin/auth/me")

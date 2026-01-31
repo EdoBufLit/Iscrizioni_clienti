@@ -20,16 +20,16 @@ def list_associazioni(request: Request, q: str = None, db: Session = Depends(get
 
     orgs = query.all()
 
-    return RedirectResponse(url="/app/associazioni")
+    return RedirectResponse(url="/associazioni")
 
 
 @router.get("/associazioni/{slug}")
 def associazioni_detail(request: Request, slug: str, db: Session = Depends(get_db)):
     org = db.query(Organization).filter(Organization.slug == slug).first()
     if not org:
-        return RedirectResponse(url="/app/associazioni")
+        return RedirectResponse(url="/associazioni")
 
-    return RedirectResponse(url=f"/app/associazioni/{slug}")
+    return RedirectResponse(url=f"/associazioni/{slug}")
 
 
 # ── Public JSON API ───────────────────────────────────────────────

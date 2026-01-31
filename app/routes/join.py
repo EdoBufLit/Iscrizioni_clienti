@@ -30,24 +30,24 @@ def join_continue_page(request: Request, token: str, db: Session = Depends(get_d
     ).first()
 
     if not token_entry:
-        return RedirectResponse(url="/app/")
+        return RedirectResponse(url="/")
 
     if token_entry.used_at:
-         return RedirectResponse(url="/app/")
+         return RedirectResponse(url="/")
 
     member = db.query(Member).filter(Member.id == token_entry.member_id).first()
     organization = db.query(Organization).filter(Organization.id == member.org_id).first()
 
-    return RedirectResponse(url="/app/")
+    return RedirectResponse(url="/")
 
 
 @router.get("/join/{org_slug}")
 def join_page(request: Request, org_slug: str, db: Session = Depends(get_db)):
     org = db.query(Organization).filter(Organization.slug == org_slug).first()
     if not org:
-        return RedirectResponse(url="/app/associazioni")
+        return RedirectResponse(url="/associazioni")
 
-    return RedirectResponse(url=f"/app/associazioni/{org_slug}/iscrizione")
+    return RedirectResponse(url=f"/associazioni/{org_slug}/iscrizione")
 
 
 # ── JSON API ──────────────────────────────────────────────────────

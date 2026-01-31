@@ -25,7 +25,7 @@ def get_current_admin(request: Request, db: Session):
 
 @router.get("/login")
 def admin_login_page(request: Request):
-    return RedirectResponse(url="/app/admin")
+    return RedirectResponse(url="/admin")
 
 
 @router.post("/login")
@@ -35,20 +35,20 @@ def admin_login_submit(request: Request, email: str = Form(...), password: str =
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     request.session["admin_id"] = admin.id
-    return RedirectResponse(url="/app/admin", status_code=status.HTTP_302_FOUND)
+    return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
 
 
 @router.get("/logout")
 def logout(request: Request):
     request.session.pop("admin_id", None)
-    return RedirectResponse(url="/app/admin")
+    return RedirectResponse(url="/admin")
 
 
 @router.get("/dashboard")
 def admin_dashboard(request: Request, db: Session = Depends(get_db)):
     admin = get_current_admin(request, db)
     if not admin:
-        return RedirectResponse(url="/app/admin")
+        return RedirectResponse(url="/admin")
 
     # Stats for Org
     org_id = admin.org_id
@@ -63,7 +63,7 @@ def admin_dashboard(request: Request, db: Session = Depends(get_db)):
     remaining_cards = sum([max(0, b.end_no - b.next_no + 1) for b in batches])
     used_cards = total_cards - remaining_cards
 
-    return RedirectResponse(url="/app/admin")
+    return RedirectResponse(url="/admin")
 
 
 @router.post("/inventory")
@@ -98,7 +98,7 @@ def add_batch(request: Request, quantity: int = Form(...), db: Session = Depends
 def list_members(request: Request, status: str = None, db: Session = Depends(get_db)):
     admin = get_current_admin(request, db)
     if not admin:
-        return RedirectResponse(url="/app/admin")
+        return RedirectResponse(url="/admin")
 
     query = db.query(Member).filter(Member.org_id == admin.org_id)
     if status:
@@ -106,20 +106,20 @@ def list_members(request: Request, status: str = None, db: Session = Depends(get
 
     members = query.all()
 
-    return RedirectResponse(url="/app/admin/affiliazioni")
+    return RedirectResponse(url="/admin/affiliazioni")
 
 
 @router.get("/members/{member_id}")
 def member_detail(request: Request, member_id: int, db: Session = Depends(get_db)):
     admin = get_current_admin(request, db)
     if not admin:
-        return RedirectResponse(url="/app/admin")
+        return RedirectResponse(url="/admin")
 
     member = db.query(Member).filter(Member.id == member_id, Member.org_id == admin.org_id).first()
     if not member:
-        return RedirectResponse(url="/app/admin/affiliazioni")
+        return RedirectResponse(url="/admin/affiliazioni")
 
-    return RedirectResponse(url="/app/admin")
+    return RedirectResponse(url="/admin")
 
 
 @router.post("/members/{member_id}/assign_card")
@@ -167,7 +167,7 @@ def edit_member(
 def admin_download_document(request: Request, doc_id: int, db: Session = Depends(get_db)):
     admin = get_current_admin(request, db)
     if not admin:
-        return RedirectResponse(url="/app/admin")
+        return RedirectResponse(url="/admin")
 
     doc = db.query(MemberDocument).filter(MemberDocument.id == doc_id).first()
     if not doc:
