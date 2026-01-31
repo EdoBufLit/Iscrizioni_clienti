@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import MotionProvider from "./motion/MotionProvider";
 import { pageVariants } from "./motion/motionPresets";
+import SceneBackground from "./SceneBackground";
 
 const NAV_ITEMS = [
   { label: "Home", to: "/" },
@@ -35,9 +36,10 @@ const Layout = () => {
 
   return (
     <MotionProvider>
-      <div className="min-h-screen bg-neutral-25 text-neutral-800">
+      <div className="relative min-h-screen text-neutral-800">
+        <SceneBackground />
         <div className="h-0.5 bg-gradient-to-r from-brand to-brand-light" aria-hidden="true" />
-        <header className="border-b border-neutral-100 bg-gradient-to-b from-neutral-50 to-white">
+        <header className="border-b border-neutral-100 bg-gradient-to-b from-neutral-50/90 to-white/80 backdrop-blur-sm">
           <div className="container-shell flex items-center justify-between py-4">
             <NavLink
               className="flex items-center gap-3"
@@ -136,7 +138,7 @@ const Layout = () => {
           </AnimatePresence>
         </main>
 
-        <footer className="border-t border-neutral-100 bg-neutral-50 py-10">
+        <footer className="border-t border-neutral-100 bg-neutral-50/80 py-10 backdrop-blur-sm">
           <div className="container-shell flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-sm font-semibold text-neutral-700">ASSO.N.A.M.</p>
