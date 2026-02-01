@@ -383,6 +383,7 @@ def get_member_detail(
                 "filename": d.original_filename,
                 "mime_type": d.mime_type,
                 "size_bytes": d.size_bytes,
+                "rel_path": d.rel_path,
                 "download_url": f"/api/org-admin/members/{member.id}/documents/{d.id}",
                 "uploaded_at": d.uploaded_at.isoformat(),
                 "status": d.status,
