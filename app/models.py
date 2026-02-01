@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Enum, UniqueConstraint, Text, JSON
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Enum, UniqueConstraint, Text, JSON, TypeDecorator
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -10,6 +10,30 @@ class MemberStatus(str, enum.Enum):
     PENDING_CARDS = "pending_cards"
     ACTIVE = "active"
     REJECTED = "rejected"
+
+class SafeMemberStatusType(TypeDecorator):
+    """Stores MemberStatus as plain strings; normalises legacy uppercase values on read."""
+    impl = String
+    cache_ok = True
+
+    _LEGACY_MAP = {e.name: e.value for e in MemberStatus}   # e.g. "PENDING_DOCS" -> "pending_docs"
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, MemberStatus):
+            return value.value
+        return str(value)
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        normalized = self._LEGACY_MAP.get(value, value)
+        try:
+            return MemberStatus(normalized)
+        except ValueError:
+            return value
+
 
 class DocStatus(str, enum.Enum):
     UPLOADED = "uploaded"
@@ -109,7 +133,7 @@ class Member(Base):
     phone = Column(String)
     fiscal_code = Column(String)
     password_hash = Column(String, nullable=True)
-    status = Column(Enum(MemberStatus, values_callable=lambda x: [e.value for e in x]), default=MemberStatus.PENDING_DOCS) # Default changed to PENDING_DOCS
+    status = Column(SafeMemberStatusType(), default=MemberStatus.PENDING_DOCS.value)
 
     card_no = Column(Integer, nullable=True)
     batch_id = Column(Integer, ForeignKey("card_batches.id"), nullable=True)

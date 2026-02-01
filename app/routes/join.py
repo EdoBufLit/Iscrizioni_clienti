@@ -93,22 +93,27 @@ def check_signup_allowed(db: Session, org_id: int, email: str, request: Request)
         elif latest_member.status == MemberStatus.REJECTED:
              # Rejected, allow resubmission
              pass
-        else:
-             # Active or Pending, block
+        elif latest_member.status == MemberStatus.ACTIVE:
+             # Fully active member, block
              audit.log_operation(
                  db,
                  action="member.signup.blocked_duplicate",
                  entity_type="member",
                  entity_id=latest_member.id,
-                 metadata={"email": email, "reason": "duplicate_active_or_pending"},
+                 metadata={"email": email, "reason": "duplicate_active"},
                  ip=get_client_ip(request)
              )
              db.commit()
-             # Return 409 conflict
              raise HTTPException(
                  status_code=409,
-                 detail="Hai già una richiesta in corso o sei già iscritto. Puoi reinviare solo se la richiesta viene rifiutata o eliminata."
+                 detail="Sei già iscritto a questa associazione."
              )
+        else:
+             # Pending state (pending_docs, pending_verification, pending_cards)
+             # Return existing member so caller can respond 200 without creating a duplicate
+             return latest_member
+
+    return None
 
 
 @router.post("/api/join/{org_slug}")
@@ -130,7 +135,9 @@ def api_join_start(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    check_signup_allowed(db, org.id, email, request)
+    existing = check_signup_allowed(db, org.id, email, request)
+    if existing:
+        return {"status": "started", "organization": org.name}
 
     member = Member(
         org_id=org.id,
@@ -340,7 +347,9 @@ async def api_join_submit_multipart(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    check_signup_allowed(db, org.id, email, request)
+    existing = check_signup_allowed(db, org.id, email, request)
+    if existing:
+        return {"status": "received", "id": existing.id, "email_sent": False}
 
     # Transactional
     rel_path_id = None
