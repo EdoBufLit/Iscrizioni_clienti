@@ -19,7 +19,7 @@ const Home = () => {
           aria-hidden="true"
         />
         <div
-          className="absolute inset-0 bg-gradient-to-t from-neutral-900/85 via-neutral-900/60 to-neutral-900/30"
+          className="absolute inset-0 bg-gradient-to-t from-neutral-900/80 via-neutral-900/40 to-transparent"
           aria-hidden="true"
         />
 
