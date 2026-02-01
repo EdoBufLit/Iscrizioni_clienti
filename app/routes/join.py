@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from app.db import get_db
-from app.models import Organization, Member, MemberStatus, Token, TokenType, MemberDocument
+from app.models import Organization, Member, MemberStatus, Token, TokenType, MemberDocument, AdminUser, AdminRole
 from app.utils import generate_token, send_email, save_upload_file, hash_token
 from app.services.card import assign_next_card
 from app.config import settings
@@ -53,6 +53,64 @@ def join_page(request: Request, org_slug: str, db: Session = Depends(get_db)):
 
 # ── JSON API ──────────────────────────────────────────────────────
 
+def check_signup_allowed(db: Session, org_id: int, email: str, request: Request):
+    # 1. Block Org Admin
+    # Check if this email is an admin for this org
+    admin_user = db.query(AdminUser).filter(
+        AdminUser.email == email,
+        AdminUser.org_id == org_id,
+        AdminUser.is_active.is_(True)
+    ).first()
+    if admin_user:
+        raise HTTPException(status_code=403, detail="Gli amministratori non possono iscriversi come soci.")
+
+    # Also check current session if authenticated as admin (double check)
+    current_admin_id = request.session.get("org_admin_id")
+    if current_admin_id:
+        current_admin = db.query(AdminUser).filter(AdminUser.id == current_admin_id).first()
+        if current_admin and current_admin.org_id == org_id:
+            raise HTTPException(status_code=403, detail="Gli amministratori non possono iscriversi come soci.")
+
+    # 2. Uniqueness / Resubmission Check
+    # Find latest member record (including deleted, but filtered manually if needed)
+    # Actually, we want to find the latest non-deleted OR deleted to decide.
+    # Logic:
+    # - If exists and status in [PENDING, ACTIVE] AND deleted_at IS NULL -> Block
+    # - If exists and status == REJECTED -> Allow (create new)
+    # - If exists and deleted_at IS NOT NULL -> Allow (create new)
+
+    latest_member = (
+        db.query(Member)
+        .filter(Member.org_id == org_id, Member.email == email)
+        .order_by(Member.id.desc())
+        .first()
+    )
+
+    if latest_member:
+        if latest_member.deleted_at is not None:
+             # Deleted, allow resubmission
+             pass
+        elif latest_member.status == MemberStatus.REJECTED:
+             # Rejected, allow resubmission
+             pass
+        else:
+             # Active or Pending, block
+             audit.log_operation(
+                 db,
+                 action="member.signup.blocked_duplicate",
+                 entity_type="member",
+                 entity_id=latest_member.id,
+                 metadata={"email": email, "reason": "duplicate_active_or_pending"},
+                 ip=get_client_ip(request)
+             )
+             db.commit()
+             # Return 409 conflict
+             raise HTTPException(
+                 status_code=409,
+                 detail="Hai già una richiesta in corso o sei già iscritto. Puoi reinviare solo se la richiesta viene rifiutata o eliminata."
+             )
+
+
 @router.post("/api/join/{org_slug}")
 def api_join_start(
     request: Request,
@@ -72,18 +130,7 @@ def api_join_start(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    existing_member = db.query(Member).filter(Member.email == email, Member.org_id == org.id).first()
-    if existing_member:
-        # Return identical response to prevent email enumeration.
-        # Notify the existing member instead.
-        if not send_email(
-            to_email=email,
-            subject=f"Registrazione presso {org.name}",
-            body=f"Risulta già una richiesta di iscrizione a {org.name} con questo indirizzo email. "
-                 f"Se non hai effettuato questa richiesta, puoi ignorare questo messaggio.",
-        ):
-             logger.warning("Failed to send existing member notification to %s", email)
-        return {"status": "started", "organization": org.name}
+    check_signup_allowed(db, org.id, email, request)
 
     member = Member(
         org_id=org.id,
@@ -293,16 +340,7 @@ async def api_join_submit_multipart(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    existing_member = db.query(Member).filter(Member.email == email, Member.org_id == org.id).first()
-    if existing_member:
-        # Return success to prevent enumeration, but notify existing email
-        if not send_email(
-            to_email=email,
-            subject=f"Registrazione presso {org.name}",
-            body=f"Risulta già una richiesta di iscrizione a {org.name} con questo indirizzo email.",
-        ):
-             logger.warning("Failed to send existing member notification to %s", email)
-        return {"status": "received", "message": "Richiesta ricevuta"}
+    check_signup_allowed(db, org.id, email, request)
 
     # Transactional
     rel_path_id = None

@@ -129,6 +129,9 @@ class Member(Base):
     decision_by_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
     decision_notes = Column(Text, nullable=True)
 
+    deleted_at = Column(DateTime, nullable=True)
+    deleted_by_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
+
     organization = relationship("Organization", back_populates="members")
     documents = relationship("MemberDocument", back_populates="member")
     tokens = relationship("Token", back_populates="member")

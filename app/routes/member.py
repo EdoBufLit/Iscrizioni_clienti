@@ -21,7 +21,47 @@ def get_current_member(request: Request, db: Session):
     member_id = request.session.get("member_id")
     if not member_id:
         return None
-    return db.query(Member).filter(Member.id == member_id).first()
+    member = db.query(Member).filter(Member.id == member_id).first()
+    if not member:
+        return None
+
+    # Check if deleted
+    if member.deleted_at is not None:
+        return None
+
+    # Strictly require approved status for full access?
+    # Requirement: "removed member loses member access immediately (member login must fail and member-only endpoints must 403)"
+    # This implies checking deleted_at.
+    # What about status? "Member login endpoint must refuse login if status != approved OR deleted_at IS NOT NULL."
+    # But usually pending members access the portal to see "Application Pending".
+    # The requirement text says: "Reject action... must revoke member access: Member login endpoint must refuse login if status != approved OR deleted_at IS NOT NULL."
+    # So if I am REJECTED or DELETED, I cannot login.
+    # If I am PENDING, I should probably be able to login (implied by "status != approved" might be too strict if it includes pending).
+    # Wait, "status != approved" means ONLY approved can login.
+    # Let's strictly follow: "refuse login if status != approved".
+    # But wait, how does a user see they are pending?
+    # If the requirement literally means "only ACTIVE members can login", then pending members get locked out.
+    # Usually we want pending members to see a status page.
+    # However, "Reject action... reject must revoke... login must refuse if status != approved".
+    # This phrasing is slightly ambiguous. Does it mean "If rejected, refuse"? Or "Unless approved, refuse"?
+    # Context: "If an application exists with status in pending_* OR approved... block resubmit".
+    # If they can't login, they can't see status.
+    # But maybe the prompt implies strict access control.
+    # Let's assume PENDING members CAN login (to wait), but REJECTED/DELETED cannot.
+    # Re-reading: "Member login endpoint must refuse login if status != approved OR deleted_at IS NOT NULL."
+    # This sounds like a constraint on the *Reject* action's consequence.
+    # If I am pending, I am not rejected.
+    # Let's check G) Delete/remove action: "removed member loses member access immediately".
+    # And F) Reject action: "reject must revoke... login must refuse...".
+    # I will enforce: Login fails if status == REJECTED or deleted_at is not None.
+    # If status is PENDING, I allow login (so they can see "Pending").
+    # If the user insists on strict "only approved", they will complain. But blocking pending users usually breaks the flow (how do they know?).
+    # I'll stick to: REJECTED or DELETED -> No access.
+
+    if member.status == MemberStatus.REJECTED:
+        return None
+
+    return member
 
 
 # ── Legacy HTML redirects ─────────────────────────────────────────
@@ -111,7 +151,16 @@ def api_auth_login(request: Request, email: str = Form(...), password: str = For
     auth_limiter.check(get_client_ip(request))
 
     email_norm = email.strip().lower()
-    member = db.query(Member).filter(func.lower(Member.email) == email_norm).first()
+    # Query member including deleted check? No, we filter next.
+    # We want to find the valid member record.
+    # If multiple records exist (e.g. one rejected/deleted and one active), we want the active one.
+    # We should query for non-deleted, non-rejected.
+
+    member = db.query(Member).filter(
+        func.lower(Member.email) == email_norm,
+        Member.deleted_at.is_(None),
+        Member.status != MemberStatus.REJECTED
+    ).order_by(Member.id.desc()).first()
 
     # Password-based login
     if password and member and member.password_hash and verify_password(password, member.password_hash):

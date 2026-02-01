@@ -290,7 +290,15 @@ def list_org_members(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    query = db.query(Member).filter(Member.org_id == admin.org_id)
+    query = db.query(Member).filter(
+        Member.org_id == admin.org_id,
+        Member.deleted_at.is_(None),  # Exclude deleted
+    )
+
+    # Exclude rejected by default unless requested (optional param, but let's stick to default behavior first)
+    # The requirement: "GET /api/org-admin/members should return ONLY pending_* and approved; exclude rejected; exclude deleted"
+    # So we strictly filter out rejected.
+    query = query.filter(Member.status != MemberStatus.REJECTED)
 
     if q:
         pattern = f"%{q}%"
@@ -503,6 +511,55 @@ def member_decision(
     db.commit()
 
     return {"ok": True, "status": member.status.value}
+
+
+@router.delete("/members/{member_id}")
+def delete_member(
+    request: Request,
+    member_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Delete (soft-delete) a member.
+    Revokes access immediately.
+    """
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    member = db.query(Member).filter(Member.id == member_id).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    if member.org_id != admin.org_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Soft delete
+    member.deleted_at = datetime.utcnow()
+    member.deleted_by_admin_id = admin.id
+
+    # Also invalidate tokens?
+    # Tokens table has expires_at. We could delete valid tokens.
+    # But since authentication checks deleted_at, it might be redundant but safer.
+    # Let's mark tokens as used or delete them.
+    # db.query(Token).filter(Token.member_id == member.id).update({Token.used_at: datetime.utcnow()})
+    # Simpler: just relying on deleted_at check in auth.
+
+    db.commit()
+
+    audit.log_operation(
+        db,
+        action="member.delete",
+        entity_type="member",
+        entity_id=member.id,
+        actor_admin_id=admin.id,
+        actor_role="org_admin",
+        metadata={"email": member.email},
+        ip=get_client_ip(request)
+    )
+    db.commit()
+
+    return {"ok": True}
 
 
 class ReviewBody(BaseModel):

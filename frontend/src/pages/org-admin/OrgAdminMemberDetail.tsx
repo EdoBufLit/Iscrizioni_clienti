@@ -137,6 +137,23 @@ export default function OrgAdminMemberDetail() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!confirm("ATTENZIONE: Sei sicuro di voler ELIMINARE definitivamente questo socio? L'operazione rimuoverà immediatamente l'accesso al socio.")) return;
+
+    try {
+      const res = await fetch(`/api/org-admin/members/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Errore durante l'eliminazione");
+
+      alert("Socio eliminato con successo.");
+      window.location.href = "/org-admin/soci";
+
+    } catch (err) {
+      alert("Errore: " + (err instanceof Error ? err.message : String(err)));
+    }
+  };
+
   if (loading) return <div className="p-8 text-center">Caricamento...</div>;
   if (error) return <div className="p-8 text-center text-red-600">{error}</div>;
   if (!member) return <div className="p-8 text-center">Socio non trovato</div>;
@@ -350,6 +367,19 @@ export default function OrgAdminMemberDetail() {
                       </button>
                   </div>
               )}
+
+             <div className="mt-8 pt-8 border-t border-neutral-200">
+                <h3 className="text-sm font-semibold text-neutral-900 mb-2">Area Pericolosa</h3>
+                <p className="text-sm text-neutral-500 mb-4">
+                  Eliminando il socio, verranno rimossi i suoi accessi e non comparirà più negli elenchi attivi.
+                </p>
+                <button
+                    onClick={handleDelete}
+                    className="bg-red-50 text-red-700 border border-red-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+                >
+                    Elimina Socio
+                </button>
+             </div>
           </div>
       </div>
     </div>
