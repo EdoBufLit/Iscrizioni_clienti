@@ -283,6 +283,7 @@ export type OrgAdminMember = {
   status: string | null;
   card_no: number | null;
   joined_at: string | null;
+  docs_count: number;
 };
 
 export type OrgAdminMembersResponse = {
