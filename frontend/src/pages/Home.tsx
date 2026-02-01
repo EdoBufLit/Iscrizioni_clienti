@@ -36,7 +36,7 @@ const Home = () => {
                 Associazione Nazionale Arti e Mestieri
               </p>
               <motion.h1
-                className="mt-4 text-4xl font-bold leading-tight text-white md:text-5xl lg:text-[3.5rem]"
+                className="mt-4 font-display text-4xl font-bold tracking-tight leading-tight text-white md:text-5xl lg:text-[3.5rem]"
                 {...heroBlur(0)}
               >
                 Gestione associativa<br className="hidden md:inline" /> e portale soci integrato.

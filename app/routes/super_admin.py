@@ -735,13 +735,23 @@ def increase_card_stock(
     db.add(movement)
     db.commit()
 
-    audit.card_stock_increased(
-        org_id=org_id,
-        amount=body.amount,
-        admin_id=admin.id,
-        reason=body.reason,
-        paid_ref=body.paid_ref,
+    audit.log_operation(
+        db,
+        action="org.cards.add",
+        entity_type="organization",
+        entity_id=org.id,
+        actor_admin_id=admin.id,
+        actor_role="super_admin",
+        metadata={
+            "count": body.amount,
+            "new_from": start_no,
+            "new_to": end_no,
+            "reason": body.reason,
+            "paid_ref": body.paid_ref
+        },
+        ip=get_client_ip(request)
     )
+    db.commit()
 
     # Return updated stock summary
     batches = db.query(CardBatch).filter(CardBatch.org_id == org_id).all()
