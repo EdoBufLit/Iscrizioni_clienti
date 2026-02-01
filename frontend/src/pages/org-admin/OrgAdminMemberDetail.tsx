@@ -5,10 +5,22 @@ interface Document {
   id: number;
   type: string;
   filename: string;
+  mime_type?: string;
+  size_bytes?: number;
+  download_url?: string;
   uploaded_at: string;
   status: string;
   review_notes?: string;
   reviewed_at?: string;
+}
+
+function formatBytes(bytes: number, decimals = 2) {
+  if (!+bytes) return '0 Bytes';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
 
 interface MemberDetail {
@@ -125,6 +137,23 @@ export default function OrgAdminMemberDetail() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!confirm("ATTENZIONE: Sei sicuro di voler ELIMINARE definitivamente questo socio? L'operazione rimuoverà immediatamente l'accesso al socio.")) return;
+
+    try {
+      const res = await fetch(`/api/org-admin/members/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Errore durante l'eliminazione");
+
+      alert("Socio eliminato con successo.");
+      window.location.href = "/org-admin/soci";
+
+    } catch (err) {
+      alert("Errore: " + (err instanceof Error ? err.message : String(err)));
+    }
+  };
+
   if (loading) return <div className="p-8 text-center">Caricamento...</div>;
   if (error) return <div className="p-8 text-center text-red-600">{error}</div>;
   if (!member) return <div className="p-8 text-center">Socio non trovato</div>;
@@ -217,7 +246,10 @@ export default function OrgAdminMemberDetail() {
                             </div>
                             <div>
                                 <h3 className="font-medium text-sm text-neutral-900">{doc.type === 'identity' ? 'Documento Identità' : doc.type === 'fiscal_code' ? 'Codice Fiscale' : doc.type}</h3>
-                                <p className="text-xs text-neutral-500">{doc.filename}</p>
+                                <p className="text-xs text-neutral-500">
+                                  {doc.filename}
+                                  {doc.size_bytes ? ` (${formatBytes(doc.size_bytes)})` : ''}
+                                </p>
                                 <p className="text-xs text-neutral-400 mt-1">Caricato il {new Date(doc.uploaded_at).toLocaleDateString()}</p>
                             </div>
                         </div>
@@ -225,7 +257,7 @@ export default function OrgAdminMemberDetail() {
                         <div className="flex items-center gap-3">
                              {/* Download Button */}
                              <a
-                                href={`/api/org-admin/documents/${doc.id}`}
+                                href={doc.download_url || `/api/org-admin/documents/${doc.id}`}
                                 className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg flex items-center gap-1 text-sm font-medium transition-colors"
                                 title="Scarica"
                              >
@@ -236,7 +268,7 @@ export default function OrgAdminMemberDetail() {
 
                              {/* Review Actions */}
                              <div className="flex items-center gap-2">
-                                {doc.status === "uploaded" || doc.status === "rejected" ? (
+                                {doc.status === "uploaded" || doc.status === "pending" || doc.status === "rejected" ? (
                                     <>
                                         <button
                                             onClick={() => handleReview(doc.id, "approved")}
@@ -335,6 +367,19 @@ export default function OrgAdminMemberDetail() {
                       </button>
                   </div>
               )}
+
+             <div className="mt-8 pt-8 border-t border-neutral-200">
+                <h3 className="text-sm font-semibold text-neutral-900 mb-2">Area Pericolosa</h3>
+                <p className="text-sm text-neutral-500 mb-4">
+                  Eliminando il socio, verranno rimossi i suoi accessi e non comparirà più negli elenchi attivi.
+                </p>
+                <button
+                    onClick={handleDelete}
+                    className="bg-red-50 text-red-700 border border-red-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+                >
+                    Elimina Socio
+                </button>
+             </div>
           </div>
       </div>
     </div>

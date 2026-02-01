@@ -290,7 +290,15 @@ def list_org_members(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    query = db.query(Member).filter(Member.org_id == admin.org_id)
+    query = db.query(Member).filter(
+        Member.org_id == admin.org_id,
+        Member.deleted_at.is_(None),  # Exclude deleted
+    )
+
+    # Exclude rejected by default unless requested (optional param, but let's stick to default behavior first)
+    # The requirement: "GET /api/org-admin/members should return ONLY pending_* and approved; exclude rejected; exclude deleted"
+    # So we strictly filter out rejected.
+    query = query.filter(Member.status != MemberStatus.REJECTED)
 
     if q:
         pattern = f"%{q}%"
@@ -313,6 +321,18 @@ def list_org_members(
         .all()
     )
 
+    # Avoid N+1 for docs_count
+    member_ids = [m.id for m in members]
+    docs_counts = {}
+    if member_ids:
+        rows = (
+            db.query(MemberDocument.member_id, func.count(MemberDocument.id))
+            .filter(MemberDocument.member_id.in_(member_ids))
+            .group_by(MemberDocument.member_id)
+            .all()
+        )
+        docs_counts = {r[0]: r[1] for r in rows}
+
     return {
         "items": [
             {
@@ -323,7 +343,7 @@ def list_org_members(
                 "card_no": m.card_no,
                 "joined_at": m.joined_at.isoformat() if m.joined_at else None,
                 "created_at": m.joined_at.isoformat() if m.joined_at else None, # fallback if no created_at
-                "docs_count": len(m.documents),
+                "docs_count": docs_counts.get(m.id, 0),
             }
             for m in members
         ],
@@ -360,6 +380,9 @@ def get_member_detail(
                 "id": d.id,
                 "type": d.doc_type,
                 "filename": d.original_filename,
+                "mime_type": d.mime_type,
+                "size_bytes": d.size_bytes,
+                "download_url": f"/api/org-admin/members/{member.id}/documents/{d.id}",
                 "uploaded_at": d.uploaded_at.isoformat(),
                 "status": d.status,
                 "review_notes": d.review_notes,
@@ -368,6 +391,40 @@ def get_member_detail(
             for d in member.documents
         ]
     }
+
+
+@router.get("/members/{member_id}/documents/{doc_id}")
+def download_member_document(
+    request: Request,
+    member_id: int,
+    doc_id: int,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    doc = db.query(MemberDocument).filter(MemberDocument.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if doc.member_id != member_id:
+        raise HTTPException(status_code=404, detail="Document not found for this member")
+
+    # Check ownership via member
+    if doc.member.org_id != admin.org_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    full_path = os.path.join(settings.UPLOAD_DIR, doc.rel_path)
+    if not os.path.exists(full_path):
+        raise HTTPException(status_code=404, detail="File missing on disk")
+
+    return FileResponse(
+        full_path,
+        filename=doc.original_filename,
+        media_type=doc.mime_type or "application/octet-stream",
+        content_disposition_type="attachment"
+    )
 
 
 @router.get("/documents/{doc_id}")
@@ -454,6 +511,55 @@ def member_decision(
     db.commit()
 
     return {"ok": True, "status": member.status.value}
+
+
+@router.delete("/members/{member_id}")
+def delete_member(
+    request: Request,
+    member_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Delete (soft-delete) a member.
+    Revokes access immediately.
+    """
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    member = db.query(Member).filter(Member.id == member_id).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    if member.org_id != admin.org_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Soft delete
+    member.deleted_at = datetime.utcnow()
+    member.deleted_by_admin_id = admin.id
+
+    # Also invalidate tokens?
+    # Tokens table has expires_at. We could delete valid tokens.
+    # But since authentication checks deleted_at, it might be redundant but safer.
+    # Let's mark tokens as used or delete them.
+    # db.query(Token).filter(Token.member_id == member.id).update({Token.used_at: datetime.utcnow()})
+    # Simpler: just relying on deleted_at check in auth.
+
+    db.commit()
+
+    audit.log_operation(
+        db,
+        action="member.delete",
+        entity_type="member",
+        entity_id=member.id,
+        actor_admin_id=admin.id,
+        actor_role="org_admin",
+        metadata={"email": member.email},
+        ip=get_client_ip(request)
+    )
+    db.commit()
+
+    return {"ok": True}
 
 
 class ReviewBody(BaseModel):
