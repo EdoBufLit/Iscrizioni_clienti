@@ -445,17 +445,8 @@ async def api_join_submit_multipart(
         )
         db.commit() # Commit log
 
-        # Send confirmation to user
-        send_email(
-            to_email=email,
-            subject=f"Richiesta iscrizione {org.name} ricevuta",
-            body="Abbiamo ricevuto la tua richiesta e i documenti. Un amministratore li verificherà a breve."
-        )
-
-        return {"status": "received", "id": member.id}
-
     except Exception as e:
-        # Cleanup
+        # Cleanup (ONLY if error happens BEFORE commit)
         for p in [rel_path_id, rel_path_fc]:
             if p:
                 try:
@@ -465,3 +456,19 @@ async def api_join_submit_multipart(
         db.rollback()
         logger.exception("Error in multipart submit")
         raise HTTPException(status_code=500, detail="Errore nel salvataggio della richiesta")
+
+    # Send confirmation to user (Post-commit)
+    email_sent = False
+    try:
+        if send_email(
+            to_email=email,
+            subject=f"Richiesta iscrizione {org.name} ricevuta",
+            body="Abbiamo ricevuto la tua richiesta e i documenti. Un amministratore li verificherà a breve."
+        ):
+            email_sent = True
+        else:
+            logger.warning("Failed to send submission email to %s", email)
+    except Exception:
+        logger.exception("Exception sending submission email to %s", email)
+
+    return {"status": "received", "id": member.id, "email_sent": email_sent}
