@@ -223,6 +223,7 @@ const Iscrizione = () => {
         accept_statute: form.statuto,
         accepted_statute_version: org?.has_statute ? (org.statute_version || null) : null,
         accept_privacy: form.privacy,
+        id_document: form.documentoIdentita,
       });
 
       // 2. Register with password for immediate login
