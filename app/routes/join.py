@@ -348,32 +348,59 @@ async def api_join_submit_multipart(
         raise HTTPException(status_code=404, detail="Organization not found")
 
     existing = check_signup_allowed(db, org.id, email, request)
-    if existing:
-        return {"status": "received", "id": existing.id, "email_sent": False}
 
     # Transactional
     rel_path_id = None
     rel_path_fc = None
 
     try:
-        # 1. Create Member FIRST to get ID for storage path
-        member = Member(
-            org_id=org.id,
-            first_name=first_name,
-            last_name=last_name,
-            email=email,
-            phone=phone,
-            fiscal_code=fiscal_code,
-            status=MemberStatus.PENDING_VERIFICATION, # Docs uploaded, waiting review
-            accepted_statute_at=datetime.utcnow(),
-            accepted_statute_version=accepted_statute_version or org.statute_version,
-            accepted_privacy_at=datetime.utcnow(),
-            accepted_privacy_version=org.privacy_version,
-            signup_ip=get_client_ip(request),
-            signup_user_agent=request.headers.get("user-agent")
-        )
-        db.add(member)
-        db.flush()
+        if existing:
+            # Reuse pending draft: update fields and replace old documents
+            member = existing
+            member.first_name = first_name
+            member.last_name = last_name
+            member.phone = phone
+            member.fiscal_code = fiscal_code
+            member.status = MemberStatus.PENDING_VERIFICATION
+            member.accepted_statute_at = datetime.utcnow()
+            member.accepted_statute_version = accepted_statute_version or org.statute_version
+            member.accepted_privacy_at = datetime.utcnow()
+            member.accepted_privacy_version = org.privacy_version
+            member.signup_ip = get_client_ip(request)
+            member.signup_user_agent = request.headers.get("user-agent")
+
+            # Remove old documents (files + DB rows)
+            old_docs = db.query(MemberDocument).filter(
+                MemberDocument.member_id == member.id
+            ).all()
+            for old_doc in old_docs:
+                try:
+                    old_path = os.path.join(settings.UPLOAD_DIR, old_doc.rel_path)
+                    if os.path.exists(old_path):
+                        os.remove(old_path)
+                except OSError:
+                    logger.warning("Failed to delete old doc file: %s", old_doc.rel_path)
+                db.delete(old_doc)
+            db.flush()
+        else:
+            # 1. Create Member FIRST to get ID for storage path
+            member = Member(
+                org_id=org.id,
+                first_name=first_name,
+                last_name=last_name,
+                email=email,
+                phone=phone,
+                fiscal_code=fiscal_code,
+                status=MemberStatus.PENDING_VERIFICATION,
+                accepted_statute_at=datetime.utcnow(),
+                accepted_statute_version=accepted_statute_version or org.statute_version,
+                accepted_privacy_at=datetime.utcnow(),
+                accepted_privacy_version=org.privacy_version,
+                signup_ip=get_client_ip(request),
+                signup_user_agent=request.headers.get("user-agent")
+            )
+            db.add(member)
+            db.flush()
 
         sub_path = f"{org.id}/{member.id}"
 
