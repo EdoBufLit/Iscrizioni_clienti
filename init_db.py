@@ -42,6 +42,12 @@ def init_db():
         _add_column_if_missing(conn, "card_movements", "paid_ref", "TEXT")
         # Add password_hash column for members (password-based login)
         _add_column_if_missing(conn, "members", "password_hash", "TEXT")
+        # Add decision / soft-delete columns for members
+        _add_column_if_missing(conn, "members", "decision_at", "DATETIME")
+        _add_column_if_missing(conn, "members", "decision_by_admin_id", "INTEGER REFERENCES admin_users(id)")
+        _add_column_if_missing(conn, "members", "decision_notes", "TEXT")
+        _add_column_if_missing(conn, "members", "deleted_at", "DATETIME")
+        _add_column_if_missing(conn, "members", "deleted_by_admin_id", "INTEGER REFERENCES admin_users(id)")
 
     db = SessionLocal()
 
