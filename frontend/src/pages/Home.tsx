@@ -1,5 +1,7 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { useState } from "react";
+import { fetchWhoAmI } from "../lib/api";
 
 const heroEase = [0.16, 1, 0.3, 1] as const;
 const heroBlur = (delay = 0) => ({
@@ -9,6 +11,23 @@ const heroBlur = (delay = 0) => ({
 });
 
 const Home = () => {
+  const navigate = useNavigate();
+  const [checking, setChecking] = useState(false);
+
+  const handleAreaRiservata = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (checking) return;
+    setChecking(true);
+    try {
+      const w = await fetchWhoAmI();
+      navigate(w.authenticated && w.redirect_to ? w.redirect_to : "/login");
+    } catch {
+      navigate("/login");
+    } finally {
+      setChecking(false);
+    }
+  };
+
   return (
     <div>
       {/* ── Hero ─────────────────────────────────────────────────── */}
@@ -52,12 +71,13 @@ const Home = () => {
                 <Link className="btn-primary px-7 py-3 text-base" to="/associazioni">
                   Diventa socio
                 </Link>
-                <Link
-                  className="inline-flex items-center justify-center rounded-md border border-white/25 px-6 py-3 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-white/10"
-                  to="/login"
+                <a
+                  className="inline-flex items-center justify-center rounded-md border border-white/25 px-6 py-3 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-white/10 cursor-pointer"
+                  onClick={handleAreaRiservata}
+                  role="button"
                 >
-                  Area riservata
-                </Link>
+                  {checking ? "Verifica\u2026" : "Area riservata"}
+                </a>
               </motion.div>
               <p className="mt-12 text-xs text-white/35">
                 Piazza Bologna, Roma
@@ -205,9 +225,10 @@ const Home = () => {
                 Apri l'elenco &rarr;
               </p>
             </Link>
-            <Link
-              className="surface flex flex-col p-7 text-left transition hover:border-neutral-200 hover:shadow-elevated"
-              to="/login"
+            <a
+              className="surface flex flex-col p-7 text-left transition hover:border-neutral-200 hover:shadow-elevated cursor-pointer"
+              onClick={handleAreaRiservata}
+              role="button"
             >
               <h3 className="text-base font-semibold text-neutral-900">
                 Area riservata
@@ -217,9 +238,9 @@ const Home = () => {
                 disponibile.
               </p>
               <p className="mt-auto pt-5 text-sm font-medium text-brand">
-                Accedi &rarr;
+                {checking ? "Verifica\u2026" : "Accedi \u2192"}
               </p>
-            </Link>
+            </a>
             <div className="surface flex flex-col p-7">
               <h3 className="text-base font-semibold text-neutral-900">
                 Iscrizione guidata

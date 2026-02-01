@@ -1,6 +1,6 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { superAdminLogin, AuthError } from "../../lib/api";
+import { superAdminLogin, AuthError, fetchWhoAmI } from "../../lib/api";
 
 const SuperAdminLogin = () => {
   const [email, setEmail] = useState("");
@@ -8,6 +8,12 @@ const SuperAdminLogin = () => {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchWhoAmI().then((w) => {
+      if (w.authenticated && w.redirect_to) navigate(w.redirect_to, { replace: true });
+    }).catch(() => {});
+  }, [navigate]);
 
   const canSubmit = email.trim().length > 0 && password.length > 0 && !submitting;
 

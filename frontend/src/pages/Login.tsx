@@ -1,6 +1,6 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { loginWithPassword, requestMagicLink } from "../lib/api";
+import { loginWithPassword, requestMagicLink, fetchWhoAmI } from "../lib/api";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -10,6 +10,12 @@ const Login = () => {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    fetchWhoAmI().then((w) => {
+      if (w.authenticated && w.redirect_to) navigate(w.redirect_to, { replace: true });
+    }).catch(() => {});
+  }, [navigate]);
 
   const canSubmit = email.trim().length > 0 && !submitting && (mode === "magic" || password.length > 0);
 

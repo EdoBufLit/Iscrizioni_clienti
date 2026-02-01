@@ -3,7 +3,7 @@ from fastapi.responses import RedirectResponse, FileResponse
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from app.db import get_db
-from app.models import Member, Token, TokenType, MemberDocument, MemberStatus, Organization
+from app.models import Member, Token, TokenType, MemberDocument, MemberStatus, Organization, AdminUser, AdminRole
 from app.utils import generate_token, send_email, hash_token
 from app.security import get_password_hash, verify_password
 from app.config import settings
@@ -307,3 +307,42 @@ def api_auth_me(request: Request, db: Session = Depends(get_db)):
             "slug": org.slug,
         } if org else None,
     }
+
+
+@router.get("/api/auth/whoami")
+def api_auth_whoami(request: Request, db: Session = Depends(get_db)):
+    """Unified session check. Returns authenticated role and redirect target."""
+    # 1. Super admin (highest priority)
+    admin_id = request.session.get("admin_id")
+    if admin_id:
+        admin = db.query(AdminUser).filter(
+            AdminUser.id == admin_id,
+            AdminUser.role == AdminRole.SUPER_ADMIN,
+        ).first()
+        if admin:
+            return {"authenticated": True, "role": "super_admin", "redirect_to": "/super-admin/org-admins"}
+
+    # 2. Org admin
+    org_admin_id = request.session.get("org_admin_id")
+    if org_admin_id:
+        admin = db.query(AdminUser).filter(
+            AdminUser.id == org_admin_id,
+            AdminUser.role == AdminRole.ORG_ADMIN,
+            AdminUser.is_active.is_(True),
+            AdminUser.deleted_at.is_(None),
+        ).first()
+        if admin:
+            return {"authenticated": True, "role": "org_admin", "redirect_to": "/org-admin"}
+
+    # 3. Member
+    member_id = request.session.get("member_id")
+    if member_id:
+        member = db.query(Member).filter(
+            Member.id == member_id,
+            Member.deleted_at.is_(None),
+            Member.status != MemberStatus.REJECTED,
+        ).first()
+        if member:
+            return {"authenticated": True, "role": "member", "redirect_to": "/dashboard"}
+
+    return {"authenticated": False}

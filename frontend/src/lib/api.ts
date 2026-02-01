@@ -197,6 +197,22 @@ export async function apiLogout(): Promise<void> {
   await fetch("/api/auth/logout", { method: "POST" });
 }
 
+export type WhoAmIResponse = {
+  authenticated: boolean;
+  role?: "super_admin" | "org_admin" | "member";
+  redirect_to?: string;
+};
+
+export async function fetchWhoAmI(): Promise<WhoAmIResponse> {
+  try {
+    const res = await fetch("/api/auth/whoami");
+    if (!res.ok) return { authenticated: false };
+    return res.json();
+  } catch {
+    return { authenticated: false };
+  }
+}
+
 // ── Org Admin ────────────────────────────────────────────────────
 
 export type OrgAdminProfile = {

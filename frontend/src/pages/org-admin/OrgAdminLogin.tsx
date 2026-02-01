@@ -1,12 +1,19 @@
-import { FormEvent, useState } from "react";
-import { Link } from "react-router-dom";
-import { requestOrgAdminMagicLink } from "../../lib/api";
+import { FormEvent, useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { requestOrgAdminMagicLink, fetchWhoAmI } from "../../lib/api";
 
 const OrgAdminLogin = () => {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    fetchWhoAmI().then((w) => {
+      if (w.authenticated && w.redirect_to) navigate(w.redirect_to, { replace: true });
+    }).catch(() => {});
+  }, [navigate]);
 
   const canSubmit = email.trim().length > 0 && !submitting;
 
