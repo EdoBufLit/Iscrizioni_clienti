@@ -7,7 +7,10 @@ from unittest.mock import patch
 
 # Fixture to enable test email mode, clear capture, and disable rate limiting
 @pytest.fixture(autouse=True)
-def setup_test_env():
+def setup_test_env(client):
+    # Clear cookies/session from previous tests
+    client.cookies.clear()
+
     # Email mode
     original_mode = settings.EMAIL_MODE
     settings.EMAIL_MODE = "test"

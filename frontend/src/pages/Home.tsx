@@ -29,7 +29,7 @@ const Home = () => {
               <img
                 src={`${import.meta.env.BASE_URL}logo.jpg`}
                 alt=""
-                className="mx-auto mb-6 h-14 rounded shadow-lg md:mx-0"
+                className="mx-auto mb-6 h-20 md:h-24 object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] md:mx-0 mix-blend-screen invert filter"
                 aria-hidden="true"
               />
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">

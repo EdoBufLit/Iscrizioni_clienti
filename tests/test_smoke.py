@@ -90,7 +90,7 @@ def test_join_start(client):
 
 
 def test_join_start_duplicate_email(client):
-    """Second join with same email still returns 200 (no enumeration)."""
+    """Second join with same email returns 409 Conflict."""
     r = client.post(
         "/api/join/my-association",
         data={
@@ -103,8 +103,8 @@ def test_join_start_duplicate_email(client):
             "accept_privacy": "true",
         },
     )
-    assert r.status_code == 200
-    assert r.json()["status"] == "started"
+    assert r.status_code == 409
+    # assert r.json()["status"] == "started" # No longer started
 
 
 def test_join_start_unknown_org(client):
