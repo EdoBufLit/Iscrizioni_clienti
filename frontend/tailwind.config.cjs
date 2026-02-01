@@ -8,6 +8,7 @@ module.exports = {
       },
       fontFamily: {
         sans: ["\"IBM Plex Sans\"", "system-ui", "sans-serif"],
+        display: ["\"Manrope\"", "system-ui", "sans-serif"],
       },
       colors: {
         brand: {

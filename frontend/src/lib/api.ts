@@ -395,6 +395,8 @@ export type SuperAdminOrganization = {
   created_at: string | null;
   city: string | null;
   province: string | null;
+  card_min: number | null;
+  card_max: number | null;
 };
 
 export type SuperAdminOrganizationsResponse = {
@@ -439,6 +441,32 @@ export async function createSuperAdminOrganization(data: {
   if (res.status === 409) throw new Error("Slug already exists");
   if (!res.ok) throw new Error("Failed to create organization");
   return res.json();
+}
+
+export async function deleteOrganization(orgId: number): Promise<void> {
+  const res = await fetch(`/api/super-admin/organizations/${orgId}`, {
+    method: "DELETE",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error("Failed to delete organization");
+}
+
+export async function setOrganizationCardRange(
+  orgId: number,
+  from: number,
+  to: number,
+): Promise<void> {
+  const res = await fetch(`/api/super-admin/organizations/${orgId}/card-range`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ from_no: from, to_no: to }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 400 || res.status === 409) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.detail ?? "Errore nel set range");
+  }
+  if (!res.ok) throw new Error("Failed to set card range");
 }
 
 export async function createOrgAdmin(
