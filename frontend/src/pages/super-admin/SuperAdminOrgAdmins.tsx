@@ -1,11 +1,8 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate, useOutletContext } from "react-router-dom";
 import {
-  fetchSuperAdminMe,
-  superAdminLogout,
   fetchOrganizations,
   fetchOrgAdmins,
-  fetchVersion,
   createOrgAdmin,
   patchOrgAdmin,
   deleteOrgAdmin,
@@ -14,7 +11,6 @@ import {
   type SuperAdminProfile,
   type Organization,
   type OrgAdmin,
-  type VersionInfo,
   type IncreaseCardsResult,
 } from "../../lib/api";
 import Skeleton from "../../components/ui/Skeleton";
@@ -25,8 +21,8 @@ const tdClass = "px-5 py-3.5 text-sm text-neutral-700";
 
 const SuperAdminOrgAdmins = () => {
   const navigate = useNavigate();
+  const { profile } = useOutletContext<{ profile: SuperAdminProfile | null }>();
 
-  const [profile, setProfile] = useState<SuperAdminProfile | null>(null);
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [admins, setAdmins] = useState<OrgAdmin[]>([]);
 
@@ -45,7 +41,6 @@ const SuperAdminOrgAdmins = () => {
 
   // Toggling
   const [toggling, setToggling] = useState<number | null>(null);
-  const [ver, setVer] = useState<VersionInfo | null>(null);
 
   // Deletion
   const [deleting, setDeleting] = useState<number | null>(null);
@@ -69,21 +64,21 @@ const SuperAdminOrgAdmins = () => {
 
   // Initial load
   useEffect(() => {
-    Promise.all([fetchSuperAdminMe(), fetchOrganizations()])
-      .then(([p, o]) => {
-        setProfile(p);
-        setOrgs(o);
-      })
+    // If profile isn't loaded yet by Layout, wait.
+    if (!profile) return;
+
+    fetchOrganizations()
+      .then(setOrgs)
       .catch((err) => {
         if (err instanceof AuthError) {
+           // handled by Layout mostly, but safe to keep
           navigate("/super-admin/login", { replace: true });
         } else {
           setError("Errore nel caricamento.");
         }
       })
       .finally(() => setLoading(false));
-    fetchVersion().then(setVer).catch(() => {});
-  }, [navigate]);
+  }, [profile, navigate]);
 
   // Load admins when org filter changes
   useEffect(() => {
@@ -101,10 +96,6 @@ const SuperAdminOrgAdmins = () => {
       .finally(() => setAdminsLoading(false));
   }, [loading, profile, selectedOrg, navigate]);
 
-  const handleLogout = async () => {
-    await superAdminLogout();
-    navigate("/super-admin/login", { replace: true });
-  };
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
@@ -233,9 +224,9 @@ const SuperAdminOrgAdmins = () => {
       ? (orgs.find((o) => o.id === cardOrgId)?.name ?? "")
       : "";
 
-  if (loading) {
+  if (loading || !profile) {
     return (
-      <div className="container-shell py-16">
+      <div>
         <Skeleton className="h-6 w-64" />
         <Skeleton className="mt-3 h-4 w-96" />
         <div className="mt-10">
@@ -247,52 +238,6 @@ const SuperAdminOrgAdmins = () => {
 
   return (
     <div>
-      {/* Header band */}
-      <div className="border-b border-white/60 bg-white/40 backdrop-blur-sm">
-        <div className="container-shell py-8">
-          <div className="flex items-start gap-5">
-            <div className="hidden shrink-0 sm:block">
-              <img
-                src={`${import.meta.env.BASE_URL}logo.jpg`}
-                alt="ASSO.N.A.M."
-                className="h-12 rounded"
-              />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <h1 className="text-lg font-semibold text-neutral-900">
-                  Super Amministrazione
-                </h1>
-                <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700">
-                  Super Admin
-                </span>
-              </div>
-              {profile && (
-                <p className="mt-1 text-sm text-neutral-500">
-                  {profile.email}
-                </p>
-              )}
-            </div>
-            <div className="flex shrink-0 items-center gap-3">
-              <Link
-                className="hidden text-sm font-medium text-neutral-500 transition hover:text-neutral-700 sm:block"
-                to="/"
-              >
-                Torna al sito
-              </Link>
-              <button
-                className="rounded-md border border-neutral-200 px-3 py-1.5 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900"
-                type="button"
-                onClick={handleLogout}
-              >
-                Esci
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="container-shell py-10">
         {error && (
           <div className="mb-8 rounded-lg border border-red-200/60 bg-red-50 px-7 py-5">
             <p className="text-sm text-red-700">{error}</p>
@@ -780,15 +725,6 @@ const SuperAdminOrgAdmins = () => {
             )}
           </div>
         </div>
-      </div>
-
-      {/* Version footer */}
-      {ver && (
-        <footer className="container-shell pb-6 pt-12 text-[11px] text-neutral-400">
-          v{ver.version}
-          {ver.git_sha ? ` (${ver.git_sha.slice(0, 7)})` : ""}
-        </footer>
-      )}
     </div>
   );
 };

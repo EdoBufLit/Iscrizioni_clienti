@@ -44,6 +44,7 @@ class CreateOrganization(BaseModel):
     name: str
     slug: Optional[str] = None
     description: Optional[str] = None
+    description_short: Optional[str] = None
     address_line1: Optional[str] = None
     address_line2: Optional[str] = None
     city: Optional[str] = None
@@ -58,6 +59,7 @@ class CreateOrganization(BaseModel):
 class PatchOrganization(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    description_short: Optional[str] = None
     address_line1: Optional[str] = None
     address_line2: Optional[str] = None
     city: Optional[str] = None
@@ -355,10 +357,14 @@ def create_organization(
     if db.query(Organization).filter(Organization.slug == slug).first():
             raise HTTPException(status_code=409, detail="Slug already exists")
 
+    description = body.description
+    if not description and body.description_short:
+        description = body.description_short
+
     org = Organization(
         name=body.name,
         slug=slug,
-        description=body.description,
+        description=description,
         address_line1=body.address_line1,
         address_line2=body.address_line2,
         city=body.city,
@@ -428,6 +434,13 @@ def update_organization(
             raise HTTPException(status_code=404, detail="Organization not found")
 
     update_data = body.model_dump(exclude_unset=True)
+
+    # Map description_short -> description if provided
+    if "description_short" in update_data:
+        short = update_data.pop("description_short")
+        if "description" not in update_data:
+            update_data["description"] = short
+
     for key, value in update_data.items():
         setattr(org, key, value)
 
