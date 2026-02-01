@@ -386,6 +386,61 @@ export async function fetchOrgAdmins(
   return res.json();
 }
 
+export type SuperAdminOrganization = {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string | null;
+  city: string | null;
+  province: string | null;
+};
+
+export type SuperAdminOrganizationsResponse = {
+  data: SuperAdminOrganization[];
+  meta: {
+    page: number;
+    limit: number;
+    total: number;
+  };
+};
+
+export async function fetchSuperAdminOrganizations(
+  page: number = 1,
+  limit: number = 50,
+  q?: string
+): Promise<SuperAdminOrganizationsResponse> {
+  const sp = new URLSearchParams();
+  sp.set("page", String(page));
+  sp.set("limit", String(limit));
+  if (q) sp.set("q", q);
+
+  const res = await fetch(`/api/super-admin/organizations?${sp.toString()}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error("Failed to fetch organizations");
+  return res.json();
+}
+
+export async function createSuperAdminOrganization(data: {
+  name: string;
+  slug?: string;
+  city?: string;
+  province?: string;
+  description_short?: string;
+  is_active?: boolean;
+}): Promise<SuperAdminOrganization> {
+  const res = await fetch("/api/super-admin/organizations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 409) throw new Error("Slug already exists");
+  if (!res.ok) throw new Error("Failed to create organization");
+  return res.json();
+}
+
 export async function createOrgAdmin(
   email: string,
   orgId: number,

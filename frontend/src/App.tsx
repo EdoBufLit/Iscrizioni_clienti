@@ -25,7 +25,9 @@ const AdminHome = lazy(() => import("./pages/admin/AdminHome"));
 const AdminAffiliations = lazy(() => import("./pages/admin/AdminAffiliations"));
 
 const SuperAdminLogin = lazy(() => import("./pages/super-admin/SuperAdminLogin"));
+const SuperAdminLayout = lazy(() => import("./pages/super-admin/SuperAdminLayout"));
 const SuperAdminOrgAdmins = lazy(() => import("./pages/super-admin/SuperAdminOrgAdmins"));
+const SuperAdminOrganizations = lazy(() => import("./pages/super-admin/SuperAdminOrganizations"));
 
 const OrgAdminLogin = lazy(() => import("./pages/org-admin/OrgAdminLogin"));
 const OrgAdminCallback = lazy(() => import("./pages/org-admin/OrgAdminCallback"));
@@ -69,7 +71,10 @@ const App = () => {
             <Route path="affiliazioni" element={<AdminAffiliations />} />
           </Route>
           <Route path="super-admin/login" element={<SuperAdminLogin />} />
-          <Route path="super-admin/org-admins" element={<SuperAdminOrgAdmins />} />
+          <Route path="super-admin" element={<SuperAdminLayout />}>
+            <Route path="associazioni" element={<SuperAdminOrganizations />} />
+            <Route path="org-admins" element={<SuperAdminOrgAdmins />} />
+          </Route>
           <Route path="org-admin/login" element={<OrgAdminLogin />} />
           <Route path="org-admin/callback" element={<OrgAdminCallback />} />
           <Route path="org-admin" element={<OrgAdminLayout />}>
