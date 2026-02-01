@@ -1,86 +1,84 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import select, update
-from app.models import Member, CardBatch, CardMovement, MemberStatus
-from app import audit
-from sqlalchemy.exc import IntegrityError
-import logging
-import time
+from sqlalchemy import select, text
+from fastapi import HTTPException
+from app.models import CardBatch, Member
 
-logger = logging.getLogger(__name__)
-
-def assign_next_card(db: Session, member_id: int, org_id: int) -> bool:
+def assign_next_card(db: Session, org_id: int) -> int:
     """
-    Assigns the next available card number to the member from available batches.
-    Returns True if successful, False if no cards available.
-    Uses retry logic for SQLite concurrency safety.
+    Atomically assigns the next available membership card number
+    for the given organization.
     """
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            # Start a sub-transaction (savepoint) to handle rollback cleanly on error
-            with db.begin_nested():
-                # Find available batches ordered by start_no
-                batches = db.query(CardBatch).filter(
-                    CardBatch.org_id == org_id,
-                    CardBatch.next_no <= CardBatch.end_no
-                ).order_by(CardBatch.start_no).all() # Ordered by sequence
+    # 1. Lock for write (SQLite)
+    db.execute(text("BEGIN IMMEDIATE"))
 
-                if not batches:
-                    logger.warning(f"No available card batches for Org {org_id}")
-                    return False
+    # 2. Load the CardBatch row
+    stmt = select(CardBatch).filter(
+        CardBatch.org_id == org_id,
+        # We want the active batch.
+        # Logic: We pick the first one where next_no <= end_no, or next_no IS NULL (handled below)
+        # But step 3 says "If batch.next_no is NULL -> set it to batch.start_no"
+        # And we want to find a batch that is NOT exhausted.
+        # "If batch.next_no > batch.end_no -> raise ... exhausted" implies we check specific batch.
+        # Usually we want to find *any* batch that has capacity.
+        # Ordering by start_no ensures we fill them sequentially.
+    ).order_by(CardBatch.start_no)
 
-                batch = batches[0]
-                card_no = batch.next_no
+    # We fetch all or first?
+    # If we fetch first, and it's exhausted, do we fail?
+    # The instructions say: "Load the CardBatch row for org_id... If batch.next_no > batch.end_no -> raise"
+    # This implies we load *a* batch. If multiple exist, we should probably pick the current one.
+    # I'll pick the first one that is either fresh (next_no is None) or has capacity (next_no <= end_no).
+    # OR, if the user implies there's only one "active" batch?
+    # "Card ranges... always continuing from the last assigned card."
+    # I will search for the first batch that is not exhausted.
 
-                # Check if card_no is already assigned (double check for safety)
-                existing = db.query(Member).filter(
-                    Member.org_id == org_id,
-                    Member.card_no == card_no
-                ).first()
+    batches = db.execute(stmt).scalars().all()
 
-                if existing:
-                    # This batch is out of sync or race condition, increment and retry logic handled by loop?
-                    # Or just skip this number.
-                    batch.next_no += 1
-                    db.flush() # Flush to update batch
-                    continue # Retry loop to get next number
+    if not batches:
+        raise HTTPException(status_code=409, detail="No card range assigned to this organization")
 
-                # Increment batch
-                batch.next_no += 1
+    # Find first non-exhausted batch
+    batch = None
+    for b in batches:
+        if b.next_no is None:
+             # It's fresh
+             batch = b
+             break
+        if b.next_no <= b.end_no:
+             batch = b
+             break
 
-                # Assign to member
-                member = db.query(Member).filter(Member.id == member_id).first()
-                if member:
-                    member.card_no = card_no
-                    member.batch_id = batch.id
-                    # Status update is handled by caller or here?
-                    # Previous logic had it here. Let's keep it consistent but flexible.
-                    # The caller (join.py) sets logic based on return value.
-                    # But wait, if we return True, caller sets ACTIVE.
-                    # We should set card_no here.
+    # If all exhausted, use the last one to raise the error from?
+    # Or just raise now?
+    # "If batch.next_no > batch.end_no -> raise HTTPException 409 'Card range exhausted...'"
+    # I'll default to the last batch if all are exhausted, so the check fails there.
+    if not batch:
+        batch = batches[-1]
 
-                    db.add(batch)
-                    db.add(member)
-                    db.add(CardMovement(
-                        org_id=org_id,
-                        member_id=member_id,
-                        card_no=card_no,
-                        delta=-1,
-                        reason="card_assigned",
-                    ))
-                    db.flush() # Force write to check constraints
-                    audit.card_assigned(member_id=member_id, org_id=org_id, card_no=card_no)
-                    return True
-                else:
-                    return False
+    # 3. If batch.next_no is NULL -> set it to batch.start_no
+    if batch.next_no is None:
+        batch.next_no = batch.start_no
 
-        except IntegrityError:
-            # Race condition on card_no unique constraint or concurrent batch update
-            logger.warning(f"IntegrityError assigning card, retrying {attempt+1}/{max_retries}")
-            time.sleep(0.1) # Brief backoff
-            continue
-        except Exception as e:
-            logger.error(f"Error assigning card: {e}")
-            return False
+    # 4. If batch.next_no > batch.end_no -> raise ...
+    if batch.next_no > batch.end_no:
+        raise HTTPException(status_code=409, detail="Card range exhausted for this organization")
 
-    return False
+    # 5. candidate = batch.next_no
+    candidate = batch.next_no
+
+    # 6. Global uniqueness check
+    stmt_check = select(Member).filter(Member.card_no == candidate)
+    existing = db.execute(stmt_check).scalars().first()
+    if existing:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Card number collision (unexpected)")
+
+    # 7. Increment batch.next_no by 1
+    batch.next_no += 1
+    db.add(batch)
+
+    # 8. db.commit()
+    db.commit()
+
+    # 9. return candidate
+    return candidate
