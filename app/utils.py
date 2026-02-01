@@ -43,15 +43,17 @@ def compute_sha256(file_path: str) -> str:
 async def save_upload_file(
     upload_file: UploadFile,
     max_size: int = 10 * 1024 * 1024,
-    allowed_types: List[str] = ["image/jpeg", "image/png", "application/pdf"]
+    allowed_types: List[str] = ["image/jpeg", "image/png", "application/pdf"],
+    sub_directory: str = ""
 ) -> Tuple[str, int, str]:
     """
     Saves an uploaded file to the upload directory with hardening.
     Returns: (relative_path, size_bytes, sha256_hash)
     Raises: HTTPException if validation fails.
     """
-    if not os.path.exists(settings.UPLOAD_DIR):
-        os.makedirs(settings.UPLOAD_DIR)
+    target_dir = os.path.join(settings.UPLOAD_DIR, sub_directory)
+    if not os.path.exists(target_dir):
+        os.makedirs(target_dir)
 
     # 1. Validate Extension and MIME
     if upload_file.content_type not in allowed_types:
@@ -68,9 +70,11 @@ async def save_upload_file(
     if file_ext not in valid_exts.get(upload_file.content_type, []):
         raise HTTPException(status_code=400, detail="File extension does not match MIME type.")
 
-    # Generate unique filename
-    unique_filename = f"{uuid.uuid4()}{file_ext}"
-    file_path = os.path.join(settings.UPLOAD_DIR, unique_filename)
+    # Generate unique filename: <uuid>_<sanitized_filename>
+    # Sanitize: simple alphanumeric + dot/dash/underscore
+    safe_filename = "".join(c for c in upload_file.filename if c.isalnum() or c in "._-")
+    unique_filename = f"{uuid.uuid4()}_{safe_filename}"
+    file_path = os.path.join(target_dir, unique_filename)
 
     # 2. Read, Validate Magic Bytes, Check Size, Write, Hash
     sha256_hash = hashlib.sha256()
@@ -120,7 +124,7 @@ async def save_upload_file(
         raise e
 
     # Return relative path from upload dir
-    rel_path = unique_filename
+    rel_path = os.path.join(sub_directory, unique_filename)
 
     return rel_path, size_bytes, sha256_hash.hexdigest()
 

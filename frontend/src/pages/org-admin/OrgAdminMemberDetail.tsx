@@ -5,10 +5,22 @@ interface Document {
   id: number;
   type: string;
   filename: string;
+  mime_type?: string;
+  size_bytes?: number;
+  download_url?: string;
   uploaded_at: string;
   status: string;
   review_notes?: string;
   reviewed_at?: string;
+}
+
+function formatBytes(bytes: number, decimals = 2) {
+  if (!+bytes) return '0 Bytes';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
 
 interface MemberDetail {
@@ -217,7 +229,10 @@ export default function OrgAdminMemberDetail() {
                             </div>
                             <div>
                                 <h3 className="font-medium text-sm text-neutral-900">{doc.type === 'identity' ? 'Documento Identità' : doc.type === 'fiscal_code' ? 'Codice Fiscale' : doc.type}</h3>
-                                <p className="text-xs text-neutral-500">{doc.filename}</p>
+                                <p className="text-xs text-neutral-500">
+                                  {doc.filename}
+                                  {doc.size_bytes ? ` (${formatBytes(doc.size_bytes)})` : ''}
+                                </p>
                                 <p className="text-xs text-neutral-400 mt-1">Caricato il {new Date(doc.uploaded_at).toLocaleDateString()}</p>
                             </div>
                         </div>
@@ -225,7 +240,7 @@ export default function OrgAdminMemberDetail() {
                         <div className="flex items-center gap-3">
                              {/* Download Button */}
                              <a
-                                href={`/api/org-admin/documents/${doc.id}`}
+                                href={doc.download_url || `/api/org-admin/documents/${doc.id}`}
                                 className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg flex items-center gap-1 text-sm font-medium transition-colors"
                                 title="Scarica"
                              >
@@ -236,7 +251,7 @@ export default function OrgAdminMemberDetail() {
 
                              {/* Review Actions */}
                              <div className="flex items-center gap-2">
-                                {doc.status === "uploaded" || doc.status === "rejected" ? (
+                                {doc.status === "uploaded" || doc.status === "pending" || doc.status === "rejected" ? (
                                     <>
                                         <button
                                             onClick={() => handleReview(doc.id, "approved")}

@@ -13,6 +13,7 @@ class MemberStatus(str, enum.Enum):
 
 class DocStatus(str, enum.Enum):
     UPLOADED = "uploaded"
+    PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
 
