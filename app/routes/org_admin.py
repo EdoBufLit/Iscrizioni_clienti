@@ -32,12 +32,20 @@ def _get_current_org_admin(request: Request, db: Session):
     admin_id = request.session.get("org_admin_id")
     if not admin_id:
         return None
-    admin = db.query(AdminUser).filter(
-        AdminUser.id == admin_id,
-        AdminUser.role == AdminRole.ORG_ADMIN,
-        AdminUser.is_active.is_(True),
-        AdminUser.deleted_at.is_(None), # Added deleted_at filter
-    ).first()
+
+    # Join with Organization to check if active
+    admin = (
+        db.query(AdminUser)
+        .join(Organization, AdminUser.org_id == Organization.id)
+        .filter(
+            AdminUser.id == admin_id,
+            AdminUser.role == AdminRole.ORG_ADMIN,
+            AdminUser.is_active.is_(True),
+            AdminUser.deleted_at.is_(None),
+            Organization.is_active.is_(True), # Ensure org is active
+        )
+        .first()
+    )
     return admin
 
 
@@ -52,13 +60,20 @@ def request_magic_link(
     Always returns 200 to prevent email enumeration.
     """
     auth_limiter.check(get_client_ip(request))
-    admin = db.query(AdminUser).filter(
-        AdminUser.email == email,
-        AdminUser.role == AdminRole.ORG_ADMIN,
-        AdminUser.is_active.is_(True),
-        AdminUser.deleted_at.is_(None), # Added deleted_at filter
-        AdminUser.org_id.isnot(None),
-    ).first()
+
+    # Join Organization to ensure it is active
+    admin = (
+        db.query(AdminUser)
+        .join(Organization, AdminUser.org_id == Organization.id)
+        .filter(
+            AdminUser.email == email,
+            AdminUser.role == AdminRole.ORG_ADMIN,
+            AdminUser.is_active.is_(True),
+            AdminUser.deleted_at.is_(None),
+            Organization.is_active.is_(True), # Ensure org is active
+        )
+        .first()
+    )
 
     if admin:
         token_str = generate_token()
@@ -107,14 +122,21 @@ def verify_magic_link(
     if not token_entry:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
 
-    admin = db.query(AdminUser).filter(
-        AdminUser.id == token_entry.admin_id,
-        AdminUser.is_active.is_(True),
-        AdminUser.deleted_at.is_(None), # Added deleted_at filter
-    ).first()
+    # Check admin and org status
+    admin = (
+        db.query(AdminUser)
+        .join(Organization, AdminUser.org_id == Organization.id)
+        .filter(
+            AdminUser.id == token_entry.admin_id,
+            AdminUser.is_active.is_(True),
+            AdminUser.deleted_at.is_(None),
+            Organization.is_active.is_(True), # Ensure org is active
+        )
+        .first()
+    )
 
     if not admin:
-        raise HTTPException(status_code=400, detail="Invalid or expired token")
+        raise HTTPException(status_code=403, detail="Access denied: Organization inactive or account disabled.")
 
     # Mark token as used (one-time)
     token_entry.used_at = datetime.utcnow()

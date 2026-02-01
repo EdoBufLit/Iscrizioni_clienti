@@ -5,6 +5,7 @@ import {
   createSuperAdminOrganization,
   setInitialCardRange,
   increaseOrgCardStock,
+  deleteSuperAdminOrganization,
   AuthError,
   type SuperAdminOrganization,
   type SuperAdminProfile,
@@ -41,6 +42,12 @@ const SuperAdminOrganizations = () => {
   const [cardError, setCardError] = useState("");
   const [cardSuccess, setCardSuccess] = useState("");
   const [managingCards, setManagingCards] = useState(false);
+
+  // Delete Modal State
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [orgToDelete, setOrgToDelete] = useState<SuperAdminOrganization | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   // Form State
   const [formData, setFormData] = useState({
@@ -158,6 +165,27 @@ const SuperAdminOrganizations = () => {
     }
   };
 
+  const confirmDelete = (org: SuperAdminOrganization) => {
+    setOrgToDelete(org);
+    setDeleteError("");
+    setShowDeleteModal(true);
+  };
+
+  const handleDelete = async () => {
+    if (!orgToDelete || deleting) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await deleteSuperAdminOrganization(orgToDelete.id);
+      setShowDeleteModal(false);
+      loadOrgs();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Errore nella disattivazione");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (loading && !orgs.length) {
     return (
       <div>
@@ -251,12 +279,22 @@ const SuperAdminOrganizations = () => {
                         : "—"}
                     </td>
                     <td className={tdClass}>
-                      <button
-                        onClick={() => openCardModal(org)}
-                        className="text-xs font-semibold text-brand hover:text-brand-dark hover:underline"
-                      >
-                        Gestisci
-                      </button>
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => openCardModal(org)}
+                          className="text-xs font-semibold text-brand hover:text-brand-dark hover:underline"
+                        >
+                          Gestisci
+                        </button>
+                        {org.is_active && (
+                          <button
+                            onClick={() => confirmDelete(org)}
+                            className="text-xs font-semibold text-red-600 hover:text-red-800 hover:underline"
+                          >
+                            Elimina
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -388,6 +426,56 @@ const SuperAdminOrganizations = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && orgToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm surface-strong p-6 shadow-xl">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100">
+                <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-neutral-900">
+                Disattiva associazione
+              </h3>
+            </div>
+
+            <div className="mt-3">
+              <p className="text-sm text-neutral-500">
+                Sei sicuro di voler disattivare <strong>{orgToDelete.name}</strong>?
+                <br /><br />
+                L'associazione non sarà più visibile pubblicamente e gli amministratori non potranno accedere.
+              </p>
+              {deleteError && (
+                <div className="mt-2 rounded bg-red-50 p-2 text-xs text-red-700">
+                  {deleteError}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                className="rounded-md border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleting}
+              >
+                Annulla
+              </button>
+              <button
+                type="button"
+                className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-subtle transition hover:bg-red-700 active:bg-red-800 disabled:opacity-50"
+                onClick={handleDelete}
+                disabled={deleting}
+              >
+                {deleting ? "Disattivazione..." : "Disattiva"}
+              </button>
+            </div>
           </div>
         </div>
       )}

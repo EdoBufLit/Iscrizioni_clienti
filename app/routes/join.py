@@ -130,6 +130,9 @@ def api_join_start(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
+    if not org.is_active:
+        raise HTTPException(status_code=409, detail="Organizzazione non attiva.")
+
     check_signup_allowed(db, org.id, email, request)
 
     member = Member(
@@ -339,6 +342,9 @@ async def api_join_submit_multipart(
     org = db.query(Organization).filter(Organization.slug == org_slug).first()
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
+
+    if not org.is_active:
+        raise HTTPException(status_code=409, detail="Organizzazione non attiva.")
 
     check_signup_allowed(db, org.id, email, request)
 

@@ -447,6 +447,18 @@ export async function createSuperAdminOrganization(data: {
   return res.json();
 }
 
+export async function deleteSuperAdminOrganization(
+  orgId: number,
+): Promise<{ ok: boolean; already_inactive?: boolean }> {
+  const res = await fetch(`/api/super-admin/organizations/${orgId}`, {
+    method: "DELETE",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Organizzazione non trovata");
+  if (!res.ok) throw new Error("Errore nella disattivazione dell'organizzazione");
+  return res.json();
+}
+
 export async function createOrgAdmin(
   email: string,
   orgId: number,

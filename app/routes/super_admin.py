@@ -415,6 +415,46 @@ def create_organization(
     return org
 
 
+@router.delete("/organizations/{org_id}")
+def delete_organization(
+    request: Request,
+    org_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Deactivate (soft-delete) an organization.
+    It remains in the database but is_active=False.
+    """
+    admin = _require_super_admin(request, db)
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    if not org.is_active:
+        return {"ok": True, "already_inactive": True}
+
+    org.is_active = False
+    # If we had deleted_at on Organization, we would set it here.
+    # org.deleted_at = datetime.utcnow()
+
+    db.commit()
+
+    audit.log_operation(
+        db,
+        action="organization.deactivate",
+        entity_type="organization",
+        entity_id=org.id,
+        actor_admin_id=admin.id,
+        actor_role="super_admin",
+        metadata={},
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent")
+    )
+    db.commit()
+
+    return {"ok": True}
+
+
 @router.get("/organizations")
 def list_organizations(
     request: Request,
