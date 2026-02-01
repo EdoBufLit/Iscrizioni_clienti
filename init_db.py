@@ -23,6 +23,19 @@ def _add_column_if_missing(conn, table: str, column: str, col_type: str):
 def init_db():
     Base.metadata.create_all(bind=engine)
 
+    # If this is a fresh install (tables created but no alembic version), stamp it
+    inspector = inspect(engine)
+    existing_tables = inspector.get_table_names()
+    if "organizations" in existing_tables and "alembic_version" not in existing_tables:
+        logger.info("Fresh database detected. Stamping alembic head...")
+        from alembic.config import Config
+        from alembic import command
+        alembic_cfg = Config("alembic.ini")
+        try:
+            command.stamp(alembic_cfg, "head")
+        except Exception:
+            logger.exception("Failed to stamp alembic head.")
+
     # Migrate existing tables — add nullable columns that create_all won't add
     with engine.begin() as conn:
         _add_column_if_missing(conn, "card_movements", "admin_id", "INTEGER REFERENCES admin_users(id)")

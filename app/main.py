@@ -12,9 +12,10 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.bootstrap import bootstrap_super_admin
 from app.config import settings
-from app.db import get_db, SessionLocal
+from app.db import get_db, SessionLocal, engine
 from app.middleware import SecurityHeadersMiddleware
 from app.routes import admin, join, member, org_admin, public, super_admin
+from app.schema_validation import validate_schema
 from app.spa import SPAStaticFiles
 from init_db import init_db
 
@@ -31,14 +32,26 @@ async def lifespan(app: FastAPI):
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     try:
         init_db()
+
+        # Verify schema consistency (SQLite only)
+        try:
+            validate_schema(engine)
+        except RuntimeError as e:
+            # Re-raise to prevent startup if schema is invalid
+            logger.critical(str(e))
+            raise e
+
         # Bootstrap super admin after DB init
         db = SessionLocal()
         try:
             bootstrap_super_admin(db)
         finally:
             db.close()
-    except Exception:
+    except Exception as e:
         logger.exception("Database initialization failed.")
+        # If it's the critical schema drift, we want to crash hard
+        if "SQLite schema drift detected" in str(e):
+            raise e
     yield
 
 
