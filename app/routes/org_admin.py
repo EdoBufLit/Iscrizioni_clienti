@@ -14,6 +14,7 @@ from fastapi import UploadFile, File
 from app.db import get_db
 from app.models import AdminUser, AdminRole, OrgAdminToken, Member, MemberStatus, CardBatch, CardMovement, Organization, MemberDocument, DocStatus
 from app.utils import generate_token, hash_token, send_email, save_upload_file
+from app.services.card import assign_next_card
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
 from app import audit
@@ -484,6 +485,11 @@ def member_decision(
 
     # Apply decision
     if body.decision == "approve":
+        if member.card_no is None:
+            # Idempotency: do not reassign card numbers
+            assigned = assign_next_card(db, member.org_id)
+            member.card_no = assigned
+
         member.status = MemberStatus.ACTIVE
         # Trigger joined_at if not set (first activation)
         if not member.joined_at:
