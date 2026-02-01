@@ -33,19 +33,6 @@ def test_org_admin_decision(client, db):
         db.commit()
         db.refresh(admin)
 
-    # Setup: Add Card Batch so approval can succeed
-    from app.models import CardBatch
-    existing_batch = db.query(CardBatch).filter_by(org_id=org.id).first()
-    if not existing_batch:
-        batch = CardBatch(
-            org_id=org.id,
-            start_no=1000,
-            end_no=1100,
-            next_no=1000
-        )
-        db.add(batch)
-        db.commit()
-
     # Setup: Member to Approve
     member_approve = Member(
         org_id=org.id,

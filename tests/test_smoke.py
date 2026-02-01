@@ -90,7 +90,7 @@ def test_join_start(client):
 
 
 def test_join_start_duplicate_email(client):
-    """Second join with same email returns 200 OK (silent failure) to prevent enumeration."""
+    """Second join with same email still returns 200 (no enumeration)."""
     r = client.post(
         "/api/join/my-association",
         data={

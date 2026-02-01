@@ -267,8 +267,6 @@ export type OrgAdminMetrics = {
   cards_used: number | null;
   cards_remaining: number | null;
   pending_requests_count: number | null;
-  card_min: number | null;
-  card_max: number | null;
 };
 
 export async function fetchOrgAdminMetrics(): Promise<OrgAdminMetrics> {
@@ -297,8 +295,6 @@ export type CardStock = {
   total: number;
   used: number;
   remaining: number;
-  min_start: number | null;
-  max_end: number | null;
 };
 
 export async function fetchCardStock(): Promise<CardStock> {
@@ -399,8 +395,6 @@ export type SuperAdminOrganization = {
   created_at: string | null;
   city: string | null;
   province: string | null;
-  card_min: number | null;
-  card_max: number | null;
 };
 
 export type SuperAdminOrganizationsResponse = {
@@ -444,18 +438,6 @@ export async function createSuperAdminOrganization(data: {
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (res.status === 409) throw new Error("Slug already exists");
   if (!res.ok) throw new Error("Failed to create organization");
-  return res.json();
-}
-
-export async function deleteSuperAdminOrganization(
-  orgId: number,
-): Promise<{ ok: boolean; already_inactive?: boolean }> {
-  const res = await fetch(`/api/super-admin/organizations/${orgId}`, {
-    method: "DELETE",
-  });
-  if (res.status === 401) throw new AuthError("Not authenticated");
-  if (res.status === 404) throw new Error("Organizzazione non trovata");
-  if (!res.ok) throw new Error("Errore nella disattivazione dell'organizzazione");
   return res.json();
 }
 
@@ -526,29 +508,6 @@ export type IncreaseCardsResult = {
   cards_remaining: number;
 };
 
-export async function setInitialCardRange(
-  orgId: number,
-  fromNo: number,
-  toNo: number,
-): Promise<{ ok: boolean; start_no: number; end_no: number }> {
-  const res = await fetch(`/api/super-admin/organizations/${orgId}/card-range`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ from_no: fromNo, to_no: toNo }),
-  });
-  if (res.status === 401) throw new AuthError("Not authenticated");
-  if (res.status === 409) {
-    const data = await res.json().catch(() => null);
-    throw new Error(data?.detail ?? "Conflitto intervallo tessere");
-  }
-  if (res.status === 400) {
-    const data = await res.json().catch(() => null);
-    throw new Error(data?.detail ?? "Dati non validi");
-  }
-  if (!res.ok) throw new Error("Errore impostazione range");
-  return res.json();
-}
-
 export async function increaseOrgCardStock(
   orgId: number,
   amount: number,
@@ -564,9 +523,9 @@ export async function increaseOrgCardStock(
     body: JSON.stringify(body),
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
-  if (res.status === 400 || res.status === 409) {
+  if (res.status === 400) {
     const data = await res.json().catch(() => null);
-    throw new Error(data?.detail ?? "Errore operazione");
+    throw new Error(data?.detail ?? "Dati non validi");
   }
   if (res.status === 404) throw new Error("Organizzazione non trovata");
   if (!res.ok) throw new Error("Errore nell'aggiunta tessere");

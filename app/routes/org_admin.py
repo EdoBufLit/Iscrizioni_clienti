@@ -14,7 +14,6 @@ from fastapi import UploadFile, File
 from app.db import get_db
 from app.models import AdminUser, AdminRole, OrgAdminToken, Member, MemberStatus, CardBatch, CardMovement, Organization, MemberDocument, DocStatus
 from app.utils import generate_token, hash_token, send_email, save_upload_file
-from app.services.card import assign_next_card
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
 from app import audit
@@ -32,20 +31,12 @@ def _get_current_org_admin(request: Request, db: Session):
     admin_id = request.session.get("org_admin_id")
     if not admin_id:
         return None
-
-    # Join with Organization to check if active
-    admin = (
-        db.query(AdminUser)
-        .join(Organization, AdminUser.org_id == Organization.id)
-        .filter(
-            AdminUser.id == admin_id,
-            AdminUser.role == AdminRole.ORG_ADMIN,
-            AdminUser.is_active.is_(True),
-            AdminUser.deleted_at.is_(None),
-            Organization.is_active.is_(True), # Ensure org is active
-        )
-        .first()
-    )
+    admin = db.query(AdminUser).filter(
+        AdminUser.id == admin_id,
+        AdminUser.role == AdminRole.ORG_ADMIN,
+        AdminUser.is_active.is_(True),
+        AdminUser.deleted_at.is_(None), # Added deleted_at filter
+    ).first()
     return admin
 
 
@@ -60,20 +51,13 @@ def request_magic_link(
     Always returns 200 to prevent email enumeration.
     """
     auth_limiter.check(get_client_ip(request))
-
-    # Join Organization to ensure it is active
-    admin = (
-        db.query(AdminUser)
-        .join(Organization, AdminUser.org_id == Organization.id)
-        .filter(
-            AdminUser.email == email,
-            AdminUser.role == AdminRole.ORG_ADMIN,
-            AdminUser.is_active.is_(True),
-            AdminUser.deleted_at.is_(None),
-            Organization.is_active.is_(True), # Ensure org is active
-        )
-        .first()
-    )
+    admin = db.query(AdminUser).filter(
+        AdminUser.email == email,
+        AdminUser.role == AdminRole.ORG_ADMIN,
+        AdminUser.is_active.is_(True),
+        AdminUser.deleted_at.is_(None), # Added deleted_at filter
+        AdminUser.org_id.isnot(None),
+    ).first()
 
     if admin:
         token_str = generate_token()
@@ -122,21 +106,14 @@ def verify_magic_link(
     if not token_entry:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
 
-    # Check admin and org status
-    admin = (
-        db.query(AdminUser)
-        .join(Organization, AdminUser.org_id == Organization.id)
-        .filter(
-            AdminUser.id == token_entry.admin_id,
-            AdminUser.is_active.is_(True),
-            AdminUser.deleted_at.is_(None),
-            Organization.is_active.is_(True), # Ensure org is active
-        )
-        .first()
-    )
+    admin = db.query(AdminUser).filter(
+        AdminUser.id == token_entry.admin_id,
+        AdminUser.is_active.is_(True),
+        AdminUser.deleted_at.is_(None), # Added deleted_at filter
+    ).first()
 
     if not admin:
-        raise HTTPException(status_code=403, detail="Access denied: Organization inactive or account disabled.")
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
 
     # Mark token as used (one-time)
     token_entry.used_at = datetime.utcnow()
@@ -285,14 +262,10 @@ def org_metrics(request: Request, db: Session = Depends(get_db)):
         cards_total = sum(b.end_no - b.start_no + 1 for b in batches)
         cards_remaining = sum(max(b.end_no - b.next_no + 1, 0) for b in batches)
         cards_used = cards_total - cards_remaining
-        card_min = min(b.start_no for b in batches)
-        card_max = max(b.end_no for b in batches)
     else:
         cards_total = None
         cards_remaining = None
         cards_used = None
-        card_min = None
-        card_max = None
 
     return {
         "members_count": members_count,
@@ -300,8 +273,6 @@ def org_metrics(request: Request, db: Session = Depends(get_db)):
         "cards_used": cards_used,
         "cards_remaining": cards_remaining,
         "pending_requests_count": pending_requests_count,
-        "card_min": card_min,
-        "card_max": card_max,
     }
 
 
@@ -513,11 +484,6 @@ def member_decision(
 
     # Apply decision
     if body.decision == "approve":
-        # Assign card
-        assigned = assign_next_card(db, member.id, member.org_id)
-        if not assigned:
-             raise HTTPException(status_code=409, detail="Tessere esaurite: acquista nuove tessere")
-
         member.status = MemberStatus.ACTIVE
         # Trigger joined_at if not set (first activation)
         if not member.joined_at:
@@ -720,16 +686,13 @@ def card_stock(request: Request, db: Session = Depends(get_db)):
     batches = db.query(CardBatch).filter(CardBatch.org_id == admin.org_id).all()
 
     if not batches:
-        return {"total": 0, "used": 0, "remaining": 0, "min_start": None, "max_end": None}
+        return {"total": 0, "used": 0, "remaining": 0}
 
     total = sum(b.end_no - b.start_no + 1 for b in batches)
     remaining = sum(max(b.end_no - b.next_no + 1, 0) for b in batches)
     used = total - remaining
 
-    min_start = min(b.start_no for b in batches)
-    max_end = max(b.end_no for b in batches)
-
-    return {"total": total, "used": used, "remaining": remaining, "min_start": min_start, "max_end": max_end}
+    return {"total": total, "used": used, "remaining": remaining}
 
 
 @router.get("/cards/movements")

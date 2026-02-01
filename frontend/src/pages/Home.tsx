@@ -19,7 +19,7 @@ const Home = () => {
           aria-hidden="true"
         />
         <div
-          className="absolute inset-0 bg-gradient-to-t from-neutral-900/80 via-neutral-900/40 to-transparent"
+          className="absolute inset-0 bg-gradient-to-t from-neutral-900/85 via-neutral-900/60 to-neutral-900/30"
           aria-hidden="true"
         />
 
@@ -29,14 +29,14 @@ const Home = () => {
               <img
                 src={`${import.meta.env.BASE_URL}logo.jpg`}
                 alt=""
-                className="mx-auto mb-6 h-20 md:h-24 object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] md:mx-0 mix-blend-screen invert filter"
+                className="mx-auto mb-6 h-14 rounded shadow-lg md:mx-0"
                 aria-hidden="true"
               />
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
                 Associazione Nazionale Arti e Mestieri
               </p>
               <motion.h1
-                className="mt-4 font-display text-4xl font-bold tracking-tight leading-tight text-white md:text-5xl lg:text-[3.5rem]"
+                className="mt-4 text-4xl font-bold leading-tight text-white md:text-5xl lg:text-[3.5rem]"
                 {...heroBlur(0)}
               >
                 Gestione associativa<br className="hidden md:inline" /> e portale soci integrato.

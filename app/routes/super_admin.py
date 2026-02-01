@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 import re
 
-from sqlalchemy import func, and_, or_, text
+from sqlalchemy import func
 
 from app.db import get_db
 from app.models import AdminUser, AdminRole, Organization, OrgAdminToken, CardBatch, CardMovement
@@ -39,23 +39,6 @@ def _require_super_admin(request: Request, db: Session) -> AdminUser:
 class LoginBody(BaseModel):
     email: str
     password: str
-
-def check_card_overlap(db: Session, start_no: int, end_no: int, exclude_batch_id: Optional[int] = None):
-    """
-    Check if the given range [start_no, end_no] overlaps with any existing CardBatch globally.
-    Returns the conflicting batch if found, else None.
-    Overlap logic: NOT (new_end < old_start OR new_start > old_end)
-    Equivalent to: (new_end >= old_start) AND (new_start <= old_end)
-    """
-    query = db.query(CardBatch).filter(
-        CardBatch.start_no <= end_no,
-        CardBatch.end_no >= start_no
-    )
-    if exclude_batch_id is not None:
-        query = query.filter(CardBatch.id != exclude_batch_id)
-
-    return query.first()
-
 
 class CreateOrganization(BaseModel):
     name: str
@@ -415,46 +398,6 @@ def create_organization(
     return org
 
 
-@router.delete("/organizations/{org_id}")
-def delete_organization(
-    request: Request,
-    org_id: int,
-    db: Session = Depends(get_db),
-):
-    """
-    Deactivate (soft-delete) an organization.
-    It remains in the database but is_active=False.
-    """
-    admin = _require_super_admin(request, db)
-    org = db.query(Organization).filter(Organization.id == org_id).first()
-    if not org:
-        raise HTTPException(status_code=404, detail="Organization not found")
-
-    if not org.is_active:
-        return {"ok": True, "already_inactive": True}
-
-    org.is_active = False
-    # If we had deleted_at on Organization, we would set it here.
-    # org.deleted_at = datetime.utcnow()
-
-    db.commit()
-
-    audit.log_operation(
-        db,
-        action="organization.deactivate",
-        entity_type="organization",
-        entity_id=org.id,
-        actor_admin_id=admin.id,
-        actor_role="super_admin",
-        metadata={},
-        ip=get_client_ip(request),
-        user_agent=request.headers.get("user-agent")
-    )
-    db.commit()
-
-    return {"ok": True}
-
-
 @router.get("/organizations")
 def list_organizations(
     request: Request,
@@ -464,51 +407,16 @@ def list_organizations(
     db: Session = Depends(get_db),
 ):
     _require_super_admin(request, db)
-
-    # Query organizations with aggregated card ranges
-    # Use outerjoin to include organizations without cards
-    query = db.query(
-        Organization,
-        func.min(CardBatch.start_no).label("card_min"),
-        func.max(CardBatch.end_no).label("card_max")
-    ).outerjoin(CardBatch, CardBatch.org_id == Organization.id)
-
+    query = db.query(Organization)
     if q:
-        search = f"%{q}%"
-        query = query.filter(Organization.name.ilike(search) | Organization.slug.ilike(search))
+            search = f"%{q}%"
+            query = query.filter(Organization.name.ilike(search) | Organization.slug.ilike(search))
 
-    query = query.group_by(Organization.id)
-
-    # Note: query.count() might be tricky with group_by, simpler to use subquery or separate count
-    # But for now, let's just count all organizations matching filter
-    total_query = db.query(func.count(Organization.id))
-    if q:
-        search = f"%{q}%"
-        total_query = total_query.filter(Organization.name.ilike(search) | Organization.slug.ilike(search))
-    total = total_query.scalar()
-
-    results = query.order_by(Organization.name).offset((page - 1) * limit).limit(limit).all()
-
-    data = []
-    for org, c_min, c_max in results:
-        # Pydantic or manual dict construction
-        # We need to inject card_min/card_max into the response
-        item = {
-            "id": org.id,
-            "name": org.name,
-            "slug": org.slug,
-            "description": org.description,
-            "is_active": org.is_active,
-            "created_at": org.created_at,
-            "city": org.city,
-            "province": org.province,
-            "card_min": c_min,
-            "card_max": c_max
-        }
-        data.append(item)
+    total = query.count()
+    orgs = query.order_by(Organization.name).offset((page - 1) * limit).limit(limit).all()
 
     return {
-        "data": data,
+        "data": orgs,
         "meta": {"page": page, "limit": limit, "total": total}
     }
 
@@ -594,83 +502,10 @@ async def upload_org_logo(
 
 # ── Card stock management ────────────────────────────────────────
 
-class SetCardRange(BaseModel):
-    from_no: int
-    to_no: int
-
 class IncreaseCards(BaseModel):
     amount: int
     reason: Optional[str] = None
     paid_ref: Optional[str] = None
-
-
-@router.post("/organizations/{org_id}/card-range")
-def set_initial_card_range(
-    request: Request,
-    org_id: int,
-    body: SetCardRange,
-    db: Session = Depends(get_db),
-):
-    admin = _require_super_admin(request, db)
-    # Ensure strict serialization for card allocation
-    db.commit()
-    db.execute(text("BEGIN IMMEDIATE"))
-
-    if body.from_no <= 0 or body.to_no <= 0:
-         raise HTTPException(status_code=400, detail="Range must be positive integers")
-    if body.from_no > body.to_no:
-         raise HTTPException(status_code=400, detail="FROM must be less than or equal to TO")
-
-    org = db.query(Organization).filter(Organization.id == org_id).first()
-    if not org:
-        raise HTTPException(status_code=404, detail="Organization not found")
-
-    # Check if org already has batches
-    existing_count = db.query(CardBatch).filter(CardBatch.org_id == org_id).count()
-    if existing_count > 0:
-        raise HTTPException(status_code=400, detail="L'organizzazione ha già delle tessere assegnate. Usa 'Aggiungi tessere'.")
-
-    # Check global overlap
-    conflict = check_card_overlap(db, body.from_no, body.to_no)
-    if conflict:
-        # Fetch conflicting org name
-        conflicting_org = db.query(Organization).filter(Organization.id == conflict.org_id).first()
-        org_name = conflicting_org.name if conflicting_org else f"Org #{conflict.org_id}"
-        raise HTTPException(
-            status_code=409,
-            detail=f"Intervallo tessere in conflitto con {org_name} ({conflict.start_no}–{conflict.end_no})"
-        )
-
-    batch = CardBatch(
-        org_id=org_id,
-        start_no=body.from_no,
-        end_no=body.to_no,
-        next_no=body.from_no,
-    )
-    db.add(batch)
-    db.flush()
-
-    movement = CardMovement(
-        org_id=org_id,
-        admin_id=admin.id,
-        delta=(body.to_no - body.from_no + 1),
-        reason="initial_allocation",
-    )
-    db.add(movement)
-
-    audit.log_operation(
-        db,
-        action="org.cards.range_set",
-        entity_type="organization",
-        entity_id=org.id,
-        actor_admin_id=admin.id,
-        actor_role="super_admin",
-        metadata={"from": body.from_no, "to": body.to_no},
-        ip=get_client_ip(request)
-    )
-    db.commit()
-
-    return {"ok": True, "start_no": body.from_no, "end_no": body.to_no}
 
 
 @router.post("/orgs/{org_id}/cards/increase")
@@ -681,9 +516,6 @@ def increase_card_stock(
     db: Session = Depends(get_db),
 ):
     admin = _require_super_admin(request, db)
-    # Ensure strict serialization for card allocation
-    db.commit()
-    db.execute(text("BEGIN IMMEDIATE"))
 
     if body.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than zero")
@@ -697,24 +529,9 @@ def increase_card_stock(
         db.query(func.max(CardBatch.end_no))
         .filter(CardBatch.org_id == org_id)
         .scalar()
-    )
-
-    if last_end is None:
-         # No existing batches
-         raise HTTPException(status_code=400, detail="Imposta prima un intervallo iniziale")
-
+    ) or 0
     start_no = last_end + 1
     end_no = last_end + body.amount
-
-    # Check global overlap
-    conflict = check_card_overlap(db, start_no, end_no)
-    if conflict:
-        conflicting_org = db.query(Organization).filter(Organization.id == conflict.org_id).first()
-        org_name = conflicting_org.name if conflicting_org else f"Org #{conflict.org_id}"
-        raise HTTPException(
-            status_code=409,
-            detail=f"Intervallo tessere in conflitto con {org_name} ({conflict.start_no}–{conflict.end_no})"
-        )
 
     batch = CardBatch(
         org_id=org_id,
@@ -735,23 +552,13 @@ def increase_card_stock(
     db.add(movement)
     db.commit()
 
-    audit.log_operation(
-        db,
-        action="org.cards.add",
-        entity_type="organization",
-        entity_id=org.id,
-        actor_admin_id=admin.id,
-        actor_role="super_admin",
-        metadata={
-            "count": body.amount,
-            "new_from": start_no,
-            "new_to": end_no,
-            "reason": body.reason,
-            "paid_ref": body.paid_ref
-        },
-        ip=get_client_ip(request)
+    audit.card_stock_increased(
+        org_id=org_id,
+        amount=body.amount,
+        admin_id=admin.id,
+        reason=body.reason,
+        paid_ref=body.paid_ref,
     )
-    db.commit()
 
     # Return updated stock summary
     batches = db.query(CardBatch).filter(CardBatch.org_id == org_id).all()
