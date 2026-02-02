@@ -5,8 +5,8 @@ import { fetchWhoAmI } from "../lib/api";
 
 const heroEase = [0.16, 1, 0.3, 1] as const;
 const heroBlur = (delay = 0) => ({
-  initial: { opacity: 0, y: 14, filter: "blur(16px)" },
-  animate: { opacity: 1, y: 0, filter: "blur(0px)" },
+  initial: { opacity: 0, y: 14 },
+  animate: { opacity: 1, y: 0 },
   transition: { duration: 0.9, ease: heroEase, delay },
 });
 
@@ -14,18 +14,22 @@ const Home = () => {
   const navigate = useNavigate();
   const [checking, setChecking] = useState(false);
 
-  const handleAreaRiservata = async (e: React.MouseEvent) => {
+  const handleAreaRiservata = (e: React.MouseEvent) => {
     e.preventDefault();
     if (checking) return;
     setChecking(true);
-    try {
-      const w = await fetchWhoAmI();
-      navigate(w.authenticated && w.redirect_to ? w.redirect_to : "/login");
-    } catch {
-      navigate("/login");
-    } finally {
-      setChecking(false);
-    }
+    setTimeout(() => {
+      void (async () => {
+        try {
+          const w = await fetchWhoAmI();
+          navigate(w.authenticated && w.redirect_to ? w.redirect_to : "/login");
+        } catch {
+          navigate("/login");
+        } finally {
+          setChecking(false);
+        }
+      })();
+    }, 0);
   };
 
   return (
@@ -45,6 +49,7 @@ const Home = () => {
           <img
             src={`${import.meta.env.BASE_URL}logo-transparent.png`}
             alt=""
+            decoding="async"
             className="hero-logo-bg h-full w-full object-contain"
           />
         </div>
@@ -193,6 +198,8 @@ const Home = () => {
               <img
                 src={`${import.meta.env.BASE_URL}studio-commercialista_800x504.jpg`}
                 alt="Studio professionale"
+                loading="lazy"
+                decoding="async"
                 className="rounded-lg shadow-elevated"
               />
             </div>

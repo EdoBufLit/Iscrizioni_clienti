@@ -85,7 +85,13 @@ const AffiliazioneDettaglio = () => {
           <div className="flex items-center gap-4 mb-4">
              {data.logo_url && (
                 <div className="h-16 w-16 flex-shrink-0 rounded-lg bg-white p-1 border border-neutral-200 overflow-hidden">
-                   <img src={data.logo_url} alt={data.name} className="h-full w-full object-contain" />
+                   <img
+                     src={data.logo_url}
+                     alt={data.name}
+                     loading="lazy"
+                     decoding="async"
+                     className="h-full w-full object-contain"
+                   />
                 </div>
              )}
              <div>

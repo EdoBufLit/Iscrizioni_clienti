@@ -17,7 +17,7 @@ html {
 }
 
 body {
-  font-family: "Sora", system-ui, sans-serif;
+  font-family: "Source Sans 3", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--tone-ivory);
@@ -52,8 +52,8 @@ body::before {
 
   .section-heading {
     @apply text-3xl font-semibold text-neutral-900 md:text-4xl;
-    font-family: "Fraunces", serif;
-    letter-spacing: -0.01em;
+    font-family: "Source Serif 4", serif;
+    letter-spacing: -0.015em;
   }
 
   .section-subtitle {
@@ -203,10 +203,12 @@ body::before {
   }
 
   .hero-logo-bg {
-    max-width: min(1100px, 120vw);
-    opacity: 0.28;
-    filter: grayscale(1) contrast(1.15) brightness(1.25);
-    mix-blend-mode: screen;
+    max-width: min(1120px, 120vw);
+    opacity: 0.42;
+    filter: grayscale(1) brightness(1.35) contrast(1.25)
+      drop-shadow(0 22px 40px rgba(0, 0, 0, 0.35));
+    mix-blend-mode: normal;
+    transform: translateY(6%);
   }
 
   .header-band {

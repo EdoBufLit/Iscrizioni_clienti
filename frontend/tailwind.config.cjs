@@ -7,8 +7,8 @@ module.exports = {
         base: ["0.9375rem", { lineHeight: "1.625" }],
       },
       fontFamily: {
-        sans: ["\"Sora\"", "system-ui", "sans-serif"],
-        display: ["\"Fraunces\"", "serif"],
+        sans: ["\"Source Sans 3\"", "system-ui", "sans-serif"],
+        display: ["\"Source Serif 4\"", "serif"],
       },
       colors: {
         brand: {
