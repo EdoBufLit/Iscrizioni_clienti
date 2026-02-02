@@ -6,6 +6,7 @@ import {
   deleteOrganization,
   setOrganizationCardRange,
   increaseOrgCardStock,
+  uploadSuperAdminStatute,
   AuthError,
   type SuperAdminOrganization,
   type SuperAdminProfile,
@@ -47,6 +48,7 @@ const SuperAdminOrganizations = () => {
     to_no: "",
     amount: "",
   });
+  const [statuteFile, setStatuteFile] = useState<File | null>(null);
 
   const loadOrgs = () => {
     if (orgs.length === 0) setLoading(true);
@@ -77,6 +79,7 @@ const SuperAdminOrganizations = () => {
         name: "", slug: "", city: "", province: "", description_short: "", is_active: true,
         from_no: "", to_no: "", amount: ""
     });
+    setStatuteFile(null);
     setShowModal(true);
   };
 
@@ -97,7 +100,10 @@ const SuperAdminOrganizations = () => {
                 description_short: formData.description_short || undefined,
                 is_active: formData.is_active,
             };
-            await createSuperAdminOrganization(payload);
+            const newOrg = await createSuperAdminOrganization(payload);
+            if (statuteFile && newOrg.id) {
+                await uploadSuperAdminStatute(newOrg.id, statuteFile);
+            }
         } else if (modalType === "range" && selectedOrg) {
             const from = parseInt(formData.from_no);
             const to = parseInt(formData.to_no);
@@ -342,6 +348,19 @@ const SuperAdminOrganizations = () => {
                             className="rounded border-gray-300 text-brand focus:ring-brand"
                         />
                         <label htmlFor="is_active" className="text-sm text-neutral-700">Attiva subito</label>
+                    </div>
+
+                    <div>
+                        <label htmlFor="statute_file" className="block text-xs font-medium text-neutral-600">
+                        Statuto (PDF, opzionale)
+                        </label>
+                        <input
+                        id="statute_file"
+                        type="file"
+                        accept=".pdf"
+                        className="mt-1 block text-sm text-neutral-600 file:mr-3 file:rounded-md file:border file:border-neutral-200 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-neutral-700"
+                        onChange={(e) => setStatuteFile(e.target.files?.[0] ?? null)}
+                        />
                     </div>
                   </>
               )}

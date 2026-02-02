@@ -135,6 +135,12 @@ def api_join_start(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
+    if not org.statute_pdf_path:
+        raise HTTPException(status_code=400, detail="Lo statuto dell'associazione non è disponibile. Contatta l'associazione.")
+
+    if not accept_statute:
+        raise HTTPException(status_code=400, detail="È necessario accettare lo statuto per procedere.")
+
     existing = check_signup_allowed(db, org.id, email, request)
     if existing:
         return {"status": "started", "organization": org.name}
@@ -346,6 +352,12 @@ async def api_join_submit_multipart(
     org = db.query(Organization).filter(Organization.slug == org_slug).first()
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
+
+    if not org.statute_pdf_path:
+        raise HTTPException(status_code=400, detail="Lo statuto dell'associazione non è disponibile. Contatta l'associazione.")
+
+    if not accept_statute:
+        raise HTTPException(status_code=400, detail="È necessario accettare lo statuto per procedere.")
 
     existing = check_signup_allowed(db, org.id, email, request)
 

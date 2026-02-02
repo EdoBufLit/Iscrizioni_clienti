@@ -416,6 +416,14 @@ const Iscrizione = () => {
                     description="La tua adesione richiede l'accettazione dei seguenti documenti."
                   />
                 </div>
+
+                {!org?.has_statute && (
+                  <div className="mt-5 flex gap-3 rounded-lg border border-amber-200/60 bg-amber-50 px-5 py-3.5">
+                    <svg className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126Z" /><path d="M12 15.75h.007v.008H12v-.008Z" /></svg>
+                    <p className="text-sm text-amber-800">Lo statuto non è ancora disponibile per questa associazione. Contatta l'associazione per maggiori informazioni.</p>
+                  </div>
+                )}
+
                 <div className="mt-5 space-y-4">
                   <label className={`flex items-start gap-3 rounded-lg border p-4 transition ${errors.privacy ? "border-red-200 bg-red-50/30" : form.privacy ? "border-brand/20 bg-brand/[0.02]" : "border-neutral-100"}`}>
                     <input className="mt-0.5 h-4 w-4 shrink-0 rounded border-neutral-300 text-brand focus:ring-brand/30" type="checkbox" checked={form.privacy} onChange={handleCheck("privacy")} />
@@ -495,7 +503,7 @@ const Iscrizione = () => {
                   <p className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-400">Documenti e consensi</p>
                   <dl className="mt-3 grid gap-x-6 gap-y-3 md:grid-cols-2">
                     <div><dt className="text-xs text-neutral-500">Documento</dt><dd className="mt-0.5 text-sm font-medium text-neutral-800">{form.documentoIdentita?.name ?? "—"}</dd></div>
-                    <div><dt className="text-xs text-neutral-500">Consensi</dt><dd className="mt-0.5 text-sm font-medium text-emerald-700">Privacy e statuto accettati</dd></div>
+                    <div><dt className="text-xs text-neutral-500">Consensi</dt><dd className="mt-0.5 text-sm font-medium text-emerald-700">{org?.has_statute ? "Privacy e statuto accettati" : "Privacy accettata"}</dd></div>
                   </dl>
                 </div>
 

@@ -158,6 +158,20 @@ def me(request: Request, db: Session = Depends(get_db)):
 router.include_router(auth_router)
 
 
+class PatchOrgOrganization(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    city: Optional[str] = None
+    province: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    website: Optional[str] = None
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    postal_code: Optional[str] = None
+    country: Optional[str] = None
+
+
 @router.get("/organization")
 def get_organization_detail(
     request: Request,
@@ -172,10 +186,56 @@ def get_organization_detail(
         "id": org.id,
         "name": org.name,
         "slug": org.slug,
+        "description": org.description,
+        "address_line1": org.address_line1,
+        "address_line2": org.address_line2,
+        "city": org.city,
+        "province": org.province,
+        "postal_code": org.postal_code,
+        "country": org.country,
+        "email": org.email,
+        "phone": org.phone,
+        "website": org.website,
+        "logo_url": f"/api/organizations/{org.slug}/logo" if org.logo_path else None,
         "statute_version": org.statute_version,
         "statute_updated_at": org.statute_updated_at,
+        "statute_url": f"/api/organizations/{org.slug}/statute" if org.statute_pdf_path else None,
         "has_statute": bool(org.statute_pdf_path),
     }
+
+
+@router.patch("/organization")
+def patch_organization(
+    request: Request,
+    body: PatchOrgOrganization,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    org = admin.organization
+    update_data = body.model_dump(exclude_unset=True)
+
+    for key, value in update_data.items():
+        setattr(org, key, value)
+
+    db.commit()
+
+    audit.log_operation(
+        db,
+        action="org.update",
+        entity_type="organization",
+        entity_id=org.id,
+        actor_admin_id=admin.id,
+        actor_role="org_admin",
+        metadata=update_data,
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+
+    return {"ok": True}
 
 
 @router.post("/organization/statute")

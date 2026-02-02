@@ -277,6 +277,86 @@ export async function orgAdminLogout(): Promise<void> {
   await fetch("/api/org-admin/auth/logout", { method: "POST" });
 }
 
+export type OrgAdminOrganizationDetail = {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  address_line1: string | null;
+  address_line2: string | null;
+  city: string | null;
+  province: string | null;
+  postal_code: string | null;
+  country: string | null;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  logo_url: string | null;
+  statute_version: string | null;
+  statute_updated_at: string | null;
+  statute_url: string | null;
+  has_statute: boolean;
+};
+
+export async function fetchOrgAdminOrganization(): Promise<OrgAdminOrganizationDetail> {
+  const res = await fetch("/api/org-admin/organization");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error("Failed to fetch organization");
+  return res.json();
+}
+
+export async function patchOrgAdminOrganization(data: {
+  name?: string;
+  description?: string;
+  city?: string;
+  province?: string;
+  email?: string;
+  phone?: string;
+  website?: string;
+  address_line1?: string;
+  address_line2?: string;
+  postal_code?: string;
+  country?: string;
+}): Promise<{ ok: boolean }> {
+  const res = await fetch("/api/org-admin/organization", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error("Failed to update organization");
+  return res.json();
+}
+
+export async function uploadOrgAdminStatute(
+  file: File,
+): Promise<{ statute_version: string; updated_at: string; has_statute: boolean }> {
+  const body = new FormData();
+  body.append("file", file);
+  const res = await fetch("/api/org-admin/organization/statute", {
+    method: "POST",
+    body,
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error("Failed to upload statute");
+  return res.json();
+}
+
+export async function uploadSuperAdminStatute(
+  orgId: number,
+  file: File,
+): Promise<{ statute_version: string; updated_at: string; has_statute: boolean }> {
+  const body = new FormData();
+  body.append("file", file);
+  const res = await fetch(`/api/super-admin/organizations/${orgId}/statute`, {
+    method: "POST",
+    body,
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error("Failed to upload statute");
+  return res.json();
+}
+
 export type OrgAdminMetrics = {
   members_count: number;
   cards_total: number | null;

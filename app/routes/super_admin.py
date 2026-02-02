@@ -568,6 +568,57 @@ async def upload_org_logo(
     return {"logo_path": rel_path}
 
 
+@router.post("/organizations/{org_id}/statute")
+async def upload_org_statute(
+    request: Request,
+    org_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    rel_path, size, sha = await save_upload_file(
+        file,
+        allowed_types=["application/pdf"],
+        max_size=10 * 1024 * 1024,
+    )
+
+    new_version = "v1"
+    if org.statute_version:
+        if org.statute_version.startswith("v") and org.statute_version[1:].isdigit():
+            ver_num = int(org.statute_version[1:])
+            new_version = f"v{ver_num + 1}"
+        else:
+            new_version = f"{org.statute_version}_new"
+
+    org.statute_pdf_path = rel_path
+    org.statute_version = new_version
+    org.statute_updated_at = datetime.utcnow()
+    db.commit()
+
+    audit.log_operation(
+        db,
+        action="org.statute.upload",
+        entity_type="organization",
+        entity_id=org.id,
+        actor_admin_id=admin.id,
+        actor_role="super_admin",
+        metadata={"filename": file.filename, "size": size, "sha256": sha, "version": new_version},
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+
+    return {
+        "statute_version": new_version,
+        "updated_at": org.statute_updated_at,
+        "has_statute": True,
+    }
+
+
 # ── Card stock management ────────────────────────────────────────
 
 class SetCardRange(BaseModel):
