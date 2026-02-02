@@ -38,20 +38,20 @@ const Home = () => {
           aria-hidden="true"
         />
         <div
-          className="absolute inset-0 bg-gradient-to-t from-neutral-900/85 via-neutral-900/45 to-transparent"
+          className="absolute inset-0 bg-gradient-to-t from-neutral-900/90 via-neutral-900/55 to-transparent"
           aria-hidden="true"
         />
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden="true">
+          <img
+            src={`${import.meta.env.BASE_URL}logo.jpg`}
+            alt=""
+            className="hero-logo-bg h-full w-full object-contain"
+          />
+        </div>
 
         <div className="relative py-32 md:py-44">
           <div className="container-shell">
             <div className="mx-auto max-w-3xl text-center">
-              <motion.img
-                src={`${import.meta.env.BASE_URL}logo.jpg`}
-                alt=""
-                className="hero-logo mx-auto mb-8 h-28 md:h-32 object-contain drop-shadow-[0_0_18px_rgba(255,255,255,0.35)]"
-                aria-hidden="true"
-                {...heroBlur(0)}
-              />
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
                 Associazione Nazionale Arti e Mestieri
               </p>

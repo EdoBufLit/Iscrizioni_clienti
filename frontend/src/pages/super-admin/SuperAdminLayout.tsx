@@ -58,7 +58,7 @@ const SuperAdminLayout = () => {
               <img
                 src={`${import.meta.env.BASE_URL}logo.jpg`}
                 alt="ASSO.N.A.M."
-                className="h-12 rounded shadow-subtle"
+                className="h-12 rounded logo-mark"
               />
             </div>
             <div className="min-w-0 flex-1">

@@ -46,7 +46,7 @@ const Layout = () => {
               to="/"
               onClick={close}
             >
-              <img src={`${import.meta.env.BASE_URL}logo.jpg`} alt="ASSO.N.A.M." className="h-11 rounded shadow-subtle" />
+              <img src={`${import.meta.env.BASE_URL}logo.jpg`} alt="ASSO.N.A.M." className="h-11 rounded logo-mark" />
               <div>
                 <p className="text-base font-bold tracking-tight text-neutral-900">
                   ASSO.N.A.M.
