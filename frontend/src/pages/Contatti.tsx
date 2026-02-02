@@ -3,17 +3,17 @@ import { Link } from "react-router-dom";
 const contactBlocks = [
   {
     label: "Email",
-    value: "segreteria@asso-nam.it",
-    note: "Per comunicazioni generali e richieste di informazioni.",
+    value: "asso.nam@email.it",
+    note: "Per comunicazioni e richieste di informazioni.",
   },
   {
     label: "Telefono",
-    value: "+39 0371 000 000",
+    value: "+39 06 3972 4643",
     note: "Attivo negli orari di apertura dello studio.",
   },
   {
     label: "Sede operativa",
-    value: "Via Roma 12, 26900 Lodi (LO)",
+    value: "Via Sambucuccio d'Alando, 10 - 00162 Roma (RM)",
     note: "Ricevimento su appuntamento.",
   },
   {
