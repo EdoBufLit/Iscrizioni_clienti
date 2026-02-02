@@ -250,11 +250,14 @@ def org_metrics(request: Request, db: Session = Depends(get_db)):
 
     members_count = db.query(func.count(Member.id)).filter(
         Member.org_id == org_id,
+        Member.deleted_at.is_(None),
     ).scalar()
 
     pending_requests_count = db.query(func.count(Member.id)).filter(
         Member.org_id == org_id,
+        Member.deleted_at.is_(None),
         Member.status != MemberStatus.ACTIVE,
+        Member.status != MemberStatus.REJECTED,
     ).scalar()
 
     # Cards: computed from batches
