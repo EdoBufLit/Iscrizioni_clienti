@@ -40,7 +40,7 @@ const OrgAdminLogin = () => {
         className="absolute inset-0 h-full w-full object-cover"
         aria-hidden="true"
       />
-      <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/90 via-brand/70 to-brand/40" aria-hidden="true" />
+      <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/90 via-brand/70 to-brand-light/45" aria-hidden="true" />
       <div className="relative flex h-full flex-col justify-end p-10">
         <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/60">Area amministratori</p>
         <p className="mt-2 text-lg font-semibold leading-snug text-white">
@@ -57,7 +57,7 @@ const OrgAdminLogin = () => {
     return (
       <section className="flex min-h-[70vh] items-center justify-center py-16">
         <div className="container-shell">
-          <div className="mx-auto grid max-w-4xl overflow-hidden rounded-lg border border-neutral-100 bg-white shadow-elevated md:grid-cols-2">
+          <div className="mx-auto grid max-w-4xl overflow-hidden surface-strong md:grid-cols-2">
             <div className="flex flex-col justify-center px-8 py-12 sm:px-12">
               <div className="flex items-center gap-3">
                 <img src={`${import.meta.env.BASE_URL}logo.jpg`} alt="ASSO.N.A.M." className="h-10 rounded" />
@@ -89,7 +89,7 @@ const OrgAdminLogin = () => {
   return (
     <section className="flex min-h-[70vh] items-center justify-center py-16">
       <div className="container-shell">
-        <div className="mx-auto grid max-w-4xl overflow-hidden rounded-lg border border-neutral-100 bg-white shadow-elevated md:grid-cols-2">
+        <div className="mx-auto grid max-w-4xl overflow-hidden surface-strong md:grid-cols-2">
           <div className="flex flex-col justify-center px-8 py-12 sm:px-12">
             <div className="flex items-center gap-3">
               <img src={`${import.meta.env.BASE_URL}logo.jpg`} alt="ASSO.N.A.M." className="h-10 rounded" />
@@ -131,9 +131,10 @@ const OrgAdminLogin = () => {
               </div>
 
               <button
-                className="mt-7 inline-flex w-full items-center justify-center rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white shadow-subtle transition hover:-translate-y-px hover:bg-brand-dark hover:shadow-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-subtle"
+                className="btn-primary mt-7 w-full py-2.5 text-sm"
                 type="submit"
                 disabled={!canSubmit}
+                data-component="org-admin-login-submit"
               >
                 {submitting ? "Invio in corso…" : "Ricevi link di accesso"}
               </button>

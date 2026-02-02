@@ -16,13 +16,13 @@ const NAV_ITEMS = [
 ];
 
 const sidebarLinkBase =
-  "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition";
-const sidebarLinkActive = `${sidebarLinkBase} bg-brand/5 text-brand`;
-const sidebarLinkIdle = `${sidebarLinkBase} text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900`;
+  "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition";
+const sidebarLinkActive = `${sidebarLinkBase} border border-white/70 bg-white/70 text-brand shadow-subtle`;
+const sidebarLinkIdle = `${sidebarLinkBase} text-neutral-600 hover:bg-white/60 hover:text-neutral-900`;
 
 const tabBase =
   "whitespace-nowrap px-3 py-2 text-sm font-medium transition border-b-2";
-const tabActive = `${tabBase} border-brand text-brand`;
+const tabActive = `${tabBase} border-accent text-brand`;
 const tabIdle = `${tabBase} border-transparent text-neutral-500 hover:text-neutral-700`;
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
@@ -35,14 +35,14 @@ const AdminLayout = () => {
   return (
     <div>
       {/* Header band */}
-      <div className="border-b border-white/60 bg-white/40 backdrop-blur-sm">
+      <div className="header-band">
         <div className="container-shell py-8">
           <div className="flex items-start gap-5">
             <div className="hidden shrink-0 sm:block">
               <img
                 src={`${import.meta.env.BASE_URL}logo.jpg`}
                 alt="ASSO.N.A.M."
-                className="h-12 rounded"
+                className="h-12 rounded shadow-subtle"
               />
             </div>
             <div className="min-w-0 flex-1">
@@ -67,22 +67,44 @@ const AdminLayout = () => {
         <div className="md:flex md:gap-10">
           {/* Sidebar — desktop */}
           <aside className="hidden w-56 shrink-0 md:block">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-400">
-              Navigazione
-            </p>
-            <nav
-              className="mt-3 flex flex-col gap-0.5"
-              aria-label="Amministrazione"
-            >
-              {NAV_ITEMS.map((item) => (
-                <NavLink
-                  key={item.label}
-                  className={linkClass}
-                  to={item.to}
-                  end={item.end}
+            <div className="surface p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-400">
+                Navigazione
+              </p>
+              <nav
+                className="mt-3 flex flex-col gap-0.5"
+                aria-label="Amministrazione"
+              >
+                {NAV_ITEMS.map((item) => (
+                  <NavLink
+                    key={item.label}
+                    className={linkClass}
+                    to={item.to}
+                    end={item.end}
+                  >
+                    <svg
+                      className="h-4 w-4 shrink-0"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={1.5}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d={item.icon} />
+                    </svg>
+                    {item.label}
+                  </NavLink>
+                ))}
+              </nav>
+
+              <div className="mt-8 border-t border-white/70 pt-4">
+                <Link
+                  className="flex items-center gap-2 text-sm font-medium text-neutral-500 transition hover:text-neutral-700"
+                  to="/"
                 >
                   <svg
-                    className="h-4 w-4 shrink-0"
+                    className="h-3.5 w-3.5"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -90,31 +112,11 @@ const AdminLayout = () => {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   >
-                    <path d={item.icon} />
+                    <path d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
                   </svg>
-                  {item.label}
-                </NavLink>
-              ))}
-            </nav>
-
-            <div className="mt-8 border-t border-neutral-100 pt-4">
-              <Link
-                className="flex items-center gap-2 text-sm font-medium text-neutral-500 transition hover:text-neutral-700"
-                to="/"
-              >
-                <svg
-                  className="h-3.5 w-3.5"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
-                </svg>
-                Torna al sito
-              </Link>
+                  Torna al sito
+                </Link>
+              </div>
             </div>
           </aside>
 

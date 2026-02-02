@@ -57,7 +57,7 @@ const Login = () => {
         className="absolute inset-0 h-full w-full object-cover"
         aria-hidden="true"
       />
-      <div className="absolute inset-0 bg-gradient-to-t from-neutral-900/70 via-neutral-900/40 to-neutral-900/20" aria-hidden="true" />
+      <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/90 via-brand/70 to-brand-light/45" aria-hidden="true" />
       <div className="relative flex h-full flex-col justify-end p-10">
         <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/60">Portale soci</p>
         <p className="mt-2 text-lg font-semibold leading-snug text-white">
@@ -159,9 +159,10 @@ const Login = () => {
               )}
 
               <button
-                className="mt-7 inline-flex w-full items-center justify-center rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white shadow-subtle transition hover:-translate-y-px hover:bg-brand-dark hover:shadow-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-subtle"
+                className="btn-primary mt-7 w-full py-2.5 text-sm"
                 type="submit"
                 disabled={!canSubmit}
+                data-component="login-submit"
               >
                 {submitting ? "Accesso in corso…" : mode === "password" ? "Accedi" : "Ricevi link di accesso"}
               </button>

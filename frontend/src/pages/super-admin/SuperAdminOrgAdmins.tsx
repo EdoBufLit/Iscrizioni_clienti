@@ -319,6 +319,7 @@ const SuperAdminOrgAdmins = () => {
               className="inline-flex shrink-0 items-center justify-center rounded-md bg-brand px-5 py-2 text-sm font-semibold text-white shadow-subtle transition hover:-translate-y-px hover:bg-brand-dark hover:shadow-card active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-subtle"
               type="submit"
               disabled={!newEmail.trim() || newOrgId === "" || creating}
+              data-component="superadmin-orgadmins-invite"
             >
               {creating ? "Invio…" : "Invita"}
             </button>

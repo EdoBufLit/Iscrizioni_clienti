@@ -13,9 +13,9 @@ const NAV_ITEMS = [
   { label: "Contatti", to: "/contatti" },
 ];
 
-const linkBase = "rounded-md px-3 py-2 text-sm font-medium transition";
-const linkActive = `${linkBase} text-brand`;
-const linkIdle = `${linkBase} text-neutral-600 hover:text-neutral-900`;
+const linkBase = "nav-pill";
+const linkActive = `${linkBase} nav-pill-active`;
+const linkIdle = `${linkBase} nav-pill-idle`;
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
   isActive ? linkActive : linkIdle;
@@ -38,15 +38,15 @@ const Layout = () => {
     <MotionProvider>
       <div className="relative min-h-screen text-neutral-800">
         <SceneBackground />
-        <div className="h-0.5 bg-gradient-to-r from-brand to-brand-light" aria-hidden="true" />
-        <header className="border-b border-neutral-100 bg-gradient-to-b from-neutral-50/90 to-white/80 backdrop-blur-sm">
+        <div className="h-0.5 bg-gradient-to-r from-accent via-brand to-ember" aria-hidden="true" />
+        <header className="header-band">
           <div className="container-shell flex items-center justify-between py-4">
             <NavLink
               className="flex items-center gap-3"
               to="/"
               onClick={close}
             >
-              <img src={`${import.meta.env.BASE_URL}logo.jpg`} alt="ASSO.N.A.M." className="h-11 rounded" />
+              <img src={`${import.meta.env.BASE_URL}logo.jpg`} alt="ASSO.N.A.M." className="h-11 rounded shadow-subtle" />
               <div>
                 <p className="text-base font-bold tracking-tight text-neutral-900">
                   ASSO.N.A.M.
@@ -72,7 +72,7 @@ const Layout = () => {
                 </NavLink>
               ))}
               <NavLink
-                className="ml-3 inline-flex items-center justify-center rounded-md border border-neutral-200 px-4 py-1.5 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900"
+                className="ml-3 btn-ghost px-4 py-1.5 text-sm"
                 to="/dashboard"
                 onMouseEnter={prefetchDashboard}
                 onFocus={prefetchDashboard}
@@ -82,11 +82,12 @@ const Layout = () => {
             </nav>
 
             <button
-              className="inline-flex items-center rounded-md border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 md:hidden"
+              className="inline-flex items-center rounded-md border border-neutral-200 bg-white/60 px-3 py-2 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 md:hidden"
               type="button"
               aria-expanded={menuOpen}
               aria-controls="mobile-nav"
               onClick={() => setMenuOpen((o) => !o)}
+              data-component="header-menu-toggle"
             >
               {menuOpen ? "Chiudi" : "Menu"}
             </button>
@@ -94,7 +95,7 @@ const Layout = () => {
 
           {menuOpen && (
             <nav
-              className="border-t border-neutral-100 bg-white md:hidden"
+              className="border-t border-white/70 bg-white/80 backdrop-blur-md md:hidden"
               id="mobile-nav"
               aria-label="Navigazione principale"
             >
@@ -111,7 +112,7 @@ const Layout = () => {
                   </NavLink>
                 ))}
                 <NavLink
-                  className="mt-2 rounded-md border border-neutral-200 px-3 py-2 text-center text-sm font-medium text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900"
+                  className="mt-2 btn-ghost text-center text-sm"
                   to="/dashboard"
                   onClick={close}
                   onMouseEnter={prefetchDashboard}
@@ -138,7 +139,7 @@ const Layout = () => {
           </AnimatePresence>
         </main>
 
-        <footer className="border-t border-neutral-100 bg-neutral-50/80 py-10 backdrop-blur-sm">
+        <footer className="border-t border-white/70 bg-white/70 py-10 backdrop-blur-sm">
           <div className="container-shell flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-sm font-semibold text-neutral-700">ASSO.N.A.M.</p>

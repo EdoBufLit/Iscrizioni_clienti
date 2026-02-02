@@ -52,14 +52,14 @@ const OrgAdminLayout = () => {
     <Ctx.Provider value={{ admin, loading }}>
       <div>
         {/* Header band */}
-        <div className="border-b border-white/60 bg-white/40 backdrop-blur-sm">
+        <div className="header-band">
           <div className="container-shell py-8">
             <div className="flex items-start gap-5">
               <div className="hidden shrink-0 sm:block">
                 <img
                 src={`${import.meta.env.BASE_URL}logo.jpg`}
                 alt="ASSO.N.A.M."
-                className="h-12 rounded"
+                className="h-12 rounded shadow-subtle"
               />
               </div>
               <div className="min-w-0 flex-1">
@@ -97,7 +97,7 @@ const OrgAdminLayout = () => {
                 </Link>
                 {!loading && admin && (
                   <button
-                    className="rounded-md border border-neutral-200 px-3 py-1.5 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900"
+                    className="btn-ghost px-3 py-1.5 text-sm"
                     type="button"
                     onClick={handleLogout}
                   >
@@ -111,18 +111,14 @@ const OrgAdminLayout = () => {
           {/* Nav tabs */}
           {!loading && admin && (
             <div className="container-shell">
-              <nav className="-mb-px flex gap-6">
+              <nav className="flex flex-wrap gap-3 pb-5">
                 {NAV_ITEMS.map((item) => (
                   <NavLink
                     key={item.to}
                     to={item.to}
                     end={item.end}
                     className={({ isActive }) =>
-                      `border-b-2 pb-3 text-sm font-medium transition ${
-                        isActive
-                          ? "border-brand text-brand"
-                          : "border-transparent text-neutral-500 hover:text-neutral-700"
-                      }`
+                      `${isActive ? "nav-pill nav-pill-active" : "nav-pill nav-pill-idle"}`
                     }
                   >
                     {item.label}

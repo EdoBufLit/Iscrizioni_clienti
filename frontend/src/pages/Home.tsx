@@ -38,41 +38,42 @@ const Home = () => {
           aria-hidden="true"
         />
         <div
-          className="absolute inset-0 bg-gradient-to-t from-neutral-900/80 via-neutral-900/40 to-transparent"
+          className="absolute inset-0 bg-gradient-to-t from-neutral-900/85 via-neutral-900/45 to-transparent"
           aria-hidden="true"
         />
 
         <div className="relative py-32 md:py-44">
           <div className="container-shell">
-            <div className="max-w-2xl text-center md:text-left">
-              <img
+            <div className="mx-auto max-w-3xl text-center">
+              <motion.img
                 src={`${import.meta.env.BASE_URL}logo.jpg`}
                 alt=""
-                className="mx-auto mb-6 h-20 md:h-24 object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] md:mx-0 mix-blend-screen invert filter"
+                className="hero-logo mx-auto mb-8 h-28 md:h-32 object-contain drop-shadow-[0_0_18px_rgba(255,255,255,0.35)]"
                 aria-hidden="true"
+                {...heroBlur(0)}
               />
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
                 Associazione Nazionale Arti e Mestieri
               </p>
               <motion.h1
-                className="mt-4 font-display text-4xl font-bold tracking-tight leading-tight text-white md:text-5xl lg:text-[3.5rem]"
+                className="mt-4 font-display text-4xl font-semibold tracking-tight leading-tight text-white md:text-5xl lg:text-[3.75rem]"
                 {...heroBlur(0)}
               >
                 Gestione associativa<br className="hidden md:inline" /> e portale soci integrato.
               </motion.h1>
               <motion.p
-                className="mx-auto mt-6 max-w-xl text-base leading-7 text-white/80 md:mx-0 md:text-lg md:leading-8"
+                className="mx-auto mt-6 max-w-2xl text-base leading-7 text-white/80 md:text-lg md:leading-8"
                 {...heroBlur(0.12)}
               >
                 Iscrizioni digitali, raccolta documenti, contabilità e
                 adempimenti — tutto in un unico portale ordinato e verificabile.
               </motion.p>
-              <motion.div className="mt-10 flex flex-wrap justify-center gap-4 md:justify-start" {...heroBlur(0.22)}>
+              <motion.div className="mt-10 flex flex-wrap justify-center gap-4" {...heroBlur(0.22)}>
                 <Link className="btn-primary px-7 py-3 text-base" to="/associazioni">
                   Diventa socio
                 </Link>
                 <a
-                  className="inline-flex items-center justify-center rounded-md border border-white/25 px-6 py-3 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-white/10 cursor-pointer"
+                  className="inline-flex items-center justify-center rounded-md border border-white/30 bg-white/10 px-6 py-3 text-sm font-semibold text-white backdrop-blur-sm transition hover:border-white/50 hover:bg-white/20 cursor-pointer"
                   onClick={handleAreaRiservata}
                   role="button"
                 >

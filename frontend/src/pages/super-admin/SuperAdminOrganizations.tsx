@@ -166,6 +166,7 @@ const SuperAdminOrganizations = () => {
         <button
           className="inline-flex items-center justify-center rounded-md bg-brand px-5 py-2 text-sm font-semibold text-white shadow-subtle transition hover:-translate-y-px hover:bg-brand-dark hover:shadow-card active:translate-y-0"
           onClick={() => openModal("create")}
+          data-component="superadmin-orgs-open-modal"
         >
           Nuova associazione
         </button>
@@ -229,6 +230,7 @@ const SuperAdminOrganizations = () => {
                             <button
                                 onClick={() => openModal(org.card_min ? "add-stock" : "range", org)}
                                 className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
+                                data-component="superadmin-orgs-manage-cards"
                             >
                                 Gestione
                             </button>

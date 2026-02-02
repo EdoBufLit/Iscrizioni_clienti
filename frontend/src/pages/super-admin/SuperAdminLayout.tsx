@@ -42,23 +42,23 @@ const SuperAdminLayout = () => {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-neutral-50 text-neutral-500">
+      <div className="flex h-screen items-center justify-center text-neutral-500">
         Caricamento...
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-neutral-50 font-sans text-neutral-900">
+    <div className="min-h-screen text-neutral-900">
       {/* Header band */}
-      <div className="border-b border-white/60 bg-white/40 backdrop-blur-sm sticky top-0 z-30">
+      <div className="header-band sticky top-0 z-30">
         <div className="container-shell py-6">
           <div className="flex items-start gap-5">
             <div className="hidden shrink-0 sm:block">
               <img
                 src={`${import.meta.env.BASE_URL}logo.jpg`}
                 alt="ASSO.N.A.M."
-                className="h-12 rounded"
+                className="h-12 rounded shadow-subtle"
               />
             </div>
             <div className="min-w-0 flex-1">
@@ -84,7 +84,7 @@ const SuperAdminLayout = () => {
                 Torna al sito
               </Link>
               <button
-                className="rounded-md border border-neutral-200 px-3 py-1.5 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900 bg-white"
+                className="btn-ghost px-3 py-1.5 text-sm"
                 type="button"
                 onClick={handleLogout}
               >
@@ -94,18 +94,14 @@ const SuperAdminLayout = () => {
           </div>
 
           {/* Navigation Tabs */}
-          <div className="mt-8 flex gap-8 border-b border-neutral-200/50">
+          <div className="mt-8 flex flex-wrap gap-3 pb-5">
             {navLinks.map((link) => {
               const isActive = location.pathname === link.path;
               return (
                 <Link
                   key={link.path}
                   to={link.path}
-                  className={`-mb-px border-b-2 pb-3 text-sm font-medium transition ${
-                    isActive
-                      ? "border-brand text-brand"
-                      : "border-transparent text-neutral-500 hover:text-neutral-700"
-                  }`}
+                  className={`${isActive ? "nav-pill nav-pill-active" : "nav-pill nav-pill-idle"}`}
                 >
                   {link.label}
                 </Link>
