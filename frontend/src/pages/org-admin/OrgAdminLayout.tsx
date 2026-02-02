@@ -57,9 +57,9 @@ const OrgAdminLayout = () => {
             <div className="flex items-start gap-5">
               <div className="hidden shrink-0 sm:block">
                 <img
-                src={`${import.meta.env.BASE_URL}logo.jpg`}
+                src={`${import.meta.env.BASE_URL}logo-transparent.png`}
                 alt="ASSO.N.A.M."
-                className="h-12 rounded logo-mark"
+                className="h-12 rounded"
               />
               </div>
               <div className="min-w-0 flex-1">

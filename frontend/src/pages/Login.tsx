@@ -77,7 +77,7 @@ const Login = () => {
           <div className="mx-auto grid max-w-4xl overflow-hidden surface-strong md:grid-cols-2">
             <div className="flex flex-col justify-center px-8 py-12 sm:px-12">
               <div className="flex items-center gap-3">
-                <img src={`${import.meta.env.BASE_URL}logo.jpg`} alt="ASSO.N.A.M." className="h-10 rounded" />
+                <img src={`${import.meta.env.BASE_URL}logo-transparent.png`} alt="ASSO.N.A.M." className="h-10 rounded" />
                 <div>
                   <p className="text-sm font-bold text-neutral-900">ASSO.N.A.M.</p>
                   <p className="text-[11px] leading-tight text-neutral-500">Associazione Nazionale Arti e Mestieri</p>
@@ -107,7 +107,7 @@ const Login = () => {
         <div className="mx-auto grid max-w-4xl overflow-hidden surface-strong md:grid-cols-2">
           <div className="flex flex-col justify-center px-8 py-12 sm:px-12">
             <div className="flex items-center gap-3">
-              <img src={`${import.meta.env.BASE_URL}logo.jpg`} alt="ASSO.N.A.M." className="h-10 rounded" />
+              <img src={`${import.meta.env.BASE_URL}logo-transparent.png`} alt="ASSO.N.A.M." className="h-10 rounded" />
               <div>
                 <p className="text-sm font-bold text-neutral-900">ASSO.N.A.M.</p>
                 <p className="text-[11px] leading-tight text-neutral-500">Associazione Nazionale Arti e Mestieri</p>

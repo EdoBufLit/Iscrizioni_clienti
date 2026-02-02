@@ -202,24 +202,11 @@ body::before {
     box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
   }
 
-  .hero-logo {
-    mix-blend-mode: screen;
-    filter: invert(1) brightness(1.08) contrast(1.35);
-    background-color: transparent;
-  }
-
   .hero-logo-bg {
     max-width: min(1100px, 120vw);
-    opacity: 0.18;
-    filter: grayscale(1) contrast(1.2) brightness(1.1);
-    mix-blend-mode: soft-light;
-  }
-
-  .logo-mark {
-    mix-blend-mode: multiply;
-    filter: saturate(1.05) contrast(1.15);
-    opacity: 0.9;
-    background-color: transparent;
+    opacity: 0.28;
+    filter: grayscale(1) contrast(1.15) brightness(1.25);
+    mix-blend-mode: screen;
   }
 
   .header-band {

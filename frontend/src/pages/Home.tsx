@@ -43,7 +43,7 @@ const Home = () => {
         />
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden="true">
           <img
-            src={`${import.meta.env.BASE_URL}logo.jpg`}
+            src={`${import.meta.env.BASE_URL}logo-transparent.png`}
             alt=""
             className="hero-logo-bg h-full w-full object-contain"
           />
