@@ -88,6 +88,7 @@ class OperationLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     actor_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
+    actor_member_id = Column(Integer, ForeignKey("members.id"), nullable=True)
     actor_role = Column(String)
     action = Column(String, index=True)
     entity_type = Column(String, index=True)
@@ -139,6 +140,9 @@ class Member(Base):
     batch_id = Column(Integer, ForeignKey("card_batches.id"), nullable=True)
 
     joined_at = Column(DateTime, nullable=True)
+    member_type = Column(String, nullable=True)
+    internal_notes = Column(Text, nullable=True)
+    is_manual = Column(Boolean, default=False, nullable=False, server_default="0")
 
     accepted_statute_at = Column(DateTime, nullable=True)
     accepted_statute_version = Column(String, nullable=True)
@@ -158,6 +162,7 @@ class Member(Base):
 
     organization = relationship("Organization", back_populates="members")
     documents = relationship("MemberDocument", back_populates="member")
+    payments = relationship("MemberPayment", back_populates="member")
     tokens = relationship("Token", back_populates="member")
     batch = relationship("CardBatch")
 
@@ -179,12 +184,33 @@ class MemberDocument(Base):
     uploaded_at = Column(DateTime, default=datetime.utcnow)
 
     # Using String for SQLite compatibility to avoid Enum lookup issues with manual migration
-    status = Column(String, default=DocStatus.UPLOADED.value)
+    status = Column(String, default=DocStatus.PENDING.value)
     review_notes = Column(String, nullable=True)
+    rejection_note = Column(Text, nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
     reviewed_by = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
+    reviewed_by_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
+    replaces_document_id = Column(Integer, ForeignKey("member_documents.id"), nullable=True)
 
     member = relationship("Member", back_populates="documents")
+
+
+class MemberPayment(Base):
+    __tablename__ = "member_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    member_id = Column(Integer, ForeignKey("members.id"), nullable=False)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
+    admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
+    amount_cents = Column(Integer, nullable=False)
+    method = Column(String, nullable=False)  # cash | bank_transfer | other
+    paid_at = Column(DateTime, nullable=False)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    member = relationship("Member", back_populates="payments")
+    organization = relationship("Organization")
+    admin = relationship("AdminUser")
 
 class Token(Base):
     __tablename__ = "tokens"

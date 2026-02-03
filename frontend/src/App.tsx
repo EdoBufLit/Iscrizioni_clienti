@@ -11,7 +11,6 @@ const AffiliazioneDettaglio = lazy(() => import("./pages/AffiliazioneDettaglio")
 const Iscrizione = lazy(() => import("./pages/Iscrizione"));
 const Contatti = lazy(() => import("./pages/Contatti"));
 const Login = lazy(() => import("./pages/Login"));
-const Register = lazy(() => import("./pages/Register"));
 const MagicLinkVerify = lazy(() => import("./pages/MagicLinkVerify"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -60,7 +59,6 @@ const App = () => {
           <Route path="associazioni/:slug/iscrizione" element={<Iscrizione />} />
           <Route path="contatti" element={<Contatti />} />
           <Route path="login" element={<Login />} />
-          <Route path="registrati" element={<Register />} />
           <Route path="auth/verify" element={<MagicLinkVerify />} />
           <Route path="dashboard" element={<DashboardLayout />}>
             <Route index element={<DashboardHome />} />

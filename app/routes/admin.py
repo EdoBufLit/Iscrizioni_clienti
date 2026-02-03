@@ -5,6 +5,7 @@ from sqlalchemy import func
 from app.db import get_db
 from app.models import AdminUser, AdminRole, Member, CardBatch, MemberDocument, DocStatus, MemberStatus, Organization
 from app.services.card import assign_next_card
+from app import audit
 from app.config import settings
 from app.security import verify_password
 from app import audit
@@ -128,8 +129,20 @@ def assign_card_manual(request: Request, member_id: int, db: Session = Depends(g
     if not admin:
         return RedirectResponse(url="/admin/login")
 
-    if assign_next_card(db, member_id, admin.org_id):
-        db.commit()
+    member = db.query(Member).filter(Member.id == member_id).first()
+    if member and member.card_no is None:
+        try:
+            assigned = assign_next_card(db, member.org_id)
+            member.card_no = assigned
+            if member.status == MemberStatus.PENDING_CARDS:
+                member.status = MemberStatus.ACTIVE
+                if not member.joined_at:
+                    member.joined_at = datetime.utcnow()
+            db.commit()
+        except HTTPException:
+            # Cards exhausted - leave member in current state
+            member.status = MemberStatus.PENDING_CARDS
+            db.commit()
 
     return RedirectResponse(url=f"/admin/members/{member_id}", status_code=status.HTTP_302_FOUND)
 
@@ -158,6 +171,19 @@ def edit_member(
     member.email = email
     member.phone = phone
     member.fiscal_code = fiscal_code
+    db.commit()
+
+    audit.log_operation(
+        db,
+        action="member.update",
+        entity_type="member",
+        entity_id=member.id,
+        actor_admin_id=admin.id,
+        actor_role=admin.role.value if hasattr(admin.role, "value") else str(admin.role),
+        metadata={"fields": ["first_name", "last_name", "email", "phone", "fiscal_code"]},
+        ip=request.client.host if request.client else "unknown",
+        user_agent=request.headers.get("user-agent"),
+    )
     db.commit()
 
     return RedirectResponse(url=f"/admin/members/{member_id}", status_code=status.HTTP_302_FOUND)

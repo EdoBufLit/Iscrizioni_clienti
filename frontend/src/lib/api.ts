@@ -178,6 +178,51 @@ export async function fetchMe(): Promise<MemberProfile> {
   return res.json();
 }
 
+export type MemberDocumentItem = {
+  id: number;
+  type: string;
+  filename: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  uploaded_at: string | null;
+  status: string;
+  rejection_note?: string | null;
+  reviewed_at?: string | null;
+  replaces_document_id?: number | null;
+  download_url: string;
+};
+
+export type MemberDocumentsResponse = {
+  required_types: string[];
+  items: MemberDocumentItem[];
+};
+
+export async function fetchMemberDocuments(): Promise<MemberDocumentsResponse> {
+  const res = await fetch("/api/member/documents");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error("Failed to fetch documents");
+  return res.json();
+}
+
+export async function resubmitMemberDocument(
+  docId: number,
+  file: File,
+): Promise<{ ok: boolean; id: number; status: string }> {
+  const body = new FormData();
+  body.append("document", file);
+  const res = await fetch(`/api/member/documents/${docId}/resubmit`, {
+    method: "POST",
+    body,
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 400) {
+    const payload = await res.json().catch(() => null);
+    throw new Error(payload?.detail ?? "Dati non validi");
+  }
+  if (!res.ok) throw new Error("Errore durante il reinvio del documento");
+  return res.json();
+}
+
 export async function changePassword(
   newPassword: string,
 ): Promise<{ status: string; message: string }> {
@@ -363,6 +408,8 @@ export type OrgAdminMetrics = {
   cards_used: number | null;
   cards_remaining: number | null;
   pending_requests_count: number | null;
+  documents_pending_review?: number | null;
+  documents_rejected?: number | null;
 };
 
 export async function fetchOrgAdminMetrics(): Promise<OrgAdminMetrics> {
@@ -375,16 +422,48 @@ export async function fetchOrgAdminMetrics(): Promise<OrgAdminMetrics> {
 export type OrgAdminMember = {
   id: number;
   name: string;
-  email: string;
+  email: string | null;
   status: string | null;
   card_no: number | null;
   joined_at: string | null;
   docs_count: number;
+  is_paid?: boolean;
+  last_payment_at?: string | null;
+  has_access?: boolean;
+  is_manual?: boolean;
 };
 
 export type OrgAdminMembersResponse = {
   items: OrgAdminMember[];
   total: number;
+};
+
+export type CreateOrgAdminMemberInput = {
+  first_name: string;
+  last_name: string;
+  email?: string;
+  phone?: string;
+  fiscal_code?: string;
+  joined_at?: string;
+  member_type?: string;
+  internal_notes?: string;
+  is_manual?: boolean;
+  send_access_email?: boolean;
+};
+
+export type OrgAdminMemberCreated = {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  phone: string | null;
+  fiscal_code: string | null;
+  status: string | null;
+  joined_at: string | null;
+  member_type: string | null;
+  internal_notes: string | null;
+  is_manual: boolean;
+  email_sent: boolean;
 };
 
 export type CardStock = {
@@ -624,7 +703,8 @@ export async function restoreOrgAdmin(
   return res.json();
 }
 
-export type IncreaseCardsResult = {
+export type AddBatchResult = {
+  ok: boolean;
   batch_id: number;
   start_no: number;
   end_no: number;
@@ -632,27 +712,54 @@ export type IncreaseCardsResult = {
   cards_remaining: number;
 };
 
-export async function increaseOrgCardStock(
+export async function addOrgCardBatch(
   orgId: number,
-  amount: number,
-  reason?: string,
-  paidRef?: string,
-): Promise<IncreaseCardsResult> {
-  const body: Record<string, unknown> = { amount };
-  if (reason) body.reason = reason;
-  if (paidRef) body.paid_ref = paidRef;
-  const res = await fetch(`/api/super-admin/orgs/${orgId}/cards/increase`, {
+  fromNo: number,
+  toNo: number,
+): Promise<AddBatchResult> {
+  const res = await fetch(`/api/super-admin/orgs/${orgId}/cards/add-batch`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ from_no: fromNo, to_no: toNo }),
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 409) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.detail ?? "Range in conflitto con altro lotto");
+  }
   if (res.status === 400) {
     const data = await res.json().catch(() => null);
     throw new Error(data?.detail ?? "Dati non validi");
   }
   if (res.status === 404) throw new Error("Organizzazione non trovata");
-  if (!res.ok) throw new Error("Errore nell'aggiunta tessere");
+  if (!res.ok) throw new Error("Errore nell'aggiunta lotto tessere");
+  return res.json();
+}
+
+export type OrgBatch = {
+  id: number;
+  start_no: number;
+  end_no: number;
+  next_no: number;
+  total: number;
+  assigned: number;
+  remaining: number;
+};
+
+export type OrgBatchesResult = {
+  batches: OrgBatch[];
+  summary: {
+    total: number;
+    assigned: number;
+    remaining: number;
+  };
+};
+
+export async function fetchOrgBatches(orgId: number): Promise<OrgBatchesResult> {
+  const res = await fetch(`/api/super-admin/organizations/${orgId}/batches`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Organizzazione non trovata");
+  if (!res.ok) throw new Error("Errore nel caricamento lotti");
   return res.json();
 }
 
@@ -673,17 +780,83 @@ export async function fetchVersion(): Promise<VersionInfo> {
 export async function fetchOrgAdminMembers(params?: {
   q?: string;
   status?: string;
+  access?: string;
+  source?: string;
+  docs?: string;
+  order?: string;
   limit?: number;
   offset?: number;
 }): Promise<OrgAdminMembersResponse> {
   const sp = new URLSearchParams();
   if (params?.q) sp.set("q", params.q);
   if (params?.status) sp.set("status", params.status);
+  if (params?.access) sp.set("access", params.access);
+  if (params?.source) sp.set("source", params.source);
+  if (params?.docs) sp.set("docs", params.docs);
+  if (params?.order) sp.set("order", params.order);
   if (params?.limit != null) sp.set("limit", String(params.limit));
   if (params?.offset != null) sp.set("offset", String(params.offset));
   const qs = sp.toString();
   const res = await fetch(`/api/org-admin/members${qs ? `?${qs}` : ""}`);
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error("Failed to fetch members");
+  return res.json();
+}
+
+export async function createOrgAdminMember(
+  data: CreateOrgAdminMemberInput,
+): Promise<OrgAdminMemberCreated> {
+  const res = await fetch("/api/org-admin/members", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 400 || res.status === 422) {
+    const payload = await res.json().catch(() => null);
+    throw new Error(payload?.detail ?? "Dati non validi");
+  }
+  if (!res.ok) throw new Error("Errore nella creazione del socio");
+  return res.json();
+}
+
+export type ManualPaymentInput = {
+  amount: number;
+  method: string;
+  paid_at: string;
+  notes?: string;
+};
+
+export type ManualPaymentResult = {
+  ok: boolean;
+  payment: {
+    id: number;
+    amount_cents: number;
+    amount: number;
+    method: string;
+    paid_at: string | null;
+    notes?: string | null;
+  };
+  member_status: string | null;
+  card_assigned: boolean;
+};
+
+export async function createManualPayment(
+  memberId: number,
+  payload: ManualPaymentInput,
+): Promise<ManualPaymentResult> {
+  const res = await fetch(`/api/org-admin/members/${memberId}/payments/manual`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 400) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.detail ?? "Dati non validi");
+  }
+  if (res.status === 403) throw new Error("Permesso negato");
+  if (res.status === 404) throw new Error("Socio non trovato");
+  if (!res.ok) throw new Error("Errore durante il salvataggio del pagamento");
   return res.json();
 }

@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Form, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Form, status, UploadFile, File
 from fastapi.responses import RedirectResponse, FileResponse
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from app.db import get_db
-from app.models import Member, Token, TokenType, MemberDocument, MemberStatus, Organization, AdminUser, AdminRole
-from app.utils import generate_token, send_email, hash_token
+from app.models import Member, Token, TokenType, MemberDocument, MemberStatus, Organization, AdminUser, AdminRole, DocStatus
+from app.utils import generate_token, send_email, hash_token, save_upload_file
 from app.security import get_password_hash, verify_password
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
@@ -138,6 +138,96 @@ def download_document(request: Request, doc_id: int, db: Session = Depends(get_d
     return FileResponse(file_path, filename=doc.original_filename, media_type=doc.mime_type)
 
 
+@router.post("/api/member/documents/{doc_id}/resubmit")
+async def resubmit_document(
+    request: Request,
+    doc_id: int,
+    document: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    member = get_current_member(request, db)
+    if not member:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    doc = db.query(MemberDocument).filter(
+        MemberDocument.id == doc_id,
+        MemberDocument.member_id == member.id,
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if doc.status != DocStatus.REJECTED.value:
+        raise HTTPException(status_code=400, detail="Il documento puo essere reinviato solo se rigettato.")
+
+    sub_path = f"{member.org_id}/{member.id}"
+    rel_path, size_bytes, sha256 = await save_upload_file(document, sub_directory=sub_path)
+
+    new_doc = MemberDocument(
+        member_id=member.id,
+        doc_type=doc.doc_type,
+        rel_path=rel_path,
+        original_filename=document.filename,
+        mime_type=document.content_type,
+        size_bytes=size_bytes,
+        sha256=sha256,
+        status=DocStatus.PENDING.value,
+        replaces_document_id=doc.id,
+    )
+    db.add(new_doc)
+    db.commit()
+    db.refresh(new_doc)
+
+    audit.log_operation(
+        db,
+        action="member.document.resubmit",
+        entity_type="member_document",
+        entity_id=new_doc.id,
+        actor_member_id=member.id,
+        metadata={"replaces_document_id": doc.id, "doc_type": doc.doc_type},
+        ip=get_client_ip(request),
+    )
+    db.commit()
+
+    return {"ok": True, "id": new_doc.id, "status": new_doc.status}
+
+
+@router.get("/api/member/documents")
+def list_member_documents(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    member = get_current_member(request, db)
+    if not member:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    docs = (
+        db.query(MemberDocument)
+        .filter(MemberDocument.member_id == member.id)
+        .order_by(MemberDocument.uploaded_at.desc(), MemberDocument.id.desc())
+        .all()
+    )
+
+    return {
+        "required_types": ["identity", "fiscal_code"],
+        "items": [
+            {
+                "id": d.id,
+                "type": d.doc_type,
+                "filename": d.original_filename,
+                "mime_type": d.mime_type,
+                "size_bytes": d.size_bytes,
+                "uploaded_at": d.uploaded_at.isoformat() if d.uploaded_at else None,
+                "status": d.status,
+                "rejection_note": d.rejection_note,
+                "reviewed_at": d.reviewed_at.isoformat() if d.reviewed_at else None,
+                "replaces_document_id": d.replaces_document_id,
+                "download_url": f"/member/download/{d.id}",
+            }
+            for d in docs
+        ],
+    }
+
+
 # ── JSON API ──────────────────────────────────────────────────────
 
 from sqlalchemy import func
@@ -212,14 +302,19 @@ def api_auth_register(
 ):
     """
     Register a new member with password auth.
-    Returns 200 always to prevent email enumeration.
+    Requires a valid org_slug — public registration without an organization is disabled.
     """
+    from fastapi import HTTPException
+
     auth_limiter.check(get_client_ip(request))
 
-    # Find org
-    org = None
-    if org_slug:
-        org = db.query(Organization).filter(Organization.slug == org_slug).first()
+    # Registration requires a valid organization
+    if not org_slug:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    org = db.query(Organization).filter(Organization.slug == org_slug).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Not found")
 
     # Check if member already exists
     existing = db.query(Member).filter(Member.email == email).first()
@@ -233,12 +328,8 @@ def api_auth_register(
         # Already registered — don't reveal
         return {"status": "ok", "message": "Registrazione ricevuta."}
 
-    if not org:
-        # Without org, just create member without org_id
-        pass
-
     member = Member(
-        org_id=org.id if org else None,
+        org_id=org.id,
         first_name=first_name,
         last_name=last_name,
         email=email,

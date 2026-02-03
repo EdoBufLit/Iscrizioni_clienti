@@ -259,7 +259,8 @@ async def api_join_continue(
             original_filename=fiscal_code_document.filename,
             mime_type=fiscal_code_document.content_type,
             size_bytes=size_fc,
-            sha256=sha_fc
+            sha256=sha_fc,
+            status="pending"
         )
         db.add(doc_fc)
         audit.log_operation(
@@ -282,14 +283,19 @@ async def api_join_continue(
         # I'll skip entity_id in this step for simplicity or set it to 0/None.
 
         # Assign Card
-        assigned = assign_next_card(db, member.id, member.org_id)
-
-        if assigned:
+        try:
+            assigned = assign_next_card(db, member.org_id)
+            member.card_no = assigned
             member.status = MemberStatus.ACTIVE
             member.joined_at = datetime.utcnow()
-        else:
-            member.status = MemberStatus.PENDING_CARDS
-            logger.warning(f"Member {member.id} completed upload but no cards available.")
+        except HTTPException as exc:
+            if exc.status_code == 409:
+                # Cards exhausted - member goes to PENDING_CARDS status
+                member.status = MemberStatus.PENDING_CARDS
+                assigned = None
+                logger.warning(f"Member {member.id} completed upload but no cards available: {exc.detail}")
+            else:
+                raise
 
         # Mark token used
         token_entry.used_at = datetime.utcnow()
@@ -430,7 +436,8 @@ async def api_join_submit_multipart(
             original_filename=id_document.filename,
             mime_type=id_document.content_type,
             size_bytes=size_id,
-            sha256=sha_id
+            sha256=sha_id,
+            status="pending"
         )
         db.add(doc_obj_id)
         audit.log_operation(

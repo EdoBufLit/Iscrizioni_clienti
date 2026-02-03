@@ -100,7 +100,9 @@ const DashboardHome = () => {
                   <p className="mt-2 text-sm leading-6 text-neutral-600">
                     {user.status === "active"
                       ? "L'iscrizione è confermata e la tessera è attiva."
-                      : "La richiesta è stata inoltrata e sarà verificata dallo studio."}
+                      : user.status === "pending_cards"
+                        ? "L'iscrizione è stata approvata. La tessera sarà assegnata a breve."
+                        : "La richiesta è stata inoltrata e sarà verificata dallo studio."}
                   </p>
                 </>
               )}

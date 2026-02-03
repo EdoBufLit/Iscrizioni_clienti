@@ -48,6 +48,13 @@ def init_db():
         _add_column_if_missing(conn, "members", "decision_notes", "TEXT")
         _add_column_if_missing(conn, "members", "deleted_at", "DATETIME")
         _add_column_if_missing(conn, "members", "deleted_by_admin_id", "INTEGER REFERENCES admin_users(id)")
+        _add_column_if_missing(conn, "members", "member_type", "TEXT")
+        _add_column_if_missing(conn, "members", "internal_notes", "TEXT")
+        _add_column_if_missing(conn, "members", "is_manual", "INTEGER DEFAULT 0")
+        _add_column_if_missing(conn, "member_documents", "rejection_note", "TEXT")
+        _add_column_if_missing(conn, "member_documents", "reviewed_by_admin_id", "INTEGER REFERENCES admin_users(id)")
+        _add_column_if_missing(conn, "member_documents", "replaces_document_id", "INTEGER REFERENCES member_documents(id)")
+        _add_column_if_missing(conn, "operation_logs", "actor_member_id", "INTEGER REFERENCES members(id)")
 
     db = SessionLocal()
 

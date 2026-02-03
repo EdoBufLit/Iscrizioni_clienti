@@ -8,7 +8,10 @@ import re
 from sqlalchemy import func, text
 
 from app.db import get_db
-from app.models import AdminUser, AdminRole, Organization, OrgAdminToken, CardBatch, CardMovement
+from app.models import (
+    AdminUser, AdminRole, Organization, OrgAdminToken, CardBatch, CardMovement,
+    Member, MemberDocument, MemberPayment, Token
+)
 from app.security import verify_password
 from app.utils import generate_token, hash_token, send_email, save_upload_file
 from app.config import settings
@@ -405,35 +408,89 @@ def delete_organization(
     db: Session = Depends(get_db),
 ):
     """
-    Deactivate (soft-delete) an organization.
-    It remains in the database but is_active=False.
+    Hard delete an organization and all related data.
+    This action is irreversible.
     """
     admin = _require_super_admin(request, db)
     org = db.query(Organization).filter(Organization.id == org_id).first()
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    if not org.is_active:
-        return {"ok": True, "already_inactive": True}
+    org_name = org.name
+    org_slug = org.slug
 
-    org.is_active = False
+    # Get all members of this organization
+    member_ids = [m.id for m in db.query(Member.id).filter(Member.org_id == org_id).all()]
+
+    # Get all org admins of this organization
+    admin_ids = [a.id for a in db.query(AdminUser.id).filter(
+        AdminUser.org_id == org_id,
+        AdminUser.role == AdminRole.ORG_ADMIN
+    ).all()]
+
+    # Delete in correct order to respect FK constraints:
+
+    # 1. Delete tokens for members
+    if member_ids:
+        db.query(Token).filter(Token.member_id.in_(member_ids)).delete(synchronize_session=False)
+
+    # 2. Delete member documents
+    if member_ids:
+        db.query(MemberDocument).filter(MemberDocument.member_id.in_(member_ids)).delete(synchronize_session=False)
+
+    # 3. Delete member payments
+    db.query(MemberPayment).filter(MemberPayment.org_id == org_id).delete(synchronize_session=False)
+
+    # 4. Delete members
+    db.query(Member).filter(Member.org_id == org_id).delete(synchronize_session=False)
+
+    # 5. Delete org admin tokens
+    if admin_ids:
+        db.query(OrgAdminToken).filter(OrgAdminToken.admin_id.in_(admin_ids)).delete(synchronize_session=False)
+
+    # 6. Delete org admins
+    db.query(AdminUser).filter(
+        AdminUser.org_id == org_id,
+        AdminUser.role == AdminRole.ORG_ADMIN
+    ).delete(synchronize_session=False)
+
+    # 7. Delete card movements
+    db.query(CardMovement).filter(CardMovement.org_id == org_id).delete(synchronize_session=False)
+
+    # 8. Delete card batches
+    db.query(CardBatch).filter(CardBatch.org_id == org_id).delete(synchronize_session=False)
+
+    # 9. Delete the organization itself
+    db.delete(org)
 
     db.commit()
 
+    # Log after commit (org no longer exists, use metadata)
     audit.log_operation(
         db,
-        action="organization.deactivate",
+        action="organization.hard_delete",
         entity_type="organization",
-        entity_id=org.id,
+        entity_id=None,
         actor_admin_id=admin.id,
         actor_role="super_admin",
-        metadata={},
+        metadata={
+            "deleted_org_id": org_id,
+            "deleted_org_name": org_name,
+            "deleted_org_slug": org_slug,
+            "deleted_members_count": len(member_ids),
+            "deleted_admins_count": len(admin_ids),
+        },
         ip=get_client_ip(request),
         user_agent=request.headers.get("user-agent")
     )
     db.commit()
 
-    return {"ok": True}
+    logger.info(
+        "organization.hard_delete: org_id=%d slug=%s by super_admin=%d (members=%d, admins=%d)",
+        org_id, org_slug, admin.id, len(member_ids), len(admin_ids)
+    )
+
+    return {"ok": True, "deleted_slug": org_slug}
 
 
 @router.get("/organizations")
@@ -625,10 +682,9 @@ class SetCardRange(BaseModel):
     from_no: int
     to_no: int
 
-class IncreaseCards(BaseModel):
-    amount: int
-    reason: Optional[str] = None
-    paid_ref: Optional[str] = None
+class AddCardBatch(BaseModel):
+    from_no: int
+    to_no: int
 
 def check_card_overlap(db: Session, start_no: int, end_no: int, exclude_batch_id: Optional[int] = None):
     """
@@ -716,41 +772,30 @@ def set_initial_card_range(
     return {"ok": True, "start_no": body.from_no, "end_no": body.to_no}
 
 
-@router.post("/orgs/{org_id}/cards/increase")
-def increase_card_stock(
+@router.post("/orgs/{org_id}/cards/add-batch")
+def add_card_batch(
     request: Request,
     org_id: int,
-    body: IncreaseCards,
+    body: AddCardBatch,
     db: Session = Depends(get_db),
 ):
+    """Add a new card batch with explicit from/to range."""
     admin = _require_super_admin(request, db)
     # Ensure strict serialization for card allocation
     db.commit()
     db.execute(text("BEGIN IMMEDIATE"))
 
-    if body.amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be greater than zero")
+    if body.from_no <= 0 or body.to_no <= 0:
+        raise HTTPException(status_code=400, detail="I numeri devono essere interi positivi")
+    if body.from_no > body.to_no:
+        raise HTTPException(status_code=400, detail="Il numero iniziale deve essere minore o uguale al finale")
 
     org = db.query(Organization).filter(Organization.id == org_id).first()
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    # Compute next start_no from existing batches for this org
-    last_end = (
-        db.query(func.max(CardBatch.end_no))
-        .filter(CardBatch.org_id == org_id)
-        .scalar()
-    )
-
-    if last_end is None:
-         # No existing batches
-         raise HTTPException(status_code=400, detail="Imposta prima un intervallo iniziale")
-
-    start_no = last_end + 1
-    end_no = last_end + body.amount
-
-    # Check global overlap
-    conflict = check_card_overlap(db, start_no, end_no)
+    # Check global overlap (across all organizations)
+    conflict = check_card_overlap(db, body.from_no, body.to_no)
     if conflict:
         conflicting_org = db.query(Organization).filter(Organization.id == conflict.org_id).first()
         org_name = conflicting_org.name if conflicting_org else f"Org #{conflict.org_id}"
@@ -761,43 +806,98 @@ def increase_card_stock(
 
     batch = CardBatch(
         org_id=org_id,
-        start_no=start_no,
-        end_no=end_no,
-        next_no=start_no,
+        start_no=body.from_no,
+        end_no=body.to_no,
+        next_no=body.from_no,
     )
     db.add(batch)
     db.flush()
 
+    amount = body.to_no - body.from_no + 1
     movement = CardMovement(
         org_id=org_id,
         admin_id=admin.id,
-        delta=body.amount,
-        reason=body.reason or "stock_increase",
-        paid_ref=body.paid_ref,
+        delta=amount,
+        reason="batch_added",
     )
     db.add(movement)
     db.commit()
 
-    audit.card_stock_increased(
-        org_id=org_id,
-        amount=body.amount,
-        admin_id=admin.id,
-        reason=body.reason,
-        paid_ref=body.paid_ref,
+    audit.log_operation(
+        db,
+        action="org.cards.batch_added",
+        entity_type="organization",
+        entity_id=org.id,
+        actor_admin_id=admin.id,
+        actor_role="super_admin",
+        metadata={"from": body.from_no, "to": body.to_no, "batch_id": batch.id},
+        ip=get_client_ip(request),
     )
+    db.commit()
 
     # Return updated stock summary
-    batches = db.query(CardBatch).filter(CardBatch.org_id == org_id).all()
+    batches = db.query(CardBatch).filter(CardBatch.org_id == org_id).order_by(CardBatch.start_no).all()
     total = sum(b.end_no - b.start_no + 1 for b in batches)
     remaining = sum(max(b.end_no - b.next_no + 1, 0) for b in batches)
 
     return {
+        "ok": True,
         "batch_id": batch.id,
-        "start_no": start_no,
-        "end_no": end_no,
+        "start_no": body.from_no,
+        "end_no": body.to_no,
         "cards_total": total,
         "cards_remaining": remaining,
     }
+
+
+@router.get("/organizations/{org_id}/batches")
+def get_org_batches(
+    request: Request,
+    org_id: int,
+    db: Session = Depends(get_db),
+):
+    """Get all card batches for an organization."""
+    _require_super_admin(request, db)
+
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    batches = db.query(CardBatch).filter(CardBatch.org_id == org_id).order_by(CardBatch.start_no).all()
+
+    return {
+        "batches": [
+            {
+                "id": b.id,
+                "start_no": b.start_no,
+                "end_no": b.end_no,
+                "next_no": b.next_no,
+                "total": b.end_no - b.start_no + 1,
+                "assigned": b.next_no - b.start_no,
+                "remaining": max(b.end_no - b.next_no + 1, 0),
+            }
+            for b in batches
+        ],
+        "summary": {
+            "total": sum(b.end_no - b.start_no + 1 for b in batches),
+            "assigned": sum(b.next_no - b.start_no for b in batches),
+            "remaining": sum(max(b.end_no - b.next_no + 1, 0) for b in batches),
+        }
+    }
+
+
+# Legacy endpoint redirect (deprecated)
+@router.post("/orgs/{org_id}/cards/increase")
+def increase_card_stock_legacy(
+    request: Request,
+    org_id: int,
+    db: Session = Depends(get_db),
+):
+    """Deprecated: use /orgs/{org_id}/cards/add-batch instead."""
+    raise HTTPException(
+        status_code=400,
+        detail="Endpoint deprecato. Usa il nuovo formato con range dalla/alla."
+    )
 
 
 # ── Test email ──────────────────────────────────────────────────

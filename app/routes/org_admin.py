@@ -4,15 +4,30 @@ import io
 import os
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, Body
 from fastapi.responses import StreamingResponse, FileResponse
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, case, and_, select
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
 from fastapi import UploadFile, File
 from app.db import get_db
-from app.models import AdminUser, AdminRole, OrgAdminToken, Member, MemberStatus, CardBatch, CardMovement, Organization, MemberDocument, DocStatus
+from app.models import (
+    AdminUser,
+    AdminRole,
+    OrgAdminToken,
+    Member,
+    MemberStatus,
+    CardBatch,
+    CardMovement,
+    Organization,
+    MemberDocument,
+    DocStatus,
+    MemberPayment,
+    OperationLog,
+    Token,
+    TokenType,
+)
 from app.utils import generate_token, hash_token, send_email, save_upload_file
 from app.services.card import assign_next_card
 from app.config import settings
@@ -29,6 +44,8 @@ auth_router = APIRouter(prefix="/auth")
 
 def _get_current_org_admin(request: Request, db: Session):
     """Return the authenticated org admin from the session, or None."""
+    if request.session.get("admin_id"):
+        return None
     admin_id = request.session.get("org_admin_id")
     if not admin_id:
         return None
@@ -39,6 +56,73 @@ def _get_current_org_admin(request: Request, db: Session):
         AdminUser.deleted_at.is_(None), # Added deleted_at filter
     ).first()
     return admin
+
+
+ACCESS_EMAIL_THROTTLE_MINUTES = 10
+
+
+def _get_last_access_email_token(db: Session, member_id: int) -> Optional[Token]:
+    return (
+        db.query(Token)
+        .filter(
+            Token.member_id == member_id,
+            Token.purpose == TokenType.LOGIN_MAGIC_LINK,
+        )
+        .order_by(Token.created_at.desc())
+        .first()
+    )
+
+
+def _send_member_magic_link(
+    db: Session,
+    request: Request,
+    member: Member,
+) -> tuple[bool, datetime]:
+    token_str = generate_token()
+    token = Token(
+        member_id=member.id,
+        purpose=TokenType.LOGIN_MAGIC_LINK,
+        token_hash=hash_token(token_str),
+        expires_at=datetime.utcnow() + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES),
+    )
+    db.add(token)
+    db.commit()
+    db.refresh(token)
+
+    frontend_base = settings.FRONTEND_URL.rstrip("/")
+    if not frontend_base:
+        frontend_base = str(request.base_url).rstrip("/")
+
+    link = f"{frontend_base}/auth/verify?token={token_str}&role=member"
+    logger.info("Generated member magic link: %s", link.replace(token_str, "***"))
+
+    email_sent = send_email(
+        to_email=member.email,
+        subject="Accesso Area Riservata - ASSO.N.A.M.",
+        body=(
+            "Sei stato registrato come socio. "
+            f"Clicca qui per accedere alla tua area riservata: {link}\n\n"
+            f"Il link scade tra {settings.LOGIN_TOKEN_EXPIRE_MINUTES} minuti."
+        ),
+    )
+    if not email_sent:
+        logger.warning("Failed to send magic link email to %s", member.email)
+
+    return email_sent, token.created_at or datetime.utcnow()
+
+
+class CreateMemberBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    first_name: str = Field(..., min_length=1)
+    last_name: str = Field(..., min_length=1)
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    fiscal_code: Optional[str] = None
+    joined_at: Optional[date] = None
+    member_type: Optional[str] = None
+    internal_notes: Optional[str] = None
+    is_manual: bool = True
+    send_access_email: bool = False
 
 
 @auth_router.post("/magic-link")
@@ -320,6 +404,24 @@ def org_metrics(request: Request, db: Session = Depends(get_db)):
         Member.status != MemberStatus.REJECTED,
     ).scalar()
 
+    documents_pending_review = db.query(func.count(MemberDocument.id)).join(
+        Member, MemberDocument.member_id == Member.id
+    ).filter(
+        Member.org_id == org_id,
+        Member.deleted_at.is_(None),
+        Member.status != MemberStatus.REJECTED,
+        MemberDocument.status.in_([DocStatus.PENDING.value, DocStatus.UPLOADED.value]),
+    ).scalar()
+
+    documents_rejected = db.query(func.count(MemberDocument.id)).join(
+        Member, MemberDocument.member_id == Member.id
+    ).filter(
+        Member.org_id == org_id,
+        Member.deleted_at.is_(None),
+        Member.status != MemberStatus.REJECTED,
+        MemberDocument.status == DocStatus.REJECTED.value,
+    ).scalar()
+
     # Cards: computed from batches
     batches = db.query(CardBatch).filter(CardBatch.org_id == org_id).all()
     if batches:
@@ -337,6 +439,8 @@ def org_metrics(request: Request, db: Session = Depends(get_db)):
         "cards_used": cards_used,
         "cards_remaining": cards_remaining,
         "pending_requests_count": pending_requests_count,
+        "documents_pending_review": documents_pending_review,
+        "documents_rejected": documents_rejected,
     }
 
 
@@ -345,6 +449,10 @@ def list_org_members(
     request: Request,
     q: Optional[str] = None,
     status: Optional[str] = None,
+    access: Optional[str] = None,
+    source: Optional[str] = None,
+    docs: Optional[str] = None,
+    order: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
     db: Session = Depends(get_db),
@@ -359,10 +467,11 @@ def list_org_members(
         Member.deleted_at.is_(None),  # Exclude deleted
     )
 
-    # Exclude rejected by default unless requested (optional param, but let's stick to default behavior first)
-    # The requirement: "GET /api/org-admin/members should return ONLY pending_* and approved; exclude rejected; exclude deleted"
-    # So we strictly filter out rejected.
-    query = query.filter(Member.status != MemberStatus.REJECTED)
+    exclude_rejected = True
+    if status in {"suspended", "rejected"}:
+        exclude_rejected = False
+    if exclude_rejected:
+        query = query.filter(Member.status != MemberStatus.REJECTED)
 
     if q:
         pattern = f"%{q}%"
@@ -371,19 +480,93 @@ def list_org_members(
                 Member.first_name.ilike(pattern),
                 Member.last_name.ilike(pattern),
                 Member.email.ilike(pattern),
+                Member.fiscal_code.ilike(pattern),
             )
         )
 
     if status:
-        query = query.filter(Member.status == status)
+        if status == "active":
+            query = query.filter(Member.status == MemberStatus.ACTIVE)
+        elif status == "pending":
+            query = query.filter(
+                Member.status.in_([
+                    MemberStatus.PENDING_VERIFICATION,
+                    MemberStatus.PENDING_DOCS,
+                    MemberStatus.PENDING_CARDS,
+                ])
+            )
+        elif status in {"suspended", "rejected"}:
+            query = query.filter(Member.status == MemberStatus.REJECTED)
+        else:
+            query = query.filter(Member.status == status)
+
+    if access in {"with", "without"}:
+        if access == "with":
+            query = query.filter(Member.password_hash.isnot(None))
+        else:
+            query = query.filter(Member.password_hash.is_(None))
+
+    if source in {"manual", "online"}:
+        if source == "manual":
+            query = query.filter(Member.is_manual.is_(True))
+        else:
+            query = query.filter(or_(Member.is_manual.is_(False), Member.is_manual.is_(None)))
+
+    if docs in {"pending", "rejected", "approved"}:
+        pending_statuses = [DocStatus.PENDING.value, DocStatus.UPLOADED.value]
+        if docs == "pending":
+            query = query.filter(
+                db.query(MemberDocument.id)
+                .filter(
+                    MemberDocument.member_id == Member.id,
+                    MemberDocument.status.in_(pending_statuses),
+                )
+                .exists()
+            )
+        elif docs == "rejected":
+            query = query.filter(
+                db.query(MemberDocument.id)
+                .filter(
+                    MemberDocument.member_id == Member.id,
+                    MemberDocument.status == DocStatus.REJECTED.value,
+                )
+                .exists()
+            )
+        else:
+            has_docs = db.query(MemberDocument.id).filter(
+                MemberDocument.member_id == Member.id
+            ).exists()
+            has_bad = db.query(MemberDocument.id).filter(
+                MemberDocument.member_id == Member.id,
+                MemberDocument.status.in_(pending_statuses + [DocStatus.REJECTED.value]),
+            ).exists()
+            query = query.filter(has_docs, ~has_bad)
 
     total = query.count()
-    members = (
-        query.order_by(Member.id.desc())
-        .offset(offset)
-        .limit(min(limit, 100))
-        .all()
+    status_rank = case(
+        (Member.status == MemberStatus.ACTIVE, 1),
+        (Member.status == MemberStatus.PENDING_VERIFICATION, 2),
+        (Member.status == MemberStatus.PENDING_DOCS, 3),
+        (Member.status == MemberStatus.PENDING_CARDS, 4),
+        (Member.status == MemberStatus.REJECTED, 5),
+        else_=9,
     )
+
+    order_key = (order or "joined_at_desc").lower()
+    if order_key == "joined_at_asc":
+        query = query.order_by(Member.joined_at.is_(None), Member.joined_at.asc())
+    elif order_key == "last_name_asc":
+        query = query.order_by(Member.last_name.asc(), Member.first_name.asc())
+    elif order_key == "last_name_desc":
+        query = query.order_by(Member.last_name.desc(), Member.first_name.desc())
+    elif order_key == "status_asc":
+        query = query.order_by(status_rank.asc(), Member.last_name.asc())
+    elif order_key == "status_desc":
+        query = query.order_by(status_rank.desc(), Member.last_name.asc())
+    else:
+        query = query.order_by(Member.joined_at.is_(None), Member.joined_at.desc())
+
+    members = query.offset(offset).limit(min(limit, 100)).all()
 
     # Avoid N+1 for docs_count
     member_ids = [m.id for m in members]
@@ -397,6 +580,16 @@ def list_org_members(
         )
         docs_counts = {r[0]: r[1] for r in rows}
 
+    payments_latest = {}
+    if member_ids:
+        pay_rows = (
+            db.query(MemberPayment.member_id, func.max(MemberPayment.paid_at))
+            .filter(MemberPayment.member_id.in_(member_ids))
+            .group_by(MemberPayment.member_id)
+            .all()
+        )
+        payments_latest = {r[0]: r[1] for r in pay_rows}
+
     return {
         "items": [
             {
@@ -408,10 +601,120 @@ def list_org_members(
                 "joined_at": m.joined_at.isoformat() if m.joined_at else None,
                 "created_at": m.joined_at.isoformat() if m.joined_at else None, # fallback if no created_at
                 "docs_count": docs_counts.get(m.id, 0),
+                "is_paid": m.id in payments_latest,
+                "last_payment_at": payments_latest.get(m.id).isoformat() if payments_latest.get(m.id) else None,
+                "has_access": bool(m.password_hash),
+                "is_manual": bool(m.is_manual),
             }
             for m in members
         ],
         "total": total,
+    }
+
+
+@router.post("/members")
+def create_org_member(
+    request: Request,
+    body: CreateMemberBody,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    first_name = body.first_name.strip()
+    last_name = body.last_name.strip()
+    if not first_name or not last_name:
+        raise HTTPException(status_code=400, detail="Nome e cognome sono obbligatori.")
+
+    email = body.email.strip() if body.email else None
+    if email == "":
+        email = None
+    phone = body.phone.strip() if body.phone else None
+    if phone == "":
+        phone = None
+    fiscal_code = body.fiscal_code.strip() if body.fiscal_code else None
+    if fiscal_code == "":
+        fiscal_code = None
+    member_type = body.member_type.strip() if body.member_type else None
+    if member_type == "":
+        member_type = None
+    internal_notes = body.internal_notes.strip() if body.internal_notes else None
+    if internal_notes == "":
+        internal_notes = None
+
+    if email:
+        existing = db.query(Member).filter(
+            func.lower(Member.email) == email.lower(),
+            Member.org_id == admin.org_id,
+            Member.deleted_at.is_(None),
+            Member.status != MemberStatus.REJECTED,
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Esiste già un socio con questa email.")
+
+    if body.send_access_email and not email:
+        raise HTTPException(status_code=400, detail="L'email è obbligatoria per inviare l'accesso.")
+
+    joined_at_date = body.joined_at or datetime.utcnow().date()
+    joined_at = datetime.combine(joined_at_date, datetime.min.time())
+
+    member = Member(
+        org_id=admin.org_id,
+        first_name=first_name,
+        last_name=last_name,
+        email=email,
+        phone=phone,
+        fiscal_code=fiscal_code,
+        status=MemberStatus.PENDING_DOCS,
+        joined_at=joined_at,
+        member_type=member_type,
+        internal_notes=internal_notes,
+        is_manual=body.is_manual,
+        signup_ip=get_client_ip(request),
+        signup_user_agent=request.headers.get("user-agent"),
+    )
+
+    db.add(member)
+    db.commit()
+    db.refresh(member)
+
+    email_sent = False
+    access_email_sent_at = None
+    if body.send_access_email and email:
+        email_sent, access_email_sent_at = _send_member_magic_link(db, request, member)
+
+    audit.log_operation(
+        db,
+        action="member.manual_create",
+        entity_type="member",
+        entity_id=member.id,
+        actor_admin_id=admin.id,
+        actor_role=AdminRole.ORG_ADMIN.value,
+        metadata={
+            "org_id": admin.org_id,
+            "email_sent": email_sent,
+            "is_manual": member.is_manual,
+        },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+
+    return {
+        "id": member.id,
+        "first_name": member.first_name,
+        "last_name": member.last_name,
+        "email": member.email,
+        "phone": member.phone,
+        "fiscal_code": member.fiscal_code,
+        "status": member.status.value if member.status else None,
+        "joined_at": member.joined_at.isoformat() if member.joined_at else None,
+        "member_type": member.member_type,
+        "internal_notes": member.internal_notes,
+        "is_manual": member.is_manual,
+        "email_sent": email_sent,
+        "access_email_sent_at": access_email_sent_at.isoformat() if access_email_sent_at else None,
     }
 
 
@@ -429,6 +732,47 @@ def get_member_detail(
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
 
+    last_token = _get_last_access_email_token(db, member.id)
+    last_access_email_at = last_token.created_at.isoformat() if last_token and last_token.created_at else None
+    payments = (
+        db.query(MemberPayment)
+        .filter(MemberPayment.member_id == member.id)
+        .order_by(MemberPayment.paid_at.desc(), MemberPayment.id.desc())
+        .limit(5)
+        .all()
+    )
+    doc_ids_sub = select(MemberDocument.id).where(MemberDocument.member_id == member.id)
+    payment_ids_sub = select(MemberPayment.id).where(MemberPayment.member_id == member.id)
+
+    activities = (
+        db.query(OperationLog)
+        .filter(
+            or_(
+                and_(OperationLog.entity_type == "member", OperationLog.entity_id == member.id),
+                and_(OperationLog.entity_type == "member_document", OperationLog.entity_id.in_(doc_ids_sub)),
+                and_(OperationLog.entity_type == "member_payment", OperationLog.entity_id.in_(payment_ids_sub)),
+            )
+        )
+        .order_by(OperationLog.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    admin_ids = {a.actor_admin_id for a in activities if a.actor_admin_id}
+    admin_emails = {}
+    if admin_ids:
+        admin_rows = (
+            db.query(AdminUser.id, AdminUser.email)
+            .filter(
+                AdminUser.id.in_(admin_ids),
+                or_(
+                    AdminUser.org_id == admin.org_id,
+                    AdminUser.role == AdminRole.SUPER_ADMIN,
+                ),
+            )
+            .all()
+        )
+        admin_emails = {row[0]: row[1] for row in admin_rows}
+
     return {
         "id": member.id,
         "first_name": member.first_name,
@@ -439,6 +783,11 @@ def get_member_detail(
         "status": member.status.value if member.status else None,
         "card_no": member.card_no,
         "joined_at": member.joined_at.isoformat() if member.joined_at else None,
+        "member_type": member.member_type,
+        "internal_notes": member.internal_notes,
+        "is_manual": member.is_manual,
+        "has_access": bool(member.password_hash),
+        "last_access_email_at": last_access_email_at,
         "documents": [
             {
                 "id": d.id,
@@ -451,10 +800,42 @@ def get_member_detail(
                 "uploaded_at": d.uploaded_at.isoformat(),
                 "status": d.status,
                 "review_notes": d.review_notes,
+                "rejection_note": d.rejection_note,
                 "reviewed_at": d.reviewed_at.isoformat() if d.reviewed_at else None,
+                "reviewed_by_admin_id": d.reviewed_by_admin_id or d.reviewed_by,
+                "replaces_document_id": d.replaces_document_id,
             }
             for d in member.documents
-        ]
+        ],
+        "payments": [
+            {
+                "id": p.id,
+                "amount_cents": p.amount_cents,
+                "amount": round(p.amount_cents / 100, 2),
+                "method": p.method,
+                "paid_at": p.paid_at.isoformat() if p.paid_at else None,
+                "notes": p.notes,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+            }
+            for p in payments
+        ],
+        "activities": [
+            {
+                "id": a.id,
+                "action": a.action,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+                "actor_admin_id": a.actor_admin_id,
+                "actor_admin_email": admin_emails.get(a.actor_admin_id) if a.actor_admin_id else None,
+                "actor_member_id": a.actor_member_id,
+                "actor_member_name": f"{member.first_name} {member.last_name}"
+                if a.actor_member_id == member.id else None,
+                "actor_role": a.actor_role,
+                "entity_type": a.entity_type,
+                "entity_id": a.entity_id,
+                "metadata": a.metadata_json,
+            }
+            for a in activities
+        ],
     }
 
 
@@ -526,6 +907,75 @@ class MemberDecisionBody(BaseModel):
     notes: Optional[str] = None
 
 
+class ManualPaymentBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    amount: float = Field(..., gt=0)
+    method: str
+    paid_at: date
+    notes: Optional[str] = None
+
+
+@router.post("/members/{member_id}/send-access")
+def send_member_access(
+    request: Request,
+    member_id: int,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    member = db.query(Member).filter(
+        Member.id == member_id,
+        Member.org_id == admin.org_id,
+        Member.deleted_at.is_(None),
+        Member.status != MemberStatus.REJECTED,
+    ).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    if not member.email:
+        raise HTTPException(status_code=400, detail="Inserisci email per inviare accesso.")
+
+    if member.password_hash:
+        raise HTTPException(status_code=400, detail="Accesso già attivo per questo socio.")
+
+    last_token = _get_last_access_email_token(db, member.id)
+    if last_token and last_token.created_at:
+        elapsed = datetime.utcnow() - last_token.created_at
+        if elapsed < timedelta(minutes=ACCESS_EMAIL_THROTTLE_MINUTES):
+            remaining_seconds = int(timedelta(minutes=ACCESS_EMAIL_THROTTLE_MINUTES).total_seconds() - elapsed.total_seconds())
+            remaining_minutes = max(1, int((remaining_seconds + 59) // 60))
+            raise HTTPException(
+                status_code=429,
+                detail=f"Accesso inviato di recente. Riprova tra {remaining_minutes} minuti.",
+            )
+
+    email_sent, sent_at = _send_member_magic_link(db, request, member)
+
+    audit.log_operation(
+        db,
+        action="member.access_sent",
+        entity_type="member",
+        entity_id=member.id,
+        actor_admin_id=admin.id,
+        actor_role=AdminRole.ORG_ADMIN.value,
+        metadata={
+            "org_id": admin.org_id,
+            "email_sent": email_sent,
+        },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+
+    return {
+        "ok": True,
+        "email_sent": email_sent,
+        "last_access_email_at": sent_at.isoformat() if sent_at else None,
+    }
+
+
 @router.post("/members/{member_id}/decision")
 def member_decision(
     request: Request,
@@ -548,16 +998,27 @@ def member_decision(
         raise HTTPException(status_code=403, detail="Forbidden")
 
     # Apply decision
+    card_exhausted = False
     if body.decision == "approve":
         if member.card_no is None:
             # Idempotency: do not reassign card numbers
-            assigned = assign_next_card(db, member.org_id)
-            member.card_no = assigned
+            try:
+                assigned = assign_next_card(db, member.org_id)
+                member.card_no = assigned
+            except HTTPException as exc:
+                if exc.status_code == 409:
+                    # Cards exhausted - member approved but waiting for card
+                    card_exhausted = True
+                else:
+                    raise
 
-        member.status = MemberStatus.ACTIVE
-        # Trigger joined_at if not set (first activation)
-        if not member.joined_at:
-            member.joined_at = datetime.utcnow()
+        if card_exhausted:
+            member.status = MemberStatus.PENDING_CARDS
+        else:
+            member.status = MemberStatus.ACTIVE
+            # Trigger joined_at if not set (first activation)
+            if not member.joined_at:
+                member.joined_at = datetime.utcnow()
     else:
         member.status = MemberStatus.REJECTED
 
@@ -581,6 +1042,112 @@ def member_decision(
     db.commit()
 
     return {"ok": True, "status": member.status.value}
+
+
+@router.post("/members/{member_id}/payments/manual")
+def create_manual_payment(
+    request: Request,
+    member_id: int,
+    body: ManualPaymentBody,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    member = db.query(Member).filter(Member.id == member_id).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    if member.org_id != admin.org_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    method = body.method.strip().lower()
+    if method not in {"contanti", "bonifico", "altro", "cash", "bank_transfer", "other"}:
+        raise HTTPException(status_code=400, detail="Metodo di pagamento non valido.")
+
+    amount_cents = int(round(body.amount * 100))
+    if amount_cents <= 0:
+        raise HTTPException(status_code=400, detail="Importo non valido.")
+
+    paid_at = datetime.combine(body.paid_at, datetime.min.time())
+    notes = body.notes.strip() if body.notes else None
+    if notes == "":
+        notes = None
+
+    payment = MemberPayment(
+        member_id=member.id,
+        org_id=admin.org_id,
+        admin_id=admin.id,
+        amount_cents=amount_cents,
+        method=method,
+        paid_at=paid_at,
+        notes=notes,
+    )
+    db.add(payment)
+
+    card_assigned = False
+    if member.status != MemberStatus.REJECTED:
+        docs = member.documents
+        docs_ok = True
+        if docs:
+            docs_ok = all(d.status == DocStatus.APPROVED.value for d in docs)
+
+        if docs_ok:
+            if member.card_no is None:
+                try:
+                    member.card_no = assign_next_card(db, member.org_id)
+                    card_assigned = True
+                except HTTPException as exc:
+                    if exc.status_code == 409:
+                        member.status = MemberStatus.PENDING_CARDS
+                    else:
+                        raise
+            if member.card_no is not None:
+                member.status = MemberStatus.ACTIVE
+                if not member.joined_at:
+                    member.joined_at = datetime.utcnow()
+                if not member.decision_at:
+                    member.decision_at = datetime.utcnow()
+                    member.decision_by_admin_id = admin.id
+                    if not member.decision_notes:
+                        member.decision_notes = "Pagamento manuale"
+
+    db.commit()
+    db.refresh(payment)
+
+    audit.log_operation(
+        db,
+        action="member.payment.manual",
+        entity_type="member_payment",
+        entity_id=payment.id,
+        actor_admin_id=admin.id,
+        actor_role=AdminRole.ORG_ADMIN.value,
+        metadata={
+            "org_id": admin.org_id,
+            "member_id": member.id,
+            "amount_cents": amount_cents,
+            "method": method,
+            "paid_at": paid_at.isoformat(),
+        },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+
+    return {
+        "ok": True,
+        "payment": {
+            "id": payment.id,
+            "amount_cents": payment.amount_cents,
+            "amount": round(payment.amount_cents / 100, 2),
+            "method": payment.method,
+            "paid_at": payment.paid_at.isoformat() if payment.paid_at else None,
+            "notes": payment.notes,
+        },
+        "member_status": member.status.value if member.status else None,
+        "card_assigned": card_assigned,
+    }
 
 
 @router.delete("/members/{member_id}")
@@ -637,6 +1204,93 @@ class ReviewBody(BaseModel):
     notes: Optional[str] = None
 
 
+class RejectBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    rejection_note: str
+
+
+def _apply_doc_review(
+    db: Session,
+    request: Request,
+    admin: AdminUser,
+    doc: MemberDocument,
+    status: str,
+    rejection_note: Optional[str] = None,
+):
+    doc.status = status
+    doc.reviewed_at = datetime.utcnow()
+    doc.reviewed_by = admin.id
+    doc.reviewed_by_admin_id = admin.id
+    if status == DocStatus.REJECTED.value:
+        doc.rejection_note = rejection_note
+        doc.review_notes = rejection_note
+    else:
+        doc.rejection_note = None
+    db.commit()
+
+    audit.log_operation(
+        db,
+        action="member_doc.review",
+        entity_type="member_document",
+        entity_id=doc.id,
+        actor_admin_id=admin.id,
+        actor_role="org_admin",
+        metadata={"status": status, "rejection_note": rejection_note, "member_id": doc.member_id},
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+
+
+@router.post("/documents/{doc_id}/approve")
+def approve_document(
+    request: Request,
+    doc_id: int,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    doc = db.query(MemberDocument).filter(MemberDocument.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if doc.member.org_id != admin.org_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    _apply_doc_review(db, request, admin, doc, DocStatus.APPROVED.value)
+
+    return {"ok": True, "doc_status": doc.status, "member_status": doc.member.status.value}
+
+
+@router.post("/documents/{doc_id}/reject")
+def reject_document(
+    request: Request,
+    doc_id: int,
+    body: RejectBody,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    note = body.rejection_note.strip() if body.rejection_note else ""
+    if not note:
+        raise HTTPException(status_code=400, detail="La nota di rigetto è obbligatoria.")
+
+    doc = db.query(MemberDocument).filter(MemberDocument.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if doc.member.org_id != admin.org_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    _apply_doc_review(db, request, admin, doc, DocStatus.REJECTED.value, rejection_note=note)
+
+    return {"ok": True, "doc_status": doc.status, "member_status": doc.member.status.value}
+
+
 @router.post("/documents/{doc_id}/review")
 def review_document(
     request: Request,
@@ -658,49 +1312,15 @@ def review_document(
     if doc.member.org_id != admin.org_id:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    doc.status = body.status
-    doc.review_notes = body.notes
-    doc.reviewed_at = datetime.utcnow()
-    doc.reviewed_by = admin.id
+    if body.status == "rejected":
+        note = body.notes.strip() if body.notes else ""
+        if not note:
+            raise HTTPException(status_code=400, detail="La nota di rigetto è obbligatoria.")
+        _apply_doc_review(db, request, admin, doc, DocStatus.REJECTED.value, rejection_note=note)
+    else:
+        _apply_doc_review(db, request, admin, doc, DocStatus.APPROVED.value)
 
-    # Logic to update Member status
-    # If ANY doc is rejected -> member status REJECTED (or PENDING_FIX if we had it)
-    # If ALL required docs are approved -> member status ACTIVE
-    # (Simplified logic: check all docs for this member)
-
-    member = doc.member
-    all_docs = db.query(MemberDocument).filter(MemberDocument.member_id == member.id).all()
-
-    any_rejected = any(d.status == DocStatus.REJECTED.value for d in all_docs)
-    all_approved = all(d.status == DocStatus.APPROVED.value for d in all_docs)
-
-    if any_rejected:
-        # If any doc is rejected, we might not want to auto-reject the whole member,
-        # but the prompt implies explicit decision.
-        # However, to be safe, let's keep status as is or move to PENDING_DOCS if they need to re-upload.
-        # But for now, let's NOT change member status automatically on doc review.
-        pass
-    elif all_approved:
-        # Docs are approved. We DO NOT auto-activate anymore.
-        # Status remains pending (e.g. pending_verification or pending_docs) until final decision.
-        pass
-
-    db.commit()
-
-    audit.log_operation(
-        db,
-        action="member_doc.review",
-        entity_type="member_document",
-        entity_id=doc.id,
-        actor_admin_id=admin.id,
-        actor_role="org_admin",
-        metadata={"status": body.status, "notes": body.notes, "member_id": member.id},
-        ip=get_client_ip(request),
-        user_agent=request.headers.get("user-agent")
-    )
-    db.commit()
-
-    return {"ok": True, "doc_status": doc.status, "member_status": member.status.value}
+    return {"ok": True, "doc_status": doc.status, "member_status": doc.member.status.value}
 
 
 @router.get("/members.csv")

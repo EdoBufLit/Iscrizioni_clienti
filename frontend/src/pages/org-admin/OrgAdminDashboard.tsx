@@ -36,6 +36,20 @@ const CARD_META: {
     icon: "M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
     format: (v) => (v === null ? "N/D" : String(v)),
   },
+  {
+    key: "documents_pending_review",
+    label: "Documenti da rivedere",
+    description: "Documenti in attesa di approvazione.",
+    icon: "M12 7.5h6m-6 3h6m-6 3h3m-6.75 5.25h9A2.25 2.25 0 0 0 19.5 16.5V6.75A2.25 2.25 0 0 0 17.25 4.5h-9A2.25 2.25 0 0 0 6 6.75v9.75A2.25 2.25 0 0 0 8.25 18.75Z",
+    format: (v) => (v === null ? "N/D" : String(v)),
+  },
+  {
+    key: "documents_rejected",
+    label: "Documenti rigettati",
+    description: "Documenti da correggere e reinviare.",
+    icon: "M12 9v3.75m0 3h.008v.008H12v-.008Zm9-3.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
+    format: (v) => (v === null ? "N/D" : String(v)),
+  },
 ];
 
 const OrgAdminDashboard = () => {
@@ -71,7 +85,7 @@ const OrgAdminDashboard = () => {
       </p>
 
       {isLoading ? (
-        <div className="mt-8 grid gap-6 md:grid-cols-3">
+        <div className="mt-8 grid gap-6 md:grid-cols-3 xl:grid-cols-5">
           {[0, 1, 2].map((i) => (
             <div key={i} className="surface p-7">
               <Skeleton className="h-9 w-9 rounded-lg" />
@@ -107,7 +121,7 @@ const OrgAdminDashboard = () => {
           </div>
         </div>
       ) : (
-        <div className="mt-8 grid gap-6 md:grid-cols-3">
+        <div className="mt-8 grid gap-6 md:grid-cols-3 xl:grid-cols-5">
           {CARD_META.map((card) => {
             const value = metrics?.[card.key] ?? null;
             const isCards = card.key === "cards_remaining";

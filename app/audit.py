@@ -109,6 +109,7 @@ def log_operation(
     entity_type: str,
     entity_id: int | None = None,
     actor_admin_id: int | None = None,
+    actor_member_id: int | None = None,
     actor_role: str | None = None,
     metadata: dict | None = None,
     ip: str | None = None,
@@ -123,6 +124,7 @@ def log_operation(
         entity_type=entity_type,
         entity_id=entity_id,
         actor_admin_id=actor_admin_id,
+        actor_member_id=actor_member_id,
         actor_role=actor_role,
         metadata_json=metadata,
         ip=ip,
@@ -135,7 +137,7 @@ def log_operation(
         action,
         entity_type=entity_type,
         entity_id=entity_id,
-        actor_id=actor_admin_id,
+        actor_id=actor_admin_id or actor_member_id,
         ip=ip,
         metadata=metadata
     )

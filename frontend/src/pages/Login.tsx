@@ -187,21 +187,6 @@ const Login = () => {
               )}
             </div>
 
-            <div className="mt-6 rounded-lg border border-brand/15 bg-brand/[0.03] px-5 py-4">
-              <p className="text-sm font-medium text-neutral-700">Non hai un account?</p>
-              <p className="mt-1 text-xs leading-5 text-neutral-500">
-                Crea un account per accedere ai servizi associativi.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-3">
-                <Link className="btn-primary text-xs px-4 py-1.5" to="/registrati">
-                  Registrati
-                </Link>
-                <Link className="text-sm font-medium text-brand transition hover:text-brand-dark" to="/associazioni">
-                  Vai alle associazioni &rarr;
-                </Link>
-              </div>
-            </div>
-
             <div className="mt-6 border-t border-neutral-100 pt-4">
               <p className="text-[11px] text-neutral-400">Accesso per amministratori:</p>
               <div className="mt-2 flex gap-4">

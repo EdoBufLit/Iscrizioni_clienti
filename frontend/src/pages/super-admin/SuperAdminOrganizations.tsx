@@ -5,11 +5,13 @@ import {
   createSuperAdminOrganization,
   deleteOrganization,
   setOrganizationCardRange,
-  increaseOrgCardStock,
+  addOrgCardBatch,
+  fetchOrgBatches,
   uploadSuperAdminStatute,
   AuthError,
   type SuperAdminOrganization,
   type SuperAdminProfile,
+  type OrgBatch,
 } from "../../lib/api";
 import Skeleton from "../../components/ui/Skeleton";
 
@@ -17,7 +19,7 @@ const thClass =
   "px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.15em] text-neutral-400";
 const tdClass = "px-5 py-3.5 text-sm text-neutral-700";
 
-type ModalType = "create" | "range" | "add-stock";
+type ModalType = "create" | "range" | "add-batch" | "view-batches";
 
 const SuperAdminOrganizations = () => {
   const navigate = useNavigate();
@@ -43,12 +45,16 @@ const SuperAdminOrganizations = () => {
     province: "",
     description_short: "",
     is_active: true,
-    // Range / Stock
+    // Range
     from_no: "",
     to_no: "",
-    amount: "",
   });
   const [statuteFile, setStatuteFile] = useState<File | null>(null);
+
+  // Batches state for view-batches modal
+  const [batches, setBatches] = useState<OrgBatch[]>([]);
+  const [batchesSummary, setBatchesSummary] = useState<{ total: number; assigned: number; remaining: number } | null>(null);
+  const [loadingBatches, setLoadingBatches] = useState(false);
 
   const loadOrgs = () => {
     if (orgs.length === 0) setLoading(true);
@@ -71,16 +77,33 @@ const SuperAdminOrganizations = () => {
     }
   }, [profile, navigate]);
 
-  const openModal = (type: ModalType, org?: SuperAdminOrganization) => {
+  const openModal = async (type: ModalType, org?: SuperAdminOrganization) => {
     setModalType(type);
     setSelectedOrg(org || null);
     setSubmitError("");
     setFormData({
         name: "", slug: "", city: "", province: "", description_short: "", is_active: true,
-        from_no: "", to_no: "", amount: ""
+        from_no: "", to_no: ""
     });
     setStatuteFile(null);
-    setShowModal(true);
+    setBatches([]);
+    setBatchesSummary(null);
+
+    if (type === "view-batches" && org) {
+      setLoadingBatches(true);
+      setShowModal(true);
+      try {
+        const result = await fetchOrgBatches(org.id);
+        setBatches(result.batches);
+        setBatchesSummary(result.summary);
+      } catch {
+        setSubmitError("Errore nel caricamento dei lotti");
+      } finally {
+        setLoadingBatches(false);
+      }
+    } else {
+      setShowModal(true);
+    }
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -104,15 +127,18 @@ const SuperAdminOrganizations = () => {
             if (statuteFile && newOrg.id) {
                 await uploadSuperAdminStatute(newOrg.id, statuteFile);
             }
-        } else if (modalType === "range" && selectedOrg) {
+        } else if ((modalType === "range" || modalType === "add-batch") && selectedOrg) {
             const from = parseInt(formData.from_no);
             const to = parseInt(formData.to_no);
             if (isNaN(from) || isNaN(to)) throw new Error("Numeri non validi");
-            await setOrganizationCardRange(selectedOrg.id, from, to);
-        } else if (modalType === "add-stock" && selectedOrg) {
-            const amount = parseInt(formData.amount);
-            if (isNaN(amount) || amount <= 0) throw new Error("Quantità non valida");
-            await increaseOrgCardStock(selectedOrg.id, amount);
+            if (from <= 0 || to <= 0) throw new Error("I numeri devono essere positivi");
+            if (from > to) throw new Error("Il numero iniziale deve essere minore o uguale al finale");
+
+            if (modalType === "range") {
+                await setOrganizationCardRange(selectedOrg.id, from, to);
+            } else {
+                await addOrgCardBatch(selectedOrg.id, from, to);
+            }
         }
 
         setShowModal(false);
@@ -124,14 +150,25 @@ const SuperAdminOrganizations = () => {
     }
   };
 
+  const [deleteConfirm, setDeleteConfirm] = useState<SuperAdminOrganization | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const handleDelete = async (org: SuperAdminOrganization) => {
-      if (!window.confirm(`Sei sicuro di voler disattivare l'associazione "${org.name}"?`)) return;
-      try {
-          await deleteOrganization(org.id);
-          loadOrgs();
-      } catch (err) {
-          alert(err instanceof Error ? err.message : "Errore durante l'eliminazione");
-      }
+    setDeleteConfirm(org);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm || deleting) return;
+    setDeleting(true);
+    try {
+      await deleteOrganization(deleteConfirm.id);
+      setDeleteConfirm(null);
+      loadOrgs();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Errore durante l'eliminazione");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   if (loading && !orgs.length) {
@@ -226,21 +263,41 @@ const SuperAdminOrganizations = () => {
                         )}
                     </td>
                     <td className={tdClass}>
-                        <div className="flex items-center gap-3">
-                            <button
-                                onClick={() => openModal(org.card_min ? "add-stock" : "range", org)}
-                                className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
-                                data-component="superadmin-orgs-manage-cards"
-                            >
-                                Gestione
-                            </button>
+                        <div className="flex items-center gap-2">
+                            {org.card_min ? (
+                              <>
+                                <button
+                                    onClick={() => openModal("view-batches", org)}
+                                    className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
+                                >
+                                    Lotti
+                                </button>
+                                <span className="text-neutral-300">|</span>
+                                <button
+                                    onClick={() => openModal("add-batch", org)}
+                                    className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
+                                >
+                                    + Lotto
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                  onClick={() => openModal("range", org)}
+                                  className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
+                              >
+                                  Imposta range
+                              </button>
+                            )}
                             {org.is_active && (
+                              <>
+                                <span className="text-neutral-300">|</span>
                                 <button
                                     onClick={() => handleDelete(org)}
                                     className="text-red-600 hover:text-red-800 font-medium text-xs uppercase tracking-wide"
                                 >
                                     Elimina
                                 </button>
+                              </>
                             )}
                         </div>
                     </td>
@@ -252,14 +309,66 @@ const SuperAdminOrganizations = () => {
         </div>
       </div>
 
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md surface-strong p-6 shadow-xl">
+            <div className="flex items-center gap-3 text-red-600">
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <h3 className="text-lg font-semibold">Elimina associazione</h3>
+            </div>
+
+            <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3">
+              <p className="text-sm font-medium text-red-800">Questa azione è irreversibile.</p>
+              <p className="mt-1 text-sm text-red-700">
+                Verranno eliminati permanentemente:
+              </p>
+              <ul className="mt-2 list-disc pl-5 text-sm text-red-700">
+                <li>L'associazione <strong>{deleteConfirm.name}</strong></li>
+                <li>Tutti i soci iscritti</li>
+                <li>Tutti i documenti caricati</li>
+                <li>Tutti gli amministratori dell'associazione</li>
+                <li>Tutti i dati delle tessere</li>
+              </ul>
+            </div>
+
+            <p className="mt-4 text-sm text-neutral-600">
+              Lo slug <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs">{deleteConfirm.slug}</code> potrà essere riutilizzato.
+            </p>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                className="rounded-md border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900"
+                onClick={() => setDeleteConfirm(null)}
+                disabled={deleting}
+              >
+                Annulla
+              </button>
+              <button
+                type="button"
+                className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
+                onClick={confirmDelete}
+                disabled={deleting}
+              >
+                {deleting ? "Eliminazione..." : "Elimina definitivamente"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-lg surface-strong p-6 shadow-xl max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-neutral-900">
                 {modalType === "create" && "Nuova associazione"}
-                {modalType === "range" && `Imposta tessere: ${selectedOrg?.name}`}
-                {modalType === "add-stock" && `Aggiungi tessere: ${selectedOrg?.name}`}
+                {modalType === "range" && `Imposta range tessere: ${selectedOrg?.name}`}
+                {modalType === "add-batch" && `Aggiungi lotto tessere: ${selectedOrg?.name}`}
+                {modalType === "view-batches" && `Lotti tessere: ${selectedOrg?.name}`}
             </h3>
 
             {submitError && (
@@ -392,26 +501,91 @@ const SuperAdminOrganizations = () => {
                   </div>
               )}
 
-              {modalType === "add-stock" && (
+              {modalType === "add-batch" && (
                   <div>
                       <p className="mb-4 text-sm text-neutral-600">
-                          Range attuale: <strong>{selectedOrg?.card_min} – {selectedOrg?.card_max}</strong>
+                          Aggiungi un nuovo lotto di tessere per <strong>{selectedOrg?.name}</strong>.
                       </p>
-                      <label className="block text-xs font-medium text-neutral-600">Quantità da aggiungere</label>
-                      <input
-                        type="number"
-                        className="mt-1 w-full rounded-md border px-3 py-2"
-                        required
-                        min="1"
-                        value={formData.amount}
-                        onChange={(e) => setFormData({...formData, amount: e.target.value})}
-                      />
-                      <p className="mt-2 text-xs text-neutral-500">
-                          Il range verrà esteso automaticamente dal numero {((selectedOrg?.card_max || 0) + 1)}.
+                      <div className="grid grid-cols-2 gap-4">
+                          <div>
+                              <label className="block text-xs font-medium text-neutral-600">Da (numero iniziale)</label>
+                              <input
+                                type="number"
+                                className="mt-1 w-full rounded-md border border-neutral-200 px-3 py-2 text-sm"
+                                required
+                                min="1"
+                                value={formData.from_no}
+                                onChange={(e) => setFormData({...formData, from_no: e.target.value})}
+                              />
+                          </div>
+                          <div>
+                              <label className="block text-xs font-medium text-neutral-600">A (numero finale)</label>
+                              <input
+                                type="number"
+                                className="mt-1 w-full rounded-md border border-neutral-200 px-3 py-2 text-sm"
+                                required
+                                min="1"
+                                value={formData.to_no}
+                                onChange={(e) => setFormData({...formData, to_no: e.target.value})}
+                              />
+                          </div>
+                      </div>
+                      <p className="mt-3 text-xs text-neutral-500">
+                          Il range non deve sovrapporsi a lotti esistenti (di questa o altre associazioni).
                       </p>
                   </div>
               )}
 
+              {modalType === "view-batches" && (
+                  <div>
+                      {loadingBatches ? (
+                          <p className="text-sm text-neutral-500">Caricamento lotti...</p>
+                      ) : batches.length === 0 ? (
+                          <p className="text-sm text-neutral-500">Nessun lotto configurato.</p>
+                      ) : (
+                          <>
+                              <table className="w-full text-sm">
+                                  <thead>
+                                      <tr className="border-b text-left text-xs text-neutral-500">
+                                          <th className="py-2 font-medium">Range</th>
+                                          <th className="py-2 font-medium text-right">Totale</th>
+                                          <th className="py-2 font-medium text-right">Assegnate</th>
+                                          <th className="py-2 font-medium text-right">Rimanenti</th>
+                                      </tr>
+                                  </thead>
+                                  <tbody>
+                                      {batches.map((b) => (
+                                          <tr key={b.id} className="border-b border-neutral-100">
+                                              <td className="py-2 tabular-nums">{b.start_no} – {b.end_no}</td>
+                                              <td className="py-2 text-right tabular-nums">{b.total}</td>
+                                              <td className="py-2 text-right tabular-nums">{b.assigned}</td>
+                                              <td className="py-2 text-right tabular-nums font-medium text-brand">{b.remaining}</td>
+                                          </tr>
+                                      ))}
+                                  </tbody>
+                              </table>
+                              {batchesSummary && (
+                                  <div className="mt-4 rounded-md bg-neutral-50 px-4 py-3">
+                                      <div className="flex justify-between text-sm">
+                                          <span className="text-neutral-600">Totale tessere:</span>
+                                          <span className="font-medium tabular-nums">{batchesSummary.total}</span>
+                                      </div>
+                                      <div className="flex justify-between text-sm mt-1">
+                                          <span className="text-neutral-600">Assegnate:</span>
+                                          <span className="font-medium tabular-nums">{batchesSummary.assigned}</span>
+                                      </div>
+                                      <div className="flex justify-between text-sm mt-1">
+                                          <span className="text-neutral-600">Rimanenti:</span>
+                                          <span className="font-semibold text-brand tabular-nums">{batchesSummary.remaining}</span>
+                                      </div>
+                                  </div>
+                              )}
+                          </>
+                      )}
+                  </div>
+              )}
+
+              {modalType !== "view-batches" && (
               <div className="mt-4 flex justify-end gap-3">
                 <button
                   type="button"
@@ -428,6 +602,29 @@ const SuperAdminOrganizations = () => {
                   {submitting ? "Salvataggio..." : "Conferma"}
                 </button>
               </div>
+              )}
+
+              {modalType === "view-batches" && (
+              <div className="mt-6 flex justify-between">
+                <button
+                  type="button"
+                  className="text-sm font-medium text-brand hover:text-brand-dark"
+                  onClick={() => {
+                    setShowModal(false);
+                    openModal("add-batch", selectedOrg!);
+                  }}
+                >
+                  + Aggiungi lotto
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900"
+                  onClick={() => setShowModal(false)}
+                >
+                  Chiudi
+                </button>
+              </div>
+              )}
             </form>
           </div>
         </div>
