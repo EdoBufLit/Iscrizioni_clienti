@@ -17,8 +17,22 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 def init_db() -> None:
-    import app.models
+    """DEPRECATED: Use Alembic migrations instead.
 
+    This function is kept for backwards compatibility but should NOT be used
+    in production. Schema changes should be managed exclusively via Alembic.
+
+    In production:
+    1. Set SKIP_CREATE_ALL=1
+    2. Run: alembic upgrade head
+    """
+    import warnings
+    warnings.warn(
+        "app.db.init_db() is deprecated. Use 'alembic upgrade head' instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    import app.models
     Base.metadata.create_all(bind=engine)
 
 def get_db():

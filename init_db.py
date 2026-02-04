@@ -1,3 +1,14 @@
+"""
+Database initialization module.
+
+IMPORTANT: In production, schema should be managed ONLY by Alembic migrations.
+Set SKIP_CREATE_ALL=1 in production to disable automatic table creation.
+
+Deployment checklist:
+1. Set SKIP_CREATE_ALL=1 (or any truthy value)
+2. Run: alembic upgrade head
+3. Start the application
+"""
 import logging
 import os
 
@@ -11,9 +22,16 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Environment flag to skip create_all() in production
+# Set SKIP_CREATE_ALL=1 in production environments
+SKIP_CREATE_ALL = os.getenv("SKIP_CREATE_ALL", "").lower() in ("1", "true", "yes")
+
 
 def _add_column_if_missing(conn, table: str, column: str, col_type: str):
-    """Add a column to an existing SQLite table if it doesn't exist yet."""
+    """Add a column to an existing SQLite table if it doesn't exist yet.
+
+    DEPRECATED: Use Alembic migrations instead.
+    """
     cols = {c["name"] for c in inspect(conn).get_columns(table)}
     if column not in cols:
         conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
@@ -21,22 +39,43 @@ def _add_column_if_missing(conn, table: str, column: str, col_type: str):
 
 
 def init_db():
-    Base.metadata.create_all(bind=engine)
+    """Initialize database schema and seed data.
 
-    # If this is a fresh install (tables created but no alembic version), stamp it
+    In production (SKIP_CREATE_ALL=1), this only runs Alembic migrations.
+    In development, it also uses create_all() for convenience.
+    """
     inspector = inspect(engine)
     existing_tables = inspector.get_table_names()
-    if "organizations" in existing_tables and "alembic_version" not in existing_tables:
-        logger.info("Fresh database detected. Stamping alembic head...")
-        from alembic.config import Config
-        from alembic import command
-        alembic_cfg = Config("alembic.ini")
-        try:
-            command.stamp(alembic_cfg, "head")
-        except Exception:
-            logger.exception("Failed to stamp alembic head.")
 
-    # Migrate existing tables — add nullable columns that create_all won't add
+    if SKIP_CREATE_ALL:
+        # Production mode: schema managed by Alembic only
+        logger.info("SKIP_CREATE_ALL is set - skipping Base.metadata.create_all()")
+        logger.info("Ensure you have run: alembic upgrade head")
+
+        # Verify alembic_version table exists (migrations have been run)
+        if "alembic_version" not in existing_tables:
+            logger.warning(
+                "WARNING: alembic_version table not found! "
+                "Run 'alembic upgrade head' before starting the application."
+            )
+    else:
+        # Development mode: use create_all for convenience
+        logger.info("Running Base.metadata.create_all() (dev mode)")
+        logger.info("Set SKIP_CREATE_ALL=1 in production to disable this.")
+        Base.metadata.create_all(bind=engine)
+
+        # If this is a fresh install (tables created but no alembic version), stamp it
+        if "organizations" in existing_tables and "alembic_version" not in existing_tables:
+            logger.info("Fresh database detected. Stamping alembic head...")
+            from alembic.config import Config
+            from alembic import command
+            alembic_cfg = Config("alembic.ini")
+            try:
+                command.stamp(alembic_cfg, "head")
+            except Exception:
+                logger.exception("Failed to stamp alembic head.")
+
+    # Legacy column migrations - DEPRECATED, kept for backwards compatibility
     with engine.begin() as conn:
         _add_column_if_missing(conn, "card_movements", "admin_id", "INTEGER REFERENCES admin_users(id)")
         _add_column_if_missing(conn, "card_movements", "paid_ref", "TEXT")
