@@ -89,6 +89,29 @@ const waitForElement = async (
   return null;
 };
 
+// localStorage keys for tour state persistence
+const TOUR_STORAGE_KEY_PREFIX = "onboarding_tour_";
+
+const getTourStorageKey = (role: string) => `${TOUR_STORAGE_KEY_PREFIX}${role}`;
+
+const getTourStateFromStorage = (role: string): "completed" | "skipped" | null => {
+  try {
+    const value = localStorage.getItem(getTourStorageKey(role));
+    if (value === "completed" || value === "skipped") return value;
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+const setTourStateInStorage = (role: string, state: "completed" | "skipped") => {
+  try {
+    localStorage.setItem(getTourStorageKey(role), state);
+  } catch {
+    // Ignore localStorage errors
+  }
+};
+
 export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -101,6 +124,8 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
   const isNavigatingRef = useRef(false);
   // Track skipped optional steps to avoid infinite loops
   const skippedStepsRef = useRef(new Set<number>());
+  // Track if tour has been ended to prevent double handling
+  const tourEndedRef = useRef(false);
 
   const steps = role === "member" ? MEMBER_TOUR_STEPS : ORG_ADMIN_TOUR_STEPS;
   const finalMessage = TOUR_FINAL_MESSAGE[role];
@@ -240,11 +265,26 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
     [stepsWithFinal, location.pathname, navigate]
   );
 
-  // Initialize tour
+  // Initialize tour - check localStorage first, then backend
   useEffect(() => {
+    // Check localStorage first for immediate response
+    const localState = getTourStateFromStorage(role);
+    if (localState) {
+      // Tour already completed or skipped locally - don't show
+      setLoading(false);
+      return;
+    }
+
+    // Check backend status
     fetchOnboardingStatus()
       .then((status) => {
         if (status.should_show) {
+          // Double-check localStorage hasn't changed
+          const recheck = getTourStateFromStorage(role);
+          if (recheck) {
+            setLoading(false);
+            return;
+          }
           // Delay to ensure initial DOM is ready
           setTimeout(() => {
             setRun(true);
@@ -255,7 +295,7 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
         // Silently fail
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [role]);
 
   // Handle step changes - ensure we're on the right route
   useEffect(() => {
@@ -276,13 +316,64 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
     }
   }, [run, loading, stepIndex, stepsWithFinal, isOnCorrectRoute, navigate]);
 
+  // Helper to end tour and persist state
+  const endTour = useCallback(
+    (reason: "completed" | "skipped") => {
+      // Prevent double handling
+      if (tourEndedRef.current) return;
+      tourEndedRef.current = true;
+
+      console.log(`[OnboardingTour] Ending tour: ${reason}`);
+
+      // IMMEDIATELY stop the tour - this removes the overlay
+      setRun(false);
+
+      // Save to localStorage for instant persistence across refreshes
+      setTourStateInStorage(role, reason);
+
+      // Save to backend (async, non-blocking)
+      if (reason === "completed") {
+        completeOnboardingTour().catch(() => {});
+      } else {
+        skipOnboardingTour().catch(() => {});
+      }
+
+      // Notify parent
+      onTourEnd?.();
+    },
+    [role, onTourEnd]
+  );
+
   const handleJoyrideCallback = useCallback(
     async (data: CallBackProps) => {
       const { status, action, type, index } = data;
 
+      // DEBUG: Log all callback events
+      console.log("[OnboardingTour] Callback:", { status, action, type, index });
+
       // Ignore events while navigating
       if (isNavigatingRef.current) return;
 
+      // Handle tour end cases - MUST check these FIRST before other logic
+      // 1. User clicked "Fine" (last button) - status becomes FINISHED
+      if (status === STATUS.FINISHED) {
+        endTour("completed");
+        return;
+      }
+
+      // 2. User clicked "Salta guida" - status becomes SKIPPED
+      if (status === STATUS.SKIPPED) {
+        endTour("skipped");
+        return;
+      }
+
+      // 3. User clicked X button - action is CLOSE
+      if (action === ACTIONS.CLOSE) {
+        endTour("skipped");
+        return;
+      }
+
+      // Handle step navigation
       if (type === EVENTS.STEP_AFTER) {
         const nextDirection = action === ACTIONS.PREV ? -1 : 1;
         const nextRawIndex = index + nextDirection;
@@ -316,20 +407,8 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
       if (type === EVENTS.TOUR_START) {
         startOnboardingTour().catch(() => {});
       }
-
-      if (status === STATUS.FINISHED) {
-        completeOnboardingTour().catch(() => {});
-        setRun(false);
-        onTourEnd?.();
-      }
-
-      if (status === STATUS.SKIPPED) {
-        skipOnboardingTour().catch(() => {});
-        setRun(false);
-        onTourEnd?.();
-      }
     },
-    [stepsWithFinal, findNextValidStep, prepareStep, onTourEnd]
+    [stepsWithFinal, findNextValidStep, prepareStep, endTour]
   );
 
   if (loading) return null;

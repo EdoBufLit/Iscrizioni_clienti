@@ -1,6 +1,19 @@
 import { useState } from "react";
 import { resetOnboardingTour } from "../../lib/api";
 
+// Must match the key prefix in OnboardingTour.tsx
+const TOUR_STORAGE_KEY_PREFIX = "onboarding_tour_";
+
+const clearTourStorage = () => {
+  try {
+    // Clear both role keys to ensure clean reset
+    localStorage.removeItem(`${TOUR_STORAGE_KEY_PREFIX}member`);
+    localStorage.removeItem(`${TOUR_STORAGE_KEY_PREFIX}org_admin`);
+  } catch {
+    // Ignore localStorage errors
+  }
+};
+
 type ReviewGuideButtonProps = {
   className?: string;
 };
@@ -12,6 +25,9 @@ export const ReviewGuideButton = ({ className = "" }: ReviewGuideButtonProps) =>
     if (loading) return;
     setLoading(true);
     try {
+      // Clear localStorage first for immediate effect
+      clearTourStorage();
+      // Then reset backend
       await resetOnboardingTour();
       window.location.reload();
     } catch {
