@@ -274,3 +274,57 @@ import { apiGet, apiPost } from "../lib/apiClient";
 const data = await apiGet<User[]>("/api/users");
 const result = await apiPost<Result>("/api/users", { name: "John" });
 ```
+
+---
+
+## Alembic Migration Idempotency Fix (Feb 04, 2026)
+
+### Problema
+`alembic upgrade head` falliva con errori tipo:
+- `table member_payments already exists`
+- `no such column: deleted_at`
+
+### Causa
+Il database era fuori sync con Alembic perché:
+1. `init_db.py` usa `Base.metadata.create_all()` che crea tabelle bypassando Alembic
+2. Alcune migrazioni aggiungono colonne che potrebbero non esistere nel DB attuale
+3. Il DB locale potrebbe essere stato creato prima che le migrazioni fossero definite
+
+### Fix Implementato
+Rese idempotenti le migrazioni problematiche:
+
+**`a1b2c3d4e5f6_add_member_payments.py`:**
+- Aggiunto check `_table_exists()` prima di `create_table`
+- Aggiunto check `_index_exists()` prima di `create_index`
+- Se la tabella esiste già, la migrazione passa senza errori
+
+**`d3e4f5g6h7i8_add_performance_indexes.py`:**
+- Aggiunto `_safe_create_index()` che verifica:
+  - L'indice non esiste già
+  - Tutte le colonne referenziate esistono
+- Se le condizioni non sono soddisfatte, skip silenzioso
+
+### Come Evitare in Futuro
+
+1. **Non usare `create_all()` in produzione** - Solo Alembic deve gestire lo schema
+2. **Usare `alembic stamp head`** dopo init manuale per sincronizzare la versione
+3. **Rendere TUTTE le migrazioni idempotenti** con pattern:
+   ```python
+   from sqlalchemy import inspect
+
+   def _table_exists(name):
+       return name in inspect(op.get_bind()).get_table_names()
+
+   def upgrade():
+       if _table_exists("my_table"):
+           return
+       op.create_table("my_table", ...)
+   ```
+
+4. **Per nuovi progetti:** Iniziare con `alembic upgrade head` su DB vuoto
+
+### Verifica
+```bash
+python -m alembic upgrade head  # OK
+python -m alembic current       # d3e4f5g6h7i8 (head)
+```
