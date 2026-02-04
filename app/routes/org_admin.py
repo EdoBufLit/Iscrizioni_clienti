@@ -43,9 +43,13 @@ auth_router = APIRouter(prefix="/auth")
 
 
 def _get_current_org_admin(request: Request, db: Session):
-    """Return the authenticated org admin from the session, or None."""
-    if request.session.get("admin_id"):
-        return None
+    """Return the authenticated org admin from the session, or None.
+
+    Note: We only check for org_admin_id. If someone is also logged in as
+    super admin (admin_id), they can still use org_admin endpoints if they
+    have a valid org_admin session. This prevents confusing authorization
+    failures when both sessions coexist.
+    """
     admin_id = request.session.get("org_admin_id")
     if not admin_id:
         return None
@@ -385,48 +389,73 @@ async def upload_statute(
 
 @router.get("/metrics")
 def org_metrics(request: Request, db: Session = Depends(get_db)):
-    """Return scoped metrics for the authenticated org admin's organization."""
+    """Return scoped metrics for the authenticated org admin's organization.
+
+    PERFORMANCE: Uses combined queries with conditional aggregation to minimize
+    database round-trips (was 4+ queries, now 3).
+    """
     admin = _get_current_org_admin(request, db)
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     org_id = admin.org_id
 
-    members_count = db.query(func.count(Member.id)).filter(
+    # Query 1: Member counts with conditional aggregation (combines 2 queries into 1)
+    member_stats = db.query(
+        func.count(Member.id).label("total"),
+        func.sum(
+            case(
+                (and_(
+                    Member.status != MemberStatus.ACTIVE,
+                    Member.status != MemberStatus.REJECTED,
+                ), 1),
+                else_=0
+            )
+        ).label("pending"),
+    ).filter(
         Member.org_id == org_id,
         Member.deleted_at.is_(None),
-    ).scalar()
+    ).first()
 
-    pending_requests_count = db.query(func.count(Member.id)).filter(
-        Member.org_id == org_id,
-        Member.deleted_at.is_(None),
-        Member.status != MemberStatus.ACTIVE,
-        Member.status != MemberStatus.REJECTED,
-    ).scalar()
+    members_count = member_stats.total or 0
+    pending_requests_count = member_stats.pending or 0
 
-    documents_pending_review = db.query(func.count(MemberDocument.id)).join(
+    # Query 2: Document counts with conditional aggregation (combines 2 queries into 1)
+    doc_stats = db.query(
+        func.sum(
+            case(
+                (MemberDocument.status.in_([DocStatus.PENDING.value, DocStatus.UPLOADED.value]), 1),
+                else_=0
+            )
+        ).label("pending"),
+        func.sum(
+            case(
+                (MemberDocument.status == DocStatus.REJECTED.value, 1),
+                else_=0
+            )
+        ).label("rejected"),
+    ).join(
         Member, MemberDocument.member_id == Member.id
     ).filter(
         Member.org_id == org_id,
         Member.deleted_at.is_(None),
         Member.status != MemberStatus.REJECTED,
-        MemberDocument.status.in_([DocStatus.PENDING.value, DocStatus.UPLOADED.value]),
-    ).scalar()
+    ).first()
 
-    documents_rejected = db.query(func.count(MemberDocument.id)).join(
-        Member, MemberDocument.member_id == Member.id
-    ).filter(
-        Member.org_id == org_id,
-        Member.deleted_at.is_(None),
-        Member.status != MemberStatus.REJECTED,
-        MemberDocument.status == DocStatus.REJECTED.value,
-    ).scalar()
+    documents_pending_review = doc_stats.pending or 0
+    documents_rejected = doc_stats.rejected or 0
 
-    # Cards: computed from batches
-    batches = db.query(CardBatch).filter(CardBatch.org_id == org_id).all()
-    if batches:
-        cards_total = sum(b.end_no - b.start_no + 1 for b in batches)
-        cards_remaining = sum(max(b.end_no - b.next_no + 1, 0) for b in batches)
+    # Query 3: Card batch aggregation in SQL (avoids Python loops)
+    card_stats = db.query(
+        func.sum(CardBatch.end_no - CardBatch.start_no + 1).label("total"),
+        func.sum(
+            func.max(CardBatch.end_no - CardBatch.next_no + 1, 0)
+        ).label("remaining"),
+    ).filter(CardBatch.org_id == org_id).first()
+
+    if card_stats.total:
+        cards_total = int(card_stats.total)
+        cards_remaining = int(card_stats.remaining or 0)
         cards_used = cards_total - cards_remaining
     else:
         cards_total = None

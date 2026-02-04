@@ -212,3 +212,65 @@
 - Steps 1-2 (`admin-dashboard-home`, `admin-stats`): `/org-admin`
 - Steps 3-4 (`admin-members-list`, `admin-add-member`): `/org-admin/soci`
 - Step 5 (`admin-cards`): `/org-admin/tessere`
+
+---
+
+## Architecture, Scaffolding & Performance Fixes (Feb 04, 2026)
+
+### Security Fixes (CRITICAL)
+- [x] Fix inverted auth check in `org_admin.py:47-48` (was returning None for super admin)
+- [x] Add atomic token consumption with UPDATE WHERE to prevent race condition (`member.py`)
+- [x] Add session expiration (30 min timeout) to `main.py` SessionMiddleware
+
+### Performance Fixes
+- [x] Combine 4 metrics queries into 3 using conditional aggregation (`org_admin.py`)
+- [x] Add composite database indexes (Alembic migration `d3e4f5g6h7i8`)
+  - `ix_members_org_status` - (org_id, status)
+  - `ix_members_org_deleted` - (org_id, deleted_at)
+  - `ix_member_documents_member_status` - (member_id, status)
+  - `ix_card_batches_org` - (org_id)
+
+### Frontend Scaffolding
+- [x] Create `AuthProvider` and `useAuth` hook (`hooks/useAuth.tsx`)
+- [x] Create `ProtectedRoute` component (`components/auth/ProtectedRoute.tsx`)
+- [x] Create `apiClient` with retry & deduplication (`lib/apiClient.ts`)
+
+### Files Created
+- `frontend/src/hooks/useAuth.tsx` - Centralized auth state with tab sync
+- `frontend/src/components/auth/ProtectedRoute.tsx` - Route guard component
+- `frontend/src/components/auth/index.ts` - Auth exports
+- `frontend/src/lib/apiClient.ts` - API client with retry/dedupe
+- `alembic/versions/d3e4f5g6h7i8_add_performance_indexes.py` - Index migration
+
+### Files Modified
+- `app/routes/org_admin.py` - Auth fix + metrics optimization
+- `app/routes/member.py` - Atomic token consumption
+- `app/main.py` - Session expiration (max_age=1800)
+
+### Usage Examples
+
+**ProtectedRoute:**
+```tsx
+// In App.tsx routes
+<Route path="/dashboard/*" element={
+  <ProtectedRoute role="member">
+    <DashboardLayout />
+  </ProtectedRoute>
+} />
+```
+
+**useAuth:**
+```tsx
+const { user, loading, logout, refresh } = useAuth();
+if (loading) return <Loading />;
+if (!user) return <Navigate to="/login" />;
+```
+
+**apiClient:**
+```tsx
+import { apiGet, apiPost } from "../lib/apiClient";
+
+// With automatic retry and deduplication
+const data = await apiGet<User[]>("/api/users");
+const result = await apiPost<Result>("/api/users", { name: "John" });
+```

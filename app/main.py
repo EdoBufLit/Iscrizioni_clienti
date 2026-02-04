@@ -67,11 +67,13 @@ app = FastAPI(
 # ── Middleware stack (last added = outermost) ─────────────────────
 
 # 1. Session — innermost, closest to route handlers
+# max_age=1800 = 30 minutes session timeout for security
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.SECRET_KEY,
     same_site="lax",
     https_only=_is_https,
+    max_age=1800,  # 30 minutes - prevents permanent access if session compromised
 )
 
 # 2. CORS — restrict cross-origin requests to our own domain

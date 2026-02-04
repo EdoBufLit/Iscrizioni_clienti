@@ -75,25 +75,36 @@ def login_page(request: Request, org: str = None, db: Session = Depends(get_db))
 def auth_magic_link(request: Request, token: str, db: Session = Depends(get_db)):
     auth_limiter.check(get_client_ip(request))
     token_hash = hash_token(token)
-    token_entry = db.query(Token).filter(
-        Token.token_hash == token_hash,
-        Token.purpose == TokenType.LOGIN_MAGIC_LINK,
-        Token.expires_at > datetime.utcnow()
-    ).first()
+    now = datetime.utcnow()
 
-    if not token_entry:
+    # Atomic token consumption: UPDATE only if unused AND not expired
+    # This prevents race conditions where two requests could use the same token
+    from sqlalchemy import update
+
+    result = db.execute(
+        update(Token)
+        .where(
+            Token.token_hash == token_hash,
+            Token.purpose == TokenType.LOGIN_MAGIC_LINK,
+            Token.expires_at > now,
+            Token.used_at.is_(None),  # Only consume if not yet used
+        )
+        .values(used_at=now)
+    )
+    db.commit()
+
+    # If no rows updated, token was invalid, expired, or already used
+    if result.rowcount == 0:
         return RedirectResponse(url="/login")
 
-    if token_entry.used_at:
+    # Now fetch the token to get member_id (safe since we just consumed it)
+    token_entry = db.query(Token).filter(Token.token_hash == token_hash).first()
+    if not token_entry:
         return RedirectResponse(url="/login")
 
     member = db.query(Member).filter(Member.id == token_entry.member_id).first()
     if not member:
         return RedirectResponse(url="/login")
-
-    # Mark token used
-    token_entry.used_at = datetime.utcnow()
-    db.commit()
 
     # Log user in — allow any member status
     request.session["member_id"] = token_entry.member_id
