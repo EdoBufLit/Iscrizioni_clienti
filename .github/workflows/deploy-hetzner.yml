@@ -18,6 +18,12 @@ jobs:
           key: ${{ secrets.HETZNER_SSH_KEY }}
           script: |
             set -euo pipefail
+            echo "===== ENV CHECK (GITHUB SECRETS) ====="
+            echo "HAS_SECRET_KEY=$([ -n '${{ secrets.SECRET_KEY }}' ] && echo YES || echo NO)"
+            echo "HAS_SMTP_PORT=$([ -n '${{ secrets.SMTP_PORT }}' ] && echo YES || echo NO)"
+            echo "BRANCH=${GITHUB_REF}"
+            echo "SHA=${GITHUB_SHA}"
+            echo "====================================="
 
             cd "${{ secrets.APP_PATH }}"
             git fetch --all
