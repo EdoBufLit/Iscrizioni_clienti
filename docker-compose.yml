@@ -11,6 +11,7 @@ services:
     environment:
       # DB
       DATABASE_URL: ${DATABASE_URL}
+      SKIP_CREATE_ALL: "1"
 
       # Super admin
       SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL}
