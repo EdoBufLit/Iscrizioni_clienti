@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { fetchMe, apiLogout, AuthError, type MemberProfile } from "../../lib/api";
 import Skeleton from "../../components/ui/Skeleton";
+import { OnboardingTour, ReviewGuideButton } from "../../components/onboarding";
 
 export type DashboardContext = {
   user: MemberProfile | null;
@@ -178,6 +179,7 @@ const DashboardLayout = () => {
               </nav>
 
               <div className="mt-8 border-t border-white/70 pt-4">
+                <ReviewGuideButton className="mb-3" />
                 <Link
                   className="flex items-center gap-2 text-sm font-medium text-neutral-500 transition hover:text-neutral-700"
                   to="/"
@@ -221,6 +223,8 @@ const DashboardLayout = () => {
           </div>
         </div>
       </div>
+
+      {!loading && user && <OnboardingTour role="member" />}
     </div>
   );
 };

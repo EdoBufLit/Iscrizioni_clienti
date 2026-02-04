@@ -47,7 +47,7 @@ const DashboardHome = () => {
     : null;
 
   return (
-    <div>
+    <div data-tour="member-dashboard-home">
       <h1 className="text-xl font-semibold text-neutral-900">Riepilogo</h1>
       <p className="mt-1 text-sm text-neutral-500">
         Panoramica dello stato dell'iscrizione e delle attività recenti.
@@ -67,7 +67,11 @@ const DashboardHome = () => {
       ) : user ? (
         <div className="mt-8 grid gap-6 md:grid-cols-3">
           {CARDS.map((card) => (
-            <div key={card.key} className="surface p-7">
+            <div
+              key={card.key}
+              className="surface p-7"
+              data-tour={card.key === "status" ? "member-status" : card.key === "card" ? "member-card-number" : undefined}
+            >
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand/10">
                 <svg
                   className="h-[18px] w-[18px] text-brand"

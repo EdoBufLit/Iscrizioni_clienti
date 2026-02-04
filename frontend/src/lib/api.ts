@@ -860,3 +860,48 @@ export async function createManualPayment(
   if (!res.ok) throw new Error("Errore durante il salvataggio del pagamento");
   return res.json();
 }
+
+// ── Onboarding Tour ─────────────────────────────────────────────
+
+export type OnboardingTourStatus = {
+  tour_key: string;
+  started_at: string | null;
+  completed_at: string | null;
+  skipped_at: string | null;
+  should_show: boolean;
+};
+
+export async function fetchOnboardingStatus(): Promise<OnboardingTourStatus> {
+  const res = await fetch("/api/me/onboarding");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error("Failed to fetch onboarding status");
+  return res.json();
+}
+
+export async function startOnboardingTour(): Promise<{ ok: boolean }> {
+  const res = await fetch("/api/me/onboarding/start", { method: "POST" });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error("Failed to start tour");
+  return res.json();
+}
+
+export async function completeOnboardingTour(): Promise<{ ok: boolean }> {
+  const res = await fetch("/api/me/onboarding/complete", { method: "POST" });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error("Failed to complete tour");
+  return res.json();
+}
+
+export async function skipOnboardingTour(): Promise<{ ok: boolean }> {
+  const res = await fetch("/api/me/onboarding/skip", { method: "POST" });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error("Failed to skip tour");
+  return res.json();
+}
+
+export async function resetOnboardingTour(): Promise<{ ok: boolean; should_show: boolean }> {
+  const res = await fetch("/api/me/onboarding/reset", { method: "POST" });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error("Failed to reset tour");
+  return res.json();
+}

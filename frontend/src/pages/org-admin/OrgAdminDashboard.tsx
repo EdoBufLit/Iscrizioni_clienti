@@ -78,7 +78,7 @@ const OrgAdminDashboard = () => {
   const isLoading = adminLoading || loading;
 
   return (
-    <div className="container-shell py-10">
+    <div className="container-shell py-10" data-tour="admin-dashboard-home">
       <h2 className="text-xl font-semibold text-neutral-900">Panoramica</h2>
       <p className="mt-1 text-sm text-neutral-500">
         Stato operativo dell'associazione e riepilogo delle attività.
@@ -121,7 +121,7 @@ const OrgAdminDashboard = () => {
           </div>
         </div>
       ) : (
-        <div className="mt-8 grid gap-6 md:grid-cols-3 xl:grid-cols-5">
+        <div className="mt-8 grid gap-6 md:grid-cols-3 xl:grid-cols-5" data-tour="admin-stats">
           {CARD_META.map((card) => {
             const value = metrics?.[card.key] ?? null;
             const isCards = card.key === "cards_remaining";

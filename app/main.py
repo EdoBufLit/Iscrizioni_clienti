@@ -14,7 +14,7 @@ from app.bootstrap import bootstrap_super_admin
 from app.config import settings
 from app.db import get_db, SessionLocal, engine
 from app.middleware import SecurityHeadersMiddleware
-from app.routes import admin, join, member, org_admin, public, super_admin
+from app.routes import admin, join, member, onboarding, org_admin, public, super_admin
 from app.schema_validation import validate_schema
 from app.spa import SPAStaticFiles
 from init_db import init_db
@@ -101,6 +101,7 @@ app.include_router(admin.router)
 app.include_router(org_admin.router)
 app.include_router(super_admin.router)
 app.include_router(public.router)
+app.include_router(onboarding.router)
 
 
 @app.get("/health")

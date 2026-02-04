@@ -9,6 +9,7 @@ import {
   type VersionInfo,
 } from "../../lib/api";
 import Skeleton from "../../components/ui/Skeleton";
+import { OnboardingTour, ReviewGuideButton } from "../../components/onboarding";
 
 type OrgAdminCtx = {
   admin: OrgAdminProfile | null;
@@ -89,6 +90,7 @@ const OrgAdminLayout = () => {
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-3">
+                {!loading && admin && <ReviewGuideButton />}
                 <Link
                   className="hidden text-sm font-medium text-neutral-500 transition hover:text-neutral-700 sm:block"
                   to="/"
@@ -139,6 +141,8 @@ const OrgAdminLayout = () => {
             {ver.git_sha ? ` (${ver.git_sha.slice(0, 7)})` : ""}
           </footer>
         )}
+
+        {!loading && admin && <OnboardingTour role="org_admin" />}
       </div>
     </Ctx.Provider>
   );

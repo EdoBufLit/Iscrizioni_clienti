@@ -149,7 +149,7 @@ const DashboardDocuments = () => {
         </div>
       ) : (
         <>
-          <div className="surface mt-8 p-7">
+          <div className="surface mt-8 p-7" data-tour="member-documents">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold text-neutral-900">Documenti richiesti</p>
@@ -268,7 +268,7 @@ const DashboardDocuments = () => {
                     )}
 
                     {normalizedStatus === "rejected" && latest && (
-                      <div className="mt-4 rounded-lg border border-red-200/70 bg-red-50 px-4 py-4">
+                      <div className="mt-4 rounded-lg border border-red-200/70 bg-red-50 px-4 py-4" data-tour="member-document-rejected">
                         <p className="text-sm font-semibold text-red-700">Azione richiesta</p>
                         <p className="mt-1 text-sm text-red-600">
                           {latest.rejection_note
@@ -276,7 +276,7 @@ const DashboardDocuments = () => {
                             : "Il documento Ã¨ stato rigettato. Carica una nuova versione."}
                         </p>
                         <div className="mt-3">
-                          <label className="btn-primary cursor-pointer">
+                          <label className="btn-primary cursor-pointer" data-tour="member-upload-document">
                             <input
                               type="file"
                               className="sr-only"

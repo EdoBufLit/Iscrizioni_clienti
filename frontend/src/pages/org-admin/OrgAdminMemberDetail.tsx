@@ -606,6 +606,7 @@ export default function OrgAdminMemberDetail() {
                             onClick={handleSendAccess}
                             disabled={sendingAccess || member.has_access || !member.email}
                             className="btn-primary"
+                            data-tour="admin-send-access"
                         >
                             {sendingAccess ? "Invio..." : "Invia accesso"}
                         </button>
@@ -809,7 +810,7 @@ export default function OrgAdminMemberDetail() {
         </p>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden" data-tour="admin-documents">
         <div className="px-6 py-4 border-b border-neutral-100 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold">Documenti Caricati</h2>
@@ -908,6 +909,7 @@ export default function OrgAdminMemberDetail() {
                             onClick={() => openRejectModal(doc)}
                             disabled={reviewingDocId === doc.id || isDecisionMade}
                             className="px-3 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            data-tour="admin-document-reject"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                             Rigetta

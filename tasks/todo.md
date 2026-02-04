@@ -136,3 +136,47 @@
 - [x] Swap to a more professional font pairing with proper loading strategy
 - [x] Improve hero logo contrast while keeping text legible
 - [x] Verify UI and document results in Review
+
+---
+
+## Guided Onboarding Tour (Feb 04, 2026)
+- [x] Create OnboardingTour DB model and Alembic migration
+- [x] Create API routes for tour state management (/api/me/onboarding/*)
+- [x] Install react-joyride and create frontend components
+- [x] Integrate tour in member (SOCIO) dashboard with data-tour attributes
+- [x] Integrate tour in org admin dashboard with data-tour attributes
+- [x] Verify frontend build passes
+
+### Files Created
+- `app/routes/onboarding.py` - Backend API routes
+- `alembic/versions/c2d3e4f5g6h7_add_onboarding_tours.py` - DB migration
+- `frontend/src/components/onboarding/tourSteps.ts` - Tour step definitions
+- `frontend/src/components/onboarding/OnboardingTour.tsx` - Main tour component
+- `frontend/src/components/onboarding/ReviewGuideButton.tsx` - Reset button
+- `frontend/src/components/onboarding/index.ts` - Exports
+
+### Files Modified
+- `app/models.py` - Added OnboardingTour model
+- `app/main.py` - Registered onboarding router
+- `frontend/src/lib/api.ts` - Added onboarding API functions
+- `frontend/src/pages/dashboard/DashboardLayout.tsx` - Tour + button
+- `frontend/src/pages/dashboard/DashboardHome.tsx` - data-tour attrs
+- `frontend/src/pages/dashboard/DashboardDocuments.tsx` - data-tour attrs
+- `frontend/src/pages/org-admin/OrgAdminLayout.tsx` - Tour + button
+- `frontend/src/pages/org-admin/OrgAdminDashboard.tsx` - data-tour attrs
+- `frontend/src/pages/org-admin/OrgAdminMembers.tsx` - data-tour attrs
+- `frontend/src/pages/org-admin/OrgAdminMemberDetail.tsx` - data-tour attrs
+- `frontend/src/pages/org-admin/OrgAdminCards.tsx` - data-tour attrs
+
+### Test Manuali
+1. Nuovo utente SOCIO: tour parte automaticamente
+2. Completa tour: non riparte
+3. Skip tour: non riparte
+4. Rivedi guida: tour riparte
+5. Nuovo ADMIN ORG: tour parte automaticamente
+6. Isolamento ruoli: socio non vede tour admin e viceversa
+
+### Come Resettare la Guida
+- UI: Clicca "Rivedi guida" nel menu
+- API: `POST /api/me/onboarding/reset`
+- DB: `UPDATE onboarding_tours SET completed_at=NULL, skipped_at=NULL WHERE user_id=X`

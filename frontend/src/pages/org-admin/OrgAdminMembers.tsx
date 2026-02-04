@@ -257,6 +257,7 @@ const OrgAdminMembers = () => {
               type="button"
               onClick={openModal}
               className="btn-primary"
+              data-tour="admin-add-member"
             >
               Aggiungi socio
             </button>
@@ -420,7 +421,7 @@ const OrgAdminMembers = () => {
           </div>
         </div>
       ) : (
-        <div className="surface mt-4 overflow-hidden">
+        <div className="surface mt-4 overflow-hidden" data-tour="admin-members-list">
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead className="border-b border-white/60 bg-white/40">

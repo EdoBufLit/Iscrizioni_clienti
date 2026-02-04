@@ -81,7 +81,7 @@ const OrgAdminCards = () => {
   const isLoading = adminLoading || loading;
 
   return (
-    <div className="container-shell py-10">
+    <div className="container-shell py-10" data-tour="admin-cards">
       <h2 className="text-xl font-semibold text-neutral-900">Tessere</h2>
       <p className="mt-1 text-sm text-neutral-500">
         Situazione del magazzino tessere e storico movimenti.

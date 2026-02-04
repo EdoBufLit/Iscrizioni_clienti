@@ -255,3 +255,20 @@ class OrgAdminToken(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     admin = relationship("AdminUser")
+
+
+class OnboardingTour(Base):
+    __tablename__ = "onboarding_tours"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False)
+    role = Column(String, nullable=False)  # "member" | "org_admin"
+    tour_key = Column(String, nullable=False)  # "member_dashboard_v1" | "org_admin_dashboard_v1"
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    skipped_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "role", "tour_key", name="uix_user_role_tour"),
+    )
