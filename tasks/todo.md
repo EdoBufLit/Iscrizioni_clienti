@@ -180,3 +180,35 @@
 - UI: Clicca "Rivedi guida" nel menu
 - API: `POST /api/me/onboarding/reset`
 - DB: `UPDATE onboarding_tours SET completed_at=NULL, skipped_at=NULL WHERE user_id=X`
+
+---
+
+## Fix Guided Tour Multi-Route (Feb 04, 2026)
+- [x] Add route mapping to tour steps (TourStep type with route property)
+- [x] Mark conditional steps as optional (member-document-rejected, member-upload-document)
+- [x] Update OnboardingTour to navigate between routes automatically
+- [x] Add DOM wait logic with requestAnimationFrame + setTimeout
+- [x] Add retry logic for finding elements (waitForElement with retries)
+- [x] Skip optional steps gracefully when target not found
+- [x] Remove non-existent steps (member-help was never implemented)
+- [x] Reorganize step order (dashboard home steps together, documents steps together)
+- [x] Verify frontend build passes
+
+### Implementazione
+- `tourSteps.ts`: Aggiunto `TourStep` type con `route` e `optional` properties
+- `OnboardingTour.tsx`:
+  - Usa `useNavigate` e `useLocation` per la navigazione
+  - `waitForDom()`: doppio requestAnimationFrame + setTimeout per aspettare il DOM
+  - `waitForElement()`: retry loop per trovare elementi con delay
+  - `findNextValidStep()`: salta automaticamente step opzionali se target mancante
+  - Gestione `TARGET_NOT_FOUND` con retry prima di skippare
+
+### Route Mapping
+**Member tour:**
+- Steps 1-3 (`member-dashboard-home`, `member-status`, `member-card-number`): `/dashboard`
+- Steps 4-6 (`member-documents`, `member-document-rejected`, `member-upload-document`): `/dashboard/documenti`
+
+**Org Admin tour:**
+- Steps 1-2 (`admin-dashboard-home`, `admin-stats`): `/org-admin`
+- Steps 3-4 (`admin-members-list`, `admin-add-member`): `/org-admin/soci`
+- Step 5 (`admin-cards`): `/org-admin/tessere`
