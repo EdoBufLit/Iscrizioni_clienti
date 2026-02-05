@@ -1034,6 +1034,7 @@ def member_decision(
             try:
                 assigned = assign_next_card(db, member.org_id)
                 member.card_no = assigned
+                member.card_year = datetime.utcnow().year
             except HTTPException as exc:
                 if exc.status_code == 409:
                     # Cards exhausted - member approved but waiting for card
@@ -1045,6 +1046,8 @@ def member_decision(
             member.status = MemberStatus.PENDING_CARDS
         else:
             member.status = MemberStatus.ACTIVE
+            if member.card_no is not None and member.card_year is None:
+                member.card_year = datetime.utcnow().year
             # Trigger joined_at if not set (first activation)
             if not member.joined_at:
                 member.joined_at = datetime.utcnow()
@@ -1126,6 +1129,7 @@ def create_manual_payment(
             if member.card_no is None:
                 try:
                     member.card_no = assign_next_card(db, member.org_id)
+                    member.card_year = datetime.utcnow().year
                     card_assigned = True
                 except HTTPException as exc:
                     if exc.status_code == 409:
@@ -1134,6 +1138,8 @@ def create_manual_payment(
                         raise
             if member.card_no is not None:
                 member.status = MemberStatus.ACTIVE
+                if member.card_year is None:
+                    member.card_year = datetime.utcnow().year
                 if not member.joined_at:
                     member.joined_at = datetime.utcnow()
                 if not member.decision_at:

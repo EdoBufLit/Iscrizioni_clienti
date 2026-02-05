@@ -73,7 +73,7 @@ const Layout = () => {
               ))}
               <NavLink
                 className="ml-3 btn-ghost px-4 py-1.5 text-sm"
-                to="/dashboard"
+                to="/area-riservata"
                 onMouseEnter={prefetchDashboard}
                 onFocus={prefetchDashboard}
               >
@@ -113,7 +113,7 @@ const Layout = () => {
                 ))}
                 <NavLink
                   className="mt-2 btn-ghost text-center text-sm"
-                  to="/dashboard"
+                  to="/area-riservata"
                   onClick={close}
                   onMouseEnter={prefetchDashboard}
                   onFocus={prefetchDashboard}

@@ -390,3 +390,30 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] Fallback robusti su campi mancanti (`-`) e fallback errore con bottone `Riprova`.
 - [x] Adapter compatibile con naming backend alternativi (`organization_name`, `card_number`, `assigned_card_number`).
 - [x] Verifica tecnica: `npm run build` in `frontend` OK.
+
+---
+
+## Spec (Tessera Separata + QR Reale + Fix Area Riservata - Feb 05, 2026)
+- Obiettivo: rendere la tessera socio ASSO.N.A.M. una sezione dedicata e separata dalle KPI card, con flip 3D fronte/retro, QR reale verso backend e bugfix del primo click su "Area riservata".
+- Vincoli: nessun mock/hardcode dati socio-tessera, no modali, stile istituzionale coerente con tessera annuale, nessuna duplicazione tessera nelle card riepilogo.
+- Dati richiesti: `socio.nome`, `socio.cognome`, `tessera.numero`, `tessera.stato`, `tessera.anno`, `associazione.nome` da DB.
+
+## Plan (Tessera Separata + QR Reale + Fix Area Riservata)
+- [x] Spostare la tessera in una sezione dedicata "La tua tessera" sotto le card riepilogo standard.
+- [x] Reimplementare `MemberCardPreview` come tessera interattiva con flip 3D fronte/retro e stati hover/focus.
+- [x] Estendere backend `GET /api/auth/me` con payload tessera completo (`status/year/verification_url`) e costruzione URL verifica firmato.
+- [x] Aggiungere endpoint pubblico reale `GET /api/cards/verify/{token}` con controllo firma + validazione dati DB.
+- [x] Introdurre `card_year` nel modello dati + migration + assegnazione anno nei flussi di emissione tessera.
+- [x] Correggere il bug primo click su "Area riservata" unificando il redirect auth in route dedicata (`/area-riservata`).
+- [x] Verificare build/test mirati e aggiornare review.
+
+## Review (Tessera Separata + QR Reale + Fix Area Riservata)
+- [x] Dashboard socio aggiornata: KPI standard separate, tessera resa protagonista in sezione dedicata con heading esplicito.
+- [x] Tessera fronte: logo, dicitura "Tessera Socio 2026", nome/cognome, numero tessera, nome completo associazione.
+- [x] Tessera retro: QR funzionante verso endpoint backend reale, stato tessera, anno validita, associazione.
+- [x] Dati tessera presi da DB tramite `GET /api/auth/me` con payload card esteso.
+- [x] Endpoint verifica implementato in backend con token firmato (`app/services/card_verification.py`) e controllo su `members`.
+- [x] Bug "Area riservata primo click" risolto con route di redirect unica e deterministica (`frontend/src/pages/ReservedAreaRedirect.tsx`).
+- [x] Verifica tecnica: `python -m pytest tests/test_member_card_verification.py` OK.
+- [x] Verifica tecnica: `npm run build` (frontend) OK.
+- [ ] Verifica allargata: `python -m pytest tests/test_member_card_verification.py tests/test_email_flows.py` NON completamente verde per failure preesistente su `test_email_flows.py::test_member_magic_link_flow` (join 400 per statuto mancante su `my-association`).

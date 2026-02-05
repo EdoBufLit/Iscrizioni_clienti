@@ -286,6 +286,7 @@ async def api_join_continue(
         try:
             assigned = assign_next_card(db, member.org_id)
             member.card_no = assigned
+            member.card_year = datetime.utcnow().year
             member.status = MemberStatus.ACTIVE
             member.joined_at = datetime.utcnow()
         except HTTPException as exc:

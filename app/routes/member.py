@@ -8,6 +8,7 @@ from app.utils import generate_token, send_email, hash_token, save_upload_file
 from app.security import get_password_hash, verify_password
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
+from app.services.card_verification import build_card_verification_token, to_card_status
 from app import audit
 import os
 import logging
@@ -392,6 +393,27 @@ def api_auth_me(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     org = member.organization
+    status_raw = member.status.value if isinstance(member.status, MemberStatus) else (str(member.status) if member.status is not None else "")
+    card_year = member.card_year
+
+    if member.card_no is not None and card_year is None:
+        # Backfill legacy rows that predate card_year.
+        card_year = member.joined_at.year if member.joined_at else datetime.utcnow().year
+        member.card_year = card_year
+        db.commit()
+
+    verification_url = None
+    if member.card_no is not None and card_year is not None:
+        backend_base = settings.BASE_URL.rstrip("/") if settings.BASE_URL else str(request.base_url).rstrip("/")
+        token = build_card_verification_token(
+            member_id=member.id,
+            org_id=member.org_id,
+            card_number=member.card_no,
+            card_year=card_year,
+        )
+        verification_url = f"{backend_base}/api/cards/verify/{token}"
+
+    card_status = to_card_status(member.status, member.card_no)
 
     return {
         "id": member.id,
@@ -400,8 +422,17 @@ def api_auth_me(request: Request, db: Session = Depends(get_db)):
         "email": member.email,
         "phone": member.phone,
         "fiscal_code": member.fiscal_code,
-        "status": member.status.value,
+        "status": status_raw,
         "card_no": member.card_no,
+        "card_status": card_status,
+        "card_year": card_year,
+        "card_verification_url": verification_url,
+        "card": {
+            "number": member.card_no,
+            "status": card_status,
+            "year": card_year,
+            "verification_url": verification_url,
+        },
         "joined_at": member.joined_at.isoformat() if member.joined_at else None,
         "organization": {
             "id": org.id,

@@ -87,6 +87,7 @@ def init_db():
         _add_column_if_missing(conn, "members", "decision_notes", "TEXT")
         _add_column_if_missing(conn, "members", "deleted_at", "DATETIME")
         _add_column_if_missing(conn, "members", "deleted_by_admin_id", "INTEGER REFERENCES admin_users(id)")
+        _add_column_if_missing(conn, "members", "card_year", "INTEGER")
         _add_column_if_missing(conn, "members", "member_type", "TEXT")
         _add_column_if_missing(conn, "members", "internal_notes", "TEXT")
         _add_column_if_missing(conn, "members", "is_manual", "INTEGER DEFAULT 0")

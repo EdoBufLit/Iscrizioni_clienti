@@ -137,6 +137,7 @@ class Member(Base):
     status = Column(SafeMemberStatusType(), default=MemberStatus.PENDING_DOCS.value)
 
     card_no = Column(Integer, nullable=True)
+    card_year = Column(Integer, nullable=True)
     batch_id = Column(Integer, ForeignKey("card_batches.id"), nullable=True)
 
     joined_at = Column(DateTime, nullable=True)

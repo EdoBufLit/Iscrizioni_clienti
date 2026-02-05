@@ -240,6 +240,42 @@ body::before {
   .grid-cards {
     @apply grid gap-6 md:grid-cols-2 lg:grid-cols-3;
   }
+
+  .member-card-flip {
+    perspective: 1800px;
+    border-radius: 28px;
+    outline: none;
+    transition: transform 220ms ease;
+  }
+
+  .member-card-flip:hover {
+    transform: translateY(-2px);
+  }
+
+  .member-card-flip:focus-visible {
+    box-shadow: 0 0 0 3px rgba(198, 160, 79, 0.45);
+  }
+
+  .member-card-flip-inner {
+    display: block;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 680ms cubic-bezier(0.18, 0.75, 0.25, 1);
+  }
+
+  .member-card-flip-inner.is-flipped {
+    transform: rotateY(180deg);
+  }
+
+  .member-card-face {
+    display: block;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  .member-card-face-back {
+    transform: rotateY(180deg);
+  }
 }
 
 .line-clamp-2 {
@@ -280,5 +316,16 @@ body::before {
   }
   50% {
     opacity: 0.95;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .member-card-flip,
+  .member-card-flip-inner {
+    transition: none !important;
+  }
+
+  .member-card-flip:hover {
+    transform: none;
   }
 }

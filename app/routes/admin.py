@@ -134,6 +134,7 @@ def assign_card_manual(request: Request, member_id: int, db: Session = Depends(g
         try:
             assigned = assign_next_card(db, member.org_id)
             member.card_no = assigned
+            member.card_year = datetime.utcnow().year
             if member.status == MemberStatus.PENDING_CARDS:
                 member.status = MemberStatus.ACTIVE
                 if not member.joined_at:

@@ -1,10 +1,12 @@
 import os
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse, FileResponse
 from sqlalchemy.orm import Session
 from app.db import get_db
-from app.models import Organization
+from app.models import Member, Organization
 from app.config import settings
+from app.services.card_verification import parse_card_verification_token, to_card_status
 
 router = APIRouter()
 
@@ -118,3 +120,49 @@ def get_organization_statute(slug: str, db: Session = Depends(get_db)):
          raise HTTPException(status_code=404, detail="File missing on disk")
 
     return FileResponse(full_path, media_type="application/pdf", filename=f"statuto_{org.slug}.pdf")
+
+
+@router.get("/api/cards/verify/{token}")
+def verify_member_card(token: str, db: Session = Depends(get_db)):
+    payload = parse_card_verification_token(token)
+    if not payload:
+        raise HTTPException(status_code=404, detail="Tessera non valida")
+
+    member = (
+        db.query(Member)
+        .filter(
+            Member.id == payload["member_id"],
+            Member.org_id == payload["org_id"],
+            Member.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if not member:
+        raise HTTPException(status_code=404, detail="Tessera non valida")
+
+    if (
+        member.card_no != payload["card_number"]
+        or member.card_year != payload["card_year"]
+    ):
+        raise HTTPException(status_code=404, detail="Tessera non valida")
+
+    status = to_card_status(member.status, member.card_no)
+    is_valid = bool(status == "attiva" and member.card_no is not None and member.card_year is not None)
+
+    return {
+        "valid": is_valid,
+        "card": {
+            "number": member.card_no,
+            "status": status,
+            "year": member.card_year,
+        },
+        "member": {
+            "first_name": member.first_name,
+            "last_name": member.last_name,
+        },
+        "organization": {
+            "name": member.organization.name if member.organization else None,
+            "slug": member.organization.slug if member.organization else None,
+        },
+        "checked_at": datetime.utcnow().isoformat() + "Z",
+    }

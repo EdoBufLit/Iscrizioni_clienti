@@ -24,6 +24,15 @@ export type MemberProfile = {
   fiscal_code: string | null;
   status: string;
   card_no: number | null;
+  card_status?: string | null;
+  card_year?: number | null;
+  card_verification_url?: string | null;
+  card?: {
+    number: number | null;
+    status: string | null;
+    year: number | null;
+    verification_url: string | null;
+  } | null;
   joined_at: string | null;
   organization: {
     id: number;
