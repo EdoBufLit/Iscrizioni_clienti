@@ -286,9 +286,15 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
             return;
           }
           // Delay to ensure initial DOM is ready
-          setTimeout(() => {
+          const timeoutId = setTimeout(() => {
+          if (tourEndedRef.current) return;
+          const recheck = getTourStateFromStorage(role);
+          if (recheck) return; // ⬅️ SE HA FINITO, NON RIPARTIRE
             setRun(true);
-          }, 600);
+            }, 600);
+
+          return () => clearTimeout(timeoutId);
+
         }
       })
       .catch(() => {
@@ -299,6 +305,7 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
 
   // Handle step changes - ensure we're on the right route
   useEffect(() => {
+    if (tourEndedRef.current) return;
     if (!run || loading || isNavigatingRef.current) return;
 
     const step = stepsWithFinal[stepIndex];
