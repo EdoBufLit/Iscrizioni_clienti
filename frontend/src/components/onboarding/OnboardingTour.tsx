@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Joyride, {
   type CallBackProps,
@@ -65,6 +65,85 @@ const LOCALE = {
   skip: "Salta guida",
 };
 
+type FinalStepDialogProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  content: string;
+  onClose: () => void;
+};
+
+const FinalStepDialog = ({
+  open,
+  onOpenChange,
+  title,
+  content,
+  onClose,
+}: FinalStepDialogProps) => {
+  useEffect(() => {
+    if (!open) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onOpenChange(false);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onOpenChange]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[10001] flex items-center justify-center px-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="onboarding-final-step-title"
+    >
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/50"
+        aria-label="Chiudi modale guida completata"
+        onClick={() => onOpenChange(false)}
+      />
+      <div className="relative z-10 w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-2xl">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-700"
+          aria-label="Chiudi"
+        >
+          X
+        </button>
+
+        <h2 id="onboarding-final-step-title" className="text-lg font-semibold text-neutral-900">
+          {title}
+        </h2>
+        <p className="mt-2 text-sm text-neutral-600">{content}</p>
+
+        <div className="mt-6 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100"
+          >
+            Indietro
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
+          >
+            Fine
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Wait for DOM to settle after navigation
 const waitForDom = (): Promise<void> =>
   new Promise((resolve) => {
@@ -119,6 +198,7 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
   const [run, setRun] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [showFinalStep, setShowFinalStep] = useState(false);
 
   // Track if we're currently navigating/waiting for DOM
   const isNavigatingRef = useRef(false);
@@ -126,21 +206,11 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
   const skippedStepsRef = useRef(new Set<number>());
   // Track if tour has been ended to prevent double handling
   const tourEndedRef = useRef(false);
+  // Track manual close of final dialog to avoid reopening due late callbacks
+  const finalStepDismissedRef = useRef(false);
 
   const steps = role === "member" ? MEMBER_TOUR_STEPS : ORG_ADMIN_TOUR_STEPS;
   const finalMessage = TOUR_FINAL_MESSAGE[role];
-
-  // Add final step dynamically
-  const stepsWithFinal: TourStep[] = [
-    ...steps,
-    {
-      target: "body",
-      title: finalMessage.title,
-      content: finalMessage.content,
-      placement: "center" as const,
-      disableBeacon: true,
-    },
-  ];
 
   // Check if current route matches the required route for a step
   const isOnCorrectRoute = useCallback(
@@ -188,11 +258,8 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
   // Prepare step - navigate if needed, verify target exists
   const prepareStep = useCallback(
     async (index: number): Promise<boolean> => {
-      const step = stepsWithFinal[index];
+      const step = steps[index];
       if (!step) return false;
-
-      // Final step always works
-      if (step.target === "body") return true;
 
       // Navigate if needed
       const navOk = await navigateToStep(step);
@@ -210,14 +277,14 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
 
       return true;
     },
-    [stepsWithFinal, navigateToStep]
+    [steps, navigateToStep]
   );
 
   // Find next valid step index (skipping optional steps whose targets don't exist)
   const findNextValidStep = useCallback(
     async (fromIndex: number, direction: 1 | -1 = 1): Promise<number> => {
       let nextIndex = fromIndex;
-      const maxIndex = stepsWithFinal.length - 1;
+      const maxIndex = steps.length - 1;
 
       while (nextIndex >= 0 && nextIndex <= maxIndex) {
         // Skip already-skipped steps
@@ -226,10 +293,11 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
           continue;
         }
 
-        const step = stepsWithFinal[nextIndex];
-
-        // Final step is always valid
-        if (step.target === "body") return nextIndex;
+        const step = steps[nextIndex];
+        if (!step) {
+          nextIndex += direction;
+          continue;
+        }
 
         // Check if step target exists
         const targetSelector =
@@ -259,14 +327,17 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
         return nextIndex;
       }
 
-      // If we've gone past the end, return the final step
+      // Clamp to the nearest valid step index
       return direction === 1 ? maxIndex : 0;
     },
-    [stepsWithFinal, location.pathname, navigate]
+    [steps, location.pathname, navigate]
   );
 
   // Initialize tour - check localStorage first, then backend
   useEffect(() => {
+    let cancelled = false;
+    let startTimer: number | null = null;
+
     // Check localStorage first for immediate response
     const localState = getTourStateFromStorage(role);
     if (localState) {
@@ -278,6 +349,7 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
     // Check backend status
     fetchOnboardingStatus()
       .then((status) => {
+        if (cancelled) return;
         if (status.should_show) {
           // Double-check localStorage hasn't changed
           const recheck = getTourStateFromStorage(role);
@@ -285,22 +357,35 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
             setLoading(false);
             return;
           }
+          tourEndedRef.current = false;
+          finalStepDismissedRef.current = false;
+          skippedStepsRef.current.clear();
+          setShowFinalStep(false);
+          setStepIndex(0);
           // Delay to ensure initial DOM is ready
-          const timeoutId = setTimeout(() => {
-          if (tourEndedRef.current) return;
-          const recheck = getTourStateFromStorage(role);
-          if (recheck) return; // ⬅️ SE HA FINITO, NON RIPARTIRE
+          startTimer = window.setTimeout(() => {
+            if (cancelled || tourEndedRef.current) return;
+            const localRecheck = getTourStateFromStorage(role);
+            if (localRecheck) return;
             setRun(true);
-            }, 600);
-
-          return () => clearTimeout(timeoutId);
-
+          }, 600);
         }
       })
       .catch(() => {
         // Silently fail
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      if (startTimer !== null) {
+        window.clearTimeout(startTimer);
+      }
+    };
   }, [role]);
 
   // Handle step changes - ensure we're on the right route
@@ -308,7 +393,7 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
     if (tourEndedRef.current) return;
     if (!run || loading || isNavigatingRef.current) return;
 
-    const step = stepsWithFinal[stepIndex];
+    const step = steps[stepIndex];
     if (!step) return;
 
     // Check if we need to navigate
@@ -321,7 +406,7 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
       };
       doNav();
     }
-  }, [run, loading, stepIndex, stepsWithFinal, isOnCorrectRoute, navigate]);
+  }, [run, loading, stepIndex, steps, isOnCorrectRoute, navigate]);
 
   // Helper to end tour and persist state
   const endTour = useCallback(
@@ -351,6 +436,18 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
     [role, onTourEnd]
   );
 
+  const handleFinalStepOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      finalStepDismissedRef.current = true;
+    }
+    setShowFinalStep(open);
+  }, []);
+
+  const closeFinalStep = useCallback(() => {
+    finalStepDismissedRef.current = true;
+    setShowFinalStep(false);
+  }, []);
+
   const handleJoyrideCallback = useCallback(
     async (data: CallBackProps) => {
       const { status, action, type, index } = data;
@@ -365,23 +462,40 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
       // 1. User clicked "Fine" (last button) - status becomes FINISHED
       if (status === STATUS.FINISHED) {
         endTour("completed");
+        if (!finalStepDismissedRef.current) {
+          setShowFinalStep(true);
+        }
         return;
       }
 
       // 2. User clicked "Salta guida" - status becomes SKIPPED
       if (status === STATUS.SKIPPED) {
+        finalStepDismissedRef.current = true;
+        setShowFinalStep(false);
         endTour("skipped");
         return;
       }
 
       // 3. User clicked X button - action is CLOSE
       if (action === ACTIONS.CLOSE) {
+        finalStepDismissedRef.current = true;
+        setShowFinalStep(false);
         endTour("skipped");
         return;
       }
 
       // Handle step navigation
       if (type === EVENTS.STEP_AFTER) {
+        // Some Joyride versions emit STEP_AFTER on last step before FINISHED.
+        // Complete immediately to avoid being stuck on the last tooltip.
+        if (action !== ACTIONS.PREV && index >= steps.length - 1) {
+          endTour("completed");
+          if (!finalStepDismissedRef.current) {
+            setShowFinalStep(true);
+          }
+          return;
+        }
+
         const nextDirection = action === ACTIONS.PREV ? -1 : 1;
         const nextRawIndex = index + nextDirection;
 
@@ -391,7 +505,7 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
       }
 
       if (type === EVENTS.TARGET_NOT_FOUND) {
-        const step = stepsWithFinal[index];
+        const step = steps[index];
 
         // If optional, skip to next
         if (step?.optional) {
@@ -415,28 +529,37 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
         startOnboardingTour().catch(() => {});
       }
     },
-    [stepsWithFinal, findNextValidStep, prepareStep, endTour]
+    [steps, findNextValidStep, prepareStep, endTour]
   );
 
   if (loading) return null;
 
   return (
-    <Joyride
-      steps={stepsWithFinal}
-      run={run}
-      stepIndex={stepIndex}
-      continuous
-      showSkipButton
-      showProgress
-      scrollToFirstStep
-      disableScrollParentFix
-      callback={handleJoyrideCallback}
-      styles={JOYRIDE_STYLES}
-      locale={LOCALE}
-      floaterProps={{
-        disableAnimation: true,
-      }}
-    />
+    <>
+      <Joyride
+        steps={steps}
+        run={run}
+        stepIndex={stepIndex}
+        continuous
+        showSkipButton
+        showProgress
+        scrollToFirstStep
+        disableScrollParentFix
+        callback={handleJoyrideCallback}
+        styles={JOYRIDE_STYLES}
+        locale={LOCALE}
+        floaterProps={{
+          disableAnimation: true,
+        }}
+      />
+      <FinalStepDialog
+        open={showFinalStep}
+        onOpenChange={handleFinalStepOpenChange}
+        title={finalMessage.title}
+        content={finalMessage.content}
+        onClose={closeFinalStep}
+      />
+    </>
   );
 };
 

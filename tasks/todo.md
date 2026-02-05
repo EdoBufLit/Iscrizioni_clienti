@@ -328,3 +328,23 @@ Rese idempotenti le migrazioni problematiche:
 python -m alembic upgrade head  # OK
 python -m alembic current       # d3e4f5g6h7i8 (head)
 ```
+
+---
+
+## Spec (Fix Modale Finale Guida Completata - Feb 05, 2026)
+- Obiettivo: evitare che la modale finale "Guida completata" resti bloccata dopo la chiusura del tour.
+- Vincoli: modale finale controllata da state esplicito; chiusura affidabile da Fine, X e Indietro; nessuna riapertura automatica dopo chiusura manuale.
+- Approccio: separare la modale finale da Joyride e renderla come dialog controllato (`open` + `onOpenChange`).
+
+## Plan (Fix Modale Finale Guida Completata)
+- [x] Trovare il componente che mostra "Guida completata" in `frontend/src`.
+- [x] Introdurre `showFinalStep` e collegare apertura/chiusura della modale a stato controllato.
+- [x] Fare in modo che Fine, X, Indietro chiudano sempre la modale (`setShowFinalStep(false)`).
+- [x] Aggiungere guard anti-riapertura dopo close manuale.
+- [x] Verificare build/lint mirato e aggiornare review.
+
+## Review (Fix Modale Finale Guida Completata)
+- [x] Modale finale resa controllata via `showFinalStep` + `onOpenChange`.
+- [x] Bottoni `Fine`, `X`, `Indietro` chiudono tutti la modale.
+- [x] Guard anti-riapertura aggiunta (`finalStepDismissedRef`) + reset stato al nuovo tour.
+- [x] Verifica tecnica: `npm run build` in `frontend` OK.
