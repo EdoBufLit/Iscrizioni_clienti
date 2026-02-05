@@ -3,12 +3,16 @@ import { resetOnboardingTour } from "../../lib/api";
 
 // Must match the key prefix in OnboardingTour.tsx
 const TOUR_STORAGE_KEY_PREFIX = "onboarding_tour_";
+const MEMBER_TOUR_RUN_KEY = "tour_member_run";
+const MEMBER_TOUR_STEP_INDEX_KEY = "tour_member_step_index";
 
 const clearTourStorage = () => {
   try {
     // Clear both role keys to ensure clean reset
     localStorage.removeItem(`${TOUR_STORAGE_KEY_PREFIX}member`);
     localStorage.removeItem(`${TOUR_STORAGE_KEY_PREFIX}org_admin`);
+    localStorage.removeItem(MEMBER_TOUR_RUN_KEY);
+    localStorage.removeItem(MEMBER_TOUR_STEP_INDEX_KEY);
   } catch {
     // Ignore localStorage errors
   }

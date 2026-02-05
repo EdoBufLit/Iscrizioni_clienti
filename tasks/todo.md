@@ -348,3 +348,45 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] Bottoni `Fine`, `X`, `Indietro` chiudono tutti la modale.
 - [x] Guard anti-riapertura aggiunta (`finalStepDismissedRef`) + reset stato al nuovo tour.
 - [x] Verifica tecnica: `npm run build` in `frontend` OK.
+
+---
+
+## Spec (Fix Tour Socio Route/Tab Resilience - Feb 05, 2026)
+- Obiettivo: rendere il tour socio (member) resiliente ai cambi tab/route interni dashboard senza interrompersi o rimbalzare.
+- Vincoli: non alterare il comportamento admin; patch mirata su gestione member in onboarding.
+- Requisiti: persistenza `run` + `stepIndex`, retry su `TARGET_NOT_FOUND/ERROR`, resume stato su mount, log diagnostici temporanei per member.
+
+## Plan (Fix Tour Socio Route/Tab Resilience)
+- [x] Analizzare flow attuale `OnboardingTour` e identificare i punti di stop su route change.
+- [x] Implementare persistenza member (`tour_member_run`, `tour_member_step_index`) e ripristino su mount.
+- [x] Implementare retry member su `TARGET_NOT_FOUND`/`ERROR` con max tentativi e avanzamento sicuro senza chiusura tour.
+- [x] Aggiungere log temporanei member (`role`, `run`, `stepIndex`, `currentRoute`, callback joyride).
+- [x] Aggiornare reset guida per pulire anche le nuove chiavi member.
+- [x] Verificare con build frontend + aggiornare review + lessons.
+
+## Review (Fix Tour Socio Route/Tab Resilience)
+- [x] Tour member continua su cambi route/tab senza chiamare `endTour` su `TARGET_NOT_FOUND/ERROR`.
+- [x] Stato in corso member persistito (`tour_member_run`, `tour_member_step_index`) e ripristinato al mount.
+- [x] Retry member su target mancanti con massimo 4 tentativi prima di avanzare.
+- [x] Admin lasciato invariato nel flusso (`role="org_admin"` non usa persistenza/retry/log extra).
+- [x] Verifica tecnica: `npm run build` in `frontend` OK.
+
+---
+
+## Spec (Preview Tessera Socio 2026 - Feb 05, 2026)
+- Obiettivo: mostrare in Dashboard Socio > Riepilogo un preview grafico della tessera ASSO.N.A.M. 2026 usando dati reali backend/DB.
+- Vincoli: nessun mock hardcoded (eccetto label anno 2026), fallback safe su campi mancanti, nessun impatto admin/deploy/docker/alembic.
+- Fonte dati: `GET /api/auth/me` (gia esistente) con `first_name`, `last_name`, `card_no`, `joined_at`, `organization.name`, `status`.
+
+## Plan (Preview Tessera Socio 2026)
+- [x] Definire adapter/type guard per mappare `MemberProfile` -> `MemberCardPreviewData` con fallback robusti.
+- [x] Creare componente riusabile `frontend/src/components/cards/MemberCardPreview.tsx` in stile tessera ufficiale (fronte).
+- [x] Integrare il preview nella card "Tessera" di `DashboardHome` con skeleton/loading e fallback errore + retry.
+- [x] Verificare build frontend e aggiornare review con passi di test locali.
+
+## Review (Preview Tessera Socio 2026)
+- [x] Dati preview tessera consumati da `GET /api/auth/me` (nessun mock di nome/cognome/associazione/numero/stato).
+- [x] Preview responsive introdotto in `DashboardHome` con design coerente crema/verde petrolio/oro.
+- [x] Fallback robusti su campi mancanti (`-`) e fallback errore con bottone `Riprova`.
+- [x] Adapter compatibile con naming backend alternativi (`organization_name`, `card_number`, `assigned_card_number`).
+- [x] Verifica tecnica: `npm run build` in `frontend` OK.

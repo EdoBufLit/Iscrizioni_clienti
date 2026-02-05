@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { fetchMe, apiLogout, AuthError, type MemberProfile } from "../../lib/api";
 import Skeleton from "../../components/ui/Skeleton";
@@ -7,6 +7,8 @@ import { OnboardingTour, ReviewGuideButton } from "../../components/onboarding";
 export type DashboardContext = {
   user: MemberProfile | null;
   loading: boolean;
+  profileError: string | null;
+  reloadProfile: () => Promise<void>;
 };
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
@@ -68,18 +70,30 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
 const DashboardLayout = () => {
   const [user, setUser] = useState<MemberProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchMe()
-      .then(setUser)
-      .catch((err) => {
-        if (err instanceof AuthError) {
-          navigate("/login", { replace: true });
-        }
-      })
-      .finally(() => setLoading(false));
+  const loadProfile = useCallback(async () => {
+    setLoading(true);
+    setProfileError(null);
+    try {
+      const profile = await fetchMe();
+      setUser(profile);
+    } catch (err) {
+      if (err instanceof AuthError) {
+        navigate("/login", { replace: true });
+        return;
+      }
+      setUser(null);
+      setProfileError(err instanceof Error ? err.message : "Errore nel caricamento profilo");
+    } finally {
+      setLoading(false);
+    }
   }, [navigate]);
+
+  useEffect(() => {
+    void loadProfile();
+  }, [loadProfile]);
 
   const displayName = user ? `${user.first_name} ${user.last_name}` : null;
   const orgName = user?.organization?.name ?? null;
@@ -219,7 +233,7 @@ const DashboardLayout = () => {
           </nav>
 
           <div className="mt-6 min-w-0 flex-1 md:mt-0">
-            <Outlet context={{ user, loading } satisfies DashboardContext} />
+            <Outlet context={{ user, loading, profileError, reloadProfile: loadProfile } satisfies DashboardContext} />
           </div>
         </div>
       </div>

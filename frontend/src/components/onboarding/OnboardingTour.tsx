@@ -170,6 +170,9 @@ const waitForElement = async (
 
 // localStorage keys for tour state persistence
 const TOUR_STORAGE_KEY_PREFIX = "onboarding_tour_";
+const MEMBER_TOUR_RUN_KEY = "tour_member_run";
+const MEMBER_TOUR_STEP_INDEX_KEY = "tour_member_step_index";
+const MEMBER_TARGET_NOT_FOUND_MAX_RETRIES = 4;
 
 const getTourStorageKey = (role: string) => `${TOUR_STORAGE_KEY_PREFIX}${role}`;
 
@@ -191,9 +194,43 @@ const setTourStateInStorage = (role: string, state: "completed" | "skipped") => 
   }
 };
 
+const getMemberTourProgressFromStorage = (): { run: boolean; stepIndex: number } => {
+  try {
+    const runRaw = localStorage.getItem(MEMBER_TOUR_RUN_KEY);
+    const stepRaw = localStorage.getItem(MEMBER_TOUR_STEP_INDEX_KEY);
+    const parsedStep = Number.parseInt(stepRaw ?? "0", 10);
+
+    return {
+      run: runRaw === "1",
+      stepIndex: Number.isFinite(parsedStep) && parsedStep >= 0 ? parsedStep : 0,
+    };
+  } catch {
+    return { run: false, stepIndex: 0 };
+  }
+};
+
+const setMemberTourProgressInStorage = (run: boolean, stepIndex: number) => {
+  try {
+    localStorage.setItem(MEMBER_TOUR_RUN_KEY, run ? "1" : "0");
+    localStorage.setItem(MEMBER_TOUR_STEP_INDEX_KEY, `${Math.max(0, stepIndex)}`);
+  } catch {
+    // Ignore localStorage errors
+  }
+};
+
+const clearMemberTourProgressInStorage = () => {
+  try {
+    localStorage.removeItem(MEMBER_TOUR_RUN_KEY);
+    localStorage.removeItem(MEMBER_TOUR_STEP_INDEX_KEY);
+  } catch {
+    // Ignore localStorage errors
+  }
+};
+
 export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const isMemberTour = role === "member";
 
   const [run, setRun] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
@@ -208,6 +245,8 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
   const tourEndedRef = useRef(false);
   // Track manual close of final dialog to avoid reopening due late callbacks
   const finalStepDismissedRef = useRef(false);
+  // Member-only retry tracking for unstable targets on route/tab changes
+  const memberTargetRetriesRef = useRef<Record<number, number>>({});
 
   const steps = role === "member" ? MEMBER_TOUR_STEPS : ORG_ADMIN_TOUR_STEPS;
   const finalMessage = TOUR_FINAL_MESSAGE[role];
@@ -242,7 +281,7 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
       const targetSelector =
         typeof step.target === "string" ? step.target : null;
       if (targetSelector) {
-        const el = await waitForElement(targetSelector);
+        const el = await waitForElement(targetSelector, isMemberTour ? 8 : 5, 200);
         if (!el && step.optional) {
           isNavigatingRef.current = false;
           return false; // Target not found, step is optional
@@ -252,7 +291,7 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
       isNavigatingRef.current = false;
       return true;
     },
-    [navigate, isOnCorrectRoute]
+    [navigate, isOnCorrectRoute, isMemberTour]
   );
 
   // Prepare step - navigate if needed, verify target exists
@@ -269,7 +308,7 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
       const targetSelector =
         typeof step.target === "string" ? step.target : null;
       if (targetSelector) {
-        const el = await waitForElement(targetSelector, 3, 150);
+        const el = await waitForElement(targetSelector, isMemberTour ? 8 : 3, 150);
         if (!el) {
           return step.optional === true; // OK to skip if optional
         }
@@ -277,7 +316,7 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
 
       return true;
     },
-    [steps, navigateToStep]
+    [steps, navigateToStep, isMemberTour]
   );
 
   // Find next valid step index (skipping optional steps whose targets don't exist)
@@ -306,11 +345,13 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
         if (targetSelector) {
           // Navigate first if needed
           if (step.route && location.pathname !== step.route) {
+            isNavigatingRef.current = true;
             navigate(step.route);
             await waitForDom();
+            isNavigatingRef.current = false;
           }
 
-          const el = await waitForElement(targetSelector, 3, 150);
+          const el = await waitForElement(targetSelector, isMemberTour ? 8 : 3, 150);
 
           if (!el) {
             if (step.optional) {
@@ -327,10 +368,14 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
         return nextIndex;
       }
 
-      // Clamp to the nearest valid step index
-      return direction === 1 ? maxIndex : 0;
+      // For member flow, allow "past end" sentinel to close cleanly when
+      // optional trailing steps are not present in the current UI.
+      if (direction === 1) {
+        return isMemberTour ? steps.length : maxIndex;
+      }
+      return 0;
     },
-    [steps, location.pathname, navigate]
+    [steps, location.pathname, navigate, isMemberTour]
   );
 
   // Initialize tour - check localStorage first, then backend
@@ -342,6 +387,9 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
     const localState = getTourStateFromStorage(role);
     if (localState) {
       // Tour already completed or skipped locally - don't show
+      if (isMemberTour) {
+        clearMemberTourProgressInStorage();
+      }
       setLoading(false);
       return;
     }
@@ -350,26 +398,47 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
     fetchOnboardingStatus()
       .then((status) => {
         if (cancelled) return;
-        if (status.should_show) {
-          // Double-check localStorage hasn't changed
-          const recheck = getTourStateFromStorage(role);
-          if (recheck) {
-            setLoading(false);
-            return;
+        if (!status.should_show) {
+          if (isMemberTour) {
+            clearMemberTourProgressInStorage();
           }
-          tourEndedRef.current = false;
-          finalStepDismissedRef.current = false;
-          skippedStepsRef.current.clear();
-          setShowFinalStep(false);
-          setStepIndex(0);
-          // Delay to ensure initial DOM is ready
-          startTimer = window.setTimeout(() => {
-            if (cancelled || tourEndedRef.current) return;
-            const localRecheck = getTourStateFromStorage(role);
-            if (localRecheck) return;
-            setRun(true);
-          }, 600);
+          return;
         }
+
+        // Double-check localStorage hasn't changed
+        const recheck = getTourStateFromStorage(role);
+        if (recheck) {
+          setLoading(false);
+          return;
+        }
+
+        tourEndedRef.current = false;
+        finalStepDismissedRef.current = false;
+        skippedStepsRef.current.clear();
+        memberTargetRetriesRef.current = {};
+        setShowFinalStep(false);
+
+        let initialStepIndex = 0;
+        let resumeInProgress = false;
+        if (isMemberTour) {
+          const progress = getMemberTourProgressFromStorage();
+          if (progress.run) {
+            resumeInProgress = true;
+            initialStepIndex = Math.min(
+              Math.max(progress.stepIndex, 0),
+              Math.max(steps.length - 1, 0)
+            );
+          }
+        }
+
+        setStepIndex(initialStepIndex);
+        // Delay to ensure initial DOM is ready
+        startTimer = window.setTimeout(() => {
+          if (cancelled || tourEndedRef.current) return;
+          const localRecheck = getTourStateFromStorage(role);
+          if (localRecheck) return;
+          setRun(true);
+        }, resumeInProgress ? 200 : 600);
       })
       .catch(() => {
         // Silently fail
@@ -386,7 +455,28 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
         window.clearTimeout(startTimer);
       }
     };
-  }, [role]);
+  }, [role, isMemberTour, steps.length]);
+
+  // Persist member in-progress state to survive remounts during route/tab changes.
+  useEffect(() => {
+    if (!isMemberTour || loading) return;
+    if (tourEndedRef.current) {
+      clearMemberTourProgressInStorage();
+      return;
+    }
+    setMemberTourProgressInStorage(run, stepIndex);
+  }, [isMemberTour, loading, run, stepIndex]);
+
+  // Temporary debug logs for member flow only.
+  useEffect(() => {
+    if (!isMemberTour) return;
+    console.log("[OnboardingTour][member] state", {
+      role,
+      run,
+      stepIndex,
+      currentRoute: location.pathname,
+    });
+  }, [isMemberTour, role, run, stepIndex, location.pathname]);
 
   // Handle step changes - ensure we're on the right route
   useEffect(() => {
@@ -415,10 +505,16 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
       if (tourEndedRef.current) return;
       tourEndedRef.current = true;
 
-      console.log(`[OnboardingTour] Ending tour: ${reason}`);
+      if (isMemberTour) {
+        console.log(`[OnboardingTour][member] Ending tour: ${reason}`);
+      }
 
       // IMMEDIATELY stop the tour - this removes the overlay
       setRun(false);
+      memberTargetRetriesRef.current = {};
+      if (isMemberTour) {
+        clearMemberTourProgressInStorage();
+      }
 
       // Save to localStorage for instant persistence across refreshes
       setTourStateInStorage(role, reason);
@@ -433,7 +529,7 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
       // Notify parent
       onTourEnd?.();
     },
-    [role, onTourEnd]
+    [role, onTourEnd, isMemberTour]
   );
 
   const handleFinalStepOpenChange = useCallback((open: boolean) => {
@@ -448,12 +544,30 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
     setShowFinalStep(false);
   }, []);
 
+  const completeTourWithFinalDialog = useCallback(() => {
+    endTour("completed");
+    if (!finalStepDismissedRef.current) {
+      setShowFinalStep(true);
+    }
+  }, [endTour]);
+
   const handleJoyrideCallback = useCallback(
     async (data: CallBackProps) => {
       const { status, action, type, index } = data;
+      const callbackIndex = typeof index === "number" ? index : stepIndex;
 
-      // DEBUG: Log all callback events
-      console.log("[OnboardingTour] Callback:", { status, action, type, index });
+      if (isMemberTour) {
+        console.log("[OnboardingTour][member] callback", {
+          role,
+          run,
+          stepIndex,
+          currentRoute: location.pathname,
+          status,
+          action,
+          type,
+          index: callbackIndex,
+        });
+      }
 
       // Ignore events while navigating
       if (isNavigatingRef.current) return;
@@ -461,10 +575,7 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
       // Handle tour end cases - MUST check these FIRST before other logic
       // 1. User clicked "Fine" (last button) - status becomes FINISHED
       if (status === STATUS.FINISHED) {
-        endTour("completed");
-        if (!finalStepDismissedRef.current) {
-          setShowFinalStep(true);
-        }
+        completeTourWithFinalDialog();
         return;
       }
 
@@ -473,6 +584,20 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
         finalStepDismissedRef.current = true;
         setShowFinalStep(false);
         endTour("skipped");
+        return;
+      }
+
+      if (isMemberTour && (status === STATUS.ERROR || type === EVENTS.ERROR)) {
+        // Keep member tour alive on transient route/DOM mismatches.
+        const prepared = await prepareStep(callbackIndex);
+        if (!prepared) {
+          const nextIndex = await findNextValidStep(callbackIndex + 1, 1);
+          if (nextIndex >= steps.length) {
+            completeTourWithFinalDialog();
+            return;
+          }
+          setStepIndex(nextIndex);
+        }
         return;
       }
 
@@ -488,48 +613,89 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
       if (type === EVENTS.STEP_AFTER) {
         // Some Joyride versions emit STEP_AFTER on last step before FINISHED.
         // Complete immediately to avoid being stuck on the last tooltip.
-        if (action !== ACTIONS.PREV && index >= steps.length - 1) {
-          endTour("completed");
-          if (!finalStepDismissedRef.current) {
-            setShowFinalStep(true);
-          }
+        if (action !== ACTIONS.PREV && callbackIndex >= steps.length - 1) {
+          completeTourWithFinalDialog();
           return;
         }
 
         const nextDirection = action === ACTIONS.PREV ? -1 : 1;
-        const nextRawIndex = index + nextDirection;
+        const nextRawIndex = callbackIndex + nextDirection;
 
         // Find next valid step
         const nextIndex = await findNextValidStep(nextRawIndex, nextDirection);
+        if (nextDirection === 1 && nextIndex >= steps.length) {
+          completeTourWithFinalDialog();
+          return;
+        }
+        memberTargetRetriesRef.current = {};
         setStepIndex(nextIndex);
+        return;
       }
 
       if (type === EVENTS.TARGET_NOT_FOUND) {
-        const step = steps[index];
+        const step = steps[callbackIndex];
 
         // If optional, skip to next
         if (step?.optional) {
-          skippedStepsRef.current.add(index);
-          const nextIndex = await findNextValidStep(index + 1, 1);
+          skippedStepsRef.current.add(callbackIndex);
+          const nextIndex = await findNextValidStep(callbackIndex + 1, 1);
+          if (nextIndex >= steps.length) {
+            completeTourWithFinalDialog();
+            return;
+          }
           setStepIndex(nextIndex);
           return;
         }
 
-        // Non-optional: try to prepare the step (navigate + wait)
-        const prepared = await prepareStep(index);
+        // Non-optional: member flow retries before advancing to avoid route/tab race.
+        if (isMemberTour) {
+          for (let attempt = 1; attempt <= MEMBER_TARGET_NOT_FOUND_MAX_RETRIES; attempt += 1) {
+            memberTargetRetriesRef.current[callbackIndex] = attempt;
+            console.warn("[OnboardingTour][member] target retry", {
+              stepIndex: callbackIndex,
+              attempt,
+              max: MEMBER_TARGET_NOT_FOUND_MAX_RETRIES,
+              currentRoute: location.pathname,
+            });
+            await waitForDom();
+            const prepared = await prepareStep(callbackIndex);
+            if (prepared) {
+              memberTargetRetriesRef.current[callbackIndex] = 0;
+              return;
+            }
+          }
+          memberTargetRetriesRef.current[callbackIndex] = 0;
+        }
+
+        // After retries, skip ahead without stopping the tour.
+        const prepared = await prepareStep(callbackIndex);
         if (!prepared) {
-          // Still can't find it - skip anyway
-          const nextIndex = await findNextValidStep(index + 1, 1);
+          const nextIndex = await findNextValidStep(callbackIndex + 1, 1);
+          if (nextIndex >= steps.length) {
+            completeTourWithFinalDialog();
+            return;
+          }
           setStepIndex(nextIndex);
         }
-        // If prepared, Joyride will retry automatically on next render
+        return;
       }
 
       if (type === EVENTS.TOUR_START) {
         startOnboardingTour().catch(() => {});
       }
     },
-    [steps, findNextValidStep, prepareStep, endTour]
+    [
+      role,
+      run,
+      stepIndex,
+      location.pathname,
+      isMemberTour,
+      steps,
+      findNextValidStep,
+      prepareStep,
+      endTour,
+      completeTourWithFinalDialog,
+    ]
   );
 
   if (loading) return null;

@@ -1,4 +1,9 @@
 import { useOutletContext } from "react-router-dom";
+import {
+  MemberCardPreview,
+  isMemberCardPreviewData,
+  type MemberCardPreviewData,
+} from "../../components/cards/MemberCardPreview";
 import Skeleton from "../../components/ui/Skeleton";
 import type { DashboardContext } from "./DashboardLayout";
 
@@ -39,18 +44,60 @@ const CARDS = [
   },
 ] as const;
 
+type MemberCardProfileCompat = {
+  organization_name?: string | null;
+  card_number?: string | number | null;
+  assigned_card_number?: string | number | null;
+  activated_at?: string | null;
+  valid_from?: string | null;
+};
+
+const buildMemberCardDataFromProfile = (
+  profile: DashboardContext["user"],
+): unknown => {
+  if (!profile) return {};
+  const compat = profile as DashboardContext["user"] & MemberCardProfileCompat;
+
+  return {
+    firstName: profile.first_name ?? null,
+    lastName: profile.last_name ?? null,
+    fullName: `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim() || null,
+    organizationName: profile.organization?.name ?? compat.organization_name ?? null,
+    cardNumber:
+      profile.card_no ??
+      compat.card_number ??
+      compat.assigned_card_number ??
+      null,
+    joinedAt: profile.joined_at ?? compat.activated_at ?? compat.valid_from ?? null,
+    status: profile.status ?? null,
+  };
+};
+
+const toSummaryValue = (value?: string | number | null): string => {
+  if (value === null || value === undefined) return "-";
+  const text = String(value).trim();
+  return text.length ? text : "-";
+};
+
 const DashboardHome = () => {
-  const { user, loading } = useOutletContext<DashboardContext>();
+  const { user, loading, profileError, reloadProfile } = useOutletContext<DashboardContext>();
 
   const statusInfo = user
     ? STATUS_STYLE[user.status] ?? { label: user.status, color: "border-neutral-200 bg-neutral-50 text-neutral-600" }
     : null;
 
+  const cardDataCandidate = buildMemberCardDataFromProfile(user);
+  const cardData: MemberCardPreviewData = isMemberCardPreviewData(cardDataCandidate)
+    ? cardDataCandidate
+    : {};
+
+  const cardSummary = `N. ${toSummaryValue(cardData.cardNumber)} � Associazione ${toSummaryValue(cardData.organizationName)}`;
+
   return (
     <div data-tour="member-dashboard-home">
       <h1 className="text-xl font-semibold text-neutral-900">Riepilogo</h1>
       <p className="mt-1 text-sm text-neutral-500">
-        Panoramica dello stato dell'iscrizione e delle attività recenti.
+        Panoramica dello stato dell'iscrizione e delle attivita recenti.
       </p>
 
       {loading ? (
@@ -89,37 +136,35 @@ const DashboardHome = () => {
                 {card.label}
               </p>
 
-              {card.key === "status" && (
+              {card.key === "status" && statusInfo && (
                 <>
                   <div className="mt-3 flex items-center gap-2">
                     <p className="text-base font-semibold text-neutral-900">
-                      {statusInfo!.label}
+                      {statusInfo.label}
                     </p>
                     <span
-                      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none ${statusInfo!.color}`}
+                      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none ${statusInfo.color}`}
                     >
                       {user.status === "active" ? "OK" : "IN CORSO"}
                     </span>
                   </div>
                   <p className="mt-2 text-sm leading-6 text-neutral-600">
                     {user.status === "active"
-                      ? "L'iscrizione è confermata e la tessera è attiva."
+                      ? "L'iscrizione e confermata e la tessera e attiva."
                       : user.status === "pending_cards"
-                        ? "L'iscrizione è stata approvata. La tessera sarà assegnata a breve."
-                        : "La richiesta è stata inoltrata e sarà verificata dallo studio."}
+                        ? "L'iscrizione e stata approvata. La tessera sara assegnata a breve."
+                        : "La richiesta e stata inoltrata e sara verificata dallo studio."}
                   </p>
                 </>
               )}
 
               {card.key === "card" && (
                 <>
-                  <p className="mt-3 text-base font-semibold text-neutral-900">
-                    {user.card_no ? `N° ${user.card_no}` : "Non ancora assegnata"}
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-neutral-600">
-                    {user.card_no
-                      ? "Numero di tessera associato alla tua iscrizione."
-                      : "La tessera sarà assegnata al completamento della pratica."}
+                  <div className="mt-3" data-tour="member-card-number">
+                    <MemberCardPreview cardData={cardData} />
+                  </div>
+                  <p className="mt-3 text-xs leading-5 text-neutral-600">
+                    {cardSummary}
                   </p>
                 </>
               )}
@@ -127,7 +172,7 @@ const DashboardHome = () => {
               {card.key === "org" && (
                 <>
                   <p className="mt-3 text-base font-semibold text-neutral-900">
-                    {user.organization?.name ?? "—"}
+                    {user.organization?.name ?? "-"}
                   </p>
                   <p className="mt-2 text-sm leading-6 text-neutral-600">
                     {user.joined_at
@@ -140,10 +185,36 @@ const DashboardHome = () => {
           ))}
         </div>
       ) : (
-        <div className="surface mt-8 p-7">
-          <p className="text-sm text-neutral-600">
-            Impossibile caricare i dati del profilo.
-          </p>
+        <div className="mt-8 grid gap-6 md:grid-cols-3">
+          <div className="surface p-7 md:col-span-2">
+            <p className="text-base font-semibold text-neutral-900">Dati profilo non disponibili</p>
+            <p className="mt-2 text-sm text-neutral-600">
+              Impossibile caricare il riepilogo socio in questo momento.
+            </p>
+            {profileError && (
+              <p className="mt-2 text-xs text-neutral-500">{profileError}</p>
+            )}
+          </div>
+          <div className="surface p-7" data-tour="member-card-number">
+            <p className="text-xs font-medium uppercase tracking-[0.2em] text-neutral-400">
+              Tessera
+            </p>
+            <div className="mt-4 rounded-lg border border-amber-200/70 bg-amber-50 px-4 py-4">
+              <p className="text-sm font-semibold text-amber-800">Impossibile caricare tessera</p>
+              <p className="mt-1 text-xs text-amber-700">
+                Riprova il caricamento dei dati della tessera socio.
+              </p>
+              <button
+                type="button"
+                className="btn-ghost mt-3 px-3 py-1.5 text-xs"
+                onClick={() => {
+                  void reloadProfile();
+                }}
+              >
+                Riprova
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
