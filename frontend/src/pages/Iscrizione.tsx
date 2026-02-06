@@ -69,8 +69,6 @@ function validateStep1(f: FormData): Record<string, string> {
 
 function validateStep2(f: FormData, hasStatute: boolean): Record<string, string> {
   const e: Record<string, string> = {};
-  if (!f.documentoIdentita)
-    e.documentoIdentita = "Il documento di identità è obbligatorio per completare l'iscrizione.";
   if (!f.privacy)
     e.privacy = "È necessario accettare l'informativa sulla privacy per procedere.";
   if (hasStatute && !f.statuto)
@@ -300,7 +298,7 @@ const Iscrizione = () => {
           <p className="mt-1.5 text-sm leading-6 text-neutral-500">
             Compila il modulo per richiedere l'iscrizione a{" "}
             <span className="font-medium text-neutral-700">{associationName}</span>.
-            Tutti i campi sono obbligatori.
+            Il documento di identita e facoltativo.
           </p>
 
           <div className="mt-8"><StepIndicator current={step} /></div>
@@ -387,7 +385,7 @@ const Iscrizione = () => {
                 <SectionHeader
                   icon="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
                   title="Documento di identità"
-                  description="Carica una copia leggibile del documento in corso di validità."
+                  description="Carica una copia leggibile del documento in corso di validita (facoltativo)."
                 />
                 <div className="mt-5">
                   <label htmlFor="documentoIdentita" className={`flex cursor-pointer flex-col items-center rounded-lg border-2 border-dashed px-6 py-8 text-center transition ${errors.documentoIdentita ? "border-red-300 bg-red-50/30" : form.documentoIdentita ? "border-brand/30 bg-brand/[0.02]" : "border-neutral-200 hover:border-neutral-300"}`}>
@@ -502,7 +500,7 @@ const Iscrizione = () => {
                 <div className="mt-4 rounded-lg border border-neutral-100 bg-neutral-25 p-5">
                   <p className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-400">Documenti e consensi</p>
                   <dl className="mt-3 grid gap-x-6 gap-y-3 md:grid-cols-2">
-                    <div><dt className="text-xs text-neutral-500">Documento</dt><dd className="mt-0.5 text-sm font-medium text-neutral-800">{form.documentoIdentita?.name ?? "—"}</dd></div>
+                    <div><dt className="text-xs text-neutral-500">Documento</dt><dd className="mt-0.5 text-sm font-medium text-neutral-800">{form.documentoIdentita?.name ?? "Non caricato (facoltativo)"}</dd></div>
                     <div><dt className="text-xs text-neutral-500">Consensi</dt><dd className="mt-0.5 text-sm font-medium text-emerald-700">{org?.has_statute ? "Privacy e statuto accettati" : "Privacy accettata"}</dd></div>
                   </dl>
                 </div>

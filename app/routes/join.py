@@ -350,7 +350,7 @@ async def api_join_submit_multipart(
     accepted_statute_version: Optional[str] = Form(None),
     accept_privacy: bool = Form(...),
     accepted_privacy_version: Optional[str] = Form(None), # Usually implied by org
-    id_document: UploadFile = File(...),
+    id_document: Optional[UploadFile] = File(None),
     fiscal_code_document: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
 ):
@@ -371,6 +371,7 @@ async def api_join_submit_multipart(
     # Transactional
     rel_path_id = None
     rel_path_fc = None
+    uploaded_docs_count = 0
 
     try:
         if existing:
@@ -424,36 +425,34 @@ async def api_join_submit_multipart(
         sub_path = f"{org.id}/{member.id}"
 
         # 2. Save Docs
-        rel_path_id, size_id, sha_id = await save_upload_file(id_document, sub_directory=sub_path)
+        if id_document:
+            rel_path_id, size_id, sha_id = await save_upload_file(id_document, sub_directory=sub_path)
+            doc_obj_id = MemberDocument(
+                member_id=member.id,
+                doc_type="identity",
+                rel_path=rel_path_id,
+                original_filename=id_document.filename,
+                mime_type=id_document.content_type,
+                size_bytes=size_id,
+                sha256=sha_id,
+                status="pending"
+            )
+            db.add(doc_obj_id)
+            uploaded_docs_count += 1
+            audit.log_operation(
+                db,
+                action="member.document.upload",
+                entity_type="member_document",
+                entity_id=None,
+                metadata={
+                    "filename": id_document.filename,
+                    "mime": id_document.content_type,
+                    "size": size_id
+                }
+            )
 
         if fiscal_code_document:
-             rel_path_fc, size_fc, sha_fc = await save_upload_file(fiscal_code_document, sub_directory=sub_path)
-
-        # 3. Create MemberDocuments
-        doc_obj_id = MemberDocument(
-            member_id=member.id,
-            doc_type="identity",
-            rel_path=rel_path_id,
-            original_filename=id_document.filename,
-            mime_type=id_document.content_type,
-            size_bytes=size_id,
-            sha256=sha_id,
-            status="pending"
-        )
-        db.add(doc_obj_id)
-        audit.log_operation(
-            db,
-            action="member.document.upload",
-            entity_type="member_document",
-            entity_id=None,
-            metadata={
-                "filename": id_document.filename,
-                "mime": id_document.content_type,
-                "size": size_id
-            }
-        )
-
-        if rel_path_fc:
+            rel_path_fc, size_fc, sha_fc = await save_upload_file(fiscal_code_document, sub_directory=sub_path)
             doc_obj_fc = MemberDocument(
                 member_id=member.id,
                 doc_type="fiscal_code",
@@ -465,6 +464,7 @@ async def api_join_submit_multipart(
                 status="pending"
             )
             db.add(doc_obj_fc)
+            uploaded_docs_count += 1
             audit.log_operation(
                 db,
                 action="member.document.upload",
@@ -497,7 +497,7 @@ async def api_join_submit_multipart(
             entity_type="member",
             entity_id=member.id,
             ip=get_client_ip(request),
-            metadata={"docs_count": 2 if rel_path_fc else 1}
+            metadata={"docs_count": uploaded_docs_count}
         )
         db.commit() # Commit log
 

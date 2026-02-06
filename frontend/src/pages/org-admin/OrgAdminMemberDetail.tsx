@@ -64,6 +64,7 @@ interface MemberDetail {
   is_manual?: boolean;
   has_access?: boolean;
   last_access_email_at?: string | null;
+  document_status?: string;
   documents: Document[];
   payments?: Payment[];
   activities?: ActivityItem[];
@@ -428,8 +429,16 @@ export default function OrgAdminMemberDetail() {
   if (error) return <div className="p-8 text-center text-red-600">{error}</div>;
   if (!member) return <div className="p-8 text-center">Socio non trovato</div>;
 
-  const allDocsApproved = member.documents.length > 0 && member.documents.every(d => d.status === "approved");
   const isDecisionMade = member.status === "active" || member.status === "rejected";
+  const documentStatus =
+    member.document_status ??
+    (member.documents.length === 0
+      ? "not_provided"
+      : member.documents.some((d) => d.status === "rejected")
+        ? "rejected"
+        : member.documents.some((d) => d.status === "pending" || d.status === "uploaded")
+          ? "pending"
+          : "approved");
   const lastAccessLabel = member.last_access_email_at
     ? new Date(member.last_access_email_at).toLocaleString("it-IT")
     : null;
@@ -819,6 +828,11 @@ export default function OrgAdminMemberDetail() {
               </p>
             </div>
             <div className="flex items-center gap-2 text-xs text-neutral-500">
+              {documentStatus === "not_provided" && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-neutral-100 px-2.5 py-0.5 text-neutral-700">
+                  Documento non caricato
+                </span>
+              )}
               <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-amber-700">
                 Pending {member.documents.filter((d) => d.status === "pending" || d.status === "uploaded").length}
               </span>
@@ -938,13 +952,6 @@ export default function OrgAdminMemberDetail() {
       <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
           <h2 className="text-lg font-semibold mb-4">Decisione Iscrizione</h2>
 
-          {!allDocsApproved && !isDecisionMade && (
-              <div className="bg-amber-50 text-amber-800 p-4 rounded-lg text-sm mb-4 border border-amber-100 flex gap-2">
-                 <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                 <p>Non è possibile approvare l'iscrizione finché tutti i documenti non sono stati approvati.</p>
-              </div>
-          )}
-
           <div className="space-y-4">
               <div>
                   <label htmlFor="decisionNotes" className="block text-sm font-medium text-neutral-700 mb-1">
@@ -981,7 +988,7 @@ export default function OrgAdminMemberDetail() {
                   <div className="flex gap-4">
                       <button
                           onClick={() => handleDecision("approve")}
-                          disabled={!allDocsApproved || isSubmittingDecision}
+                          disabled={isSubmittingDecision}
                           className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
                       >
                           Approva Iscrizione

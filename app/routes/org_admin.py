@@ -77,6 +77,19 @@ def _get_last_access_email_token(db: Session, member_id: int) -> Optional[Token]
     )
 
 
+def _document_status_from_statuses(statuses: list[Optional[str]]) -> str:
+    normalized = [s for s in statuses if s]
+    if not normalized:
+        return "not_provided"
+    if DocStatus.REJECTED.value in normalized:
+        return DocStatus.REJECTED.value
+    if any(s in {DocStatus.PENDING.value, DocStatus.UPLOADED.value} for s in normalized):
+        return DocStatus.PENDING.value
+    if all(s == DocStatus.APPROVED.value for s in normalized):
+        return DocStatus.APPROVED.value
+    return DocStatus.PENDING.value
+
+
 def _send_member_magic_link(
     db: Session,
     request: Request,
@@ -600,6 +613,7 @@ def list_org_members(
     # Avoid N+1 for docs_count
     member_ids = [m.id for m in members]
     docs_counts = {}
+    docs_statuses = {}
     if member_ids:
         rows = (
             db.query(MemberDocument.member_id, func.count(MemberDocument.id))
@@ -608,6 +622,18 @@ def list_org_members(
             .all()
         )
         docs_counts = {r[0]: r[1] for r in rows}
+        status_rows = (
+            db.query(MemberDocument.member_id, MemberDocument.status)
+            .filter(MemberDocument.member_id.in_(member_ids))
+            .all()
+        )
+        status_map = {}
+        for member_id, doc_status in status_rows:
+            status_map.setdefault(member_id, []).append(doc_status)
+        docs_statuses = {
+            member_id: _document_status_from_statuses(status_map.get(member_id, []))
+            for member_id in member_ids
+        }
 
     payments_latest = {}
     if member_ids:
@@ -630,6 +656,7 @@ def list_org_members(
                 "joined_at": m.joined_at.isoformat() if m.joined_at else None,
                 "created_at": m.joined_at.isoformat() if m.joined_at else None, # fallback if no created_at
                 "docs_count": docs_counts.get(m.id, 0),
+                "document_status": docs_statuses.get(m.id, "not_provided"),
                 "is_paid": m.id in payments_latest,
                 "last_payment_at": payments_latest.get(m.id).isoformat() if payments_latest.get(m.id) else None,
                 "has_access": bool(m.password_hash),
@@ -801,6 +828,7 @@ def get_member_detail(
             .all()
         )
         admin_emails = {row[0]: row[1] for row in admin_rows}
+    document_status = _document_status_from_statuses([d.status for d in member.documents])
 
     return {
         "id": member.id,
@@ -817,6 +845,7 @@ def get_member_detail(
         "is_manual": member.is_manual,
         "has_access": bool(member.password_hash),
         "last_access_email_at": last_access_email_at,
+        "document_status": document_status,
         "documents": [
             {
                 "id": d.id,
@@ -1120,33 +1149,27 @@ def create_manual_payment(
 
     card_assigned = False
     if member.status != MemberStatus.REJECTED:
-        docs = member.documents
-        docs_ok = True
-        if docs:
-            docs_ok = all(d.status == DocStatus.APPROVED.value for d in docs)
-
-        if docs_ok:
-            if member.card_no is None:
-                try:
-                    member.card_no = assign_next_card(db, member.org_id)
-                    member.card_year = datetime.utcnow().year
-                    card_assigned = True
-                except HTTPException as exc:
-                    if exc.status_code == 409:
-                        member.status = MemberStatus.PENDING_CARDS
-                    else:
-                        raise
-            if member.card_no is not None:
-                member.status = MemberStatus.ACTIVE
-                if member.card_year is None:
-                    member.card_year = datetime.utcnow().year
-                if not member.joined_at:
-                    member.joined_at = datetime.utcnow()
-                if not member.decision_at:
-                    member.decision_at = datetime.utcnow()
-                    member.decision_by_admin_id = admin.id
-                    if not member.decision_notes:
-                        member.decision_notes = "Pagamento manuale"
+        if member.card_no is None:
+            try:
+                member.card_no = assign_next_card(db, member.org_id)
+                member.card_year = datetime.utcnow().year
+                card_assigned = True
+            except HTTPException as exc:
+                if exc.status_code == 409:
+                    member.status = MemberStatus.PENDING_CARDS
+                else:
+                    raise
+        if member.card_no is not None:
+            member.status = MemberStatus.ACTIVE
+            if member.card_year is None:
+                member.card_year = datetime.utcnow().year
+            if not member.joined_at:
+                member.joined_at = datetime.utcnow()
+            if not member.decision_at:
+                member.decision_at = datetime.utcnow()
+                member.decision_by_admin_id = admin.id
+                if not member.decision_notes:
+                    member.decision_notes = "Pagamento manuale"
 
     db.commit()
     db.refresh(payment)

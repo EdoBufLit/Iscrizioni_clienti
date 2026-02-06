@@ -417,3 +417,30 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] Verifica tecnica: `python -m pytest tests/test_member_card_verification.py` OK.
 - [x] Verifica tecnica: `npm run build` (frontend) OK.
 - [ ] Verifica allargata: `python -m pytest tests/test_member_card_verification.py tests/test_email_flows.py` NON completamente verde per failure preesistente su `test_email_flows.py::test_member_magic_link_flow` (join 400 per statuto mancante su `my-association`).
+
+---
+
+## Spec (ASSONAM - Documento facoltativo + attivazione senza documenti - Feb 06, 2026)
+- Obiettivo: separare stato iscrizione/attivazione dal flusso documenti.
+- Upload carta identita facoltativo nel form iscrizione.
+- Admin puo approvare/attivare socio anche senza documenti caricati.
+- Flusso approva/rifiuta documento invariato quando il documento esiste.
+
+## Plan (ASSONAM - Documento facoltativo)
+- [x] Rendere opzionale `id_document` nel backend submit iscrizione.
+- [x] Salvare documenti solo se presenti e mantenere submit valido senza file.
+- [x] Introdurre `document_status` separato (`not_provided|pending|approved|rejected`) nel payload admin.
+- [x] Rimuovere guard docs-based nell'attivazione da pagamento manuale.
+- [x] Aggiornare frontend iscrizione (campo documento facoltativo + submit unico).
+- [x] Aggiornare frontend admin dettaglio (badge documento non caricato, nessun blocco approvazione iscrizione).
+- [x] Aggiungere migrazione Alembic di compatibilita per nullable status documento.
+- [x] Aggiungere test minimi richiesti.
+
+## Review (ASSONAM - Documento facoltativo)
+- [x] `python -m pytest tests/test_optional_identity_document.py` OK (3 passed).
+- [x] Verifica caso a): create member senza documento -> OK.
+- [x] Verifica caso b): admin activate member senza documento -> OK.
+- [x] Verifica caso c): approve documento inesistente -> 404.
+- [x] `npm run build` in `frontend` OK.
+- [ ] `python -m pytest tests/test_org_admin_decision.py` non verde per stato ambiente (`pending_cards` per stock tessere org test).
+- [ ] `python -m pytest tests/test_document_workflow.py` non verde per slug duplicati su DB test preesistente (`docflow-org*`).
