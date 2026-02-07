@@ -24,6 +24,7 @@ def test_join_submit_email_returns_false(client):
         "email": email,
         "phone": "111222333",
         "fiscal_code": "MLFAIL80A01H501Z",
+        "payment_method": "CASH",
         "accept_statute": "true",
         "accept_privacy": "true",
     }
@@ -73,6 +74,7 @@ def test_join_submit_email_raises_exception(client):
         "email": email,
         "phone": "444555666",
         "fiscal_code": "CRASH80A01H501Z",
+        "payment_method": "BONIFICO",
         "accept_statute": "true",
         "accept_privacy": "true",
     }

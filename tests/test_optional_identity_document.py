@@ -95,6 +95,7 @@ def test_join_submit_without_identity_document_ok(client, db):
             "email": email,
             "phone": "333000111",
             "fiscal_code": "NODCSM80A01H501Z",
+            "payment_method": "CASH",
             "accept_statute": "true",
             "accept_privacy": "true",
         },

@@ -18,6 +18,7 @@ from app.models import (
     OrgAdminToken,
     Member,
     MemberStatus,
+    PaymentMethod,
     CardBatch,
     CardMovement,
     Organization,
@@ -63,6 +64,48 @@ def _get_current_org_admin(request: Request, db: Session):
 
 
 ACCESS_EMAIL_THROTTLE_MINUTES = 10
+_ALLOWED_MEMBER_PAYMENT_METHODS = {
+    PaymentMethod.CASH.value,
+    PaymentMethod.BONIFICO.value,
+}
+
+
+def _normalize_member_payment_method(raw_value: Optional[str], required: bool = False) -> Optional[str]:
+    if raw_value is None:
+        if required:
+            raise HTTPException(
+                status_code=400,
+                detail="Modalita di pagamento obbligatoria. Seleziona CASH o BONIFICO.",
+            )
+        return None
+
+    normalized = raw_value.strip().upper()
+    if normalized == "":
+        if required:
+            raise HTTPException(
+                status_code=400,
+                detail="Modalita di pagamento obbligatoria. Seleziona CASH o BONIFICO.",
+            )
+        return None
+
+    if normalized not in _ALLOWED_MEMBER_PAYMENT_METHODS:
+        raise HTTPException(
+            status_code=400,
+            detail="Modalita di pagamento non valida. Valori ammessi: CASH, BONIFICO.",
+        )
+    return normalized
+
+
+def _serialize_member_payment_method(value: Optional[object]) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, PaymentMethod):
+        return value.value
+    text = str(value).strip()
+    if text == "":
+        return None
+    upper = text.upper()
+    return upper if upper in _ALLOWED_MEMBER_PAYMENT_METHODS else text
 
 
 def _get_last_access_email_token(db: Session, member_id: int) -> Optional[Token]:
@@ -135,6 +178,7 @@ class CreateMemberBody(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     fiscal_code: Optional[str] = None
+    payment_method: Optional[str] = None
     joined_at: Optional[date] = None
     member_type: Optional[str] = None
     internal_notes: Optional[str] = None
@@ -698,6 +742,7 @@ def create_org_member(
     internal_notes = body.internal_notes.strip() if body.internal_notes else None
     if internal_notes == "":
         internal_notes = None
+    payment_method = _normalize_member_payment_method(body.payment_method)
 
     if email:
         existing = db.query(Member).filter(
@@ -722,6 +767,7 @@ def create_org_member(
         email=email,
         phone=phone,
         fiscal_code=fiscal_code,
+        payment_method=payment_method,
         status=MemberStatus.PENDING_DOCS,
         joined_at=joined_at,
         member_type=member_type,
@@ -764,6 +810,7 @@ def create_org_member(
         "email": member.email,
         "phone": member.phone,
         "fiscal_code": member.fiscal_code,
+        "payment_method": _serialize_member_payment_method(member.payment_method),
         "status": member.status.value if member.status else None,
         "joined_at": member.joined_at.isoformat() if member.joined_at else None,
         "member_type": member.member_type,
@@ -837,6 +884,7 @@ def get_member_detail(
         "email": member.email,
         "phone": member.phone,
         "fiscal_code": member.fiscal_code,
+        "payment_method": _serialize_member_payment_method(member.payment_method),
         "status": member.status.value if member.status else None,
         "card_no": member.card_no,
         "joined_at": member.joined_at.isoformat() if member.joined_at else None,

@@ -1,25 +1,20 @@
-import { FormEvent, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import {
   fetchSuperAdminOrganizations,
-  createSuperAdminOrganization,
   deleteOrganization,
-  setOrganizationCardRange,
-  addOrgCardBatch,
-  fetchOrgBatches,
-  uploadSuperAdminStatute,
   AuthError,
   type SuperAdminOrganization,
   type SuperAdminProfile,
-  type OrgBatch,
 } from "../../lib/api";
 import Skeleton from "../../components/ui/Skeleton";
+import OrganizationManageModal, {
+  type OrganizationModalType,
+} from "./components/OrganizationManageModal";
 
 const thClass =
   "px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.15em] text-neutral-400";
 const tdClass = "px-5 py-3.5 text-sm text-neutral-700";
-
-type ModalType = "create" | "range" | "add-batch" | "view-batches";
 
 const SuperAdminOrganizations = () => {
   const navigate = useNavigate();
@@ -29,38 +24,23 @@ const SuperAdminOrganizations = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Modal State
   const [showModal, setShowModal] = useState(false);
-  const [modalType, setModalType] = useState<ModalType>("create");
+  const [modalType, setModalType] = useState<OrganizationModalType>("create");
   const [selectedOrg, setSelectedOrg] = useState<SuperAdminOrganization | null>(null);
 
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState<SuperAdminOrganization | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  // Form State (Shared)
-  const [formData, setFormData] = useState({
-    name: "",
-    slug: "",
-    city: "",
-    province: "",
-    description_short: "",
-    is_active: true,
-    // Range
-    from_no: "",
-    to_no: "",
-  });
-  const [statuteFile, setStatuteFile] = useState<File | null>(null);
-
-  // Batches state for view-batches modal
-  const [batches, setBatches] = useState<OrgBatch[]>([]);
-  const [batchesSummary, setBatchesSummary] = useState<{ total: number; assigned: number; remaining: number } | null>(null);
-  const [loadingBatches, setLoadingBatches] = useState(false);
-
-  const loadOrgs = () => {
-    if (orgs.length === 0) setLoading(true);
+  const loadOrgs = useCallback(() => {
+    if (orgs.length === 0) {
+      setLoading(true);
+    }
 
     fetchSuperAdminOrganizations()
-      .then((res) => setOrgs(res.data))
+      .then((res) => {
+        setOrgs(res.data);
+        setError("");
+      })
       .catch((err) => {
         if (err instanceof AuthError) {
           navigate("/super-admin/login", { replace: true });
@@ -69,93 +49,40 @@ const SuperAdminOrganizations = () => {
         }
       })
       .finally(() => setLoading(false));
-  };
+  }, [orgs.length, navigate]);
 
   useEffect(() => {
-    if (profile) {
-        loadOrgs();
+    if (!profile) {
+      return;
     }
-  }, [profile, navigate]);
+    loadOrgs();
+  }, [profile, loadOrgs]);
 
-  const openModal = async (type: ModalType, org?: SuperAdminOrganization) => {
+  const openModal = useCallback((type: OrganizationModalType, org?: SuperAdminOrganization) => {
     setModalType(type);
     setSelectedOrg(org || null);
-    setSubmitError("");
-    setFormData({
-        name: "", slug: "", city: "", province: "", description_short: "", is_active: true,
-        from_no: "", to_no: ""
-    });
-    setStatuteFile(null);
-    setBatches([]);
-    setBatchesSummary(null);
+    setShowModal(true);
+  }, []);
 
-    if (type === "view-batches" && org) {
-      setLoadingBatches(true);
-      setShowModal(true);
-      try {
-        const result = await fetchOrgBatches(org.id);
-        setBatches(result.batches);
-        setBatchesSummary(result.summary);
-      } catch {
-        setSubmitError("Errore nel caricamento dei lotti");
-      } finally {
-        setLoadingBatches(false);
-      }
-    } else {
-      setShowModal(true);
+  const closeModal = useCallback(() => {
+    setShowModal(false);
+  }, []);
+
+  const handleModalSaved = useCallback(() => {
+    setShowModal(false);
+    loadOrgs();
+  }, [loadOrgs]);
+
+  const handleSwitchToAddBatch = useCallback(() => {
+    if (!selectedOrg) {
+      return;
     }
-  };
+    setModalType("add-batch");
+  }, [selectedOrg]);
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (submitting) return;
-
-    setSubmitting(true);
-    setSubmitError("");
-
-    try {
-        if (modalType === "create") {
-            const payload = {
-                name: formData.name,
-                slug: formData.slug || undefined,
-                city: formData.city || undefined,
-                province: formData.province || undefined,
-                description_short: formData.description_short || undefined,
-                is_active: formData.is_active,
-            };
-            const newOrg = await createSuperAdminOrganization(payload);
-            if (statuteFile && newOrg.id) {
-                await uploadSuperAdminStatute(newOrg.id, statuteFile);
-            }
-        } else if ((modalType === "range" || modalType === "add-batch") && selectedOrg) {
-            const from = parseInt(formData.from_no);
-            const to = parseInt(formData.to_no);
-            if (isNaN(from) || isNaN(to)) throw new Error("Numeri non validi");
-            if (from <= 0 || to <= 0) throw new Error("I numeri devono essere positivi");
-            if (from > to) throw new Error("Il numero iniziale deve essere minore o uguale al finale");
-
-            if (modalType === "range") {
-                await setOrganizationCardRange(selectedOrg.id, from, to);
-            } else {
-                await addOrgCardBatch(selectedOrg.id, from, to);
-            }
-        }
-
-        setShowModal(false);
-        loadOrgs();
-    } catch (err) {
-        setSubmitError(err instanceof Error ? err.message : "Errore operazione");
-    } finally {
-        setSubmitting(false);
-    }
-  };
-
-  const [deleteConfirm, setDeleteConfirm] = useState<SuperAdminOrganization | null>(null);
-  const [deleting, setDeleting] = useState(false);
-
-  const handleDelete = async (org: SuperAdminOrganization) => {
+  const handleDelete = useCallback((org: SuperAdminOrganization) => {
     setDeleteConfirm(org);
-  };
+  }, []);
 
   const confirmDelete = async () => {
     if (!deleteConfirm || deleting) return;
@@ -177,7 +104,7 @@ const SuperAdminOrganizations = () => {
         <Skeleton className="h-6 w-64" />
         <Skeleton className="mt-3 h-4 w-96" />
         <div className="mt-10">
-           <Skeleton className="h-48 w-full rounded-lg" />
+          <Skeleton className="h-48 w-full rounded-lg" />
         </div>
       </div>
     );
@@ -185,17 +112,17 @@ const SuperAdminOrganizations = () => {
 
   return (
     <div>
-      {error && (
-        <div className="mb-8 rounded-lg border border-red-200/60 bg-red-50 px-7 py-5">
-          <p className="text-sm text-red-700">{error}</p>
-        </div>
-      )}
+      <div className="mb-8 min-h-[76px]">
+        {error && (
+          <div className="rounded-lg border border-red-200/60 bg-red-50 px-7 py-5">
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        )}
+      </div>
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold text-neutral-900">
-            Associazioni
-          </h2>
+          <h2 className="text-xl font-semibold text-neutral-900">Associazioni</h2>
           <p className="mt-1 text-sm text-neutral-500">
             Gestisci le associazioni registrate sulla piattaforma.
           </p>
@@ -209,14 +136,14 @@ const SuperAdminOrganizations = () => {
         </button>
       </div>
 
-      <div className="surface mt-8 overflow-hidden">
+      <div className="surface mt-8 overflow-hidden" data-component="superadmin-orgs-table">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="border-b border-white/60 bg-white/40">
               <tr>
                 <th className={thClass}>Nome</th>
                 <th className={thClass}>Slug</th>
-                <th className={thClass}>Città</th>
+                <th className={thClass}>Citta</th>
                 <th className={thClass}>Stato</th>
                 <th className={thClass}>Tessere</th>
                 <th className={thClass}>Azioni</th>
@@ -233,13 +160,9 @@ const SuperAdminOrganizations = () => {
                 orgs.map((org, i) => (
                   <tr
                     key={org.id}
-                    className={`transition hover:bg-brand/[0.02] ${
-                      i % 2 === 1 ? "bg-white/30" : ""
-                    }`}
+                    className={`transition hover:bg-brand/[0.02] ${i % 2 === 1 ? "bg-white/30" : ""}`}
                   >
-                    <td className={`${tdClass} font-medium text-neutral-900`}>
-                      {org.name}
-                    </td>
+                    <td className={`${tdClass} font-medium text-neutral-900`}>{org.name}</td>
                     <td className={tdClass}>{org.slug}</td>
                     <td className={tdClass}>
                       {org.city} {org.province ? `(${org.province})` : ""}
@@ -256,50 +179,50 @@ const SuperAdminOrganizations = () => {
                       </span>
                     </td>
                     <td className={`${tdClass} tabular-nums`}>
-                        {org.card_min ? (
-                            <span>{org.card_min} – {org.card_max}</span>
-                        ) : (
-                            <span className="text-neutral-400">—</span>
-                        )}
+                      {org.card_min ? (
+                        <span>{org.card_min} - {org.card_max}</span>
+                      ) : (
+                        <span className="text-neutral-400">-</span>
+                      )}
                     </td>
                     <td className={tdClass}>
-                        <div className="flex items-center gap-2">
-                            {org.card_min ? (
-                              <>
-                                <button
-                                    onClick={() => openModal("view-batches", org)}
-                                    className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
-                                >
-                                    Lotti
-                                </button>
-                                <span className="text-neutral-300">|</span>
-                                <button
-                                    onClick={() => openModal("add-batch", org)}
-                                    className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
-                                >
-                                    + Lotto
-                                </button>
-                              </>
-                            ) : (
-                              <button
-                                  onClick={() => openModal("range", org)}
-                                  className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
-                              >
-                                  Imposta range
-                              </button>
-                            )}
-                            {org.is_active && (
-                              <>
-                                <span className="text-neutral-300">|</span>
-                                <button
-                                    onClick={() => handleDelete(org)}
-                                    className="text-red-600 hover:text-red-800 font-medium text-xs uppercase tracking-wide"
-                                >
-                                    Elimina
-                                </button>
-                              </>
-                            )}
-                        </div>
+                      <div className="flex items-center gap-2">
+                        {org.card_min ? (
+                          <>
+                            <button
+                              onClick={() => openModal("view-batches", org)}
+                              className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
+                            >
+                              Lotti
+                            </button>
+                            <span className="text-neutral-300">|</span>
+                            <button
+                              onClick={() => openModal("add-batch", org)}
+                              className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
+                            >
+                              + Lotto
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => openModal("range", org)}
+                            className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
+                          >
+                            Imposta range
+                          </button>
+                        )}
+                        {org.is_active && (
+                          <>
+                            <span className="text-neutral-300">|</span>
+                            <button
+                              onClick={() => handleDelete(org)}
+                              className="text-red-600 hover:text-red-800 font-medium text-xs uppercase tracking-wide"
+                            >
+                              Elimina
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -309,7 +232,6 @@ const SuperAdminOrganizations = () => {
         </div>
       </div>
 
-      {/* Delete Confirmation Modal */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md surface-strong p-6 shadow-xl">
@@ -321,10 +243,8 @@ const SuperAdminOrganizations = () => {
             </div>
 
             <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3">
-              <p className="text-sm font-medium text-red-800">Questa azione è irreversibile.</p>
-              <p className="mt-1 text-sm text-red-700">
-                Verranno eliminati permanentemente:
-              </p>
+              <p className="text-sm font-medium text-red-800">Questa azione e irreversibile.</p>
+              <p className="mt-1 text-sm text-red-700">Verranno eliminati permanentemente:</p>
               <ul className="mt-2 list-disc pl-5 text-sm text-red-700">
                 <li>L'associazione <strong>{deleteConfirm.name}</strong></li>
                 <li>Tutti i soci iscritti</li>
@@ -335,7 +255,7 @@ const SuperAdminOrganizations = () => {
             </div>
 
             <p className="mt-4 text-sm text-neutral-600">
-              Lo slug <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs">{deleteConfirm.slug}</code> potrà essere riutilizzato.
+              Lo slug <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs">{deleteConfirm.slug}</code> potra essere riutilizzato.
             </p>
 
             <div className="mt-6 flex justify-end gap-3">
@@ -360,275 +280,14 @@ const SuperAdminOrganizations = () => {
         </div>
       )}
 
-      {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg surface-strong p-6 shadow-xl max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold text-neutral-900">
-                {modalType === "create" && "Nuova associazione"}
-                {modalType === "range" && `Imposta range tessere: ${selectedOrg?.name}`}
-                {modalType === "add-batch" && `Aggiungi lotto tessere: ${selectedOrg?.name}`}
-                {modalType === "view-batches" && `Lotti tessere: ${selectedOrg?.name}`}
-            </h3>
-
-            {submitError && (
-              <div className="mt-4 rounded-md border border-red-200/60 bg-red-50 px-4 py-3">
-                <p className="text-sm text-red-700">{submitError}</p>
-              </div>
-            )}
-
-            <form className="mt-6 grid gap-4" onSubmit={handleSubmit}>
-
-              {modalType === "create" && (
-                  <>
-                    <div>
-                        <label htmlFor="name" className="block text-xs font-medium text-neutral-600">
-                        Nome associazione *
-                        </label>
-                        <input
-                        id="name"
-                        className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
-                        type="text"
-                        required
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label htmlFor="city" className="block text-xs font-medium text-neutral-600">
-                            Città
-                            </label>
-                            <input
-                            id="city"
-                            className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
-                            type="text"
-                            value={formData.city}
-                            onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor="province" className="block text-xs font-medium text-neutral-600">
-                            Provincia
-                            </label>
-                            <input
-                            id="province"
-                            className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
-                            type="text"
-                            placeholder="RM"
-                            maxLength={2}
-                            value={formData.province}
-                            onChange={(e) => setFormData({ ...formData, province: e.target.value })}
-                            />
-                        </div>
-                    </div>
-
-                    <div>
-                        <label htmlFor="slug" className="block text-xs font-medium text-neutral-600">
-                        Slug (opzionale, autogenerato)
-                        </label>
-                        <input
-                        id="slug"
-                        className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
-                        type="text"
-                        value={formData.slug}
-                        onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
-                        />
-                    </div>
-
-                    <div>
-                        <label htmlFor="description" className="block text-xs font-medium text-neutral-600">
-                        Descrizione breve
-                        </label>
-                        <textarea
-                        id="description"
-                        className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
-                        rows={3}
-                        value={formData.description_short}
-                        onChange={(e) => setFormData({ ...formData, description_short: e.target.value })}
-                        />
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <input
-                            type="checkbox"
-                            id="is_active"
-                            checked={formData.is_active}
-                            onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                            className="rounded border-gray-300 text-brand focus:ring-brand"
-                        />
-                        <label htmlFor="is_active" className="text-sm text-neutral-700">Attiva subito</label>
-                    </div>
-
-                    <div>
-                        <label htmlFor="statute_file" className="block text-xs font-medium text-neutral-600">
-                        Statuto (PDF, opzionale)
-                        </label>
-                        <input
-                        id="statute_file"
-                        type="file"
-                        accept=".pdf"
-                        className="mt-1 block text-sm text-neutral-600 file:mr-3 file:rounded-md file:border file:border-neutral-200 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-neutral-700"
-                        onChange={(e) => setStatuteFile(e.target.files?.[0] ?? null)}
-                        />
-                    </div>
-                  </>
-              )}
-
-              {modalType === "range" && (
-                  <div className="grid grid-cols-2 gap-4">
-                      <div>
-                          <label className="block text-xs font-medium text-neutral-600">Da (Inizio)</label>
-                          <input
-                            type="number"
-                            className="mt-1 w-full rounded-md border px-3 py-2"
-                            required
-                            value={formData.from_no}
-                            onChange={(e) => setFormData({...formData, from_no: e.target.value})}
-                          />
-                      </div>
-                      <div>
-                          <label className="block text-xs font-medium text-neutral-600">A (Fine)</label>
-                          <input
-                            type="number"
-                            className="mt-1 w-full rounded-md border px-3 py-2"
-                            required
-                            value={formData.to_no}
-                            onChange={(e) => setFormData({...formData, to_no: e.target.value})}
-                          />
-                      </div>
-                  </div>
-              )}
-
-              {modalType === "add-batch" && (
-                  <div>
-                      <p className="mb-4 text-sm text-neutral-600">
-                          Aggiungi un nuovo lotto di tessere per <strong>{selectedOrg?.name}</strong>.
-                      </p>
-                      <div className="grid grid-cols-2 gap-4">
-                          <div>
-                              <label className="block text-xs font-medium text-neutral-600">Da (numero iniziale)</label>
-                              <input
-                                type="number"
-                                className="mt-1 w-full rounded-md border border-neutral-200 px-3 py-2 text-sm"
-                                required
-                                min="1"
-                                value={formData.from_no}
-                                onChange={(e) => setFormData({...formData, from_no: e.target.value})}
-                              />
-                          </div>
-                          <div>
-                              <label className="block text-xs font-medium text-neutral-600">A (numero finale)</label>
-                              <input
-                                type="number"
-                                className="mt-1 w-full rounded-md border border-neutral-200 px-3 py-2 text-sm"
-                                required
-                                min="1"
-                                value={formData.to_no}
-                                onChange={(e) => setFormData({...formData, to_no: e.target.value})}
-                              />
-                          </div>
-                      </div>
-                      <p className="mt-3 text-xs text-neutral-500">
-                          Il range non deve sovrapporsi a lotti esistenti (di questa o altre associazioni).
-                      </p>
-                  </div>
-              )}
-
-              {modalType === "view-batches" && (
-                  <div>
-                      {loadingBatches ? (
-                          <p className="text-sm text-neutral-500">Caricamento lotti...</p>
-                      ) : batches.length === 0 ? (
-                          <p className="text-sm text-neutral-500">Nessun lotto configurato.</p>
-                      ) : (
-                          <>
-                              <table className="w-full text-sm">
-                                  <thead>
-                                      <tr className="border-b text-left text-xs text-neutral-500">
-                                          <th className="py-2 font-medium">Range</th>
-                                          <th className="py-2 font-medium text-right">Totale</th>
-                                          <th className="py-2 font-medium text-right">Assegnate</th>
-                                          <th className="py-2 font-medium text-right">Rimanenti</th>
-                                      </tr>
-                                  </thead>
-                                  <tbody>
-                                      {batches.map((b) => (
-                                          <tr key={b.id} className="border-b border-neutral-100">
-                                              <td className="py-2 tabular-nums">{b.start_no} – {b.end_no}</td>
-                                              <td className="py-2 text-right tabular-nums">{b.total}</td>
-                                              <td className="py-2 text-right tabular-nums">{b.assigned}</td>
-                                              <td className="py-2 text-right tabular-nums font-medium text-brand">{b.remaining}</td>
-                                          </tr>
-                                      ))}
-                                  </tbody>
-                              </table>
-                              {batchesSummary && (
-                                  <div className="mt-4 rounded-md bg-neutral-50 px-4 py-3">
-                                      <div className="flex justify-between text-sm">
-                                          <span className="text-neutral-600">Totale tessere:</span>
-                                          <span className="font-medium tabular-nums">{batchesSummary.total}</span>
-                                      </div>
-                                      <div className="flex justify-between text-sm mt-1">
-                                          <span className="text-neutral-600">Assegnate:</span>
-                                          <span className="font-medium tabular-nums">{batchesSummary.assigned}</span>
-                                      </div>
-                                      <div className="flex justify-between text-sm mt-1">
-                                          <span className="text-neutral-600">Rimanenti:</span>
-                                          <span className="font-semibold text-brand tabular-nums">{batchesSummary.remaining}</span>
-                                      </div>
-                                  </div>
-                              )}
-                          </>
-                      )}
-                  </div>
-              )}
-
-              {modalType !== "view-batches" && (
-              <div className="mt-4 flex justify-end gap-3">
-                <button
-                  type="button"
-                  className="rounded-md border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900"
-                  onClick={() => setShowModal(false)}
-                >
-                  Annulla
-                </button>
-                <button
-                  type="submit"
-                  className="inline-flex items-center justify-center rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white shadow-subtle transition hover:-translate-y-px hover:bg-brand-dark hover:shadow-card active:translate-y-0 disabled:opacity-50"
-                  disabled={submitting}
-                >
-                  {submitting ? "Salvataggio..." : "Conferma"}
-                </button>
-              </div>
-              )}
-
-              {modalType === "view-batches" && (
-              <div className="mt-6 flex justify-between">
-                <button
-                  type="button"
-                  className="text-sm font-medium text-brand hover:text-brand-dark"
-                  onClick={() => {
-                    setShowModal(false);
-                    openModal("add-batch", selectedOrg!);
-                  }}
-                >
-                  + Aggiungi lotto
-                </button>
-                <button
-                  type="button"
-                  className="rounded-md border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900"
-                  onClick={() => setShowModal(false)}
-                >
-                  Chiudi
-                </button>
-              </div>
-              )}
-            </form>
-          </div>
-        </div>
-      )}
+      <OrganizationManageModal
+        open={showModal}
+        modalType={modalType}
+        selectedOrg={selectedOrg}
+        onClose={closeModal}
+        onSaved={handleModalSaved}
+        onSwitchToAddBatch={handleSwitchToAddBatch}
+      />
     </div>
   );
 };

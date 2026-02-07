@@ -10,7 +10,7 @@ from sqlalchemy import func, text
 from app.db import get_db
 from app.models import (
     AdminUser, AdminRole, Organization, OrgAdminToken, CardBatch, CardMovement,
-    Member, MemberDocument, MemberPayment, Token
+    Member, MemberDocument, MemberPayment, PaymentMethod, Token
 )
 from app.security import verify_password
 from app.utils import generate_token, hash_token, send_email, save_upload_file
@@ -25,6 +25,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/super-admin")
 auth_router = APIRouter(prefix="/auth")
 
+_ALLOWED_MEMBER_PAYMENT_METHODS = {
+    PaymentMethod.CASH.value,
+    PaymentMethod.BONIFICO.value,
+}
+
 
 def _require_super_admin(request: Request, db: Session) -> AdminUser:
     admin_id = request.session.get("admin_id")
@@ -37,6 +42,18 @@ def _require_super_admin(request: Request, db: Session) -> AdminUser:
     if not admin:
         raise HTTPException(status_code=403, detail="Forbidden")
     return admin
+
+
+def _serialize_member_payment_method(value) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, PaymentMethod):
+        return value.value
+    text = str(value).strip()
+    if not text:
+        return None
+    upper = text.upper()
+    return upper if upper in _ALLOWED_MEMBER_PAYMENT_METHODS else text
 
 
 class LoginBody(BaseModel):
@@ -134,6 +151,43 @@ class CreateOrgAdmin(BaseModel):
 
 class PatchOrgAdmin(BaseModel):
     is_active: bool
+
+
+@router.get("/members/{member_id}")
+def super_admin_member_detail(
+    request: Request,
+    member_id: int,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+
+    member = db.query(Member).filter(
+        Member.id == member_id,
+        Member.deleted_at.is_(None),
+    ).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    return {
+        "id": member.id,
+        "first_name": member.first_name,
+        "last_name": member.last_name,
+        "email": member.email,
+        "phone": member.phone,
+        "fiscal_code": member.fiscal_code,
+        "payment_method": _serialize_member_payment_method(member.payment_method),
+        "status": member.status.value if hasattr(member.status, "value") else str(member.status),
+        "card_no": member.card_no,
+        "joined_at": member.joined_at.isoformat() if member.joined_at else None,
+        "member_type": member.member_type,
+        "internal_notes": member.internal_notes,
+        "is_manual": bool(member.is_manual),
+        "organization": {
+            "id": member.organization.id,
+            "name": member.organization.name,
+            "slug": member.organization.slug,
+        } if member.organization else None,
+    }
 
 
 @router.post("/org-admins")

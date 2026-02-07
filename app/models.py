@@ -11,6 +11,12 @@ class MemberStatus(str, enum.Enum):
     ACTIVE = "active"
     REJECTED = "rejected"
 
+
+class PaymentMethod(str, enum.Enum):
+    CASH = "CASH"
+    BONIFICO = "BONIFICO"
+
+
 class SafeMemberStatusType(TypeDecorator):
     """Stores MemberStatus as plain strings; normalises legacy uppercase values on read."""
     impl = String
@@ -31,6 +37,52 @@ class SafeMemberStatusType(TypeDecorator):
         normalized = self._LEGACY_MAP.get(value, value)
         try:
             return MemberStatus(normalized)
+        except ValueError:
+            return value
+
+
+class SafePaymentMethodType(TypeDecorator):
+    """Stores payment method as strings while normalizing legacy aliases on read/write."""
+    impl = String
+    cache_ok = True
+
+    _NORMALIZED_MAP = {
+        "cash": PaymentMethod.CASH.value,
+        "contanti": PaymentMethod.CASH.value,
+        "bonifico": PaymentMethod.BONIFICO.value,
+        "bank_transfer": PaymentMethod.BONIFICO.value,
+    }
+
+    @classmethod
+    def _normalize(cls, value):
+        if value is None:
+            return None
+        cleaned = str(value).strip()
+        if cleaned == "":
+            return None
+        upper = cleaned.upper()
+        if upper in {PaymentMethod.CASH.value, PaymentMethod.BONIFICO.value}:
+            return upper
+        return cls._NORMALIZED_MAP.get(cleaned.lower())
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, PaymentMethod):
+            return value.value
+        normalized = self._normalize(value)
+        if normalized is None:
+            raise ValueError(f"Invalid payment method: {value}")
+        return normalized
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        normalized = self._normalize(value)
+        if normalized is None:
+            return value
+        try:
+            return PaymentMethod(normalized)
         except ValueError:
             return value
 
@@ -133,6 +185,7 @@ class Member(Base):
     email = Column(String, index=True)
     phone = Column(String)
     fiscal_code = Column(String)
+    payment_method = Column(SafePaymentMethodType(), nullable=True)
     password_hash = Column(String, nullable=True)
     status = Column(SafeMemberStatusType(), default=MemberStatus.PENDING_DOCS.value)
 

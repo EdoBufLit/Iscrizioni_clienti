@@ -46,6 +46,7 @@ def test_document_flow(client, db):
         'email': 'doc.test@example.com',
         'phone': '1234567890',
         'fiscal_code': 'DOCTST90A01H501Z',
+        'payment_method': 'CASH',
         'accept_statute': 'true',
         'accept_privacy': 'true'
     }

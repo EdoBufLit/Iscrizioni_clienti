@@ -101,3 +101,14 @@ cd frontend
 npm run dev    # Development server
 npm run build  # Production build
 ```
+
+## Dashboard Performance (Feb 07, 2026)
+
+Migliorie applicate su dashboard socio/org-admin/super-admin per ridurre lag su typing:
+
+- isolamento dei form/modali in componenti con stato locale (meno rerender globali)
+- memoizzazione dei blocchi tabellari pesanti
+- ricerca debounced e callback stabili
+- spazi riservati (`min-height`) per ridurre layout shift (CLS)
+
+Dettagli operativi e guida di misurazione INP: vedi `README_INP.md`.

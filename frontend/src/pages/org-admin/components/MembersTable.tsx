@@ -1,0 +1,209 @@
+import { memo } from "react";
+import Skeleton from "../../../components/ui/Skeleton";
+import { type OrgAdminMember } from "../../../lib/api";
+
+const STATUS_LABEL: Record<string, string> = {
+  pending_verification: "Verifica email",
+  pending_docs: "Documenti",
+  pending_cards: "Tessera",
+  active: "Attivo",
+};
+
+const STATUS_CHIP: Record<string, string> = {
+  active: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  pending_verification: "border-blue-200 bg-blue-50 text-blue-700",
+  pending_docs: "border-amber-200 bg-amber-50 text-amber-700",
+  pending_cards: "border-amber-200 bg-amber-50 text-amber-700",
+};
+
+const thClass =
+  "px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.15em] text-neutral-400";
+const tdClass = "px-5 py-3.5 text-sm text-neutral-700";
+
+type MembersTableProps = {
+  error: boolean;
+  isLoading: boolean;
+  members: OrgAdminMember[];
+  totalPages: number;
+  page: number;
+  onPageChange: (nextPage: number) => void;
+  onOpenMember: (memberId: number) => void;
+};
+
+const MembersTable = memo(function MembersTable({
+  error,
+  isLoading,
+  members,
+  totalPages,
+  page,
+  onPageChange,
+  onOpenMember,
+}: MembersTableProps) {
+  if (error) {
+    return (
+      <div className="mt-4 rounded-lg border border-red-200/60 bg-red-50 px-7 py-5 min-h-[120px]">
+        <div className="flex gap-4">
+          <svg
+            className="mt-0.5 h-5 w-5 shrink-0 text-red-400"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+          </svg>
+          <div>
+            <p className="text-sm font-medium text-red-700">
+              Impossibile caricare l'elenco dei soci
+            </p>
+            <p className="mt-1 text-sm leading-6 text-red-600">
+              Si e verificato un errore. Ricarica la pagina per riprovare.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="surface mt-4 overflow-hidden min-h-[360px]"
+      data-tour="admin-members-list"
+      data-component="orgadmin-members-table"
+    >
+      <div className="overflow-x-auto">
+        <table className="w-full text-left">
+          <thead className="border-b border-white/60 bg-white/40">
+            <tr>
+              <th className={thClass}>Nome</th>
+              <th className={thClass}>Email</th>
+              <th className={thClass}>Stato</th>
+              <th className={thClass}>Documenti</th>
+              <th className={thClass}>Tessera</th>
+              <th className={thClass}>Iscrizione</th>
+              <th className={thClass}>
+                <span className="sr-only">Azioni</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i}>
+                  <td className={tdClass}>
+                    <Skeleton className="h-3.5 w-32" />
+                  </td>
+                  <td className={tdClass}>
+                    <Skeleton className="h-3.5 w-40" />
+                  </td>
+                  <td className={tdClass}>
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                  </td>
+                  <td className={tdClass}>
+                    <Skeleton className="h-3.5 w-12" />
+                  </td>
+                  <td className={tdClass}>
+                    <Skeleton className="h-3.5 w-20" />
+                  </td>
+                </tr>
+              ))
+            ) : members.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={7}
+                  className="px-5 py-12 text-center text-sm text-neutral-500"
+                >
+                  Nessun socio corrisponde ai filtri impostati.
+                </td>
+              </tr>
+            ) : (
+              members.map((m, i) => (
+                <tr
+                  key={m.id}
+                  className={`transition hover:bg-brand/[0.02] ${
+                    i % 2 === 1 ? "bg-white/30" : ""
+                  }`}
+                >
+                  <td className={`${tdClass} font-medium text-neutral-900`}>{m.name}</td>
+                  <td className={tdClass}>{m.email ?? "-"}</td>
+                  <td className={tdClass}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {m.status && (
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+                            STATUS_CHIP[m.status] ??
+                            "border-neutral-200 bg-neutral-50 text-neutral-600"
+                          }`}
+                        >
+                          {STATUS_LABEL[m.status] ?? m.status}
+                        </span>
+                      )}
+                      {m.is_paid && (
+                        <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+                          Pagato
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className={tdClass}>
+                    {m.docs_count != null ? (
+                      <span className="inline-flex items-center rounded bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-800">
+                        {m.docs_count}
+                      </span>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                  <td className={`${tdClass} tabular-nums`}>{m.card_no ?? "-"}</td>
+                  <td className={`${tdClass} tabular-nums`}>
+                    {m.joined_at
+                      ? new Date(m.joined_at).toLocaleDateString("it-IT")
+                      : "-"}
+                  </td>
+                  <td className={tdClass}>
+                    <div className="flex justify-end">
+                      <button
+                        className="text-sm font-medium text-brand hover:text-brand-dark"
+                        onClick={() => onOpenMember(m.id)}
+                        data-testid={`member-open-${m.id}`}
+                      >
+                        Apri
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+      {!isLoading && totalPages > 1 && (
+        <div className="flex items-center justify-between border-t border-white/60 px-5 py-4 text-sm text-neutral-600">
+          <button
+            type="button"
+            className="rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 transition hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => onPageChange(Math.max(1, page - 1))}
+            disabled={page <= 1}
+          >
+            Precedente
+          </button>
+          <span className="text-xs text-neutral-500">
+            Pagina {page} di {totalPages}
+          </span>
+          <button
+            type="button"
+            className="rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 transition hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+            disabled={page >= totalPages}
+          >
+            Successiva
+          </button>
+        </div>
+      )}
+    </div>
+  );
+});
+
+export default MembersTable;

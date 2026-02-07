@@ -3,7 +3,17 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from app.db import get_db
-from app.models import Organization, Member, MemberStatus, Token, TokenType, MemberDocument, AdminUser, AdminRole
+from app.models import (
+    Organization,
+    Member,
+    MemberStatus,
+    PaymentMethod,
+    Token,
+    TokenType,
+    MemberDocument,
+    AdminUser,
+    AdminRole,
+)
 from app.utils import generate_token, send_email, save_upload_file, hash_token
 from app.services.card import assign_next_card
 from app.config import settings
@@ -17,6 +27,39 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+# Accepted values for member payment preference in signup.
+_ALLOWED_PAYMENT_METHODS = {
+    PaymentMethod.CASH.value,
+    PaymentMethod.BONIFICO.value,
+}
+
+
+def _normalize_payment_method(raw_value: Optional[str], required: bool = False) -> Optional[str]:
+    if raw_value is None:
+        if required:
+            raise HTTPException(
+                status_code=400,
+                detail="Modalita di pagamento obbligatoria. Seleziona CASH o BONIFICO.",
+            )
+        return None
+
+    normalized = raw_value.strip().upper()
+    if normalized == "":
+        if required:
+            raise HTTPException(
+                status_code=400,
+                detail="Modalita di pagamento obbligatoria. Seleziona CASH o BONIFICO.",
+            )
+        return None
+
+    if normalized not in _ALLOWED_PAYMENT_METHODS:
+        raise HTTPException(
+            status_code=400,
+            detail="Modalita di pagamento non valida. Valori ammessi: CASH, BONIFICO.",
+        )
+    return normalized
 
 
 # ── Legacy HTML redirects ─────────────────────────────────────────
@@ -349,6 +392,7 @@ async def api_join_submit_multipart(
     accept_statute: bool = Form(...),
     accepted_statute_version: Optional[str] = Form(None),
     accept_privacy: bool = Form(...),
+    payment_method: Optional[str] = Form(None),
     accepted_privacy_version: Optional[str] = Form(None), # Usually implied by org
     id_document: Optional[UploadFile] = File(None),
     fiscal_code_document: Optional[UploadFile] = File(None),
@@ -365,6 +409,8 @@ async def api_join_submit_multipart(
 
     if not accept_statute:
         raise HTTPException(status_code=400, detail="È necessario accettare lo statuto per procedere.")
+
+    normalized_payment_method = _normalize_payment_method(payment_method, required=True)
 
     existing = check_signup_allowed(db, org.id, email, request)
 
@@ -386,6 +432,7 @@ async def api_join_submit_multipart(
             member.accepted_statute_version = accepted_statute_version or org.statute_version
             member.accepted_privacy_at = datetime.utcnow()
             member.accepted_privacy_version = org.privacy_version
+            member.payment_method = normalized_payment_method
             member.signup_ip = get_client_ip(request)
             member.signup_user_agent = request.headers.get("user-agent")
 
@@ -411,6 +458,7 @@ async def api_join_submit_multipart(
                 email=email,
                 phone=phone,
                 fiscal_code=fiscal_code,
+                payment_method=normalized_payment_method,
                 status=MemberStatus.PENDING_VERIFICATION,
                 accepted_statute_at=datetime.utcnow(),
                 accepted_statute_version=accepted_statute_version or org.statute_version,

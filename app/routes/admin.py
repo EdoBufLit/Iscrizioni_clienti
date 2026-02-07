@@ -3,7 +3,7 @@ from fastapi.responses import RedirectResponse, FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.db import get_db
-from app.models import AdminUser, AdminRole, Member, CardBatch, MemberDocument, DocStatus, MemberStatus, Organization
+from app.models import AdminUser, AdminRole, Member, CardBatch, MemberDocument, DocStatus, MemberStatus, Organization, PaymentMethod
 from app.services.card import assign_next_card
 from app import audit
 from app.config import settings
@@ -157,6 +157,7 @@ def edit_member(
     email: str = Form(...),
     phone: str = Form(None),
     fiscal_code: str = Form(None),
+    payment_method: str = Form(None),
     db: Session = Depends(get_db)
 ):
     admin = get_current_admin(request, db)
@@ -172,6 +173,13 @@ def edit_member(
     member.email = email
     member.phone = phone
     member.fiscal_code = fiscal_code
+    if payment_method is None or payment_method.strip() == "":
+        member.payment_method = None
+    else:
+        normalized_payment_method = payment_method.strip().upper()
+        if normalized_payment_method not in {PaymentMethod.CASH.value, PaymentMethod.BONIFICO.value}:
+            raise HTTPException(status_code=400, detail="Modalita di pagamento non valida. Valori ammessi: CASH, BONIFICO.")
+        member.payment_method = normalized_payment_method
     db.commit()
 
     audit.log_operation(
@@ -181,7 +189,7 @@ def edit_member(
         entity_id=member.id,
         actor_admin_id=admin.id,
         actor_role=admin.role.value if hasattr(admin.role, "value") else str(admin.role),
-        metadata={"fields": ["first_name", "last_name", "email", "phone", "fiscal_code"]},
+        metadata={"fields": ["first_name", "last_name", "email", "phone", "fiscal_code", "payment_method"]},
         ip=request.client.host if request.client else "unknown",
         user_agent=request.headers.get("user-agent"),
     )

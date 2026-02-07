@@ -22,6 +22,7 @@ export type MemberProfile = {
   email: string;
   phone: string | null;
   fiscal_code: string | null;
+  payment_method?: string | null;
   status: string;
   card_no: number | null;
   card_status?: string | null;
@@ -143,6 +144,7 @@ export async function joinOrganization(
     accept_statute: boolean;
     accepted_statute_version: string | null;
     accept_privacy: boolean;
+    payment_method: "CASH" | "BONIFICO";
     id_document?: File | null;
   },
 ): Promise<{ status: string; organization?: string; id?: number; email_sent?: boolean }> {
@@ -157,6 +159,7 @@ export async function joinOrganization(
     body.append("accepted_statute_version", data.accepted_statute_version);
   }
   body.append("accept_privacy", String(data.accept_privacy));
+  body.append("payment_method", data.payment_method);
 
   if (data.id_document) {
     body.append("id_document", data.id_document);
@@ -443,6 +446,7 @@ export type CreateOrgAdminMemberInput = {
   email?: string;
   phone?: string;
   fiscal_code?: string;
+  payment_method?: "CASH" | "BONIFICO";
   joined_at?: string;
   member_type?: string;
   internal_notes?: string;
@@ -457,6 +461,7 @@ export type OrgAdminMemberCreated = {
   email: string | null;
   phone: string | null;
   fiscal_code: string | null;
+  payment_method?: string | null;
   status: string | null;
   joined_at: string | null;
   member_type: string | null;
@@ -514,6 +519,27 @@ export type SuperAdminProfile = {
   role: string;
 };
 
+export type SuperAdminMemberDetail = {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  phone: string | null;
+  fiscal_code: string | null;
+  payment_method: string | null;
+  status: string;
+  card_no: number | null;
+  joined_at: string | null;
+  member_type?: string | null;
+  internal_notes?: string | null;
+  is_manual?: boolean;
+  organization?: {
+    id: number;
+    name: string;
+    slug: string;
+  } | null;
+};
+
 export async function superAdminLogin(
   email: string,
   password: string,
@@ -532,6 +558,16 @@ export async function fetchSuperAdminMe(): Promise<SuperAdminProfile> {
   const res = await fetch("/api/super-admin/auth/me");
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error("Failed to fetch profile");
+  return res.json();
+}
+
+export async function fetchSuperAdminMemberDetail(
+  memberId: number,
+): Promise<SuperAdminMemberDetail> {
+  const res = await fetch(`/api/super-admin/members/${memberId}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Socio non trovato");
+  if (!res.ok) throw new Error("Errore nel caricamento del socio");
   return res.json();
 }
 

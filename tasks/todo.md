@@ -25,9 +25,9 @@
 - `python -m pytest tests/test_org_admin_member_filters.py` OK (warnings about datetime.utcnow deprecation)
 - `npm run build` (frontend) OK (org-admin soci filters)
 - `python -m pytest tests/test_org_admin_member_activity.py` OK (warnings about datetime.utcnow deprecation)
-- `npm run build` (frontend) OK (attivitÃ  socio + reset filtri)
+- `npm run build` (frontend) OK (attivitÃƒÆ’Ã‚Â  socio + reset filtri)
 - `python -m alembic upgrade head` OK (actor_member_id)
-- `npm run build` (frontend) OK (legenda attività)
+- `npm run build` (frontend) OK (legenda attivitÃƒÂ )
 - `npm run build` (frontend) OK (INP + font + hero contrast)
 
 ---
@@ -85,7 +85,7 @@
 - [x] Add modal-based rejection flow with required note and inline status updates
 - [x] Render document status badges + actions with error handling
 - [x] Show document chain when replacements exist
-- [x] Add dashboard counters for “da rivedere” and “rigettati”
+- [x] Add dashboard counters for Ã¢â‚¬Å“da rivedereÃ¢â‚¬Â and Ã¢â‚¬Å“rigettatiÃ¢â‚¬Â
 - [x] Update review section with how to test locally
 
 ---
@@ -120,7 +120,7 @@
 
 ---
 
-## Audit Log & AttivitÃ  Socio (Feb 02, 2026)
+## Audit Log & AttivitÃƒÆ’Ã‚Â  Socio (Feb 02, 2026)
 - [x] Add actor_member_id to audit logs and migrate schema
 - [x] Log sensitive actions for member create/update/access/doc review/resubmit/payment
 - [x] Surface recent activity in org-admin member detail (tab)
@@ -285,7 +285,7 @@ const result = await apiPost<Result>("/api/users", { name: "John" });
 - `no such column: deleted_at`
 
 ### Causa
-Il database era fuori sync con Alembic perché:
+Il database era fuori sync con Alembic perchÃƒÂ©:
 1. `init_db.py` usa `Base.metadata.create_all()` che crea tabelle bypassando Alembic
 2. Alcune migrazioni aggiungono colonne che potrebbero non esistere nel DB attuale
 3. Il DB locale potrebbe essere stato creato prima che le migrazioni fossero definite
@@ -296,11 +296,11 @@ Rese idempotenti le migrazioni problematiche:
 **`a1b2c3d4e5f6_add_member_payments.py`:**
 - Aggiunto check `_table_exists()` prima di `create_table`
 - Aggiunto check `_index_exists()` prima di `create_index`
-- Se la tabella esiste già, la migrazione passa senza errori
+- Se la tabella esiste giÃƒÂ , la migrazione passa senza errori
 
 **`d3e4f5g6h7i8_add_performance_indexes.py`:**
 - Aggiunto `_safe_create_index()` che verifica:
-  - L'indice non esiste già
+  - L'indice non esiste giÃƒÂ 
   - Tutte le colonne referenziate esistono
 - Se le condizioni non sono soddisfatte, skip silenzioso
 
@@ -444,3 +444,51 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] `npm run build` in `frontend` OK.
 - [ ] `python -m pytest tests/test_org_admin_decision.py` non verde per stato ambiente (`pending_cards` per stock tessere org test).
 - [ ] `python -m pytest tests/test_document_workflow.py` non verde per slug duplicati su DB test preesistente (`docflow-org*`).
+
+---
+
+## Spec (ASSONAM - Modalita di pagamento iscrizione socio - Feb 07, 2026)
+- Obiettivo: aggiungere `payment_method` (CASH/BONIFICO) nel flusso iscrizione socio con persistenza DB.
+- Vincoli: nessuna integrazione gateway; solo scelta e salvataggio.
+- UX: select con label italiana "Modalita di pagamento", placeholder "Seleziona...", opzioni "Contanti" e "Bonifico".
+- Backend: campo su `members`, validazione input, supporto payload create/update, esposizione nel dettaglio socio admin.
+- Test minimo: create con `CASH` OK, create con `BONIFICO` OK, create senza campo -> 400 con messaggio chiaro.
+
+## Plan (ASSONAM - Modalita di pagamento iscrizione socio)
+- [x] Aggiungere `payment_method` al modello `Member` con validazione valori ammessi e compatibilita legacy.
+- [x] Creare migrazione Alembic idempotente per colonna `members.payment_method` (+ eventuale vincolo dove supportato).
+- [x] Aggiornare endpoint backend di creazione/aggiornamento socio (`/api/join/{org_slug}/submit`, create member org-admin, edit legacy) per accettare/salvare il campo.
+- [x] Esporre `payment_method` nei payload dettaglio socio per org-admin e super-admin (dove disponibile) e nei tipi API frontend.
+- [x] Aggiornare form iscrizione frontend con select required + placeholder e invio del campo alle API.
+- [x] Mostrare "Modalita di pagamento" nella vista dettaglio socio dashboard org-admin (e super-admin dove presente).
+- [x] Aggiungere/aggiornare test backend per CASH, BONIFICO e validazione required.
+- [x] Eseguire test mirati + build frontend e compilare review.
+
+## Review (ASSONAM - Modalita di pagamento iscrizione socio)
+- [x] Migrazione eseguita con successo: `python -m alembic upgrade head` OK (`f4a5b6c7d8e9 -> a9b8c7d6e5f4`).
+- [x] Test richiesti feature: `python -m pytest tests/test_payment_method_join.py tests/test_org_admin_payment_method_detail.py tests/test_super_admin_member_payment_method_detail.py` OK (5 passed).
+- [x] Build frontend: `npm run build` in `frontend` OK.
+- [x] Verifica addizionale: `python -m pytest tests/test_payment_method_join.py tests/test_optional_identity_document.py tests/test_documents.py tests/test_org_admin_manual_member.py` NON completamente verde per failure preesistenti su `tests/test_documents.py` e `tests/test_org_admin_manual_member.py`.
+
+---
+
+## Spec (ASSONAM - Performance INP/CLS dashboard - Feb 07, 2026)
+- Obiettivo: eliminare il lag in typing e ridurre INP/CLS su dashboard socio, org-admin, super-admin.
+- Hotspot principali: form/modali con stato locale nel parent che contiene tabelle/listoni, causando rerender dell'intera pagina ad ogni keypress.
+- Vincoli: nessuna regressione funzionale nei flussi esistenti; ottimizzazioni mirate e progressive.
+
+## Plan (ASSONAM - Performance INP/CLS dashboard)
+- [x] Profilare hotspot di rerender su typing e documentare i componenti impattati.
+- [x] Isolare i form/modali pesanti in componenti memoizzati con stato locale (evitare rerender di tabelle/layout su keypress).
+- [x] Stabilizzare render di liste/tabelle con memo/callback stabili e ridurre computazioni nel render.
+- [x] Ridurre CLS con spazi riservati/min-height per messaggi e blocchi dinamici in dashboard.
+- [x] Verificare build/test frontend, raccogliere evidenze e aggiornare README/perf notes + review.
+
+## Review (ASSONAM - Performance INP/CLS dashboard)
+- [x] Hotspot confermati: `OrgAdminMembers`, `SuperAdminOrganizations`, `SuperAdminOrgAdmins`, `OrgAdminMemberDetail` avevano stato input/modale nel parent con tabelle/listoni nello stesso albero.
+- [x] Refactor eseguito: form/modali separati in componenti dedicati con stato locale (`CreateMemberModal`, `OrganizationManageModal`, `CreateOrgAdminForm`, `ManualPaymentForm`, `RejectDocumentModal`, `MemberDecisionPanel`).
+- [x] Tabelle/listoni stabilizzati con componenti memoizzati (`MembersTable`) e callback stabili; conteggi documenti memoizzati nel dettaglio socio.
+- [x] CLS mitigato con `min-h` su aree messaggi dinamiche nelle pagine dashboard ottimizzate.
+- [x] Documentazione aggiornata: note performance in `README.md` e dettaglio operativo in `README_INP.md`.
+- [x] Verifica tecnica: `npm run build` in `frontend` OK (bundle rigenerato senza errori TS/Vite).
+- [x] Evidenza build: chunk dashboard ottimizzati generati (`OrgAdminMembers-YPTJ6xid.js`, `SuperAdminOrganizations-DUb0JKUy.js`, `SuperAdminOrgAdmins-zONclGsn.js`, `OrgAdminMemberDetail-BLs04_lo.js`).

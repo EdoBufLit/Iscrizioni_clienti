@@ -91,6 +91,7 @@ def init_db():
         _add_column_if_missing(conn, "members", "member_type", "TEXT")
         _add_column_if_missing(conn, "members", "internal_notes", "TEXT")
         _add_column_if_missing(conn, "members", "is_manual", "INTEGER DEFAULT 0")
+        _add_column_if_missing(conn, "members", "payment_method", "TEXT")
         _add_column_if_missing(conn, "member_documents", "rejection_note", "TEXT")
         _add_column_if_missing(conn, "member_documents", "reviewed_by_admin_id", "INTEGER REFERENCES admin_users(id)")
         _add_column_if_missing(conn, "member_documents", "replaces_document_id", "INTEGER REFERENCES member_documents(id)")

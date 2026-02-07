@@ -30,6 +30,7 @@ type FormData = {
   codiceFiscale: string;
   email: string;
   telefono: string;
+  modalitaPagamento: "" | "CASH" | "BONIFICO";
   password: string;
   documentoIdentita: File | null;
   privacy: boolean;
@@ -43,6 +44,7 @@ const initial: FormData = {
   codiceFiscale: "",
   email: "",
   telefono: "",
+  modalitaPagamento: "",
   password: "",
   documentoIdentita: null,
   privacy: false,
@@ -62,6 +64,8 @@ function validateStep1(f: FormData): Record<string, string> {
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email))
     e.email = "L'indirizzo email non sembra valido.";
   if (!f.telefono.trim()) e.telefono = "Il numero di telefono è obbligatorio.";
+  if (!f.modalitaPagamento)
+    e.modalitaPagamento = "Seleziona la modalità di pagamento.";
   if (!f.password || f.password.length < 6)
     e.password = "La password deve avere almeno 6 caratteri.";
   return e;
@@ -208,6 +212,10 @@ const Iscrizione = () => {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (submitting) return;
+    if (!form.modalitaPagamento) {
+      setSubmitError("Seleziona la modalità di pagamento.");
+      return;
+    }
     setSubmitError("");
     setSubmitting(true);
     try {
@@ -221,6 +229,7 @@ const Iscrizione = () => {
         accept_statute: form.statuto,
         accepted_statute_version: org?.has_statute ? (org.statute_version || null) : null,
         accept_privacy: form.privacy,
+        payment_method: form.modalitaPagamento,
         id_document: form.documentoIdentita,
       });
 
@@ -250,6 +259,12 @@ const Iscrizione = () => {
 
   const hasErrors = Object.keys(errors).length > 0;
   const ic = (field: string) => (errors[field] ? inputErr : inputOk);
+  const paymentMethodLabel =
+    form.modalitaPagamento === "CASH"
+      ? "Contanti"
+      : form.modalitaPagamento === "BONIFICO"
+        ? "Bonifico"
+        : "-";
 
   if (submitted) {
     return (
@@ -364,6 +379,21 @@ const Iscrizione = () => {
                     <label htmlFor="telefono" className={labelClass}>Telefono</label>
                     <input id="telefono" className={ic("telefono")} type="tel" placeholder="+39 333 1234567" value={form.telefono} onChange={handleText("telefono")} />
                     {errors.telefono && <p className="mt-1.5 text-xs text-red-600">{errors.telefono}</p>}
+                  </div>
+                  <div>
+                    <label htmlFor="modalitaPagamento" className={labelClass}>Modalità di pagamento</label>
+                    <select
+                      id="modalitaPagamento"
+                      className={ic("modalitaPagamento")}
+                      value={form.modalitaPagamento}
+                      onChange={(e) => updateField("modalitaPagamento", e.target.value as "" | "CASH" | "BONIFICO")}
+                      required
+                    >
+                      <option value="">Seleziona...</option>
+                      <option value="CASH">Contanti</option>
+                      <option value="BONIFICO">Bonifico</option>
+                    </select>
+                    {errors.modalitaPagamento && <p className="mt-1.5 text-xs text-red-600">{errors.modalitaPagamento}</p>}
                   </div>
                   <div className="md:col-span-2">
                     <label htmlFor="password" className={labelClass}>Password</label>
@@ -494,6 +524,7 @@ const Iscrizione = () => {
                   <dl className="mt-3 grid gap-x-6 gap-y-3 md:grid-cols-2">
                     <div><dt className="text-xs text-neutral-500">Email</dt><dd className="mt-0.5 text-sm font-medium text-neutral-800">{form.email}</dd></div>
                     <div><dt className="text-xs text-neutral-500">Telefono</dt><dd className="mt-0.5 text-sm font-medium text-neutral-800">{form.telefono}</dd></div>
+                    <div><dt className="text-xs text-neutral-500">Modalità di pagamento</dt><dd className="mt-0.5 text-sm font-medium text-neutral-800">{paymentMethodLabel}</dd></div>
                   </dl>
                 </div>
 

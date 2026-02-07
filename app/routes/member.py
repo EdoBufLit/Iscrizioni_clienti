@@ -3,7 +3,7 @@ from fastapi.responses import RedirectResponse, FileResponse
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from app.db import get_db
-from app.models import Member, Token, TokenType, MemberDocument, MemberStatus, Organization, AdminUser, AdminRole, DocStatus
+from app.models import Member, Token, TokenType, MemberDocument, MemberStatus, PaymentMethod, Organization, AdminUser, AdminRole, DocStatus
 from app.utils import generate_token, send_email, hash_token, save_upload_file
 from app.security import get_password_hash, verify_password
 from app.config import settings
@@ -16,6 +16,34 @@ import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+_ALLOWED_PAYMENT_METHODS = {PaymentMethod.CASH.value, PaymentMethod.BONIFICO.value}
+
+
+def _normalize_payment_method(raw_value: str | None) -> str | None:
+    if raw_value is None:
+        return None
+    normalized = raw_value.strip().upper()
+    if normalized == "":
+        return None
+    if normalized not in _ALLOWED_PAYMENT_METHODS:
+        raise HTTPException(
+            status_code=400,
+            detail="Modalita di pagamento non valida. Valori ammessi: CASH, BONIFICO.",
+        )
+    return normalized
+
+
+def _serialize_payment_method(value) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, PaymentMethod):
+        return value.value
+    text = str(value).strip()
+    if not text:
+        return None
+    upper = text.upper()
+    return upper if upper in _ALLOWED_PAYMENT_METHODS else text
 
 
 def get_current_member(request: Request, db: Session):
@@ -309,6 +337,7 @@ def api_auth_register(
     last_name: str = Form(...),
     phone: str = Form(default=""),
     fiscal_code: str = Form(default=""),
+    payment_method: str = Form(default=""),
     org_slug: str = Form(default=""),
     db: Session = Depends(get_db),
 ):
@@ -328,12 +357,16 @@ def api_auth_register(
     if not org:
         raise HTTPException(status_code=404, detail="Not found")
 
+    normalized_payment_method = _normalize_payment_method(payment_method)
+
     # Check if member already exists
     existing = db.query(Member).filter(Member.email == email).first()
     if existing:
         # If existing but no password, allow setting password
         if not existing.password_hash:
             existing.password_hash = get_password_hash(password)
+            if normalized_payment_method is not None:
+                existing.payment_method = normalized_payment_method
             db.commit()
             request.session["member_id"] = existing.id
             return {"status": "ok", "message": "Account attivato.", "authenticated": True}
@@ -347,6 +380,7 @@ def api_auth_register(
         email=email,
         phone=phone,
         fiscal_code=fiscal_code,
+        payment_method=normalized_payment_method,
         password_hash=get_password_hash(password),
         status=MemberStatus.PENDING_DOCS,
         signup_ip=request.client.host if request.client else "unknown",
@@ -422,6 +456,7 @@ def api_auth_me(request: Request, db: Session = Depends(get_db)):
         "email": member.email,
         "phone": member.phone,
         "fiscal_code": member.fiscal_code,
+        "payment_method": _serialize_payment_method(member.payment_method),
         "status": status_raw,
         "card_no": member.card_no,
         "card_status": card_status,
