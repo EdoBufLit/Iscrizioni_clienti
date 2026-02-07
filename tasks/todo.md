@@ -535,3 +535,19 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] Retro semplificato: QR grande centrale + 3 righe essenziali (`Numero tessera`, `Nome`, `Anno`) senza testi front duplicati/specchiati.
 - [x] Accessibilita: flip via bottone (click + Enter/Space nativi), `aria-label="Ruota tessera"`, `user-select: none` sul wrapper.
 - [x] Verifica tecnica: `npm run build` in `frontend` OK.
+
+---
+
+## Spec (Dashboard socio - Follow-up flip ancora specchiato - Feb 07, 2026)
+- Obiettivo: eliminare definitivamente il rendering specchiato del fronte quando la card e in stato flipped.
+- Approccio: rendere front/back figli diretti di uno stage unico ruotato, con proprieta 3D/backface rinforzate anche inline.
+
+## Plan (Follow-up flip specchiato)
+- [x] Sostituire `member-card-flip-inner` con `member-card-flip-stage` e ridurre livelli annidati nel DOM della card.
+- [x] Rinforzare `backface-visibility` e `transform-style` (incluse varianti WebKit) su stage e facce.
+- [x] Verificare build frontend e aggiornare review.
+
+## Review (Follow-up flip specchiato)
+- [x] Front/back resi figli diretti dello stage ruotato, evitando layering ambiguo che mostrava il fronte specchiato.
+- [x] Aggiunte proprieta 3D robuste (`preserve-3d`, `backface-visibility`, `translateZ`) a livello CSS + inline sulle facce.
+- [x] Verifica tecnica: `npm run build` in `frontend` OK.

@@ -264,15 +264,14 @@ body::before {
     box-shadow: 0 0 0 3px rgba(198, 160, 79, 0.45);
   }
 
-  .member-card-flip-inner {
+  .member-card-flip-stage {
     display: block;
     position: relative;
+    width: 100%;
     transform-style: preserve-3d;
+    -webkit-transform-style: preserve-3d;
     transition: transform 620ms ease;
-  }
-
-  .member-card-flip-inner.is-flipped {
-    transform: rotateY(180deg);
+    will-change: transform;
   }
 
   .member-card-face {
@@ -281,14 +280,16 @@ body::before {
     inset: 0;
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
+    transform-style: preserve-3d;
+    -webkit-transform-style: preserve-3d;
   }
 
   .member-card-face-front {
-    transform: rotateY(0deg);
+    transform: rotateY(0deg) translateZ(1px);
   }
 
   .member-card-face-back {
-    transform: rotateY(180deg);
+    transform: rotateY(180deg) translateZ(1px);
   }
 }
 
@@ -368,7 +369,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
 
 @media (prefers-reduced-motion: reduce) {
   .member-card-flip,
-  .member-card-flip-inner {
+  .member-card-flip-stage {
     transition: none !important;
   }
 

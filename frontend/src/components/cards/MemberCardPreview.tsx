@@ -116,9 +116,25 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
           />
         </span>
 
-        <span className={`member-card-flip-inner ${isFlipped ? "is-flipped" : ""}`}>
-          <span className="relative block w-full" style={{ aspectRatio: "1.586 / 1" }}>
-            <span className="member-card-face member-card-face-front overflow-hidden rounded-[28px] border border-[#cfb97a]/70 bg-[#fbf7eb] shadow-[0_20px_40px_rgba(15,61,58,0.18)]">
+        <span
+          className="member-card-flip-stage"
+          style={{
+            aspectRatio: "1.586 / 1",
+            transformStyle: "preserve-3d",
+            WebkitTransformStyle: "preserve-3d",
+            transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
+            WebkitTransform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
+          }}
+        >
+          <span
+            className="member-card-face member-card-face-front overflow-hidden rounded-[28px] border border-[#cfb97a]/70 bg-[#fbf7eb] shadow-[0_20px_40px_rgba(15,61,58,0.18)]"
+            style={{
+              backfaceVisibility: "hidden",
+              WebkitBackfaceVisibility: "hidden",
+              transform: "rotateY(0deg) translateZ(1px)",
+              WebkitTransform: "rotateY(0deg) translateZ(1px)",
+            }}
+          >
               <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_8%_12%,rgba(15,61,58,0.16),transparent_52%),radial-gradient(circle_at_95%_88%,rgba(198,160,79,0.26),transparent_48%)]" />
               <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,0.84)_0%,rgba(251,247,235,0.95)_38%,rgba(244,232,199,0.96)_100%)]" />
               <span className="pointer-events-none absolute inset-x-0 top-0 h-[5px] bg-gradient-to-r from-[#0f3d3a] via-[#c6a04f] to-[#0f3d3a]" />
@@ -158,9 +174,17 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
                   </span>
                 </span>
               </span>
-            </span>
+          </span>
 
-            <span className="member-card-face member-card-face-back overflow-hidden rounded-[28px] border border-[#cfb97a]/70 bg-[#f7f2e3] shadow-[0_20px_40px_rgba(15,61,58,0.18)]">
+          <span
+            className="member-card-face member-card-face-back overflow-hidden rounded-[28px] border border-[#cfb97a]/70 bg-[#f7f2e3] shadow-[0_20px_40px_rgba(15,61,58,0.18)]"
+            style={{
+              backfaceVisibility: "hidden",
+              WebkitBackfaceVisibility: "hidden",
+              transform: "rotateY(180deg) translateZ(1px)",
+              WebkitTransform: "rotateY(180deg) translateZ(1px)",
+            }}
+          >
               <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(145deg,rgba(18,58,56,0.06),rgba(198,160,79,0.14))]" />
               <span className="relative flex h-full flex-col items-center justify-center px-5 py-5 sm:px-7 sm:py-6">
                 <span className="grid place-items-center rounded-2xl border border-[#c8b07a]/70 bg-white/90 p-3 shadow-[0_10px_20px_rgba(15,61,58,0.12)]">
@@ -198,7 +222,6 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
                   </span>
                 </span>
               </span>
-            </span>
           </span>
         </span>
       </button>
