@@ -492,3 +492,23 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] Documentazione aggiornata: note performance in `README.md` e dettaglio operativo in `README_INP.md`.
 - [x] Verifica tecnica: `npm run build` in `frontend` OK (bundle rigenerato senza errori TS/Vite).
 - [x] Evidenza build: chunk dashboard ottimizzati generati (`OrgAdminMembers-YPTJ6xid.js`, `SuperAdminOrganizations-DUb0JKUy.js`, `SuperAdminOrgAdmins-zONclGsn.js`, `OrgAdminMemberDetail-BLs04_lo.js`).
+
+---
+
+## Spec (ASSONAM - Performance follow-up lag alto in input/modal - Feb 07, 2026)
+- Evidenza utente: INP ancora alto (~424ms) con breakdown dominato da `presentationDelay` durante interazione su input/modal dashboard.
+- Ipotesi principale: costo compositing/paint elevato da glass UI (`backdrop-filter`, gradient overlay, hover transforms) e sfondo scenico animato attivi anche sulle route dashboard.
+- Obiettivo: ridurre latenza percepita su click/focus/typing in form dashboard, mantenendo flussi invariati.
+
+## Plan (ASSONAM - Performance follow-up lag alto in input/modal)
+- [x] Introdurre modalita performance per route dashboard/admin e attenuare effetti visivi costosi (blur/backdrop/overlay animati) in quel contesto.
+- [x] Rendere il form "Aggiungi socio" principalmente uncontrolled (FormData submit) per eliminare rerender per keypress.
+- [x] Sostituire i pannelli modali principali con stile statico senza `backdrop-filter` per limitare repaint.
+- [x] Verificare build frontend e aggiornare note/review.
+
+## Review (ASSONAM - Performance follow-up lag alto in input/modal)
+- [x] Aggiunta `dashboard-perf-mode` sulle route admin/dashboard in `Layout`: disattivati sfondo scenico animato e page transition framer-motion su quelle route.
+- [x] Override CSS performance su dashboard: rimozione `backdrop-filter`/glass overlay per `surface`, `surface-strong`, `header-band`; hover meno costosi.
+- [x] Form modal "Aggiungi socio" rifattorizzato in modalita quasi-uncontrolled (`FormData` submit), eliminando setState per keypress nei campi testo.
+- [x] Modali principali convertiti a pannello statico `modal-panel` (senza blur) per ridurre paint/compositing.
+- [x] Verifica tecnica: `npm run build` in `frontend` OK.

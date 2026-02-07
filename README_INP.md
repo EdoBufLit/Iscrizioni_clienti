@@ -49,6 +49,9 @@ Ottimizzazioni applicate per ridurre INP/lag su typing e contenere CLS:
 - `SuperAdminOrgAdmins`: form "Nuovo amministratore" estratto in `CreateOrgAdminForm` con stato locale; la tabella admin non rerendera ad ogni keypress email.
 - `OrgAdminMemberDetail`: form pagamento, rigetto documento e decisione finale isolati in componenti dedicati (`ManualPaymentForm`, `RejectDocumentModal`, `MemberDecisionPanel`) per limitare il rerender del dettaglio completo mentre si digita.
 - CLS: introdotti blocchi con altezza minima per messaggi dinamici nelle pagine dashboard ottimizzate.
+- Follow-up lag (presentation delay): su route dashboard/admin e attiva `dashboard-perf-mode` (niente scene background animato, niente page transition framer-motion, meno `backdrop-filter` su `surface`/`surface-strong`/`header-band`).
+- Modale "Aggiungi socio" rifattorizzata in modalita quasi-uncontrolled (submit con `FormData`) per evitare setState su ogni keypress.
+- Modali principali uniformati su `modal-panel` statico (senza blur glass) per ridurre costo di compositing.
 
 ### Verifica rapida consigliata
 

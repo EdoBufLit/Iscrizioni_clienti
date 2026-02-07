@@ -110,5 +110,7 @@ Migliorie applicate su dashboard socio/org-admin/super-admin per ridurre lag su 
 - memoizzazione dei blocchi tabellari pesanti
 - ricerca debounced e callback stabili
 - spazi riservati (`min-height`) per ridurre layout shift (CLS)
+- modalita `dashboard-perf-mode`: effetti glass/blur ridotti sulle route dashboard/admin
+- modale "Aggiungi socio" spostata a submit `FormData` (quasi-uncontrolled) per ridurre lavoro per keypress
 
 Dettagli operativi e guida di misurazione INP: vedi `README_INP.md`.

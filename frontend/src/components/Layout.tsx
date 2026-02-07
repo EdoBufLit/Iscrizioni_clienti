@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import MotionProvider from "./motion/MotionProvider";
@@ -33,11 +33,24 @@ const Layout = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const close = () => setMenuOpen(false);
   const location = useLocation();
+  const isDashboardRoute = useMemo(
+    () =>
+      location.pathname.startsWith("/dashboard") ||
+      location.pathname.startsWith("/org-admin") ||
+      location.pathname.startsWith("/super-admin") ||
+      location.pathname.startsWith("/admin"),
+    [location.pathname]
+  );
+
+  useEffect(() => {
+    document.body.classList.toggle("dashboard-perf-mode", isDashboardRoute);
+    return () => document.body.classList.remove("dashboard-perf-mode");
+  }, [isDashboardRoute]);
 
   return (
     <MotionProvider>
       <div className="relative min-h-screen text-neutral-800">
-        <SceneBackground />
+        {!isDashboardRoute && <SceneBackground />}
         <div className="h-0.5 bg-gradient-to-r from-accent via-brand to-ember" aria-hidden="true" />
         <header className="header-band">
           <div className="container-shell flex items-center justify-between py-4">
@@ -126,17 +139,21 @@ const Layout = () => {
         </header>
 
         <main>
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={location.pathname}
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-            >
-              <Outlet />
-            </motion.div>
-          </AnimatePresence>
+          {isDashboardRoute ? (
+            <Outlet />
+          ) : (
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={location.pathname}
+                variants={pageVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+              >
+                <Outlet />
+              </motion.div>
+            </AnimatePresence>
+          )}
         </main>
 
         <footer className="border-t border-white/70 bg-white/70 py-10 backdrop-blur-sm">

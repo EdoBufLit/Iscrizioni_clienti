@@ -36,7 +36,7 @@ const RejectDocumentModal = memo(function RejectDocumentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg surface-strong p-6 shadow-xl" data-component="orgadmin-reject-doc-modal">
+      <div className="modal-panel max-w-lg p-6" data-component="orgadmin-reject-doc-modal">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-lg font-semibold text-neutral-900">Rigetta documento</h3>
