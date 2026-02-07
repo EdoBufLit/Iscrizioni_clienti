@@ -247,10 +247,13 @@ body::before {
   }
 
   .member-card-flip {
-    perspective: 1800px;
+    perspective: 1000px;
+    position: relative;
+    display: block;
     border-radius: 28px;
     outline: none;
     transition: transform 220ms ease;
+    user-select: none;
   }
 
   .member-card-flip:hover {
@@ -265,7 +268,7 @@ body::before {
     display: block;
     position: relative;
     transform-style: preserve-3d;
-    transition: transform 680ms cubic-bezier(0.18, 0.75, 0.25, 1);
+    transition: transform 620ms ease;
   }
 
   .member-card-flip-inner.is-flipped {
@@ -274,8 +277,14 @@ body::before {
 
   .member-card-face {
     display: block;
+    position: absolute;
+    inset: 0;
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
+  }
+
+  .member-card-face-front {
+    transform: rotateY(0deg);
   }
 
   .member-card-face-back {

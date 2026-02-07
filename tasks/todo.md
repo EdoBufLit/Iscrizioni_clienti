@@ -512,3 +512,26 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] Form modal "Aggiungi socio" rifattorizzato in modalita quasi-uncontrolled (`FormData` submit), eliminando setState per keypress nei campi testo.
 - [x] Modali principali convertiti a pannello statico `modal-panel` (senza blur) per ridurre paint/compositing.
 - [x] Verifica tecnica: `npm run build` in `frontend` OK.
+
+---
+
+## Spec (Dashboard socio - Fix flip tessera no specchio + logo fisso - Feb 07, 2026)
+- Obiettivo: correggere il flip 3D della tessera socio evitando qualsiasi testo specchiato durante/after rotate.
+- Vincoli UX: retro minimal (solo QR grande + dati essenziali), logo ASSONAM sempre fisso/non ruotato come overlay.
+- Accessibilità: flip via click + Enter/Space, aria-label chiara, no text selection durante animazione.
+- Impatto: patch limitata a `MemberCardPreview` e CSS dedicato in `frontend/src/index.css`.
+
+## Plan (Dashboard socio - Fix flip tessera)
+- [x] Rifattorizzare markup in struttura flip standard (`wrapper`/`inner`/`front`/`back`) con facce assolute e backface hidden.
+- [x] Spostare logo ASSONAM fuori da `inner` e renderlo overlay assoluto non ruotante.
+- [x] Ridurre il retro a QR grande + massimo 3 righe dati essenziali (numero, nome, anno) mantenendo endpoint QR attuale.
+- [x] Garantire interazione accessibile (click/Enter/Space, aria-label) e `user-select: none`.
+- [x] Verificare build frontend e aggiornare review.
+
+
+## Review (Dashboard socio - Fix flip tessera)
+- [x] Struttura flip standard applicata: `member-card-flip` (perspective), `member-card-flip-inner` (preserve-3d + rotateY), facce front/back assolute con `backface-visibility` nascosta.
+- [x] Logo ASSONAM estratto dal layer ruotato e reso overlay fisso (`absolute`, `z-10`, `pointer-events-none`), senza duplicazioni.
+- [x] Retro semplificato: QR grande centrale + 3 righe essenziali (`Numero tessera`, `Nome`, `Anno`) senza testi front duplicati/specchiati.
+- [x] Accessibilita: flip via bottone (click + Enter/Space nativi), `aria-label="Ruota tessera"`, `user-select: none` sul wrapper.
+- [x] Verifica tecnica: `npm run build` in `frontend` OK.

@@ -47,26 +47,11 @@ const toDisplayYear = (value?: string | number | null): string => {
   return raw.length ? raw : EMPTY;
 };
 
-const toStatusMeta = (status?: string | null): { label: string; tone: string } => {
-  const normalized = (status ?? "").toLowerCase();
-  const isActive = normalized === "active" || normalized === "attiva";
-  if (isActive) {
-    return {
-      label: "Attiva",
-      tone: "border-emerald-300/80 bg-emerald-50 text-emerald-700",
-    };
-  }
-  return {
-    label: "Non attiva",
-    tone: "border-amber-300/80 bg-amber-50 text-amber-700",
-  };
-};
-
 const toQrImageUrl = (value?: string | null): string | null => {
   if (!value) return null;
   const normalized = value.trim();
   if (!normalized.length) return null;
-  return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=0&data=${encodeURIComponent(normalized)}`;
+  return `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=0&data=${encodeURIComponent(normalized)}`;
 };
 
 export const isMemberCardPreviewData = (value: unknown): value is MemberCardPreviewData => {
@@ -109,8 +94,7 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
   const displayName = toDisplayName(cardData);
   const organizationName = toSafeText(cardData.organizationName);
   const cardNumber = toDisplayCardNumber(cardData.cardNumber);
-  const cardYear = toDisplayYear(cardData.cardYear);
-  const statusMeta = toStatusMeta(cardData.cardStatus);
+  const cardYear = toDisplayYear(cardData.cardYear) || ASSONAM_CARD_YEAR_LABEL;
   const qrImageUrl = useMemo(() => toQrImageUrl(cardData.verificationUrl), [cardData.verificationUrl]);
   const verificationUrl = cardData.verificationUrl?.trim() ? cardData.verificationUrl.trim() : null;
 
@@ -118,30 +102,31 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
     <div className={className}>
       <button
         type="button"
-        className="member-card-flip group w-full cursor-pointer"
+        className="member-card-flip group relative block w-full cursor-pointer select-none"
         onClick={() => setIsFlipped((prev) => !prev)}
         aria-pressed={isFlipped}
-        aria-label={isFlipped ? "Mostra fronte tessera" : "Mostra retro tessera"}
+        aria-label="Ruota tessera"
       >
+        <span className="pointer-events-none absolute right-4 top-4 z-10">
+          <img
+            src={ASSONAM_LOGO_SRC}
+            alt="Logo ASSO.N.A.M."
+            className="h-9 w-auto object-contain sm:h-11"
+            loading="lazy"
+          />
+        </span>
+
         <span className={`member-card-flip-inner ${isFlipped ? "is-flipped" : ""}`}>
           <span className="relative block w-full" style={{ aspectRatio: "1.586 / 1" }}>
-            <span className="member-card-face absolute inset-0 overflow-hidden rounded-[28px] border border-[#cfb97a]/70 bg-[#fbf7eb] shadow-[0_20px_40px_rgba(15,61,58,0.18)]">
+            <span className="member-card-face member-card-face-front overflow-hidden rounded-[28px] border border-[#cfb97a]/70 bg-[#fbf7eb] shadow-[0_20px_40px_rgba(15,61,58,0.18)]">
               <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_8%_12%,rgba(15,61,58,0.16),transparent_52%),radial-gradient(circle_at_95%_88%,rgba(198,160,79,0.26),transparent_48%)]" />
               <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,0.84)_0%,rgba(251,247,235,0.95)_38%,rgba(244,232,199,0.96)_100%)]" />
               <span className="pointer-events-none absolute inset-x-0 top-0 h-[5px] bg-gradient-to-r from-[#0f3d3a] via-[#c6a04f] to-[#0f3d3a]" />
 
               <span className="relative flex h-full flex-col px-5 py-5 text-[#123a38] sm:px-7 sm:py-6">
-                <span className="flex items-start justify-between gap-3">
-                  <img
-                    src={ASSONAM_LOGO_SRC}
-                    alt="Logo ASSO.N.A.M."
-                    className="h-10 w-auto object-contain sm:h-12"
-                    loading="lazy"
-                  />
-                  <span className="text-right">
-                    <span className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-[#315d5a]">
-                      Tessera Socio {ASSONAM_CARD_YEAR_LABEL}
-                    </span>
+                <span className="pr-16 text-right sm:pr-20">
+                  <span className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-[#315d5a]">
+                    Tessera Socio {ASSONAM_CARD_YEAR_LABEL}
                   </span>
                 </span>
 
@@ -175,62 +160,41 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
               </span>
             </span>
 
-            <span className="member-card-face member-card-face-back absolute inset-0 overflow-hidden rounded-[28px] border border-[#cfb97a]/70 bg-[#f7f2e3] shadow-[0_20px_40px_rgba(15,61,58,0.18)]">
+            <span className="member-card-face member-card-face-back overflow-hidden rounded-[28px] border border-[#cfb97a]/70 bg-[#f7f2e3] shadow-[0_20px_40px_rgba(15,61,58,0.18)]">
               <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(145deg,rgba(18,58,56,0.06),rgba(198,160,79,0.14))]" />
-              <span className="relative flex h-full flex-col px-5 py-5 sm:px-7 sm:py-6">
-                <span className="flex items-center justify-between gap-3">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#355c59]">
-                    Verifica tessera
-                  </span>
-                  <span
-                    className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.12em] ${statusMeta.tone}`}
-                  >
-                    {statusMeta.label}
-                  </span>
+              <span className="relative flex h-full flex-col items-center justify-center px-5 py-5 sm:px-7 sm:py-6">
+                <span className="grid place-items-center rounded-2xl border border-[#c8b07a]/70 bg-white/90 p-3 shadow-[0_10px_20px_rgba(15,61,58,0.12)]">
+                  {qrImageUrl ? (
+                    <img
+                      src={qrImageUrl}
+                      alt="QR code per verifica tessera"
+                      className="h-40 w-40 rounded-xl border border-[#e4d7b5] bg-white p-1 sm:h-44 sm:w-44"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  ) : (
+                    <span className="inline-flex h-40 w-40 items-center justify-center rounded-xl border border-dashed border-[#ccb98a] text-[0.62rem] font-medium uppercase tracking-[0.15em] text-[#8a6f34] sm:h-44 sm:w-44">
+                      QR non disponibile
+                    </span>
+                  )}
                 </span>
 
-                <span className="mt-4 grid flex-1 gap-4 sm:grid-cols-[1fr_auto]">
-                  <span className="flex min-w-0 flex-col gap-3">
-                    <span>
-                      <span className="block text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-[#5b6f6d]">
-                        Stato tessera
-                      </span>
-                      <span className="mt-1 block text-sm font-semibold text-[#183d3b] sm:text-base">
-                        {statusMeta.label}
-                      </span>
+                <span className="mt-4 w-full max-w-[18rem] space-y-2 rounded-xl border border-[#d7c797]/70 bg-white/65 px-3 py-3 text-left">
+                  <span className="flex items-baseline justify-between gap-3">
+                    <span className="text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-[#5b6f6d]">
+                      Numero tessera
                     </span>
-                    <span>
-                      <span className="block text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-[#5b6f6d]">
-                        Anno validita
-                      </span>
-                      <span className="mt-1 block text-sm font-semibold text-[#183d3b] sm:text-base">
-                        {cardYear}
-                      </span>
-                    </span>
-                    <span>
-                      <span className="block text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-[#5b6f6d]">
-                        Associazione
-                      </span>
-                      <span className="mt-1 block text-sm font-semibold text-[#183d3b] sm:text-base">
-                        {organizationName}
-                      </span>
+                    <span className="text-xs font-semibold tracking-[0.08em] text-[#183d3b] sm:text-sm">
+                      {cardNumber}
                     </span>
                   </span>
-
-                  <span className="grid place-items-center rounded-2xl border border-[#c8b07a]/70 bg-white/80 p-2 shadow-[0_10px_20px_rgba(15,61,58,0.12)]">
-                    {qrImageUrl ? (
-                      <img
-                        src={qrImageUrl}
-                        alt="QR code per verifica tessera"
-                        className="h-28 w-28 rounded-lg border border-[#e4d7b5] bg-white p-1 sm:h-32 sm:w-32"
-                        loading="lazy"
-                        decoding="async"
-                      />
-                    ) : (
-                      <span className="inline-flex h-28 w-28 items-center justify-center rounded-lg border border-dashed border-[#ccb98a] text-[0.62rem] font-medium uppercase tracking-[0.15em] text-[#8a6f34] sm:h-32 sm:w-32">
-                        QR non disponibile
-                      </span>
-                    )}
+                  <span className="flex items-baseline justify-between gap-3">
+                    <span className="text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-[#5b6f6d]">Nome</span>
+                    <span className="truncate text-xs font-semibold text-[#183d3b] sm:text-sm">{displayName}</span>
+                  </span>
+                  <span className="flex items-baseline justify-between gap-3">
+                    <span className="text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-[#5b6f6d]">Anno</span>
+                    <span className="text-xs font-semibold text-[#183d3b] sm:text-sm">{cardYear}</span>
                   </span>
                 </span>
               </span>
