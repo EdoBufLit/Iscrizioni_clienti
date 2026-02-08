@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { loginWithPassword, requestMagicLink, fetchWhoAmI } from "../lib/api";
+import { applySeo } from "../lib/seo";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -10,6 +11,16 @@ const Login = () => {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    applySeo({
+      title: "Accedi",
+      description:
+        "Accedi all'area riservata ASSO.N.A.M. per gestire la tua iscrizione, documenti e tessera socio.",
+      canonicalPath: "/login",
+      noindex: true,
+    });
+  }, []);
 
   useEffect(() => {
     fetchWhoAmI().then((w) => {

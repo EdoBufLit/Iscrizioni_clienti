@@ -1,6 +1,7 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchOrganizations, type OrganizationListItem } from "../lib/api";
+import { applySeo } from "../lib/seo";
 import Skeleton from "../components/ui/Skeleton";
 
 const inputClass =
@@ -29,6 +30,15 @@ const Associazioni = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    applySeo({
+      title: "Associazioni affiliate",
+      description:
+        "Elenco delle associazioni affiliate ad ASSO.N.A.M. Trova la tua associazione e avvia l'iscrizione online.",
+      canonicalPath: "/associazioni",
+    });
+  }, []);
 
   useEffect(() => {
     clearTimeout(timerRef.current);

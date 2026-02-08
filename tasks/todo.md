@@ -518,7 +518,7 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 ## Spec (Dashboard socio - Fix flip tessera no specchio + logo fisso - Feb 07, 2026)
 - Obiettivo: correggere il flip 3D della tessera socio evitando qualsiasi testo specchiato durante/after rotate.
 - Vincoli UX: retro minimal (solo QR grande + dati essenziali), logo ASSONAM sempre fisso/non ruotato come overlay.
-- Accessibilità: flip via click + Enter/Space, aria-label chiara, no text selection durante animazione.
+- Accessibilitï¿½: flip via click + Enter/Space, aria-label chiara, no text selection durante animazione.
 - Impatto: patch limitata a `MemberCardPreview` e CSS dedicato in `frontend/src/index.css`.
 
 ## Plan (Dashboard socio - Fix flip tessera)
@@ -551,3 +551,77 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] Front/back resi figli diretti dello stage ruotato, evitando layering ambiguo che mostrava il fronte specchiato.
 - [x] Aggiunte proprieta 3D robuste (`preserve-3d`, `backface-visibility`, `translateZ`) a livello CSS + inline sulle facce.
 - [x] Verifica tecnica: `npm run build` in `frontend` OK.
+
+---
+
+## Spec (Fix Favicon ASSONAM tab browser - Feb 08, 2026)
+- Obiettivo: mostrare il logo ASSONAM nella scheda browser al posto della favicon errata.
+- Vincoli: modifica minima, nessun impatto su routing/API, compatibile con build Vite.
+
+## Plan (Fix Favicon ASSONAM)
+- [ ] Aggiornare `frontend/index.html` per usare il logo ASSONAM come favicon.
+- [ ] Eliminare la favicon legacy non coerente (`frontend/public/favicon.svg`).
+- [ ] Eseguire verifica tecnica (`npm run build` frontend) e aggiornare review.
+## Execution (Fix Favicon ASSONAM)
+- [x] Aggiornato `frontend/index.html` per usare il logo ASSONAM come favicon (`/logo-transparent.png?v=2026-02-08`).
+- [x] Eliminata favicon legacy non coerente (`frontend/public/favicon.svg`).
+- [x] Verifica tecnica completata: `npm run build` in `frontend` OK.
+
+---
+
+## Spec (SEO Audit completo + remediation - Feb 08, 2026)
+- Obiettivo: eseguire audit SEO tecnico/on-page completo e correggere le criticita principali direttamente nel codice.
+- Scope: crawlability/indexation, meta tags, canonical, OG/Twitter, robots/sitemap, soft-404 SPA, pagine trust base.
+- Vincoli: impatto minimo sui flussi applicativi, nessuna regressione su routing dashboard/API.
+
+## Plan (SEO Audit + Fix)
+- [x] Implementare gestione SEO centralizzata frontend (title, description, canonical, robots, OG/Twitter) con regole per route pubbliche/private.
+- [x] Migliorare SEO dinamico su pagine associazione/iscrizione e aggiungere structured data nella home.
+- [x] Aggiungere endpoint backend `sitemap.xml` (con URL statiche + associazioni attive da DB) e `robots.txt` statico frontend.
+- [x] Aggiungere pagina Privacy pubblica e link interno dal footer per trust/compliance base.
+- [x] Eseguire verifica tecnica (build frontend + smoke checks backend) e documentare review in `tasks/todo.md`.
+
+## Execution (SEO Audit + Fix)
+
+### Frontend: applySeo() wired into all pages
+- `Home.tsx`: title, description, canonical, Organization + FAQPage JSON-LD
+- `LoStudio.tsx`: title, description, canonical
+- `Servizi.tsx`: title, description, canonical
+- `Associazioni.tsx`: title, description, canonical
+- `AffiliazioneDettaglio.tsx`: dynamic title/description from DB, Organization JSON-LD
+- `Iscrizione.tsx`: dynamic title from org name, noindex
+- `Contatti.tsx`: title, description, canonical, ContactPage JSON-LD
+- `Login.tsx`: title, description, noindex
+- `Register.tsx`: title, description, noindex
+- `NotFound.tsx`: title, noindex
+- `DashboardLayout.tsx`: noindex
+- `AdminLayout.tsx`: noindex
+- `OrgAdminLayout.tsx`: noindex
+- `SuperAdminLayout.tsx`: noindex
+
+### Frontend: index.html fallback meta
+- Meta description, robots, canonical in static HTML
+- Full Open Graph tags (type, title, description, url, site_name, locale, image)
+- Twitter Card tags (summary_large_image)
+
+### Frontend: robots.txt
+- `frontend/public/robots.txt`: Allow /, Disallow private routes, Sitemap reference
+
+### Backend: sitemap.xml endpoint
+- `app/routes/public.py`: GET /sitemap.xml â€” static pages + active organizations from DB
+
+### Frontend: Privacy page
+- `frontend/src/pages/Privacy.tsx`: GDPR-compliant privacy policy
+- Route added in App.tsx: `/privacy`
+- Footer link updated from unlinked `<span>` to `<Link to="/privacy">`
+
+## Review (SEO Audit + Fix)
+- [x] `npm run build` in `frontend` OK.
+- [x] Tutte le pagine pubbliche hanno title, description, canonical, OG e Twitter Card.
+- [x] Pagine private (dashboard, admin, org-admin, super-admin, login, register) hanno `noindex,nofollow`.
+- [x] Home page ha structured data Organization + FAQPage.
+- [x] Pagine associazione hanno structured data Organization dinamico da DB.
+- [x] `robots.txt` statico in `frontend/public/` con disallow route private e sitemap reference.
+- [x] Endpoint `/sitemap.xml` dinamico nel backend con pagine statiche + associazioni attive.
+- [x] Pagina Privacy creata con informativa GDPR e linkata dal footer.
+- [x] Fallback meta tags in `index.html` per crawler che non eseguono JS.

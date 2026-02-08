@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import RedirectResponse, FileResponse
+from fastapi.responses import RedirectResponse, FileResponse, Response
 from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import Member, Organization
@@ -120,6 +120,47 @@ def get_organization_statute(slug: str, db: Session = Depends(get_db)):
          raise HTTPException(status_code=404, detail="File missing on disk")
 
     return FileResponse(full_path, media_type="application/pdf", filename=f"statuto_{org.slug}.pdf")
+
+
+# ── SEO: Sitemap ─────────────────────────────────────────────────
+
+_STATIC_PAGES = [
+    ("/", "1.0", "weekly"),
+    ("/lo-studio", "0.8", "monthly"),
+    ("/servizi", "0.8", "monthly"),
+    ("/associazioni", "0.9", "weekly"),
+    ("/contatti", "0.7", "monthly"),
+    ("/privacy", "0.3", "yearly"),
+]
+
+
+@router.get("/sitemap.xml")
+def sitemap_xml(db: Session = Depends(get_db)):
+    base = settings.BASE_URL.rstrip("/")
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ]
+    for path, priority, freq in _STATIC_PAGES:
+        lines.append(
+            f"  <url><loc>{base}{path}</loc>"
+            f"<priority>{priority}</priority>"
+            f"<changefreq>{freq}</changefreq></url>"
+        )
+    orgs = (
+        db.query(Organization.slug)
+        .filter(Organization.is_active == True)
+        .order_by(Organization.name)
+        .all()
+    )
+    for (slug,) in orgs:
+        lines.append(
+            f"  <url><loc>{base}/associazioni/{slug}</loc>"
+            f"<priority>0.7</priority>"
+            f"<changefreq>weekly</changefreq></url>"
+        )
+    lines.append("</urlset>")
+    return Response(content="\n".join(lines), media_type="application/xml")
 
 
 @router.get("/api/cards/verify/{token}")

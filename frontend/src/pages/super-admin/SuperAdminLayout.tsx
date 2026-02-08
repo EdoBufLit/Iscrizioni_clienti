@@ -8,6 +8,7 @@ import {
   type SuperAdminProfile,
   type VersionInfo,
 } from "../../lib/api";
+import { applySeo } from "../../lib/seo";
 
 const SuperAdminLayout = () => {
   const navigate = useNavigate();
@@ -16,6 +17,10 @@ const SuperAdminLayout = () => {
   const [profile, setProfile] = useState<SuperAdminProfile | null>(null);
   const [ver, setVer] = useState<VersionInfo | null>(null);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    applySeo({ title: "Super Admin", description: "Pannello super admin ASSO.N.A.M.", noindex: true });
+  }, []);
 
   useEffect(() => {
     fetchSuperAdminMe()

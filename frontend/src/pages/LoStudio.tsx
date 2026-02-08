@@ -1,4 +1,16 @@
+import { useEffect } from "react";
+import { applySeo } from "../lib/seo";
+
 const LoStudio = () => {
+  useEffect(() => {
+    applySeo({
+      title: "Lo Studio",
+      description:
+        "Studio di gestione associativa e amministrativa a Roma. Adempimenti, contabilità e supporto operativo per associazioni affiliate.",
+      canonicalPath: "/lo-studio",
+    });
+  }, []);
+
   return (
     <div>
       <section className="bg-white py-20">

@@ -172,7 +172,12 @@ const Layout = () => {
                 Contatti
               </Link>
               <span className="text-neutral-200">·</span>
-              <span>Privacy</span>
+              <Link
+                className="transition hover:text-neutral-600"
+                to="/privacy"
+              >
+                Privacy
+              </Link>
             </div>
           </div>
         </footer>

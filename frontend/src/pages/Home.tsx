@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
+import { applySeo } from "../lib/seo";
 
 const heroEase = [0.16, 1, 0.3, 1] as const;
 const heroBlur = (delay = 0) => ({
@@ -9,6 +11,64 @@ const heroBlur = (delay = 0) => ({
 });
 
 const Home = () => {
+  useEffect(() => {
+    applySeo({
+      title: "ASSO.N.A.M.",
+      description:
+        "Portale di gestione associativa ASSO.N.A.M. — Iscrizioni digitali, raccolta documenti, contabilità e adempimenti per associazioni affiliate a Roma.",
+      canonicalPath: "/",
+      structuredData: [
+        {
+          "@context": "https://schema.org",
+          "@type": "Organization",
+          name: "ASSO.N.A.M. — Associazione Nazionale Arti e Mestieri",
+          url: "https://assonam.it",
+          logo: "https://assonam.it/logo.jpg",
+          address: {
+            "@type": "PostalAddress",
+            streetAddress: "Via Sambucuccio d'Alando, 10",
+            addressLocality: "Roma",
+            postalCode: "00162",
+            addressRegion: "RM",
+            addressCountry: "IT",
+          },
+          telephone: "+390639724643",
+          email: "asso.nam@email.it",
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: [
+            {
+              "@type": "Question",
+              name: "Serve un account per iscriversi?",
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: "Sì, per accedere all'area riservata e consultare stato e documenti.",
+              },
+            },
+            {
+              "@type": "Question",
+              name: "Quali documenti servono per l'iscrizione?",
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: "Dipende dall'associazione: il flusso ti mostra solo ciò che è richiesto.",
+              },
+            },
+            {
+              "@type": "Question",
+              name: "Come vengo aggiornato sullo stato dell'iscrizione?",
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: "Lo stato è visibile nell'area riservata. Le notifiche possono essere attivate.",
+              },
+            },
+          ],
+        },
+      ],
+    });
+  }, []);
+
   return (
     <div>
       {/* ── Hero ─────────────────────────────────────────────────── */}

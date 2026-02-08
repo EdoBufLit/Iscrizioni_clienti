@@ -10,6 +10,7 @@ const Servizi = lazy(() => import("./pages/Servizi"));
 const AffiliazioneDettaglio = lazy(() => import("./pages/AffiliazioneDettaglio"));
 const Iscrizione = lazy(() => import("./pages/Iscrizione"));
 const Contatti = lazy(() => import("./pages/Contatti"));
+const Privacy = lazy(() => import("./pages/Privacy"));
 const Login = lazy(() => import("./pages/Login"));
 const MagicLinkVerify = lazy(() => import("./pages/MagicLinkVerify"));
 const ReservedAreaRedirect = lazy(() => import("./pages/ReservedAreaRedirect"));
@@ -60,6 +61,7 @@ const App = () => {
           <Route path="associazioni/:slug" element={<AffiliazioneDettaglio />} />
           <Route path="associazioni/:slug/iscrizione" element={<Iscrizione />} />
           <Route path="contatti" element={<Contatti />} />
+          <Route path="privacy" element={<Privacy />} />
           <Route path="login" element={<Login />} />
           <Route path="area-riservata" element={<ReservedAreaRedirect />} />
           <Route path="auth/verify" element={<MagicLinkVerify />} />

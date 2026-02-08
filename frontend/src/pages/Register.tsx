@@ -1,8 +1,19 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { registerMember } from "../lib/api";
+import { applySeo } from "../lib/seo";
 
 const Register = () => {
+  useEffect(() => {
+    applySeo({
+      title: "Registrati",
+      description:
+        "Crea un account ASSO.N.A.M. per accedere ai servizi associativi, caricare documenti e monitorare lo stato della pratica.",
+      canonicalPath: "/registrati",
+      noindex: true,
+    });
+  }, []);
+
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const orgSlug = searchParams.get("org") ?? "";

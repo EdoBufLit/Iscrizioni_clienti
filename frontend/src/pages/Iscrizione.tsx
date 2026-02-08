@@ -6,6 +6,7 @@ import {
   registerMember,
   type OrganizationDetail,
 } from "../lib/api";
+import { applySeo } from "../lib/seo";
 import Skeleton from "../components/ui/Skeleton";
 
 const STEPS = [
@@ -155,6 +156,17 @@ const Iscrizione = () => {
       .catch(() => setOrgError("Associazione non trovata."))
       .finally(() => setOrgLoading(false));
   }, [slug]);
+
+  useEffect(() => {
+    if (org) {
+      applySeo({
+        title: `Iscrizione a ${org.name}`,
+        description: `Compila il modulo per richiedere l'iscrizione a ${org.name}. Iscrizione digitale guidata su ASSO.N.A.M.`,
+        canonicalPath: `/associazioni/${slug}/iscrizione`,
+        noindex: true,
+      });
+    }
+  }, [org, slug]);
 
   const associationName = org?.name;
 

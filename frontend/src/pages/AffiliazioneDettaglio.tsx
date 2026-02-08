@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { fetchOrganizationDetail, type OrganizationDetail } from "../lib/api";
+import { applySeo } from "../lib/seo";
 import Skeleton from "../components/ui/Skeleton";
 
 const AffiliazioneDettaglio = () => {
@@ -18,6 +19,34 @@ const AffiliazioneDettaglio = () => {
         .finally(() => setLoading(false));
     }
   }, [slug]);
+
+  useEffect(() => {
+    if (data) {
+      applySeo({
+        title: data.name,
+        description: data.description
+          ? data.description.slice(0, 155)
+          : `Dettagli e iscrizione all'associazione ${data.name} affiliata ad ASSO.N.A.M.`,
+        canonicalPath: `/associazioni/${slug}`,
+        structuredData: {
+          "@context": "https://schema.org",
+          "@type": "Organization",
+          name: data.name,
+          url: `https://assonam.it/associazioni/${slug}`,
+          ...(data.email && { email: data.email }),
+          ...(data.phone && { telephone: data.phone }),
+          ...(data.city && {
+            address: {
+              "@type": "PostalAddress",
+              addressLocality: data.city,
+              ...(data.province && { addressRegion: data.province }),
+              addressCountry: "IT",
+            },
+          }),
+        },
+      });
+    }
+  }, [data, slug]);
 
   if (loading) {
     return (

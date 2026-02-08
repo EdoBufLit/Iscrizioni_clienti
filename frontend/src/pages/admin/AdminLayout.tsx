@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
+import { applySeo } from "../../lib/seo";
 
 const NAV_ITEMS = [
   {
@@ -32,6 +34,10 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
   isActive ? tabActive : tabIdle;
 
 const AdminLayout = () => {
+  useEffect(() => {
+    applySeo({ title: "Amministrazione", description: "Pannello amministrativo ASSO.N.A.M.", noindex: true });
+  }, []);
+
   return (
     <div>
       {/* Header band */}

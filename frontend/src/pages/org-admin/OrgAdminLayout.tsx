@@ -8,6 +8,7 @@ import {
   type OrgAdminProfile,
   type VersionInfo,
 } from "../../lib/api";
+import { applySeo } from "../../lib/seo";
 import Skeleton from "../../components/ui/Skeleton";
 import { OnboardingTour, ReviewGuideButton } from "../../components/onboarding";
 
@@ -31,6 +32,10 @@ const OrgAdminLayout = () => {
   const [loading, setLoading] = useState(true);
   const [ver, setVer] = useState<VersionInfo | null>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    applySeo({ title: "Admin Associazione", description: "Pannello admin associazione ASSO.N.A.M.", noindex: true });
+  }, []);
 
   useEffect(() => {
     fetchOrgAdminMe()

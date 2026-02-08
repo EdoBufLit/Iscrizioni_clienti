@@ -1,6 +1,16 @@
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
+import { applySeo } from "../lib/seo";
 
 const NotFound = () => {
+  useEffect(() => {
+    applySeo({
+      title: "Pagina non trovata",
+      description: "La pagina richiesta non esiste o non è più disponibile.",
+      noindex: true,
+    });
+  }, []);
+
   return (
     <section className="py-16">
       <div className="container-shell">

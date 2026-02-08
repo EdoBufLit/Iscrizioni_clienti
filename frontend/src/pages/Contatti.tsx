@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
+import { applySeo } from "../lib/seo";
 
 const contactBlocks = [
   {
@@ -24,6 +26,21 @@ const contactBlocks = [
 ];
 
 const Contatti = () => {
+  useEffect(() => {
+    applySeo({
+      title: "Contatti",
+      description:
+        "Contatta lo studio ASSO.N.A.M. a Roma per informazioni su iscrizioni, affiliazioni e stato pratiche. Telefono, email e sede operativa.",
+      canonicalPath: "/contatti",
+      structuredData: {
+        "@context": "https://schema.org",
+        "@type": "ContactPage",
+        name: "Contatti ASSO.N.A.M.",
+        url: "https://assonam.it/contatti",
+      },
+    });
+  }, []);
+
   return (
     <div>
       <section className="bg-white py-16">

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { fetchMe, apiLogout, AuthError, type MemberProfile } from "../../lib/api";
+import { applySeo } from "../../lib/seo";
 import Skeleton from "../../components/ui/Skeleton";
 import { OnboardingTour, ReviewGuideButton } from "../../components/onboarding";
 
@@ -72,6 +73,14 @@ const DashboardLayout = () => {
   const [loading, setLoading] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    applySeo({
+      title: "Area riservata",
+      description: "Area riservata socio ASSO.N.A.M.",
+      noindex: true,
+    });
+  }, []);
 
   const loadProfile = useCallback(async () => {
     setLoading(true);

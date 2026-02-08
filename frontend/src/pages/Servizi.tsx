@@ -45,7 +45,19 @@ const services = [
   },
 ];
 
+import { useEffect } from "react";
+import { applySeo } from "../lib/seo";
+
 const Servizi = () => {
+  useEffect(() => {
+    applySeo({
+      title: "Servizi",
+      description:
+        "Contabilità, gestione associativa, iscrizioni digitali e supporto documentale per associazioni affiliate ad ASSO.N.A.M.",
+      canonicalPath: "/servizi",
+    });
+  }, []);
+
   return (
     <div>
       <section className="relative overflow-hidden bg-white py-20">
