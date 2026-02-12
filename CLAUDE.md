@@ -1,4 +1,4 @@
-# Claude Operating Rules
+# Claudes Operating Rules
 
 These rules are mandatory.
 Claude must follow them strictly when working in this repository.
