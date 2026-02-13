@@ -799,3 +799,19 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] File legacy `frontend/public/public-images/associazione-team.jpg` eliminato.
 - [x] Verifica tecnica: `npm.cmd run build` in `frontend` OK.
 
+---
+
+## Spec (Hotfix hero mobile readability/layout - Feb 13, 2026)
+- Obiettivo: correggere la resa hero su mobile (headline invisibile/disallineata e logo fallback troppo alto sopra il copy).
+
+## Plan (Hotfix hero mobile)
+- [x] Introdurre fallback tipografico robusto su mobile (headline blu pieno, senza dipendenza da text-clip gradient).
+- [x] Limitare il gradiente testo blu/giallo solo a desktop con `@supports` + `@media`.
+- [x] Spostare logo fallback mobile piu in basso e ridurne scala/opacita per evitare overlap con subtitle/CTA.
+- [x] Verificare build frontend.
+
+## Review (Hotfix hero mobile)
+- [x] `frontend/src/index.css`: hero title default solido blu; gradient clip attivo solo desktop compatibile.
+- [x] `frontend/src/index.css`: fallback logo mobile riposizionato (`top: 68%`) e ridotto (`clamp(8.8rem, 34vw, 11.2rem)`).
+- [x] Verifica tecnica: `npm.cmd run build` in `frontend` OK.
+

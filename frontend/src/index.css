@@ -860,16 +860,26 @@ body.dashboard-perf-mode .btn-ghost:hover {
   line-height: 1.02;
   letter-spacing: -0.034em;
   font-weight: 700;
-  color: transparent;
-  background: linear-gradient(180deg, #143778 0%, #143778 52%, #efbf30 52%, #efbf30 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: #143778;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 
 .public-hero-title-line {
   display: block;
   white-space: nowrap;
+}
+
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  @media (min-width: 768px) {
+    .public-hero-content h1 {
+      color: transparent;
+      background: linear-gradient(180deg, #143778 0%, #143778 52%, #efbf30 52%, #efbf30 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: none;
+    }
+  }
 }
 
 .public-hero-subtitle {
@@ -1131,9 +1141,9 @@ body.dashboard-perf-mode .btn-ghost:hover {
   }
 
   .public-hero-object-fallback-wrap {
-    top: 50%;
-    width: clamp(10.5rem, 40vw, 14rem);
-    opacity: 0.5;
+    top: 68%;
+    width: clamp(8.8rem, 34vw, 11.2rem);
+    opacity: 0.34;
   }
 
   .landing-panel {
