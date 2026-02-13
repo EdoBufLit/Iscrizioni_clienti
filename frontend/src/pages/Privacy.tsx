@@ -2,194 +2,93 @@ import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { applySeo } from "../lib/seo";
 
+const SECTIONS = [
+  {
+    title: "1. Titolare del trattamento",
+    body: [
+      "Il titolare del trattamento e ASSONAM - Associazione Nazionale Arti e Mestieri, con sede operativa in Via Sambucuccio d'Alando, 10 - 00162 Roma (RM).",
+      "Email: asso.nam@email.it - Telefono: +39 06 3972 4643",
+    ],
+  },
+  {
+    title: "2. Finalita e base giuridica",
+    body: [
+      "I dati personali sono utilizzati per gestione iscrizioni, verifica documentale, emissione tessera, adempimenti amministrativi e comunicazioni operative.",
+      "La base giuridica include consenso dell'interessato, esecuzione di obblighi contrattuali e adempimento di obblighi di legge.",
+    ],
+  },
+  {
+    title: "3. Dati raccolti",
+    body: [
+      "Nome, cognome, data di nascita, codice fiscale, email, telefono, credenziali di accesso e, dove previsto, documento di identita.",
+    ],
+  },
+  {
+    title: "4. Conservazione e sicurezza",
+    body: [
+      "I dati sono trattati con strumenti informatici protetti e conservati per il tempo necessario alle finalita indicate e agli obblighi normativi.",
+    ],
+  },
+  {
+    title: "5. Diritti dell'interessato",
+    body: [
+      "L'interessato puo esercitare i diritti previsti dagli articoli 15-22 GDPR: accesso, rettifica, cancellazione, limitazione, opposizione, portabilita e revoca del consenso.",
+      "Le richieste possono essere inviate a asso.nam@email.it.",
+    ],
+  },
+  {
+    title: "6. Cookie",
+    body: [
+      "Il portale utilizza cookie tecnici necessari al funzionamento della sessione e non impiega cookie di profilazione per finalita pubblicitarie.",
+    ],
+  },
+] as const;
+
 const Privacy = () => {
   useEffect(() => {
     applySeo({
       title: "Informativa sulla privacy",
       description:
-        "Informativa sul trattamento dei dati personali ai sensi del GDPR (Regolamento UE 2016/679) — ASSO.N.A.M.",
+        "Informativa sul trattamento dei dati personali ai sensi del GDPR (Regolamento UE 2016/679) - ASSONAM.",
       canonicalPath: "/privacy",
     });
   }, []);
 
   return (
-    <div>
-      <section className="bg-white py-16">
-        <div className="container-shell">
+    <section className="py-16" data-reveal="fade-up">
+      <div className="container-shell">
+        <div className="surface-strong p-8 md:p-10">
           <div className="max-w-3xl">
-            <p className="section-title">PRIVACY</p>
-            <h1 className="section-heading">Informativa sulla privacy</h1>
-            <p className="mt-5 text-base leading-7 text-neutral-600">
-              Informativa sul trattamento dei dati personali ai sensi del
-              Regolamento (UE) 2016/679 (GDPR) e della normativa italiana
-              vigente in materia di protezione dei dati personali.
+            <p className="section-title">Privacy</p>
+            <h1 className="section-heading">Informativa sul trattamento dei dati personali</h1>
+            <p className="mt-5 text-base leading-8 text-neutral-600">
+              Informativa resa ai sensi del Regolamento (UE) 2016/679 (GDPR) e della normativa
+              italiana vigente.
             </p>
           </div>
-        </div>
-      </section>
 
-      <section className="py-16">
-        <div className="container-shell">
-          <div className="prose prose-neutral max-w-3xl">
-            <div className="surface p-7">
-              <h2 className="text-base font-semibold text-neutral-900">
-                1. Titolare del trattamento
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-neutral-600">
-                Il titolare del trattamento dei dati personali è ASSO.N.A.M. —
-                Associazione Nazionale Arti e Mestieri, con sede operativa in Via
-                Sambucuccio d'Alando, 10 — 00162 Roma (RM).
-              </p>
-              <p className="mt-2 text-sm leading-6 text-neutral-600">
-                Email: asso.nam@email.it — Telefono: +39 06 3972 4643
-              </p>
-            </div>
-
-            <div className="surface mt-6 p-7">
-              <h2 className="text-base font-semibold text-neutral-900">
-                2. Finalità e base giuridica del trattamento
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-neutral-600">
-                I dati personali raccolti attraverso il portale sono trattati per
-                le seguenti finalità:
-              </p>
-              <ul className="mt-3 space-y-2 text-sm leading-6 text-neutral-600">
-                <li>
-                  <span className="mr-2 text-neutral-300">—</span>
-                  Gestione delle richieste di iscrizione alle associazioni
-                  affiliate
-                </li>
-                <li>
-                  <span className="mr-2 text-neutral-300">—</span>
-                  Verifica dei dati e della documentazione presentata
-                </li>
-                <li>
-                  <span className="mr-2 text-neutral-300">—</span>
-                  Emissione della tessera socio e gestione dell'area riservata
-                </li>
-                <li>
-                  <span className="mr-2 text-neutral-300">—</span>
-                  Adempimento degli obblighi amministrativi e contabili previsti
-                  dalla normativa vigente e dallo statuto associativo
-                </li>
-                <li>
-                  <span className="mr-2 text-neutral-300">—</span>
-                  Comunicazioni relative allo stato della pratica e ai servizi
-                  associativi
-                </li>
-              </ul>
-              <p className="mt-3 text-sm leading-6 text-neutral-600">
-                La base giuridica del trattamento è il consenso dell'interessato
-                (art. 6, par. 1, lett. a del GDPR), l'esecuzione di un contratto
-                (art. 6, par. 1, lett. b) e l'adempimento di obblighi legali
-                (art. 6, par. 1, lett. c).
-              </p>
-            </div>
-
-            <div className="surface mt-6 p-7">
-              <h2 className="text-base font-semibold text-neutral-900">
-                3. Dati raccolti
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-neutral-600">
-                I dati personali raccolti comprendono: nome, cognome, data di
-                nascita, codice fiscale, indirizzo email, numero di telefono,
-                documento di identità (facoltativo) e credenziali di accesso.
-              </p>
-            </div>
-
-            <div className="surface mt-6 p-7">
-              <h2 className="text-base font-semibold text-neutral-900">
-                4. Modalità di trattamento e conservazione
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-neutral-600">
-                I dati sono trattati con strumenti informatici e archiviati su
-                sistemi protetti. Le misure di sicurezza adottate sono conformi a
-                quanto previsto dal GDPR. I dati sono conservati per il tempo
-                necessario al conseguimento delle finalità indicate e comunque
-                nel rispetto degli obblighi di legge.
-              </p>
-            </div>
-
-            <div className="surface mt-6 p-7">
-              <h2 className="text-base font-semibold text-neutral-900">
-                5. Comunicazione e diffusione dei dati
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-neutral-600">
-                I dati personali non sono diffusi a terzi. Possono essere
-                comunicati all'associazione affiliata per la quale è stata
-                presentata richiesta di iscrizione, nonché a soggetti autorizzati
-                al trattamento in qualità di responsabili o incaricati, nei
-                limiti strettamente necessari alle finalità indicate.
-              </p>
-            </div>
-
-            <div className="surface mt-6 p-7">
-              <h2 className="text-base font-semibold text-neutral-900">
-                6. Diritti dell'interessato
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-neutral-600">
-                Ai sensi degli articoli 15-22 del GDPR, l'interessato ha
-                diritto di:
-              </p>
-              <ul className="mt-3 space-y-2 text-sm leading-6 text-neutral-600">
-                <li>
-                  <span className="mr-2 text-neutral-300">—</span>
-                  Accedere ai propri dati personali
-                </li>
-                <li>
-                  <span className="mr-2 text-neutral-300">—</span>
-                  Richiedere la rettifica o la cancellazione dei dati
-                </li>
-                <li>
-                  <span className="mr-2 text-neutral-300">—</span>
-                  Limitare od opporsi al trattamento
-                </li>
-                <li>
-                  <span className="mr-2 text-neutral-300">—</span>
-                  Richiedere la portabilità dei dati
-                </li>
-                <li>
-                  <span className="mr-2 text-neutral-300">—</span>
-                  Revocare il consenso in qualsiasi momento
-                </li>
-                <li>
-                  <span className="mr-2 text-neutral-300">—</span>
-                  Proporre reclamo all'Autorità Garante per la protezione dei
-                  dati personali
-                </li>
-              </ul>
-              <p className="mt-3 text-sm leading-6 text-neutral-600">
-                Le richieste possono essere inviate all'indirizzo email
-                asso.nam@email.it.
-              </p>
-            </div>
-
-            <div className="surface mt-6 p-7">
-              <h2 className="text-base font-semibold text-neutral-900">
-                7. Cookie
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-neutral-600">
-                Il sito utilizza esclusivamente cookie tecnici necessari al
-                funzionamento del portale e alla gestione della sessione utente.
-                Non vengono utilizzati cookie di profilazione o di terze parti a
-                fini pubblicitari.
-              </p>
-            </div>
+          <div className="mt-10 space-y-4" data-reveal="stagger">
+            {SECTIONS.map((section) => (
+              <article key={section.title} className="surface p-6" data-reveal-item>
+                <h2 className="text-lg font-semibold text-neutral-900">{section.title}</h2>
+                {section.body.map((paragraph) => (
+                  <p key={paragraph} className="mt-3 text-sm leading-7 text-neutral-600">
+                    {paragraph}
+                  </p>
+                ))}
+              </article>
+            ))}
           </div>
 
-          <div className="mt-10 max-w-3xl">
-            <p className="text-xs text-neutral-400">
-              Ultimo aggiornamento: febbraio 2026
-            </p>
-            <div className="mt-4">
-              <Link className="btn-ghost" to="/">
-                Torna alla home
-              </Link>
-            </div>
+          <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-neutral-500">Ultimo aggiornamento: 13 febbraio 2026</p>
+            <Link className="btn-ghost px-5 py-2.5" to="/">
+              Torna alla home
+            </Link>
           </div>
         </div>
-      </section>
-    </div>
+      </div>
+    </section>
   );
 };
 

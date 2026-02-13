@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { loginWithPassword, requestMagicLink, fetchWhoAmI } from "../lib/api";
+import { fetchWhoAmI, loginWithPassword, requestMagicLink } from "../lib/api";
 import { applySeo } from "../lib/seo";
 
 const Login = () => {
@@ -16,25 +16,33 @@ const Login = () => {
     applySeo({
       title: "Accedi",
       description:
-        "Accedi all'area riservata ASSO.N.A.M. per gestire la tua iscrizione, documenti e tessera socio.",
+        "Accedi all'area riservata ASSONAM per monitorare iscrizione, documenti e stato tessera.",
       canonicalPath: "/login",
       noindex: true,
     });
   }, []);
 
   useEffect(() => {
-    fetchWhoAmI().then((w) => {
-      if (w.authenticated && w.redirect_to) navigate(w.redirect_to, { replace: true });
-    }).catch(() => {});
+    fetchWhoAmI()
+      .then((whoAmI) => {
+        if (whoAmI.authenticated && whoAmI.redirect_to) {
+          navigate(whoAmI.redirect_to, { replace: true });
+        }
+      })
+      .catch(() => {});
   }, [navigate]);
 
-  const canSubmit = email.trim().length > 0 && !submitting && (mode === "magic" || password.length > 0);
+  const canSubmit =
+    email.trim().length > 0 &&
+    !submitting &&
+    (mode === "magic" || password.length > 0);
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
     if (!canSubmit) return;
-    setError("");
+
     setSubmitting(true);
+    setError("");
     try {
       if (mode === "password") {
         const result = await loginWithPassword(email.trim(), password);
@@ -42,15 +50,14 @@ const Login = () => {
           navigate("/dashboard");
           return;
         }
-        // If not authenticated, password was wrong — show as magic link sent
         setSent(true);
       } else {
         await requestMagicLink(email.trim());
         setSent(true);
       }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "";
-      if (msg.includes("429") || msg.toLowerCase().includes("too many")) {
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : "";
+      if (message.includes("429") || message.toLowerCase().includes("too many")) {
         setError("Troppi tentativi. Attendi un minuto e riprova.");
       } else {
         setError("Credenziali non valide o errore di connessione.");
@@ -60,52 +67,25 @@ const Login = () => {
     }
   };
 
-  const imagePanel = (
-    <div className="relative hidden overflow-hidden md:block">
-      <img
-        src={`${import.meta.env.BASE_URL}studio-commercialista_800x504.jpg`}
-        alt=""
-        className="absolute inset-0 h-full w-full object-cover"
-        aria-hidden="true"
-      />
-      <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/90 via-brand/70 to-brand-light/45" aria-hidden="true" />
-      <div className="relative flex h-full flex-col justify-end p-10">
-        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/60">Portale soci</p>
-        <p className="mt-2 text-lg font-semibold leading-snug text-white">
-          Gestione associativa,<br />contabilità e adempimenti.
-        </p>
-        <p className="mt-3 text-sm leading-6 text-white/70">
-          Iscrizioni, documenti e stato pratica accessibili in un unico punto riservato.
-        </p>
-      </div>
-    </div>
-  );
-
   if (sent) {
     return (
-      <section className="flex min-h-[70vh] items-center justify-center py-16">
+      <section className="py-16" data-reveal="fade-up">
         <div className="container-shell">
-          <div className="mx-auto grid max-w-4xl overflow-hidden surface-strong md:grid-cols-2">
-            <div className="flex flex-col justify-center px-8 py-12 sm:px-12">
-              <div className="flex items-center gap-3">
-                <img src={`${import.meta.env.BASE_URL}logo-transparent.png`} alt="ASSO.N.A.M." className="h-10 rounded" />
-                <div>
-                  <p className="text-sm font-bold text-neutral-900">ASSO.N.A.M.</p>
-                  <p className="text-[11px] leading-tight text-neutral-500">Associazione Nazionale Arti e Mestieri</p>
-                </div>
-              </div>
-              <div className="mt-10">
-                <svg className="h-10 w-10 text-brand/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
-                </svg>
-                <h1 className="mt-4 text-xl font-semibold text-neutral-900">Controlla la tua email</h1>
-                <p className="mt-3 text-sm leading-6 text-neutral-600">Se l'indirizzo è associato a un account, riceverai un link per accedere all'area riservata.</p>
-              </div>
-              <div className="mt-10 border-t border-neutral-100 pt-6">
-                <Link className="text-sm font-medium text-neutral-600 transition hover:text-neutral-900" to="/">&larr; Torna alla home</Link>
-              </div>
+          <div className="surface-strong mx-auto max-w-3xl p-8 md:p-10">
+            <p className="section-title">Area riservata</p>
+            <h1 className="section-heading">Controlla la tua email</h1>
+            <p className="mt-5 max-w-2xl text-sm leading-7 text-neutral-600">
+              Se l'indirizzo e associato a un account, riceverai un link di accesso sicuro entro
+              pochi istanti.
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <button className="btn-primary px-6 py-2.5" type="button" onClick={() => setSent(false)}>
+                Inserisci un'altra email
+              </button>
+              <Link className="btn-ghost px-6 py-2.5" to="/">
+                Torna alla home
+              </Link>
             </div>
-            {imagePanel}
           </div>
         </div>
       </section>
@@ -113,83 +93,80 @@ const Login = () => {
   }
 
   return (
-    <section className="flex min-h-[70vh] items-center justify-center py-16">
+    <section className="py-16" data-reveal="fade-up">
       <div className="container-shell">
-        <div className="mx-auto grid max-w-4xl overflow-hidden surface-strong md:grid-cols-2">
-          <div className="flex flex-col justify-center px-8 py-12 sm:px-12">
-            <div className="flex items-center gap-3">
-              <img src={`${import.meta.env.BASE_URL}logo-transparent.png`} alt="ASSO.N.A.M." className="h-10 rounded" />
-              <div>
-                <p className="text-sm font-bold text-neutral-900">ASSO.N.A.M.</p>
-                <p className="text-[11px] leading-tight text-neutral-500">Associazione Nazionale Arti e Mestieri</p>
-              </div>
-            </div>
-
-            <div className="mt-10">
-              <h1 className="text-xl font-semibold text-neutral-900">Accedi</h1>
-              <p className="mt-1.5 text-sm leading-6 text-neutral-500">
-                {mode === "password"
-                  ? "Inserisci email e password per accedere."
-                  : "Inserisci la tua email per ricevere un link di accesso sicuro."}
-              </p>
-            </div>
+        <div className="surface-strong mx-auto grid max-w-5xl overflow-hidden md:grid-cols-2">
+          <div className="p-8 md:p-10">
+            <p className="section-title">Area riservata</p>
+            <h1 className="section-heading">Accedi al portale soci</h1>
+            <p className="mt-4 text-sm leading-7 text-neutral-600">
+              Inserisci le credenziali oppure richiedi un link di accesso via email.
+            </p>
 
             {error && (
-              <div className="mt-6 rounded-md border border-red-200/60 bg-red-50 px-4 py-3">
-                <p className="text-sm text-red-700">{error}</p>
+              <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {error}
               </div>
             )}
 
-            <form className="mt-8" onSubmit={handleSubmit}>
+            <form className="mt-7 space-y-4" onSubmit={handleSubmit}>
               <div>
-                <label htmlFor="login-email" className="block text-sm font-medium text-neutral-700">Email</label>
+                <label htmlFor="login-email" className="text-sm font-semibold text-neutral-700">
+                  Email
+                </label>
                 <input
                   id="login-email"
-                  className="mt-1.5 w-full rounded-md border border-neutral-200 bg-white px-4 py-2.5 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                  className="mt-2 w-full px-4 py-2.5 text-sm"
                   type="email"
-                  placeholder="nome@esempio.it"
                   autoComplete="email"
+                  placeholder="nome@esempio.it"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(event) => setEmail(event.target.value)}
                 />
               </div>
 
               {mode === "password" && (
-                <div className="mt-4">
-                  <label htmlFor="login-password" className="block text-sm font-medium text-neutral-700">Password</label>
+                <div>
+                  <label htmlFor="login-password" className="text-sm font-semibold text-neutral-700">
+                    Password
+                  </label>
                   <input
                     id="login-password"
-                    className="mt-1.5 w-full rounded-md border border-neutral-200 bg-white px-4 py-2.5 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                    className="mt-2 w-full px-4 py-2.5 text-sm"
                     type="password"
-                    placeholder="La tua password"
                     autoComplete="current-password"
+                    placeholder="La tua password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(event) => setPassword(event.target.value)}
                   />
                 </div>
               )}
 
               <button
-                className="btn-primary mt-7 w-full py-2.5 text-sm"
+                className="btn-primary mt-2 w-full py-2.5 text-sm"
                 type="submit"
                 disabled={!canSubmit}
                 data-component="login-submit"
               >
-                {submitting ? "Accesso in corso…" : mode === "password" ? "Accedi" : "Ricevi link di accesso"}
+                {submitting
+                  ? "Accesso in corso..."
+                  : mode === "password"
+                    ? "Accedi"
+                    : "Ricevi link di accesso"}
               </button>
             </form>
 
-            <div className="mt-4 flex items-center justify-between">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs">
               <button
-                className="text-xs font-medium text-neutral-500 transition hover:text-neutral-700"
+                className="text-neutral-500 transition hover:text-neutral-700"
                 type="button"
                 onClick={() => setMode(mode === "password" ? "magic" : "password")}
               >
-                {mode === "password" ? "Accedi con link via email" : "Accedi con password"}
+                {mode === "password" ? "Usa link via email" : "Usa password"}
               </button>
               {mode === "password" && (
                 <button
-                  className="text-xs font-medium text-brand/70 transition hover:text-brand"
+                  className="text-brand transition hover:text-brand-dark"
                   type="button"
                   onClick={() => setMode("magic")}
                 >
@@ -198,19 +175,36 @@ const Login = () => {
               )}
             </div>
 
-            <div className="mt-6 border-t border-neutral-100 pt-4">
-              <p className="text-[11px] text-neutral-400">Accesso per amministratori:</p>
-              <div className="mt-2 flex gap-4">
-                <Link className="text-xs font-medium text-neutral-500 transition hover:text-neutral-700" to="/super-admin/login">Super Admin</Link>
-                <Link className="text-xs font-medium text-neutral-500 transition hover:text-neutral-700" to="/org-admin/login">Admin Associazione</Link>
-              </div>
-            </div>
-
-            <div className="mt-4 border-t border-neutral-100 pt-4">
-              <Link className="text-sm font-medium text-neutral-600 transition hover:text-neutral-900" to="/">&larr; Torna alla home</Link>
+            <div className="mt-6 border-t border-neutral-200/70 pt-4 text-xs text-neutral-500">
+              Accessi amministrativi:{" "}
+              <Link className="font-semibold text-neutral-700 hover:text-neutral-900" to="/super-admin/login">
+                Super Admin
+              </Link>{" "}
+              ·{" "}
+              <Link className="font-semibold text-neutral-700 hover:text-neutral-900" to="/org-admin/login">
+                Admin Associazione
+              </Link>
             </div>
           </div>
-          {imagePanel}
+
+          <div className="relative hidden min-h-[24rem] md:block">
+            <img
+              src={`${import.meta.env.BASE_URL}studio-commercialista_800x504.jpg`}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+              aria-hidden="true"
+            />
+            <div className="absolute inset-0 bg-gradient-to-br from-[#12383d]/88 via-[#1f5b61]/78 to-[#0c2a2e]/86" />
+            <div className="relative flex h-full flex-col justify-end p-10 text-white">
+              <p className="text-xs uppercase tracking-[0.2em] text-white/70">ASSONAM</p>
+              <p className="mt-3 font-display text-2xl leading-tight">
+                Accesso protetto per soci e flussi associativi.
+              </p>
+              <p className="mt-4 max-w-sm text-sm leading-7 text-white/80">
+                Stato pratica, documenti e tessera disponibili in un ambiente unico.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </section>

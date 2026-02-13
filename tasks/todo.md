@@ -1,4 +1,4 @@
-- [x] Inspect frontend structure, routes, and existing styles to map all pages (public + user/admin/superadmin dashboards)
+﻿- [x] Inspect frontend structure, routes, and existing styles to map all pages (public + user/admin/superadmin dashboards)
 - [x] Define a premium, colorful visual direction (type, palette, motion, imagery) consistent across pages
 - [x] Implement global theming updates (tokens, typography, backgrounds, effects) and set reusable UI patterns
 - [x] Update homepage hero (centered, larger logo) and enhance key UI sections across all dashboards
@@ -25,9 +25,9 @@
 - `python -m pytest tests/test_org_admin_member_filters.py` OK (warnings about datetime.utcnow deprecation)
 - `npm run build` (frontend) OK (org-admin soci filters)
 - `python -m pytest tests/test_org_admin_member_activity.py` OK (warnings about datetime.utcnow deprecation)
-- `npm run build` (frontend) OK (attivitÃƒÆ’Ã‚Â  socio + reset filtri)
+- `npm run build` (frontend) OK (attivitÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â  socio + reset filtri)
 - `python -m alembic upgrade head` OK (actor_member_id)
-- `npm run build` (frontend) OK (legenda attivitÃƒÂ )
+- `npm run build` (frontend) OK (legenda attivitÃƒÆ’Ã‚Â )
 - `npm run build` (frontend) OK (INP + font + hero contrast)
 
 ---
@@ -85,7 +85,7 @@
 - [x] Add modal-based rejection flow with required note and inline status updates
 - [x] Render document status badges + actions with error handling
 - [x] Show document chain when replacements exist
-- [x] Add dashboard counters for Ã¢â‚¬Å“da rivedereÃ¢â‚¬Â and Ã¢â‚¬Å“rigettatiÃ¢â‚¬Â
+- [x] Add dashboard counters for ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œda rivedereÃƒÂ¢Ã¢â€šÂ¬Ã‚Â and ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œrigettatiÃƒÂ¢Ã¢â€šÂ¬Ã‚Â
 - [x] Update review section with how to test locally
 
 ---
@@ -120,7 +120,7 @@
 
 ---
 
-## Audit Log & AttivitÃƒÆ’Ã‚Â  Socio (Feb 02, 2026)
+## Audit Log & AttivitÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â  Socio (Feb 02, 2026)
 - [x] Add actor_member_id to audit logs and migrate schema
 - [x] Log sensitive actions for member create/update/access/doc review/resubmit/payment
 - [x] Surface recent activity in org-admin member detail (tab)
@@ -285,7 +285,7 @@ const result = await apiPost<Result>("/api/users", { name: "John" });
 - `no such column: deleted_at`
 
 ### Causa
-Il database era fuori sync con Alembic perchÃƒÂ©:
+Il database era fuori sync con Alembic perchÃƒÆ’Ã‚Â©:
 1. `init_db.py` usa `Base.metadata.create_all()` che crea tabelle bypassando Alembic
 2. Alcune migrazioni aggiungono colonne che potrebbero non esistere nel DB attuale
 3. Il DB locale potrebbe essere stato creato prima che le migrazioni fossero definite
@@ -296,11 +296,11 @@ Rese idempotenti le migrazioni problematiche:
 **`a1b2c3d4e5f6_add_member_payments.py`:**
 - Aggiunto check `_table_exists()` prima di `create_table`
 - Aggiunto check `_index_exists()` prima di `create_index`
-- Se la tabella esiste giÃƒÂ , la migrazione passa senza errori
+- Se la tabella esiste giÃƒÆ’Ã‚Â , la migrazione passa senza errori
 
 **`d3e4f5g6h7i8_add_performance_indexes.py`:**
 - Aggiunto `_safe_create_index()` che verifica:
-  - L'indice non esiste giÃƒÂ 
+  - L'indice non esiste giÃƒÆ’Ã‚Â 
   - Tutte le colonne referenziate esistono
 - Se le condizioni non sono soddisfatte, skip silenzioso
 
@@ -518,7 +518,7 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 ## Spec (Dashboard socio - Fix flip tessera no specchio + logo fisso - Feb 07, 2026)
 - Obiettivo: correggere il flip 3D della tessera socio evitando qualsiasi testo specchiato durante/after rotate.
 - Vincoli UX: retro minimal (solo QR grande + dati essenziali), logo ASSONAM sempre fisso/non ruotato come overlay.
-- Accessibilit�: flip via click + Enter/Space, aria-label chiara, no text selection durante animazione.
+- Accessibilitï¿½: flip via click + Enter/Space, aria-label chiara, no text selection durante animazione.
 - Impatto: patch limitata a `MemberCardPreview` e CSS dedicato in `frontend/src/index.css`.
 
 ## Plan (Dashboard socio - Fix flip tessera)
@@ -608,7 +608,7 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - `frontend/public/robots.txt`: Allow /, Disallow private routes, Sitemap reference
 
 ### Backend: sitemap.xml endpoint
-- `app/routes/public.py`: GET /sitemap.xml — static pages + active organizations from DB
+- `app/routes/public.py`: GET /sitemap.xml â€” static pages + active organizations from DB
 
 ### Frontend: Privacy page
 - `frontend/src/pages/Privacy.tsx`: GDPR-compliant privacy policy
@@ -625,3 +625,177 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] Endpoint `/sitemap.xml` dinamico nel backend con pagine statiche + associazioni attive.
 - [x] Pagina Privacy creata con informativa GDPR e linkata dal footer.
 - [x] Fallback meta tags in `index.html` per crawler che non eseguono JS.
+
+---
+
+## Spec (Rehaul totale pagine pubbliche + Hero Three.js - Feb 13, 2026)
+- Obiettivo: modernizzare tutte le pagine pubbliche ASSONAM con hero home WebGL premium sobrio e motion system coerente, senza alterare dashboard/logica backend/routing.
+- Scope incluso: home/landing, lo studio, servizi, associazioni, dettaglio affiliazione, iscrizione, contatti, privacy, login/register/magic verify/not-found, header/footer/layout pubblico.
+- Scope escluso: dashboard socio/admin/org-admin/super-admin e relativi componenti/layout.
+
+## Plan (Rehaul pagine pubbliche)
+- [x] Separare shell/layout pubblico da route dashboard mantenendo dashboard invariata.
+- [x] Introdurre motion system GSAP pubblico con reveal discreti (fade-up + stagger) e supporto prefers-reduced-motion.
+- [x] Implementare hero home con Three.js client-only, quality adattiva mobile e fallback statico WebGL off/low-power.
+- [x] Ridisegnare header/footer pubblici con brand block + payoff animato e menu mobile curato.
+- [x] Aggiornare styling/UX di tutte le pagine pubbliche e componenti comuni (cards, forms, FAQ, CTA, sezioni).
+- [x] Aggiornare dipendenze frontend e verificare build/test funzionali richiesti (desktop/mobile/fallback/dashboard invariata).
+
+## Review (Rehaul pagine pubbliche)
+- [x] Aggiunta shell pubblica dedicata in `Layout` con header sticky+shrink, brand block e payoff animato, footer ristrutturato; branch dashboard mantenuto separato.
+- [x] Motion system GSAP introdotto (`usePublicMotion`) con due pattern reveal (`fade-up`, `stagger`) e rispetto `prefers-reduced-motion`.
+- [x] Hero home rifatta con scena WebGL lazy/client-only (`@react-three/fiber`), quality adattiva (mobile/low-power), cap FPS e fallback statico senza WebGL.
+- [x] Rehaul UI completo su pagine pubbliche principali: `Home`, `LoStudio`, `Servizi`, `Associazioni`, `AffiliazioneDettaglio`, `Contatti`, `Privacy`, `Login`, `Register`, `MagicLinkVerify`, `ReservedAreaRedirect`, `NotFound`, `Iscrizione`.
+- [x] Design system pubblico in `index.css` (`public-*`), aggiornamento tipografia, cards, form states, FAQ accordion, CTA e coerenza cromatica globale.
+- [x] Dipendenze aggiornate (`gsap`, `three`, `@react-three/fiber`, `@react-three/drei`) con lockfile rigenerato.
+- [x] Verifica tecnica: `npm.cmd run build` (frontend) OK.
+- [x] Verifica dashboard invariata lato file: nessuna modifica diretta in `frontend/src/pages/dashboard/*`, `frontend/src/pages/admin/*`, `frontend/src/pages/org-admin/*`, `frontend/src/pages/super-admin/*`.
+- [ ] Verifica visuale manuale browser (desktop/mobile e fallback WebGL disabilitato) da completare in ambiente UI locale.
+
+---
+
+## Spec (Fix reale Three.js + GSAP pubblico - Feb 13, 2026)
+- Obiettivo: sostituire la scena hero simulata con WebGL reale (`<canvas>`) e garantire motion GSAP verificabile sulle sole pagine pubbliche.
+- Vincoli: impatto minimo, nessuna modifica a dashboard/admin/org-admin/super-admin; routing/auth/forms invariati.
+- Accettazione: dipendenze presenti, `<canvas>` hero visibile, timeline mount (logo/payoff/CTA), almeno uno ScrollTrigger reveal, WebGL client-only, mobile 360x800 e 390x844 senza regressioni UX/perf.
+
+## Plan (Fix reale Three.js + GSAP pubblico)
+- [x] Introdurre componente hero WebGL dedicato `PublicHeroThree.client.tsx` con `@react-three/fiber` + `@react-three/drei`.
+- [x] Integrare Home hero con mount client-only, fallback non-WebGL e layering canvas/overlay/testo corretto.
+- [x] Rafforzare GSAP mount timeline pubblico (logo/payoff/CTA) e confermare `ScrollTrigger` reveal sezioni.
+- [x] Rifinire mobile/performance (DPR/fps, touch scroll, clamp typography, CTA above-the-fold, no overflow).
+- [x] Verificare build frontend e documentare review con punti di verifica DevTools/GSAP.
+
+## Execution (Fix reale Three.js + GSAP pubblico)
+- Creato `frontend/src/components/public/PublicHeroThree.client.tsx` con scena R3F reale (`Canvas`) + `MeshDistortMaterial` (drei), luci morbide, fog e particelle discrete.
+- Aggiornata `Home` con import lazy client-only del nuovo componente e policy degrado qualitativo (non disattivazione WebGL su low-power).
+- Rafforzata la timeline GSAP nel layout pubblico: logo, payoff e CTA hero (`[data-hero-cta]`) in sequenza mount.
+- Confermato e irrigidito il sistema `ScrollTrigger` reveal pubblico (`fade-up` e `stagger`) in `usePublicMotion`.
+- Rifinita UX mobile/public CSS: canvas assoluto non-interattivo, overlay leggibilita, tap target >= 44px, clamp heading e prevenzione overflow orizzontale.
+
+## Review (Fix reale Three.js + GSAP pubblico)
+- [x] `npm.cmd run build` in `frontend` OK.
+- [x] Dipendenze richieste presenti in `frontend/package.json`: `three`, `@react-three/fiber`, `@react-three/drei`, `gsap`.
+- [x] Home usa un `Canvas` R3F reale (`public-hero-canvas`) dentro hero, con fallback quando WebGL non disponibile.
+- [x] Timeline GSAP mount presente in `Layout` per logo/payoff/CTA (`data-hero-cta`).
+- [x] ScrollTrigger attivo su reveal sezioni pubbliche (`[data-reveal=\"fade-up\"]`, `[data-reveal=\"stagger\"]`).
+- [x] Dashboard non toccata: nessuna modifica in `frontend/src/pages/dashboard/*`, `frontend/src/pages/admin/*`, `frontend/src/pages/org-admin/*`, `frontend/src/pages/super-admin/*`.
+- [ ] Verifica manuale browser DevTools (presenza `<canvas>` in Elements + test viewport 360x800 e 390x844) da completare localmente.
+
+---
+
+## Spec (Hero Particle Logo ASSONAM da SVG - Feb 13, 2026)
+- Obiettivo: sostituire la hero WebGL con logo ASSONAM a particelle riconoscibile da sorgente SVG, senza geometrie casuali.
+- Vincoli: no sfere/torus/knot/poligoni random; movimento minimo sobrio; fallback statico su low-power/no WebGL; dashboard esclusa.
+- Verifiche richieste: canvas in hero desktop, particle logo visibile a destra, mobile stabile con fallback, screenshot desktop/mobile.
+
+## Plan (Hero Particle Logo ASSONAM da SVG)
+- [x] Generare asset SVG dedicato del logo ASSONAM e usarlo come sorgente particellare.
+- [x] Implementare parser SVG (`SVGLoader`) e campionamento path in punti per `THREE.Points`.
+- [x] Riprogettare hero composition (copy a sinistra, logo a destra, overlay leggibilitÃ ).
+- [x] Limitare movimento a micro breathing/parallax e ridurre costi su mobile/low-power.
+- [x] Eseguire build e produrre screenshot desktop/mobile.
+
+## Review (Hero Particle Logo ASSONAM da SVG)
+- [x] Asset sorgente creato: `frontend/public/logo-assonam-particle.svg`.
+- [x] Particle logo implementato in `PublicHeroThree.client.tsx` con `SVGLoader` + `PointsMaterial` (niente mesh casuali).
+- [x] Hero aggiornata con composizione copy-left/logo-right e fallback statico logo su low-power/no WebGL.
+- [x] Rimossa qualsiasi immagine underlay quando WebGL Ã¨ attivo: in modalitÃ  WebGL il logo Ã¨ solo `THREE.Points`.
+- [x] Sampling SVG reso piÃ¹ pulito con path vettoriali da contorni (no texture/no scanline overlay).
+- [x] Build frontend verificata: `npm.cmd run build` OK.
+- [x] Screenshot generati:
+  - `tasks/screenshots/hero-desktop.png`
+  - `tasks/screenshots/hero-mobile-390x844.png`
+  - `tasks/screenshots/hero-mobile-360x800.png`
+
+---
+
+## Spec (Hero Monumento: logo 3D ASSONAM sotto testo - Feb 13, 2026)
+- Obiettivo: sostituire l'hero object con il logo ASSONAM 3D estruso da SVG, grande, centrato e posizionato sotto H1/CTA.
+- Vincoli: niente sfere/forme casuali, colori brand blu+giallo, animazione sobria, fallback statico solo quando WebGL e disattivo.
+
+## Plan (Hero Monumento)
+- [x] Rigenerare SVG logo pulito in `public` con separazione cromatica blu/giallo.
+- [x] Implementare pipeline `SVGLoader -> shapes -> ExtrudeGeometry` con gruppo centrato e scala monumentale.
+- [x] Aggiornare layout hero in stack verticale (copy sopra, monumento sotto) mantenendo CTA leggibile.
+- [x] Applicare lighting morbido + animazione minima (breathing/oscillazione lieve + micro parallax desktop).
+- [x] Verificare build frontend e fallback statico mobile/low-power.
+
+## Review (Hero Monumento)
+- [x] Nuovo hero object: logo ASSONAM 3D da SVG, nessun oggetto geometrico casuale.
+- [x] Layout aggiornato: testo/CTA sopra, area monumento centrata sotto con spazio dedicato (`public-hero-monument-spacer`).
+- [x] Materiali brand coerenti (blu + giallo) con luci key/rim/ambient morbide.
+- [x] Mobile/low-power: WebGL disattivato e fallback statico grande centrato sotto testo.
+- [x] Verifica tecnica: `npm.cmd run build` in `frontend` OK.
+
+---
+
+## Spec (Hero WebGL monument fix dopo review utente - Feb 13, 2026)
+- Obiettivo: correggere hero pubblico per avere logo ASSONAM 3D animato sotto il testo, CTA leggibili e sfondo chiaro brand (bianco sfumato con glow blu/giallo).
+- Vincoli: dashboard invariata, WebGL desktop attivo con canvas reale, fallback statico su mobile/low-power, GSAP pubblico mantenuto.
+
+## Plan (Hero WebGL monument fix)
+- [x] Rivedere trigger WebGL/low-power per evitare fallback statico su desktop.
+- [x] Riallineare stile hero (background chiaro, CTA coerenti blu/bianco, layout non sovrapposto).
+- [x] Rafforzare resa logo 3D (materiali double-side, colori brand da SVG, motion continuo sobrio).
+- [x] Forzare comportamento mobile stabile con fallback statico sotto testo.
+- [x] Verificare build e produrre screenshot desktop/mobile aggiornati.
+
+## Review (Hero WebGL monument fix)
+- [x] `frontend/src/pages/Home.tsx`: policy low-power aggiornata (`<768px` => fallback statico) e CTA hero uniformate.
+- [x] `frontend/src/components/public/PublicHeroThree.client.tsx`: logo 3D da SVG con animazione breathing/parallax + materiali blu/giallo e `DoubleSide`.
+- [x] `frontend/src/index.css`: hero sfondo bianco sfumato con glow blu/giallo, canvas limitato alla zona bassa per non coprire copy/CTA.
+- [x] `frontend/public/logo-assonam-particle.svg`: path con riempimenti brand blu/giallo usati per la mesh estrusa.
+- [x] Verifica build: `npm.cmd run build` OK.
+- [x] Verifica canvas in hero: `npx playwright screenshot --wait-for-selector ".public-hero-scene canvas"` OK.
+- [x] Screenshot aggiornati:
+  - `tasks/screenshots/hero-desktop-final.png`
+  - `tasks/screenshots/hero-mobile-final.png`
+
+---
+
+## Spec (Hero background composition fix post-feedback - Feb 13, 2026)
+- Obiettivo: integrare il logo hero WebGL nel background (dietro copy/CTA), ridurre aggressivita visiva e ripristinare leggibilita foto Piazza Bologna + tipografia headline bilanciata.
+- Vincoli: canvas reale in hero, GSAP mount/scroll invariati, dashboard e pricing untouched.
+
+## Plan (Hero background composition fix)
+- [x] Spostare la composizione del logo hero nel layer background (non in flow sotto al testo).
+- [x] Ribilanciare overlay/background per rendere visibile la foto e mantenere contrasto del copy.
+- [x] Correggere line-break H1 e spacing CTA per evitare resa "storta".
+- [x] Verificare desktop/mobile con screenshot e check canvas in DevTools.
+
+---
+
+## Spec (Hero brand color rebalance + CTA pairs coherence - Feb 13, 2026)
+- Obiettivo: centrare meglio il logo ASSONAM dietro la headline, evitare hero monocromatica blu e rendere tutte le coppie CTA pubbliche coerenti con palette blu+giallo.
+- Vincoli: nessun impatto dashboard/admin; mantenere Three.js + GSAP reali.
+
+## Plan (Hero brand rebalance)
+- [x] Ricalibrare scala/posizione/logo opacity nel canvas Three per centratura dietro H1.
+- [x] Uniformare i bottoni pubblici (`btn-primary` + `btn-ghost`) con trattamento cromatico blu+giallo su tutto il sito pubblico.
+- [x] Aggiornare la resa tipografica hero con trattamento cromatico verticale blu/giallo.
+- [x] Verificare build frontend.
+
+## Review (Hero brand rebalance)
+- [x] `frontend/src/components/public/PublicHeroThree.client.tsx`: logo ridimensionato e riposizionato per stare centrato nel layer hero dietro il copy.
+- [x] `frontend/src/index.css`: bottoni pubblici aggiornati con gradienti brand-mix blu/giallo applicati a tutte le coppie CTA del sito pubblico.
+- [x] `frontend/src/index.css`: headline hero con gradiente verticale (parte alta blu / parte bassa gialla).
+- [x] Verifica tecnica: `npm.cmd run build` in `frontend` OK.
+
+---
+
+## Spec (Sostituzione immagine sezione post-hero - Feb 13, 2026)
+- Obiettivo: rimuovere completamente la foto con mano/unghie e sostituire la prima immagine sotto hero con un asset web piu coerente.
+
+## Plan (Sostituzione immagine sezione)
+- [x] Scaricare un nuovo asset royalty-free dal web nella cartella `frontend/public/public-images`.
+- [x] Aggiornare mapping immagini in `Home.tsx` eliminando riferimenti a `associazione-team.jpg`.
+- [x] Cancellare il file `associazione-team.jpg` e verificare build frontend.
+
+## Review (Sostituzione immagine sezione)
+- [x] Nuova immagine web salvata: `frontend/public/public-images/process-consulenza-web.jpg`.
+- [x] `frontend/src/pages/Home.tsx` aggiornato: prima sezione usa il nuovo asset web.
+- [x] Riferimento a `associazione-team.jpg` rimosso dal codice.
+- [x] File legacy `frontend/public/public-images/associazione-team.jpg` eliminato.
+- [x] Verifica tecnica: `npm.cmd run build` in `frontend` OK.
+

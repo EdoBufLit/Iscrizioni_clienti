@@ -1,125 +1,124 @@
 import { useEffect } from "react";
 import { applySeo } from "../lib/seo";
 
+const APPROACH_ITEMS = [
+  {
+    step: "01",
+    title: "Ordine documentale",
+    text: "Ogni documento viene acquisito e reso disponibile con struttura chiara e controllabile.",
+  },
+  {
+    step: "02",
+    title: "Tracciabilita operativa",
+    text: "Lo stato di ogni pratica resta verificabile da studio, associazione e socio.",
+  },
+  {
+    step: "03",
+    title: "Supporto diretto",
+    text: "Nessun passaggio dispersivo: il contatto resta umano e orientato alla risoluzione.",
+  },
+] as const;
+
+const ACTIVITY_ITEMS = [
+  {
+    title: "Amministrazione associativa",
+    text: "Gestione iscrizioni, anagrafiche e adempimenti previsti da statuto e normativa.",
+  },
+  {
+    title: "Contabilita e rendicontazione",
+    text: "Supporto contabile continuo per bilanci, registri e documentazione fiscale.",
+  },
+  {
+    title: "Flusso documentale",
+    text: "Raccolta e verifica documenti con processo ordinato e riduzione degli errori.",
+  },
+  {
+    title: "Esperienza socio",
+    text: "Area riservata chiara per monitorare avanzamento pratica e disponibilita tessera.",
+  },
+] as const;
+
 const LoStudio = () => {
   useEffect(() => {
     applySeo({
       title: "Lo Studio",
       description:
-        "Studio di gestione associativa e amministrativa a Roma. Adempimenti, contabilità e supporto operativo per associazioni affiliate.",
+        "Studio di gestione associativa e amministrativa a Roma. Adempimenti, contabilita e supporto operativo per associazioni affiliate.",
       canonicalPath: "/lo-studio",
     });
   }, []);
 
   return (
     <div>
-      <section className="bg-white py-20">
+      <section className="py-20" data-reveal="fade-up">
         <div className="container-shell">
-          <div className="grid items-center gap-12 md:grid-cols-2">
-            <div className="max-w-xl">
-              <p className="section-title">LO STUDIO</p>
-              <h1 className="section-heading">
-                Gestione associativa con approccio professionale
-              </h1>
-              <p className="mt-5 text-base leading-7 text-neutral-600">
-                Lo studio opera come riferimento amministrativo e gestionale per
-                associazioni e realtà affiliate. L'attività si concentra sulla
-                corretta tenuta degli adempimenti, sulla raccolta documentale e
-                sulla tracciabilità dei flussi associativi.
-              </p>
-              <p className="mt-4 text-base leading-7 text-neutral-600">
-                L'obiettivo non è offrire una piattaforma, ma un servizio
-                strutturato: ogni operazione segue procedure verificabili,
-                coerenti con le esigenze di uno studio contabile.
-              </p>
-            </div>
-            <div className="hidden md:block">
-              <img
-                src={`${import.meta.env.BASE_URL}Fatture-cartacee-perche-conservarle-chi-deve-farlo-1024x597.png`}
-                alt="Documentazione contabile"
-                className="rounded-lg shadow-elevated"
-              />
+          <div className="surface-strong p-8 md:p-10">
+            <div className="grid items-center gap-10 md:grid-cols-2">
+              <div>
+                <p className="section-title">Lo studio</p>
+                <h1 className="section-heading">
+                  Governance associativa con metodo professionale.
+                </h1>
+                <p className="mt-5 text-base leading-8 text-neutral-600">
+                  ASSONAM affianca associazioni e realta affiliate nella gestione quotidiana di
+                  processi amministrativi, documentali e organizzativi.
+                </p>
+                <p className="mt-4 text-base leading-8 text-neutral-600">
+                  L'approccio e pratico: procedure chiare, tracciabilita costante e supporto
+                  operativo reale per ogni fase del ciclo associativo.
+                </p>
+              </div>
+              <div className="overflow-hidden rounded-2xl border border-white/50 shadow-premium">
+                <img
+                  src={`${import.meta.env.BASE_URL}Fatture-cartacee-perche-conservarle-chi-deve-farlo-1024x597.png`}
+                  alt="Documentazione contabile"
+                  className="h-full w-full object-cover"
+                />
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="bg-warm-50 py-20">
+      <section className="py-20" data-reveal="fade-up">
         <div className="container-shell">
-          <p className="section-title">APPROCCIO</p>
-          <h2 className="section-heading">Come lavoriamo</h2>
-          <p className="section-subtitle">
-            Rigore operativo, senza complessità inutili.
-          </p>
-          <div className="mt-12 grid gap-8 md:grid-cols-3">
-            {[
-              {
-                step: "01",
-                title: "Ordine documentale",
-                text: "Ogni documento viene acquisito, classificato e reso disponibile in modo strutturato. Nessun passaggio informale.",
-              },
-              {
-                step: "02",
-                title: "Tracciabilità",
-                text: "Le operazioni sono registrate e consultabili. Lo stato di ogni pratica è sempre verificabile dallo studio e dall'associazione.",
-              },
-              {
-                step: "03",
-                title: "Assistenza diretta",
-                text: "Il supporto è gestito internamente, con interlocutori definiti. Nessun ticket, nessun chatbot.",
-              },
-            ].map((card) => (
-              <div key={card.step} className="surface p-7">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-brand/10 text-xs font-bold text-brand">
-                  {card.step}
-                </span>
-                <h3 className="mt-3 text-base font-semibold text-neutral-900">
-                  {card.title}
-                </h3>
-                <p className="mt-3 text-sm leading-6 text-neutral-600">
-                  {card.text}
-                </p>
-              </div>
-            ))}
+          <div className="surface-strong p-8 md:p-10">
+            <p className="section-title">Approccio</p>
+            <h2 className="section-heading">Come lavoriamo</h2>
+            <p className="section-subtitle">
+              Struttura operativa solida, con attenzione alla chiarezza di ogni passaggio.
+            </p>
+            <div className="mt-10 grid gap-6 md:grid-cols-3" data-reveal="stagger">
+              {APPROACH_ITEMS.map((item) => (
+                <article key={item.step} className="surface p-6" data-reveal-item>
+                  <p className="text-xs font-semibold tracking-[0.17em] text-neutral-500">
+                    STEP {item.step}
+                  </p>
+                  <h3 className="mt-3 text-lg font-semibold text-neutral-900">{item.title}</h3>
+                  <p className="mt-3 text-sm leading-7 text-neutral-600">{item.text}</p>
+                </article>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="bg-white py-20">
+      <section className="py-20" data-reveal="fade-up">
         <div className="container-shell">
-          <p className="section-title">ATTIVITÀ</p>
-          <h2 className="section-heading">Di cosa ci occupiamo</h2>
-          <p className="section-subtitle">
-            Le aree operative dello studio, in sintesi.
-          </p>
-          <div className="mt-12 grid gap-8 md:grid-cols-2">
-            {[
-              {
-                title: "Amministrazione associativa",
-                text: "Gestione dei dati associativi, delle iscrizioni e degli adempimenti previsti dallo statuto e dalla normativa.",
-              },
-              {
-                title: "Contabilità e rendicontazione",
-                text: "Tenuta contabile, bilanci e documentazione fiscale per associazioni e realtà affiliate.",
-              },
-              {
-                title: "Raccolta e gestione documenti",
-                text: "Acquisizione strutturata dei documenti necessari per iscrizioni, rinnovi e pratiche associative.",
-              },
-              {
-                title: "Portale soci",
-                text: "Area riservata per la consultazione dello stato di iscrizione e della documentazione disponibile.",
-              },
-            ].map((card) => (
-              <div key={card.title} className="surface p-7">
-                <h3 className="text-base font-semibold text-neutral-900">
-                  {card.title}
-                </h3>
-                <p className="mt-3 text-sm leading-6 text-neutral-600">
-                  {card.text}
-                </p>
-              </div>
-            ))}
+          <div className="surface-strong p-8 md:p-10">
+            <p className="section-title">Attivita</p>
+            <h2 className="section-heading">Aree operative principali</h2>
+            <p className="section-subtitle">
+              Presidio completo delle funzioni strategiche per associazioni affiliate.
+            </p>
+            <div className="mt-10 grid gap-6 md:grid-cols-2" data-reveal="stagger">
+              {ACTIVITY_ITEMS.map((item) => (
+                <article key={item.title} className="surface p-6" data-reveal-item>
+                  <h3 className="text-lg font-semibold text-neutral-900">{item.title}</h3>
+                  <p className="mt-3 text-sm leading-7 text-neutral-600">{item.text}</p>
+                </article>
+              ))}
+            </div>
           </div>
         </div>
       </section>

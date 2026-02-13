@@ -6,28 +6,26 @@ const NotFound = () => {
   useEffect(() => {
     applySeo({
       title: "Pagina non trovata",
-      description: "La pagina richiesta non esiste o non è più disponibile.",
+      description: "La pagina richiesta non esiste o non e piu disponibile.",
       noindex: true,
     });
   }, []);
 
   return (
-    <section className="py-16">
+    <section className="py-16" data-reveal="fade-up">
       <div className="container-shell">
-        <div className="surface mx-auto max-w-2xl p-7">
-          <p className="text-xs font-medium text-neutral-400">404</p>
-          <h1 className="mt-2 text-base font-semibold text-neutral-900">
-            Pagina non trovata
-          </h1>
-          <p className="mt-3 text-sm leading-6 text-neutral-600">
-            La pagina richiesta non esiste o non è più disponibile.
+        <div className="surface-strong mx-auto max-w-2xl p-8 md:p-10">
+          <p className="section-title">Errore 404</p>
+          <h1 className="section-heading">Pagina non trovata</h1>
+          <p className="mt-4 text-sm leading-7 text-neutral-600">
+            Il percorso richiesto non esiste o non e piu disponibile.
           </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <Link className="btn-primary" to="/">
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link className="btn-primary px-6 py-2.5" to="/">
               Vai alla home
             </Link>
-            <Link className="btn-ghost" to="/associazioni">
-              Associazioni
+            <Link className="btn-ghost px-6 py-2.5" to="/associazioni">
+              Vedi affiliazioni
             </Link>
           </div>
         </div>

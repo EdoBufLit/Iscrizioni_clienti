@@ -10,14 +10,12 @@ const ReservedAreaRedirect = () => {
 
     const resolveAccess = async () => {
       try {
-        const whoami = await fetchWhoAmI();
+        const whoAmI = await fetchWhoAmI();
         if (!active) return;
-        const target = whoami.authenticated && whoami.redirect_to ? whoami.redirect_to : "/login";
+        const target = whoAmI.authenticated && whoAmI.redirect_to ? whoAmI.redirect_to : "/login";
         navigate(target, { replace: true });
       } catch {
-        if (active) {
-          navigate("/login", { replace: true });
-        }
+        if (active) navigate("/login", { replace: true });
       }
     };
 
@@ -29,10 +27,14 @@ const ReservedAreaRedirect = () => {
   }, [navigate]);
 
   return (
-    <section className="flex min-h-[60vh] items-center justify-center py-16">
+    <section className="py-16" data-reveal="fade-up">
       <div className="container-shell">
-        <div className="surface mx-auto max-w-md px-8 py-6 text-center">
-          <p className="text-sm text-neutral-500">Verifica accesso in corso…</p>
+        <div className="surface-strong mx-auto max-w-xl p-8 text-center md:p-10">
+          <p className="section-title">Area riservata</p>
+          <h1 className="section-heading">Verifica accesso in corso</h1>
+          <p className="mt-4 text-sm leading-7 text-neutral-600">
+            Ti stiamo reindirizzando al percorso corretto.
+          </p>
         </div>
       </div>
     </section>

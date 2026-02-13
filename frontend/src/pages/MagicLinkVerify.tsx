@@ -5,16 +5,14 @@ import { verifyMemberToken, verifyOrgAdminToken } from "../lib/api";
 const MagicLinkVerify = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [error, setError] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     const token = searchParams.get("token");
-    const role = searchParams.get("role"); // "org_admin" or "member"
+    const role = searchParams.get("role");
 
     if (!token) {
-      setError(true);
-      setErrorMessage("Link non valido: token mancante");
+      setErrorMessage("Link non valido: token mancante.");
       return;
     }
 
@@ -23,41 +21,34 @@ const MagicLinkVerify = () => {
         if (role === "org_admin") {
           await verifyOrgAdminToken(token);
           navigate("/org-admin", { replace: true });
-        } else if (role === "member") {
+          return;
+        }
+        if (role === "member") {
           await verifyMemberToken(token);
           navigate("/dashboard", { replace: true });
-        } else {
-            // Require role parameter
-            setError(true);
-            setErrorMessage("Link non valido: ruolo non specificato");
+          return;
         }
-      } catch (err) {
-        console.error(err);
-        setError(true);
-        setErrorMessage("Il link di accesso non è valido o è scaduto.");
+        setErrorMessage("Link non valido: ruolo non specificato.");
+      } catch {
+        setErrorMessage("Il link di accesso non e valido o e scaduto.");
       }
     };
 
-    verify();
-  }, [searchParams, navigate]);
+    void verify();
+  }, [navigate, searchParams]);
 
-  if (error) {
+  if (errorMessage) {
     return (
-      <section className="flex min-h-[60vh] items-center justify-center py-16">
+      <section className="py-16" data-reveal="fade-up">
         <div className="container-shell">
-          <div className="mx-auto max-w-md">
-            <div className="surface p-8 text-center">
-              <h1 className="text-xl font-semibold text-neutral-900">
-                Link non valido
-              </h1>
-              <p className="mt-3 text-sm leading-6 text-neutral-600">
-                {errorMessage}
-              </p>
-              <div className="mt-6">
-                <Link className="btn-primary" to="/login">
-                  Torna al login
-                </Link>
-              </div>
+          <div className="surface-strong mx-auto max-w-xl p-8 text-center md:p-10">
+            <p className="section-title">Accesso</p>
+            <h1 className="section-heading">Link non valido</h1>
+            <p className="mt-4 text-sm leading-7 text-neutral-600">{errorMessage}</p>
+            <div className="mt-7">
+              <Link className="btn-primary px-6 py-2.5" to="/login">
+                Torna al login
+              </Link>
             </div>
           </div>
         </div>
@@ -66,10 +57,14 @@ const MagicLinkVerify = () => {
   }
 
   return (
-    <section className="flex min-h-[60vh] items-center justify-center py-16">
+    <section className="py-16" data-reveal="fade-up">
       <div className="container-shell">
-        <div className="surface mx-auto max-w-md px-8 py-6 text-center">
-          <p className="text-sm text-neutral-500">Verifica in corso…</p>
+        <div className="surface-strong mx-auto max-w-xl p-8 text-center md:p-10">
+          <p className="section-title">Accesso</p>
+          <h1 className="section-heading">Verifica in corso</h1>
+          <p className="mt-4 text-sm leading-7 text-neutral-600">
+            Stiamo completando la verifica del link sicuro.
+          </p>
         </div>
       </div>
     </section>

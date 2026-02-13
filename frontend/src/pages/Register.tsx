@@ -4,16 +4,6 @@ import { registerMember } from "../lib/api";
 import { applySeo } from "../lib/seo";
 
 const Register = () => {
-  useEffect(() => {
-    applySeo({
-      title: "Registrati",
-      description:
-        "Crea un account ASSO.N.A.M. per accedere ai servizi associativi, caricare documenti e monitorare lo stato della pratica.",
-      canonicalPath: "/registrati",
-      noindex: true,
-    });
-  }, []);
-
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const orgSlug = searchParams.get("org") ?? "";
@@ -28,6 +18,16 @@ const Register = () => {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  useEffect(() => {
+    applySeo({
+      title: "Registrati",
+      description:
+        "Crea un account ASSONAM per accedere ai servizi associativi e monitorare le pratiche.",
+      canonicalPath: "/registrati",
+      noindex: true,
+    });
+  }, []);
+
   const canSubmit =
     firstName.trim().length > 0 &&
     lastName.trim().length > 0 &&
@@ -36,15 +36,17 @@ const Register = () => {
     password === confirmPassword &&
     !submitting;
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
     if (!canSubmit) return;
+
     if (password !== confirmPassword) {
       setError("Le password non coincidono.");
       return;
     }
-    setError("");
+
     setSubmitting(true);
+    setError("");
     try {
       const result = await registerMember({
         email: email.trim(),
@@ -67,201 +69,130 @@ const Register = () => {
     }
   };
 
-  const imagePanel = (
-    <div className="relative hidden overflow-hidden md:block">
-      <img
-        src={`${import.meta.env.BASE_URL}piazza-bologna2.webp`}
-        alt=""
-        className="absolute inset-0 h-full w-full object-cover"
-        aria-hidden="true"
-      />
-      <div
-        className="absolute inset-0 bg-gradient-to-t from-brand-dark/90 via-brand/70 to-brand-light/45"
-        aria-hidden="true"
-      />
-      <div className="relative flex h-full flex-col justify-end p-10">
-        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/60">
-          Nuovo socio
-        </p>
-        <p className="mt-2 text-lg font-semibold leading-snug text-white">
-          Crea il tuo account<br />per accedere ai servizi.
-        </p>
-        <p className="mt-3 text-sm leading-6 text-white/70">
-          Iscriviti per gestire la tua tessera, caricare documenti e monitorare lo stato della pratica.
-        </p>
-      </div>
-    </div>
-  );
-
   return (
-    <section className="flex min-h-[70vh] items-center justify-center py-16">
+    <section className="py-16" data-reveal="fade-up">
       <div className="container-shell">
-        <div className="mx-auto grid max-w-4xl overflow-hidden surface-strong md:grid-cols-2">
-          <div className="flex flex-col justify-center px-8 py-12 sm:px-12">
-            <div className="flex items-center gap-3">
-                <img
-                  src={`${import.meta.env.BASE_URL}logo-transparent.png`}
-                  alt="ASSO.N.A.M."
-                  className="h-10 rounded"
-                />
-              <div>
-                <p className="text-sm font-bold text-neutral-900">ASSO.N.A.M.</p>
-                <p className="text-[11px] leading-tight text-neutral-500">
-                  Associazione Nazionale Arti e Mestieri
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-8">
-              <h1 className="text-xl font-semibold text-neutral-900">
-                Crea un account
-              </h1>
-              <p className="mt-1.5 text-sm leading-6 text-neutral-500">
-                Inserisci i tuoi dati per registrarti come socio.
-                {orgSlug && (
-                  <span className="block mt-1 text-brand font-medium">
-                    Associazione: {orgSlug}
-                  </span>
-                )}
+        <div className="surface-strong mx-auto grid max-w-5xl overflow-hidden md:grid-cols-2">
+          <div className="p-8 md:p-10">
+            <p className="section-title">Registrazione</p>
+            <h1 className="section-heading">Crea il tuo account socio</h1>
+            <p className="mt-4 text-sm leading-7 text-neutral-600">
+              Completa i dati essenziali per attivare l'accesso al portale.
+            </p>
+            {orgSlug && (
+              <p className="mt-2 rounded-lg bg-brand/10 px-3 py-2 text-xs font-semibold text-brand">
+                Affiliazione preselezionata: {orgSlug}
               </p>
-            </div>
+            )}
 
             {error && (
-              <div className="mt-5 rounded-md border border-red-200/60 bg-red-50 px-4 py-3">
-                <p className="text-sm text-red-700">{error}</p>
+              <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {error}
               </div>
             )}
 
-            <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+            <form className="mt-7 space-y-4" onSubmit={handleSubmit}>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label
-                    htmlFor="reg-first"
-                    className="block text-sm font-medium text-neutral-700"
-                  >
+                  <label htmlFor="reg-first" className="text-sm font-semibold text-neutral-700">
                     Nome
                   </label>
                   <input
                     id="reg-first"
-                    className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3.5 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                    className="mt-2 w-full px-4 py-2.5 text-sm"
                     type="text"
                     autoComplete="given-name"
                     value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
+                    onChange={(event) => setFirstName(event.target.value)}
                   />
                 </div>
                 <div>
-                  <label
-                    htmlFor="reg-last"
-                    className="block text-sm font-medium text-neutral-700"
-                  >
+                  <label htmlFor="reg-last" className="text-sm font-semibold text-neutral-700">
                     Cognome
                   </label>
                   <input
                     id="reg-last"
-                    className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3.5 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                    className="mt-2 w-full px-4 py-2.5 text-sm"
                     type="text"
                     autoComplete="family-name"
                     value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
+                    onChange={(event) => setLastName(event.target.value)}
                   />
                 </div>
               </div>
 
               <div>
-                <label
-                  htmlFor="reg-email"
-                  className="block text-sm font-medium text-neutral-700"
-                >
+                <label htmlFor="reg-email" className="text-sm font-semibold text-neutral-700">
                   Email
                 </label>
                 <input
                   id="reg-email"
-                  className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3.5 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                  className="mt-2 w-full px-4 py-2.5 text-sm"
                   type="email"
                   autoComplete="email"
                   placeholder="nome@esempio.it"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(event) => setEmail(event.target.value)}
                 />
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label
-                    htmlFor="reg-phone"
-                    className="block text-sm font-medium text-neutral-700"
-                  >
-                    Telefono{" "}
-                    <span className="text-neutral-400 font-normal">(facoltativo)</span>
+                  <label htmlFor="reg-phone" className="text-sm font-semibold text-neutral-700">
+                    Telefono <span className="font-normal text-neutral-500">(facoltativo)</span>
                   </label>
                   <input
                     id="reg-phone"
-                    className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3.5 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                    className="mt-2 w-full px-4 py-2.5 text-sm"
                     type="tel"
                     autoComplete="tel"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(event) => setPhone(event.target.value)}
                   />
                 </div>
                 <div>
-                  <label
-                    htmlFor="reg-cf"
-                    className="block text-sm font-medium text-neutral-700"
-                  >
-                    Codice fiscale{" "}
-                    <span className="text-neutral-400 font-normal">(facoltativo)</span>
+                  <label htmlFor="reg-cf" className="text-sm font-semibold text-neutral-700">
+                    Codice fiscale <span className="font-normal text-neutral-500">(facoltativo)</span>
                   </label>
                   <input
                     id="reg-cf"
-                    className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3.5 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                    className="mt-2 w-full px-4 py-2.5 text-sm uppercase"
                     type="text"
-                    autoComplete="off"
                     value={fiscalCode}
-                    onChange={(e) => setFiscalCode(e.target.value.toUpperCase())}
+                    onChange={(event) => setFiscalCode(event.target.value.toUpperCase())}
                   />
                 </div>
               </div>
 
               <div>
-                <label
-                  htmlFor="reg-pw"
-                  className="block text-sm font-medium text-neutral-700"
-                >
+                <label htmlFor="reg-password" className="text-sm font-semibold text-neutral-700">
                   Password
                 </label>
                 <input
-                  id="reg-pw"
-                  className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3.5 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                  id="reg-password"
+                  className="mt-2 w-full px-4 py-2.5 text-sm"
                   type="password"
                   autoComplete="new-password"
                   placeholder="Minimo 8 caratteri"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(event) => setPassword(event.target.value)}
                 />
               </div>
 
               <div>
-                <label
-                  htmlFor="reg-pw2"
-                  className="block text-sm font-medium text-neutral-700"
-                >
+                <label htmlFor="reg-confirm-password" className="text-sm font-semibold text-neutral-700">
                   Conferma password
                 </label>
                 <input
-                  id="reg-pw2"
-                  className={`mt-1 w-full rounded-md border bg-white px-3.5 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:ring-2 ${
-                    confirmPassword && confirmPassword !== password
-                      ? "border-red-300 focus:border-red-400 focus:ring-red-200/40"
-                      : "border-neutral-200 focus:border-brand focus:ring-brand/20"
-                  }`}
+                  id="reg-confirm-password"
+                  className="mt-2 w-full px-4 py-2.5 text-sm"
                   type="password"
                   autoComplete="new-password"
                   value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
                 />
                 {confirmPassword && confirmPassword !== password && (
-                  <p className="mt-1 text-xs text-red-600">Le password non coincidono</p>
+                  <p className="mt-1 text-xs text-red-600">Le password non coincidono.</p>
                 )}
               </div>
 
@@ -271,32 +202,34 @@ const Register = () => {
                 disabled={!canSubmit}
                 data-component="register-submit"
               >
-                {submitting ? "Registrazione in corso…" : "Registrati"}
+                {submitting ? "Registrazione in corso..." : "Registrati"}
               </button>
             </form>
 
-            <div className="mt-6 border-t border-neutral-100 pt-4">
-              <p className="text-sm text-neutral-600">
-                Hai già un account?{" "}
-                <Link
-                  className="font-medium text-brand transition hover:text-brand-dark"
-                  to="/login"
-                >
-                  Accedi
-                </Link>
-              </p>
-            </div>
-
-            <div className="mt-4 border-t border-neutral-100 pt-4">
-              <Link
-                className="text-sm font-medium text-neutral-600 transition hover:text-neutral-900"
-                to="/"
-              >
-                &larr; Torna alla home
+            <div className="mt-6 border-t border-neutral-200/70 pt-4 text-sm text-neutral-600">
+              Hai gia un account?{" "}
+              <Link className="font-semibold text-brand hover:text-brand-dark" to="/login">
+                Accedi
               </Link>
             </div>
           </div>
-          {imagePanel}
+
+          <div className="relative hidden min-h-[24rem] md:block">
+            <img
+              src={`${import.meta.env.BASE_URL}piazza-bologna2.webp`}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+              aria-hidden="true"
+            />
+            <div className="absolute inset-0 bg-gradient-to-br from-[#12383d]/88 via-[#1f5b61]/78 to-[#0c2a2e]/86" />
+            <div className="relative flex h-full flex-col justify-end p-10 text-white">
+              <p className="text-xs uppercase tracking-[0.2em] text-white/70">Nuovo socio</p>
+              <p className="mt-3 font-display text-2xl leading-tight">Attiva il tuo profilo in pochi minuti.</p>
+              <p className="mt-4 max-w-sm text-sm leading-7 text-white/80">
+                Una volta registrato potrai seguire tutta la pratica dall'area riservata.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </section>

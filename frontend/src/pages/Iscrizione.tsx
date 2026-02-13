@@ -172,7 +172,7 @@ const Iscrizione = () => {
 
   if (orgLoading) {
     return (
-      <section className="py-16">
+      <section className="py-16" data-reveal="fade-up">
         <div className="container-shell max-w-2xl">
           <Skeleton className="h-6 w-64" />
           <Skeleton className="mt-3 h-4 w-96" />
@@ -183,7 +183,7 @@ const Iscrizione = () => {
 
   if (orgError || !org) {
     return (
-      <section className="py-16">
+      <section className="py-16" data-reveal="fade-up">
         <div className="container-shell">
           <div className="surface max-w-2xl p-7">
             <h1 className="text-base font-semibold text-neutral-900">Associazione non trovata</h1>
@@ -280,7 +280,7 @@ const Iscrizione = () => {
 
   if (submitted) {
     return (
-      <section className="flex min-h-[60vh] items-center justify-center py-16">
+      <section className="flex min-h-[60vh] items-center justify-center py-16" data-reveal="fade-up">
         <div className="container-shell">
           <div className="surface mx-auto max-w-lg overflow-hidden">
             <div className="bg-gradient-to-b from-emerald-50 to-white px-8 pb-0 pt-10 text-center">
@@ -312,7 +312,7 @@ const Iscrizione = () => {
   }
 
   return (
-    <section className="py-16">
+    <section className="py-16" data-reveal="fade-up">
       <div className="container-shell">
         <div className="mb-6">
           <Link className="text-sm font-medium text-neutral-500 transition hover:text-neutral-800" to={`/associazioni/${slug}`}>{associationName}</Link>

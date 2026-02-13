@@ -1,113 +1,112 @@
-const services = [
+import { useEffect } from "react";
+import { applySeo } from "../lib/seo";
+
+const SERVICES = [
   {
-    title: "Contabilità e rendicontazione",
+    title: "Contabilita e rendicontazione",
     description:
-      "Gestione contabile ordinaria e straordinaria per associazioni e realtà affiliate.",
+      "Gestione contabile ordinaria e straordinaria per associazioni e realta affiliate.",
     items: [
-      "Tenuta dei registri contabili obbligatori",
-      "Redazione del bilancio e del rendiconto annuale",
-      "Adempimenti fiscali e dichiarativi",
-      "Supporto per revisioni e controlli interni",
+      "Registri contabili e adempimenti ricorrenti",
+      "Bilancio e rendiconto annuale",
+      "Supporto fiscale e dichiarativo",
+      "Preparazione documentale per revisioni",
     ],
   },
   {
-    title: "Gestione associativa e adempimenti",
+    title: "Gestione associativa",
     description:
-      "Supporto operativo per gli obblighi amministrativi e statutari delle associazioni.",
+      "Supporto operativo per obblighi amministrativi e procedure interne delle associazioni.",
     items: [
-      "Aggiornamento del libro soci e dei registri associativi",
-      "Gestione delle assemblee e della documentazione correlata",
-      "Comunicazioni obbligatorie e scadenze normative",
-      "Consulenza su statuto e regolamenti interni",
+      "Libro soci e registri associativi",
+      "Gestione assemblee e documentazione",
+      "Scadenze normative e comunicazioni",
+      "Supporto su statuto e policy interne",
     ],
   },
   {
     title: "Iscrizioni e tesseramento",
     description:
-      "Percorsi di adesione strutturati, dalla raccolta dati all'emissione della tessera.",
+      "Percorsi di adesione digitali dalla raccolta dati alla validazione finale.",
     items: [
-      "Flusso di iscrizione digitale guidato",
-      "Raccolta dati e accettazione informative",
-      "Verifica della documentazione e validazione",
-      "Emissione tessera e conferma di iscrizione",
+      "Flusso iscrizione guidato",
+      "Consensi e informative in un unico step",
+      "Verifica documentazione socio",
+      "Emissione tessera e notifica pratica",
     ],
   },
   {
     title: "Supporto documentale",
     description:
-      "Acquisizione e gestione ordinata dei documenti necessari alle pratiche associative.",
+      "Raccolta, verifica e archiviazione strutturata per semplificare il lavoro operativo.",
     items: [
-      "Caricamento documenti in formato digitale",
-      "Controllo di completezza e conformità",
-      "Archiviazione strutturata e tracciabile",
-      "Accesso riservato alla documentazione per i soci",
+      "Upload documenti con controllo formato",
+      "Stato avanzamento per ogni pratica",
+      "Tracciabilita completa delle revisioni",
+      "Accesso riservato ai documenti del socio",
     ],
   },
-];
-
-import { useEffect } from "react";
-import { applySeo } from "../lib/seo";
+] as const;
 
 const Servizi = () => {
   useEffect(() => {
     applySeo({
       title: "Servizi",
       description:
-        "Contabilità, gestione associativa, iscrizioni digitali e supporto documentale per associazioni affiliate ad ASSO.N.A.M.",
+        "Contabilita, gestione associativa, iscrizioni digitali e supporto documentale per associazioni affiliate ad ASSONAM.",
       canonicalPath: "/servizi",
     });
   }, []);
 
   return (
     <div>
-      <section className="relative overflow-hidden bg-white py-20">
+      <section className="py-20" data-reveal="fade-up">
         <div className="container-shell">
-          <div className="grid items-center gap-12 md:grid-cols-2">
-            <div className="max-w-xl">
-              <p className="section-title">SERVIZI</p>
-              <h1 className="section-heading">Aree operative</h1>
-              <p className="mt-5 text-base leading-7 text-neutral-600">
-                I servizi dello studio sono organizzati per rispondere alle
-                esigenze amministrative e gestionali delle associazioni affiliate.
-                Ogni area è gestita con procedure definite e documentazione
-                tracciabile.
-              </p>
-            </div>
-            <div className="hidden md:block">
-              <img
-                src={`${import.meta.env.BASE_URL}hero-office.avif`}
-                alt="Ufficio professionale"
-                className="rounded-lg shadow-elevated"
-              />
+          <div className="surface-strong p-8 md:p-10">
+            <div className="grid items-center gap-10 md:grid-cols-2">
+              <div>
+                <p className="section-title">Servizi</p>
+                <h1 className="section-heading">Aree operative integrate.</h1>
+                <p className="mt-5 text-base leading-8 text-neutral-600">
+                  Ogni servizio e disegnato per offrire continuita amministrativa e controllo
+                  operativo sulle attivita associative.
+                </p>
+              </div>
+              <div className="overflow-hidden rounded-2xl border border-white/50 shadow-premium">
+                <img
+                  src={`${import.meta.env.BASE_URL}hero-office.avif`}
+                  alt="Ufficio professionale"
+                  className="h-full w-full object-cover"
+                />
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="bg-warm-50 py-20">
+      <section className="py-20" data-reveal="fade-up">
         <div className="container-shell">
-          <div className="grid gap-8 md:grid-cols-2">
-            {services.map((service) => (
-              <div key={service.title} className="surface p-7">
-                <h2 className="text-base font-semibold text-neutral-900">
-                  {service.title}
-                </h2>
-                <p className="mt-2 text-sm leading-6 text-neutral-600">
-                  {service.description}
-                </p>
-                <ul className="mt-4 space-y-2 border-t border-neutral-100 pt-4">
-                  {service.items.map((item) => (
-                    <li
-                      key={item}
-                      className="text-sm leading-6 text-neutral-600"
-                    >
-                      <span className="mr-2 text-neutral-300">—</span>
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+          <div className="surface-strong p-8 md:p-10">
+            <p className="section-title">Catalogo</p>
+            <h2 className="section-heading">Servizi pensati per il lavoro reale.</h2>
+            <p className="section-subtitle">
+              Configurabili sulle esigenze dell'associazione, con processi omogenei end-to-end.
+            </p>
+            <div className="mt-10 grid gap-6 md:grid-cols-2" data-reveal="stagger">
+              {SERVICES.map((service) => (
+                <article key={service.title} className="surface p-6" data-reveal-item>
+                  <h3 className="text-lg font-semibold text-neutral-900">{service.title}</h3>
+                  <p className="mt-3 text-sm leading-7 text-neutral-600">{service.description}</p>
+                  <ul className="mt-5 space-y-2 border-t border-neutral-200/70 pt-5">
+                    {service.items.map((item) => (
+                      <li key={item} className="text-sm leading-7 text-neutral-600">
+                        - {item}
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              ))}
+            </div>
           </div>
         </div>
       </section>
