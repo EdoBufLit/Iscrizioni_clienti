@@ -815,3 +815,22 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] `frontend/src/index.css`: fallback logo mobile riposizionato (`top: 68%`) e ridotto (`clamp(8.8rem, 34vw, 11.2rem)`).
 - [x] Verifica tecnica: `npm.cmd run build` in `frontend` OK.
 
+---
+
+## Spec (Hotfix mobile typo/contrast dopo screenshot reale - Feb 13, 2026)
+- Obiettivo: correggere hero mobile con titolo troppo grande/spezzato e subtitle poco leggibile sullo sfondo foto.
+
+## Plan (Hotfix mobile readability v2)
+- [x] Ridurre ulteriormente scala e tracking dell'H1 mobile.
+- [x] Aumentare leggibilita copy mobile con panel leggero dietro al blocco testo.
+- [x] Rafforzare contrasto del subtitle (colore + peso + text-shadow soft).
+- [x] Spostare logo fallback piu in basso per evitare sovrapposizione copy/CTA.
+- [x] Verificare build frontend.
+
+## Review (Hotfix mobile readability v2)
+- [x] `frontend/src/index.css`: H1 mobile ridotto (`clamp(1.58rem, 8.9vw, 2.7rem)`), `line-height: 1.11`.
+- [x] `frontend/src/index.css`: `public-hero-copy` mobile con pannello soft per contrasto del testo.
+- [x] `frontend/src/index.css`: subtitle mobile scurito e reso piu leggibile (`rgba(19,42,101,0.96)`, weight 500).
+- [x] `frontend/src/index.css`: fallback logo mobile abbassato (`top: 78%`) e ridotto (`clamp(8.1rem, 30vw, 10.2rem)`).
+- [x] Verifica tecnica: `npm.cmd run build` in `frontend` OK.
+

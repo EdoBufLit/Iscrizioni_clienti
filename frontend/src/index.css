@@ -1100,12 +1100,20 @@ body.dashboard-perf-mode .btn-ghost:hover {
   .public-hero-copy {
     width: 100%;
     text-align: center;
+    padding: 0.9rem 0.72rem 1rem;
+    border-radius: 1rem;
+    background: linear-gradient(
+      180deg,
+      rgba(244, 248, 255, 0.54) 0%,
+      rgba(240, 245, 255, 0.26) 100%
+    );
   }
 
   .public-hero-content h1 {
-    max-width: 11ch;
-    font-size: clamp(1.9rem, 11vw, 3.2rem);
-    line-height: 1.06;
+    max-width: 10.2ch;
+    font-size: clamp(1.58rem, 8.9vw, 2.7rem);
+    line-height: 1.11;
+    letter-spacing: -0.02em;
     text-wrap: balance;
   }
 
@@ -1115,9 +1123,12 @@ body.dashboard-perf-mode .btn-ghost:hover {
 
   .public-hero-subtitle {
     margin-top: 0.95rem;
-    max-width: 32ch;
-    font-size: 1rem;
-    line-height: 1.6;
+    max-width: 30ch;
+    font-size: 0.98rem;
+    line-height: 1.52;
+    font-weight: 500;
+    color: rgba(19, 42, 101, 0.96);
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.34);
   }
 
   .public-hero-ctas {
@@ -1141,9 +1152,25 @@ body.dashboard-perf-mode .btn-ghost:hover {
   }
 
   .public-hero-object-fallback-wrap {
-    top: 68%;
-    width: clamp(8.8rem, 34vw, 11.2rem);
-    opacity: 0.34;
+    top: 78%;
+    width: clamp(8.1rem, 30vw, 10.2rem);
+    opacity: 0.24;
+  }
+
+  .public-hero-fallback {
+    filter: saturate(1.04) contrast(1.04) brightness(0.9) blur(0.14px);
+  }
+
+  .public-hero-overlay {
+    background:
+      radial-gradient(circle at 14% 14%, rgba(255, 223, 97, 0.2), transparent 40%),
+      radial-gradient(circle at 80% 74%, rgba(44, 78, 196, 0.2), transparent 46%),
+      linear-gradient(
+        155deg,
+        rgba(248, 252, 255, 0.43) 0%,
+        rgba(238, 244, 255, 0.36) 40%,
+        rgba(231, 239, 255, 0.44) 100%
+      );
   }
 
   .landing-panel {
