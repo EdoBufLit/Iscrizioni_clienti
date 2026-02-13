@@ -834,3 +834,24 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] `frontend/src/index.css`: fallback logo mobile abbassato (`top: 78%`) e ridotto (`clamp(8.1rem, 30vw, 10.2rem)`).
 - [x] Verifica tecnica: `npm.cmd run build` in `frontend` OK.
 
+---
+
+## Spec (Hero mobile CTA-only con watermark - Feb 13, 2026)
+- Obiettivo: su mobile mostrare solo CTA centrate + watermark logo; nascondere completamente eyebrow/H1/subtitle. Da `md` in su layout invariato con testo completo.
+- Vincoli: niente cambi routing/backend/SEO, nessuna nuova dipendenza, modifica limitata a hero + css collegato.
+
+## Plan (Hero mobile CTA-only)
+- [x] Aggiornare markup hero in `Home.tsx` con blocco testo `hidden md:block` senza duplicare la hero.
+- [x] Rendere CTA sempre presenti con layout responsive: mobile colonna full-width, desktop riga width auto.
+- [x] Inserire watermark mobile assoluto (`md:hidden`) dietro CTA e separare fallback no-webgl desktop-only.
+- [x] Pulire stratificazione z-index (`scene 0`, `overlay 10`, `watermark 20`, `cta/text 30`) e centratura verticale mobile.
+- [x] Verificare build frontend.
+
+## Review (Hero mobile CTA-only)
+- [x] `frontend/src/pages/Home.tsx`: testo hero wrappato in `hidden md:block`; CTA sempre visibili con classi responsive richieste.
+- [x] `frontend/src/pages/Home.tsx`: watermark mobile aggiunto (`md:hidden`, `opacity 0.12`, `pointer-events-none`) dietro bottoni.
+- [x] `frontend/src/pages/Home.tsx`: fallback statico no-webgl limitato a desktop (`hidden md:flex`) per evitare doppio logo su mobile.
+- [x] `frontend/src/index.css`: min-height hero mobile impostata a `70svh` / `75svh` (sm), copy centrato verticalmente e overlay ribilanciato.
+- [x] `frontend/src/index.css`: z-index hero riallineati (`overlay 10`, `content/copy 30`).
+- [x] Verifica tecnica: `npm.cmd run build` in `frontend` OK.
+

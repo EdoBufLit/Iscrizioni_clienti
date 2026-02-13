@@ -192,7 +192,7 @@ const Home = () => {
             }}
           />
           {!useWebGLScene ? (
-            <div className="public-hero-object-fallback-wrap" data-hero-logo>
+            <div className="public-hero-object-fallback-wrap hidden md:flex" data-hero-logo>
               <img
                 src={`${import.meta.env.BASE_URL}assonam-logo.svg`}
                 alt=""
@@ -210,29 +210,54 @@ const Home = () => {
 
         <div className="container-shell public-hero-content">
           <div className="public-hero-copy">
-            <p className="section-title" data-hero-eyebrow>
-              ASSONAM · ECOSISTEMA PUBBLICO
-            </p>
-            <h1>
-              <span className="public-hero-title-line" data-hero-line>
-                Il nuovo standard
-              </span>
-              <span className="public-hero-title-line" data-hero-line>
-                per iscrizioni associative
-              </span>
-              <span className="public-hero-title-line" data-hero-line>
-                e gestione soci.
-              </span>
-            </h1>
-            <p className="public-hero-subtitle" data-hero-subtitle>
-              Una esperienza digitale pulita e verificabile che collega affiliazioni, iscrizione e
-              area riservata in un flusso unico.
-            </p>
-            <div className="public-hero-ctas" data-hero-cta-group>
-              <Link className="btn-primary public-hero-btn" to="/associazioni" data-hero-cta>
+            <div className="hidden md:block">
+              <p className="section-title" data-hero-eyebrow>
+                ASSONAM · ECOSISTEMA PUBBLICO
+              </p>
+              <h1>
+                <span className="public-hero-title-line" data-hero-line>
+                  Il nuovo standard
+                </span>
+                <span className="public-hero-title-line" data-hero-line>
+                  per iscrizioni associative
+                </span>
+                <span className="public-hero-title-line" data-hero-line>
+                  e gestione soci.
+                </span>
+              </h1>
+              <p className="public-hero-subtitle" data-hero-subtitle>
+                Una esperienza digitale pulita e verificabile che collega affiliazioni, iscrizione
+                e area riservata in un flusso unico.
+              </p>
+            </div>
+
+            <div
+              className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center md:hidden"
+              aria-hidden="true"
+            >
+              <img
+                src={`${import.meta.env.BASE_URL}assonam-logo.svg`}
+                alt=""
+                className="w-[clamp(240px,70vw,420px)] select-none opacity-[0.12]"
+              />
+            </div>
+
+            <div
+              className="public-hero-ctas relative z-30 flex w-full flex-col items-center justify-center gap-3 md:w-auto md:flex-row"
+              data-hero-cta-group
+            >
+              <Link
+                className="btn-primary public-hero-btn w-[min(92vw,340px)] md:w-auto"
+                to="/associazioni"
+                data-hero-cta
+              >
                 Diventa socio
               </Link>
-              <Link className="btn-ghost public-hero-btn" to="/area-riservata" data-hero-cta>
+              <Link
+                className="btn-ghost public-hero-btn w-[min(92vw,340px)] md:w-auto"
+                to="/area-riservata"
+                data-hero-cta
+              >
                 Area riservata
               </Link>
             </div>
