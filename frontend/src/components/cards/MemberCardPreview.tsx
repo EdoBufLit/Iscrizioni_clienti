@@ -107,15 +107,6 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
         aria-pressed={isFlipped}
         aria-label="Ruota tessera"
       >
-        <span className="pointer-events-none absolute right-4 top-4 z-10">
-          <img
-            src={ASSONAM_LOGO_SRC}
-            alt="Logo ASSO.N.A.M."
-            className="h-9 w-auto object-contain sm:h-11"
-            loading="lazy"
-          />
-        </span>
-
         <span
           className="member-card-flip-stage"
           style={{
@@ -126,102 +117,185 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
             WebkitTransform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
           }}
         >
+          {/* ─── FRONT FACE ─── */}
           <span
-            className="member-card-face member-card-face-front overflow-hidden rounded-[28px] border border-[#cfb97a]/70 bg-[#fbf7eb] shadow-[0_20px_40px_rgba(15,61,58,0.18)]"
+            className="member-card-face member-card-face-front overflow-hidden rounded-[20px] sm:rounded-[24px]"
             style={{
               backfaceVisibility: "hidden",
               WebkitBackfaceVisibility: "hidden",
               transform: "rotateY(0deg) translateZ(1px)",
               WebkitTransform: "rotateY(0deg) translateZ(1px)",
+              background: "linear-gradient(135deg, #0b2e2c 0%, #143f3c 40%, #1a4f4b 70%, #0f3a37 100%)",
+              boxShadow: "0 24px 48px rgba(10,40,38,0.35), 0 8px 16px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.08)",
             }}
           >
-              <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_8%_12%,rgba(15,61,58,0.16),transparent_52%),radial-gradient(circle_at_95%_88%,rgba(198,160,79,0.26),transparent_48%)]" />
-              <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,0.84)_0%,rgba(251,247,235,0.95)_38%,rgba(244,232,199,0.96)_100%)]" />
-              <span className="pointer-events-none absolute inset-x-0 top-0 h-[5px] bg-gradient-to-r from-[#0f3d3a] via-[#c6a04f] to-[#0f3d3a]" />
+            {/* Guilloche-style decorative pattern overlay */}
+            <span
+              className="pointer-events-none absolute inset-0 opacity-[0.04]"
+              style={{
+                backgroundImage:
+                  "repeating-linear-gradient(0deg, transparent, transparent 8px, rgba(198,160,79,1) 8px, rgba(198,160,79,1) 9px)," +
+                  "repeating-linear-gradient(90deg, transparent, transparent 8px, rgba(198,160,79,1) 8px, rgba(198,160,79,1) 9px)",
+              }}
+            />
+            {/* Radial light accent */}
+            <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_20%,rgba(198,160,79,0.15),transparent_55%)]" />
+            <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_85%_80%,rgba(198,160,79,0.10),transparent_50%)]" />
 
-              <span className="relative flex h-full flex-col px-5 py-5 text-[#123a38] sm:px-7 sm:py-6">
-                <span className="pr-16 text-right sm:pr-20">
-                  <span className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-[#315d5a]">
-                    Tessera Socio {ASSONAM_CARD_YEAR_LABEL}
+            {/* Top gold accent bar */}
+            <span className="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#c6a04f] to-transparent" />
+            {/* Bottom gold accent bar */}
+            <span className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] bg-gradient-to-r from-transparent via-[#c6a04f]/60 to-transparent" />
+
+            {/* Left gold vertical accent */}
+            <span className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-gradient-to-b from-transparent via-[#c6a04f]/40 to-transparent" />
+
+            <span className="relative flex h-full flex-col px-5 py-4 sm:px-7 sm:py-5">
+              {/* Header row: year label + logo */}
+              <span className="flex items-start justify-between">
+                <span className="flex flex-col">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#c6a04f]/80 sm:text-[11px]">
+                    Tessera Socio
+                  </span>
+                  <span className="mt-0.5 text-[18px] font-bold tracking-[0.06em] text-[#d4b45c] sm:text-[22px]" style={{ fontFamily: '"Source Serif 4", serif' }}>
+                    {cardYear}
                   </span>
                 </span>
+                <span className="flex-shrink-0">
+                  <img
+                    src={ASSONAM_LOGO_SRC}
+                    alt="Logo ASSO.N.A.M."
+                    className="h-10 w-auto object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)] sm:h-12"
+                    loading="lazy"
+                  />
+                </span>
+              </span>
 
-                <span className="mt-5 block flex-1">
-                  <span className="block text-[0.64rem] font-semibold uppercase tracking-[0.2em] text-[#5b6f6d]">
-                    Nome e cognome
-                  </span>
-                  <span
-                    className="mt-1 block text-xl font-semibold leading-tight text-[#133331] sm:text-2xl"
-                    style={{ fontFamily: "\"Source Serif 4\", serif" }}
-                  >
-                    {displayName}
-                  </span>
-
-                  <span className="mt-4 block text-[0.64rem] font-semibold uppercase tracking-[0.2em] text-[#5b6f6d]">
-                    Associazione
-                  </span>
-                  <span className="mt-1 block truncate text-sm font-semibold text-[#214745] sm:text-[0.98rem]">
-                    {organizationName}
-                  </span>
+              {/* Main content area */}
+              <span className="mt-auto block">
+                {/* Name */}
+                <span className="block text-[0.58rem] font-semibold uppercase tracking-[0.22em] text-[#8aaba8] sm:text-[0.62rem]">
+                  Nome e cognome
+                </span>
+                <span
+                  className="mt-1 block text-lg font-semibold leading-tight text-white sm:text-xl"
+                  style={{ fontFamily: '"Source Serif 4", serif' }}
+                >
+                  {displayName}
                 </span>
 
-                <span className="mt-4 block border-t border-[#d7c797]/70 pt-3">
-                  <span className="block text-[0.64rem] font-semibold uppercase tracking-[0.2em] text-[#5b6f6d]">
-                    Numero tessera
+                {/* Org */}
+                <span className="mt-3 block text-[0.58rem] font-semibold uppercase tracking-[0.22em] text-[#8aaba8] sm:text-[0.62rem]">
+                  Associazione
+                </span>
+                <span className="mt-0.5 block truncate text-sm font-medium text-[#c6d8d6] sm:text-[0.95rem]">
+                  {organizationName}
+                </span>
+              </span>
+
+              {/* Card number footer */}
+              <span className="mt-3 flex items-end justify-between border-t border-[#c6a04f]/25 pt-2.5">
+                <span>
+                  <span className="block text-[0.58rem] font-semibold uppercase tracking-[0.22em] text-[#8aaba8] sm:text-[0.62rem]">
+                    N. Tessera
                   </span>
-                  <span className="mt-1 block text-base font-semibold tracking-[0.08em] text-[#103432] sm:text-lg">
+                  <span className="mt-0.5 block font-mono text-base font-bold tracking-[0.12em] text-[#d4b45c] sm:text-lg">
                     {cardNumber}
                   </span>
                 </span>
+                {/* Decorative gold chip */}
+                <span className="mb-0.5 flex-shrink-0">
+                  <span
+                    className="inline-block h-7 w-10 rounded-md sm:h-8 sm:w-11"
+                    style={{
+                      background: "linear-gradient(145deg, #d4b45c 0%, #a8883a 50%, #d4b45c 100%)",
+                      boxShadow: "inset 0 1px 2px rgba(255,255,255,0.3), inset 0 -1px 2px rgba(0,0,0,0.15), 0 2px 4px rgba(0,0,0,0.2)",
+                    }}
+                  >
+                    <span className="block h-full w-full rounded-md opacity-30" style={{
+                      backgroundImage: "repeating-linear-gradient(90deg, transparent 0px, transparent 2px, rgba(255,255,255,0.3) 2px, rgba(255,255,255,0.3) 3px)",
+                    }} />
+                  </span>
+                </span>
               </span>
+            </span>
           </span>
 
+          {/* ─── BACK FACE ─── */}
           <span
-            className="member-card-face member-card-face-back overflow-hidden rounded-[28px] border border-[#cfb97a]/70 bg-[#f7f2e3] shadow-[0_20px_40px_rgba(15,61,58,0.18)]"
+            className="member-card-face member-card-face-back overflow-hidden rounded-[20px] sm:rounded-[24px]"
             style={{
               backfaceVisibility: "hidden",
               WebkitBackfaceVisibility: "hidden",
               transform: "rotateY(180deg) translateZ(1px)",
               WebkitTransform: "rotateY(180deg) translateZ(1px)",
+              background: "linear-gradient(135deg, #0d3330 0%, #164542 50%, #0f3a37 100%)",
+              boxShadow: "0 24px 48px rgba(10,40,38,0.35), 0 8px 16px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.08)",
             }}
           >
-              <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(145deg,rgba(18,58,56,0.06),rgba(198,160,79,0.14))]" />
-              <span className="relative flex h-full flex-col items-center justify-center px-5 py-5 sm:px-7 sm:py-6">
-                <span className="grid place-items-center rounded-2xl border border-[#c8b07a]/70 bg-white/90 p-3 shadow-[0_10px_20px_rgba(15,61,58,0.12)]">
-                  {qrImageUrl ? (
-                    <img
-                      src={qrImageUrl}
-                      alt="QR code per verifica tessera"
-                      className="h-40 w-40 rounded-xl border border-[#e4d7b5] bg-white p-1 sm:h-44 sm:w-44"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  ) : (
-                    <span className="inline-flex h-40 w-40 items-center justify-center rounded-xl border border-dashed border-[#ccb98a] text-[0.62rem] font-medium uppercase tracking-[0.15em] text-[#8a6f34] sm:h-44 sm:w-44">
-                      QR non disponibile
-                    </span>
-                  )}
-                </span>
+            {/* Subtle pattern */}
+            <span
+              className="pointer-events-none absolute inset-0 opacity-[0.03]"
+              style={{
+                backgroundImage:
+                  "repeating-linear-gradient(45deg, transparent, transparent 6px, rgba(198,160,79,1) 6px, rgba(198,160,79,1) 7px)",
+              }}
+            />
+            <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_50%,rgba(198,160,79,0.08),transparent_65%)]" />
 
-                <span className="mt-4 w-full max-w-[18rem] space-y-2 rounded-xl border border-[#d7c797]/70 bg-white/65 px-3 py-3 text-left">
-                  <span className="flex items-baseline justify-between gap-3">
-                    <span className="text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-[#5b6f6d]">
-                      Numero tessera
-                    </span>
-                    <span className="text-xs font-semibold tracking-[0.08em] text-[#183d3b] sm:text-sm">
-                      {cardNumber}
-                    </span>
+            {/* Top gold bar */}
+            <span className="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#c6a04f] to-transparent" />
+
+            <span className="relative flex h-full flex-col items-center justify-center px-5 py-5 sm:px-7 sm:py-6">
+              {/* QR Code area */}
+              <span
+                className="grid place-items-center rounded-2xl p-3"
+                style={{
+                  background: "linear-gradient(145deg, rgba(255,255,255,0.95), rgba(251,247,235,0.9))",
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.8)",
+                }}
+              >
+                {qrImageUrl ? (
+                  <img
+                    src={qrImageUrl}
+                    alt="QR code per verifica tessera"
+                    className="h-36 w-36 rounded-xl bg-white p-1.5 sm:h-40 sm:w-40"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                ) : (
+                  <span className="inline-flex h-36 w-36 items-center justify-center rounded-xl border border-dashed border-[#ccb98a] text-[0.62rem] font-medium uppercase tracking-[0.15em] text-[#8a6f34] sm:h-40 sm:w-40">
+                    QR non disponibile
                   </span>
-                  <span className="flex items-baseline justify-between gap-3">
-                    <span className="text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-[#5b6f6d]">Nome</span>
-                    <span className="truncate text-xs font-semibold text-[#183d3b] sm:text-sm">{displayName}</span>
+                )}
+              </span>
+
+              {/* Info summary on back */}
+              <span
+                className="mt-4 w-full max-w-[18rem] space-y-1.5 rounded-xl px-4 py-3 text-left"
+                style={{
+                  background: "rgba(255,255,255,0.08)",
+                  border: "1px solid rgba(198,160,79,0.2)",
+                }}
+              >
+                <span className="flex items-baseline justify-between gap-3">
+                  <span className="text-[0.58rem] font-semibold uppercase tracking-[0.16em] text-[#8aaba8]">
+                    N. Tessera
                   </span>
-                  <span className="flex items-baseline justify-between gap-3">
-                    <span className="text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-[#5b6f6d]">Anno</span>
-                    <span className="text-xs font-semibold text-[#183d3b] sm:text-sm">{cardYear}</span>
+                  <span className="font-mono text-xs font-bold tracking-[0.08em] text-[#d4b45c] sm:text-sm">
+                    {cardNumber}
                   </span>
+                </span>
+                <span className="flex items-baseline justify-between gap-3">
+                  <span className="text-[0.58rem] font-semibold uppercase tracking-[0.16em] text-[#8aaba8]">Nome</span>
+                  <span className="truncate text-xs font-semibold text-[#c6d8d6] sm:text-sm">{displayName}</span>
+                </span>
+                <span className="flex items-baseline justify-between gap-3">
+                  <span className="text-[0.58rem] font-semibold uppercase tracking-[0.16em] text-[#8aaba8]">Anno</span>
+                  <span className="text-xs font-semibold text-[#d4b45c] sm:text-sm">{cardYear}</span>
                 </span>
               </span>
+            </span>
           </span>
         </span>
       </button>
