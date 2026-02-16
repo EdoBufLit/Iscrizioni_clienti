@@ -129,7 +129,10 @@ export async function registerMember(data: {
   if (data.fiscal_code) body.append("fiscal_code", data.fiscal_code);
   if (data.org_slug) body.append("org_slug", data.org_slug);
   const res = await fetch("/api/auth/register", { method: "POST", body });
-  if (!res.ok) throw new Error("Registration failed");
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null);
+    throw new Error(payload?.detail ?? "Registrazione fallita.");
+  }
   return res.json();
 }
 
@@ -168,8 +171,15 @@ export async function joinOrganization(
     method: "POST",
     body,
   });
-  if (res.status === 404) throw new Error("Organization not found");
-  if (!res.ok) throw new Error("Join failed");
+  if (res.status === 404) throw new Error("Associazione non trovata.");
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null);
+    const detail = payload?.detail;
+    if (res.status === 409) throw new Error(detail ?? "Iscrizione già presente.");
+    if (res.status === 400) throw new Error(detail ?? "Dati non validi.");
+    if (res.status === 429) throw new Error("Troppe richieste. Riprova tra qualche minuto.");
+    throw new Error(detail ?? "Errore durante l'iscrizione.");
+  }
   return res.json();
 }
 

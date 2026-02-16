@@ -17,3 +17,9 @@
 - Se l'utente chiede di eliminare una foto, non basta spostarla in un'altra sezione: va rimossa da tutti i mapping attivi e, se richiesto, cancellata anche dagli asset locali.
 - La hero che funziona su desktop puo rompersi su mobile: validare sempre contrasto reale di H1/subtitle e usare fallback tipografici solidi + pannello copy leggero quando il background e fotografico.
 - Quando il requisito mobile e "CTA-only", non inseguire tweak tipografici: nascondere completamente il blocco testo con `hidden md:block` e mantenere la gerarchia visuale tramite watermark leggero dietro i bottoni.
+- React class ErrorBoundary con `<Link>` non funziona: il state `hasError` persiste durante la navigazione SPA. Usare `window.location.href` per garantire un reset completo.
+- Backend che richiede config (es. statute_pdf_path) per TUTTE le entità blocca quelle senza config. Rendere i check condizionali: se l'org non ha statuto caricato, non richiederlo.
+- Le API frontend che fanno `throw new Error("Join failed")` nascondono il vero errore backend. Sempre leggere `res.json().detail` prima di throw.
+- In un flusso multi-step (join + register), se step 1 è critico e step 2 è opzionale, gestirli separatamente: marcare successo dopo step 1 e rendere step 2 non-bloccante.
+- Download file con `<a href>` naviga il browser su errori (JSON error page). Usare `fetch()` + blob per gestire errori client-side e mostrare messaggi utili.
+- MAI mettere `useMemo`/`useCallback`/altri hooks dopo `if (loading) return`. Viola le Rules of Hooks: React conta hooks per posizione e se un render ne chiama 0 e il successivo ne chiama 3, crasha con "Rendered more hooks than expected". Spostare TUTTI i hooks prima di qualsiasi return condizionale.

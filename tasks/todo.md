@@ -836,6 +836,43 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 
 ---
 
+## Spec (Bug Fix: Doc Socio + Iscrizione + Error Page - Feb 16, 2026)
+
+### Root Causes Identified
+1. **Org-admin soci/:id page crash (CRITICAL)**: 3 `useMemo` hooks dopo `if (loading) return` → violazione Rules of Hooks → React crash "Rendered more hooks than expected" → ErrorBoundary. Spostati PRIMA dei return condizionali.
+2. **ErrorBoundary buttons broken**: `<Link to="/">` does SPA nav but `hasError` class state persists → fallback keeps showing. Fixed by using `window.location.href` for full navigation.
+3. **Signup 400 for oasi-2 (and any org without statute)**: Backend required `statute_pdf_path` AND `accept_statute=true` unconditionally. Frontend only showed statute checkbox when org had statute. Fixed: statute acceptance now conditional on org having a statute.
+4. **Generic error messages hide real cause**: `joinOrganization()` threw "Join failed" without reading response body. Fixed: now reads `detail` from response.
+5. **Registration failure masks signup success**: If `joinOrganization` succeeded but `registerMember` failed, user saw error. Fixed: registration is now non-blocking.
+
+### Fixes Applied
+- [x] A. ErrorBoundary: `<Link>` → `window.location.href`, added error logging
+- [x] B. Join endpoint: statute check conditional, added `is_active` check
+- [x] C. `joinOrganization()`: reads response body for 400/409/429/500 detail
+- [x] D. Iscrizione.tsx: shows real backend error, registration non-blocking
+- [x] E. Request ID middleware: `X-Request-Id` on all responses, logged in errors
+- [x] F. Doc download: fetch+blob with error handling instead of `<a href>` nav
+- [x] G. Tests: 6 pytest tests all passing (statute-optional, inactive, all-orgs, request-id)
+
+### Files Modified
+- `frontend/src/components/ErrorBoundary.tsx` — Full navigation, error logging
+- `frontend/src/lib/api.ts` — `joinOrganization` + `registerMember` error detail
+- `frontend/src/pages/Iscrizione.tsx` — Real error messages, non-blocking registration
+- `frontend/src/pages/org-admin/OrgAdminMemberDetail.tsx` — Fetch-based doc download
+- `app/routes/join.py` — Conditional statute, is_active check, request_id in errors
+- `app/middleware.py` — `RequestIdMiddleware` + `get_request_id`
+- `app/main.py` — Register `RequestIdMiddleware`
+
+### Files Created
+- `tests/test_signup_fixes.py` — 6 tests covering all fixes
+
+### Deploy Notes
+- No DB migration needed
+- No new env vars
+- Request ID header (`X-Request-Id`) now present on all responses
+
+---
+
 ## Spec (Hero mobile CTA-only con watermark - Feb 13, 2026)
 - Obiettivo: su mobile mostrare solo CTA centrate + watermark logo; nascondere completamente eyebrow/H1/subtitle. Da `md` in su layout invariato con testo completo.
 - Vincoli: niente cambi routing/backend/SEO, nessuna nuova dipendenza, modifica limitata a hero + css collegato.

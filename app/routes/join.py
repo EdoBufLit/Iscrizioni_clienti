@@ -17,7 +17,7 @@ from app.models import (
 from app.utils import generate_token, send_email, save_upload_file, hash_token
 from app.services.card import assign_next_card
 from app.config import settings
-from app.middleware import join_limiter, get_client_ip
+from app.middleware import join_limiter, get_client_ip, get_request_id
 from app import audit
 import logging
 import os
@@ -178,11 +178,13 @@ def api_join_start(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    if not org.statute_pdf_path:
-        raise HTTPException(status_code=400, detail="Lo statuto dell'associazione non è disponibile. Contatta l'associazione.")
+    if not org.is_active:
+        raise HTTPException(status_code=400, detail="L'associazione non è attualmente attiva.")
 
-    if not accept_statute:
-        raise HTTPException(status_code=400, detail="È necessario accettare lo statuto per procedere.")
+    # Statute acceptance is required only when the org has a statute uploaded
+    if org.statute_pdf_path:
+        if not accept_statute:
+            raise HTTPException(status_code=400, detail="È necessario accettare lo statuto per procedere.")
 
     existing = check_signup_allowed(db, org.id, email, request)
     if existing:
@@ -404,11 +406,13 @@ async def api_join_submit_multipart(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    if not org.statute_pdf_path:
-        raise HTTPException(status_code=400, detail="Lo statuto dell'associazione non è disponibile. Contatta l'associazione.")
+    if not org.is_active:
+        raise HTTPException(status_code=400, detail="L'associazione non è attualmente attiva.")
 
-    if not accept_statute:
-        raise HTTPException(status_code=400, detail="È necessario accettare lo statuto per procedere.")
+    # Statute acceptance is required only when the org has a statute uploaded
+    if org.statute_pdf_path:
+        if not accept_statute:
+            raise HTTPException(status_code=400, detail="È necessario accettare lo statuto per procedere.")
 
     normalized_payment_method = _normalize_payment_method(payment_method, required=True)
 
@@ -549,17 +553,23 @@ async def api_join_submit_multipart(
         )
         db.commit() # Commit log
 
+    except HTTPException:
+        raise
     except Exception as e:
         # Cleanup (ONLY if error happens BEFORE commit)
         for p in [rel_path_id, rel_path_fc]:
             if p:
                 try:
                     os.remove(os.path.join(settings.UPLOAD_DIR, p))
-                except:
+                except OSError:
                     pass
         db.rollback()
-        logger.exception("Error in multipart submit")
-        raise HTTPException(status_code=500, detail="Errore nel salvataggio della richiesta")
+        rid = get_request_id(request)
+        logger.exception("Error in multipart submit [request_id=%s]", rid)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Errore nel salvataggio della richiesta. (ref: {rid})",
+        )
 
     # Send confirmation to user (Post-commit)
     email_sent = False

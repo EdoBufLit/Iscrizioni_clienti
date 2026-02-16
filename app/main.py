@@ -13,7 +13,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.bootstrap import bootstrap_super_admin
 from app.config import settings
 from app.db import get_db, SessionLocal, engine
-from app.middleware import SecurityHeadersMiddleware
+from app.middleware import SecurityHeadersMiddleware, RequestIdMiddleware
 from app.routes import admin, join, member, onboarding, org_admin, public, super_admin
 from app.schema_validation import validate_schema
 from app.spa import SPAStaticFiles
@@ -85,8 +85,11 @@ app.add_middleware(
     allow_credentials=True,
 )
 
-# 3. Security headers — outermost, applies to every response
+# 3. Security headers
 app.add_middleware(SecurityHeadersMiddleware)
+
+# 4. Request ID — outermost, generates unique ID for every request
+app.add_middleware(RequestIdMiddleware)
 
 # ── Static files ──────────────────────────────────────────────────
 

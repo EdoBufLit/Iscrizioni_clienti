@@ -1,21 +1,33 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
-import { Link } from "react-router-dom";
 
 type Props = { children: ReactNode };
-type State = { hasError: boolean };
+type State = { hasError: boolean; error: Error | null };
 
 class ErrorBoundary extends Component<Props, State> {
-  state: State = { hasError: false };
+  state: State = { hasError: false, error: null };
 
-  static getDerivedStateFromError(): State {
-    return { hasError: true };
+  static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    if (import.meta.env.DEV) {
-      console.error("ErrorBoundary caught:", error, info.componentStack);
-    }
+    console.error(
+      "[ErrorBoundary]",
+      error.name,
+      error.message,
+      info.componentStack,
+    );
   }
+
+  private handleRetry = () => {
+    // Full page reload to guarantee clean state
+    window.location.reload();
+  };
+
+  private handleGoHome = () => {
+    // Use full navigation (not SPA) so error state is fully cleared
+    window.location.href = "/";
+  };
 
   render() {
     if (!this.state.hasError) return this.props.children;
@@ -30,17 +42,26 @@ class ErrorBoundary extends Component<Props, State> {
             Qualcosa non ha funzionato come previsto. Prova a ricaricare la
             pagina o torna alla pagina principale.
           </p>
+          {import.meta.env.DEV && this.state.error && (
+            <p className="mt-2 rounded bg-red-50 px-3 py-2 text-xs text-red-700 text-left font-mono break-all">
+              {this.state.error.name}: {this.state.error.message}
+            </p>
+          )}
           <div className="mt-6 flex items-center justify-center gap-4">
             <button
               type="button"
               className="btn-ghost"
-              onClick={() => window.location.reload()}
+              onClick={this.handleRetry}
             >
               Ricarica
             </button>
-            <Link to="/" className="btn-primary">
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={this.handleGoHome}
+            >
               Torna alla home
-            </Link>
+            </button>
           </div>
         </div>
       </div>

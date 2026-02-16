@@ -231,7 +231,7 @@ const Iscrizione = () => {
     setSubmitError("");
     setSubmitting(true);
     try {
-      // 1. Submit join request to backend
+      // 1. Submit join request to backend (critical - if this fails, show error)
       await joinOrganization(slug!, {
         first_name: form.nome,
         last_name: form.cognome,
@@ -245,25 +245,31 @@ const Iscrizione = () => {
         id_document: form.documentoIdentita,
       });
 
-      // 2. Register with password for immediate login
-      const regResult = await registerMember({
-        email: form.email,
-        password: form.password,
-        first_name: form.nome,
-        last_name: form.cognome,
-        phone: form.telefono,
-        fiscal_code: form.codiceFiscale.toUpperCase(),
-        org_slug: slug!,
-      });
-
+      // Signup saved successfully — mark as submitted regardless of registration
       setSubmitted(true);
 
-      // If auto-authenticated, redirect to dashboard after a short delay
-      if (regResult.authenticated) {
-        setTimeout(() => navigate("/dashboard"), 3000);
+      // 2. Register with password for immediate login (non-blocking)
+      try {
+        const regResult = await registerMember({
+          email: form.email,
+          password: form.password,
+          first_name: form.nome,
+          last_name: form.cognome,
+          phone: form.telefono,
+          fiscal_code: form.codiceFiscale.toUpperCase(),
+          org_slug: slug!,
+        });
+
+        if (regResult.authenticated) {
+          setTimeout(() => navigate("/dashboard"), 3000);
+        }
+      } catch {
+        // Registration failed but signup was saved — user can login later
+        console.warn("Password registration failed, signup was saved successfully");
       }
-    } catch {
-      setSubmitError("Si è verificato un errore durante l'invio. Riprova.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Errore sconosciuto";
+      setSubmitError(msg);
     } finally {
       setSubmitting(false);
     }

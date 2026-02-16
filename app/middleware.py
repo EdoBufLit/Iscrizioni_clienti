@@ -1,11 +1,30 @@
-"""Security middleware: response headers and rate limiting."""
+"""Security middleware: response headers, request ID, and rate limiting."""
 
 import time
+import uuid
 from collections import defaultdict
 from threading import Lock
 
 from fastapi import HTTPException, Request
 from starlette.middleware.base import BaseHTTPMiddleware
+
+
+# ── Request ID ───────────────────────────────────────────────────
+
+class RequestIdMiddleware(BaseHTTPMiddleware):
+    """Generate a unique request ID for every request and attach to response."""
+
+    async def dispatch(self, request: Request, call_next):
+        request_id = uuid.uuid4().hex[:12]
+        request.state.request_id = request_id
+        response = await call_next(request)
+        response.headers["X-Request-Id"] = request_id
+        return response
+
+
+def get_request_id(request: Request) -> str:
+    """Get the request ID from request state, or generate one."""
+    return getattr(request.state, "request_id", uuid.uuid4().hex[:12])
 
 
 # ── Security Headers ──────────────────────────────────────────────

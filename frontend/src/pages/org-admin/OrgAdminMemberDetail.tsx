@@ -364,6 +364,43 @@ export default function OrgAdminMemberDetail() {
     }
   };
 
+  const [downloadingDocId, setDownloadingDocId] = useState<number | null>(null);
+
+  const handleDownloadDoc = async (doc: Document) => {
+    const url = doc.download_url || `/api/org-admin/documents/${doc.id}`;
+    setDownloadingDocId(doc.id);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        const detail = payload?.detail ?? "Errore durante il download";
+        if (res.status === 404) {
+          setActionError("Documento non disponibile sul server. Potrebbe essere stato rimosso.");
+        } else if (res.status === 403) {
+          setActionError("Permesso negato per questo documento.");
+        } else {
+          setActionError(detail);
+        }
+        return;
+      }
+      const blob = await res.blob();
+      const filename = doc.filename || "documento";
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        URL.revokeObjectURL(a.href);
+        a.remove();
+      }, 100);
+    } catch {
+      setActionError("Errore di rete durante il download del documento.");
+    } finally {
+      setDownloadingDocId(null);
+    }
+  };
+
   const handleDelete = async () => {
     if (!confirm("ATTENZIONE: Sei sicuro di voler ELIMINARE definitivamente questo socio? L'operazione rimuoverÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â  immediatamente l'accesso al socio.")) return;
 
@@ -381,6 +418,21 @@ export default function OrgAdminMemberDetail() {
     }
   };
 
+  // ── Hooks MUST be called unconditionally (Rules of Hooks) ──────
+  const docs = member?.documents ?? [];
+  const docById = useMemo(
+    () => new Map(docs.map((doc) => [doc.id, doc])),
+    [docs]
+  );
+  const pendingDocsCount = useMemo(
+    () => docs.filter((d) => d.status === "pending" || d.status === "uploaded").length,
+    [docs]
+  );
+  const rejectedDocsCount = useMemo(
+    () => docs.filter((d) => d.status === "rejected").length,
+    [docs]
+  );
+
   if (loading) return <div className="p-8 text-center">Caricamento...</div>;
   if (error) return <div className="p-8 text-center text-red-600">{error}</div>;
   if (!member) return <div className="p-8 text-center">Socio non trovato</div>;
@@ -388,11 +440,11 @@ export default function OrgAdminMemberDetail() {
   const isDecisionMade = member.status === "active" || member.status === "rejected";
   const documentStatus =
     member.document_status ??
-    (member.documents.length === 0
+    (docs.length === 0
       ? "not_provided"
-      : member.documents.some((d) => d.status === "rejected")
+      : docs.some((d) => d.status === "rejected")
         ? "rejected"
-        : member.documents.some((d) => d.status === "pending" || d.status === "uploaded")
+        : docs.some((d) => d.status === "pending" || d.status === "uploaded")
           ? "pending"
           : "approved");
   const lastAccessLabel = member.last_access_email_at
@@ -404,18 +456,6 @@ export default function OrgAdminMemberDetail() {
       : member.payment_method === "BONIFICO"
         ? "Bonifico"
         : "-";
-  const docById = useMemo(
-    () => new Map(member.documents.map((doc) => [doc.id, doc])),
-    [member.documents]
-  );
-  const pendingDocsCount = useMemo(
-    () => member.documents.filter((d) => d.status === "pending" || d.status === "uploaded").length,
-    [member.documents]
-  );
-  const rejectedDocsCount = useMemo(
-    () => member.documents.filter((d) => d.status === "rejected").length,
-    [member.documents]
-  );
 
   return (
     <div className="space-y-6">
@@ -721,14 +761,16 @@ export default function OrgAdminMemberDetail() {
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
-                          <a
-                            href={doc.download_url || `/api/org-admin/documents/${doc.id}`}
-                            className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg flex items-center gap-1 text-sm font-medium transition-colors"
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadDoc(doc)}
+                            disabled={downloadingDocId === doc.id}
+                            className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg flex items-center gap-1 text-sm font-medium transition-colors disabled:opacity-50"
                             title="Scarica"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                            <span className="hidden md:inline">Scarica</span>
-                          </a>
+                            <span className="hidden md:inline">{downloadingDocId === doc.id ? "..." : "Scarica"}</span>
+                          </button>
                           <button
                             onClick={() => handleApprove(doc.id)}
                             disabled={reviewingDocId === doc.id || isDecisionMade}
