@@ -7,6 +7,7 @@ import secrets
 import re
 
 from sqlalchemy import func, text
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.db import get_db
 from app.models import (
@@ -209,18 +210,95 @@ def _create_integration_key(
     name: str,
     scopes: list[str],
 ) -> tuple[IntegrationApiKey, str]:
-    raw_key = secrets.token_urlsafe(32)
-    key = IntegrationApiKey(
-        org_id=org_id,
-        name=name,
-        key_hash=hash_api_key(raw_key),
-        scopes=scopes,
-        is_active=True,
+    def _is_org_name_unique_conflict(error: IntegrityError) -> bool:
+        message = str(getattr(error, "orig", error)).lower()
+        return (
+            "unique" in message
+            and "integration_api_keys.org_id" in message
+            and "integration_api_keys.name" in message
+        ) or "uix_integration_api_keys_org_name" in message
+
+    def _is_key_hash_unique_conflict(error: IntegrityError) -> bool:
+        message = str(getattr(error, "orig", error)).lower()
+        return (
+            "unique" in message
+            and "integration_api_keys.key_hash" in message
+        ) or "uq_integration_api_keys_key_hash" in message
+
+    def _reuse_legacy_unique_row(
+        key_hash: str,
+    ) -> IntegrationApiKey | None:
+        existing = (
+            db.query(IntegrationApiKey)
+            .filter(
+                IntegrationApiKey.org_id == org_id,
+                IntegrationApiKey.name == name,
+            )
+            .order_by(IntegrationApiKey.id.desc())
+            .first()
+        )
+        if not existing:
+            return None
+
+        # Legacy DBs may still enforce UNIQUE(org_id, name). In that case we
+        # rotate by updating the existing row in place.
+        existing.key_hash = key_hash
+        existing.scopes = scopes
+        existing.is_active = True
+        existing.created_at = datetime.utcnow()
+        existing.last_used_at = None
+        existing.last_used_ip = None
+        existing.last_used_user_agent = None
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    for attempt in range(2):
+        raw_key = secrets.token_urlsafe(32)
+        key_hash = hash_api_key(raw_key)
+        key = IntegrationApiKey(
+            org_id=org_id,
+            name=name,
+            key_hash=key_hash,
+            scopes=scopes,
+            is_active=True,
+        )
+        db.add(key)
+
+        try:
+            db.commit()
+            db.refresh(key)
+            return key, raw_key
+        except IntegrityError as exc:
+            db.rollback()
+            if _is_key_hash_unique_conflict(exc) and attempt == 0:
+                continue
+            if _is_org_name_unique_conflict(exc):
+                reused = _reuse_legacy_unique_row(key_hash=key_hash)
+                if reused is not None:
+                    logger.warning(
+                        "integration_api_keys legacy unique(org_id,name) detected for org_id=%s name=%s; reusing key row id=%s",
+                        org_id,
+                        name,
+                        reused.id,
+                    )
+                    return reused, raw_key
+            raise HTTPException(
+                status_code=409,
+                detail="Impossibile creare la chiave integrazione. Verifica vincoli esistenti o ruota la chiave corrente.",
+            ) from exc
+        except OperationalError as exc:
+            db.rollback()
+            logger.exception("Integration key creation failed due to DB schema issue.")
+            raise HTTPException(
+                status_code=500,
+                detail="Schema integrazioni non aggiornato. Esegui 'alembic upgrade head'.",
+            ) from exc
+
+    raise HTTPException(
+        status_code=500,
+        detail="Errore interno durante la generazione della chiave integrazione.",
     )
-    db.add(key)
-    db.commit()
-    db.refresh(key)
-    return key, raw_key
 
 
 @router.get("/orgs/{org_id}/integration-keys")

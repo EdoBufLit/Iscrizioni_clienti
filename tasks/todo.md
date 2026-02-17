@@ -1,3 +1,14 @@
+- [x] Riprodurre errore 500 creazione integration key da super admin e identificare causa
+- [x] Hardening backend create/rotate key con gestione vincoli legacy UNIQUE(org_id,name) su integration_api_keys
+- [x] Restituire errore applicativo (409) al posto di 500 generico su conflitti di vincolo
+- [x] Aggiungere test regressione per schema legacy con unique parziale org+name
+- [x] Eseguire test mirati endpoint super-admin keys
+
+## Review (Fix 500 create integration key - Feb 17, 2026)
+- `python -m pytest tests/test_org_admin_integration_keys.py` -> 5 passed
+- Fix applicato in `app/routes/super_admin.py`: fallback legacy-safe quando presente vincolo unico org+name non migrato
+
+---
 - [x] FE super-admin: aggiungere API client integration-keys (list/create/rotate/disable) con error handling 401/403
 - [x] FE super-admin: creare SuperAdminPienissimoIntegrationCard con stato key attiva, last_used_at e azioni
 - [x] FE super-admin: modal one-time raw key con copy + warning e reset visibilita alla chiusura

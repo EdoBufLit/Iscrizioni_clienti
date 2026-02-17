@@ -26,3 +26,4 @@
 - Se il requisito dice che una capability e centralizzata (es. integrazioni), non esporre endpoint di gestione a ruoli tenant (org-admin): applicare ownership e autorizzazioni al livello richiesto fin dalla prima implementazione.
 - Quando una capability passa a super-admin only, rimuovere subito anche la UI tenant (org-admin) e tutte le API calls client correlate, non solo il backend.
 - Quando una credenziale e one-time (raw API key), la UI deve isolarla in un modal dedicato, consentire copia immediata e cancellarla dallo stato alla chiusura per evitare leak.
+- Quando una route di provisioning può colpire DB legacy, non fare commit() cieco: intercettare IntegrityError e gestire fallback/409 per evitare 500 lato UI.

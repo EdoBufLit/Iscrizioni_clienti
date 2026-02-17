@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 
 import pytest
-from sqlalchemy import func
+from sqlalchemy import func, text
 
 from app.db import SessionLocal
 from app.models import (
@@ -227,3 +227,53 @@ def test_issue_member_works_with_super_admin_created_key(client, db):
     assert len(keys) >= 1
     assert keys[0]["last_used_at"] is not None
     assert keys[0]["last_used_ip"] == "testclient"
+
+
+def test_super_admin_create_key_handles_legacy_org_name_unique_constraint(client, db):
+    org = _ensure_org(db, f"legacy-unique-{uuid.uuid4().hex[:8]}")
+    _login_super_admin(client)
+
+    unique_index_name = f"uq_legacy_org_name_{uuid.uuid4().hex[:8]}"
+    db.execute(
+        text(
+            f"CREATE UNIQUE INDEX {unique_index_name} "
+            f"ON integration_api_keys (org_id, name) WHERE org_id = {org.id}"
+        )
+    )
+    db.commit()
+
+    try:
+        first = client.post(
+            f"/api/super-admin/orgs/{org.id}/integration-keys",
+            json={"name": "pienissimo", "scopes": ["issue_member"]},
+        )
+        assert first.status_code == 200, first.text
+        first_payload = first.json()
+        assert first_payload["raw_key"]
+
+        first_id = first_payload["id"]
+        disable = client.delete(f"/api/super-admin/orgs/{org.id}/integration-keys/{first_id}")
+        assert disable.status_code == 200, disable.text
+
+        second = client.post(
+            f"/api/super-admin/orgs/{org.id}/integration-keys",
+            json={"name": "pienissimo", "scopes": ["issue_member"]},
+        )
+        assert second.status_code == 200, second.text
+        second_payload = second.json()
+        assert second_payload["raw_key"]
+
+        keys = (
+            db.query(IntegrationApiKey)
+            .filter(
+                IntegrationApiKey.org_id == org.id,
+                IntegrationApiKey.name == "pienissimo",
+            )
+            .all()
+        )
+        # Legacy unique keeps one row, but creation must not fail with 500.
+        assert len(keys) == 1
+        assert keys[0].is_active is True
+    finally:
+        db.execute(text(f"DROP INDEX IF EXISTS {unique_index_name}"))
+        db.commit()
