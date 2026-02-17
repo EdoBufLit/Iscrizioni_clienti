@@ -9,6 +9,7 @@ All environment variables used by the application. Variables marked **required**
 | `SECRET_KEY` | **Yes** | `supersecretkey` | Secret key for signing session cookies and tokens. Use a long random string in production. |
 | `BASE_URL` | **Yes** | `http://localhost:8000` | Public base URL of the application (e.g. `https://app.assonam.it`). Used for API redirects. |
 | `FRONTEND_URL` | **Yes** | _(empty)_ | Public URL of the frontend (e.g. `https://assonam.it`). Used for magic links. If missing, falls back to `BASE_URL` + `/app`. |
+| `INGEST_SECRET` | Recommended | _(empty)_ | Shared secret for `POST /api/ingest/pienissimo/{org_slug}` via header `X-ASSO-INGEST-SECRET`. If empty, ingest endpoint is not secret-protected. |
 | `DATABASE_URL` | No | `sqlite:///data/app.db` (local) or `sqlite:////app/data/app.db` (Docker) | SQLAlchemy database URL. Auto-detected based on environment. |
 | `UPLOAD_DIR` | No | `<project_root>/data/uploads` | Directory for storing uploaded member documents. |
 | `SPA_DIR` | No | `frontend/dist` | Path to the built frontend SPA directory. |
@@ -51,6 +52,12 @@ External issuer requests must send:
 - Header: `X-ASSONAM-API-KEY: <raw-key>`
 - Scope in DB (`scopes` JSON): `issue_member`
 - Organization scoping via `org_id` on the API key record
+
+## Ingest Endpoint (Pienissimo bridge)
+
+- `POST /api/ingest/pienissimo/{org_slug}`
+- Optional secret auth (recommended): `X-ASSO-INGEST-SECRET: <INGEST_SECRET>`
+- Endpoint normalizes flexible payload fields and calls internal issuer logic for the resolved org.
 
 ## Build Metadata (optional)
 

@@ -1,10 +1,59 @@
-﻿- [x] Inspect frontend structure, routes, and existing styles to map all pages (public + user/admin/superadmin dashboards)
+- [x] Aggiornare security con IntegrationContext (key_id, org_id, scopes) e enforcement key->org nell'issuer
+- [x] Estrarre logica issuer in service riusabile issue_member_from_integration
+- [x] Aggiungere endpoint ingest POST /api/ingest/pienissimo/{org_slug} con X-ASSO-INGEST-SECRET
+- [x] Mappare payload Pienissimo flessibile e fallback external_customer_id con hash(email+org_slug)
+- [x] Confermare super-admin only key management e assenza endpoint/UI org-admin keys
+- [x] Aggiornare settings/docs con INGEST_SECRET
+- [x] Aggiungere test: ingest 401/200, issuer key-org mismatch, regressioni key endpoints
+- [x] Eseguire test mirati e documentare review
+
+## Review (Ingest Pienissimo option A - Feb 17, 2026)
+- `python -m pytest tests/test_integration_issue_member.py tests/test_org_admin_integration_keys.py tests/test_ingest_pienissimo.py` -> 11 passed
+- `python -m pytest tests/test_signup_fixes.py` -> 6 passed
+- `npm --prefix frontend run build` -> OK
+- `DATABASE_URL=sqlite:///tmp_option_a_empty.db python -m alembic upgrade head` -> OK
+- `DATABASE_URL=sqlite:///tmp_option_a_existing.db python -m alembic upgrade head` con `member_documents` preesistente -> OK
+
+---
+- [x] Identificare tutti i riferimenti FE org-admin a integrazioni/API key/Pienissimo
+- [x] Rimuovere sezione UI Integrazioni dall'area org-admin (settings/cards/menu)
+- [x] Eliminare funzioni e tipi API client verso /api/org-admin/integrations/keys*
+- [x] Verificare che il badge signup_source in tab Soci resti invariato
+- [x] Eseguire build frontend e controllo link/route/chiamate residue
+
+## Review (FE cleanup org-admin integration keys - Feb 17, 2026)
+- npm run build (frontend) OK
+- Nessun riferimento FE residuo a /api/org-admin/integrations/keys* o UI "Integrazioni/Pienissimo key"
+- Badge INTEGRAZIONE in tab Soci mantenuto (usa signup_source)
+
+---
+- [x] Mappare implementazione IntegrationApiKey corrente (org-admin + issue endpoint) e definire refactor target super-admin only
+- [x] Rimuovere completamente endpoint org-admin integration keys (devono risultare 404)
+- [x] Implementare endpoint super-admin per list/create/rotate/disable chiavi per organizzazione
+- [x] Verificare hardening require_integration_key e assenza raw_key fuori create/rotate
+- [x] Aggiornare test: super-admin create key, org-admin access denied/404, issue endpoint con key super-admin
+- [x] Aggiornare documentazione (README/ENV_REQUIRED) con ownership super-admin ASSONAM
+- [x] Eseguire test mirati e aggiornare review
+
+## Review (Integration keys super-admin only - Feb 17, 2026)
+- python -m pytest tests/test_org_admin_integration_keys.py tests/test_integration_issue_member.py -> 8 passed
+- Verifica funzionale: endpoint /api/org-admin/integrations/keys* non pi� registrati; GET/POST/PATCH/DELETE su path rimossi rispondono 404 (fallback API)
+- /api/integrations/members/issue invariato su header X-ASSONAM-API-KEY, con update last_used_at/last_used_ip/last_used_user_agent su chiave attiva
+
+---
+- [x] Analizzare payload membri/org-admin esistenti e mappare dove rendere visibili signup_source e gestione chiavi
+- [x] Aggiornare tabella Soci con badge "INTEGRAZIONE" + sorgente senza alterare filtri/ordinamenti
+- [x] Aggiungere sezione "Integrazioni" in OrgAdminSettings con stato key, genera/rigenera, disattiva, reveal one-time e copia
+- [x] Verificare compilazione frontend e documentare esito in Review
+## Review (Frontend integrazione Pienissimo - Feb 17, 2026)
+- npm run build (frontend) OK (badge integrazione soci + gestione chiavi API)
+---
+- [x] Inspect frontend structure, routes, and existing styles to map all pages (public + user/admin/superadmin dashboards)
 - [x] Define a premium, colorful visual direction (type, palette, motion, imagery) consistent across pages
 - [x] Implement global theming updates (tokens, typography, backgrounds, effects) and set reusable UI patterns
 - [x] Update homepage hero (centered, larger logo) and enhance key UI sections across all dashboards
 - [x] Add motion/interaction effects and validate UX improvements across critical flows
 - [x] Review changes, run targeted checks, and document results
-
 ## Review
 - `npm run build` (frontend) OK
 - `npm run build` (frontend) OK (perf instrumentation)
@@ -25,13 +74,11 @@
 - `python -m pytest tests/test_org_admin_member_filters.py` OK (warnings about datetime.utcnow deprecation)
 - `npm run build` (frontend) OK (org-admin soci filters)
 - `python -m pytest tests/test_org_admin_member_activity.py` OK (warnings about datetime.utcnow deprecation)
-- `npm run build` (frontend) OK (attivitÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â  socio + reset filtri)
+- `npm run build` (frontend) OK (attivitÃƒÆ’Ã‚Â  socio + reset filtri)
 - `python -m alembic upgrade head` OK (actor_member_id)
-- `npm run build` (frontend) OK (legenda attivitÃƒÆ’Ã‚Â )
+- `npm run build` (frontend) OK (legenda attivitÃƒÂ )
 - `npm run build` (frontend) OK (INP + font + hero contrast)
-
 ---
-
 ## INP + Hero Logo (Feb 02, 2026)
 - [x] Inspect hero logo rendering and remove visible box background without changing the asset
 - [x] Add dev-only INP instrumentation (web-vitals) with breakdown logging
@@ -39,17 +86,13 @@
 - [x] Wire performance logging in dev entrypoint and add minimal INP optimizations
 - [x] Document local INP reproduction steps and update review
 - [x] Harden perf instrumentation, reduce overhead, add sampling/throttling/cleanup
-
 ---
-
 ## Hero Logo Background (Feb 02, 2026)
 - [x] Update hero layout to move logo into background layer and remove visible white box
 - [x] Add subtle background styling so logo fills hero and keeps text readable
 - [x] Verify rendering and document outcome
 - [x] Swap to transparent logo asset and remove header logo background box
-
 ---
-
 ## Manual Member Creation (Feb 02, 2026)
 - [x] Review current org-admin member flows (API, models, UI) and identify integration points
 - [x] Add backend endpoint + validations + permissions, plus email magic-link option
@@ -57,9 +100,7 @@
 - [x] Update org-admin UI with CTA + form + success/error handling and detail view updates
 - [x] Add tests for org admin creation + permission guards
 - [x] Update review section with how to test locally
-
 ---
-
 ## Org Admin Send Access (Feb 02, 2026)
 - [x] Review existing member magic-link flow and decide a reuse strategy
 - [x] Add backend endpoint with throttle + permissions + audit and expose last sent timestamp
@@ -67,9 +108,7 @@
 - [x] Add UI button and UX messaging on member detail (and/or list)
 - [x] Add tests for send access (ok / no email / permissions)
 - [x] Update review section with how to test locally
-
 ---
-
 ## Document Workflow (Feb 02, 2026)
 - [x] Review current member document schema + routes and decide minimal changes
 - [x] Add DB fields + alembic migration (status/review/rejection/replaces)
@@ -77,19 +116,15 @@
 - [x] Implement member resubmit flow to create new pending doc linked to rejected
 - [x] Add tests for reject-without-note, resubmit policy, cross-org guard
 - [x] Update review section with how to test locally
-
 ---
-
 ## Org Admin Document UI (Feb 02, 2026)
 - [x] Review current org-admin member detail UI and dashboard metrics
 - [x] Add modal-based rejection flow with required note and inline status updates
 - [x] Render document status badges + actions with error handling
 - [x] Show document chain when replacements exist
-- [x] Add dashboard counters for ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œda rivedereÃƒÂ¢Ã¢â€šÂ¬Ã‚Â and ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œrigettatiÃƒÂ¢Ã¢â€šÂ¬Ã‚Â
+- [x] Add dashboard counters for Ã¢â‚¬Å“da rivedereÃ¢â‚¬Â and Ã¢â‚¬Å“rigettatiÃ¢â‚¬Â
 - [x] Update review section with how to test locally
-
 ---
-
 ## Socio Dashboard Documenti (Feb 02, 2026)
 - [x] Review current member dashboard documents page and backend APIs
 - [x] Add member documents API payload (status, rejection note, replacements)
@@ -97,9 +132,7 @@
 - [x] Wire resubmit upload to create pending doc + inline state refresh
 - [x] Add minimal tests for member doc view + resubmit flow
 - [x] Update review section with local test steps
-
 ---
-
 ## Pagamento Manuale Org Admin (Feb 02, 2026)
 - [x] Review current member detail/list flows for payment state display
 - [x] Add DB table + migration for manual payments
@@ -108,37 +141,29 @@
 - [x] Add payment badge in org-admin members list
 - [x] Add tests for permissions + manual payment flow
 - [x] Update review section with local test steps
-
 ---
-
 ## Org Admin Soci Filters & Pagination (Feb 02, 2026)
 - [x] Review current org-admin members list UI + API and define filter/ordering params
 - [x] Update backend list endpoint with filters, ordering, and pagination; optimize queries
 - [x] Update frontend members page UI for search, filters, ordering, and pagination controls
 - [x] Add tests for filters + permissions
 - [x] Update review section with local test steps
-
 ---
-
-## Audit Log & AttivitÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â  Socio (Feb 02, 2026)
+## Audit Log & AttivitÃƒÆ’Ã‚Â  Socio (Feb 02, 2026)
 - [x] Add actor_member_id to audit logs and migrate schema
 - [x] Log sensitive actions for member create/update/access/doc review/resubmit/payment
 - [x] Surface recent activity in org-admin member detail (tab)
 - [x] Add reset filters UI on members list
 - [x] Add tests for activity visibility
 - [x] Add user-friendly legend for activity items
-
 ---
-
 ## INP + Font + Hero Contrast (Feb 02, 2026)
 - [x] Inspect INP hotspots (routes /, /associazioni) and current font/hero styles
 - [x] Implement low-overhead INP optimizations (defer heavy work, reduce reflow, memoize where safe)
 - [x] Swap to a more professional font pairing with proper loading strategy
 - [x] Improve hero logo contrast while keeping text legible
 - [x] Verify UI and document results in Review
-
 ---
-
 ## Guided Onboarding Tour (Feb 04, 2026)
 - [x] Create OnboardingTour DB model and Alembic migration
 - [x] Create API routes for tour state management (/api/me/onboarding/*)
@@ -146,7 +171,6 @@
 - [x] Integrate tour in member (SOCIO) dashboard with data-tour attributes
 - [x] Integrate tour in org admin dashboard with data-tour attributes
 - [x] Verify frontend build passes
-
 ### Files Created
 - `app/routes/onboarding.py` - Backend API routes
 - `alembic/versions/c2d3e4f5g6h7_add_onboarding_tours.py` - DB migration
@@ -154,7 +178,6 @@
 - `frontend/src/components/onboarding/OnboardingTour.tsx` - Main tour component
 - `frontend/src/components/onboarding/ReviewGuideButton.tsx` - Reset button
 - `frontend/src/components/onboarding/index.ts` - Exports
-
 ### Files Modified
 - `app/models.py` - Added OnboardingTour model
 - `app/main.py` - Registered onboarding router
@@ -167,7 +190,6 @@
 - `frontend/src/pages/org-admin/OrgAdminMembers.tsx` - data-tour attrs
 - `frontend/src/pages/org-admin/OrgAdminMemberDetail.tsx` - data-tour attrs
 - `frontend/src/pages/org-admin/OrgAdminCards.tsx` - data-tour attrs
-
 ### Test Manuali
 1. Nuovo utente SOCIO: tour parte automaticamente
 2. Completa tour: non riparte
@@ -175,14 +197,11 @@
 4. Rivedi guida: tour riparte
 5. Nuovo ADMIN ORG: tour parte automaticamente
 6. Isolamento ruoli: socio non vede tour admin e viceversa
-
 ### Come Resettare la Guida
 - UI: Clicca "Rivedi guida" nel menu
 - API: `POST /api/me/onboarding/reset`
 - DB: `UPDATE onboarding_tours SET completed_at=NULL, skipped_at=NULL WHERE user_id=X`
-
 ---
-
 ## Fix Guided Tour Multi-Route (Feb 04, 2026)
 - [x] Add route mapping to tour steps (TourStep type with route property)
 - [x] Mark conditional steps as optional (member-document-rejected, member-upload-document)
@@ -193,7 +212,6 @@
 - [x] Remove non-existent steps (member-help was never implemented)
 - [x] Reorganize step order (dashboard home steps together, documents steps together)
 - [x] Verify frontend build passes
-
 ### Implementazione
 - `tourSteps.ts`: Aggiunto `TourStep` type con `route` e `optional` properties
 - `OnboardingTour.tsx`:
@@ -202,26 +220,20 @@
   - `waitForElement()`: retry loop per trovare elementi con delay
   - `findNextValidStep()`: salta automaticamente step opzionali se target mancante
   - Gestione `TARGET_NOT_FOUND` con retry prima di skippare
-
 ### Route Mapping
 **Member tour:**
 - Steps 1-3 (`member-dashboard-home`, `member-status`, `member-card-number`): `/dashboard`
 - Steps 4-6 (`member-documents`, `member-document-rejected`, `member-upload-document`): `/dashboard/documenti`
-
 **Org Admin tour:**
 - Steps 1-2 (`admin-dashboard-home`, `admin-stats`): `/org-admin`
 - Steps 3-4 (`admin-members-list`, `admin-add-member`): `/org-admin/soci`
 - Step 5 (`admin-cards`): `/org-admin/tessere`
-
 ---
-
 ## Architecture, Scaffolding & Performance Fixes (Feb 04, 2026)
-
 ### Security Fixes (CRITICAL)
 - [x] Fix inverted auth check in `org_admin.py:47-48` (was returning None for super admin)
 - [x] Add atomic token consumption with UPDATE WHERE to prevent race condition (`member.py`)
 - [x] Add session expiration (30 min timeout) to `main.py` SessionMiddleware
-
 ### Performance Fixes
 - [x] Combine 4 metrics queries into 3 using conditional aggregation (`org_admin.py`)
 - [x] Add composite database indexes (Alembic migration `d3e4f5g6h7i8`)
@@ -229,26 +241,21 @@
   - `ix_members_org_deleted` - (org_id, deleted_at)
   - `ix_member_documents_member_status` - (member_id, status)
   - `ix_card_batches_org` - (org_id)
-
 ### Frontend Scaffolding
 - [x] Create `AuthProvider` and `useAuth` hook (`hooks/useAuth.tsx`)
 - [x] Create `ProtectedRoute` component (`components/auth/ProtectedRoute.tsx`)
 - [x] Create `apiClient` with retry & deduplication (`lib/apiClient.ts`)
-
 ### Files Created
 - `frontend/src/hooks/useAuth.tsx` - Centralized auth state with tab sync
 - `frontend/src/components/auth/ProtectedRoute.tsx` - Route guard component
 - `frontend/src/components/auth/index.ts` - Auth exports
 - `frontend/src/lib/apiClient.ts` - API client with retry/dedupe
 - `alembic/versions/d3e4f5g6h7i8_add_performance_indexes.py` - Index migration
-
 ### Files Modified
 - `app/routes/org_admin.py` - Auth fix + metrics optimization
 - `app/routes/member.py` - Atomic token consumption
 - `app/main.py` - Session expiration (max_age=1800)
-
 ### Usage Examples
-
 **ProtectedRoute:**
 ```tsx
 // In App.tsx routes
@@ -258,104 +265,81 @@
   </ProtectedRoute>
 } />
 ```
-
 **useAuth:**
 ```tsx
 const { user, loading, logout, refresh } = useAuth();
 if (loading) return <Loading />;
 if (!user) return <Navigate to="/login" />;
 ```
-
 **apiClient:**
 ```tsx
 import { apiGet, apiPost } from "../lib/apiClient";
-
 // With automatic retry and deduplication
 const data = await apiGet<User[]>("/api/users");
 const result = await apiPost<Result>("/api/users", { name: "John" });
 ```
-
 ---
-
 ## Alembic Migration Idempotency Fix (Feb 04, 2026)
-
 ### Problema
 `alembic upgrade head` falliva con errori tipo:
 - `table member_payments already exists`
 - `no such column: deleted_at`
-
 ### Causa
-Il database era fuori sync con Alembic perchÃƒÆ’Ã‚Â©:
+Il database era fuori sync con Alembic perchÃƒÂ©:
 1. `init_db.py` usa `Base.metadata.create_all()` che crea tabelle bypassando Alembic
 2. Alcune migrazioni aggiungono colonne che potrebbero non esistere nel DB attuale
 3. Il DB locale potrebbe essere stato creato prima che le migrazioni fossero definite
-
 ### Fix Implementato
 Rese idempotenti le migrazioni problematiche:
-
 **`a1b2c3d4e5f6_add_member_payments.py`:**
 - Aggiunto check `_table_exists()` prima di `create_table`
 - Aggiunto check `_index_exists()` prima di `create_index`
-- Se la tabella esiste giÃƒÆ’Ã‚Â , la migrazione passa senza errori
-
+- Se la tabella esiste giÃƒÂ , la migrazione passa senza errori
 **`d3e4f5g6h7i8_add_performance_indexes.py`:**
 - Aggiunto `_safe_create_index()` che verifica:
-  - L'indice non esiste giÃƒÆ’Ã‚Â 
+  - L'indice non esiste giÃƒÂ 
   - Tutte le colonne referenziate esistono
 - Se le condizioni non sono soddisfatte, skip silenzioso
-
 ### Come Evitare in Futuro
-
 1. **Non usare `create_all()` in produzione** - Solo Alembic deve gestire lo schema
 2. **Usare `alembic stamp head`** dopo init manuale per sincronizzare la versione
 3. **Rendere TUTTE le migrazioni idempotenti** con pattern:
    ```python
    from sqlalchemy import inspect
-
    def _table_exists(name):
        return name in inspect(op.get_bind()).get_table_names()
-
    def upgrade():
        if _table_exists("my_table"):
            return
        op.create_table("my_table", ...)
    ```
-
 4. **Per nuovi progetti:** Iniziare con `alembic upgrade head` su DB vuoto
-
 ### Verifica
 ```bash
 python -m alembic upgrade head  # OK
 python -m alembic current       # d3e4f5g6h7i8 (head)
 ```
-
 ---
-
 ## Spec (Fix Modale Finale Guida Completata - Feb 05, 2026)
 - Obiettivo: evitare che la modale finale "Guida completata" resti bloccata dopo la chiusura del tour.
 - Vincoli: modale finale controllata da state esplicito; chiusura affidabile da Fine, X e Indietro; nessuna riapertura automatica dopo chiusura manuale.
 - Approccio: separare la modale finale da Joyride e renderla come dialog controllato (`open` + `onOpenChange`).
-
 ## Plan (Fix Modale Finale Guida Completata)
 - [x] Trovare il componente che mostra "Guida completata" in `frontend/src`.
 - [x] Introdurre `showFinalStep` e collegare apertura/chiusura della modale a stato controllato.
 - [x] Fare in modo che Fine, X, Indietro chiudano sempre la modale (`setShowFinalStep(false)`).
 - [x] Aggiungere guard anti-riapertura dopo close manuale.
 - [x] Verificare build/lint mirato e aggiornare review.
-
 ## Review (Fix Modale Finale Guida Completata)
 - [x] Modale finale resa controllata via `showFinalStep` + `onOpenChange`.
 - [x] Bottoni `Fine`, `X`, `Indietro` chiudono tutti la modale.
 - [x] Guard anti-riapertura aggiunta (`finalStepDismissedRef`) + reset stato al nuovo tour.
 - [x] Verifica tecnica: `npm run build` in `frontend` OK.
-
 ---
-
 ## Spec (Fix Tour Socio Route/Tab Resilience - Feb 05, 2026)
 - Obiettivo: rendere il tour socio (member) resiliente ai cambi tab/route interni dashboard senza interrompersi o rimbalzare.
 - Vincoli: non alterare il comportamento admin; patch mirata su gestione member in onboarding.
 - Requisiti: persistenza `run` + `stepIndex`, retry su `TARGET_NOT_FOUND/ERROR`, resume stato su mount, log diagnostici temporanei per member.
-
 ## Plan (Fix Tour Socio Route/Tab Resilience)
 - [x] Analizzare flow attuale `OnboardingTour` e identificare i punti di stop su route change.
 - [x] Implementare persistenza member (`tour_member_run`, `tour_member_step_index`) e ripristino su mount.
@@ -363,41 +347,33 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] Aggiungere log temporanei member (`role`, `run`, `stepIndex`, `currentRoute`, callback joyride).
 - [x] Aggiornare reset guida per pulire anche le nuove chiavi member.
 - [x] Verificare con build frontend + aggiornare review + lessons.
-
 ## Review (Fix Tour Socio Route/Tab Resilience)
 - [x] Tour member continua su cambi route/tab senza chiamare `endTour` su `TARGET_NOT_FOUND/ERROR`.
 - [x] Stato in corso member persistito (`tour_member_run`, `tour_member_step_index`) e ripristinato al mount.
 - [x] Retry member su target mancanti con massimo 4 tentativi prima di avanzare.
 - [x] Admin lasciato invariato nel flusso (`role="org_admin"` non usa persistenza/retry/log extra).
 - [x] Verifica tecnica: `npm run build` in `frontend` OK.
-
 ---
-
 ## Spec (Preview Tessera Socio 2026 - Feb 05, 2026)
 - Obiettivo: mostrare in Dashboard Socio > Riepilogo un preview grafico della tessera ASSO.N.A.M. 2026 usando dati reali backend/DB.
 - Vincoli: nessun mock hardcoded (eccetto label anno 2026), fallback safe su campi mancanti, nessun impatto admin/deploy/docker/alembic.
 - Fonte dati: `GET /api/auth/me` (gia esistente) con `first_name`, `last_name`, `card_no`, `joined_at`, `organization.name`, `status`.
-
 ## Plan (Preview Tessera Socio 2026)
 - [x] Definire adapter/type guard per mappare `MemberProfile` -> `MemberCardPreviewData` con fallback robusti.
 - [x] Creare componente riusabile `frontend/src/components/cards/MemberCardPreview.tsx` in stile tessera ufficiale (fronte).
 - [x] Integrare il preview nella card "Tessera" di `DashboardHome` con skeleton/loading e fallback errore + retry.
 - [x] Verificare build frontend e aggiornare review con passi di test locali.
-
 ## Review (Preview Tessera Socio 2026)
 - [x] Dati preview tessera consumati da `GET /api/auth/me` (nessun mock di nome/cognome/associazione/numero/stato).
 - [x] Preview responsive introdotto in `DashboardHome` con design coerente crema/verde petrolio/oro.
 - [x] Fallback robusti su campi mancanti (`-`) e fallback errore con bottone `Riprova`.
 - [x] Adapter compatibile con naming backend alternativi (`organization_name`, `card_number`, `assigned_card_number`).
 - [x] Verifica tecnica: `npm run build` in `frontend` OK.
-
 ---
-
 ## Spec (Tessera Separata + QR Reale + Fix Area Riservata - Feb 05, 2026)
 - Obiettivo: rendere la tessera socio ASSO.N.A.M. una sezione dedicata e separata dalle KPI card, con flip 3D fronte/retro, QR reale verso backend e bugfix del primo click su "Area riservata".
 - Vincoli: nessun mock/hardcode dati socio-tessera, no modali, stile istituzionale coerente con tessera annuale, nessuna duplicazione tessera nelle card riepilogo.
 - Dati richiesti: `socio.nome`, `socio.cognome`, `tessera.numero`, `tessera.stato`, `tessera.anno`, `associazione.nome` da DB.
-
 ## Plan (Tessera Separata + QR Reale + Fix Area Riservata)
 - [x] Spostare la tessera in una sezione dedicata "La tua tessera" sotto le card riepilogo standard.
 - [x] Reimplementare `MemberCardPreview` come tessera interattiva con flip 3D fronte/retro e stati hover/focus.
@@ -406,7 +382,6 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] Introdurre `card_year` nel modello dati + migration + assegnazione anno nei flussi di emissione tessera.
 - [x] Correggere il bug primo click su "Area riservata" unificando il redirect auth in route dedicata (`/area-riservata`).
 - [x] Verificare build/test mirati e aggiornare review.
-
 ## Review (Tessera Separata + QR Reale + Fix Area Riservata)
 - [x] Dashboard socio aggiornata: KPI standard separate, tessera resa protagonista in sezione dedicata con heading esplicito.
 - [x] Tessera fronte: logo, dicitura "Tessera Socio 2026", nome/cognome, numero tessera, nome completo associazione.
@@ -417,15 +392,12 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] Verifica tecnica: `python -m pytest tests/test_member_card_verification.py` OK.
 - [x] Verifica tecnica: `npm run build` (frontend) OK.
 - [ ] Verifica allargata: `python -m pytest tests/test_member_card_verification.py tests/test_email_flows.py` NON completamente verde per failure preesistente su `test_email_flows.py::test_member_magic_link_flow` (join 400 per statuto mancante su `my-association`).
-
 ---
-
 ## Spec (ASSONAM - Documento facoltativo + attivazione senza documenti - Feb 06, 2026)
 - Obiettivo: separare stato iscrizione/attivazione dal flusso documenti.
 - Upload carta identita facoltativo nel form iscrizione.
 - Admin puo approvare/attivare socio anche senza documenti caricati.
 - Flusso approva/rifiuta documento invariato quando il documento esiste.
-
 ## Plan (ASSONAM - Documento facoltativo)
 - [x] Rendere opzionale `id_document` nel backend submit iscrizione.
 - [x] Salvare documenti solo se presenti e mantenere submit valido senza file.
@@ -435,7 +407,6 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] Aggiornare frontend admin dettaglio (badge documento non caricato, nessun blocco approvazione iscrizione).
 - [x] Aggiungere migrazione Alembic di compatibilita per nullable status documento.
 - [x] Aggiungere test minimi richiesti.
-
 ## Review (ASSONAM - Documento facoltativo)
 - [x] `python -m pytest tests/test_optional_identity_document.py` OK (3 passed).
 - [x] Verifica caso a): create member senza documento -> OK.
@@ -444,16 +415,13 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] `npm run build` in `frontend` OK.
 - [ ] `python -m pytest tests/test_org_admin_decision.py` non verde per stato ambiente (`pending_cards` per stock tessere org test).
 - [ ] `python -m pytest tests/test_document_workflow.py` non verde per slug duplicati su DB test preesistente (`docflow-org*`).
-
 ---
-
 ## Spec (ASSONAM - Modalita di pagamento iscrizione socio - Feb 07, 2026)
 - Obiettivo: aggiungere `payment_method` (CASH/BONIFICO) nel flusso iscrizione socio con persistenza DB.
 - Vincoli: nessuna integrazione gateway; solo scelta e salvataggio.
 - UX: select con label italiana "Modalita di pagamento", placeholder "Seleziona...", opzioni "Contanti" e "Bonifico".
 - Backend: campo su `members`, validazione input, supporto payload create/update, esposizione nel dettaglio socio admin.
 - Test minimo: create con `CASH` OK, create con `BONIFICO` OK, create senza campo -> 400 con messaggio chiaro.
-
 ## Plan (ASSONAM - Modalita di pagamento iscrizione socio)
 - [x] Aggiungere `payment_method` al modello `Member` con validazione valori ammessi e compatibilita legacy.
 - [x] Creare migrazione Alembic idempotente per colonna `members.payment_method` (+ eventuale vincolo dove supportato).
@@ -463,27 +431,22 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] Mostrare "Modalita di pagamento" nella vista dettaglio socio dashboard org-admin (e super-admin dove presente).
 - [x] Aggiungere/aggiornare test backend per CASH, BONIFICO e validazione required.
 - [x] Eseguire test mirati + build frontend e compilare review.
-
 ## Review (ASSONAM - Modalita di pagamento iscrizione socio)
 - [x] Migrazione eseguita con successo: `python -m alembic upgrade head` OK (`f4a5b6c7d8e9 -> a9b8c7d6e5f4`).
 - [x] Test richiesti feature: `python -m pytest tests/test_payment_method_join.py tests/test_org_admin_payment_method_detail.py tests/test_super_admin_member_payment_method_detail.py` OK (5 passed).
 - [x] Build frontend: `npm run build` in `frontend` OK.
 - [x] Verifica addizionale: `python -m pytest tests/test_payment_method_join.py tests/test_optional_identity_document.py tests/test_documents.py tests/test_org_admin_manual_member.py` NON completamente verde per failure preesistenti su `tests/test_documents.py` e `tests/test_org_admin_manual_member.py`.
-
 ---
-
 ## Spec (ASSONAM - Performance INP/CLS dashboard - Feb 07, 2026)
 - Obiettivo: eliminare il lag in typing e ridurre INP/CLS su dashboard socio, org-admin, super-admin.
 - Hotspot principali: form/modali con stato locale nel parent che contiene tabelle/listoni, causando rerender dell'intera pagina ad ogni keypress.
 - Vincoli: nessuna regressione funzionale nei flussi esistenti; ottimizzazioni mirate e progressive.
-
 ## Plan (ASSONAM - Performance INP/CLS dashboard)
 - [x] Profilare hotspot di rerender su typing e documentare i componenti impattati.
 - [x] Isolare i form/modali pesanti in componenti memoizzati con stato locale (evitare rerender di tabelle/layout su keypress).
 - [x] Stabilizzare render di liste/tabelle con memo/callback stabili e ridurre computazioni nel render.
 - [x] Ridurre CLS con spazi riservati/min-height per messaggi e blocchi dinamici in dashboard.
 - [x] Verificare build/test frontend, raccogliere evidenze e aggiornare README/perf notes + review.
-
 ## Review (ASSONAM - Performance INP/CLS dashboard)
 - [x] Hotspot confermati: `OrgAdminMembers`, `SuperAdminOrganizations`, `SuperAdminOrgAdmins`, `OrgAdminMemberDetail` avevano stato input/modale nel parent con tabelle/listoni nello stesso albero.
 - [x] Refactor eseguito: form/modali separati in componenti dedicati con stato locale (`CreateMemberModal`, `OrganizationManageModal`, `CreateOrgAdminForm`, `ManualPaymentForm`, `RejectDocumentModal`, `MemberDecisionPanel`).
@@ -492,72 +455,56 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] Documentazione aggiornata: note performance in `README.md` e dettaglio operativo in `README_INP.md`.
 - [x] Verifica tecnica: `npm run build` in `frontend` OK (bundle rigenerato senza errori TS/Vite).
 - [x] Evidenza build: chunk dashboard ottimizzati generati (`OrgAdminMembers-YPTJ6xid.js`, `SuperAdminOrganizations-DUb0JKUy.js`, `SuperAdminOrgAdmins-zONclGsn.js`, `OrgAdminMemberDetail-BLs04_lo.js`).
-
 ---
-
 ## Spec (ASSONAM - Performance follow-up lag alto in input/modal - Feb 07, 2026)
 - Evidenza utente: INP ancora alto (~424ms) con breakdown dominato da `presentationDelay` durante interazione su input/modal dashboard.
 - Ipotesi principale: costo compositing/paint elevato da glass UI (`backdrop-filter`, gradient overlay, hover transforms) e sfondo scenico animato attivi anche sulle route dashboard.
 - Obiettivo: ridurre latenza percepita su click/focus/typing in form dashboard, mantenendo flussi invariati.
-
 ## Plan (ASSONAM - Performance follow-up lag alto in input/modal)
 - [x] Introdurre modalita performance per route dashboard/admin e attenuare effetti visivi costosi (blur/backdrop/overlay animati) in quel contesto.
 - [x] Rendere il form "Aggiungi socio" principalmente uncontrolled (FormData submit) per eliminare rerender per keypress.
 - [x] Sostituire i pannelli modali principali con stile statico senza `backdrop-filter` per limitare repaint.
 - [x] Verificare build frontend e aggiornare note/review.
-
 ## Review (ASSONAM - Performance follow-up lag alto in input/modal)
 - [x] Aggiunta `dashboard-perf-mode` sulle route admin/dashboard in `Layout`: disattivati sfondo scenico animato e page transition framer-motion su quelle route.
 - [x] Override CSS performance su dashboard: rimozione `backdrop-filter`/glass overlay per `surface`, `surface-strong`, `header-band`; hover meno costosi.
 - [x] Form modal "Aggiungi socio" rifattorizzato in modalita quasi-uncontrolled (`FormData` submit), eliminando setState per keypress nei campi testo.
 - [x] Modali principali convertiti a pannello statico `modal-panel` (senza blur) per ridurre paint/compositing.
 - [x] Verifica tecnica: `npm run build` in `frontend` OK.
-
 ---
-
 ## Spec (Dashboard socio - Fix flip tessera no specchio + logo fisso - Feb 07, 2026)
 - Obiettivo: correggere il flip 3D della tessera socio evitando qualsiasi testo specchiato durante/after rotate.
 - Vincoli UX: retro minimal (solo QR grande + dati essenziali), logo ASSONAM sempre fisso/non ruotato come overlay.
-- Accessibilitï¿½: flip via click + Enter/Space, aria-label chiara, no text selection durante animazione.
+- Accessibilit�: flip via click + Enter/Space, aria-label chiara, no text selection durante animazione.
 - Impatto: patch limitata a `MemberCardPreview` e CSS dedicato in `frontend/src/index.css`.
-
 ## Plan (Dashboard socio - Fix flip tessera)
 - [x] Rifattorizzare markup in struttura flip standard (`wrapper`/`inner`/`front`/`back`) con facce assolute e backface hidden.
 - [x] Spostare logo ASSONAM fuori da `inner` e renderlo overlay assoluto non ruotante.
 - [x] Ridurre il retro a QR grande + massimo 3 righe dati essenziali (numero, nome, anno) mantenendo endpoint QR attuale.
 - [x] Garantire interazione accessibile (click/Enter/Space, aria-label) e `user-select: none`.
 - [x] Verificare build frontend e aggiornare review.
-
-
 ## Review (Dashboard socio - Fix flip tessera)
 - [x] Struttura flip standard applicata: `member-card-flip` (perspective), `member-card-flip-inner` (preserve-3d + rotateY), facce front/back assolute con `backface-visibility` nascosta.
 - [x] Logo ASSONAM estratto dal layer ruotato e reso overlay fisso (`absolute`, `z-10`, `pointer-events-none`), senza duplicazioni.
 - [x] Retro semplificato: QR grande centrale + 3 righe essenziali (`Numero tessera`, `Nome`, `Anno`) senza testi front duplicati/specchiati.
 - [x] Accessibilita: flip via bottone (click + Enter/Space nativi), `aria-label="Ruota tessera"`, `user-select: none` sul wrapper.
 - [x] Verifica tecnica: `npm run build` in `frontend` OK.
-
 ---
-
 ## Spec (Dashboard socio - Follow-up flip ancora specchiato - Feb 07, 2026)
 - Obiettivo: eliminare definitivamente il rendering specchiato del fronte quando la card e in stato flipped.
 - Approccio: rendere front/back figli diretti di uno stage unico ruotato, con proprieta 3D/backface rinforzate anche inline.
-
 ## Plan (Follow-up flip specchiato)
 - [x] Sostituire `member-card-flip-inner` con `member-card-flip-stage` e ridurre livelli annidati nel DOM della card.
 - [x] Rinforzare `backface-visibility` e `transform-style` (incluse varianti WebKit) su stage e facce.
 - [x] Verificare build frontend e aggiornare review.
-
 ## Review (Follow-up flip specchiato)
 - [x] Front/back resi figli diretti dello stage ruotato, evitando layering ambiguo che mostrava il fronte specchiato.
 - [x] Aggiunte proprieta 3D robuste (`preserve-3d`, `backface-visibility`, `translateZ`) a livello CSS + inline sulle facce.
 - [x] Verifica tecnica: `npm run build` in `frontend` OK.
-
 ---
-
 ## Spec (Fix Favicon ASSONAM tab browser - Feb 08, 2026)
 - Obiettivo: mostrare il logo ASSONAM nella scheda browser al posto della favicon errata.
 - Vincoli: modifica minima, nessun impatto su routing/API, compatibile con build Vite.
-
 ## Plan (Fix Favicon ASSONAM)
 - [ ] Aggiornare `frontend/index.html` per usare il logo ASSONAM come favicon.
 - [ ] Eliminare la favicon legacy non coerente (`frontend/public/favicon.svg`).
@@ -566,23 +513,18 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] Aggiornato `frontend/index.html` per usare il logo ASSONAM come favicon (`/logo-transparent.png?v=2026-02-08`).
 - [x] Eliminata favicon legacy non coerente (`frontend/public/favicon.svg`).
 - [x] Verifica tecnica completata: `npm run build` in `frontend` OK.
-
 ---
-
 ## Spec (SEO Audit completo + remediation - Feb 08, 2026)
 - Obiettivo: eseguire audit SEO tecnico/on-page completo e correggere le criticita principali direttamente nel codice.
 - Scope: crawlability/indexation, meta tags, canonical, OG/Twitter, robots/sitemap, soft-404 SPA, pagine trust base.
 - Vincoli: impatto minimo sui flussi applicativi, nessuna regressione su routing dashboard/API.
-
 ## Plan (SEO Audit + Fix)
 - [x] Implementare gestione SEO centralizzata frontend (title, description, canonical, robots, OG/Twitter) con regole per route pubbliche/private.
 - [x] Migliorare SEO dinamico su pagine associazione/iscrizione e aggiungere structured data nella home.
 - [x] Aggiungere endpoint backend `sitemap.xml` (con URL statiche + associazioni attive da DB) e `robots.txt` statico frontend.
 - [x] Aggiungere pagina Privacy pubblica e link interno dal footer per trust/compliance base.
 - [x] Eseguire verifica tecnica (build frontend + smoke checks backend) e documentare review in `tasks/todo.md`.
-
 ## Execution (SEO Audit + Fix)
-
 ### Frontend: applySeo() wired into all pages
 - `Home.tsx`: title, description, canonical, Organization + FAQPage JSON-LD
 - `LoStudio.tsx`: title, description, canonical
@@ -598,23 +540,18 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - `AdminLayout.tsx`: noindex
 - `OrgAdminLayout.tsx`: noindex
 - `SuperAdminLayout.tsx`: noindex
-
 ### Frontend: index.html fallback meta
 - Meta description, robots, canonical in static HTML
 - Full Open Graph tags (type, title, description, url, site_name, locale, image)
 - Twitter Card tags (summary_large_image)
-
 ### Frontend: robots.txt
 - `frontend/public/robots.txt`: Allow /, Disallow private routes, Sitemap reference
-
 ### Backend: sitemap.xml endpoint
-- `app/routes/public.py`: GET /sitemap.xml â€” static pages + active organizations from DB
-
+- `app/routes/public.py`: GET /sitemap.xml — static pages + active organizations from DB
 ### Frontend: Privacy page
 - `frontend/src/pages/Privacy.tsx`: GDPR-compliant privacy policy
 - Route added in App.tsx: `/privacy`
 - Footer link updated from unlinked `<span>` to `<Link to="/privacy">`
-
 ## Review (SEO Audit + Fix)
 - [x] `npm run build` in `frontend` OK.
 - [x] Tutte le pagine pubbliche hanno title, description, canonical, OG e Twitter Card.
@@ -625,14 +562,11 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] Endpoint `/sitemap.xml` dinamico nel backend con pagine statiche + associazioni attive.
 - [x] Pagina Privacy creata con informativa GDPR e linkata dal footer.
 - [x] Fallback meta tags in `index.html` per crawler che non eseguono JS.
-
 ---
-
 ## Spec (Rehaul totale pagine pubbliche + Hero Three.js - Feb 13, 2026)
 - Obiettivo: modernizzare tutte le pagine pubbliche ASSONAM con hero home WebGL premium sobrio e motion system coerente, senza alterare dashboard/logica backend/routing.
 - Scope incluso: home/landing, lo studio, servizi, associazioni, dettaglio affiliazione, iscrizione, contatti, privacy, login/register/magic verify/not-found, header/footer/layout pubblico.
 - Scope escluso: dashboard socio/admin/org-admin/super-admin e relativi componenti/layout.
-
 ## Plan (Rehaul pagine pubbliche)
 - [x] Separare shell/layout pubblico da route dashboard mantenendo dashboard invariata.
 - [x] Introdurre motion system GSAP pubblico con reveal discreti (fade-up + stagger) e supporto prefers-reduced-motion.
@@ -640,7 +574,6 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] Ridisegnare header/footer pubblici con brand block + payoff animato e menu mobile curato.
 - [x] Aggiornare styling/UX di tutte le pagine pubbliche e componenti comuni (cards, forms, FAQ, CTA, sezioni).
 - [x] Aggiornare dipendenze frontend e verificare build/test funzionali richiesti (desktop/mobile/fallback/dashboard invariata).
-
 ## Review (Rehaul pagine pubbliche)
 - [x] Aggiunta shell pubblica dedicata in `Layout` con header sticky+shrink, brand block e payoff animato, footer ristrutturato; branch dashboard mantenuto separato.
 - [x] Motion system GSAP introdotto (`usePublicMotion`) con due pattern reveal (`fade-up`, `stagger`) e rispetto `prefers-reduced-motion`.
@@ -651,28 +584,23 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] Verifica tecnica: `npm.cmd run build` (frontend) OK.
 - [x] Verifica dashboard invariata lato file: nessuna modifica diretta in `frontend/src/pages/dashboard/*`, `frontend/src/pages/admin/*`, `frontend/src/pages/org-admin/*`, `frontend/src/pages/super-admin/*`.
 - [ ] Verifica visuale manuale browser (desktop/mobile e fallback WebGL disabilitato) da completare in ambiente UI locale.
-
 ---
-
 ## Spec (Fix reale Three.js + GSAP pubblico - Feb 13, 2026)
 - Obiettivo: sostituire la scena hero simulata con WebGL reale (`<canvas>`) e garantire motion GSAP verificabile sulle sole pagine pubbliche.
 - Vincoli: impatto minimo, nessuna modifica a dashboard/admin/org-admin/super-admin; routing/auth/forms invariati.
 - Accettazione: dipendenze presenti, `<canvas>` hero visibile, timeline mount (logo/payoff/CTA), almeno uno ScrollTrigger reveal, WebGL client-only, mobile 360x800 e 390x844 senza regressioni UX/perf.
-
 ## Plan (Fix reale Three.js + GSAP pubblico)
 - [x] Introdurre componente hero WebGL dedicato `PublicHeroThree.client.tsx` con `@react-three/fiber` + `@react-three/drei`.
 - [x] Integrare Home hero con mount client-only, fallback non-WebGL e layering canvas/overlay/testo corretto.
 - [x] Rafforzare GSAP mount timeline pubblico (logo/payoff/CTA) e confermare `ScrollTrigger` reveal sezioni.
 - [x] Rifinire mobile/performance (DPR/fps, touch scroll, clamp typography, CTA above-the-fold, no overflow).
 - [x] Verificare build frontend e documentare review con punti di verifica DevTools/GSAP.
-
 ## Execution (Fix reale Three.js + GSAP pubblico)
 - Creato `frontend/src/components/public/PublicHeroThree.client.tsx` con scena R3F reale (`Canvas`) + `MeshDistortMaterial` (drei), luci morbide, fog e particelle discrete.
 - Aggiornata `Home` con import lazy client-only del nuovo componente e policy degrado qualitativo (non disattivazione WebGL su low-power).
 - Rafforzata la timeline GSAP nel layout pubblico: logo, payoff e CTA hero (`[data-hero-cta]`) in sequenza mount.
 - Confermato e irrigidito il sistema `ScrollTrigger` reveal pubblico (`fade-up` e `stagger`) in `usePublicMotion`.
 - Rifinita UX mobile/public CSS: canvas assoluto non-interattivo, overlay leggibilita, tap target >= 44px, clamp heading e prevenzione overflow orizzontale.
-
 ## Review (Fix reale Three.js + GSAP pubblico)
 - [x] `npm.cmd run build` in `frontend` OK.
 - [x] Dipendenze richieste presenti in `frontend/package.json`: `three`, `@react-three/fiber`, `@react-three/drei`, `gsap`.
@@ -681,66 +609,54 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] ScrollTrigger attivo su reveal sezioni pubbliche (`[data-reveal=\"fade-up\"]`, `[data-reveal=\"stagger\"]`).
 - [x] Dashboard non toccata: nessuna modifica in `frontend/src/pages/dashboard/*`, `frontend/src/pages/admin/*`, `frontend/src/pages/org-admin/*`, `frontend/src/pages/super-admin/*`.
 - [ ] Verifica manuale browser DevTools (presenza `<canvas>` in Elements + test viewport 360x800 e 390x844) da completare localmente.
-
 ---
-
 ## Spec (Hero Particle Logo ASSONAM da SVG - Feb 13, 2026)
 - Obiettivo: sostituire la hero WebGL con logo ASSONAM a particelle riconoscibile da sorgente SVG, senza geometrie casuali.
 - Vincoli: no sfere/torus/knot/poligoni random; movimento minimo sobrio; fallback statico su low-power/no WebGL; dashboard esclusa.
 - Verifiche richieste: canvas in hero desktop, particle logo visibile a destra, mobile stabile con fallback, screenshot desktop/mobile.
-
 ## Plan (Hero Particle Logo ASSONAM da SVG)
 - [x] Generare asset SVG dedicato del logo ASSONAM e usarlo come sorgente particellare.
 - [x] Implementare parser SVG (`SVGLoader`) e campionamento path in punti per `THREE.Points`.
-- [x] Riprogettare hero composition (copy a sinistra, logo a destra, overlay leggibilitÃ ).
+- [x] Riprogettare hero composition (copy a sinistra, logo a destra, overlay leggibilità).
 - [x] Limitare movimento a micro breathing/parallax e ridurre costi su mobile/low-power.
 - [x] Eseguire build e produrre screenshot desktop/mobile.
-
 ## Review (Hero Particle Logo ASSONAM da SVG)
 - [x] Asset sorgente creato: `frontend/public/logo-assonam-particle.svg`.
 - [x] Particle logo implementato in `PublicHeroThree.client.tsx` con `SVGLoader` + `PointsMaterial` (niente mesh casuali).
 - [x] Hero aggiornata con composizione copy-left/logo-right e fallback statico logo su low-power/no WebGL.
-- [x] Rimossa qualsiasi immagine underlay quando WebGL Ã¨ attivo: in modalitÃ  WebGL il logo Ã¨ solo `THREE.Points`.
-- [x] Sampling SVG reso piÃ¹ pulito con path vettoriali da contorni (no texture/no scanline overlay).
+- [x] Rimossa qualsiasi immagine underlay quando WebGL è attivo: in modalità WebGL il logo è solo `THREE.Points`.
+- [x] Sampling SVG reso più pulito con path vettoriali da contorni (no texture/no scanline overlay).
 - [x] Build frontend verificata: `npm.cmd run build` OK.
 - [x] Screenshot generati:
   - `tasks/screenshots/hero-desktop.png`
   - `tasks/screenshots/hero-mobile-390x844.png`
   - `tasks/screenshots/hero-mobile-360x800.png`
-
 ---
-
 ## Spec (Hero Monumento: logo 3D ASSONAM sotto testo - Feb 13, 2026)
 - Obiettivo: sostituire l'hero object con il logo ASSONAM 3D estruso da SVG, grande, centrato e posizionato sotto H1/CTA.
 - Vincoli: niente sfere/forme casuali, colori brand blu+giallo, animazione sobria, fallback statico solo quando WebGL e disattivo.
-
 ## Plan (Hero Monumento)
 - [x] Rigenerare SVG logo pulito in `public` con separazione cromatica blu/giallo.
 - [x] Implementare pipeline `SVGLoader -> shapes -> ExtrudeGeometry` con gruppo centrato e scala monumentale.
 - [x] Aggiornare layout hero in stack verticale (copy sopra, monumento sotto) mantenendo CTA leggibile.
 - [x] Applicare lighting morbido + animazione minima (breathing/oscillazione lieve + micro parallax desktop).
 - [x] Verificare build frontend e fallback statico mobile/low-power.
-
 ## Review (Hero Monumento)
 - [x] Nuovo hero object: logo ASSONAM 3D da SVG, nessun oggetto geometrico casuale.
 - [x] Layout aggiornato: testo/CTA sopra, area monumento centrata sotto con spazio dedicato (`public-hero-monument-spacer`).
 - [x] Materiali brand coerenti (blu + giallo) con luci key/rim/ambient morbide.
 - [x] Mobile/low-power: WebGL disattivato e fallback statico grande centrato sotto testo.
 - [x] Verifica tecnica: `npm.cmd run build` in `frontend` OK.
-
 ---
-
 ## Spec (Hero WebGL monument fix dopo review utente - Feb 13, 2026)
 - Obiettivo: correggere hero pubblico per avere logo ASSONAM 3D animato sotto il testo, CTA leggibili e sfondo chiaro brand (bianco sfumato con glow blu/giallo).
 - Vincoli: dashboard invariata, WebGL desktop attivo con canvas reale, fallback statico su mobile/low-power, GSAP pubblico mantenuto.
-
 ## Plan (Hero WebGL monument fix)
 - [x] Rivedere trigger WebGL/low-power per evitare fallback statico su desktop.
 - [x] Riallineare stile hero (background chiaro, CTA coerenti blu/bianco, layout non sovrapposto).
 - [x] Rafforzare resa logo 3D (materiali double-side, colori brand da SVG, motion continuo sobrio).
 - [x] Forzare comportamento mobile stabile con fallback statico sotto testo.
 - [x] Verificare build e produrre screenshot desktop/mobile aggiornati.
-
 ## Review (Hero WebGL monument fix)
 - [x] `frontend/src/pages/Home.tsx`: policy low-power aggiornata (`<768px` => fallback statico) e CTA hero uniformate.
 - [x] `frontend/src/components/public/PublicHeroThree.client.tsx`: logo 3D da SVG con animazione breathing/parallax + materiali blu/giallo e `DoubleSide`.
@@ -751,139 +667,109 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] Screenshot aggiornati:
   - `tasks/screenshots/hero-desktop-final.png`
   - `tasks/screenshots/hero-mobile-final.png`
-
 ---
-
 ## Spec (Hero background composition fix post-feedback - Feb 13, 2026)
 - Obiettivo: integrare il logo hero WebGL nel background (dietro copy/CTA), ridurre aggressivita visiva e ripristinare leggibilita foto Piazza Bologna + tipografia headline bilanciata.
 - Vincoli: canvas reale in hero, GSAP mount/scroll invariati, dashboard e pricing untouched.
-
 ## Plan (Hero background composition fix)
 - [x] Spostare la composizione del logo hero nel layer background (non in flow sotto al testo).
 - [x] Ribilanciare overlay/background per rendere visibile la foto e mantenere contrasto del copy.
 - [x] Correggere line-break H1 e spacing CTA per evitare resa "storta".
 - [x] Verificare desktop/mobile con screenshot e check canvas in DevTools.
-
 ---
-
 ## Spec (Hero brand color rebalance + CTA pairs coherence - Feb 13, 2026)
 - Obiettivo: centrare meglio il logo ASSONAM dietro la headline, evitare hero monocromatica blu e rendere tutte le coppie CTA pubbliche coerenti con palette blu+giallo.
 - Vincoli: nessun impatto dashboard/admin; mantenere Three.js + GSAP reali.
-
 ## Plan (Hero brand rebalance)
 - [x] Ricalibrare scala/posizione/logo opacity nel canvas Three per centratura dietro H1.
 - [x] Uniformare i bottoni pubblici (`btn-primary` + `btn-ghost`) con trattamento cromatico blu+giallo su tutto il sito pubblico.
 - [x] Aggiornare la resa tipografica hero con trattamento cromatico verticale blu/giallo.
 - [x] Verificare build frontend.
-
 ## Review (Hero brand rebalance)
 - [x] `frontend/src/components/public/PublicHeroThree.client.tsx`: logo ridimensionato e riposizionato per stare centrato nel layer hero dietro il copy.
 - [x] `frontend/src/index.css`: bottoni pubblici aggiornati con gradienti brand-mix blu/giallo applicati a tutte le coppie CTA del sito pubblico.
 - [x] `frontend/src/index.css`: headline hero con gradiente verticale (parte alta blu / parte bassa gialla).
 - [x] Verifica tecnica: `npm.cmd run build` in `frontend` OK.
-
 ---
-
 ## Spec (Sostituzione immagine sezione post-hero - Feb 13, 2026)
 - Obiettivo: rimuovere completamente la foto con mano/unghie e sostituire la prima immagine sotto hero con un asset web piu coerente.
-
 ## Plan (Sostituzione immagine sezione)
 - [x] Scaricare un nuovo asset royalty-free dal web nella cartella `frontend/public/public-images`.
 - [x] Aggiornare mapping immagini in `Home.tsx` eliminando riferimenti a `associazione-team.jpg`.
 - [x] Cancellare il file `associazione-team.jpg` e verificare build frontend.
-
 ## Review (Sostituzione immagine sezione)
 - [x] Nuova immagine web salvata: `frontend/public/public-images/process-consulenza-web.jpg`.
 - [x] `frontend/src/pages/Home.tsx` aggiornato: prima sezione usa il nuovo asset web.
 - [x] Riferimento a `associazione-team.jpg` rimosso dal codice.
 - [x] File legacy `frontend/public/public-images/associazione-team.jpg` eliminato.
 - [x] Verifica tecnica: `npm.cmd run build` in `frontend` OK.
-
 ---
-
 ## Spec (Hotfix hero mobile readability/layout - Feb 13, 2026)
 - Obiettivo: correggere la resa hero su mobile (headline invisibile/disallineata e logo fallback troppo alto sopra il copy).
-
 ## Plan (Hotfix hero mobile)
 - [x] Introdurre fallback tipografico robusto su mobile (headline blu pieno, senza dipendenza da text-clip gradient).
 - [x] Limitare il gradiente testo blu/giallo solo a desktop con `@supports` + `@media`.
 - [x] Spostare logo fallback mobile piu in basso e ridurne scala/opacita per evitare overlap con subtitle/CTA.
 - [x] Verificare build frontend.
-
 ## Review (Hotfix hero mobile)
 - [x] `frontend/src/index.css`: hero title default solido blu; gradient clip attivo solo desktop compatibile.
 - [x] `frontend/src/index.css`: fallback logo mobile riposizionato (`top: 68%`) e ridotto (`clamp(8.8rem, 34vw, 11.2rem)`).
 - [x] Verifica tecnica: `npm.cmd run build` in `frontend` OK.
-
 ---
-
 ## Spec (Hotfix mobile typo/contrast dopo screenshot reale - Feb 13, 2026)
 - Obiettivo: correggere hero mobile con titolo troppo grande/spezzato e subtitle poco leggibile sullo sfondo foto.
-
 ## Plan (Hotfix mobile readability v2)
 - [x] Ridurre ulteriormente scala e tracking dell'H1 mobile.
 - [x] Aumentare leggibilita copy mobile con panel leggero dietro al blocco testo.
 - [x] Rafforzare contrasto del subtitle (colore + peso + text-shadow soft).
 - [x] Spostare logo fallback piu in basso per evitare sovrapposizione copy/CTA.
 - [x] Verificare build frontend.
-
 ## Review (Hotfix mobile readability v2)
 - [x] `frontend/src/index.css`: H1 mobile ridotto (`clamp(1.58rem, 8.9vw, 2.7rem)`), `line-height: 1.11`.
 - [x] `frontend/src/index.css`: `public-hero-copy` mobile con pannello soft per contrasto del testo.
 - [x] `frontend/src/index.css`: subtitle mobile scurito e reso piu leggibile (`rgba(19,42,101,0.96)`, weight 500).
 - [x] `frontend/src/index.css`: fallback logo mobile abbassato (`top: 78%`) e ridotto (`clamp(8.1rem, 30vw, 10.2rem)`).
 - [x] Verifica tecnica: `npm.cmd run build` in `frontend` OK.
-
 ---
-
 ## Spec (Bug Fix: Doc Socio + Iscrizione + Error Page - Feb 16, 2026)
-
 ### Root Causes Identified
-1. **Org-admin soci/:id page crash (CRITICAL)**: 3 `useMemo` hooks dopo `if (loading) return` → violazione Rules of Hooks → React crash "Rendered more hooks than expected" → ErrorBoundary. Spostati PRIMA dei return condizionali.
-2. **ErrorBoundary buttons broken**: `<Link to="/">` does SPA nav but `hasError` class state persists → fallback keeps showing. Fixed by using `window.location.href` for full navigation.
+1. **Org-admin soci/:id page crash (CRITICAL)**: 3 `useMemo` hooks dopo `if (loading) return` ? violazione Rules of Hooks ? React crash "Rendered more hooks than expected" ? ErrorBoundary. Spostati PRIMA dei return condizionali.
+2. **ErrorBoundary buttons broken**: `<Link to="/">` does SPA nav but `hasError` class state persists ? fallback keeps showing. Fixed by using `window.location.href` for full navigation.
 3. **Signup 400 for oasi-2 (and any org without statute)**: Backend required `statute_pdf_path` AND `accept_statute=true` unconditionally. Frontend only showed statute checkbox when org had statute. Fixed: statute acceptance now conditional on org having a statute.
 4. **Generic error messages hide real cause**: `joinOrganization()` threw "Join failed" without reading response body. Fixed: now reads `detail` from response.
 5. **Registration failure masks signup success**: If `joinOrganization` succeeded but `registerMember` failed, user saw error. Fixed: registration is now non-blocking.
-
 ### Fixes Applied
-- [x] A. ErrorBoundary: `<Link>` → `window.location.href`, added error logging
+- [x] A. ErrorBoundary: `<Link>` ? `window.location.href`, added error logging
 - [x] B. Join endpoint: statute check conditional, added `is_active` check
 - [x] C. `joinOrganization()`: reads response body for 400/409/429/500 detail
 - [x] D. Iscrizione.tsx: shows real backend error, registration non-blocking
 - [x] E. Request ID middleware: `X-Request-Id` on all responses, logged in errors
 - [x] F. Doc download: fetch+blob with error handling instead of `<a href>` nav
 - [x] G. Tests: 6 pytest tests all passing (statute-optional, inactive, all-orgs, request-id)
-
 ### Files Modified
-- `frontend/src/components/ErrorBoundary.tsx` — Full navigation, error logging
-- `frontend/src/lib/api.ts` — `joinOrganization` + `registerMember` error detail
-- `frontend/src/pages/Iscrizione.tsx` — Real error messages, non-blocking registration
-- `frontend/src/pages/org-admin/OrgAdminMemberDetail.tsx` — Fetch-based doc download
-- `app/routes/join.py` — Conditional statute, is_active check, request_id in errors
-- `app/middleware.py` — `RequestIdMiddleware` + `get_request_id`
-- `app/main.py` — Register `RequestIdMiddleware`
-
+- `frontend/src/components/ErrorBoundary.tsx` � Full navigation, error logging
+- `frontend/src/lib/api.ts` � `joinOrganization` + `registerMember` error detail
+- `frontend/src/pages/Iscrizione.tsx` � Real error messages, non-blocking registration
+- `frontend/src/pages/org-admin/OrgAdminMemberDetail.tsx` � Fetch-based doc download
+- `app/routes/join.py` � Conditional statute, is_active check, request_id in errors
+- `app/middleware.py` � `RequestIdMiddleware` + `get_request_id`
+- `app/main.py` � Register `RequestIdMiddleware`
 ### Files Created
-- `tests/test_signup_fixes.py` — 6 tests covering all fixes
-
+- `tests/test_signup_fixes.py` � 6 tests covering all fixes
 ### Deploy Notes
 - No DB migration needed
 - No new env vars
 - Request ID header (`X-Request-Id`) now present on all responses
-
 ---
-
 ## Spec (Hero mobile CTA-only con watermark - Feb 13, 2026)
 - Obiettivo: su mobile mostrare solo CTA centrate + watermark logo; nascondere completamente eyebrow/H1/subtitle. Da `md` in su layout invariato con testo completo.
 - Vincoli: niente cambi routing/backend/SEO, nessuna nuova dipendenza, modifica limitata a hero + css collegato.
-
 ## Plan (Hero mobile CTA-only)
 - [x] Aggiornare markup hero in `Home.tsx` con blocco testo `hidden md:block` senza duplicare la hero.
 - [x] Rendere CTA sempre presenti con layout responsive: mobile colonna full-width, desktop riga width auto.
 - [x] Inserire watermark mobile assoluto (`md:hidden`) dietro CTA e separare fallback no-webgl desktop-only.
 - [x] Pulire stratificazione z-index (`scene 0`, `overlay 10`, `watermark 20`, `cta/text 30`) e centratura verticale mobile.
 - [x] Verificare build frontend.
-
 ## Review (Hero mobile CTA-only)
 - [x] `frontend/src/pages/Home.tsx`: testo hero wrappato in `hidden md:block`; CTA sempre visibili con classi responsive richieste.
 - [x] `frontend/src/pages/Home.tsx`: watermark mobile aggiunto (`md:hidden`, `opacity 0.12`, `pointer-events-none`) dietro bottoni.
@@ -891,4 +777,78 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] `frontend/src/index.css`: min-height hero mobile impostata a `70svh` / `75svh` (sm), copy centrato verticalmente e overlay ribilanciato.
 - [x] `frontend/src/index.css`: z-index hero riallineati (`overlay 10`, `content/copy 30`).
 - [x] Verifica tecnica: `npm.cmd run build` in `frontend` OK.
+---
+## Spec (Integrazione Issuer Tessera API - Feb 17, 2026)
+- Obiettivo: aggiungere endpoint sicuro per emissione socio attivo via gestionale esterno (es. Pienissimo), con idempotenza, assegnazione tessera da lotto, email HTML tessera + magic link accesso area riservata.
+- Vincoli: non alterare il flusso signup standard (resta pending/approvazione), usare API key scoped per associazione, evitare duplicati su retry (`external_customer_id`), mantenere compatibilit� codice esistente.
+## Plan (Integrazione Issuer Tessera API)
+- [x] Estendere modelli (`Member` + `IntegrationApiKey`) e retro-compatibilit� init DB.
+- [x] Aggiungere migrazione Alembic per nuovi campi, nuova tabella e vincolo univoco idempotenza.
+- [x] Implementare sicurezza integrazione (hash API key + dependency con scope e tracciamento `last_used_*`).
+- [x] Implementare endpoint `POST /api/integrations/members/issue` con idempotenza, attivazione socio e card verification URL.
+- [x] Estendere servizio email a multipart HTML e aggiungere template tessera con QR + CTA accesso/verifica.
+- [x] Integrare generazione token magic-link diretto nel flusso issuer.
+- [x] Aggiungere audit log evento `integration_issue_member`.
+- [x] Scrivere test pytest richiesti (create/idempotenza/401/email HTML capture).
+- [x] Aggiornare documentazione (README/ENV_REQUIRED) con header e creazione chiavi.
+- [x] Eseguire test mirati e completare review.
+## Review (Integrazione Issuer Tessera API)
+- [x] Endpoint `POST /api/integrations/members/issue` attivo con API key scoped e controllo org.
+- [x] Idempotenza implementata su `(org_id, signup_source, external_customer_id)` con vincolo DB + logica applicativa.
+- [x] Emissione tessera con `assign_next_card_with_batch` e salvataggio `batch_id` sul socio.
+- [x] Email multipart HTML implementata (`send_email_html`) con template tessera, QR `qrserver` e CTA magic-link.
+- [x] Audit DB `integration_issue_member` registrato in `operation_logs`.
+- [x] Test eseguiti: `python -m pytest tests\\test_integration_issue_member.py tests\\test_email_flows.py tests\\test_card_assignment.py` -> **22 passed**.
+- [x] Nota migrazioni legacy: `python -m alembic upgrade head` resta bloccato da una migration storica preesistente (`5f60c30665a2`, table `member_documents` gi� esistente), non da questa implementazione.
+---
+## Spec (Hotfix Alembic 5f60 Idempotenza - Feb 17, 2026)
+- Obiettivo: rendere idempotente la migration storica `5f60c30665a2` (`member_documents`) per evitare crash su `alembic upgrade head` quando la tabella esiste gi�.
+- Vincoli: usare SQLAlchemy inspector (`sa.inspect(op.get_bind())`), saltare creazione tabella/indici/constraint se gi� presenti.
+## Plan (Hotfix Alembic 5f60 Idempotenza)
+- [x] Aggiornare `upgrade()` con check esistenza tabella `member_documents`.
+- [x] Proteggere creazione indice della migration con check `index exists`.
+- [x] Rendere `downgrade()` safe (drop solo se tabella/indice esistono).
+- [x] Verificare `alembic upgrade head` su DB vuoto e su DB con tabella gi� presente.
+## Review (Hotfix Alembic 5f60 Idempotenza)
+- [x] Modificata migration `alembic/versions/5f60c30665a2_add_member_documents_table.py` con helper `_table_exists` e `_index_exists`.
+- [x] `upgrade()` ora ritorna subito se `member_documents` � gi� presente.
+- [x] `downgrade()` ora evita drop su oggetti mancanti.
+- [x] Validazione eseguita:
+  - `DATABASE_URL=sqlite:///tmp_alembic_empty.db python -m alembic upgrade head` -> OK.
+  - `DATABASE_URL=sqlite:///tmp_alembic_existing.db python -m alembic upgrade d9638477c3a7` -> OK.
+  - `DATABASE_URL=sqlite:///tmp_alembic_existing.db python -m alembic upgrade head` -> OK.
+---
+## Spec (Org-Admin IntegrationApiKey Management - Feb 17, 2026)
+- Obiettivo: aggiungere endpoint org-admin per creare/listare/ruotare/disattivare IntegrationApiKey in modo sicuro, con raw key esposta solo in create/rotate.
+- Vincoli: session auth org-admin esistente, scoping rigoroso su `org_id`, soft-disable via `is_active=false`, audit su OperationLog.
+## Plan (Org-Admin IntegrationApiKey Management)
+- [x] Estendere schema/model per permettere rotazione storica (rimozione unique `org_id+name` su integration keys).
+- [x] Implementare endpoint `GET /api/org-admin/integrations/keys` con filtro `name` e output senza `key_hash`.
+- [x] Implementare endpoint `POST /api/org-admin/integrations/keys` con generazione raw key e hash persistito.
+- [x] Implementare endpoint `POST /api/org-admin/integrations/keys/{id}/rotate` disattivando la key vecchia e creando una nuova.
+- [x] Implementare endpoint `DELETE /api/org-admin/integrations/keys/{id}` per soft-disable.
+- [x] Aggiungere audit log `integration_key_created`, `integration_key_rotated`, `integration_key_disabled`.
+- [x] Aggiungere test basilari pytest (auth, create/list, rotate, disable, scoping org).
+- [x] Eseguire test mirati e documentare review.
+## Review (Org-Admin IntegrationApiKey Management)
+- [x] Aggiunti endpoint in `app/routes/org_admin.py`:
+  - `GET /api/org-admin/integrations/keys`
+  - `POST /api/org-admin/integrations/keys`
+  - `POST /api/org-admin/integrations/keys/{id}/rotate`
+  - `DELETE /api/org-admin/integrations/keys/{id}`
+- [x] Sicurezza: accesso solo via sessione org-admin e filtro `key.org_id == admin.org_id`.
+- [ ] Verificare hardening require_integration_key e assenza raw_key fuori create/rotate
+- [x] Soft disable implementato via `is_active=False`.
+- [x] Audit log DB aggiunti: `integration_key_created`, `integration_key_rotated`, `integration_key_disabled`.
+- [x] Schema aggiornato per rotazione storica:
+  - modello `IntegrationApiKey` senza unique `org_id+name`
+  - migration `h1a2b3c4d5e6_drop_integration_org_name_unique.py`
+- [x] Test aggiunti: `tests/test_org_admin_integration_keys.py`.
+- [x] Verifiche eseguite:
+  - `python -m pytest tests\\test_org_admin_integration_keys.py tests\\test_integration_issue_member.py` -> **8 passed**
+  - `DATABASE_URL=sqlite:///tmp_org_admin_integration_keys.db python -m alembic upgrade head` -> **OK**
+
+
+
+
 

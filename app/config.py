@@ -16,6 +16,7 @@ class Settings:
 
     BASE_URL: str = os.getenv("BASE_URL", "http://localhost:8000")
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "")
+    INGEST_SECRET: str = os.getenv("INGEST_SECRET", "")
 
     GIT_SHA: str = os.getenv("GIT_SHA", "")
     BUILD_TIME: str = os.getenv("BUILD_TIME", "")

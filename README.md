@@ -34,6 +34,8 @@ A minimal web application for association member signup, document upload, and me
    |----------|-------------|---------|
    | `SECRET_KEY` | Secret for sessions and token hashing | `supersecretkey` |
    | `BASE_URL` | Public URL of the app (for emails) | `http://localhost:8000` |
+   | `FRONTEND_URL` | Public URL of SPA (for member magic-link) | _(empty)_ |
+   | `INGEST_SECRET` | Secret for `/api/ingest/pienissimo/{org_slug}` header `X-ASSO-INGEST-SECRET` | _(empty, recommended)_ |
    | `UPLOAD_DIR` | Directory for uploaded files | `data/uploads` |
    | `LOGIN_TOKEN_EXPIRE_MINUTES` | Login link validity | `15` |
    | `JOIN_TOKEN_EXPIRE_MINUTES` | Signup continue link validity | `120` |
@@ -97,6 +99,16 @@ External management systems can issue members directly as active through:
 - Required header: `X-ASSONAM-API-KEY`
 - Required API key scope: `issue_member`
 - Integration keys are managed by ASSONAM super admin only
+- Key ownership is enforced server-side: request data cannot switch organization
+
+### Ingest endpoint (Option A, org_slug path)
+
+Use the ingest endpoint as your bridge entrypoint for Pienissimo payloads:
+
+- `POST /api/ingest/pienissimo/{org_slug}`
+- Header: `X-ASSO-INGEST-SECRET: <INGEST_SECRET>` (required when `INGEST_SECRET` is configured)
+- Accepts flexible payload field names and normalizes to issuer flow internally
+- Does not require `X-ASSONAM-API-KEY` in input; it reuses configured integration key server-side
 
 ### Super-admin key management endpoints
 

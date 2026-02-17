@@ -10,6 +10,7 @@ from app.models import (
     IntegrationApiKey,
     Member,
     MemberStatus,
+    OperationLog,
     Organization,
     SignupSource,
 )
@@ -195,3 +196,36 @@ def test_issue_member_captures_html_email_with_verification_url(client, db):
     finally:
         settings.EMAIL_MODE = original_email_mode
         clear_captured_emails()
+
+
+def test_issue_member_rejects_payload_org_mismatch(client, db):
+    org_key_owner, _batch_a, raw_key = _create_org_with_key(db)
+    other_org, _batch_b, _unused_key = _create_org_with_key(db)
+
+    response = client.post(
+        "/api/integrations/members/issue",
+        json={
+            "org_slug": other_org.slug,
+            "external_customer_id": f"ext-mismatch-{uuid.uuid4().hex[:8]}",
+            "email": f"mismatch.{uuid.uuid4().hex[:6]}@example.com",
+            "first_name": "Mismatch",
+            "last_name": "Test",
+            "send_email": False,
+        },
+        headers={"X-ASSONAM-API-KEY": raw_key},
+    )
+    assert response.status_code == 403, response.text
+
+    latest_security_log = (
+        db.query(OperationLog)
+        .filter(
+            OperationLog.action == "security_event",
+            OperationLog.entity_type == "integration_api_key",
+        )
+        .order_by(OperationLog.id.desc())
+        .first()
+    )
+    assert latest_security_log is not None
+    metadata = latest_security_log.metadata_json or {}
+    assert metadata.get("reason") == "org_slug_mismatch"
+    assert metadata.get("key_org_id") == org_key_owner.id

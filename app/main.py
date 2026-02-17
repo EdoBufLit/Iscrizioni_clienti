@@ -14,7 +14,17 @@ from app.bootstrap import bootstrap_super_admin
 from app.config import settings
 from app.db import get_db, SessionLocal, engine
 from app.middleware import SecurityHeadersMiddleware, RequestIdMiddleware
-from app.routes import admin, integrations, join, member, onboarding, org_admin, public, super_admin
+from app.routes import (
+    admin,
+    ingest_pienissimo,
+    integrations,
+    join,
+    member,
+    onboarding,
+    org_admin,
+    public,
+    super_admin,
+)
 from app.schema_validation import validate_schema
 from app.spa import SPAStaticFiles
 from init_db import init_db
@@ -81,7 +91,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.BASE_URL],
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-ASSONAM-API-KEY"],
+    allow_headers=["Content-Type", "X-ASSONAM-API-KEY", "X-ASSO-INGEST-SECRET"],
     allow_credentials=True,
 )
 
@@ -108,6 +118,7 @@ app.include_router(super_admin.router)
 app.include_router(public.router)
 app.include_router(onboarding.router)
 app.include_router(integrations.router)
+app.include_router(ingest_pienissimo.router)
 
 
 @app.get("/health")
