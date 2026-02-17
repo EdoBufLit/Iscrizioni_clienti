@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import Optional
+import secrets
 import re
 
 from sqlalchemy import func, text
@@ -10,9 +11,9 @@ from sqlalchemy import func, text
 from app.db import get_db
 from app.models import (
     AdminUser, AdminRole, Organization, OrgAdminToken, CardBatch, CardMovement,
-    Member, MemberDocument, MemberPayment, PaymentMethod, Token
+    Member, MemberDocument, MemberPayment, PaymentMethod, Token, IntegrationApiKey
 )
-from app.security import verify_password
+from app.security import hash_api_key, verify_password
 from app.utils import generate_token, hash_token, send_email, save_upload_file
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
@@ -29,6 +30,7 @@ _ALLOWED_MEMBER_PAYMENT_METHODS = {
     PaymentMethod.CASH.value,
     PaymentMethod.BONIFICO.value,
 }
+_ALLOWED_INTEGRATION_SCOPES = {"issue_member"}
 
 
 def _require_super_admin(request: Request, db: Session) -> AdminUser:
@@ -151,6 +153,227 @@ class CreateOrgAdmin(BaseModel):
 
 class PatchOrgAdmin(BaseModel):
     is_active: bool
+
+
+class CreateIntegrationKeyBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = "pienissimo"
+    scopes: list[str] = Field(default_factory=lambda: ["issue_member"])
+
+
+def _get_org_or_404(db: Session, org_id: int) -> Organization:
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    return org
+
+
+def _normalize_integration_name(raw_value: str | None) -> str:
+    normalized = (raw_value or "").strip().lower()
+    if not normalized:
+        raise HTTPException(status_code=400, detail="Nome integrazione obbligatorio.")
+    return normalized
+
+
+def _normalize_integration_scopes(raw_scopes: list[str] | None) -> list[str]:
+    provided_scopes = raw_scopes or ["issue_member"]
+    cleaned_scopes = sorted({scope.strip() for scope in provided_scopes if scope and scope.strip()})
+    if not cleaned_scopes:
+        raise HTTPException(status_code=400, detail="Almeno uno scope e obbligatorio.")
+
+    invalid_scopes = [scope for scope in cleaned_scopes if scope not in _ALLOWED_INTEGRATION_SCOPES]
+    if invalid_scopes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Scope non validi: {', '.join(invalid_scopes)}",
+        )
+    return cleaned_scopes
+
+
+def _serialize_integration_key(key: IntegrationApiKey) -> dict:
+    return {
+        "id": key.id,
+        "name": key.name,
+        "scopes": key.scopes or [],
+        "is_active": bool(key.is_active),
+        "created_at": key.created_at.isoformat() if key.created_at else None,
+        "last_used_at": key.last_used_at.isoformat() if key.last_used_at else None,
+        "last_used_ip": key.last_used_ip,
+    }
+
+
+def _create_integration_key(
+    db: Session,
+    org_id: int,
+    name: str,
+    scopes: list[str],
+) -> tuple[IntegrationApiKey, str]:
+    raw_key = secrets.token_urlsafe(32)
+    key = IntegrationApiKey(
+        org_id=org_id,
+        name=name,
+        key_hash=hash_api_key(raw_key),
+        scopes=scopes,
+        is_active=True,
+    )
+    db.add(key)
+    db.commit()
+    db.refresh(key)
+    return key, raw_key
+
+
+@router.get("/orgs/{org_id}/integration-keys")
+def list_org_integration_keys(
+    request: Request,
+    org_id: int,
+    name: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    _get_org_or_404(db, org_id)
+
+    query = db.query(IntegrationApiKey).filter(IntegrationApiKey.org_id == org_id)
+    if name is not None:
+        query = query.filter(IntegrationApiKey.name == _normalize_integration_name(name))
+
+    keys = query.order_by(IntegrationApiKey.created_at.desc(), IntegrationApiKey.id.desc()).all()
+    return {"items": [_serialize_integration_key(key) for key in keys]}
+
+
+@router.post("/orgs/{org_id}/integration-keys")
+def create_org_integration_key(
+    request: Request,
+    org_id: int,
+    body: CreateIntegrationKeyBody,
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+    _get_org_or_404(db, org_id)
+
+    normalized_name = _normalize_integration_name(body.name)
+    normalized_scopes = _normalize_integration_scopes(body.scopes)
+    key, raw_key = _create_integration_key(
+        db=db,
+        org_id=org_id,
+        name=normalized_name,
+        scopes=normalized_scopes,
+    )
+
+    audit.log_operation(
+        db,
+        action="integration_key_created",
+        entity_type="integration_api_key",
+        entity_id=key.id,
+        actor_admin_id=admin.id,
+        actor_role=AdminRole.SUPER_ADMIN.value,
+        metadata={
+            "org_id": org_id,
+            "name": key.name,
+            "scopes": key.scopes,
+            "is_active": bool(key.is_active),
+        },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+
+    return {
+        "id": key.id,
+        "created_at": key.created_at.isoformat() if key.created_at else None,
+        "raw_key": raw_key,
+    }
+
+
+@router.post("/orgs/{org_id}/integration-keys/{key_id}/rotate")
+def rotate_org_integration_key(
+    request: Request,
+    org_id: int,
+    key_id: int,
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+    _get_org_or_404(db, org_id)
+
+    current_key = (
+        db.query(IntegrationApiKey)
+        .filter(IntegrationApiKey.id == key_id, IntegrationApiKey.org_id == org_id)
+        .first()
+    )
+    if not current_key:
+        raise HTTPException(status_code=404, detail="Integration key not found")
+
+    current_key.is_active = False
+    db.commit()
+
+    new_key, raw_key = _create_integration_key(
+        db=db,
+        org_id=org_id,
+        name=current_key.name,
+        scopes=_normalize_integration_scopes(current_key.scopes or ["issue_member"]),
+    )
+
+    audit.log_operation(
+        db,
+        action="integration_key_rotated",
+        entity_type="integration_api_key",
+        entity_id=new_key.id,
+        actor_admin_id=admin.id,
+        actor_role=AdminRole.SUPER_ADMIN.value,
+        metadata={
+            "org_id": org_id,
+            "previous_key_id": current_key.id,
+            "name": new_key.name,
+            "scopes": new_key.scopes,
+        },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+
+    return {
+        "id": new_key.id,
+        "created_at": new_key.created_at.isoformat() if new_key.created_at else None,
+        "raw_key": raw_key,
+        "replaced_key_id": current_key.id,
+    }
+
+
+@router.delete("/orgs/{org_id}/integration-keys/{key_id}")
+def disable_org_integration_key(
+    request: Request,
+    org_id: int,
+    key_id: int,
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+    _get_org_or_404(db, org_id)
+
+    key = (
+        db.query(IntegrationApiKey)
+        .filter(IntegrationApiKey.id == key_id, IntegrationApiKey.org_id == org_id)
+        .first()
+    )
+    if not key:
+        raise HTTPException(status_code=404, detail="Integration key not found")
+
+    key.is_active = False
+    db.commit()
+
+    audit.log_operation(
+        db,
+        action="integration_key_disabled",
+        entity_type="integration_api_key",
+        entity_id=key.id,
+        actor_admin_id=admin.id,
+        actor_role=AdminRole.SUPER_ADMIN.value,
+        metadata={"org_id": org_id, "name": key.name, "is_active": bool(key.is_active)},
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+
+    return {"ok": True, **_serialize_integration_key(key)}
 
 
 @router.get("/members/{member_id}")
@@ -508,13 +731,16 @@ def delete_organization(
         AdminUser.role == AdminRole.ORG_ADMIN
     ).delete(synchronize_session=False)
 
-    # 7. Delete card movements
+    # 7. Delete integration API keys
+    db.query(IntegrationApiKey).filter(IntegrationApiKey.org_id == org_id).delete(synchronize_session=False)
+
+    # 8. Delete card movements
     db.query(CardMovement).filter(CardMovement.org_id == org_id).delete(synchronize_session=False)
 
-    # 8. Delete card batches
+    # 9. Delete card batches
     db.query(CardBatch).filter(CardBatch.org_id == org_id).delete(synchronize_session=False)
 
-    # 9. Delete the organization itself
+    # 10. Delete the organization itself
     db.delete(org)
 
     db.commit()

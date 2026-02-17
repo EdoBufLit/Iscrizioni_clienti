@@ -30,7 +30,7 @@ from app.models import (
     TokenType,
 )
 from app.utils import generate_token, hash_token, send_email, save_upload_file
-from app.services.card import assign_next_card
+from app.services.card import assign_next_card_with_batch
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
 from app import audit
@@ -705,6 +705,8 @@ def list_org_members(
                 "last_payment_at": payments_latest.get(m.id).isoformat() if payments_latest.get(m.id) else None,
                 "has_access": bool(m.password_hash),
                 "is_manual": bool(m.is_manual),
+                "signup_source": m.signup_source,
+                "external_customer_id": m.external_customer_id,
             }
             for m in members
         ],
@@ -1109,8 +1111,9 @@ def member_decision(
         if member.card_no is None:
             # Idempotency: do not reassign card numbers
             try:
-                assigned = assign_next_card(db, member.org_id)
+                assigned, batch_id = assign_next_card_with_batch(db, member.org_id)
                 member.card_no = assigned
+                member.batch_id = batch_id
                 member.card_year = datetime.utcnow().year
             except HTTPException as exc:
                 if exc.status_code == 409:
@@ -1199,7 +1202,9 @@ def create_manual_payment(
     if member.status != MemberStatus.REJECTED:
         if member.card_no is None:
             try:
-                member.card_no = assign_next_card(db, member.org_id)
+                assigned, batch_id = assign_next_card_with_batch(db, member.org_id)
+                member.card_no = assigned
+                member.batch_id = batch_id
                 member.card_year = datetime.utcnow().year
                 card_assigned = True
             except HTTPException as exc:

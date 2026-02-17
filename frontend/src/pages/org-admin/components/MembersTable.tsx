@@ -20,6 +20,13 @@ const thClass =
   "px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.15em] text-neutral-400";
 const tdClass = "px-5 py-3.5 text-sm text-neutral-700";
 
+function formatIntegrationSourceLabel(source: string): string {
+  return source
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 type MembersTableProps = {
   error: boolean;
   isLoading: boolean;
@@ -119,62 +126,78 @@ const MembersTable = memo(function MembersTable({
                 </td>
               </tr>
             ) : (
-              members.map((m, i) => (
-                <tr
-                  key={m.id}
-                  className={`transition hover:bg-brand/[0.02] ${
-                    i % 2 === 1 ? "bg-white/30" : ""
-                  }`}
-                >
-                  <td className={`${tdClass} font-medium text-neutral-900`}>{m.name}</td>
-                  <td className={tdClass}>{m.email ?? "-"}</td>
-                  <td className={tdClass}>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {m.status && (
-                        <span
-                          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-                            STATUS_CHIP[m.status] ??
-                            "border-neutral-200 bg-neutral-50 text-neutral-600"
-                          }`}
+              members.map((m, i) => {
+                const sourceRaw = (m.signup_source ?? "").trim();
+                const sourceLower = sourceRaw.toLowerCase();
+                const isIntegration =
+                  sourceLower.length > 0 && sourceLower !== "assonam_form";
+
+                return (
+                  <tr
+                    key={m.id}
+                    className={`transition hover:bg-brand/[0.02] ${
+                      i % 2 === 1 ? "bg-white/30" : ""
+                    }`}
+                  >
+                    <td className={`${tdClass} font-medium text-neutral-900`}>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span>{m.name}</span>
+                        {isIntegration && (
+                          <span className="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-cyan-700">
+                            INTEGRAZIONE {formatIntegrationSourceLabel(sourceRaw)}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className={tdClass}>{m.email ?? "-"}</td>
+                    <td className={tdClass}>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {m.status && (
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+                              STATUS_CHIP[m.status] ??
+                              "border-neutral-200 bg-neutral-50 text-neutral-600"
+                            }`}
+                          >
+                            {STATUS_LABEL[m.status] ?? m.status}
+                          </span>
+                        )}
+                        {m.is_paid && (
+                          <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+                            Pagato
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className={tdClass}>
+                      {m.docs_count != null ? (
+                        <span className="inline-flex items-center rounded bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-800">
+                          {m.docs_count}
+                        </span>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                    <td className={`${tdClass} tabular-nums`}>{m.card_no ?? "-"}</td>
+                    <td className={`${tdClass} tabular-nums`}>
+                      {m.joined_at
+                        ? new Date(m.joined_at).toLocaleDateString("it-IT")
+                        : "-"}
+                    </td>
+                    <td className={tdClass}>
+                      <div className="flex justify-end">
+                        <button
+                          className="text-sm font-medium text-brand hover:text-brand-dark"
+                          onClick={() => onOpenMember(m.id)}
+                          data-testid={`member-open-${m.id}`}
                         >
-                          {STATUS_LABEL[m.status] ?? m.status}
-                        </span>
-                      )}
-                      {m.is_paid && (
-                        <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
-                          Pagato
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className={tdClass}>
-                    {m.docs_count != null ? (
-                      <span className="inline-flex items-center rounded bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-800">
-                        {m.docs_count}
-                      </span>
-                    ) : (
-                      "-"
-                    )}
-                  </td>
-                  <td className={`${tdClass} tabular-nums`}>{m.card_no ?? "-"}</td>
-                  <td className={`${tdClass} tabular-nums`}>
-                    {m.joined_at
-                      ? new Date(m.joined_at).toLocaleDateString("it-IT")
-                      : "-"}
-                  </td>
-                  <td className={tdClass}>
-                    <div className="flex justify-end">
-                      <button
-                        className="text-sm font-medium text-brand hover:text-brand-dark"
-                        onClick={() => onOpenMember(m.id)}
-                        data-testid={`member-open-${m.id}`}
-                      >
-                        Apri
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
+                          Apri
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

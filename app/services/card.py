@@ -3,14 +3,15 @@ from sqlalchemy import select, text
 from fastapi import HTTPException
 from app.models import CardBatch, Member
 import logging
+from typing import Tuple
 
 logger = logging.getLogger(__name__)
 
 
-def assign_next_card(db: Session, org_id: int) -> int:
+def assign_next_card_with_batch(db: Session, org_id: int) -> Tuple[int, int]:
     """
-    Atomically assigns the next available membership card number
-    for the given organization.
+    Atomically assigns the next available membership card number for an organization.
+    Returns (card_number, batch_id).
 
     Logic:
     1. Find all batches for this org, ordered by start_no (deterministic order)
@@ -99,4 +100,12 @@ def assign_next_card(db: Session, org_id: int) -> int:
         candidate, batch.id, batch.start_no, batch.end_no, org_id
     )
 
-    return candidate
+    return candidate, batch.id
+
+
+def assign_next_card(db: Session, org_id: int) -> int:
+    """
+    Backward-compatible wrapper for callers expecting only card number.
+    """
+    card_no, _batch_id = assign_next_card_with_batch(db, org_id)
+    return card_no

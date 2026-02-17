@@ -7,6 +7,7 @@ from app.models import (
     Organization,
     Member,
     MemberStatus,
+    SignupSource,
     PaymentMethod,
     Token,
     TokenType,
@@ -15,7 +16,7 @@ from app.models import (
     AdminRole,
 )
 from app.utils import generate_token, send_email, save_upload_file, hash_token
-from app.services.card import assign_next_card
+from app.services.card import assign_next_card_with_batch
 from app.config import settings
 from app.middleware import join_limiter, get_client_ip, get_request_id
 from app import audit
@@ -202,6 +203,7 @@ def api_join_start(
         accepted_statute_version=org.statute_version,
         accepted_privacy_at=datetime.utcnow(),
         accepted_privacy_version=org.privacy_version,
+        signup_source=SignupSource.ASSONAM_FORM.value,
         signup_ip=request.client.host,
         signup_user_agent=request.headers.get("user-agent")
     )
@@ -329,8 +331,9 @@ async def api_join_continue(
 
         # Assign Card
         try:
-            assigned = assign_next_card(db, member.org_id)
+            assigned, batch_id = assign_next_card_with_batch(db, member.org_id)
             member.card_no = assigned
+            member.batch_id = batch_id
             member.card_year = datetime.utcnow().year
             member.status = MemberStatus.ACTIVE
             member.joined_at = datetime.utcnow()
@@ -436,6 +439,8 @@ async def api_join_submit_multipart(
             member.accepted_statute_version = accepted_statute_version or org.statute_version
             member.accepted_privacy_at = datetime.utcnow()
             member.accepted_privacy_version = org.privacy_version
+            if not member.signup_source:
+                member.signup_source = SignupSource.ASSONAM_FORM.value
             member.payment_method = normalized_payment_method
             member.signup_ip = get_client_ip(request)
             member.signup_user_agent = request.headers.get("user-agent")
@@ -468,6 +473,7 @@ async def api_join_submit_multipart(
                 accepted_statute_version=accepted_statute_version or org.statute_version,
                 accepted_privacy_at=datetime.utcnow(),
                 accepted_privacy_version=org.privacy_version,
+                signup_source=SignupSource.ASSONAM_FORM.value,
                 signup_ip=get_client_ip(request),
                 signup_user_agent=request.headers.get("user-agent")
             )

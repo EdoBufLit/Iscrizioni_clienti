@@ -18,8 +18,26 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _table_exists(table_name: str) -> bool:
+    insp = sa.inspect(op.get_bind())
+    return table_name in insp.get_table_names()
+
+
+def _index_exists(table_name: str, index_name: str) -> bool:
+    insp = sa.inspect(op.get_bind())
+    try:
+        indexes = insp.get_indexes(table_name)
+    except Exception:
+        return False
+    return any(idx.get("name") == index_name for idx in indexes)
+
+
 def upgrade() -> None:
     """Upgrade schema."""
+    if _table_exists("member_documents"):
+        # Idempotency: table already present in some legacy DBs.
+        return
+
     op.create_table('member_documents',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('member_id', sa.Integer(), nullable=True),
@@ -38,13 +56,20 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['reviewed_by'], ['admin_users.id'], ),
         sa.PrimaryKeyConstraint('id')
     )
-    with op.batch_alter_table('member_documents', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_member_documents_id'), ['id'], unique=False)
+    index_name = op.f("ix_member_documents_id")
+    if not _index_exists("member_documents", index_name):
+        with op.batch_alter_table('member_documents', schema=None) as batch_op:
+            batch_op.create_index(index_name, ['id'], unique=False)
 
 
 def downgrade() -> None:
     """Downgrade schema."""
-    with op.batch_alter_table('member_documents', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_member_documents_id'))
+    if not _table_exists("member_documents"):
+        return
+
+    index_name = op.f("ix_member_documents_id")
+    if _index_exists("member_documents", index_name):
+        with op.batch_alter_table('member_documents', schema=None) as batch_op:
+            batch_op.drop_index(index_name)
 
     op.drop_table('member_documents')

@@ -22,6 +22,8 @@ export type MemberProfile = {
   email: string;
   phone: string | null;
   fiscal_code: string | null;
+  signup_source?: string | null;
+  external_customer_id?: string | null;
   payment_method?: string | null;
   status: string;
   card_no: number | null;
@@ -443,6 +445,8 @@ export type OrgAdminMember = {
   last_payment_at?: string | null;
   has_access?: boolean;
   is_manual?: boolean;
+  signup_source?: string | null;
+  external_customer_id?: string | null;
 };
 
 export type OrgAdminMembersResponse = {
@@ -471,6 +475,8 @@ export type OrgAdminMemberCreated = {
   email: string | null;
   phone: string | null;
   fiscal_code: string | null;
+  signup_source?: string | null;
+  external_customer_id?: string | null;
   payment_method?: string | null;
   status: string | null;
   joined_at: string | null;

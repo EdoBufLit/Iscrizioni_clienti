@@ -97,6 +97,12 @@ class AdminRole(str, enum.Enum):
     SUPER_ADMIN = "super_admin"
     ORG_ADMIN = "org_admin"
 
+
+class SignupSource(str, enum.Enum):
+    ASSONAM_FORM = "assonam_form"
+    PIENISSIMO = "pienissimo"
+
+
 class TokenType(str, enum.Enum):
     SIGNUP_CONTINUE = "signup_continue"
     LOGIN_MAGIC_LINK = "login_magic_link"
@@ -132,6 +138,7 @@ class Organization(Base):
 
     members = relationship("Member", back_populates="organization")
     batches = relationship("CardBatch", back_populates="organization")
+    integration_api_keys = relationship("IntegrationApiKey", back_populates="organization")
     admins = relationship("AdminUser", back_populates="organization", foreign_keys="AdminUser.org_id")
 
 class OperationLog(Base):
@@ -204,6 +211,9 @@ class Member(Base):
     accepted_privacy_at = Column(DateTime, nullable=True)
     accepted_privacy_version = Column(String, nullable=True)
 
+    signup_source = Column(String, nullable=True)
+    external_customer_id = Column(String, nullable=True)
+
     signup_ip = Column(String, nullable=True)
     signup_user_agent = Column(String, nullable=True)
 
@@ -222,6 +232,28 @@ class Member(Base):
 
     __table_args__ = (
         UniqueConstraint('org_id', 'card_no', name='uix_org_card'),
+        UniqueConstraint('org_id', 'signup_source', 'external_customer_id', name='uix_member_external_source'),
+    )
+
+
+class IntegrationApiKey(Base):
+    __tablename__ = "integration_api_keys"
+
+    id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    key_hash = Column(String, nullable=False, index=True)
+    scopes = Column(JSON, nullable=False, default=list)
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    last_used_at = Column(DateTime, nullable=True)
+    last_used_ip = Column(String, nullable=True)
+    last_used_user_agent = Column(String, nullable=True)
+
+    organization = relationship("Organization", back_populates="integration_api_keys")
+
+    __table_args__ = (
+        UniqueConstraint("key_hash", name="uq_integration_api_keys_key_hash"),
     )
 
 class MemberDocument(Base):

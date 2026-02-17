@@ -3,7 +3,7 @@ from fastapi.responses import RedirectResponse, FileResponse
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from app.db import get_db
-from app.models import Member, Token, TokenType, MemberDocument, MemberStatus, PaymentMethod, Organization, AdminUser, AdminRole, DocStatus
+from app.models import Member, Token, TokenType, MemberDocument, MemberStatus, PaymentMethod, Organization, AdminUser, AdminRole, DocStatus, SignupSource
 from app.utils import generate_token, send_email, hash_token, save_upload_file
 from app.security import get_password_hash, verify_password
 from app.config import settings
@@ -365,6 +365,8 @@ def api_auth_register(
         # If existing but no password, allow setting password
         if not existing.password_hash:
             existing.password_hash = get_password_hash(password)
+            if not existing.signup_source:
+                existing.signup_source = SignupSource.ASSONAM_FORM.value
             if normalized_payment_method is not None:
                 existing.payment_method = normalized_payment_method
             db.commit()
@@ -383,6 +385,7 @@ def api_auth_register(
         payment_method=normalized_payment_method,
         password_hash=get_password_hash(password),
         status=MemberStatus.PENDING_DOCS,
+        signup_source=SignupSource.ASSONAM_FORM.value,
         signup_ip=request.client.host if request.client else "unknown",
         signup_user_agent=request.headers.get("user-agent"),
     )

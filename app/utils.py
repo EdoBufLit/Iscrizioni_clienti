@@ -6,7 +6,7 @@ import smtplib
 import uuid
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 from fastapi import UploadFile, HTTPException
 from .config import settings
 
@@ -129,11 +129,38 @@ async def save_upload_file(
     return rel_path, size_bytes, sha256_hash.hexdigest()
 
 
-def send_email(to_email: str, subject: str, body: str) -> bool:
+def send_email_html(to_email: str, subject: str, text_body: str, html_body: str) -> bool:
+    """
+    Send a multipart/alternative email (plain text + HTML).
+    Returns True on success, False on failure.
+    """
+    return _send_email_internal(
+        to_email=to_email,
+        subject=subject,
+        text_body=text_body,
+        html_body=html_body,
+    )
+
+
+def send_email(to_email: str, subject: str, body: str, html_body: Optional[str] = None) -> bool:
     """
     Send an email via SMTP if configured, otherwise fall back to simulation.
     Returns True on success, False on failure.
     """
+    return _send_email_internal(
+        to_email=to_email,
+        subject=subject,
+        text_body=body,
+        html_body=html_body,
+    )
+
+
+def _send_email_internal(
+    to_email: str,
+    subject: str,
+    text_body: str,
+    html_body: Optional[str] = None,
+) -> bool:
     logger.info("send_email: to=%s, subject=%s", to_email, subject)
 
     if settings.EMAIL_MODE == "test":
@@ -141,7 +168,9 @@ def send_email(to_email: str, subject: str, body: str) -> bool:
         _captured_emails.append({
             "to": to_email,
             "subject": subject,
-            "body": body
+            "body": text_body,
+            "text_body": text_body,
+            "html_body": html_body,
         })
         return True
 
@@ -155,7 +184,9 @@ def send_email(to_email: str, subject: str, body: str) -> bool:
             msg["From"] = settings.SMTP_FROM
             msg["To"] = to_email
             msg["Subject"] = subject
-            msg.attach(MIMEText(body, "plain", "utf-8"))
+            msg.attach(MIMEText(text_body, "plain", "utf-8"))
+            if html_body:
+                msg.attach(MIMEText(html_body, "html", "utf-8"))
 
             if settings.SMTP_USE_TLS:
                 server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15)
@@ -175,13 +206,21 @@ def send_email(to_email: str, subject: str, body: str) -> bool:
             return False
     else:
         logger.info("send_email: SMTP not configured, using simulation")
-        _send_email_simulation(to_email, subject, body)
+        _send_email_simulation(to_email, subject, text_body, html_body)
         return True
 
 
-def _send_email_simulation(to_email: str, subject: str, body: str):
+def _send_email_simulation(
+    to_email: str,
+    subject: str,
+    text_body: str,
+    html_body: Optional[str] = None,
+):
     """Log email to file for development/testing."""
-    log_line = f"To: {to_email}\nSubject: {subject}\nBody: {body}\n{'-'*40}\n"
+    log_line = f"To: {to_email}\nSubject: {subject}\nBody: {text_body}\n"
+    if html_body:
+        log_line += f"HTML:\n{html_body}\n"
+    log_line += f"{'-'*40}\n"
     logger.info("EMAIL [simulation] to=%s subject=%s", to_email, subject)
     try:
         with open("email_log.txt", "a") as f:

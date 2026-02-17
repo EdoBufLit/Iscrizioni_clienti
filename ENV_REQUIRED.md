@@ -35,6 +35,23 @@ When `SMTP_HOST` is empty the application falls back to writing emails to `email
 | `SMTP_FROM` | No | `noreply@assonam.it` | Sender address for outgoing emails. |
 | `SMTP_USE_TLS` | No | `true` | Enable STARTTLS (`true`, `1`, or `yes` to enable). |
 
+## Integration API Keys
+
+No dedicated environment variable is required for issuer integrations. Keys are stored in DB table `integration_api_keys` as salted hashes (`sha256(raw_key + SECRET_KEY)`).
+
+Integration keys are managed only by ASSONAM super admin using:
+
+- `GET /api/super-admin/orgs/{org_id}/integration-keys?name=pienissimo`
+- `POST /api/super-admin/orgs/{org_id}/integration-keys`
+- `POST /api/super-admin/orgs/{org_id}/integration-keys/{id}/rotate`
+- `DELETE /api/super-admin/orgs/{org_id}/integration-keys/{id}`
+
+External issuer requests must send:
+
+- Header: `X-ASSONAM-API-KEY: <raw-key>`
+- Scope in DB (`scopes` JSON): `issue_member`
+- Organization scoping via `org_id` on the API key record
+
 ## Build Metadata (optional)
 
 Set automatically by CI/CD pipelines. Not required for local development.

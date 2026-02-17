@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.db import get_db
 from app.models import AdminUser, AdminRole, Member, CardBatch, MemberDocument, DocStatus, MemberStatus, Organization, PaymentMethod
-from app.services.card import assign_next_card
+from app.services.card import assign_next_card_with_batch
 from app import audit
 from app.config import settings
 from app.security import verify_password
@@ -132,8 +132,9 @@ def assign_card_manual(request: Request, member_id: int, db: Session = Depends(g
     member = db.query(Member).filter(Member.id == member_id).first()
     if member and member.card_no is None:
         try:
-            assigned = assign_next_card(db, member.org_id)
+            assigned, batch_id = assign_next_card_with_batch(db, member.org_id)
             member.card_no = assigned
+            member.batch_id = batch_id
             member.card_year = datetime.utcnow().year
             if member.status == MemberStatus.PENDING_CARDS:
                 member.status = MemberStatus.ACTIVE

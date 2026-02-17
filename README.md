@@ -8,6 +8,7 @@ A minimal web application for association member signup, document upload, and me
 - **Document Upload**: ID and Fiscal Code (PDF/Image)
 - **Member Portal**: Magic link login (no passwords)
 - **Status Tracking**: Pending -> Active automation
+- **Issuer Integration API**: `/api/integrations/members/issue` (API key scoped per association)
 
 ## Setup (Development)
 
@@ -86,6 +87,49 @@ alembic revision --autogenerate -m "description"
 
 # Rollback one version
 alembic downgrade -1
+```
+
+## Integration API (Issuer Tessera)
+
+External management systems can issue members directly as active through:
+
+- `POST /api/integrations/members/issue`
+- Required header: `X-ASSONAM-API-KEY`
+- Required API key scope: `issue_member`
+- Integration keys are managed by ASSONAM super admin only
+
+### Super-admin key management endpoints
+
+Only super admin can create/rotate/disable keys for a target organization:
+
+```http
+GET    /api/super-admin/orgs/{org_id}/integration-keys?name=pienissimo
+POST   /api/super-admin/orgs/{org_id}/integration-keys
+POST   /api/super-admin/orgs/{org_id}/integration-keys/{id}/rotate
+DELETE /api/super-admin/orgs/{org_id}/integration-keys/{id}
+```
+
+`raw_key` is returned only by `create` and `rotate` responses. In DB, only `key_hash` is stored.
+
+### Request example
+
+```http
+POST /api/integrations/members/issue
+X-ASSONAM-API-KEY: <raw-key>
+Content-Type: application/json
+```
+
+```json
+{
+  "org_slug": "my-association",
+  "external_customer_id": "cust_12345",
+  "email": "socio@example.com",
+  "first_name": "Mario",
+  "last_name": "Rossi",
+  "phone": "+39333111222",
+  "fiscal_code": "RSSMRA80A01H501Z",
+  "send_email": true
+}
 ```
 
 ## Development
