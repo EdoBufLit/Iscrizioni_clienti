@@ -123,6 +123,16 @@ DELETE /api/super-admin/orgs/{org_id}/integration-keys/{id}
 
 `raw_key` is returned only by `create` and `rotate` responses. In DB, only `key_hash` is stored.
 
+### Migration note (integration keys)
+
+If your database was created before this integration flow, run:
+
+```bash
+alembic upgrade head
+```
+
+This applies the latest integration-key migrations (including legacy unique-constraint cleanup).
+
 ### Request example
 
 ```http
