@@ -25,3 +25,4 @@
 - MAI mettere `useMemo`/`useCallback`/altri hooks dopo `if (loading) return`. Viola le Rules of Hooks: React conta hooks per posizione e se un render ne chiama 0 e il successivo ne chiama 3, crasha con "Rendered more hooks than expected". Spostare TUTTI i hooks prima di qualsiasi return condizionale.
 - Se il requisito dice che una capability e centralizzata (es. integrazioni), non esporre endpoint di gestione a ruoli tenant (org-admin): applicare ownership e autorizzazioni al livello richiesto fin dalla prima implementazione.
 - Quando una capability passa a super-admin only, rimuovere subito anche la UI tenant (org-admin) e tutte le API calls client correlate, non solo il backend.
+- Quando una credenziale e one-time (raw API key), la UI deve isolarla in un modal dedicato, consentire copia immediata e cancellarla dallo stato alla chiusura per evitare leak.

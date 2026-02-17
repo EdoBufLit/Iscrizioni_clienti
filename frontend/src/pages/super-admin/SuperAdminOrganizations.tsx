@@ -11,6 +11,7 @@ import Skeleton from "../../components/ui/Skeleton";
 import OrganizationManageModal, {
   type OrganizationModalType,
 } from "./components/OrganizationManageModal";
+import SuperAdminPienissimoIntegrationCard from "./components/SuperAdminPienissimoIntegrationCard";
 
 const thClass =
   "px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.15em] text-neutral-400";
@@ -19,6 +20,7 @@ const tdClass = "px-5 py-3.5 text-sm text-neutral-700";
 const SuperAdminOrganizations = () => {
   const navigate = useNavigate();
   const { profile } = useOutletContext<{ profile: SuperAdminProfile | null }>();
+  const isSuperAdmin = profile?.role === "super_admin";
 
   const [orgs, setOrgs] = useState<SuperAdminOrganization[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +32,7 @@ const SuperAdminOrganizations = () => {
 
   const [deleteConfirm, setDeleteConfirm] = useState<SuperAdminOrganization | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [integrationOrg, setIntegrationOrg] = useState<SuperAdminOrganization | null>(null);
 
   const loadOrgs = useCallback(() => {
     if (orgs.length === 0) {
@@ -82,6 +85,14 @@ const SuperAdminOrganizations = () => {
 
   const handleDelete = useCallback((org: SuperAdminOrganization) => {
     setDeleteConfirm(org);
+  }, []);
+
+  const openIntegrationModal = useCallback((org: SuperAdminOrganization) => {
+    setIntegrationOrg(org);
+  }, []);
+
+  const closeIntegrationModal = useCallback(() => {
+    setIntegrationOrg(null);
   }, []);
 
   const confirmDelete = async () => {
@@ -202,14 +213,38 @@ const SuperAdminOrganizations = () => {
                             >
                               + Lotto
                             </button>
+                            {isSuperAdmin && (
+                              <>
+                                <span className="text-neutral-300">|</span>
+                                <button
+                                  onClick={() => openIntegrationModal(org)}
+                                  className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
+                                >
+                                  Integrazione
+                                </button>
+                              </>
+                            )}
                           </>
                         ) : (
-                          <button
-                            onClick={() => openModal("range", org)}
-                            className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
-                          >
-                            Imposta range
-                          </button>
+                          <>
+                            <button
+                              onClick={() => openModal("range", org)}
+                              className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
+                            >
+                              Imposta range
+                            </button>
+                            {isSuperAdmin && (
+                              <>
+                                <span className="text-neutral-300">|</span>
+                                <button
+                                  onClick={() => openIntegrationModal(org)}
+                                  className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
+                                >
+                                  Integrazione
+                                </button>
+                              </>
+                            )}
+                          </>
                         )}
                         {org.is_active && (
                           <>
@@ -288,6 +323,37 @@ const SuperAdminOrganizations = () => {
         onSaved={handleModalSaved}
         onSwitchToAddBatch={handleSwitchToAddBatch}
       />
+
+      {isSuperAdmin && integrationOrg && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
+          <div className="modal-panel w-full max-w-3xl p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-neutral-900">Integrazione Pienissimo</h3>
+                <p className="mt-1 text-sm text-neutral-500">
+                  Gestione chiave API per: {integrationOrg.name}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded-md border border-neutral-200 px-3 py-1.5 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900"
+                onClick={closeIntegrationModal}
+              >
+                Chiudi
+              </button>
+            </div>
+
+            <div className="mt-5">
+              <SuperAdminPienissimoIntegrationCard
+                orgId={integrationOrg.id}
+                orgName={integrationOrg.name}
+                open={Boolean(integrationOrg)}
+                isSuperAdmin={isSuperAdmin}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

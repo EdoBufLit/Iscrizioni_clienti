@@ -1,3 +1,15 @@
+- [x] FE super-admin: aggiungere API client integration-keys (list/create/rotate/disable) con error handling 401/403
+- [x] FE super-admin: creare SuperAdminPienissimoIntegrationCard con stato key attiva, last_used_at e azioni
+- [x] FE super-admin: modal one-time raw key con copy + warning e reset visibilita alla chiusura
+- [x] FE super-admin: integrare sezione Integrazione Pienissimo in pagina Associazioni (solo role super_admin)
+- [x] Verificare assenza residui org-admin UI/API keys e build frontend
+
+## Review (Super Admin FE Integration Keys - Feb 17, 2026)
+- `npm --prefix frontend run build` -> OK
+- Verifica manuale codice: nessuna chiamata FE a `/api/org-admin/integrations/keys*`
+- Sezione integrazione visibile solo in `SuperAdminOrganizations` con `profile.role === "super_admin"`
+
+---
 - [x] Aggiornare security con IntegrationContext (key_id, org_id, scopes) e enforcement key->org nell'issuer
 - [x] Estrarre logica issuer in service riusabile issue_member_from_integration
 - [x] Aggiungere endpoint ingest POST /api/ingest/pienissimo/{org_slug} con X-ASSO-INGEST-SECRET

@@ -650,6 +650,98 @@ export async function fetchSuperAdminOrganizations(
   return res.json();
 }
 
+export type SuperAdminIntegrationKey = {
+  id: number;
+  name: string;
+  scopes: string[];
+  is_active: boolean;
+  created_at: string | null;
+  last_used_at: string | null;
+  last_used_ip: string | null;
+};
+
+export type SuperAdminIntegrationKeysResponse = {
+  items: SuperAdminIntegrationKey[];
+};
+
+export type SuperAdminIntegrationKeyCreated = {
+  id: number;
+  created_at: string | null;
+  raw_key: string;
+  replaced_key_id?: number;
+};
+
+async function parseApiErrorDetail(
+  res: Response,
+  fallback: string,
+): Promise<string> {
+  const payload = await res.json().catch(() => null);
+  const detail = payload?.detail;
+  return typeof detail === "string" && detail.trim() ? detail : fallback;
+}
+
+export async function fetchSuperAdminIntegrationKeys(
+  orgId: number,
+  name: string = "pienissimo",
+): Promise<SuperAdminIntegrationKeysResponse> {
+  const res = await fetch(
+    `/api/super-admin/orgs/${orgId}/integration-keys?name=${encodeURIComponent(name)}`,
+  );
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 403) throw new Error("Accesso negato");
+  if (res.status === 404) throw new Error("Organizzazione non trovata");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento chiavi"));
+  return res.json();
+}
+
+export async function createSuperAdminIntegrationKey(
+  orgId: number,
+  payload: { name?: string; scopes?: string[] } = {},
+): Promise<SuperAdminIntegrationKeyCreated> {
+  const body = {
+    name: payload.name ?? "pienissimo",
+    scopes: payload.scopes ?? ["issue_member"],
+  };
+  const res = await fetch(`/api/super-admin/orgs/${orgId}/integration-keys`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 403) throw new Error("Accesso negato");
+  if (res.status === 404) throw new Error("Organizzazione non trovata");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione chiave"));
+  return res.json();
+}
+
+export async function rotateSuperAdminIntegrationKey(
+  orgId: number,
+  keyId: number,
+): Promise<SuperAdminIntegrationKeyCreated> {
+  const res = await fetch(`/api/super-admin/orgs/${orgId}/integration-keys/${keyId}/rotate`, {
+    method: "POST",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 403) throw new Error("Accesso negato");
+  if (res.status === 404) throw new Error("Chiave non trovata");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore rotazione chiave"));
+  return res.json();
+}
+
+export async function disableSuperAdminIntegrationKey(
+  orgId: number,
+  keyId: number,
+): Promise<{ ok: boolean; is_active: boolean }> {
+  const res = await fetch(`/api/super-admin/orgs/${orgId}/integration-keys/${keyId}`, {
+    method: "DELETE",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 403) throw new Error("Accesso negato");
+  if (res.status === 404) throw new Error("Chiave non trovata");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore disattivazione chiave"));
+  return res.json();
+}
+
 export async function createSuperAdminOrganization(data: {
   name: string;
   slug?: string;
