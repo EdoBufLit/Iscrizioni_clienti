@@ -875,3 +875,32 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 
 
 
+
+---
+## Spec (Ingest pubblico Pienissimo senza secret - Feb 17, 2026)
+- Obiettivo: rendere operativo solo `POST /api/ingest/pienissimo/{org_slug}` pubblico, senza auth/secret, con gating su integrazione attiva per org, idempotenza forte, rate limit e invio email solo al primo successo.
+- Vincoli: nessuna regressione signup normale; endpoint issuer key-based invariato su `X-ASSONAM-API-KEY`.
+## Plan (Ingest pubblico)
+- [x] Rimuovere ogni dipendenza runtime da `INGEST_SECRET` lato ingest/docs/config.
+- [x] Verificare paywall su key attiva + scope issue_member con esito coerente 402.
+- [x] Verificare idempotenza forte + email-once in service issuer (retry senza duplicati/card/email).
+- [x] Verificare e rifinire rate limit per IP+org (20/5m configurabile) con risposta 429.
+- [x] Aggiornare test ingest richiesti (402, 200 create, 100x idempotenza, 429 RL).
+- [x] Eseguire `alembic upgrade head` e test mirati backend.
+- [x] Aggiornare review finale in `tasks/todo.md`.
+## Execution Update (Ingest pubblico Pienissimo senza secret - Feb 17, 2026)
+- [x] Rimosse dipendenze runtime da `INGEST_SECRET` (config/cors/docs).
+- [x] Confermato paywall `integration_inactive` con HTTP 402 su ingest senza key attiva.
+- [x] Confermata idempotenza forte + email-once (`card_email_sent_at`) su retry ingest.
+- [x] Confermato rate limit IP+org (configurabile) con HTTP 429.
+- [x] Eseguito `python -m alembic upgrade head`.
+- [x] Eseguiti test mirati backend ingest/integration.
+- [x] Eseguite regressioni rapide signup + build frontend.
+## Review (Ingest pubblico Pienissimo senza secret - Feb 17, 2026)
+- `python -m alembic upgrade head` -> OK
+- `python -m pytest tests/test_ingest_pienissimo.py tests/test_integration_issue_member.py tests/test_org_admin_integration_keys.py -q` -> 14 passed
+- `python -m pytest tests/test_signup_fixes.py tests/test_join_submit_failure.py -q` -> 8 passed
+- `npm --prefix frontend run build` -> OK
+
+- `python -m pytest tests/test_ingest_pienissimo.py tests/test_integration_issue_member.py tests/test_org_admin_integration_keys.py tests/test_signup_fixes.py tests/test_join_submit_failure.py -q` -> 23 passed
+- Hardening test isolation: `tests/test_signup_fixes.py` ora forza logout admin prima del test bulk su tutte le org attive.

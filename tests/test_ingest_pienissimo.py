@@ -7,6 +7,7 @@ from app.config import settings
 from app.db import SessionLocal
 from app.models import CardBatch, IntegrationApiKey, Member, MemberStatus, Organization, SignupSource
 from app.security import hash_api_key
+from app.utils import clear_captured_emails, get_captured_emails
 
 
 @pytest.fixture
@@ -16,11 +17,11 @@ def db():
     session.close()
 
 
-def _create_org_with_batch_and_key(db) -> tuple[Organization, CardBatch]:
+def _create_org_with_batch(db, *, slug_prefix: str = "ingest-org") -> tuple[Organization, CardBatch]:
     suffix = uuid.uuid4().hex[:8]
     org = Organization(
         name=f"Ingest Org {suffix}",
-        slug=f"ingest-org-{suffix}",
+        slug=f"{slug_prefix}-{suffix}",
         is_active=True,
         privacy_version="v1",
     )
@@ -39,69 +40,166 @@ def _create_org_with_batch_and_key(db) -> tuple[Organization, CardBatch]:
     db.add(batch)
     db.commit()
     db.refresh(batch)
-
-    key = IntegrationApiKey(
-        org_id=org.id,
-        name="pienissimo",
-        key_hash=hash_api_key(f"ingest-key-{uuid.uuid4().hex}"),
-        scopes=["issue_member"],
-        is_active=True,
-    )
-    db.add(key)
-    db.commit()
     return org, batch
 
 
-def test_ingest_requires_secret_when_configured(client, db):
-    org, _batch = _create_org_with_batch_and_key(db)
-    previous_secret = settings.INGEST_SECRET
-    settings.INGEST_SECRET = f"secret-{uuid.uuid4().hex[:8]}"
+def _create_integration_key(
+    db,
+    *,
+    org_id: int,
+    active: bool,
+    name: str = "pienissimo",
+    scopes: list[str] | None = None,
+):
+    key = IntegrationApiKey(
+        org_id=org_id,
+        name=name,
+        key_hash=hash_api_key(f"ingest-key-{uuid.uuid4().hex}"),
+        scopes=scopes or ["issue_member"],
+        is_active=active,
+    )
+    db.add(key)
+    db.commit()
+
+
+def test_ingest_returns_402_when_integration_not_active(client, db):
+    org, _batch = _create_org_with_batch(db, slug_prefix="ingest-inactive")
+    _create_integration_key(db, org_id=org.id, active=False)
+
+    response = client.post(
+        f"/api/ingest/pienissimo/{org.slug}",
+        json={"email": f"inactive.{uuid.uuid4().hex[:6]}@example.com"},
+    )
+
+    assert response.status_code == 402, response.text
+    payload = response.json()
+    assert payload["error"] == "integration_inactive"
+    assert "non attiva" in payload["message"].lower()
+
+
+def test_ingest_with_active_key_creates_active_member_with_card(client, db):
+    org, batch = _create_org_with_batch(db, slug_prefix="ingest-active")
+    _create_integration_key(db, org_id=org.id, active=True)
+
+    response = client.post(
+        f"/api/ingest/pienissimo/{org.slug}",
+        json={
+            "email": f"ingest.member.{uuid.uuid4().hex[:6]}@example.com",
+            "full_name": "Mario Rossi",
+            "phone": "+39333111222",
+            "send_email": False,
+        },
+    )
+    assert response.status_code == 200, response.text
+
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert batch.start_no <= payload["card_number"] <= batch.end_no
+    assert "/api/cards/verify/" in payload["card_url"]
+
+    member = db.query(Member).filter(Member.id == payload["member_id"]).first()
+    assert member is not None
+    assert member.status == MemberStatus.ACTIVE
+    assert member.card_no == payload["card_number"]
+    assert member.signup_source == SignupSource.PIENISSIMO.value
+    assert member.external_customer_id == f"email:{member.email.lower()}"
+    assert member.first_name == "Mario"
+    assert member.last_name == "Rossi"
+
+
+def test_ingest_requires_email_even_when_external_id_is_provided(client, db):
+    org, _batch = _create_org_with_batch(db, slug_prefix="ingest-email-required")
+    _create_integration_key(db, org_id=org.id, active=True)
+
+    response = client.post(
+        f"/api/ingest/pienissimo/{org.slug}",
+        json={"external_customer_id": f"lead-{uuid.uuid4().hex[:8]}"},
+    )
+
+    assert response.status_code == 422, response.text
+
+
+def test_ingest_retry_100x_is_idempotent_and_sends_email_once(client, db):
+    org, batch = _create_org_with_batch(db, slug_prefix="ingest-idem")
+    _create_integration_key(db, org_id=org.id, active=True)
+
+    previous_email_mode = settings.EMAIL_MODE
+    previous_limit = settings.INGEST_RATE_LIMIT_MAX_REQUESTS
+    clear_captured_emails()
+    settings.EMAIL_MODE = "test"
+    settings.INGEST_RATE_LIMIT_MAX_REQUESTS = 1000
+
+    request_email = f"idem.{uuid.uuid4().hex[:6]}@example.com"
     try:
-        response = client.post(
-            f"/api/ingest/pienissimo/{org.slug}",
-            json={
-                "email": f"secret.required.{uuid.uuid4().hex[:6]}@example.com",
-                "external_customer_id": f"lead-{uuid.uuid4().hex[:8]}",
-            },
+        member_ids = set()
+        card_numbers = set()
+        for _ in range(100):
+            response = client.post(
+                f"/api/ingest/pienissimo/{org.slug}",
+                json={
+                    "email": request_email,
+                    "first_name": "Mario",
+                    "last_name": "Rossi",
+                },
+            )
+            assert response.status_code == 200, response.text
+            payload = response.json()
+            member_ids.add(payload["member_id"])
+            card_numbers.add(payload["card_number"])
+
+        assert len(member_ids) == 1
+        assert len(card_numbers) == 1
+
+        members = (
+            db.query(Member)
+            .filter(
+                Member.org_id == org.id,
+                Member.signup_source == SignupSource.PIENISSIMO.value,
+                Member.external_customer_id == f"email:{request_email.lower()}",
+                Member.deleted_at.is_(None),
+            )
+            .all()
         )
-        assert response.status_code == 401, response.text
+        assert len(members) == 1
+        assert members[0].card_email_sent_at is not None
+        db.refresh(batch)
+        assert batch.next_no == members[0].card_no + 1
+
+        captured = get_captured_emails()
+        assert len(captured) == 1
     finally:
-        settings.INGEST_SECRET = previous_secret
+        settings.EMAIL_MODE = previous_email_mode
+        settings.INGEST_RATE_LIMIT_MAX_REQUESTS = previous_limit
+        clear_captured_emails()
 
 
-def test_ingest_with_secret_creates_active_member_with_card(client, db):
-    org, batch = _create_org_with_batch_and_key(db)
-    ingest_secret = f"ingest-{uuid.uuid4().hex[:10]}"
-    previous_secret = settings.INGEST_SECRET
-    settings.INGEST_SECRET = ingest_secret
+def test_ingest_rate_limit_returns_429(client, db):
+    org, _batch = _create_org_with_batch(db, slug_prefix="ingest-rate")
+    _create_integration_key(db, org_id=org.id, active=True)
 
-    external_customer_id = f"lead-{uuid.uuid4().hex[:10]}"
+    previous_limit = settings.INGEST_RATE_LIMIT_MAX_REQUESTS
+    previous_window = settings.INGEST_RATE_LIMIT_WINDOW_SECONDS
+    settings.INGEST_RATE_LIMIT_MAX_REQUESTS = 5
+    settings.INGEST_RATE_LIMIT_WINDOW_SECONDS = 300
     try:
-        response = client.post(
+        for idx in range(5):
+            response = client.post(
+                f"/api/ingest/pienissimo/{org.slug}",
+                json={
+                    "email": f"rate.{idx}.{uuid.uuid4().hex[:4]}@example.com",
+                    "send_email": False,
+                },
+            )
+            assert response.status_code == 200, response.text
+
+        blocked = client.post(
             f"/api/ingest/pienissimo/{org.slug}",
             json={
-                "Email": f"ingest.member.{uuid.uuid4().hex[:6]}@example.com",
-                "nominativo": "Mario Rossi",
-                "telefono": "+39333111222",
-                "lead_id": external_customer_id,
+                "email": f"rate.blocked.{uuid.uuid4().hex[:4]}@example.com",
                 "send_email": False,
-                "extra_custom_field": "keep-ignored",
             },
-            headers={"X-ASSO-INGEST-SECRET": ingest_secret},
         )
-        assert response.status_code == 200, response.text
-        payload = response.json()
-        assert payload["status"] == "ok"
-        assert batch.start_no <= payload["card_number"] <= batch.end_no
-        assert "/api/cards/verify/" in payload["card_url"]
-
-        member = db.query(Member).filter(Member.id == payload["member_id"]).first()
-        assert member is not None
-        assert member.status == MemberStatus.ACTIVE
-        assert member.card_no == payload["card_number"]
-        assert member.signup_source == SignupSource.PIENISSIMO.value
-        assert member.external_customer_id == external_customer_id
-        assert member.first_name == "Mario"
-        assert member.last_name == "Rossi"
+        assert blocked.status_code == 429, blocked.text
     finally:
-        settings.INGEST_SECRET = previous_secret
+        settings.INGEST_RATE_LIMIT_MAX_REQUESTS = previous_limit
+        settings.INGEST_RATE_LIMIT_WINDOW_SECONDS = previous_window

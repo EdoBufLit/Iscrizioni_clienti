@@ -199,6 +199,7 @@ class Member(Base):
     card_no = Column(Integer, nullable=True)
     card_year = Column(Integer, nullable=True)
     batch_id = Column(Integer, ForeignKey("card_batches.id"), nullable=True)
+    card_email_sent_at = Column(DateTime, nullable=True)
 
     joined_at = Column(DateTime, nullable=True)
     member_type = Column(String, nullable=True)
@@ -254,6 +255,22 @@ class IntegrationApiKey(Base):
 
     __table_args__ = (
         UniqueConstraint("key_hash", name="uq_integration_api_keys_key_hash"),
+    )
+
+
+class IngestRateLimit(Base):
+    __tablename__ = "ingest_rate_limits"
+
+    id = Column(Integer, primary_key=True, index=True)
+    org_slug = Column(String, nullable=False, index=True)
+    client_ip = Column(String, nullable=False, index=True)
+    window_started_at = Column(DateTime, nullable=False)
+    request_count = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("org_slug", "client_ip", name="uix_ingest_rate_limits_org_ip"),
     )
 
 class MemberDocument(Base):

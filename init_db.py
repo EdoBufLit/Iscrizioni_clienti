@@ -94,6 +94,7 @@ def init_db():
         _add_column_if_missing(conn, "members", "payment_method", "TEXT")
         _add_column_if_missing(conn, "members", "signup_source", "TEXT")
         _add_column_if_missing(conn, "members", "external_customer_id", "TEXT")
+        _add_column_if_missing(conn, "members", "card_email_sent_at", "DATETIME")
         _add_column_if_missing(conn, "member_documents", "rejection_note", "TEXT")
         _add_column_if_missing(conn, "member_documents", "reviewed_by_admin_id", "INTEGER REFERENCES admin_users(id)")
         _add_column_if_missing(conn, "member_documents", "replaces_document_id", "INTEGER REFERENCES member_documents(id)")

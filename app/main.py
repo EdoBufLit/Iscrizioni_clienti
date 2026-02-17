@@ -91,7 +91,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.BASE_URL],
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-ASSONAM-API-KEY", "X-ASSO-INGEST-SECRET"],
+    allow_headers=["Content-Type", "X-ASSONAM-API-KEY"],
     allow_credentials=True,
 )
 

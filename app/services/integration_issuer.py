@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import audit
@@ -29,6 +30,7 @@ class IssueMemberCommand:
     request_user_agent: str | None = None
     backend_base_url: str | None = None
     frontend_base_url: str | None = None
+    send_email_once: bool = False
 
 
 @dataclass(frozen=True)
@@ -41,6 +43,7 @@ class IssueMemberResult:
     member_portal_login_hint: str
     email_sent: bool
     org_slug: str
+    outcome: str
 
 
 def _normalize_text(value: str | None) -> str | None:
@@ -116,6 +119,7 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
         .first()
     )
 
+    outcome = "reused"
     if not member:
         member = Member(
             org_id=org.id,
@@ -135,8 +139,27 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
             signup_user_agent=command.request_user_agent,
         )
         db.add(member)
-        db.commit()
-        db.refresh(member)
+        try:
+            db.commit()
+            db.refresh(member)
+            outcome = "created"
+        except IntegrityError:
+            # Handle concurrent idempotent inserts gracefully.
+            db.rollback()
+            member = (
+                db.query(Member)
+                .filter(
+                    Member.org_id == org.id,
+                    Member.signup_source == signup_source,
+                    Member.external_customer_id == external_customer_id,
+                    Member.deleted_at.is_(None),
+                )
+                .order_by(Member.id.desc())
+                .first()
+            )
+            if not member:
+                raise
+            outcome = "reused"
     else:
         member.email = email
         if first_name is not None:
@@ -178,7 +201,12 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
 
     email_sent = False
     login_hint = "email_skipped"
-    if command.send_email and member.email:
+    should_send_email = bool(command.send_email and member.email)
+    if command.send_email_once and member.card_email_sent_at is not None:
+        should_send_email = False
+        login_hint = "magic_link_already_sent"
+
+    if should_send_email:
         magic_link_url = _build_magic_link(db, member.id, frontend_base)
         logo_url = f"{backend_base}/assonam-logo.svg"
         full_name = f"{(member.first_name or '').strip()} {(member.last_name or '').strip()}".strip() or email
@@ -197,6 +225,9 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
             text_body=text_body,
             html_body=html_body,
         )
+        if email_sent:
+            member.card_email_sent_at = datetime.utcnow()
+            db.commit()
         login_hint = "magic_link_sent" if email_sent else "magic_link_send_failed"
 
     audit.log_operation(
@@ -210,6 +241,7 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
             "signup_source": signup_source,
             "integration_name": command.integration_name,
             "email_sent": email_sent,
+            "outcome": outcome,
         },
         ip=command.request_ip,
         user_agent=command.request_user_agent,
@@ -225,4 +257,31 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
         member_portal_login_hint=login_hint,
         email_sent=email_sent,
         org_slug=org.slug,
+        outcome=outcome,
+    )
+
+
+def issue_member_from_ingest(
+    db: Session,
+    command: IssueMemberCommand,
+) -> IssueMemberResult:
+    return issue_member_from_integration(
+        db,
+        IssueMemberCommand(
+            org_id=command.org_id,
+            external_customer_id=command.external_customer_id,
+            email=command.email,
+            first_name=command.first_name,
+            last_name=command.last_name,
+            phone=command.phone,
+            fiscal_code=command.fiscal_code,
+            send_email=command.send_email,
+            signup_source=command.signup_source,
+            integration_name=command.integration_name,
+            request_ip=command.request_ip,
+            request_user_agent=command.request_user_agent,
+            backend_base_url=command.backend_base_url,
+            frontend_base_url=command.frontend_base_url,
+            send_email_once=True,
+        ),
     )

@@ -35,7 +35,8 @@ A minimal web application for association member signup, document upload, and me
    | `SECRET_KEY` | Secret for sessions and token hashing | `supersecretkey` |
    | `BASE_URL` | Public URL of the app (for emails) | `http://localhost:8000` |
    | `FRONTEND_URL` | Public URL of SPA (for member magic-link) | _(empty)_ |
-   | `INGEST_SECRET` | Secret for `/api/ingest/pienissimo/{org_slug}` header `X-ASSO-INGEST-SECRET` | _(empty, recommended)_ |
+   | `INGEST_RATE_LIMIT_MAX_REQUESTS` | Max requests per IP+org for public ingest window | `20` |
+   | `INGEST_RATE_LIMIT_WINDOW_SECONDS` | Public ingest rate-limit window in seconds | `300` |
    | `UPLOAD_DIR` | Directory for uploaded files | `data/uploads` |
    | `LOGIN_TOKEN_EXPIRE_MINUTES` | Login link validity | `15` |
    | `JOIN_TOKEN_EXPIRE_MINUTES` | Signup continue link validity | `120` |
@@ -106,7 +107,9 @@ External management systems can issue members directly as active through:
 Use the ingest endpoint as your bridge entrypoint for Pienissimo payloads:
 
 - `POST /api/ingest/pienissimo/{org_slug}`
-- Header: `X-ASSO-INGEST-SECRET: <INGEST_SECRET>` (required when `INGEST_SECRET` is configured)
+- Public endpoint (no auth header)
+- Works only when the target organization has an active integration key with scope `issue_member` (paywall gating)
+- Returns `402` with `integration_inactive` when integration is not active for that organization
 - Accepts flexible payload field names and normalizes to issuer flow internally
 - Does not require `X-ASSONAM-API-KEY` in input; it reuses configured integration key server-side
 
