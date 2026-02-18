@@ -89,7 +89,8 @@ const SuperAdminOrganizations = () => {
 
   const handleDelete = useCallback((org: SuperAdminOrganization) => {
     setDeleteConfirm(org);
-    setDeleteMode("archive");
+    const shouldDefaultPurge = org.is_active && !org.is_archived && !Boolean(org.deleted_at);
+    setDeleteMode(shouldDefaultPurge ? "purge" : "archive");
     setPurgeSlugInput("");
     setDeleteError("");
   }, []);
@@ -284,14 +285,14 @@ const SuperAdminOrganizations = () => {
                             )}
                           </>
                         )}
-                        {(!org.is_active || org.is_archived || Boolean(org.deleted_at)) && (
+                        {isSuperAdmin && (
                           <>
                             <span className="text-neutral-300">|</span>
                             <button
                               onClick={() => handleDelete(org)}
                               className="text-red-600 hover:text-red-800 font-medium text-xs uppercase tracking-wide"
                             >
-                              Elimina e libera tessere
+                              Elimina
                             </button>
                           </>
                         )}
