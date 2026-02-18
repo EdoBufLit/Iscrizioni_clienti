@@ -765,6 +765,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   overflow: hidden;
   min-height: min(92vh, 58rem);
   border-bottom: 1px solid rgba(17, 39, 41, 0.14);
+  isolation: isolate;
 }
 
 .public-hero-scene,
@@ -798,17 +799,17 @@ body.dashboard-perf-mode .btn-ghost:hover {
 }
 
 .public-hero-overlay {
-  z-index: 10;
+  z-index: 1;
   pointer-events: none;
-  /* High-contrast overlay for WCAG-friendly text legibility over photography. */
+  /* Neutral dark overlay to separate text from photo without blue cast. */
   background:
-    radial-gradient(circle at 16% 18%, rgba(239, 191, 48, 0.2), transparent 42%),
-    radial-gradient(circle at 82% 72%, rgba(44, 78, 196, 0.2), transparent 48%),
+    radial-gradient(circle at 16% 18%, rgba(250, 204, 21, 0.08), transparent 40%),
+    radial-gradient(circle at 82% 72%, rgba(37, 99, 235, 0.08), transparent 45%),
     linear-gradient(
       154deg,
-      rgba(9, 19, 46, 0.68) 0%,
-      rgba(10, 24, 58, 0.62) 42%,
-      rgba(8, 20, 49, 0.66) 100%
+      rgba(16, 18, 23, 0.62) 0%,
+      rgba(20, 23, 30, 0.58) 42%,
+      rgba(13, 16, 22, 0.64) 100%
     );
 }
 
@@ -835,7 +836,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
 
 .public-hero-content {
   position: relative;
-  z-index: 30;
+  z-index: 2;
   min-height: min(92vh, 58rem);
   display: flex;
   flex-direction: column;
@@ -864,8 +865,8 @@ body.dashboard-perf-mode .btn-ghost:hover {
   line-height: 1.02;
   letter-spacing: -0.034em;
   font-weight: 700;
-  color: #143778;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+  color: #1e4ed8;
+  text-shadow: 0 2px 14px rgba(9, 12, 18, 0.34);
 }
 
 .public-hero-title-line {
@@ -877,7 +878,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   @media (min-width: 768px) {
     .public-hero-content h1 {
       color: transparent;
-      background: linear-gradient(180deg, #143778 0%, #143778 52%, #efbf30 52%, #efbf30 100%);
+      background: linear-gradient(180deg, #1e4ed8 0%, #1e4ed8 52%, #facc15 52%, #facc15 100%);
       -webkit-background-clip: text;
       background-clip: text;
       -webkit-text-fill-color: transparent;
@@ -887,15 +888,15 @@ body.dashboard-perf-mode .btn-ghost:hover {
 }
 
 .public-hero-subtitle {
-  /* Accessible subtitle typography and width for clear scanability. */
+  /* Readable subtitle sizing/contrast for immediate scanability on photo background. */
   margin-top: 1.3rem;
-  max-width: 38rem;
+  max-width: 40rem;
   margin-inline: auto;
-  color: rgba(255, 255, 255, 0.96);
+  color: #f9fafb;
   font-size: clamp(1.125rem, 1.2vw + 0.95rem, 1.35rem);
   line-height: 1.6;
   font-weight: 500;
-  text-shadow: 0 2px 12px rgba(6, 14, 34, 0.45);
+  text-shadow: 0 2px 12px rgba(8, 11, 16, 0.5);
 }
 
 .public-hero-ctas {
@@ -1146,24 +1147,25 @@ body.dashboard-perf-mode .btn-ghost:hover {
   }
 
   .public-hero-overlay {
-    /* Mobile overlay gains density to keep text readable in sunlight/glare conditions. */
+    /* Mobile uses a denser neutral layer to preserve readability. */
     background:
-      radial-gradient(circle at 14% 14%, rgba(255, 223, 97, 0.14), transparent 40%),
-      radial-gradient(circle at 80% 74%, rgba(44, 78, 196, 0.14), transparent 46%),
+      radial-gradient(circle at 14% 14%, rgba(250, 204, 21, 0.06), transparent 38%),
+      radial-gradient(circle at 80% 74%, rgba(37, 99, 235, 0.06), transparent 44%),
       linear-gradient(
         155deg,
-        rgba(7, 17, 42, 0.76) 0%,
-        rgba(7, 20, 48, 0.72) 40%,
-        rgba(6, 18, 44, 0.78) 100%
+        rgba(10, 12, 17, 0.72) 0%,
+        rgba(14, 17, 24, 0.7) 40%,
+        rgba(9, 11, 16, 0.74) 100%
       );
   }
 
   /* Keep subtitle within mobile comfort range without dropping below 16px. */
   .public-hero-subtitle {
-    max-width: 34rem;
+    max-width: 32rem;
     padding-inline: clamp(0.2rem, 2vw, 0.6rem);
     font-size: 1rem;
     line-height: 1.58;
+    color: #ffffff;
   }
 
   .landing-panel {
