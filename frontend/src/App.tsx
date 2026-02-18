@@ -14,6 +14,7 @@ const Privacy = lazy(() => import("./pages/Privacy"));
 const Login = lazy(() => import("./pages/Login"));
 const MagicLinkVerify = lazy(() => import("./pages/MagicLinkVerify"));
 const ReservedAreaRedirect = lazy(() => import("./pages/ReservedAreaRedirect"));
+const PienissimoThankYouPage = lazy(() => import("./pages/PienissimoThankYouPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const DashboardLayout = lazy(() => import("./pages/dashboard/DashboardLayout"));
@@ -64,6 +65,7 @@ const App = () => {
           <Route path="privacy" element={<Privacy />} />
           <Route path="login" element={<Login />} />
           <Route path="area-riservata" element={<ReservedAreaRedirect />} />
+          <Route path="pienissimo/thank-you/:orgSlug" element={<PienissimoThankYouPage />} />
           <Route path="auth/verify" element={<MagicLinkVerify />} />
           <Route path="dashboard" element={<DashboardLayout />}>
             <Route index element={<DashboardHome />} />
