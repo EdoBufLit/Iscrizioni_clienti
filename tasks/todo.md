@@ -904,3 +904,32 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 
 - `python -m pytest tests/test_ingest_pienissimo.py tests/test_integration_issue_member.py tests/test_org_admin_integration_keys.py tests/test_signup_fixes.py tests/test_join_submit_failure.py -q` -> 23 passed
 - Hardening test isolation: `tests/test_signup_fixes.py` ora forza logout admin prima del test bulk su tutte le org attive.
+
+---
+## Spec (Delete associazione + rilascio range tessere - Feb 18, 2026)
+- Obiettivo: rendere eliminabile una associazione disattivata con rilascio slot tessere riutilizzabile.
+- Vincoli: operazione solo super-admin, modalita archive/purge, transazionale, no regressioni UI.
+## Plan (Delete associazione + rilascio range tessere)
+- [ ] Analisi vincoli FK e cause blocco delete (modelli + endpoint esistenti).
+- [ ] Implementare service transazionale backend deleteAssociationAndReleaseRange con mode archive/purge, force e release_range.
+- [ ] Esporre endpoint DELETE /api/admin/associations/{association_id} e mantenere compatibilita endpoint super-admin esistente.
+- [ ] Aggiungere supporto schema per archiviazione/rilascio range (migrazione alembic + modello minimo).
+- [ ] Aggiornare UI super-admin Associazioni con modal a due scelte e conferma slug per purge.
+- [ ] Aggiungere test backend archive/purge + verifica riutilizzo range; eseguire test/build mirati.
+## Review (Delete associazione + rilascio range tessere)
+- [ ] Da completare.
+## Execution Update (Delete associazione + rilascio range tessere - Feb 18, 2026)
+- [x] Analizzati modelli/route delete/range: causa primaria blocco delete su FK indirette (es. operation_logs actor_* verso admin/member).
+- [x] Implementato service transazionale backend delete_association_and_release_range con mode archive/purge, force, release_range e audit.
+- [x] Esposto nuovo endpoint DELETE /api/admin/associations/{association_id}; endpoint legacy super-admin delete mantenuto (purge compat).
+- [x] Aggiunte colonne schema minime organizations.deleted_at e card_batches.released_at (modello + migrazione + init_db compat).
+- [x] Aggiornata UI Super Admin Associazioni con modal archive/purge, conferma slug per purge e feedback operazione.
+- [x] Aggiunti test backend dedicati per archive/purge con verifica riutilizzo range.
+## Review (Delete associazione + rilascio range tessere - Feb 18, 2026)
+- [x] python -m py_compile app/models.py app/services/association_delete.py app/services/card.py app/routes/super_admin.py app/main.py init_db.py alembic/versions/j1k2l3m4n5o6_add_archive_and_released_flags.py tests/test_super_admin_association_delete_release_range.py -> OK
+- [x] python -m pytest tests/test_super_admin_association_delete_release_range.py -q -> 2 passed
+- [x] python -m pytest tests/test_soft_delete.py -q -> 1 passed
+- [x] python -m pytest tests/test_org_admin_integration_keys.py -q -> 5 passed
+- [x] 
+pm --prefix frontend run build -> OK
+- [x] DATABASE_URL=sqlite:///tmp_assoc_delete.db python -m alembic upgrade head -> OK

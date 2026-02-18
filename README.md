@@ -126,6 +126,30 @@ DELETE /api/super-admin/orgs/{org_id}/integration-keys/{id}
 
 `raw_key` is returned only by `create` and `rotate` responses. In DB, only `key_hash` is stored.
 
+### Super-admin association delete/archive with card-range release
+
+To archive or purge a disabled association and release its card range for reuse:
+
+```http
+DELETE /api/admin/associations/{association_id}?mode=archive|purge&release_range=true&force=false|true
+```
+
+- `mode=archive` (default): soft-archive (`is_active=false`, `deleted_at` set), keeps historical records, and releases assigned card batches.
+- `mode=purge`: hard-delete organization and related records.
+- `force=true`: required for purge when dependencies exist.
+
+Response shape:
+
+```json
+{
+  "ok": true,
+  "mode": "archive",
+  "releasedRange": { "start": 18401, "end": 18700 },
+  "archivedAssociationId": 12,
+  "purgedAssociationId": null
+}
+```
+
 ### Migration note (integration keys)
 
 If your database was created before this integration flow, run:

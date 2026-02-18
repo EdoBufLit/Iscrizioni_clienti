@@ -31,6 +31,10 @@ const SuperAdminOrganizations = () => {
   const [selectedOrg, setSelectedOrg] = useState<SuperAdminOrganization | null>(null);
 
   const [deleteConfirm, setDeleteConfirm] = useState<SuperAdminOrganization | null>(null);
+  const [deleteMode, setDeleteMode] = useState<"archive" | "purge">("archive");
+  const [purgeSlugInput, setPurgeSlugInput] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const [deleteSuccess, setDeleteSuccess] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [integrationOrg, setIntegrationOrg] = useState<SuperAdminOrganization | null>(null);
 
@@ -85,6 +89,9 @@ const SuperAdminOrganizations = () => {
 
   const handleDelete = useCallback((org: SuperAdminOrganization) => {
     setDeleteConfirm(org);
+    setDeleteMode("archive");
+    setPurgeSlugInput("");
+    setDeleteError("");
   }, []);
 
   const openIntegrationModal = useCallback((org: SuperAdminOrganization) => {
@@ -97,13 +104,33 @@ const SuperAdminOrganizations = () => {
 
   const confirmDelete = async () => {
     if (!deleteConfirm || deleting) return;
+    if (deleteMode === "purge" && purgeSlugInput.trim() !== deleteConfirm.slug) {
+      setDeleteError("Per confermare il purge devi digitare esattamente lo slug dell'associazione.");
+      return;
+    }
     setDeleting(true);
+    setDeleteError("");
+    setDeleteSuccess("");
     try {
-      await deleteOrganization(deleteConfirm.id);
+      const result = await deleteOrganization(deleteConfirm.id, {
+        mode: deleteMode,
+        releaseRange: true,
+        force: deleteMode === "purge",
+      });
+      const range =
+        result.releasedRange
+          ? `${result.releasedRange.start}-${result.releasedRange.end}`
+          : "nessuno";
+      setDeleteSuccess(
+        deleteMode === "archive"
+          ? `Associazione archiviata. Range liberato: ${range}.`
+          : `Associazione eliminata definitivamente. Range liberato: ${range}.`
+      );
       setDeleteConfirm(null);
+      setPurgeSlugInput("");
       loadOrgs();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Errore durante l'eliminazione");
+      setDeleteError(err instanceof Error ? err.message : "Errore durante l'eliminazione");
     } finally {
       setDeleting(false);
     }
@@ -127,6 +154,11 @@ const SuperAdminOrganizations = () => {
         {error && (
           <div className="rounded-lg border border-red-200/60 bg-red-50 px-7 py-5">
             <p className="text-sm text-red-700">{error}</p>
+          </div>
+        )}
+        {!error && deleteSuccess && (
+          <div className="rounded-lg border border-emerald-200/60 bg-emerald-50 px-7 py-5">
+            <p className="text-sm text-emerald-700">{deleteSuccess}</p>
           </div>
         )}
       </div>
@@ -179,6 +211,11 @@ const SuperAdminOrganizations = () => {
                       {org.city} {org.province ? `(${org.province})` : ""}
                     </td>
                     <td className={tdClass}>
+                      {org.is_archived || org.deleted_at ? (
+                        <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                          Archiviata
+                        </span>
+                      ) : (
                       <span
                         className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
                           org.is_active
@@ -188,6 +225,7 @@ const SuperAdminOrganizations = () => {
                       >
                         {org.is_active ? "Attiva" : "Disattivata"}
                       </span>
+                      )}
                     </td>
                     <td className={`${tdClass} tabular-nums`}>
                       {org.card_min ? (
@@ -246,14 +284,14 @@ const SuperAdminOrganizations = () => {
                             )}
                           </>
                         )}
-                        {org.is_active && (
+                        {(!org.is_active || org.is_archived || Boolean(org.deleted_at)) && (
                           <>
                             <span className="text-neutral-300">|</span>
                             <button
                               onClick={() => handleDelete(org)}
                               className="text-red-600 hover:text-red-800 font-medium text-xs uppercase tracking-wide"
                             >
-                              Elimina
+                              Elimina e libera tessere
                             </button>
                           </>
                         )}
@@ -274,30 +312,82 @@ const SuperAdminOrganizations = () => {
               <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
-              <h3 className="text-lg font-semibold">Elimina associazione</h3>
+              <h3 className="text-lg font-semibold">Elimina e libera tessere</h3>
             </div>
 
-            <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3">
-              <p className="text-sm font-medium text-red-800">Questa azione e irreversibile.</p>
-              <p className="mt-1 text-sm text-red-700">Verranno eliminati permanentemente:</p>
-              <ul className="mt-2 list-disc pl-5 text-sm text-red-700">
-                <li>L'associazione <strong>{deleteConfirm.name}</strong></li>
-                <li>Tutti i soci iscritti</li>
-                <li>Tutti i documenti caricati</li>
-                <li>Tutti gli amministratori dell'associazione</li>
-                <li>Tutti i dati delle tessere</li>
-              </ul>
-            </div>
-
-            <p className="mt-4 text-sm text-neutral-600">
-              Lo slug <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs">{deleteConfirm.slug}</code> potra essere riutilizzato.
+            <p className="mt-4 text-sm text-neutral-700">
+              Associazione: <strong>{deleteConfirm.name}</strong>
             </p>
+
+            <div className="mt-4 space-y-3 rounded-md border border-neutral-200 bg-neutral-50 px-4 py-3">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="radio"
+                  name="delete-mode"
+                  value="archive"
+                  checked={deleteMode === "archive"}
+                  onChange={() => {
+                    setDeleteMode("archive");
+                    setDeleteError("");
+                  }}
+                />
+                <span className="text-sm text-neutral-700">
+                  <strong>Archivia (consigliato) + libera range</strong>
+                  <br />
+                  L'associazione resta storicizzata ma disattivata.
+                </span>
+              </label>
+
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="radio"
+                  name="delete-mode"
+                  value="purge"
+                  checked={deleteMode === "purge"}
+                  onChange={() => {
+                    setDeleteMode("purge");
+                    setDeleteError("");
+                  }}
+                />
+                <span className="text-sm text-neutral-700">
+                  <strong>Elimina definitivamente (purge) + libera range</strong>
+                  <br />
+                  Cancella dati collegati in modo irreversibile.
+                </span>
+              </label>
+            </div>
+
+            {deleteMode === "purge" && (
+              <div className="mt-4">
+                <p className="text-sm text-neutral-700">
+                  Per confermare il purge digita lo slug:{" "}
+                  <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs">{deleteConfirm.slug}</code>
+                </p>
+                <input
+                  type="text"
+                  className="mt-2 w-full rounded-md border border-neutral-200 px-3 py-2 text-sm"
+                  value={purgeSlugInput}
+                  onChange={(event) => setPurgeSlugInput(event.target.value)}
+                  placeholder="Digita lo slug esatto"
+                />
+              </div>
+            )}
+
+            {deleteError && (
+              <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {deleteError}
+              </div>
+            )}
 
             <div className="mt-6 flex justify-end gap-3">
               <button
                 type="button"
                 className="rounded-md border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900"
-                onClick={() => setDeleteConfirm(null)}
+                onClick={() => {
+                  setDeleteConfirm(null);
+                  setDeleteError("");
+                  setPurgeSlugInput("");
+                }}
                 disabled={deleting}
               >
                 Annulla
@@ -308,7 +398,7 @@ const SuperAdminOrganizations = () => {
                 onClick={confirmDelete}
                 disabled={deleting}
               >
-                {deleting ? "Eliminazione..." : "Elimina definitivamente"}
+                {deleting ? "Elaborazione..." : deleteMode === "archive" ? "Archivia e libera" : "Purge e libera"}
               </button>
             </div>
           </div>

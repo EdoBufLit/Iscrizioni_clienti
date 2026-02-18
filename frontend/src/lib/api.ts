@@ -618,6 +618,8 @@ export type SuperAdminOrganization = {
   slug: string;
   description: string | null;
   is_active: boolean;
+  is_archived?: boolean;
+  deleted_at?: string | null;
   created_at: string | null;
   city: string | null;
   province: string | null;
@@ -761,12 +763,42 @@ export async function createSuperAdminOrganization(data: {
   return res.json();
 }
 
-export async function deleteOrganization(orgId: number): Promise<void> {
-  const res = await fetch(`/api/super-admin/organizations/${orgId}`, {
+export type DeleteAssociationMode = "archive" | "purge";
+
+export type DeleteAssociationResult = {
+  ok: boolean;
+  mode: DeleteAssociationMode;
+  releasedRange: { start: number; end: number } | null;
+  archivedAssociationId: number | null;
+  purgedAssociationId: number | null;
+};
+
+export async function deleteOrganization(
+  orgId: number,
+  options?: {
+    mode?: DeleteAssociationMode;
+    releaseRange?: boolean;
+    force?: boolean;
+  }
+): Promise<DeleteAssociationResult> {
+  const mode = options?.mode ?? "archive";
+  const releaseRange = options?.releaseRange ?? true;
+  const force = options?.force ?? false;
+  const query = new URLSearchParams({
+    mode,
+    release_range: String(releaseRange),
+    force: String(force),
+  });
+
+  const res = await fetch(`/api/admin/associations/${orgId}?${query.toString()}`, {
     method: "DELETE",
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
-  if (!res.ok) throw new Error("Failed to delete organization");
+  if (res.status === 403) throw new Error("Operazione consentita solo a super-admin");
+  if (res.status === 404) throw new Error("Associazione non trovata");
+  if (res.status === 409) throw new Error(await parseApiErrorDetail(res, "Operazione bloccata"));
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Failed to delete organization"));
+  return res.json();
 }
 
 export async function setOrganizationCardRange(

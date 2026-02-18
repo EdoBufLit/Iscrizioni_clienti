@@ -2,29 +2,31 @@ from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Literal, Optional
 import secrets
 import re
 
-from sqlalchemy import func, text
+from sqlalchemy import and_, func, text
 from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.db import get_db
 from app.models import (
     AdminUser, AdminRole, Organization, OrgAdminToken, CardBatch, CardMovement,
-    Member, MemberDocument, MemberPayment, PaymentMethod, Token, IntegrationApiKey
+    Member, PaymentMethod, IntegrationApiKey
 )
 from app.security import hash_api_key, verify_password
 from app.utils import generate_token, hash_token, send_email, save_upload_file
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
 from app import audit
+from app.services.association_delete import delete_association_and_release_range
 
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/super-admin")
+associations_router = APIRouter(prefix="/api/admin")
 auth_router = APIRouter(prefix="/auth")
 
 _ALLOWED_MEMBER_PAYMENT_METHODS = {
@@ -756,99 +758,60 @@ def create_organization(
     return org
 
 
+def _delete_association_handler(
+    request: Request,
+    association_id: int,
+    mode: Literal["archive", "purge"],
+    release_range: bool,
+    force: bool,
+    db: Session,
+):
+    admin = _require_super_admin(request, db)
+    return delete_association_and_release_range(
+        db,
+        request=request,
+        association_id=association_id,
+        mode=mode,
+        release_range=release_range,
+        force=force,
+        actor_admin_id=admin.id,
+    )
+
+
+@associations_router.delete("/associations/{association_id}")
+def delete_association(
+    request: Request,
+    association_id: int,
+    mode: Literal["archive", "purge"] = "archive",
+    release_range: bool = True,
+    force: bool = False,
+    db: Session = Depends(get_db),
+):
+    return _delete_association_handler(
+        request=request,
+        association_id=association_id,
+        mode=mode,
+        release_range=release_range,
+        force=force,
+        db=db,
+    )
+
+
 @router.delete("/organizations/{org_id}")
 def delete_organization(
     request: Request,
     org_id: int,
     db: Session = Depends(get_db),
 ):
-    """
-    Hard delete an organization and all related data.
-    This action is irreversible.
-    """
-    admin = _require_super_admin(request, db)
-    org = db.query(Organization).filter(Organization.id == org_id).first()
-    if not org:
-        raise HTTPException(status_code=404, detail="Organization not found")
-
-    org_name = org.name
-    org_slug = org.slug
-
-    # Get all members of this organization
-    member_ids = [m.id for m in db.query(Member.id).filter(Member.org_id == org_id).all()]
-
-    # Get all org admins of this organization
-    admin_ids = [a.id for a in db.query(AdminUser.id).filter(
-        AdminUser.org_id == org_id,
-        AdminUser.role == AdminRole.ORG_ADMIN
-    ).all()]
-
-    # Delete in correct order to respect FK constraints:
-
-    # 1. Delete tokens for members
-    if member_ids:
-        db.query(Token).filter(Token.member_id.in_(member_ids)).delete(synchronize_session=False)
-
-    # 2. Delete member documents
-    if member_ids:
-        db.query(MemberDocument).filter(MemberDocument.member_id.in_(member_ids)).delete(synchronize_session=False)
-
-    # 3. Delete member payments
-    db.query(MemberPayment).filter(MemberPayment.org_id == org_id).delete(synchronize_session=False)
-
-    # 4. Delete members
-    db.query(Member).filter(Member.org_id == org_id).delete(synchronize_session=False)
-
-    # 5. Delete org admin tokens
-    if admin_ids:
-        db.query(OrgAdminToken).filter(OrgAdminToken.admin_id.in_(admin_ids)).delete(synchronize_session=False)
-
-    # 6. Delete org admins
-    db.query(AdminUser).filter(
-        AdminUser.org_id == org_id,
-        AdminUser.role == AdminRole.ORG_ADMIN
-    ).delete(synchronize_session=False)
-
-    # 7. Delete integration API keys
-    db.query(IntegrationApiKey).filter(IntegrationApiKey.org_id == org_id).delete(synchronize_session=False)
-
-    # 8. Delete card movements
-    db.query(CardMovement).filter(CardMovement.org_id == org_id).delete(synchronize_session=False)
-
-    # 9. Delete card batches
-    db.query(CardBatch).filter(CardBatch.org_id == org_id).delete(synchronize_session=False)
-
-    # 10. Delete the organization itself
-    db.delete(org)
-
-    db.commit()
-
-    # Log after commit (org no longer exists, use metadata)
-    audit.log_operation(
-        db,
-        action="organization.hard_delete",
-        entity_type="organization",
-        entity_id=None,
-        actor_admin_id=admin.id,
-        actor_role="super_admin",
-        metadata={
-            "deleted_org_id": org_id,
-            "deleted_org_name": org_name,
-            "deleted_org_slug": org_slug,
-            "deleted_members_count": len(member_ids),
-            "deleted_admins_count": len(admin_ids),
-        },
-        ip=get_client_ip(request),
-        user_agent=request.headers.get("user-agent")
+    # Legacy endpoint compatibility: preserve hard-delete behavior.
+    return _delete_association_handler(
+        request=request,
+        association_id=org_id,
+        mode="purge",
+        release_range=True,
+        force=True,
+        db=db,
     )
-    db.commit()
-
-    logger.info(
-        "organization.hard_delete: org_id=%d slug=%s by super_admin=%d (members=%d, admins=%d)",
-        org_id, org_slug, admin.id, len(member_ids), len(admin_ids)
-    )
-
-    return {"ok": True, "deleted_slug": org_slug}
 
 
 @router.get("/organizations")
@@ -867,7 +830,13 @@ def list_organizations(
         Organization,
         func.min(CardBatch.start_no).label("card_min"),
         func.max(CardBatch.end_no).label("card_max")
-    ).outerjoin(CardBatch, CardBatch.org_id == Organization.id)
+    ).outerjoin(
+        CardBatch,
+        and_(
+            CardBatch.org_id == Organization.id,
+            CardBatch.released_at.is_(None),
+        ),
+    )
 
     if q:
         search = f"%{q}%"
@@ -891,6 +860,8 @@ def list_organizations(
             "slug": org.slug,
             "description": org.description,
             "is_active": org.is_active,
+            "is_archived": org.deleted_at is not None,
+            "deleted_at": org.deleted_at,
             "created_at": org.created_at,
             "city": org.city,
             "province": org.province,
@@ -1052,6 +1023,7 @@ def check_card_overlap(db: Session, start_no: int, end_no: int, exclude_batch_id
     Equivalent to: (new_end >= old_start) AND (new_start <= old_end)
     """
     query = db.query(CardBatch).filter(
+        CardBatch.released_at.is_(None),
         CardBatch.start_no <= end_no,
         CardBatch.end_no >= start_no
     )
@@ -1083,7 +1055,10 @@ def set_initial_card_range(
         raise HTTPException(status_code=404, detail="Organization not found")
 
     # Check if org already has batches
-    existing_count = db.query(CardBatch).filter(CardBatch.org_id == org_id).count()
+    existing_count = db.query(CardBatch).filter(
+        CardBatch.org_id == org_id,
+        CardBatch.released_at.is_(None),
+    ).count()
     if existing_count > 0:
         raise HTTPException(status_code=400, detail="L'organizzazione ha già delle tessere assegnate. Usa 'Aggiungi tessere'.")
 
@@ -1194,7 +1169,10 @@ def add_card_batch(
     db.commit()
 
     # Return updated stock summary
-    batches = db.query(CardBatch).filter(CardBatch.org_id == org_id).order_by(CardBatch.start_no).all()
+    batches = db.query(CardBatch).filter(
+        CardBatch.org_id == org_id,
+        CardBatch.released_at.is_(None),
+    ).order_by(CardBatch.start_no).all()
     total = sum(b.end_no - b.start_no + 1 for b in batches)
     remaining = sum(max(b.end_no - b.next_no + 1, 0) for b in batches)
 
@@ -1221,7 +1199,10 @@ def get_org_batches(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    batches = db.query(CardBatch).filter(CardBatch.org_id == org_id).order_by(CardBatch.start_no).all()
+    batches = db.query(CardBatch).filter(
+        CardBatch.org_id == org_id,
+        CardBatch.released_at.is_(None),
+    ).order_by(CardBatch.start_no).all()
 
     return {
         "batches": [

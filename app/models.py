@@ -131,6 +131,7 @@ class Organization(Base):
     website = Column(String, nullable=True)
     logo_path = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
+    deleted_at = Column(DateTime, nullable=True)
 
     created_by_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -178,6 +179,7 @@ class CardBatch(Base):
     start_no = Column(Integer)
     end_no = Column(Integer)
     next_no = Column(Integer) # Tracks the next available number
+    released_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     organization = relationship("Organization", back_populates="batches")

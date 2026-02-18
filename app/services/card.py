@@ -28,7 +28,8 @@ def assign_next_card_with_batch(db: Session, org_id: int) -> Tuple[int, int]:
 
     # 2. Load all batches for this org, ordered by start_no for deterministic progression
     stmt = select(CardBatch).filter(
-        CardBatch.org_id == org_id
+        CardBatch.org_id == org_id,
+        CardBatch.released_at.is_(None),
     ).order_by(CardBatch.start_no)
 
     batches = db.execute(stmt).scalars().all()
