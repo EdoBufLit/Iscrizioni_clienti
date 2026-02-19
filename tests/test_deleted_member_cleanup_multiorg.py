@@ -109,6 +109,7 @@ def test_join_submit_cleans_deleted_legacy_traces_per_association(client, db):
         fiscal_code=fiscal_a,
         card_no=92001,
     )
+    old_a_id = old_a.id
     old_b = _create_legacy_deleted_member(
         db,
         org_id=org_b.id,
@@ -116,6 +117,7 @@ def test_join_submit_cleans_deleted_legacy_traces_per_association(client, db):
         fiscal_code=fiscal_b,
         card_no=92002,
     )
+    old_b_id = old_b.id
 
     res_a = client.post(
         f"/api/join/{org_a.slug}/submit",
@@ -147,16 +149,10 @@ def test_join_submit_cleans_deleted_legacy_traces_per_association(client, db):
     )
     assert res_b.status_code == 200, res_b.text
 
-    db.refresh(old_a)
-    db.refresh(old_b)
-    assert old_a.email is None
-    assert old_a.fiscal_code is None
-    assert old_a.card_no is None
-    assert old_a.external_customer_id is None
-    assert old_b.email is None
-    assert old_b.fiscal_code is None
-    assert old_b.card_no is None
-    assert old_b.external_customer_id is None
+    old_a_after = db.query(Member).filter(Member.id == old_a_id).first()
+    old_b_after = db.query(Member).filter(Member.id == old_b_id).first()
+    assert old_a_after is None
+    assert old_b_after is None
 
     new_a = (
         db.query(Member)
@@ -170,8 +166,8 @@ def test_join_submit_cleans_deleted_legacy_traces_per_association(client, db):
         .order_by(Member.id.desc())
         .first()
     )
-    assert new_a is not None and new_a.id != old_a.id
-    assert new_b is not None and new_b.id != old_b.id
+    assert new_a is not None and new_a.id != old_a_id
+    assert new_b is not None and new_b.id != old_b_id
 
 
 def test_register_is_scoped_to_org_and_not_blocked_by_other_org_deleted_member(client, db):
@@ -210,4 +206,3 @@ def test_register_is_scoped_to_org_and_not_blocked_by_other_org_deleted_member(c
     )
     assert new_b is not None
     assert new_b.id != old_a.id
-

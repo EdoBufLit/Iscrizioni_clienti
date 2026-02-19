@@ -19,7 +19,7 @@ from app.models import (
 )
 from app.utils import generate_token, send_email, save_upload_file, hash_token
 from app.services.card import assign_next_card_with_batch
-from app.services.member_cleanup import cleanup_deleted_member_traces
+from app.services.member_cleanup import cleanup_deleted_member_traces, purge_deleted_members_permanently
 from app.config import settings
 from app.middleware import join_limiter, get_client_ip, get_request_id
 from app import audit
@@ -109,6 +109,20 @@ def check_signup_allowed(
     fiscal_code: Optional[str] = None,
 ):
     normalized_email = email.strip().lower()
+
+    purged = purge_deleted_members_permanently(
+        db,
+        org_id=org_id,
+        email=normalized_email,
+        fiscal_code=fiscal_code,
+    )
+    if purged:
+        db.commit()
+        logger.info(
+            "Hard-purged %s deleted member rows before signup check (org_id=%s)",
+            purged,
+            org_id,
+        )
 
     cleaned = cleanup_deleted_member_traces(
         db,

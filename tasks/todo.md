@@ -1181,3 +1181,6 @@ pm --prefix frontend run build -> OK
 
 
 
+- [x] Esteso fix con hard purge fisico dei soci `deleted_at` (cleanup FK) in `app/services/member_cleanup.py`, invocato in startup (`init_db.py`) e pre-check join/register.
+- [x] Verifica locale purge on-demand: `purged_deleted_members=0` (DB locale già pulito).
+- `python -m pytest tests/test_deleted_member_cleanup_multiorg.py tests/test_signup_fixes.py tests/test_member_active_state_regression.py -q` -> **10 passed** (post hard-purge update).

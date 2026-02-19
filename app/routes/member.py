@@ -10,7 +10,7 @@ from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
 from app.services.card_verification import build_card_verification_token
 from app.services.member_activity import get_member_inactive_reason, is_card_active, is_member_active
-from app.services.member_cleanup import cleanup_deleted_member_traces
+from app.services.member_cleanup import cleanup_deleted_member_traces, purge_deleted_members_permanently
 from app.services.org_branding import resolve_card_logo_url, resolve_club_display_name
 from app import audit
 import os
@@ -337,6 +337,15 @@ def api_auth_register(
     normalized_payment_method = _normalize_payment_method(payment_method)
     email_norm = email.strip().lower()
     fiscal_code_norm = fiscal_code.strip().upper() if fiscal_code else None
+
+    purged = purge_deleted_members_permanently(
+        db,
+        org_id=org.id,
+        email=email_norm,
+        fiscal_code=fiscal_code_norm,
+    )
+    if purged:
+        db.commit()
 
     cleaned = cleanup_deleted_member_traces(
         db,

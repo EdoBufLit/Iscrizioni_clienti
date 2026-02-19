@@ -19,7 +19,7 @@ import app.models
 from app.models import Organization, AdminUser, AdminRole, CardBatch
 from app.security import get_password_hash
 from app.config import settings
-from app.services.member_cleanup import cleanup_deleted_member_traces
+from app.services.member_cleanup import cleanup_deleted_member_traces, purge_deleted_members_permanently
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +118,13 @@ def init_db():
             logger.info(
                 "Sanitized %s soft-deleted member rows with legacy identifiers.",
                 cleaned_deleted_members,
+            )
+        purged_deleted_members = purge_deleted_members_permanently(db)
+        if purged_deleted_members:
+            db.commit()
+            logger.info(
+                "Hard-purged %s soft-deleted member rows and dependencies.",
+                purged_deleted_members,
             )
         # ── Seed organization ──────────────────────────────────────
         org = db.query(Organization).filter(Organization.slug == "my-association").first()

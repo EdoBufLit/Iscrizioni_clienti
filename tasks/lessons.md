@@ -55,3 +55,4 @@
 
 - In deploy con SKIP_CREATE_ALL=1, ogni nuova colonna usata dai model va coperta da migration o fallback bootstrap: altrimenti l'app crasha in startup e va in restart loop (502).
 - Quando un dominio usa soft-delete con vincoli legacy, servono due livelli di protezione: bonifica retroattiva globale all'avvio + cleanup runtime mirato prima dei controlli duplicati su join/register, altrimenti restano "tracce" che riemergono come 500/duplicati.
+- Se il cliente richiede "nessuna traccia" dei soft-delete, la sola anonimizzazione non basta: serve hard purge delle righe `members.deleted_at` con cleanup FK (tokens/docs/payments/card_movements/operation_logs) e trigger all'avvio.
