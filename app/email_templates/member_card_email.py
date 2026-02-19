@@ -73,7 +73,7 @@ def build_member_card_email(
                   <tr>
                     <td style="padding:20px 24px 12px 24px;">
                       <p style="margin:0;font-size:11px;letter-spacing:1.5px;color:#8aaba8;text-transform:uppercase;">Nome e cognome</p>
-                      <p style="margin:8px 0 0 0;font-size:28px;line-height:1.15;color:#ffffff;font-family:Georgia,serif;">{safe_name}</p>
+                      <p style="margin:8px 0 0 0;font-size:28px;line-height:1.15;color:#101010 !important;-webkit-text-fill-color:#101010 !important;font-weight:700;font-family:Georgia,serif;">{safe_name}</p>
                       <p style="margin:16px 0 0 0;font-size:11px;letter-spacing:1.5px;color:#8aaba8;text-transform:uppercase;">Associazione</p>
                       <p style="margin:6px 0 0 0;font-size:16px;color:#c6d8d6;">{safe_org}</p>
                     </td>

@@ -41,3 +41,5 @@
 - Se esistono vincoli unici su identificativi (es. external_customer_id), i record soft-deleted legacy vanno bonificati prima del provisioning per evitare 500 e trasformare i conflitti in 409 gestiti.
 
 - Nelle pagine pubbliche ingest, i 409 non vanno mascherati come servizio inattivo: mostrare sempre il dettaglio backend (es. socio gia presente).
+
+- Nei template email, il testo principale (nome socio) va forzato con colore scuro inline (!important) per evitare perdita di contrasto nei client che alterano i colori.
