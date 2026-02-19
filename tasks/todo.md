@@ -1031,3 +1031,22 @@ pm --prefix frontend run build -> OK
 - Test: python -m pytest tests/test_member_active_state_regression.py tests/test_ingest_pienissimo.py -q -> 7 passed.
 - Build FE: npm --prefix frontend run build -> OK.
 
+
+---
+## Review (CSV + riuso email/card post-delete - Feb 19, 2026)
+- Export CSV org-admin ora esclude i soci soft-deleted (/api/org-admin/members.csv).
+- Delete org-admin libera card_no, batch_id, external_customer_id per permettere nuova iscrizione con stessa email e riuso numero tessera.
+- Maintenance annuale libera anche card_no/batch_id/external_customer_id per rendere riutilizzabili email e numeri dopo reset.
+- Allocazione tessere aggiornata: cerca il primo numero libero nei lotti (riempie buchi prima del progressivo).
+- Test: python -m pytest tests/test_member_active_state_regression.py tests/test_member_card_expiration_maintenance.py tests/test_ingest_pienissimo.py -q -> 10 passed.
+- Build FE: npm --prefix frontend run build -> OK.
+
+
+
+---
+## Review (Hard purge delete + fallback anti-500 ingest - Feb 19, 2026)
+- Delete org-admin ora azzera email, phone, fiscal_code, password_hash, card_no, card_year, batch_id, external_customer_id.
+- Integrazione ingest/issue ripulisce conflitti su record deleted legacy prima del provisioning e in caso di race restituisce 409 'socio gia presente' invece di 500.
+- Allocazione lotti usa il primo numero libero nel range per consentire riuso dei numeri liberati.
+- Test: python -m pytest tests/test_member_active_state_regression.py tests/test_member_card_expiration_maintenance.py tests/test_ingest_pienissimo.py tests/test_integration_issue_member.py -q -> 15 passed.
+

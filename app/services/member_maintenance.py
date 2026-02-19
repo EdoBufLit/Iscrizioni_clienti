@@ -49,6 +49,10 @@ def expire_and_purge_members(
         member.expired_at = member.expired_at or current_time
         member.status = MemberStatus.EXPIRED
         member.decision_at = member.decision_at or current_time
+        # Free reusable identifiers after yearly expiration cleanup.
+        member.card_no = None
+        member.batch_id = None
+        member.external_customer_id = None
         if purge_pii:
             _purge_member_pii(member, current_time)
             purged_count += 1

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from fastapi import HTTPException
+from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -88,6 +89,47 @@ def _build_verification_url(member: Member, backend_base: str) -> str:
     return f"{backend_base}/api/cards/verify/{token}"
 
 
+def _cleanup_deleted_conflicts(
+    db: Session,
+    *,
+    org_id: int,
+    signup_source: str,
+    external_customer_id: str,
+    email: str,
+) -> int:
+    deleted_members = (
+        db.query(Member)
+        .filter(
+            Member.org_id == org_id,
+            Member.deleted_at.isnot(None),
+            or_(
+                and_(
+                    Member.signup_source == signup_source,
+                    Member.external_customer_id == external_customer_id,
+                ),
+                func.lower(Member.email) == email,
+            ),
+        )
+        .all()
+    )
+    if not deleted_members:
+        return 0
+
+    for member in deleted_members:
+        member.email = None
+        member.phone = None
+        member.fiscal_code = None
+        member.password_hash = None
+        member.external_customer_id = None
+        member.card_no = None
+        member.card_year = None
+        member.batch_id = None
+        member.signup_ip = None
+        member.signup_user_agent = None
+    db.commit()
+    return len(deleted_members)
+
+
 def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> IssueMemberResult:
     org = _resolve_active_organization(db, command.org_id)
 
@@ -106,6 +148,14 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
     phone = _normalize_text(command.phone)
     fiscal_code = _normalize_text(command.fiscal_code)
     signup_source = _normalize_text(command.signup_source) or SignupSource.PIENISSIMO.value
+
+    _cleanup_deleted_conflicts(
+        db,
+        org_id=org.id,
+        signup_source=signup_source,
+        external_customer_id=external_customer_id,
+        email=email,
+    )
 
     member = (
         db.query(Member)
@@ -158,7 +208,7 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
                 .first()
             )
             if not member:
-                raise
+                raise HTTPException(status_code=409, detail="socio già presente")
             outcome = "reused"
     else:
         member.email = email

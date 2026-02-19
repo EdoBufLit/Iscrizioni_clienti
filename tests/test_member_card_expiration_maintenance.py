@@ -4,8 +4,18 @@ from datetime import datetime, timedelta
 import pytest
 
 from app.db import SessionLocal
-from app.models import AdminRole, AdminUser, Member, MemberStatus, OperationLog, OrgAdminToken, Organization
-from app.security import get_password_hash
+from app.models import (
+    AdminRole,
+    AdminUser,
+    CardBatch,
+    IntegrationApiKey,
+    Member,
+    MemberStatus,
+    OperationLog,
+    OrgAdminToken,
+    Organization,
+)
+from app.security import get_password_hash, hash_api_key
 from app.services.card_verification import build_card_verification_token
 from app.services.member_activity import is_member_active
 from app.utils import hash_token
@@ -146,6 +156,7 @@ def test_maintenance_expire_and_purge_updates_member_and_hides_from_admin_lists(
     assert member.password_hash is None
     assert member.first_name == "EXPIRED"
     assert member.last_name == "MEMBER"
+    assert member.card_no is None
 
     detail_res = client.get(f"/api/super-admin/members/{member.id}")
     assert detail_res.status_code == 404
@@ -163,3 +174,82 @@ def test_maintenance_expire_and_purge_updates_member_and_hides_from_admin_lists(
     assert active_members_res.status_code == 200, active_members_res.text
     active_ids = [item["id"] for item in active_members_res.json()["items"]]
     assert member.id not in active_ids
+
+
+def test_maintenance_frees_email_and_card_number_for_new_issue(client, db):
+    suffix = uuid.uuid4().hex[:8]
+    current_year = datetime.utcnow().year
+    expired_year = current_year - 1
+    reused_email = f"expired.reuse.{suffix}@example.com"
+
+    org = Organization(
+        name=f"Reuse Org {suffix}",
+        slug=f"reuse-org-{suffix}",
+        is_active=True,
+    )
+    db.add(org)
+    db.commit()
+    db.refresh(org)
+
+    batch = CardBatch(
+        org_id=org.id,
+        start_no=52000,
+        end_no=52020,
+        next_no=52021,
+    )
+    db.add(batch)
+    db.commit()
+
+    expired_member = Member(
+        org_id=org.id,
+        first_name="Old",
+        last_name="Member",
+        email=reused_email,
+        status=MemberStatus.ACTIVE,
+        card_no=52000,
+        card_year=expired_year,
+        external_customer_id=f"email:{reused_email}",
+    )
+    db.add(expired_member)
+
+    raw_key = f"pk_test_reuse_{uuid.uuid4().hex}"
+    integration_key = IntegrationApiKey(
+        org_id=org.id,
+        name="pienissimo",
+        key_hash=hash_api_key(raw_key),
+        scopes=["issue_member"],
+        is_active=True,
+    )
+    db.add(integration_key)
+    db.commit()
+    db.refresh(expired_member)
+
+    client.post("/api/super-admin/auth/logout")
+    login_res = client.post(
+        "/api/super-admin/auth/login",
+        json={"email": "admin@assonam.it", "password": "admin"},
+    )
+    assert login_res.status_code == 200, login_res.text
+
+    maintenance_res = client.post("/api/super-admin/maintenance/run", json={"purge_pii": True})
+    assert maintenance_res.status_code == 200, maintenance_res.text
+
+    db.refresh(expired_member)
+    assert expired_member.deleted_at is not None
+    assert expired_member.card_no is None
+
+    reissue_res = client.post(
+        "/api/integrations/members/issue",
+        json={
+            "org_slug": org.slug,
+            "external_customer_id": f"email:{reused_email}",
+            "email": reused_email,
+            "first_name": "New",
+            "last_name": "Member",
+            "send_email": False,
+        },
+        headers={"X-ASSONAM-API-KEY": raw_key},
+    )
+    assert reissue_res.status_code == 200, reissue_res.text
+    reissue_payload = reissue_res.json()
+    assert reissue_payload["card_number"] == 52000

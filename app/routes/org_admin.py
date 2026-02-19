@@ -76,18 +76,28 @@ _ALLOWED_MEMBER_PAYMENT_METHODS = {
 
 
 def _compute_org_card_stock(db: Session, org_id: int, now: datetime | None = None) -> dict[str, int]:
-    card_stats = db.query(
-        func.sum(CardBatch.end_no - CardBatch.start_no + 1).label("total"),
-        func.sum(
-            func.max(CardBatch.end_no - CardBatch.next_no + 1, 0)
-        ).label("remaining"),
-    ).filter(
+    batches = db.query(CardBatch.start_no, CardBatch.end_no).filter(
         CardBatch.org_id == org_id,
         CardBatch.released_at.is_(None),
-    ).first()
+    ).all()
+    if not batches:
+        return {"total": 0, "used": 0, "remaining": 0}
 
-    total = int(card_stats.total or 0)
-    remaining = int(card_stats.remaining or 0)
+    total = int(sum((end_no - start_no + 1) for start_no, end_no in batches))
+    range_filters = [
+        and_(Member.card_no >= start_no, Member.card_no <= end_no)
+        for start_no, end_no in batches
+    ]
+    allocated_non_deleted = int(
+        db.query(func.count(func.distinct(Member.card_no))).filter(
+            Member.org_id == org_id,
+            Member.deleted_at.is_(None),
+            Member.card_no.isnot(None),
+            or_(*range_filters),
+        ).scalar()
+        or 0
+    )
+    remaining = max(total - allocated_non_deleted, 0)
     active_used = int(
         db.query(func.count(Member.id)).filter(
             Member.org_id == org_id,
@@ -1337,11 +1347,21 @@ def delete_member(
         raise HTTPException(status_code=403, detail="Forbidden")
 
     now = datetime.utcnow()
+    released_card_no = member.card_no
     member.deleted_at = now
     member.deleted_by_admin_id = admin.id
     member.status = MemberStatus.REJECTED
     member.decision_at = now
     member.decision_by_admin_id = admin.id
+    # Purge key identifiers so the member can be re-created later if needed.
+    member.email = None
+    member.phone = None
+    member.fiscal_code = None
+    member.password_hash = None
+    member.card_no = None
+    member.card_year = None
+    member.batch_id = None
+    member.external_customer_id = None
     if not member.decision_notes:
         member.decision_notes = "Disattivato da amministratore"
 
@@ -1354,7 +1374,7 @@ def delete_member(
         entity_id=member.id,
         actor_admin_id=admin.id,
         actor_role="org_admin",
-        metadata={"email": member.email},
+        metadata={"email": member.email, "released_card_no": released_card_no},
         ip=get_client_ip(request)
     )
     db.commit()
@@ -1498,7 +1518,10 @@ def export_members_csv(
 
     members = (
         db.query(Member)
-        .filter(Member.org_id == admin.org_id)
+        .filter(
+            Member.org_id == admin.org_id,
+            Member.deleted_at.is_(None),
+        )
         .order_by(Member.last_name, Member.first_name)
         .all()
     )

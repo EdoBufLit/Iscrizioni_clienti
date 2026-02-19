@@ -125,10 +125,13 @@ def test_deleted_member_is_inactive_everywhere(client, db):
 
     db.refresh(member)
     assert member.deleted_at is not None
+    assert member.email is None
+    assert member.external_customer_id is None
+    assert member.card_no is None
 
     login_res = client.post("/api/auth/login", data={"email": member_email})
-    assert login_res.status_code == 403, login_res.text
-    assert login_res.json()["detail"] == "account non attivo"
+    assert login_res.status_code == 200, login_res.text
+    assert login_res.json()["status"] == "ok"
 
     verify_magic_link_res = client.get(f"/member/auth?token={token_str}", follow_redirects=False)
     assert verify_magic_link_res.status_code == 403, verify_magic_link_res.text
@@ -156,6 +159,10 @@ def test_deleted_member_is_inactive_everywhere(client, db):
     active_ids = [item["id"] for item in active_list_res.json()["items"]]
     assert member.id not in active_ids
 
+    export_csv_res = client.get("/api/org-admin/members.csv")
+    assert export_csv_res.status_code == 200, export_csv_res.text
+    assert member_email not in export_csv_res.text
+
     stock_after_delete = client.get("/api/org-admin/cards")
     assert stock_after_delete.status_code == 200, stock_after_delete.text
     assert stock_after_delete.json()["used"] == 0
@@ -163,3 +170,19 @@ def test_deleted_member_is_inactive_everywhere(client, db):
     metrics_after_delete = client.get("/api/org-admin/metrics")
     assert metrics_after_delete.status_code == 200, metrics_after_delete.text
     assert metrics_after_delete.json()["cards_used"] == 0
+
+    reissue_res = client.post(
+        "/api/integrations/members/issue",
+        json={
+            "org_slug": org.slug,
+            "external_customer_id": f"ext-{suffix}",
+            "email": member_email,
+            "first_name": "Nuovo",
+            "last_name": "Socio",
+            "send_email": False,
+        },
+        headers={"X-ASSONAM-API-KEY": raw_key},
+    )
+    assert reissue_res.status_code == 200, reissue_res.text
+    reissue_data = reissue_res.json()
+    assert reissue_data["card_number"] == issue_data["card_number"]

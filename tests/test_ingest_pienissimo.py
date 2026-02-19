@@ -210,18 +210,8 @@ def test_ingest_skips_legacy_card_collision_and_returns_200(client, db):
     org, batch = _create_org_with_batch(db, slug_prefix="ingest-collision")
     _create_integration_key(db, org_id=org.id, active=True)
 
-    legacy_org = Organization(
-        name=f"Legacy Org {uuid.uuid4().hex[:8]}",
-        slug=f"legacy-org-{uuid.uuid4().hex[:8]}",
-        is_active=True,
-        privacy_version="v1",
-    )
-    db.add(legacy_org)
-    db.commit()
-    db.refresh(legacy_org)
-
     legacy_member = Member(
-        org_id=legacy_org.id,
+        org_id=org.id,
         first_name="Legacy",
         last_name="Collision",
         email=f"legacy.collision.{uuid.uuid4().hex[:6]}@example.com",

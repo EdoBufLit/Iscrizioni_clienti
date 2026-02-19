@@ -34,3 +34,8 @@
 - I KPI tessere 'assegnate' devono usare soci attivi (is_member_active) e non il solo avanzamento next_no dei lotti, altrimenti i cancellati restano conteggiati.
 
 - L'endpoint ingest pubblico non deve mai propagare 500 per collisioni legacy su card_no: l'allocazione deve saltare il numero occupato e continuare nel lotto.
+- Per allocazioni da lotti, non affidarsi solo a next_no: cercare sempre il primo numero libero nel range per riempire i buchi lasciati dai soci eliminati.
+
+- Se il requisito richiede riuso dopo soft delete (email, external_customer_id, card_no), quei campi vanno liberati esplicitamente nel delete e nella maintenance annuale.
+
+- Se esistono vincoli unici su identificativi (es. external_customer_id), i record soft-deleted legacy vanno bonificati prima del provisioning per evitare 500 e trasformare i conflitti in 409 gestiti.

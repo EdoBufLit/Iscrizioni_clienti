@@ -15,9 +15,9 @@ def assign_next_card_with_batch(db: Session, org_id: int) -> Tuple[int, int]:
 
     Logic:
     1. Find all batches for this org, ordered by start_no (deterministic order)
-    2. Walk numbers from next_no to end_no
-    3. Skip card numbers already used (legacy overlap/collision safety)
-    4. Atomically persist next_no and return the assigned number
+    2. For each batch, compute occupied numbers from non-deleted members
+    3. Pick the first free number in range (fills holes before progressing)
+    4. Persist next_no and return the assigned number
 
     Concurrency safety:
     - Uses BEGIN IMMEDIATE for SQLite write lock
@@ -43,39 +43,41 @@ def assign_next_card_with_batch(db: Session, org_id: int) -> Tuple[int, int]:
 
     # 3. Find the first free number across all active batches.
     for batch in batches:
-        candidate = batch.next_no if batch.next_no is not None else batch.start_no
-        if candidate > batch.end_no:
+        occupied_rows = db.execute(
+            select(Member.card_no).filter(
+                Member.org_id == org_id,
+                Member.deleted_at.is_(None),
+                Member.card_no.isnot(None),
+                Member.card_no >= batch.start_no,
+                Member.card_no <= batch.end_no,
+            )
+        ).all()
+        occupied_numbers = {row[0] for row in occupied_rows if row[0] is not None}
+
+        assigned_candidate = None
+        for candidate in range(batch.start_no, batch.end_no + 1):
+            if candidate not in occupied_numbers:
+                assigned_candidate = candidate
+                break
+
+        if assigned_candidate is None:
+            batch.next_no = batch.end_no + 1
+            db.add(batch)
             continue
 
-        while candidate <= batch.end_no:
-            existing_member_id = (
-                db.execute(select(Member.id).filter(Member.card_no == candidate)).scalars().first()
-            )
-            if existing_member_id is None:
-                batch.next_no = candidate + 1
-                db.add(batch)
-                db.commit()
-                logger.info(
-                    "Assigned card %d from batch %d (range %d-%d) for org %d",
-                    candidate,
-                    batch.id,
-                    batch.start_no,
-                    batch.end_no,
-                    org_id,
-                )
-                return candidate, batch.id
-
-            logger.warning(
-                "Card number collision for org %d: %d already assigned to member %d, skipping",
-                org_id,
-                candidate,
-                existing_member_id,
-            )
-            candidate += 1
-
-        # Mark exhausted so future allocations skip this batch quickly.
-        batch.next_no = batch.end_no + 1
+        baseline_next = batch.next_no if batch.next_no is not None else batch.start_no
+        batch.next_no = max(baseline_next, assigned_candidate + 1)
         db.add(batch)
+        db.commit()
+        logger.info(
+            "Assigned card %d from batch %d (range %d-%d) for org %d",
+            assigned_candidate,
+            batch.id,
+            batch.start_no,
+            batch.end_no,
+            org_id,
+        )
+        return assigned_candidate, batch.id
 
     # 4. If all batches are exhausted (or fully colliding), surface business error.
     db.commit()
