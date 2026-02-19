@@ -117,7 +117,6 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
 
   const displayName = toDisplayName(cardData);
   const clubDisplayName = toSafeText(cardData.clubDisplayName);
-  const organizationSlug = toSafeText(cardData.organizationSlug).toLowerCase();
   const organizationName = toSafeText(cardData.organizationName);
   const organizationLogoUrl = toSafeText(cardData.organizationLogoUrl);
   const organizationLabel = clubDisplayName !== EMPTY ? clubDisplayName : organizationName;
