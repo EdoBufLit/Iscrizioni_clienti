@@ -10,6 +10,7 @@ from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
 from app.services.card_verification import build_card_verification_token
 from app.services.member_activity import get_member_inactive_reason, is_card_active, is_member_active
+from app.services.member_cleanup import cleanup_deleted_member_traces
 from app.services.org_branding import resolve_card_logo_url, resolve_club_display_name
 from app import audit
 import os
@@ -334,9 +335,29 @@ def api_auth_register(
         raise HTTPException(status_code=404, detail="Not found")
 
     normalized_payment_method = _normalize_payment_method(payment_method)
+    email_norm = email.strip().lower()
+    fiscal_code_norm = fiscal_code.strip().upper() if fiscal_code else None
+
+    cleaned = cleanup_deleted_member_traces(
+        db,
+        org_id=org.id,
+        email=email_norm,
+        fiscal_code=fiscal_code_norm,
+    )
+    if cleaned:
+        db.commit()
 
     # Check if member already exists
-    existing = db.query(Member).filter(Member.email == email).first()
+    existing = (
+        db.query(Member)
+        .filter(
+            Member.org_id == org.id,
+            func.lower(Member.email) == email_norm,
+            Member.deleted_at.is_(None),
+        )
+        .order_by(Member.id.desc())
+        .first()
+    )
     if existing:
         # If existing but no password, allow setting password
         if not existing.password_hash:
@@ -357,7 +378,7 @@ def api_auth_register(
         org_id=org.id,
         first_name=first_name,
         last_name=last_name,
-        email=email,
+        email=email_norm,
         phone=phone,
         fiscal_code=fiscal_code,
         payment_method=normalized_payment_method,

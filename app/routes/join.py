@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile, File
 from fastapi.responses import JSONResponse, RedirectResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timedelta
 from app.db import get_db
 from app.models import (
@@ -17,6 +19,7 @@ from app.models import (
 )
 from app.utils import generate_token, send_email, save_upload_file, hash_token
 from app.services.card import assign_next_card_with_batch
+from app.services.member_cleanup import cleanup_deleted_member_traces
 from app.config import settings
 from app.middleware import join_limiter, get_client_ip, get_request_id
 from app import audit
@@ -97,11 +100,34 @@ def join_page(request: Request, org_slug: str, db: Session = Depends(get_db)):
 
 # ── JSON API ──────────────────────────────────────────────────────
 
-def check_signup_allowed(db: Session, org_id: int, email: str, request: Request):
+def check_signup_allowed(
+    db: Session,
+    org_id: int,
+    email: str,
+    request: Request,
+    *,
+    fiscal_code: Optional[str] = None,
+):
+    normalized_email = email.strip().lower()
+
+    cleaned = cleanup_deleted_member_traces(
+        db,
+        org_id=org_id,
+        email=normalized_email,
+        fiscal_code=fiscal_code,
+    )
+    if cleaned:
+        db.commit()
+        logger.info(
+            "Sanitized %s deleted member rows before signup check (org_id=%s)",
+            cleaned,
+            org_id,
+        )
+
     # 1. Block Org Admin
     # Check if this email is an admin for this org
     admin_user = db.query(AdminUser).filter(
-        AdminUser.email == email,
+        func.lower(AdminUser.email) == normalized_email,
         AdminUser.org_id == org_id,
         AdminUser.is_active.is_(True)
     ).first()
@@ -125,7 +151,10 @@ def check_signup_allowed(db: Session, org_id: int, email: str, request: Request)
 
     latest_member = (
         db.query(Member)
-        .filter(Member.org_id == org_id, Member.email == email)
+        .filter(
+            Member.org_id == org_id,
+            func.lower(Member.email) == normalized_email,
+        )
         .order_by(Member.id.desc())
         .first()
     )
@@ -144,7 +173,7 @@ def check_signup_allowed(db: Session, org_id: int, email: str, request: Request)
                  action="member.signup.blocked_duplicate",
                  entity_type="member",
                  entity_id=latest_member.id,
-                 metadata={"email": email, "reason": "duplicate_active"},
+                 metadata={"email": normalized_email, "reason": "duplicate_active"},
                  ip=get_client_ip(request)
              )
              db.commit()
@@ -187,7 +216,7 @@ def api_join_start(
         if not accept_statute:
             raise HTTPException(status_code=400, detail="È necessario accettare lo statuto per procedere.")
 
-    existing = check_signup_allowed(db, org.id, email, request)
+    existing = check_signup_allowed(db, org.id, email, request, fiscal_code=fiscal_code)
     if existing:
         return {"status": "started", "organization": org.name}
 
@@ -419,7 +448,7 @@ async def api_join_submit_multipart(
 
     normalized_payment_method = _normalize_payment_method(payment_method, required=True)
 
-    existing = check_signup_allowed(db, org.id, email, request)
+    existing = check_signup_allowed(db, org.id, email, request, fiscal_code=fiscal_code)
 
     # Transactional
     rel_path_id = None
@@ -561,6 +590,12 @@ async def api_join_submit_multipart(
 
     except HTTPException:
         raise
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Esiste già una iscrizione associata a questi dati.",
+        )
     except Exception as e:
         # Cleanup (ONLY if error happens BEFORE commit)
         for p in [rel_path_id, rel_path_fc]:

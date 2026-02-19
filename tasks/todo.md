@@ -981,7 +981,6 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [ ] Aggiornare UI super-admin Associazioni con modal a due scelte e conferma slug per purge.
 - [ ] Aggiungere test backend archive/purge + verifica riutilizzo range; eseguire test/build mirati.
 ## Review (Delete associazione + rilascio range tessere)
-- [ ] Da completare.
 ## Execution Update (Delete associazione + rilascio range tessere - Feb 18, 2026)
 - [x] Analizzati modelli/route delete/range: causa primaria blocco delete su FK indirette (es. operation_logs actor_* verso admin/member).
 - [x] Implementato service transazionale backend delete_association_and_release_range con mode archive/purge, force, release_range e audit.
@@ -1009,7 +1008,6 @@ pm --prefix frontend run build -> OK
 - [ ] Allineare soft-delete socio e query/liste admin affinché tessera eliminata non risulti mai attiva.
 - [ ] Aggiornare/aggiungere test regressione (QR verify JSON+HTML, delete->non attiva, login negato, lista attivi esclusa) ed eseguire test mirati.
 ## Review (Fix coerenza socio/tessera/accesso/QR)
-- [ ] Da completare.
 ## Execution Update (Fix coerenza socio/tessera/accesso/QR - Feb 19, 2026)
 - [x] Aggiunta utility centrale in `app/services/member_activity.py` con `is_member_active`, `is_card_active`, reason codes e label utente.
 - [x] Hardening auth member in `app/routes/member.py`: login/magic-link/session check bloccano account non attivo con HTTP 403 `account non attivo`.
@@ -1033,7 +1031,6 @@ pm --prefix frontend run build -> OK
 - [ ] Aggiornare query/listing dove necessario per non mostrare scaduti come attivi.
 - [ ] Aggiungere test regressione: member scaduto -> verify non attiva (Scaduta), login negato, maintenance -> deleted_at/expired_at/purged_at + PII purgata.
 ## Review (Scadenza annuale tessere)
-- [ ] Da completare.
 ## Execution Update (Scadenza annuale tessere + auto-expire/purge - Feb 19, 2026)
 - [x] Esteso modello `Member` con `expired_at`, `purged_at`, indice `ix_members_card_year_deleted` e nuovo stato `expired`.
 - [x] Aggiunta migration Alembic `k2l3m4n5o6p7_add_member_expiration_and_purge_fields.py` + aggiornamento fallback legacy in `init_db.py`.
@@ -1153,6 +1150,33 @@ pm --prefix frontend run build -> OK
 
 
 
+
+
+
+
+
+---
+## Spec (Cleanup soci eliminati multi-associazione - Feb 19, 2026)
+- Obiettivo: eliminare definitivamente le "tracce" dei soci soft-deleted in tutte le associazioni, evitando errori 500/duplicati in iscrizione.
+- Vincoli: nessuna regressione sui flussi join/register/integration; cleanup scoped per associazione quando richiesto dai flussi runtime.
+
+## Plan (Cleanup soci eliminati multi-associazione)
+- [x] Tracciare spec e piano operativo in `tasks/todo.md`.
+- [x] Implementare bonifica retroattiva globale dei soci `deleted_at` con identificativi ancora presenti (startup-safe/idempotente).
+- [x] Hardening runtime su iscrizione/registrazione per pulire conflitti legacy prima dei controlli duplicati.
+- [x] Aggiungere test regressione per ri-iscrizione dopo delete su associazioni diverse.
+- [x] Eseguire test mirati e compilare Review con esiti.
+
+## Execution Update (Cleanup soci eliminati multi-associazione - Feb 19, 2026)
+- [x] Implementata utility condivisa `cleanup_deleted_member_traces` in `app/services/member_cleanup.py` per bonifica identificativi su soci `deleted_at`.
+- [x] Hardening `app/routes/join.py`: cleanup pre-check signup (email/fiscal), matching email case-insensitive e gestione `IntegrityError` con HTTP 409 (no 500 generico).
+- [x] Hardening `app/routes/member.py` (`/api/auth/register`): controllo duplicati scoped per org + cleanup pre-check su record deleted legacy.
+- [x] Bonifica retroattiva globale collegata a startup in `init_db.py` (idempotente, con log conteggio righe pulite).
+- [x] Aggiunti test regressione multi-associazione in `tests/test_deleted_member_cleanup_multiorg.py`.
+
+## Review (Cleanup soci eliminati multi-associazione - Feb 19, 2026)
+- `python -m pytest tests/test_deleted_member_cleanup_multiorg.py tests/test_signup_fixes.py tests/test_member_active_state_regression.py -q` -> **10 passed**
+- Esito: i soci soft-deleted legacy vengono bonificati (globale + runtime), la ri-iscrizione per associazione non lascia conflitti residui, e i conflitti legacy non esplodono più in 500 nel submit iscrizione.
 
 
 
