@@ -16,6 +16,7 @@ class Settings:
 
     BASE_URL: str = os.getenv("BASE_URL", "http://localhost:8000")
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "")
+    FRONTEND_STATIC_DIR: str = os.getenv("FRONTEND_STATIC_DIR", "")
     INGEST_RATE_LIMIT_MAX_REQUESTS: int = int(os.getenv("INGEST_RATE_LIMIT_MAX_REQUESTS", "20"))
     INGEST_RATE_LIMIT_WINDOW_SECONDS: int = int(os.getenv("INGEST_RATE_LIMIT_WINDOW_SECONDS", "300"))
 

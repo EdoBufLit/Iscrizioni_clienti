@@ -6,6 +6,8 @@ from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+import os
+
 from app import audit
 from app.config import settings
 from app.email_templates.member_card_email import build_member_card_email
@@ -19,6 +21,30 @@ from app.services.org_branding import (
     resolve_club_display_name,
 )
 from app.utils import generate_token, hash_token, send_email_html
+
+
+def _resolve_org_logo_disk_path(org: Organization) -> str | None:
+    if org.logo_path:
+        p = os.path.join(settings.UPLOAD_DIR, org.logo_path)
+        return p if os.path.exists(p) else None
+    slug = (getattr(org, "slug", None) or "").strip().lower()
+    if slug:
+        static_p = os.path.normpath(
+            os.path.join(os.path.dirname(__file__), "..", "static", "card-logos", f"{slug}.png")
+        )
+        return static_p if os.path.exists(static_p) else None
+    return None
+
+
+def _resolve_assonam_disk_path() -> str | None:
+    static_dir = (settings.FRONTEND_STATIC_DIR or "").strip()
+    if static_dir:
+        p = os.path.join(static_dir, "logo-transparent.png")
+        return p if os.path.exists(p) else None
+    rel = os.path.normpath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "public", "logo-transparent.png")
+    )
+    return rel if os.path.exists(rel) else None
 
 
 @dataclass(frozen=True)
@@ -98,7 +124,7 @@ def _build_card_links(member: Member, backend_base: str) -> tuple[str, str, str,
         card_year=member.card_year,
     )
     verification_url = f"{backend_base}/api/cards/verify/{token}"
-    download_url = f"{backend_base}/api/cards/{token}/download"
+    download_url = f"{backend_base}/api/cards/{token}/download.pdf"
     wallet_apple_url = f"{backend_base}/api/cards/{token}/wallet/apple"
     wallet_google_url = f"{backend_base}/api/cards/{token}/wallet/google"
     return token, verification_url, download_url, wallet_apple_url, wallet_google_url
@@ -288,6 +314,35 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
         club_display_name = resolve_club_display_name(org) or org.name
         subject = resolve_card_email_subject(org)
         full_name = f"{(member.first_name or '').strip()} {(member.last_name or '').strip()}".strip() or email
+
+        # Generate card PNG for inline email embed (CID)
+        card_image_bytes: bytes | None = None
+        try:
+            from app.services.card_image import generate_card_image_bytes
+            card_image_bytes = generate_card_image_bytes(
+                member_full_name=full_name,
+                organization_name=org.name,
+                club_display_name=club_display_name,
+                card_number=member.card_no,
+                card_year=member.card_year,
+                card_status="attiva",
+                org_logo_path=_resolve_org_logo_disk_path(org),
+                assonam_logo_path=_resolve_assonam_disk_path(),
+            )
+        except Exception:
+            card_image_bytes = None  # fallback: email senza immagine inline
+
+        card_image_cid: str | None = None
+        inline_images: list[dict] = []
+        if card_image_bytes:
+            card_image_cid = "card_front@assonam"
+            inline_images.append({
+                "cid": card_image_cid,
+                "content_type": "image/png",
+                "data": card_image_bytes,
+                "filename": "tessera.png",
+            })
+
         text_body, html_body = build_member_card_email(
             member_full_name=full_name,
             organization_name=org.name,
@@ -300,12 +355,14 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
             magic_link_url=magic_link_url,
             assonam_logo_url=assonam_logo_url,
             organization_logo_url=organization_logo_url,
+            card_image_cid=card_image_cid,
         )
         email_sent = send_email_html(
             to_email=member.email,
             subject=subject,
             text_body=text_body,
             html_body=html_body,
+            inline_images=inline_images if inline_images else None,
         )
         if email_sent:
             member.card_email_sent_at = datetime.utcnow()

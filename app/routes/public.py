@@ -16,6 +16,8 @@ from app.services.member_activity import (
     member_inactive_reason_label,
 )
 from app.services.org_branding import resolve_assonam_logo_url, resolve_card_logo_url, resolve_club_display_name
+from app.services.card_pdf import generate_card_pdf_bytes
+from app.services.card_image import generate_card_image_bytes
 
 router = APIRouter()
 
@@ -626,3 +628,162 @@ def card_wallet_apple(token: str):
 def card_wallet_google(token: str):
     _ = parse_card_verification_token(token)
     raise HTTPException(status_code=404, detail="Wallet non configurato")
+
+
+# ── Disk-path helpers (used by PDF and PNG endpoints) ─────────────────────────
+
+def _resolve_logo_disk_path(org: Organization | None) -> str | None:
+    """Return the absolute disk path for the org logo, or None if unavailable."""
+    if org is None:
+        return None
+    if org.logo_path:
+        p = os.path.join(settings.UPLOAD_DIR, org.logo_path)
+        return p if os.path.exists(p) else None
+    slug = (getattr(org, "slug", None) or "").strip().lower()
+    if slug:
+        static_p = os.path.normpath(
+            os.path.join(os.path.dirname(__file__), "..", "static", "card-logos", f"{slug}.png")
+        )
+        return static_p if os.path.exists(static_p) else None
+    return None
+
+
+def _resolve_assonam_disk_path() -> str | None:
+    """Return the absolute disk path for the ASSONAM logo PNG."""
+    static_dir = (settings.FRONTEND_STATIC_DIR or "").strip()
+    if static_dir:
+        p = os.path.join(static_dir, "logo-transparent.png")
+        return p if os.path.exists(p) else None
+    rel = os.path.normpath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "public", "logo-transparent.png")
+    )
+    return rel if os.path.exists(rel) else None
+
+
+# ── PDF direct download ────────────────────────────────────────────────────────
+
+@router.get("/api/cards/{token}/download.pdf")
+def download_card_pdf(token: str, request: Request, db: Session = Depends(get_db)):
+    """Return a 2-page PDF (front + back) as a direct download — no print dialog."""
+    checked_at = datetime.utcnow()
+    payload = parse_card_verification_token(token)
+    if not payload:
+        raise HTTPException(status_code=404, detail="Tessera non valida")
+
+    member = (
+        db.query(Member)
+        .filter(Member.id == payload["member_id"], Member.org_id == payload["org_id"])
+        .first()
+    )
+    organization = (
+        member.organization
+        if member and member.organization
+        else db.query(Organization).filter(Organization.id == payload["org_id"]).first()
+    )
+
+    inactive_reason = ""
+    if not member:
+        inactive_reason = MEMBER_INACTIVE_REASON_DELETED
+    else:
+        inactive_reason = get_member_inactive_reason(member, now=checked_at)
+        if inactive_reason == "" and (
+            member.card_no != payload["card_number"] or member.card_year != payload["card_year"]
+        ):
+            inactive_reason = MEMBER_INACTIVE_REASON_NOT_APPROVED
+
+    is_valid = inactive_reason == ""
+    card_status = "attiva" if is_valid else "non_attiva"
+    card_number = (member.card_no if member and member.card_no is not None else payload["card_number"])
+    card_year = (member.card_year if member and member.card_year is not None else payload["card_year"])
+
+    backend_base = _get_backend_base_url(request)
+    verification_url = f"{backend_base}/api/cards/verify/{token}"
+    club_display_name = resolve_club_display_name(organization) or (organization.name if organization else "")
+    org_logo_path = _resolve_logo_disk_path(organization)
+    assonam_logo_path = _resolve_assonam_disk_path()
+
+    try:
+        pdf_bytes = generate_card_pdf_bytes(
+            member_full_name=_member_display_name(
+                member.first_name if member else None,
+                member.last_name if member else None,
+            ),
+            organization_name=organization.name if organization else "N/D",
+            club_display_name=club_display_name or (organization.name if organization else "N/D"),
+            organization_slug=organization.slug if organization else None,
+            card_number=card_number or 0,
+            card_year=card_year or 0,
+            card_status=card_status,
+            verification_url=verification_url,
+            org_logo_path=org_logo_path,
+            assonam_logo_path=assonam_logo_path,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Errore generazione PDF: {exc}") from exc
+
+    slug = (organization.slug if organization else "card").replace("/", "_")
+    filename = f"tessera_{slug}_{card_year}_{card_number}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ── Card image PNG ─────────────────────────────────────────────────────────────
+
+@router.get("/api/cards/{token}/image.png")
+def card_image_png(token: str, request: Request, db: Session = Depends(get_db)):
+    """Return a PNG image of the card front in bordeaux theme."""
+    checked_at = datetime.utcnow()
+    payload = parse_card_verification_token(token)
+    if not payload:
+        raise HTTPException(status_code=404, detail="Tessera non valida")
+
+    member = (
+        db.query(Member)
+        .filter(Member.id == payload["member_id"], Member.org_id == payload["org_id"])
+        .first()
+    )
+    organization = (
+        member.organization
+        if member and member.organization
+        else db.query(Organization).filter(Organization.id == payload["org_id"]).first()
+    )
+
+    inactive_reason = ""
+    if not member:
+        inactive_reason = MEMBER_INACTIVE_REASON_DELETED
+    else:
+        inactive_reason = get_member_inactive_reason(member, now=checked_at)
+        if inactive_reason == "" and (
+            member.card_no != payload["card_number"] or member.card_year != payload["card_year"]
+        ):
+            inactive_reason = MEMBER_INACTIVE_REASON_NOT_APPROVED
+
+    is_valid = inactive_reason == ""
+    card_status = "attiva" if is_valid else "non_attiva"
+    card_number = (member.card_no if member and member.card_no is not None else payload["card_number"])
+    card_year = (member.card_year if member and member.card_year is not None else payload["card_year"])
+    club_display_name = resolve_club_display_name(organization) or (organization.name if organization else "")
+    org_logo_path = _resolve_logo_disk_path(organization)
+    assonam_logo_path = _resolve_assonam_disk_path()
+
+    try:
+        png_bytes = generate_card_image_bytes(
+            member_full_name=_member_display_name(
+                member.first_name if member else None,
+                member.last_name if member else None,
+            ),
+            organization_name=organization.name if organization else "N/D",
+            club_display_name=club_display_name or (organization.name if organization else "N/D"),
+            card_number=card_number or 0,
+            card_year=card_year or 0,
+            card_status=card_status,
+            org_logo_path=org_logo_path,
+            assonam_logo_path=assonam_logo_path,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Errore generazione immagine: {exc}") from exc
+
+    return Response(content=png_bytes, media_type="image/png")

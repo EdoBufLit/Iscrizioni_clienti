@@ -31,7 +31,6 @@ const toSafeText = (value?: string | null): string => {
 const toDisplayName = (cardData: MemberCardPreviewData): string => {
   const fullName = toSafeText(cardData.fullName);
   if (fullName !== EMPTY) return fullName;
-
   const firstName = toSafeText(cardData.firstName);
   const lastName = toSafeText(cardData.lastName);
   const merged = `${firstName === EMPTY ? "" : firstName} ${lastName === EMPTY ? "" : lastName}`.trim();
@@ -61,37 +60,56 @@ export const isMemberCardPreviewData = (value: unknown): value is MemberCardPrev
   if (!value || typeof value !== "object") return false;
   const data = value as Record<string, unknown>;
   const stringFields = [
-    "firstName",
-    "lastName",
-    "fullName",
-    "clubDisplayName",
-    "organizationSlug",
-    "organizationName",
-    "organizationLogoUrl",
-    "cardStatus",
-    "verificationUrl",
+    "firstName", "lastName", "fullName", "clubDisplayName",
+    "organizationSlug", "organizationName", "organizationLogoUrl",
+    "cardStatus", "verificationUrl",
   ];
-
   const stringsOk = stringFields.every((field) => {
     const fieldValue = data[field];
     return fieldValue === undefined || fieldValue === null || typeof fieldValue === "string";
   });
   if (!stringsOk) return false;
-
   const cardNumber = data.cardNumber;
   const cardYear = data.cardYear;
   const cardNumberOk =
-    cardNumber === undefined ||
-    cardNumber === null ||
-    typeof cardNumber === "string" ||
-    typeof cardNumber === "number";
+    cardNumber === undefined || cardNumber === null ||
+    typeof cardNumber === "string" || typeof cardNumber === "number";
   const cardYearOk =
-    cardYear === undefined ||
-    cardYear === null ||
-    typeof cardYear === "string" ||
-    typeof cardYear === "number";
-
+    cardYear === undefined || cardYear === null ||
+    typeof cardYear === "string" || typeof cardYear === "number";
   return cardNumberOk && cardYearOk;
+};
+
+// ── Logo with fallback ─────────────────────────────────────────────────────────
+type LogoProps = {
+  src: string;
+  alt: string;
+  className?: string;
+  style?: React.CSSProperties;
+};
+
+const LogoImg = ({ src, alt, className = "", style }: LogoProps) => {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <span
+        className={`inline-flex items-center justify-center text-[0.55rem] font-bold uppercase tracking-widest text-[#c9a8b0] ${className}`}
+        style={style}
+      >
+        {alt.slice(0, 6)}
+      </span>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      style={style}
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
 };
 
 export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPreviewProps) => {
@@ -102,12 +120,16 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
   const organizationSlug = toSafeText(cardData.organizationSlug).toLowerCase();
   const organizationName = toSafeText(cardData.organizationName);
   const organizationLogoUrl = toSafeText(cardData.organizationLogoUrl);
-  const isOasi2Card = organizationSlug === "oasi-2";
   const organizationLabel = clubDisplayName !== EMPTY ? clubDisplayName : organizationName;
   const cardNumber = toDisplayCardNumber(cardData.cardNumber);
   const cardYear = toDisplayYear(cardData.cardYear) || getCurrentCardYearLabel();
   const qrImageUrl = useMemo(() => toQrImageUrl(cardData.verificationUrl), [cardData.verificationUrl]);
   const verificationUrl = cardData.verificationUrl?.trim() ? cardData.verificationUrl.trim() : null;
+
+  // Bordeaux palette
+  const frontBg = "linear-gradient(135deg, #3a0015 0%, #5a0828 40%, #2d0015 100%)";
+  const backBg  = "linear-gradient(135deg, #2a0010 0%, #450620 50%, #2d0015 100%)";
+  const boxShadow = "0 24px 48px rgba(40,0,10,0.40), 0 8px 16px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.06)";
 
   return (
     <div className={className}>
@@ -136,29 +158,31 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
               WebkitBackfaceVisibility: "hidden",
               transform: "rotateY(0deg) translateZ(1px)",
               WebkitTransform: "rotateY(0deg) translateZ(1px)",
-              background: "linear-gradient(135deg, #0b2e2c 0%, #143f3c 40%, #1a4f4b 70%, #0f3a37 100%)",
-              boxShadow: "0 24px 48px rgba(10,40,38,0.35), 0 8px 16px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.08)",
+              background: frontBg,
+              boxShadow,
             }}
           >
-            {/* Guilloche-style decorative pattern overlay */}
+            {/* Guilloche-style pattern overlay */}
             <span
-              className="pointer-events-none absolute inset-0 opacity-[0.04]"
+              className="pointer-events-none absolute inset-0 opacity-[0.035]"
               style={{
                 backgroundImage:
                   "repeating-linear-gradient(0deg, transparent, transparent 8px, rgba(198,160,79,1) 8px, rgba(198,160,79,1) 9px)," +
                   "repeating-linear-gradient(90deg, transparent, transparent 8px, rgba(198,160,79,1) 8px, rgba(198,160,79,1) 9px)",
               }}
             />
-            {/* Radial light accent */}
-            <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_20%,rgba(198,160,79,0.15),transparent_55%)]" />
-            <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_85%_80%,rgba(198,160,79,0.10),transparent_50%)]" />
-            {organizationLogoUrl !== EMPTY && isOasi2Card && (
+            {/* Radial light accents */}
+            <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_20%,rgba(198,160,79,0.12),transparent_55%)]" />
+            <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_85%_80%,rgba(198,160,79,0.08),transparent_50%)]" />
+
+            {/* Watermark: org logo for ALL orgs */}
+            {organizationLogoUrl !== EMPTY && (
               <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
                 <img
                   src={organizationLogoUrl}
                   alt=""
                   aria-hidden="true"
-                  className="h-auto w-[58%] max-w-[250px] object-contain opacity-[0.12] sm:w-[62%] sm:max-w-[290px]"
+                  className="h-auto w-[55%] max-w-[240px] object-contain opacity-[0.09] sm:w-[60%] sm:max-w-[280px]"
                   loading="lazy"
                 />
               </span>
@@ -167,68 +191,90 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
             {/* Top gold accent bar */}
             <span className="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#c6a04f] to-transparent" />
             {/* Bottom gold accent bar */}
-            <span className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] bg-gradient-to-r from-transparent via-[#c6a04f]/60 to-transparent" />
-
+            <span className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] bg-gradient-to-r from-transparent via-[#c6a04f]/50 to-transparent" />
             {/* Left gold vertical accent */}
-            <span className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-gradient-to-b from-transparent via-[#c6a04f]/40 to-transparent" />
+            <span className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-gradient-to-b from-transparent via-[#c6a04f]/35 to-transparent" />
 
             <span className="relative flex h-full flex-col px-5 py-4 sm:px-7 sm:py-5">
-              {organizationLogoUrl !== EMPTY && !isOasi2Card && (
+              {/* Org logo: small pill above header (non-watermark display) */}
+              {organizationLogoUrl !== EMPTY && (
                 <span className="mb-1 flex justify-center sm:mb-2">
-                  <img
-                    src={organizationLogoUrl}
-                    alt="Logo associazione"
-                    className="h-8 w-auto max-w-[170px] object-contain opacity-95 sm:h-10 sm:max-w-[190px]"
-                    loading="lazy"
-                  />
+                  <span
+                    className="flex items-center justify-center rounded-xl px-2 py-1"
+                    style={{ background: "rgba(0,0,0,0.28)", backdropFilter: "blur(4px)" }}
+                  >
+                    <LogoImg
+                      src={organizationLogoUrl}
+                      alt="Logo associazione"
+                      className="object-contain opacity-90"
+                      style={{
+                        height: "clamp(22px, 4vw, 34px)",
+                        minHeight: 22,
+                        minWidth: 50,
+                        maxWidth: 160,
+                      }}
+                    />
+                  </span>
                 </span>
               )}
-              {/* Header row: year label + logo */}
+
+              {/* Header row: year label + ASSONAM logo */}
               <span className="flex items-start justify-between">
                 <span className="flex flex-col">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#c6a04f]/80 sm:text-[11px]">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#c9a8b0]/80 sm:text-[11px]">
                     Tessera Socio
                   </span>
-                  <span className="mt-0.5 text-[18px] font-bold tracking-[0.06em] text-[#d4b45c] sm:text-[22px]" style={{ fontFamily: '"Source Serif 4", serif' }}>
+                  <span
+                    className="mt-0.5 font-bold tracking-[0.06em] text-[#d4b45c]"
+                    style={{ fontSize: "clamp(1rem, 4vw, 1.375rem)", fontFamily: '"Source Serif 4", serif' }}
+                  >
                     {cardYear}
                   </span>
                 </span>
-                <span className="flex flex-shrink-0 items-center">
-                  <img
+
+                {/* ASSONAM logo — always visible, with contrast plate */}
+                <span
+                  className="flex flex-shrink-0 items-center rounded-xl px-1.5 py-1"
+                  style={{ background: "rgba(0,0,0,0.22)", backdropFilter: "blur(4px)" }}
+                >
+                  <LogoImg
                     src={ASSONAM_LOGO_SRC}
                     alt="Logo ASSO.N.A.M."
-                    className="h-10 w-auto object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)] sm:h-12"
-                    loading="lazy"
+                    className="object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]"
+                    style={{
+                      height: "clamp(28px, 5.5vw, 44px)",
+                      minHeight: 28,
+                      minWidth: 50,
+                      maxWidth: 130,
+                    }}
                   />
                 </span>
               </span>
 
-              {/* Main content area */}
+              {/* Main content */}
               <span className="mt-auto block">
-                {/* Name */}
-                <span className="block text-[0.58rem] font-semibold uppercase tracking-[0.22em] text-[#8aaba8] sm:text-[0.62rem]">
+                <span className="block text-[0.58rem] font-semibold uppercase tracking-[0.22em] text-[#c9a8b0] sm:text-[0.62rem]">
                   Nome e cognome
                 </span>
                 <span
-                  className="mt-1 block text-lg font-semibold leading-tight text-white sm:text-xl"
-                  style={{ fontFamily: '"Source Serif 4", serif' }}
+                  className="mt-1 block font-semibold leading-tight text-white"
+                  style={{ fontSize: "clamp(0.9rem, 3.5vw, 1.2rem)", fontFamily: '"Source Serif 4", serif' }}
                 >
                   {displayName}
                 </span>
 
-                {/* Org */}
-                <span className="mt-3 block text-[0.58rem] font-semibold uppercase tracking-[0.22em] text-[#8aaba8] sm:text-[0.62rem]">
+                <span className="mt-3 block text-[0.58rem] font-semibold uppercase tracking-[0.22em] text-[#c9a8b0] sm:text-[0.62rem]">
                   Associazione
                 </span>
-                <span className="mt-0.5 block truncate text-sm font-medium text-[#c6d8d6] sm:text-[0.95rem]">
+                <span className="mt-0.5 block truncate text-sm font-medium text-[#fdf6e3]/85 sm:text-[0.95rem]">
                   {organizationLabel}
                 </span>
               </span>
 
               {/* Card number footer */}
-              <span className="mt-3 flex items-end justify-between border-t border-[#c6a04f]/25 pt-2.5">
+              <span className="mt-3 flex items-end justify-between border-t border-[#c6a04f]/20 pt-2.5">
                 <span>
-                  <span className="block text-[0.58rem] font-semibold uppercase tracking-[0.22em] text-[#8aaba8] sm:text-[0.62rem]">
+                  <span className="block text-[0.58rem] font-semibold uppercase tracking-[0.22em] text-[#c9a8b0] sm:text-[0.62rem]">
                     N. Tessera
                   </span>
                   <span className="mt-0.5 block font-mono text-base font-bold tracking-[0.12em] text-[#d4b45c] sm:text-lg">
@@ -261,30 +307,30 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
               WebkitBackfaceVisibility: "hidden",
               transform: "rotateY(180deg) translateZ(1px)",
               WebkitTransform: "rotateY(180deg) translateZ(1px)",
-              background: "linear-gradient(135deg, #0d3330 0%, #164542 50%, #0f3a37 100%)",
-              boxShadow: "0 24px 48px rgba(10,40,38,0.35), 0 8px 16px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.08)",
+              background: backBg,
+              boxShadow,
             }}
           >
-            {/* Subtle pattern */}
+            {/* Subtle diagonal pattern */}
             <span
-              className="pointer-events-none absolute inset-0 opacity-[0.03]"
+              className="pointer-events-none absolute inset-0 opacity-[0.025]"
               style={{
                 backgroundImage:
                   "repeating-linear-gradient(45deg, transparent, transparent 6px, rgba(198,160,79,1) 6px, rgba(198,160,79,1) 7px)",
               }}
             />
-            <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_50%,rgba(198,160,79,0.08),transparent_65%)]" />
+            <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_50%,rgba(198,160,79,0.06),transparent_65%)]" />
 
             {/* Top gold bar */}
             <span className="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#c6a04f] to-transparent" />
 
             <span className="relative flex h-full flex-col items-center justify-center px-5 py-5 sm:px-7 sm:py-6">
-              {/* QR Code area */}
+              {/* QR Code */}
               <span
                 className="grid place-items-center rounded-2xl p-3"
                 style={{
-                  background: "linear-gradient(145deg, rgba(255,255,255,0.95), rgba(251,247,235,0.9))",
-                  boxShadow: "0 8px 24px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.8)",
+                  background: "linear-gradient(145deg, rgba(255,255,255,0.96), rgba(253,246,227,0.90))",
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.8)",
                 }}
               >
                 {qrImageUrl ? (
@@ -296,34 +342,30 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
                     decoding="async"
                   />
                 ) : (
-                  <span className="inline-flex h-36 w-36 items-center justify-center rounded-xl border border-dashed border-[#ccb98a] text-[0.62rem] font-medium uppercase tracking-[0.15em] text-[#8a6f34] sm:h-40 sm:w-40">
+                  <span className="inline-flex h-36 w-36 items-center justify-center rounded-xl border border-dashed border-[#c9a8b0] text-[0.62rem] font-medium uppercase tracking-[0.15em] text-[#8a6f34] sm:h-40 sm:w-40">
                     QR non disponibile
                   </span>
                 )}
               </span>
 
-              {/* Info summary on back */}
+              {/* Info summary */}
               <span
                 className="mt-4 w-full max-w-[18rem] space-y-1.5 rounded-xl px-4 py-3 text-left"
                 style={{
-                  background: "rgba(255,255,255,0.08)",
-                  border: "1px solid rgba(198,160,79,0.2)",
+                  background: "rgba(255,255,255,0.07)",
+                  border: "1px solid rgba(198,160,79,0.18)",
                 }}
               >
                 <span className="flex items-baseline justify-between gap-3">
-                  <span className="text-[0.58rem] font-semibold uppercase tracking-[0.16em] text-[#8aaba8]">
-                    N. Tessera
-                  </span>
-                  <span className="font-mono text-xs font-bold tracking-[0.08em] text-[#d4b45c] sm:text-sm">
-                    {cardNumber}
-                  </span>
+                  <span className="text-[0.58rem] font-semibold uppercase tracking-[0.16em] text-[#c9a8b0]">N. Tessera</span>
+                  <span className="font-mono text-xs font-bold tracking-[0.08em] text-[#d4b45c] sm:text-sm">{cardNumber}</span>
                 </span>
                 <span className="flex items-baseline justify-between gap-3">
-                  <span className="text-[0.58rem] font-semibold uppercase tracking-[0.16em] text-[#8aaba8]">Nome</span>
-                  <span className="truncate text-xs font-semibold text-[#c6d8d6] sm:text-sm">{displayName}</span>
+                  <span className="text-[0.58rem] font-semibold uppercase tracking-[0.16em] text-[#c9a8b0]">Nome</span>
+                  <span className="truncate text-xs font-semibold text-[#fdf6e3]/85 sm:text-sm">{displayName}</span>
                 </span>
                 <span className="flex items-baseline justify-between gap-3">
-                  <span className="text-[0.58rem] font-semibold uppercase tracking-[0.16em] text-[#8aaba8]">Anno</span>
+                  <span className="text-[0.58rem] font-semibold uppercase tracking-[0.16em] text-[#c9a8b0]">Anno</span>
                   <span className="text-xs font-semibold text-[#d4b45c] sm:text-sm">{cardYear}</span>
                 </span>
               </span>
@@ -333,7 +375,7 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
       </button>
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-neutral-600">
+        <p className="text-xs text-neutral-500">
           Clicca la tessera per vedere {isFlipped ? "il fronte" : "il retro"}.
         </p>
         {verificationUrl && (

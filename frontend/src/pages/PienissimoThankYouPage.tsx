@@ -28,7 +28,7 @@ const PienissimoThankYouPage = () => {
   useEffect(() => {
     applySeo({
       title: "Conferma tessera digitale",
-      description: "Conferma i tuoi dati per scaricare subito la tessera associativa.",
+      description: "Conferma i tuoi dati per ricevere e scaricare la tessera associativa.",
       canonicalPath: window.location.pathname,
       noindex: true,
     });
@@ -36,11 +36,7 @@ const PienissimoThankYouPage = () => {
 
   useEffect(() => {
     let active = true;
-    if (!orgSlug) {
-      return () => {
-        active = false;
-      };
-    }
+    if (!orgSlug) return () => { active = false; };
 
     fetchPublicOrganizationInfo(orgSlug)
       .then((payload) => {
@@ -56,9 +52,7 @@ const PienissimoThankYouPage = () => {
         setWalletEnabled(false);
       });
 
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [orgSlug]);
 
   const normalizedEmail = useMemo(() => email.trim().toLowerCase(), [email]);
@@ -76,7 +70,6 @@ const PienissimoThankYouPage = () => {
       setErrorMessage("Associazione non trovata nel link.");
       return;
     }
-
     if (!normalizedEmail || !isEmailValid) {
       setEmailError("Inserisci una email valida.");
       return;
@@ -120,6 +113,7 @@ const PienissimoThankYouPage = () => {
   };
 
   const downloadUrl = successData?.card_download_url ?? null;
+  const verifyUrl = successData?.card_verification_url ?? null;
   const walletAppleUrl = successData?.card_wallet_apple_url ?? null;
   const walletGoogleUrl = successData?.card_wallet_google_url ?? null;
 
@@ -127,77 +121,97 @@ const PienissimoThankYouPage = () => {
     <section className="py-16" data-reveal="fade-up">
       <div className="container-shell">
         <div className="surface-strong mx-auto max-w-[32rem] p-6 sm:p-8">
-          <p className="section-title">{clubDisplayName}</p>
-          <h1 className="section-heading">ULTIMO PASSO PER RICEVERE LA TESSERA</h1>
-          <p className="mt-4 text-sm leading-7 text-neutral-600">
-            Inserisci i dati richiesti per ricevere la tessera associativa.
-          </p>
 
-          {cardLogoUrl && (
-            <div className="mt-4 flex justify-center">
+          {/* ── Branding header ── */}
+          <div className="mb-6 flex flex-col items-center gap-3 sm:flex-row sm:items-center sm:gap-4">
+            {cardLogoUrl && (
               <img
                 src={cardLogoUrl}
                 alt={`Logo ${clubDisplayName}`}
-                className="h-14 max-w-[220px] object-contain"
+                className="object-contain"
+                style={{
+                  height: "clamp(48px, 10vw, 72px)",
+                  maxWidth: "clamp(120px, 40vw, 220px)",
+                  minWidth: 80,
+                  minHeight: 40,
+                }}
                 loading="lazy"
               />
+            )}
+            <div className="text-center sm:text-left">
+              <h1 className="text-2xl font-bold leading-tight text-neutral-900 sm:text-3xl">
+                {clubDisplayName}
+              </h1>
+              <p className="mt-1 text-sm text-neutral-500">Tessera associativa digitale</p>
             </div>
-          )}
+          </div>
 
           {isSuccess ? (
-            <div className="mt-6 space-y-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-700">
-              <p className="font-semibold">Tessera inviata via email. Controlla anche lo spam.</p>
+            /* ── Success state ── */
+            <div className="space-y-4">
+              <div className="rounded-xl border border-[#c6a04f]/30 bg-[#2d0015]/5 px-4 py-4">
+                <p className="text-base font-semibold text-neutral-800">
+                  Tessera pronta! Scaricala in PDF o verificala.
+                </p>
+                <p className="mt-1 text-sm text-neutral-500">
+                  Ti abbiamo inviato un'email con la tessera. Se non la ricevi entro 5 minuti,
+                  controlla Spam/Promozioni.
+                </p>
+              </div>
+
               {downloadUrl && (
                 <a
-                  className="btn-primary inline-flex w-full items-center justify-center py-2.5 text-sm"
+                  className="btn-primary inline-flex w-full items-center justify-center py-3 text-sm"
                   href={downloadUrl}
+                >
+                  Scarica tessera (PDF)
+                </a>
+              )}
+
+              {verifyUrl && (
+                <a
+                  className="inline-flex w-full items-center justify-center rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
+                  href={verifyUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  Scarica ora
+                  Verifica tessera
                 </a>
               )}
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {walletEnabled && walletAppleUrl ? (
-                  <a
-                    className="inline-flex items-center justify-center rounded-xl border border-brand/40 bg-white px-3 py-2 text-xs font-semibold text-brand hover:bg-brand/5"
-                    href={walletAppleUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Aggiungi a Apple Wallet
-                  </a>
-                ) : (
-                  <button
-                    type="button"
-                    className="inline-flex items-center justify-center rounded-xl border border-neutral-200 bg-neutral-100 px-3 py-2 text-xs font-semibold text-neutral-400"
-                    disabled
-                  >
-                    Apple Wallet (presto)
-                  </button>
-                )}
-                {walletEnabled && walletGoogleUrl ? (
-                  <a
-                    className="inline-flex items-center justify-center rounded-xl border border-brand/40 bg-white px-3 py-2 text-xs font-semibold text-brand hover:bg-brand/5"
-                    href={walletGoogleUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Aggiungi a Google Wallet
-                  </a>
-                ) : (
-                  <button
-                    type="button"
-                    className="inline-flex items-center justify-center rounded-xl border border-neutral-200 bg-neutral-100 px-3 py-2 text-xs font-semibold text-neutral-400"
-                    disabled
-                  >
-                    Google Wallet (presto)
-                  </button>
-                )}
-              </div>
+
+              {/* Wallet links — only show if actually enabled */}
+              {walletEnabled && (walletAppleUrl || walletGoogleUrl) && (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {walletAppleUrl && (
+                    <a
+                      className="inline-flex items-center justify-center rounded-xl border border-brand/40 bg-white px-3 py-2 text-xs font-semibold text-brand hover:bg-brand/5"
+                      href={walletAppleUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Aggiungi a Apple Wallet
+                    </a>
+                  )}
+                  {walletGoogleUrl && (
+                    <a
+                      className="inline-flex items-center justify-center rounded-xl border border-brand/40 bg-white px-3 py-2 text-xs font-semibold text-brand hover:bg-brand/5"
+                      href={walletGoogleUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Aggiungi a Google Wallet
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
-            <form className="mt-6 space-y-4" onSubmit={handleSubmit} noValidate>
+            /* ── Form ── */
+            <form className="space-y-4" onSubmit={handleSubmit} noValidate>
+              <p className="text-sm leading-7 text-neutral-600">
+                Inserisci i tuoi dati per ricevere e scaricare la tessera associativa.
+              </p>
+
               {errorMessage && (
                 <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                   {errorMessage}
@@ -256,14 +270,18 @@ const PienissimoThankYouPage = () => {
                 />
               </div>
 
-              <button className="btn-primary mt-2 w-full py-2.5 text-sm" type="submit" disabled={!canSubmit}>
+              <button
+                className="btn-primary mt-2 w-full py-3 text-sm"
+                type="submit"
+                disabled={!canSubmit}
+              >
                 {isLoading ? (
                   <span className="inline-flex items-center gap-2">
                     <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                    Invio...
+                    Elaborazione...
                   </span>
                 ) : (
-                  "Invia tessera"
+                  "Ricevi e scarica la tessera"
                 )}
               </button>
             </form>
