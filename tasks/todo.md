@@ -1184,3 +1184,55 @@ pm --prefix frontend run build -> OK
 - [x] Esteso fix con hard purge fisico dei soci `deleted_at` (cleanup FK) in `app/services/member_cleanup.py`, invocato in startup (`init_db.py`) e pre-check join/register.
 - [x] Verifica locale purge on-demand: `purged_deleted_members=0` (DB locale già pulito).
 - `python -m pytest tests/test_deleted_member_cleanup_multiorg.py tests/test_signup_fixes.py tests/test_member_active_state_regression.py -q` -> **10 passed** (post hard-purge update).
+
+---
+## Spec (Full Audit ASSONAM - Feb 19, 2026)
+- Obiettivo: audit end-to-end sicurezza, regressioni funzionali (focus integrazione Pienissimo), integrita dati e robustezza UX/API per stack Vite/React + FastAPI + DB.
+- Deliverable: report markdown con executive summary + tabella findings + checklist PASS/FAIL, patch mirate per tutti i Must Fix, test aggiornati per ogni fix rilevante.
+
+## Plan (Full Audit ASSONAM)
+- [ ] Inventory completo backend/frontend: routes, middleware, auth boundaries, servizi ingest/verify/download/pdf/email.
+- [ ] Eseguire audit tool-based con skill `audit-website` (squirrel) dove applicabile e dependency/secrets scan locale.
+- [ ] Verificare checklist SECURITY/FUNCTIONAL richiesta e classificare finding per severita/impatto/riproduzione.
+- [ ] Definire Top 10 criticita con piano fix (Must fix before prod vs Nice to have).
+- [ ] Implementare patch mirate sui Must Fix (no refactor massivi) con hardening security/data consistency.
+- [ ] Aggiungere/aggiornare test backend/frontend per ogni fix importante e coprire regressioni Pienissimo.
+- [ ] Eseguire test/build mirati, validare assenza regressioni principali e raccogliere evidenze.
+- [ ] Redigere report finale markdown in `docs/assonam_full_audit_2026-02-19.md` con risultati completi.
+
+## Review (Full Audit ASSONAM - Feb 19, 2026)
+- [ ] Da compilare a fine esecuzione con comandi, esiti e file modificati.
+
+## Execution Update (Full Audit ASSONAM - Feb 19, 2026)
+- [x] Inventory completo backend/frontend: routes, middleware, auth boundaries, servizi ingest/verify/download/pdf/email.
+- [x] Eseguire audit tool-based con skill `audit-website` (squirrel) dove applicabile e dependency/secrets scan locale.
+- [x] Verificare checklist SECURITY/FUNCTIONAL richiesta e classificare finding per severita/impatto/riproduzione.
+- [x] Definire Top 10 criticita con piano fix (Must fix before prod vs Nice to have).
+- [x] Implementare patch mirate sui Must Fix (no refactor massivi) con hardening security/data consistency.
+- [x] Aggiungere/aggiornare test backend/frontend per ogni fix importante e coprire regressioni Pienissimo.
+- [x] Eseguire test/build mirati, validare assenza regressioni principali e raccogliere evidenze.
+- [x] Redigere report finale markdown in `docs/assonam_full_audit_2026-02-19.md` con risultati completi.
+
+## Review (Full Audit ASSONAM - Feb 19, 2026) - Update
+- `squirrel --version` -> comando non disponibile nel workspace (`squirrel` non installato), audit skill eseguito in fallback manuale code-first.
+- Dependency/security scan:
+  - `npm --prefix frontend audit --audit-level=high --json` -> 2 vuln moderate (transitive `esbuild` via `vite`, fix major `vite@7.3.1` consigliato).
+  - `python -m pip_audit` -> modulo non installato (`No module named pip_audit`).
+  - `rg` secrets scan su repo -> nessuna chiave raw esposta nei sorgenti applicativi.
+- Hardening implementato:
+  - Rate-limit DB per endpoint pubblici tessera (`verify/download/download.pdf/image`) riusando tabella `ingest_rate_limits`.
+  - Rimosso leak token verso servizio QR esterno: QR ora embedded `data:image/png;base64`.
+  - Security headers estesi (CSP, COOP/CORP, HSTS su HTTPS) + cookie `same_site=strict`.
+  - CSRF best-effort su endpoint session-auth (origin/referer mismatch -> 403).
+  - PII minimizzata nei log integrazione/login (hash external id/email).
+  - Hardening RBAC endpoint legacy `/api/super-admin/orgs/{id}/cards/increase` (auth check prima della risposta deprecata).
+  - Sanitizzazione header email (`To`/`Subject`) contro header injection.
+- Test eseguiti:
+  - `python -m pytest tests/test_security_hardening_audit.py tests/test_member_card_verification.py tests/test_ingest_pienissimo.py tests/test_smoke.py -q` -> **43 passed**
+  - `npm --prefix frontend run build` -> **OK**
+- File nuovi/modificati principali:
+  - `app/services/db_rate_limit.py`
+  - `app/main.py`, `app/middleware.py`, `app/config.py`
+  - `app/routes/public.py`, `app/routes/ingest_pienissimo.py`, `app/routes/member.py`, `app/routes/super_admin.py`
+  - `app/services/integration_issuer.py`, `app/utils.py`
+  - `tests/test_security_hardening_audit.py`, `tests/test_ingest_pienissimo.py`

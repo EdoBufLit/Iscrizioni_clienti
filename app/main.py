@@ -13,7 +13,11 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.bootstrap import bootstrap_super_admin
 from app.config import settings
 from app.db import get_db, SessionLocal, engine
-from app.middleware import SecurityHeadersMiddleware, RequestIdMiddleware
+from app.middleware import (
+    RequestIdMiddleware,
+    SecurityHeadersMiddleware,
+    SessionCsrfMiddleware,
+)
 from app.routes import (
     admin,
     ingest_pienissimo,
@@ -34,6 +38,13 @@ logger = logging.getLogger(__name__)
 SPA_DIR = os.getenv("SPA_DIR", "frontend/dist")
 
 _is_https = settings.BASE_URL.startswith("https")
+_cors_origins = sorted(
+    {
+        origin.rstrip("/")
+        for origin in (settings.BASE_URL, settings.FRONTEND_URL)
+        if (origin or "").strip()
+    }
+)
 
 
 @asynccontextmanager
@@ -81,7 +92,7 @@ app = FastAPI(
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.SECRET_KEY,
-    same_site="lax",
+    same_site="strict",
     https_only=_is_https,
     max_age=1800,  # 30 minutes - prevents permanent access if session compromised
 )
@@ -89,16 +100,19 @@ app.add_middleware(
 # 2. CORS — restrict cross-origin requests to our own domain
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.BASE_URL],
+    allow_origins=_cors_origins,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "X-ASSONAM-API-KEY"],
     allow_credentials=True,
 )
 
-# 3. Security headers
+# 3. CSRF origin checks for unsafe session-auth requests
+app.add_middleware(SessionCsrfMiddleware)
+
+# 4. Security headers
 app.add_middleware(SecurityHeadersMiddleware)
 
-# 4. Request ID — outermost, generates unique ID for every request
+# 5. Request ID — outermost, generates unique ID for every request
 app.add_middleware(RequestIdMiddleware)
 
 # ── Static files ──────────────────────────────────────────────────

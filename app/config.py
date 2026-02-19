@@ -19,6 +19,12 @@ class Settings:
     FRONTEND_STATIC_DIR: str = os.getenv("FRONTEND_STATIC_DIR", "")
     INGEST_RATE_LIMIT_MAX_REQUESTS: int = int(os.getenv("INGEST_RATE_LIMIT_MAX_REQUESTS", "20"))
     INGEST_RATE_LIMIT_WINDOW_SECONDS: int = int(os.getenv("INGEST_RATE_LIMIT_WINDOW_SECONDS", "300"))
+    CARD_PUBLIC_RATE_LIMIT_MAX_REQUESTS: int = int(
+        os.getenv("CARD_PUBLIC_RATE_LIMIT_MAX_REQUESTS", "120")
+    )
+    CARD_PUBLIC_RATE_LIMIT_WINDOW_SECONDS: int = int(
+        os.getenv("CARD_PUBLIC_RATE_LIMIT_WINDOW_SECONDS", "300")
+    )
 
     GIT_SHA: str = os.getenv("GIT_SHA", "")
     BUILD_TIME: str = os.getenv("BUILD_TIME", "")

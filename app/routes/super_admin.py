@@ -1304,6 +1304,7 @@ def increase_card_stock_legacy(
     db: Session = Depends(get_db),
 ):
     """Deprecated: use /orgs/{org_id}/cards/add-batch instead."""
+    _require_super_admin(request, db)
     raise HTTPException(
         status_code=400,
         detail="Endpoint deprecato. Usa il nuovo formato con range dalla/alla."

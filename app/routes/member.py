@@ -15,6 +15,7 @@ from app.services.org_branding import resolve_card_logo_url, resolve_club_displa
 from app import audit
 import os
 import logging
+import hashlib
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,13 @@ router = APIRouter()
 
 _ALLOWED_PAYMENT_METHODS = {PaymentMethod.CASH.value, PaymentMethod.BONIFICO.value}
 _ACCOUNT_NOT_ACTIVE_DETAIL = "account non attivo"
+
+
+def _hash_email_for_log(email: str | None) -> str:
+    normalized = (email or "").strip().lower()
+    if not normalized:
+        return "unknown"
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
 
 
 def _normalize_payment_method(raw_value: str | None) -> str | None:
@@ -266,7 +274,11 @@ def api_auth_login(request: Request, email: str = Form(...), password: str = For
     )
     if member is None and matching_members:
         inactive_reason = get_member_inactive_reason(matching_members[0], now=now)
-        logger.info("Blocked login for non-active member email=%s reason=%s", email_norm, inactive_reason)
+        logger.info(
+            "Blocked login for non-active member email_hash=%s reason=%s",
+            _hash_email_for_log(email_norm),
+            inactive_reason,
+        )
         raise HTTPException(status_code=403, detail=_ACCOUNT_NOT_ACTIVE_DETAIL)
 
     # Password-based login

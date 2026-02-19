@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import hashlib
 
 from fastapi import HTTPException
 from sqlalchemy import and_, func, or_
@@ -376,7 +377,9 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
         entity_id=member.id,
         metadata={
             "org_slug": org.slug,
-            "external_customer_id": external_customer_id,
+            "external_customer_id_hash": hashlib.sha256(
+                external_customer_id.lower().encode("utf-8")
+            ).hexdigest()[:16],
             "signup_source": signup_source,
             "integration_name": command.integration_name,
             "email_sent": email_sent,

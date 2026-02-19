@@ -100,7 +100,7 @@ def test_ingest_with_active_key_creates_active_member_with_card(client, db):
     assert payload["card_verification_url"] == payload["card_url"]
     assert payload["card_verification_token"]
     assert payload["card_download_url"].endswith(
-        f"/api/cards/{payload['card_verification_token']}/download"
+        f"/api/cards/{payload['card_verification_token']}/download.pdf"
     )
     assert payload["wallet_enabled"] is False
 

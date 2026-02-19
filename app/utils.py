@@ -197,6 +197,15 @@ def _send_email_internal(
             return False
 
         try:
+            def _sanitize_header_value(value: str) -> str:
+                cleaned = (value or "").replace("\r", " ").replace("\n", " ").strip()
+                if not cleaned:
+                    raise ValueError("Email header value is empty after sanitization.")
+                return cleaned
+
+            safe_to = _sanitize_header_value(to_email)
+            safe_subject = _sanitize_header_value(subject)
+
             has_inline_images = bool(inline_images)
             if has_inline_images:
                 msg = MIMEMultipart("related")
@@ -212,8 +221,8 @@ def _send_email_internal(
                     msg.attach(MIMEText(html_body, "html", "utf-8"))
 
             msg["From"] = settings.SMTP_FROM
-            msg["To"] = to_email
-            msg["Subject"] = subject
+            msg["To"] = safe_to
+            msg["Subject"] = safe_subject
 
             if has_inline_images:
                 for image in inline_images or []:
@@ -243,7 +252,7 @@ def _send_email_internal(
                 server.ehlo()
 
             server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-            server.sendmail(settings.SMTP_FROM, [to_email], msg.as_string())
+            server.sendmail(settings.SMTP_FROM, [safe_to], msg.as_string())
             server.quit()
             logger.info("send_email: SMTP delivery OK to=%s", to_email)
             return True

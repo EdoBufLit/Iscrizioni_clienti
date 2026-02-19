@@ -1,21 +1,23 @@
 import logging
+import hashlib
 from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import func, text
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app import audit
 from app.config import settings
 from app.db import get_db
-from app.models import IngestRateLimit, IntegrationApiKey, Organization, SignupSource
+from app.models import IntegrationApiKey, Organization, SignupSource
 from app.services.integration_issuer import (
     IssueMemberCommand,
     issue_member_from_ingest,
 )
+from app.services.db_rate_limit import enforce_db_rate_limit
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +155,12 @@ def _log_ingest_operation(
     member_id: int | None,
     outcome: str,
 ):
+    external_id_hash = None
+    if external_customer_id:
+        external_id_hash = hashlib.sha256(
+            external_customer_id.strip().lower().encode("utf-8")
+        ).hexdigest()[:16]
+
     audit.log_operation(
         db,
         action="integration_ingest_member",
@@ -160,7 +168,7 @@ def _log_ingest_operation(
         entity_id=member_id,
         metadata={
             "org_slug": org_slug,
-            "external_customer_id": external_customer_id,
+            "external_customer_id_hash": external_id_hash,
             "outcome": outcome,
         },
         ip=request.client.host if request.client else None,
@@ -170,53 +178,13 @@ def _log_ingest_operation(
 
 
 def _enforce_rate_limit_or_429(db: Session, *, org_slug: str, client_ip: str):
-    now = datetime.utcnow()
-    window_seconds = max(1, settings.INGEST_RATE_LIMIT_WINDOW_SECONDS)
-    max_requests = max(1, settings.INGEST_RATE_LIMIT_MAX_REQUESTS)
-
-    try:
-        db.execute(text("BEGIN IMMEDIATE"))
-        row = (
-            db.query(IngestRateLimit)
-            .filter(
-                IngestRateLimit.org_slug == org_slug,
-                IngestRateLimit.client_ip == client_ip,
-            )
-            .first()
-        )
-
-        if not row:
-            db.add(
-                IngestRateLimit(
-                    org_slug=org_slug,
-                    client_ip=client_ip,
-                    window_started_at=now,
-                    request_count=1,
-                )
-            )
-            db.commit()
-            return
-
-        elapsed_seconds = (now - row.window_started_at).total_seconds() if row.window_started_at else window_seconds
-        if elapsed_seconds >= window_seconds:
-            row.window_started_at = now
-            row.request_count = 1
-            row.updated_at = now
-            db.commit()
-            return
-
-        if row.request_count >= max_requests:
-            db.rollback()
-            raise HTTPException(status_code=429, detail="Too many requests")
-
-        row.request_count = row.request_count + 1
-        row.updated_at = now
-        db.commit()
-    except HTTPException:
-        raise
-    except Exception:
-        db.rollback()
-        raise
+    enforce_db_rate_limit(
+        db,
+        bucket=f"ingest:{org_slug}",
+        client_ip=client_ip,
+        window_seconds=settings.INGEST_RATE_LIMIT_WINDOW_SECONDS,
+        max_requests=settings.INGEST_RATE_LIMIT_MAX_REQUESTS,
+    )
 
 
 def _normalize_ingest_payload(body: PienissimoIngestBody) -> dict[str, Any]:

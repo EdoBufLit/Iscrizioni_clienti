@@ -1,7 +1,9 @@
 import html
+import io
+import base64
+import logging
 import os
 from datetime import datetime
-from urllib.parse import quote_plus
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse, FileResponse, Response, HTMLResponse
 from sqlalchemy.orm import Session
@@ -9,6 +11,7 @@ from app.db import get_db
 from app.models import Member, Organization
 from app.config import settings
 from app.services.card_verification import parse_card_verification_token
+from app.services.db_rate_limit import enforce_db_rate_limit
 from app.services.member_activity import (
     MEMBER_INACTIVE_REASON_DELETED,
     MEMBER_INACTIVE_REASON_NOT_APPROVED,
@@ -20,6 +23,7 @@ from app.services.card_pdf import generate_card_pdf_bytes
 from app.services.card_image import generate_card_image_bytes
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # ── Legacy HTML redirects ─────────────────────────────────────────
@@ -90,6 +94,43 @@ def _get_backend_base_url(request: Request) -> str:
     return str(request.base_url).rstrip("/")
 
 
+def _enforce_public_card_rate_limit(
+    db: Session,
+    request: Request,
+    *,
+    bucket: str,
+) -> None:
+    client_ip = request.client.host if request.client else "unknown"
+    enforce_db_rate_limit(
+        db,
+        bucket=f"cards:{bucket}",
+        client_ip=client_ip,
+        window_seconds=settings.CARD_PUBLIC_RATE_LIMIT_WINDOW_SECONDS,
+        max_requests=settings.CARD_PUBLIC_RATE_LIMIT_MAX_REQUESTS,
+    )
+
+
+def _build_qr_data_uri(value: str) -> str | None:
+    try:
+        import qrcode
+
+        qr = qrcode.QRCode(
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=8,
+            border=2,
+        )
+        qr.add_data(value)
+        qr.make(fit=True)
+        image = qr.make_image(fill_color="black", back_color="white")
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+        return f"data:image/png;base64,{encoded}"
+    except Exception:
+        logger.exception("Unable to generate QR data URI.")
+        return None
+
+
 @router.get("/api/organizations")
 def api_list_organizations(q: str = None, db: Session = Depends(get_db)):
     # Only active organizations
@@ -105,7 +146,15 @@ def api_list_organizations(q: str = None, db: Session = Depends(get_db)):
 
 @router.get("/api/organizations/{slug}")
 def api_organization_detail(slug: str, db: Session = Depends(get_db)):
-    org = db.query(Organization).filter(Organization.slug == slug).first()
+    org = (
+        db.query(Organization)
+        .filter(
+            Organization.slug == slug,
+            Organization.deleted_at.is_(None),
+            Organization.is_active.is_(True),
+        )
+        .first()
+    )
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
@@ -141,7 +190,15 @@ def api_public_org_info(org_slug: str, request: Request, db: Session = Depends(g
 
 @router.get("/api/organizations/{slug}/logo")
 def get_organization_logo(slug: str, db: Session = Depends(get_db)):
-    org = db.query(Organization).filter(Organization.slug == slug).first()
+    org = (
+        db.query(Organization)
+        .filter(
+            Organization.slug == slug,
+            Organization.deleted_at.is_(None),
+            Organization.is_active.is_(True),
+        )
+        .first()
+    )
     if not org or not org.logo_path:
         raise HTTPException(status_code=404, detail="Logo not found")
 
@@ -155,7 +212,15 @@ def get_organization_logo(slug: str, db: Session = Depends(get_db)):
 
 @router.get("/api/organizations/{slug}/statute")
 def get_organization_statute(slug: str, db: Session = Depends(get_db)):
-    org = db.query(Organization).filter(Organization.slug == slug).first()
+    org = (
+        db.query(Organization)
+        .filter(
+            Organization.slug == slug,
+            Organization.deleted_at.is_(None),
+            Organization.is_active.is_(True),
+        )
+        .first()
+    )
     if not org or not org.statute_pdf_path:
         raise HTTPException(status_code=404, detail="Statute not found")
 
@@ -325,15 +390,21 @@ def _render_card_download_html(
     safe_checked_at = html.escape(checked_at.strftime("%d/%m/%Y %H:%M UTC"))
     safe_verify_url = html.escape(verification_url)
     safe_download_url = html.escape(download_url)
+    safe_download_pdf_url = html.escape(f"/api/cards/{token}/download.pdf")
     safe_assonam_logo = html.escape(assonam_logo_url)
     safe_org_logo = html.escape(organization_logo_url) if organization_logo_url else ""
     safe_reason = html.escape(member_inactive_reason_label(inactive_reason))
 
-    qr_url = (
-        "https://api.qrserver.com/v1/create-qr-code/?size=360x360&margin=0&data="
-        f"{quote_plus(verification_url)}"
+    qr_data_uri = _build_qr_data_uri(verification_url)
+    qr_block = (
+        f'<img src="{html.escape(qr_data_uri)}" alt="QR verifica tessera" '
+        'style="width:184px;height:184px;border-radius:14px;background:#ffffff;'
+        'padding:8px;border:1px solid #dbe3e1;" />'
+    ) if qr_data_uri else (
+        '<div style="width:184px;height:184px;border-radius:14px;background:#f3f6f5;'
+        'border:1px solid #dbe3e1;display:inline-flex;align-items:center;justify-content:center;'
+        'font-size:13px;color:#526a67;font-weight:600;">QR non disponibile</div>'
     )
-    safe_qr_url = html.escape(qr_url)
 
     status_title = "TESSERA ATTIVA" if is_valid else "TESSERA NON ATTIVA"
     status_tone = "#0b9f55" if is_valid else "#c81e1e"
@@ -429,12 +500,12 @@ def _render_card_download_html(
       {non_active_block}
 
       <section style="margin-top:18px;background:#ffffff;border:1px solid #dce5e3;border-radius:18px;padding:16px 16px 20px;text-align:center;">
-        <img src="{safe_qr_url}" alt="QR verifica tessera" style="width:184px;height:184px;border-radius:14px;background:#ffffff;padding:8px;border:1px solid #dbe3e1;" />
+        {qr_block}
         <p style="margin:10px 0 0;font-size:13px;color:#526a67;">Scansiona il QR per verificare lo stato della tessera.</p>
         <div style="margin-top:14px;display:flex;flex-wrap:wrap;justify-content:center;gap:10px;">
-          <button type="button" onclick="window.print()" style="cursor:pointer;border:0;border-radius:10px;padding:12px 18px;background:#0f5b53;color:#ffffff;font-size:14px;font-weight:700;">
+          <a href="{safe_download_pdf_url}" style="display:inline-block;cursor:pointer;border:0;border-radius:10px;padding:12px 18px;background:#0f5b53;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;">
             Scarica tessera (PDF)
-          </button>
+          </a>
           <a href="{safe_verify_url}" style="display:inline-block;border-radius:10px;padding:12px 18px;background:#f2f6f5;border:1px solid #ccd9d7;color:#123330;text-decoration:none;font-size:14px;font-weight:700;">
             Verifica tessera
           </a>
@@ -452,6 +523,7 @@ def _render_card_download_html(
 
 @router.get("/api/cards/verify/{token}")
 def verify_member_card(request: Request, token: str, db: Session = Depends(get_db)):
+    _enforce_public_card_rate_limit(db, request, bucket="verify")
     prefers_json = _prefers_json_response(request)
     checked_at = datetime.utcnow()
     payload = parse_card_verification_token(token)
@@ -543,6 +615,7 @@ def verify_member_card(request: Request, token: str, db: Session = Depends(get_d
 
 @router.get("/api/cards/{token}/download")
 def download_member_card(token: str, request: Request, db: Session = Depends(get_db)):
+    _enforce_public_card_rate_limit(db, request, bucket="download_html")
     checked_at = datetime.utcnow()
     requested_format = (request.query_params.get("format") or "").strip().lower()
     wants_pdf = requested_format == "pdf"
@@ -665,6 +738,7 @@ def _resolve_assonam_disk_path() -> str | None:
 @router.get("/api/cards/{token}/download.pdf")
 def download_card_pdf(token: str, request: Request, db: Session = Depends(get_db)):
     """Return a 2-page PDF (front + back) as a direct download — no print dialog."""
+    _enforce_public_card_rate_limit(db, request, bucket="download_pdf")
     checked_at = datetime.utcnow()
     payload = parse_card_verification_token(token)
     if not payload:
@@ -719,7 +793,8 @@ def download_card_pdf(token: str, request: Request, db: Session = Depends(get_db
             assonam_logo_path=assonam_logo_path,
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Errore generazione PDF: {exc}") from exc
+        logger.exception("Card PDF generation failed.")
+        raise HTTPException(status_code=500, detail="Errore generazione PDF") from exc
 
     slug = (organization.slug if organization else "card").replace("/", "_")
     filename = f"tessera_{slug}_{card_year}_{card_number}.pdf"
@@ -735,6 +810,7 @@ def download_card_pdf(token: str, request: Request, db: Session = Depends(get_db
 @router.get("/api/cards/{token}/image.png")
 def card_image_png(token: str, request: Request, db: Session = Depends(get_db)):
     """Return a PNG image of the card front in bordeaux theme."""
+    _enforce_public_card_rate_limit(db, request, bucket="image_png")
     checked_at = datetime.utcnow()
     payload = parse_card_verification_token(token)
     if not payload:
@@ -784,6 +860,7 @@ def card_image_png(token: str, request: Request, db: Session = Depends(get_db)):
             assonam_logo_path=assonam_logo_path,
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Errore generazione immagine: {exc}") from exc
+        logger.exception("Card image generation failed.")
+        raise HTTPException(status_code=500, detail="Errore generazione immagine") from exc
 
     return Response(content=png_bytes, media_type="image/png")
