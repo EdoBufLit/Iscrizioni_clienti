@@ -20,6 +20,7 @@ from app.models import (
 from app.utils import generate_token, send_email, save_upload_file, hash_token
 from app.services.card import assign_next_card_with_batch
 from app.services.member_cleanup import cleanup_deleted_member_traces, purge_deleted_members_permanently
+from app.services.member_activity import is_member_active
 from app.config import settings
 from app.middleware import join_limiter, get_client_ip, get_request_id
 from app import audit
@@ -180,7 +181,7 @@ def check_signup_allowed(
         elif latest_member.status == MemberStatus.REJECTED:
              # Rejected, allow resubmission
              pass
-        elif latest_member.status == MemberStatus.ACTIVE:
+        elif latest_member.status == MemberStatus.ACTIVE and is_member_active(latest_member, now=datetime.utcnow()):
              # Fully active member, block
              audit.log_operation(
                  db,
@@ -197,6 +198,7 @@ def check_signup_allowed(
              )
         else:
              # Pending state (pending_docs, pending_verification, pending_cards)
+             # Also reuse stale legacy rows that are status=active but lifecycle-inactive.
              # Return existing member so caller can respond 200 without creating a duplicate
              return latest_member
 

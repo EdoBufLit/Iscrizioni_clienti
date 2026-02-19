@@ -503,25 +503,29 @@ def org_metrics(request: Request, db: Session = Depends(get_db)):
 
     org_id = admin.org_id
 
-    # Query 1: Member counts with conditional aggregation (combines 2 queries into 1)
-    member_stats = db.query(
-        func.count(Member.id).label("total"),
-        func.sum(
-            case(
-                (and_(
-                    Member.status != MemberStatus.ACTIVE,
-                    Member.status != MemberStatus.REJECTED,
-                ), 1),
-                else_=0
-            )
-        ).label("pending"),
-    ).filter(
-        Member.org_id == org_id,
-        Member.deleted_at.is_(None),
-    ).first()
+    current_time = datetime.utcnow()
+    pending_statuses = [
+        MemberStatus.PENDING_VERIFICATION,
+        MemberStatus.PENDING_DOCS,
+        MemberStatus.PENDING_CARDS,
+    ]
 
-    members_count = member_stats.total or 0
-    pending_requests_count = member_stats.pending or 0
+    active_members_count = int(
+        db.query(func.count(Member.id)).filter(
+            Member.org_id == org_id,
+            *member_active_filters(now=current_time),
+        ).scalar()
+        or 0
+    )
+    pending_requests_count = int(
+        db.query(func.count(Member.id)).filter(
+            Member.org_id == org_id,
+            Member.deleted_at.is_(None),
+            Member.status.in_(pending_statuses),
+        ).scalar()
+        or 0
+    )
+    members_count = active_members_count + pending_requests_count
 
     # Query 2: Document counts with conditional aggregation (combines 2 queries into 1)
     doc_stats = db.query(
@@ -542,13 +546,13 @@ def org_metrics(request: Request, db: Session = Depends(get_db)):
     ).filter(
         Member.org_id == org_id,
         Member.deleted_at.is_(None),
-        Member.status != MemberStatus.REJECTED,
+        Member.status.notin_([MemberStatus.REJECTED, MemberStatus.EXPIRED]),
     ).first()
 
     documents_pending_review = doc_stats.pending or 0
     documents_rejected = doc_stats.rejected or 0
 
-    card_stock = _compute_org_card_stock(db, org_id, now=datetime.utcnow())
+    card_stock = _compute_org_card_stock(db, org_id, now=current_time)
     cards_total = card_stock["total"]
     cards_remaining = card_stock["remaining"]
     cards_used = card_stock["used"]
@@ -1516,11 +1520,23 @@ def export_members_csv(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
+    now = datetime.utcnow()
+    pending_statuses = [
+        MemberStatus.PENDING_VERIFICATION,
+        MemberStatus.PENDING_DOCS,
+        MemberStatus.PENDING_CARDS,
+    ]
+    active_filters = member_active_filters(now=now)
+
     members = (
         db.query(Member)
         .filter(
             Member.org_id == admin.org_id,
             Member.deleted_at.is_(None),
+            or_(
+                and_(*active_filters),
+                Member.status.in_(pending_statuses),
+            ),
         )
         .order_by(Member.last_name, Member.first_name)
         .all()
