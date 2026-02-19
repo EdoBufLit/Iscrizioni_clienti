@@ -102,6 +102,10 @@ def init_db():
         _add_column_if_missing(conn, "member_documents", "replaces_document_id", "INTEGER REFERENCES member_documents(id)")
         _add_column_if_missing(conn, "operation_logs", "actor_member_id", "INTEGER REFERENCES members(id)")
         _add_column_if_missing(conn, "organizations", "deleted_at", "DATETIME")
+        # Card-branding fields: keep startup resilient even if alembic wasn't run yet.
+        _add_column_if_missing(conn, "organizations", "club_display_name", "VARCHAR")
+        _add_column_if_missing(conn, "organizations", "card_email_subject", "VARCHAR")
+        _add_column_if_missing(conn, "organizations", "card_logo_url", "VARCHAR")
         _add_column_if_missing(conn, "card_batches", "released_at", "DATETIME")
 
     db = SessionLocal()

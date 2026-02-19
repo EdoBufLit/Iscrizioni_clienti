@@ -1,3 +1,14 @@
+- [x] Investigare crash startup (502/restart loop) post-push
+- [x] Applicare hotfix bootstrap schema per colonne branding org mancanti
+- [x] Verificare avvio app locale dopo hotfix
+- [x] Push hotfix urgente
+
+## Review (Hotfix 502 startup - Feb 19, 2026)
+- Root cause probabile: DB senza colonne branding (`club_display_name`, `card_email_subject`, `card_logo_url`) + startup strict con `SKIP_CREATE_ALL=1`
+- Fix in `init_db.py`: aggiunta auto-riparazione colonne branding su `organizations` prima delle query modello
+- Smoke check: `python -m uvicorn app.main:app --host 127.0.0.1 --port 8099 --log-level debug` avvia correttamente (errore solo su porta gia in uso locale)
+
+---
 - [x] Limitare watermark/logo e naming speciale alla sola org `oasi-2`
 - [x] Mantenere comportamento standard per le altre org
 - [x] Verificare thank-you page su slug `oasi-2`
@@ -1136,6 +1147,7 @@ pm --prefix frontend run build -> OK
 - [x] Aggiornare titolo form Thank You in "ULTIMO PASSO PER RICEVERE LA TESSERA"
 - [x] Migliorare layout tessera con doppio logo leggibile (logo associazione + ASSONAM, senza coprire testi)
 - [x] Verificare build frontend e test backend toccati
+
 
 
 
