@@ -1050,3 +1050,5 @@ pm --prefix frontend run build -> OK
 - Allocazione lotti usa il primo numero libero nel range per consentire riuso dei numeri liberati.
 - Test: python -m pytest tests/test_member_active_state_regression.py tests/test_member_card_expiration_maintenance.py tests/test_ingest_pienissimo.py tests/test_integration_issue_member.py -q -> 15 passed.
 
+
+- FE thank-you aggiornata: su HTTP 409 mostra detail/message backend (es. socio gia presente) invece del messaggio servizio non attivo.

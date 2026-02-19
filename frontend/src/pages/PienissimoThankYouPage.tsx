@@ -83,7 +83,20 @@ const PienissimoThankYouPage = () => {
         return;
       }
 
-      if ([402, 403, 409].includes(response.status)) {
+      if (response.status === 409) {
+        const payload = await response.json().catch(() => null);
+        const detail =
+          typeof payload?.detail === "string"
+            ? payload.detail
+            : typeof payload?.message === "string"
+              ? payload.message
+              : "Socio già presente.";
+        setStatus("error");
+        setErrorMessage(detail);
+        return;
+      }
+
+      if ([402, 403].includes(response.status)) {
         setStatus("error");
         setErrorMessage("Servizio tessera non attivo per questa associazione.");
         return;
@@ -217,4 +230,3 @@ const PienissimoThankYouPage = () => {
 };
 
 export default PienissimoThankYouPage;
-
