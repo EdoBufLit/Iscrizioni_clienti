@@ -1,10 +1,13 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
+from urllib.parse import quote_plus
 
 from fastapi import HTTPException
 from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+import requests
 
 from app import audit
 from app.config import settings
@@ -87,6 +90,42 @@ def _build_verification_url(member: Member, backend_base: str) -> str:
         card_year=member.card_year,
     )
     return f"{backend_base}/api/cards/verify/{token}"
+
+
+def _fetch_bytes(url: str, timeout_seconds: int = 10) -> bytes | None:
+    try:
+        response = requests.get(url, timeout=timeout_seconds)
+        if response.status_code != 200:
+            return None
+        if not response.content:
+            return None
+        return response.content
+    except Exception:
+        return None
+
+
+def _load_logo_bytes(logo_url: str) -> bytes | None:
+    candidate_paths = [
+        Path("frontend/public/logo-transparent.png"),
+        Path("frontend/dist/logo-transparent.png"),
+        Path("app/static/logo-transparent.png"),
+        Path("logo-transparent.png"),
+    ]
+    for candidate in candidate_paths:
+        try:
+            if candidate.is_file():
+                return candidate.read_bytes()
+        except OSError:
+            continue
+    return _fetch_bytes(logo_url, timeout_seconds=8)
+
+
+def _load_qr_bytes(verification_url: str) -> bytes | None:
+    qr_url = (
+        "https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=0&data="
+        f"{quote_plus(verification_url)}"
+    )
+    return _fetch_bytes(qr_url, timeout_seconds=12)
 
 
 def _cleanup_deleted_conflicts(
@@ -259,7 +298,35 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
     if should_send_email:
         magic_link_url = _build_magic_link(db, member.id, frontend_base)
         # Prefer PNG for broad email-client compatibility (SVG is often blocked or not rendered).
-        logo_url = f"{frontend_base}/logo-transparent.png"
+        remote_logo_url = f"{frontend_base}/logo-transparent.png"
+        logo_url = remote_logo_url
+        qr_image_src = None
+        inline_images: list[dict] = []
+
+        logo_bytes = _load_logo_bytes(remote_logo_url)
+        if logo_bytes:
+            inline_images.append(
+                {
+                    "cid": "member-card-logo",
+                    "filename": "logo-transparent.png",
+                    "content_type": "image/png",
+                    "data": logo_bytes,
+                }
+            )
+            logo_url = "cid:member-card-logo"
+
+        qr_bytes = _load_qr_bytes(verification_url)
+        if qr_bytes:
+            inline_images.append(
+                {
+                    "cid": "member-card-qr",
+                    "filename": "card-qr.png",
+                    "content_type": "image/png",
+                    "data": qr_bytes,
+                }
+            )
+            qr_image_src = "cid:member-card-qr"
+
         full_name = f"{(member.first_name or '').strip()} {(member.last_name or '').strip()}".strip() or email
         text_body, html_body = build_member_card_email(
             member_full_name=full_name,
@@ -269,12 +336,14 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
             verification_url=verification_url,
             magic_link_url=magic_link_url,
             logo_url=logo_url,
+            qr_image_src=qr_image_src,
         )
         email_sent = send_email_html(
             to_email=member.email,
             subject=f"La tua tessera socio {org.name}",
             text_body=text_body,
             html_body=html_body,
+            inline_images=inline_images or None,
         )
         if email_sent:
             member.card_email_sent_at = datetime.utcnow()

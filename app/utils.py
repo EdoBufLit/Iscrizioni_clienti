@@ -4,6 +4,7 @@ import os
 import secrets
 import smtplib
 import uuid
+from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Tuple, List, Optional
@@ -129,7 +130,13 @@ async def save_upload_file(
     return rel_path, size_bytes, sha256_hash.hexdigest()
 
 
-def send_email_html(to_email: str, subject: str, text_body: str, html_body: str) -> bool:
+def send_email_html(
+    to_email: str,
+    subject: str,
+    text_body: str,
+    html_body: str,
+    inline_images: Optional[List[dict]] = None,
+) -> bool:
     """
     Send a multipart/alternative email (plain text + HTML).
     Returns True on success, False on failure.
@@ -139,6 +146,7 @@ def send_email_html(to_email: str, subject: str, text_body: str, html_body: str)
         subject=subject,
         text_body=text_body,
         html_body=html_body,
+        inline_images=inline_images,
     )
 
 
@@ -160,6 +168,7 @@ def _send_email_internal(
     subject: str,
     text_body: str,
     html_body: Optional[str] = None,
+    inline_images: Optional[List[dict]] = None,
 ) -> bool:
     logger.info("send_email: to=%s, subject=%s", to_email, subject)
 
@@ -171,6 +180,14 @@ def _send_email_internal(
             "body": text_body,
             "text_body": text_body,
             "html_body": html_body,
+            "inline_images": [
+                {
+                    "cid": str(item.get("cid") or ""),
+                    "content_type": str(item.get("content_type") or ""),
+                    "size": len(item.get("data") or b""),
+                }
+                for item in (inline_images or [])
+            ],
         })
         return True
 
@@ -180,13 +197,42 @@ def _send_email_internal(
             return False
 
         try:
-            msg = MIMEMultipart("alternative")
+            has_inline_images = bool(inline_images)
+            if has_inline_images:
+                msg = MIMEMultipart("related")
+                alt = MIMEMultipart("alternative")
+                alt.attach(MIMEText(text_body, "plain", "utf-8"))
+                if html_body:
+                    alt.attach(MIMEText(html_body, "html", "utf-8"))
+                msg.attach(alt)
+            else:
+                msg = MIMEMultipart("alternative")
+                msg.attach(MIMEText(text_body, "plain", "utf-8"))
+                if html_body:
+                    msg.attach(MIMEText(html_body, "html", "utf-8"))
+
             msg["From"] = settings.SMTP_FROM
             msg["To"] = to_email
             msg["Subject"] = subject
-            msg.attach(MIMEText(text_body, "plain", "utf-8"))
-            if html_body:
-                msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+            if has_inline_images:
+                for image in inline_images or []:
+                    cid = str(image.get("cid") or "").strip()
+                    data = image.get("data") or b""
+                    content_type = str(image.get("content_type") or "image/png").strip().lower()
+                    filename = str(image.get("filename") or f"{cid or 'inline'}.png")
+                    if not cid or not isinstance(data, (bytes, bytearray)) or not data:
+                        continue
+                    if "/" not in content_type:
+                        continue
+                    maintype, subtype = content_type.split("/", 1)
+                    if maintype != "image":
+                        continue
+
+                    image_part = MIMEImage(bytes(data), _subtype=subtype)
+                    image_part.add_header("Content-ID", f"<{cid}>")
+                    image_part.add_header("Content-Disposition", "inline", filename=filename)
+                    msg.attach(image_part)
 
             if settings.SMTP_USE_TLS:
                 server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15)

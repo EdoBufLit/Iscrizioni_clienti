@@ -1054,3 +1054,5 @@ pm --prefix frontend run build -> OK
 - FE thank-you aggiornata: su HTTP 409 mostra detail/message backend (es. socio gia presente) invece del messaggio servizio non attivo.
 
 - Email tessera: nome socio reso nero con priorita inline nel template HTML per aumentare leggibilita nei client mail.
+
+- Email tessera mobile: aggiunto invio inline CID di logo+QR (fallback URL) per evitare immagini mancanti su client mobile.

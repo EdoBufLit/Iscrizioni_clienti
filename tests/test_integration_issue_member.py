@@ -192,9 +192,13 @@ def test_issue_member_captures_html_email_with_verification_url(client, db):
         assert captured[0]["html_body"] is not None
         assert "<html" in captured[0]["html_body"].lower()
         assert "Accedi area riservata" in captured[0]["html_body"]
-        assert "api.qrserver.com" in captured[0]["html_body"]
-        assert "logo-transparent.png" in captured[0]["html_body"]
+        assert ("cid:member-card-qr" in captured[0]["html_body"]) or ("api.qrserver.com" in captured[0]["html_body"])
+        assert ("cid:member-card-logo" in captured[0]["html_body"]) or ("logo-transparent.png" in captured[0]["html_body"])
         assert "assonam-logo.svg" not in captured[0]["html_body"]
+        inline_images = captured[0].get("inline_images") or []
+        if inline_images:
+            image_cids = {img.get("cid") for img in inline_images}
+            assert "member-card-logo" in image_cids
     finally:
         settings.EMAIL_MODE = original_email_mode
         clear_captured_emails()

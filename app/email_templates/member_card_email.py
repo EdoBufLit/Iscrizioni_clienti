@@ -11,6 +11,7 @@ def build_member_card_email(
     verification_url: str,
     magic_link_url: str,
     logo_url: str,
+    qr_image_src: str | None = None,
 ) -> tuple[str, str]:
     safe_name = html.escape(member_full_name or "")
     safe_org = html.escape(organization_name or "")
@@ -19,10 +20,12 @@ def build_member_card_email(
     safe_verification_url = html.escape(verification_url)
     safe_magic_link_url = html.escape(magic_link_url)
     safe_logo_url = html.escape(logo_url)
-    qr_url = (
+    qr_url_default = (
         "https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=0&data="
         f"{quote_plus(verification_url)}"
     )
+    qr_url = qr_image_src.strip() if qr_image_src and qr_image_src.strip() else qr_url_default
+    safe_qr_url = html.escape(qr_url)
 
     text_body = (
         "Benvenuto in ASSO.N.A.M.\n\n"
@@ -101,7 +104,7 @@ def build_member_card_email(
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#ffffff;border-radius:18px;border:1px solid #dde7e6;">
                   <tr>
                     <td align="center" style="padding:20px 20px 10px 20px;">
-                      <img src="{qr_url}" alt="QR verifica tessera" style="width:170px;height:170px;border-radius:14px;background:#ffffff;padding:8px;border:1px solid #dbe3e1;" />
+                      <img src="{safe_qr_url}" alt="QR verifica tessera" style="width:170px;height:170px;border-radius:14px;background:#ffffff;padding:8px;border:1px solid #dbe3e1;" />
                     </td>
                   </tr>
                   <tr>
