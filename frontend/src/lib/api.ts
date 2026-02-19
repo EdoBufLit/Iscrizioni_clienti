@@ -41,6 +41,8 @@ export type MemberProfile = {
     id: number;
     name: string;
     slug: string;
+    club_display_name?: string | null;
+    card_logo_url?: string | null;
   } | null;
 };
 
@@ -88,6 +90,75 @@ export async function fetchOrganizationDetail(
   const res = await fetch(`/api/organizations/${encodeURIComponent(slug)}`);
   if (res.status === 404) throw new Error("Organization not found");
   if (!res.ok) throw new Error("Failed to fetch organization");
+  return res.json();
+}
+
+export type PublicOrganizationInfo = {
+  slug: string;
+  name: string;
+  club_display_name: string;
+  card_logo_url: string | null;
+  wallet_enabled: boolean;
+};
+
+export async function fetchPublicOrganizationInfo(
+  orgSlug: string,
+): Promise<PublicOrganizationInfo> {
+  const res = await fetch(`/api/public/orgs/${encodeURIComponent(orgSlug)}`);
+  if (res.status === 404) throw new Error("Organization not found");
+  if (!res.ok) throw new Error("Failed to fetch public organization info");
+  return res.json();
+}
+
+export type PienissimoIngestResponse = {
+  status: string;
+  member_id: number;
+  card_number: number;
+  card_verification_token: string;
+  card_url: string;
+  card_verification_url: string;
+  card_download_url: string;
+  card_wallet_apple_url?: string | null;
+  card_wallet_google_url?: string | null;
+  wallet_enabled: boolean;
+};
+
+export async function ingestPienissimoMember(
+  orgSlug: string,
+  payload: {
+    email: string;
+    external_customer_id: string;
+    first_name?: string;
+    last_name?: string;
+  },
+): Promise<PienissimoIngestResponse> {
+  const res = await fetch(`/api/ingest/pienissimo/${encodeURIComponent(orgSlug)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (res.status === 409) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.message ?? data?.detail ?? "Socio gia presente.");
+  }
+  if (res.status === 402 || res.status === 403) {
+    throw new Error("Servizio tessera non attivo per questa associazione.");
+  }
+  if (res.status === 429) {
+    throw new Error("Troppi tentativi. Riprova tra qualche minuto.");
+  }
+  if (res.status === 422) {
+    throw new Error("Inserisci una email valida.");
+  }
+  if (res.status >= 500) {
+    throw new Error("Errore temporaneo. Riprova.");
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.detail ?? data?.message ?? "Richiesta non completata. Verifica i dati e riprova.");
+  }
+
   return res.json();
 }
 
@@ -626,6 +697,9 @@ export type SuperAdminOrganization = {
   id: number;
   name: string;
   slug: string;
+  club_display_name?: string | null;
+  card_email_subject?: string | null;
+  card_logo_url?: string | null;
   description: string | null;
   is_active: boolean;
   is_archived?: boolean;
@@ -757,6 +831,9 @@ export async function disableSuperAdminIntegrationKey(
 export async function createSuperAdminOrganization(data: {
   name: string;
   slug?: string;
+  club_display_name?: string;
+  card_email_subject?: string;
+  card_logo_url?: string;
   city?: string;
   province?: string;
   description_short?: string;
@@ -770,6 +847,28 @@ export async function createSuperAdminOrganization(data: {
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (res.status === 409) throw new Error("Slug already exists");
   if (!res.ok) throw new Error("Failed to create organization");
+  return res.json();
+}
+
+export async function patchSuperAdminOrganization(
+  orgId: number,
+  data: {
+    name?: string;
+    club_display_name?: string | null;
+    card_email_subject?: string | null;
+    card_logo_url?: string | null;
+    description?: string;
+    is_active?: boolean;
+  },
+): Promise<SuperAdminOrganization> {
+  const res = await fetch(`/api/super-admin/organizations/${orgId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Organizzazione non trovata");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento associazione"));
   return res.json();
 }
 

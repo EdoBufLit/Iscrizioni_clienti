@@ -1,6 +1,7 @@
 import { FormEvent, memo, useEffect, useState } from "react";
 import {
   createSuperAdminOrganization,
+  patchSuperAdminOrganization,
   setOrganizationCardRange,
   addOrgCardBatch,
   fetchOrgBatches,
@@ -10,7 +11,7 @@ import {
   type OrgBatch,
 } from "../../../lib/api";
 
-export type OrganizationModalType = "create" | "range" | "add-batch" | "view-batches";
+export type OrganizationModalType = "create" | "range" | "add-batch" | "view-batches" | "branding";
 
 type OrganizationManageModalProps = {
   open: boolean;
@@ -24,6 +25,9 @@ type OrganizationManageModalProps = {
 type ModalFormData = {
   name: string;
   slug: string;
+  club_display_name: string;
+  card_email_subject: string;
+  card_logo_url: string;
   city: string;
   province: string;
   description_short: string;
@@ -35,6 +39,9 @@ type ModalFormData = {
 const createInitialFormData = (): ModalFormData => ({
   name: "",
   slug: "",
+  club_display_name: "",
+  card_email_subject: "",
+  card_logo_url: "",
   city: "",
   province: "",
   description_short: "",
@@ -68,6 +75,11 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
   const [batchesCurrentYear, setBatchesCurrentYear] = useState<number | null>(null);
   const [nextResetAt, setNextResetAt] = useState<string | null>(null);
 
+  const normalizeOptionalString = (value: string): string | null => {
+    const normalized = value.trim();
+    return normalized.length > 0 ? normalized : null;
+  };
+
   useEffect(() => {
     if (!open) {
       return;
@@ -82,6 +94,20 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
     setBatchesCurrentYear(null);
     setNextResetAt(null);
   }, [open, modalType, selectedOrg?.id]);
+
+  useEffect(() => {
+    if (!open || !selectedOrg || modalType !== "branding") {
+      return;
+    }
+    setFormData((prev) => ({
+      ...prev,
+      name: selectedOrg.name ?? "",
+      slug: selectedOrg.slug ?? "",
+      club_display_name: selectedOrg.club_display_name ?? "",
+      card_email_subject: selectedOrg.card_email_subject ?? "",
+      card_logo_url: selectedOrg.card_logo_url ?? "",
+    }));
+  }, [open, modalType, selectedOrg]);
 
   useEffect(() => {
     if (!open || modalType !== "view-batches" || !selectedOrg) {
@@ -123,6 +149,9 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
         const payload = {
           name: formData.name,
           slug: formData.slug || undefined,
+          club_display_name: normalizeOptionalString(formData.club_display_name) ?? undefined,
+          card_email_subject: normalizeOptionalString(formData.card_email_subject) ?? undefined,
+          card_logo_url: normalizeOptionalString(formData.card_logo_url) ?? undefined,
           city: formData.city || undefined,
           province: formData.province || undefined,
           description_short: formData.description_short || undefined,
@@ -150,6 +179,12 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
         } else {
           await addOrgCardBatch(selectedOrg.id, from, to);
         }
+      } else if (modalType === "branding" && selectedOrg) {
+        await patchSuperAdminOrganization(selectedOrg.id, {
+          club_display_name: normalizeOptionalString(formData.club_display_name),
+          card_email_subject: normalizeOptionalString(formData.card_email_subject),
+          card_logo_url: normalizeOptionalString(formData.card_logo_url),
+        });
       }
 
       onSaved();
@@ -204,6 +239,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
           {modalType === "range" && `Imposta range tessere: ${selectedOrg?.name}`}
           {modalType === "add-batch" && `Aggiungi lotto tessere: ${selectedOrg?.name}`}
           {modalType === "view-batches" && `Lotti tessere: ${selectedOrg?.name}`}
+          {modalType === "branding" && `Branding tessera: ${selectedOrg?.name}`}
         </h3>
 
         <div className="mt-4 min-h-[48px]">
@@ -286,6 +322,59 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                     setFormData((prev) => ({ ...prev, description_short: e.target.value }))
                   }
                 />
+              </div>
+
+              <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-neutral-600">
+                  Branding tessera
+                </p>
+                <div className="mt-3 grid gap-3">
+                  <div>
+                    <label htmlFor="club_display_name" className="block text-xs font-medium text-neutral-600">
+                      Nome club visualizzato
+                    </label>
+                    <input
+                      id="club_display_name"
+                      className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                      type="text"
+                      value={formData.club_display_name}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, club_display_name: e.target.value }))
+                      }
+                      placeholder="Golden Age - Speakeasy"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="card_email_subject" className="block text-xs font-medium text-neutral-600">
+                      Oggetto email tessera
+                    </label>
+                    <input
+                      id="card_email_subject"
+                      className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                      type="text"
+                      value={formData.card_email_subject}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, card_email_subject: e.target.value }))
+                      }
+                      placeholder="La tua tessera {club_display_name}"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="card_logo_url" className="block text-xs font-medium text-neutral-600">
+                      URL logo tessera (opzionale)
+                    </label>
+                    <input
+                      id="card_logo_url"
+                      className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                      type="url"
+                      value={formData.card_logo_url}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, card_logo_url: e.target.value }))
+                      }
+                      placeholder="https://..."
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="flex items-center gap-2">
@@ -472,6 +561,62 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                   )}
                 </>
               )}
+            </div>
+          )}
+
+          {modalType === "branding" && (
+            <div className="grid gap-4">
+              <p className="text-sm text-neutral-600">
+                Configura nome pubblico, oggetto email e logo dedicato per la tessera digitale.
+              </p>
+              <div>
+                <label className="block text-xs font-medium text-neutral-600">
+                  Nome club visualizzato
+                </label>
+                <input
+                  type="text"
+                  className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
+                  value={formData.club_display_name}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, club_display_name: e.target.value }))
+                  }
+                  placeholder={selectedOrg?.name ?? "Nome club"}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-600">
+                  Oggetto email tessera
+                </label>
+                <input
+                  type="text"
+                  className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
+                  value={formData.card_email_subject}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, card_email_subject: e.target.value }))
+                  }
+                  placeholder="La tua tessera {club_display_name}"
+                />
+                <p className="mt-1 text-xs text-neutral-500">
+                  Placeholder supportati: {"{club_display_name}"}, {"{org_name}"}.
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-600">
+                  URL logo tessera
+                </label>
+                <input
+                  type="url"
+                  className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
+                  value={formData.card_logo_url}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, card_logo_url: e.target.value }))
+                  }
+                  placeholder="https://..."
+                />
+                <p className="mt-1 text-xs text-neutral-500">
+                  Se vuoto, viene usato il logo ufficiale associazione (se presente).
+                </p>
+              </div>
             </div>
           )}
 

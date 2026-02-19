@@ -97,6 +97,12 @@ def test_ingest_with_active_key_creates_active_member_with_card(client, db):
     assert payload["status"] == "ok"
     assert batch.start_no <= payload["card_number"] <= batch.end_no
     assert "/api/cards/verify/" in payload["card_url"]
+    assert payload["card_verification_url"] == payload["card_url"]
+    assert payload["card_verification_token"]
+    assert payload["card_download_url"].endswith(
+        f"/api/cards/{payload['card_verification_token']}/download"
+    )
+    assert payload["wallet_enabled"] is False
 
     member = db.query(Member).filter(Member.id == payload["member_id"]).first()
     assert member is not None

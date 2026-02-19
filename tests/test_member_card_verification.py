@@ -23,6 +23,8 @@ def _ensure_active_member(db):
         db.add(org)
         db.commit()
         db.refresh(org)
+    org.club_display_name = "Golden Age - Speakeasy"
+    org.card_logo_url = "https://cdn.example.com/golden-age.png"
 
     email = "card.verify.member@example.com"
     member = db.query(Member).filter_by(email=email).first()
@@ -53,6 +55,7 @@ def _ensure_active_member(db):
         member.deleted_at = None
 
     db.commit()
+    db.refresh(org)
     db.refresh(member)
     return org, member
 
@@ -108,3 +111,66 @@ def test_member_card_verify_html_response_for_browser(client, db):
 def test_member_card_verify_invalid_token(client):
     res = client.get("/api/cards/verify/not-a-valid-token")
     assert res.status_code == 404
+
+
+def test_public_org_info_endpoint_returns_safe_branding_fields(client, db):
+    org, _member = _ensure_active_member(db)
+
+    res = client.get(f"/api/public/orgs/{org.slug}")
+    assert res.status_code == 200, res.text
+    payload = res.json()
+
+    assert payload["slug"] == org.slug
+    assert payload["club_display_name"] == "Golden Age - Speakeasy"
+    assert payload["card_logo_url"] == "https://cdn.example.com/golden-age.png"
+    assert payload["wallet_enabled"] is False
+
+
+def test_public_org_info_uses_oasi2_logo_fallback_when_card_logo_missing(client, db):
+    slug = "oasi-2"
+    org = db.query(Organization).filter_by(slug=slug).first()
+    if not org:
+        org = Organization(name="Golden Age Oasi 2", slug=slug, is_active=True)
+        db.add(org)
+        db.commit()
+        db.refresh(org)
+
+    org.deleted_at = None
+    org.is_active = True
+    org.card_logo_url = None
+    org.logo_path = None
+    db.commit()
+
+    res = client.get(f"/api/public/orgs/{slug}")
+    assert res.status_code == 200, res.text
+    payload = res.json()
+    assert payload["club_display_name"] == "Golden Age - Speakeasy"
+    assert payload["card_logo_url"].endswith("/static/card-logos/oasi-2.png")
+
+
+def test_member_card_download_page_and_wallet_placeholder_endpoints(client, db):
+    org, member = _ensure_active_member(db)
+    token = build_card_verification_token(
+        member_id=member.id,
+        org_id=org.id,
+        card_number=member.card_no,
+        card_year=member.card_year,
+    )
+
+    download_res = client.get(f"/api/cards/{token}/download")
+    assert download_res.status_code == 200, download_res.text
+    assert "text/html" in download_res.headers.get("content-type", "")
+    assert "Scarica tessera (PDF)" in download_res.text
+    assert "Golden Age - Speakeasy" in download_res.text
+
+    pdf_hint_res = client.get(f"/api/cards/{token}/download?format=pdf")
+    assert pdf_hint_res.status_code == 200, pdf_hint_res.text
+    assert "PDF server-side non configurato" in pdf_hint_res.text
+
+    apple_res = client.get(f"/api/cards/{token}/wallet/apple")
+    assert apple_res.status_code == 404
+    assert apple_res.json()["detail"] == "Wallet non configurato"
+
+    google_res = client.get(f"/api/cards/{token}/wallet/google")
+    assert google_res.status_code == 404
+    assert google_res.json()["detail"] == "Wallet non configurato"

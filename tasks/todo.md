@@ -1,3 +1,45 @@
+- [x] Limitare watermark/logo e naming speciale alla sola org `oasi-2`
+- [x] Mantenere comportamento standard per le altre org
+- [x] Verificare thank-you page su slug `oasi-2`
+- [x] Eseguire test/build e preparare push
+
+## Review (Scope branding solo oasi-2 - Feb 19, 2026)
+- Watermark attivo solo per `oasi-2` su preview FE, email e download HTML
+- Nome speciale `Golden Age - Speakeasy` limitato a `oasi-2`
+- Test: `python -m pytest tests/test_member_card_verification.py tests/test_integration_issue_member.py::test_issue_member_captures_html_email_with_verification_url -q` -> 7 passed
+- Build: `npm --prefix frontend run build` -> OK
+
+---
+- [x] Forzare nome club tessera per slug `oasi-2`: `Golden Age - Speakeasy`
+- [x] Applicare logo org come watermark di sfondo su tessera (FE preview + email + download)
+- [x] Mantenere logo ASSONAM visibile nel layout tessera
+- [x] Aggiornare test branding su public/orgs e download tessera
+- [x] Eseguire test/build mirati e documentare esito
+
+## Review (Nome tessera + watermark logo org - Feb 19, 2026)
+- Override naming aggiunto in `app/services/org_branding.py`: `oasi-2 -> Golden Age - Speakeasy`
+- Watermark logo org applicato su:
+  - `frontend/src/components/cards/MemberCardPreview.tsx`
+  - `app/email_templates/member_card_email.py`
+  - `app/routes/public.py` (download HTML)
+- Nome associazione sulla tessera ora usa `club_display_name` (non `organization_name`) in email/download
+- Test: `python -m pytest tests/test_member_card_verification.py tests/test_integration_issue_member.py::test_issue_member_captures_html_email_with_verification_url -q` -> 7 passed
+- Build: `npm --prefix frontend run build` -> OK
+
+---
+- [x] Impostare logo dedicato per slug `oasi-2` su tessera (senza rimuovere logo ASSONAM)
+- [x] Rendere la sorgente logo robusta con fallback backend statico per branding tessera
+- [x] Verificare heading Thank You Page: `ULTIMO PASSO PER RICEVERE LA TESSERA`
+- [x] Aggiungere test regressione branding pubblico (logo fallback slug)
+- [x] Eseguire test/build mirati e documentare esito
+
+## Review (Logo oasi-2 + heading thank-you - Feb 19, 2026)
+- Asset aggiunto: `app/static/card-logos/oasi-2.png` (logo Golden Age per slug `oasi-2`)
+- Resolver branding aggiornato: `app/services/org_branding.py` usa fallback dedicato per `oasi-2` mantenendo priorita a `card_logo_url` configurato
+- Heading Thank You confermato: `ULTIMO PASSO PER RICEVERE LA TESSERA`
+- Test: `python -m pytest tests/test_member_card_verification.py -q` -> 6 passed
+- Build: `npm --prefix frontend run build` -> OK
+---
 - [x] Individuare perché il logo ASSONAM non viene renderizzato nella mail tessera inviata da flusso API/thank-you
 - [x] Correggere URL logo nel template email integrazione usando asset compatibile client mail
 - [x] Aggiungere regressione test su HTML email per evitare ritorno a SVG non compatibile
@@ -1056,3 +1098,50 @@ pm --prefix frontend run build -> OK
 - Email tessera: nome socio reso nero con priorita inline nel template HTML per aumentare leggibilita nei client mail.
 
 - Email tessera mobile: aggiunto invio inline CID di logo+QR (fallback URL) per evitare immagini mancanti su client mobile.
+
+---
+## Flusso Tessera Pienissimo/ThankYou/Email (Feb 19, 2026)
+- [ ] Aggiungere campi branding su Organization + migrazione Alembic (`club_display_name`, `card_email_subject`, `card_logo_url`)
+- [ ] Esporre endpoint pubblico `GET /api/public/orgs/{org_slug}` con fallback branding e wallet flag
+- [ ] Implementare download tessera `GET /api/cards/{token}/download` (HTML printable MVP)
+- [ ] Aggiungere placeholder wallet endpoints Apple/Google (404 quando non configurato)
+- [ ] Aggiornare issuer/email: subject per-org, logo org + ASSONAM, bottone "Scarica tessera"
+- [ ] Estendere response ingest con token/url utili per Thank You page
+- [ ] Aggiornare Thank You FE: copy richiesto, club dinamico, bottone "Scarica ora", wallet CTA condizionali
+- [ ] Aggiungere configurazione branding in UI super-admin (almeno campi base)
+- [ ] Aggiornare test backend/FE e verifiche build
+
+## Review (Flusso Tessera Pienissimo/ThankYou/Email - Feb 19, 2026)
+- [ ] Da compilare a fine implementazione con comandi eseguiti e risultati
+
+## Flusso Tessera Pienissimo/ThankYou/Email (Feb 19, 2026) - Update
+- [x] Aggiungere campi branding su Organization + migrazione Alembic (`club_display_name`, `card_email_subject`, `card_logo_url`)
+- [x] Esporre endpoint pubblico `GET /api/public/orgs/{org_slug}` con fallback branding e wallet flag
+- [x] Implementare download tessera `GET /api/cards/{token}/download` (HTML printable MVP)
+- [x] Aggiungere placeholder wallet endpoints Apple/Google (404 quando non configurato)
+- [x] Aggiornare issuer/email: subject per-org, logo org + ASSONAM, bottone "Scarica tessera"
+- [x] Estendere response ingest con token/url utili per Thank You page
+- [x] Aggiornare Thank You FE: copy richiesto, club dinamico, bottone "Scarica ora", wallet CTA condizionali
+- [x] Aggiungere configurazione branding in UI super-admin (almeno campi base)
+- [x] Aggiornare test backend/FE e verifiche build
+
+## Review (Flusso Tessera Pienissimo/ThankYou/Email - Feb 19, 2026) - Update
+- `python -m alembic upgrade head` -> OK (migrazione `l3m4n5o6p7q8`)
+- `$env:DATABASE_URL='sqlite:///test_qa.db'; python -m alembic upgrade head` -> OK (allineamento DB test)
+- `python -m pytest tests/test_integration_issue_member.py tests/test_ingest_pienissimo.py tests/test_member_card_verification.py -q` -> 17 passed
+- `npm --prefix frontend run build` -> OK
+- Nota: `python -m pytest tests/test_soft_delete.py tests/test_smoke.py -q` ha 1 failure preesistente su endpoint legacy `/api/super-admin/orgs/1/cards/increase` (risponde 400 invece di 401/403), non introdotto da questo change-set.
+
+## ThankYou + Logo placement (Feb 19, 2026) - Update
+- [x] Aggiornare titolo form Thank You in "ULTIMO PASSO PER RICEVERE LA TESSERA"
+- [x] Migliorare layout tessera con doppio logo leggibile (logo associazione + ASSONAM, senza coprire testi)
+- [x] Verificare build frontend e test backend toccati
+
+
+
+
+
+
+
+
+

@@ -1,11 +1,15 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import {
+  fetchPublicOrganizationInfo,
+  ingestPienissimoMember,
+  type PienissimoIngestResponse,
+} from "../lib/api";
 import { applySeo } from "../lib/seo";
 
 type SubmitStatus = "idle" | "loading" | "success" | "error";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
 
 const PienissimoThankYouPage = () => {
   const { orgSlug } = useParams<{ orgSlug: string }>();
@@ -16,15 +20,46 @@ const PienissimoThankYouPage = () => {
   const [status, setStatus] = useState<SubmitStatus>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [emailError, setEmailError] = useState("");
+  const [clubDisplayName, setClubDisplayName] = useState("Associazione");
+  const [cardLogoUrl, setCardLogoUrl] = useState<string | null>(null);
+  const [walletEnabled, setWalletEnabled] = useState(false);
+  const [successData, setSuccessData] = useState<PienissimoIngestResponse | null>(null);
 
   useEffect(() => {
     applySeo({
-      title: "Completa la richiesta tessera",
-      description: "Inserisci la tua email per ricevere la tessera associativa.",
+      title: "Conferma tessera digitale",
+      description: "Conferma i tuoi dati per scaricare subito la tessera associativa.",
       canonicalPath: window.location.pathname,
       noindex: true,
     });
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    if (!orgSlug) {
+      return () => {
+        active = false;
+      };
+    }
+
+    fetchPublicOrganizationInfo(orgSlug)
+      .then((payload) => {
+        if (!active) return;
+        setClubDisplayName(payload.club_display_name || payload.name || "Associazione");
+        setCardLogoUrl(payload.card_logo_url ?? null);
+        setWalletEnabled(Boolean(payload.wallet_enabled));
+      })
+      .catch(() => {
+        if (!active) return;
+        setClubDisplayName("Associazione");
+        setCardLogoUrl(null);
+        setWalletEnabled(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [orgSlug]);
 
   const normalizedEmail = useMemo(() => email.trim().toLowerCase(), [email]);
   const isEmailValid = EMAIL_REGEX.test(normalizedEmail);
@@ -50,6 +85,7 @@ const PienissimoThankYouPage = () => {
     setStatus("loading");
     setErrorMessage("");
     setEmailError("");
+    setSuccessData(null);
 
     const payload: {
       email: string;
@@ -67,80 +103,98 @@ const PienissimoThankYouPage = () => {
     if (cleanLastName) payload.last_name = cleanLastName;
 
     try {
-      const response = await fetch(
-        `${API_BASE}/api/ingest/pienissimo/${encodeURIComponent(orgSlug)}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        }
-      );
-
-      if (response.status === 200) {
-        setStatus("success");
-        return;
-      }
-
-      if (response.status === 409) {
-        const payload = await response.json().catch(() => null);
-        const detail =
-          typeof payload?.detail === "string"
-            ? payload.detail
-            : typeof payload?.message === "string"
-              ? payload.message
-              : "Socio già presente.";
-        setStatus("error");
-        setErrorMessage(detail);
-        return;
-      }
-
-      if ([402, 403].includes(response.status)) {
-        setStatus("error");
-        setErrorMessage("Servizio tessera non attivo per questa associazione.");
-        return;
-      }
-
-      if (response.status === 429) {
-        setStatus("error");
-        setErrorMessage("Troppi tentativi. Riprova tra qualche minuto.");
-        return;
-      }
-
-      if (response.status === 422) {
+      const result = await ingestPienissimoMember(orgSlug, payload);
+      setSuccessData(result);
+      setWalletEnabled(Boolean(result.wallet_enabled));
+      setStatus("success");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Errore temporaneo. Riprova.";
+      if (message.toLowerCase().includes("email valida")) {
         setStatus("error");
         setEmailError("Inserisci una email valida.");
         return;
       }
-
-      if (response.status >= 500) {
-        setStatus("error");
-        setErrorMessage("Errore temporaneo. Riprova.");
-        return;
-      }
-
       setStatus("error");
-      setErrorMessage("Richiesta non completata. Verifica i dati e riprova.");
-    } catch {
-      setStatus("error");
-      setErrorMessage("Errore temporaneo. Riprova.");
+      setErrorMessage(message);
     }
   };
+
+  const downloadUrl = successData?.card_download_url ?? null;
+  const walletAppleUrl = successData?.card_wallet_apple_url ?? null;
+  const walletGoogleUrl = successData?.card_wallet_google_url ?? null;
 
   return (
     <section className="py-16" data-reveal="fade-up">
       <div className="container-shell">
-        <div className="surface-strong mx-auto max-w-[30rem] p-6 sm:p-8">
-          <p className="section-title">Pienissimo</p>
-          <h1 className="section-heading">Completa la richiesta tessera</h1>
+        <div className="surface-strong mx-auto max-w-[32rem] p-6 sm:p-8">
+          <p className="section-title">{clubDisplayName}</p>
+          <h1 className="section-heading">ULTIMO PASSO PER RICEVERE LA TESSERA</h1>
           <p className="mt-4 text-sm leading-7 text-neutral-600">
             Inserisci i dati richiesti per ricevere la tessera associativa.
           </p>
 
+          {cardLogoUrl && (
+            <div className="mt-4 flex justify-center">
+              <img
+                src={cardLogoUrl}
+                alt={`Logo ${clubDisplayName}`}
+                className="h-14 max-w-[220px] object-contain"
+                loading="lazy"
+              />
+            </div>
+          )}
+
           {isSuccess ? (
-            <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-              Tessera inviata via email. Controlla anche lo spam.
+            <div className="mt-6 space-y-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-700">
+              <p className="font-semibold">Tessera inviata via email. Controlla anche lo spam.</p>
+              {downloadUrl && (
+                <a
+                  className="btn-primary inline-flex w-full items-center justify-center py-2.5 text-sm"
+                  href={downloadUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Scarica ora
+                </a>
+              )}
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {walletEnabled && walletAppleUrl ? (
+                  <a
+                    className="inline-flex items-center justify-center rounded-xl border border-brand/40 bg-white px-3 py-2 text-xs font-semibold text-brand hover:bg-brand/5"
+                    href={walletAppleUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Aggiungi a Apple Wallet
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-xl border border-neutral-200 bg-neutral-100 px-3 py-2 text-xs font-semibold text-neutral-400"
+                    disabled
+                  >
+                    Apple Wallet (presto)
+                  </button>
+                )}
+                {walletEnabled && walletGoogleUrl ? (
+                  <a
+                    className="inline-flex items-center justify-center rounded-xl border border-brand/40 bg-white px-3 py-2 text-xs font-semibold text-brand hover:bg-brand/5"
+                    href={walletGoogleUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Aggiungi a Google Wallet
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-xl border border-neutral-200 bg-neutral-100 px-3 py-2 text-xs font-semibold text-neutral-400"
+                    disabled
+                  >
+                    Google Wallet (presto)
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             <form className="mt-6 space-y-4" onSubmit={handleSubmit} noValidate>

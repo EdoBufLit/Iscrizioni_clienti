@@ -70,6 +70,9 @@ class LoginBody(BaseModel):
 class CreateOrganization(BaseModel):
     name: str
     slug: Optional[str] = None
+    club_display_name: Optional[str] = None
+    card_email_subject: Optional[str] = None
+    card_logo_url: Optional[str] = None
     description: Optional[str] = None
     description_short: Optional[str] = None
     address_line1: Optional[str] = None
@@ -85,6 +88,9 @@ class CreateOrganization(BaseModel):
 
 class PatchOrganization(BaseModel):
     name: Optional[str] = None
+    club_display_name: Optional[str] = None
+    card_email_subject: Optional[str] = None
+    card_logo_url: Optional[str] = None
     description: Optional[str] = None
     description_short: Optional[str] = None
     address_line1: Optional[str] = None
@@ -775,6 +781,9 @@ def create_organization(
     org = Organization(
         name=body.name,
         slug=slug,
+        club_display_name=body.club_display_name,
+        card_email_subject=body.card_email_subject,
+        card_logo_url=body.card_logo_url,
         description=description,
         address_line1=body.address_line1,
         address_line2=body.address_line2,
@@ -909,6 +918,9 @@ def list_organizations(
             "id": org.id,
             "name": org.name,
             "slug": org.slug,
+            "club_display_name": org.club_display_name,
+            "card_email_subject": org.card_email_subject,
+            "card_logo_url": org.card_logo_url,
             "description": org.description,
             "is_active": org.is_active,
             "is_archived": org.deleted_at is not None,

@@ -5,7 +5,10 @@ export type MemberCardPreviewData = {
   firstName?: string | null;
   lastName?: string | null;
   fullName?: string | null;
+  clubDisplayName?: string | null;
+  organizationSlug?: string | null;
   organizationName?: string | null;
+  organizationLogoUrl?: string | null;
   cardNumber?: string | number | null;
   cardStatus?: string | null;
   cardYear?: string | number | null;
@@ -61,7 +64,10 @@ export const isMemberCardPreviewData = (value: unknown): value is MemberCardPrev
     "firstName",
     "lastName",
     "fullName",
+    "clubDisplayName",
+    "organizationSlug",
     "organizationName",
+    "organizationLogoUrl",
     "cardStatus",
     "verificationUrl",
   ];
@@ -92,7 +98,12 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
   const [isFlipped, setIsFlipped] = useState(false);
 
   const displayName = toDisplayName(cardData);
+  const clubDisplayName = toSafeText(cardData.clubDisplayName);
+  const organizationSlug = toSafeText(cardData.organizationSlug).toLowerCase();
   const organizationName = toSafeText(cardData.organizationName);
+  const organizationLogoUrl = toSafeText(cardData.organizationLogoUrl);
+  const isOasi2Card = organizationSlug === "oasi-2";
+  const organizationLabel = clubDisplayName !== EMPTY ? clubDisplayName : organizationName;
   const cardNumber = toDisplayCardNumber(cardData.cardNumber);
   const cardYear = toDisplayYear(cardData.cardYear) || getCurrentCardYearLabel();
   const qrImageUrl = useMemo(() => toQrImageUrl(cardData.verificationUrl), [cardData.verificationUrl]);
@@ -141,6 +152,17 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
             {/* Radial light accent */}
             <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_20%,rgba(198,160,79,0.15),transparent_55%)]" />
             <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_85%_80%,rgba(198,160,79,0.10),transparent_50%)]" />
+            {organizationLogoUrl !== EMPTY && isOasi2Card && (
+              <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <img
+                  src={organizationLogoUrl}
+                  alt=""
+                  aria-hidden="true"
+                  className="h-auto w-[58%] max-w-[250px] object-contain opacity-[0.12] sm:w-[62%] sm:max-w-[290px]"
+                  loading="lazy"
+                />
+              </span>
+            )}
 
             {/* Top gold accent bar */}
             <span className="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#c6a04f] to-transparent" />
@@ -151,6 +173,16 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
             <span className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-gradient-to-b from-transparent via-[#c6a04f]/40 to-transparent" />
 
             <span className="relative flex h-full flex-col px-5 py-4 sm:px-7 sm:py-5">
+              {organizationLogoUrl !== EMPTY && !isOasi2Card && (
+                <span className="mb-1 flex justify-center sm:mb-2">
+                  <img
+                    src={organizationLogoUrl}
+                    alt="Logo associazione"
+                    className="h-8 w-auto max-w-[170px] object-contain opacity-95 sm:h-10 sm:max-w-[190px]"
+                    loading="lazy"
+                  />
+                </span>
+              )}
               {/* Header row: year label + logo */}
               <span className="flex items-start justify-between">
                 <span className="flex flex-col">
@@ -161,7 +193,7 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
                     {cardYear}
                   </span>
                 </span>
-                <span className="flex-shrink-0">
+                <span className="flex flex-shrink-0 items-center">
                   <img
                     src={ASSONAM_LOGO_SRC}
                     alt="Logo ASSO.N.A.M."
@@ -189,7 +221,7 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
                   Associazione
                 </span>
                 <span className="mt-0.5 block truncate text-sm font-medium text-[#c6d8d6] sm:text-[0.95rem]">
-                  {organizationName}
+                  {organizationLabel}
                 </span>
               </span>
 

@@ -13,7 +13,10 @@ REQUIRED_ORG_COLUMNS = {
     "created_at",
     "updated_at",
     "email",
-    "phone"
+    "phone",
+    "club_display_name",
+    "card_email_subject",
+    "card_logo_url",
 }
 
 def validate_schema(engine):

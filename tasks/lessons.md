@@ -45,3 +45,10 @@
 - Nei template email, il testo principale (nome socio) va forzato con colore scuro inline (!important) per evitare perdita di contrasto nei client che alterano i colori.
 
 - Per compatibilita mobile email (es. Gmail app), logo e QR nelle mail tessera vanno inviati come immagini inline CID con fallback URL remoto.
+- Per compatibilita reale mobile email, non usare solo immagini inline CID: mantenere URL assoluti HTTP(s) per logo e QR nella tessera.
+
+- Quando il cliente chiede un logo specifico per uno slug, aggiungere un asset statico dedicato + fallback centralizzato nel resolver branding, mantenendo il logo istituzionale separato e senza sovrapporre testo critico.
+
+- Se il cliente richiede un naming preciso in tessera per uno slug, applicare override centralizzato di club_display_name e riusarlo in tutti i render (preview FE, email, download) per evitare mismatch.
+
+- Quando una personalizzazione brand nasce per un solo cliente/slug, il rendering speciale (watermark, naming) va sempre gated sullo slug per non impattare le altre organizzazioni.

@@ -45,7 +45,10 @@ const SUMMARY_CARDS = [
 ] as const;
 
 type MemberCardProfileCompat = {
+  organization_slug?: string | null;
   organization_name?: string | null;
+  club_display_name?: string | null;
+  organization_logo_url?: string | null;
   card_number?: string | number | null;
   assigned_card_number?: string | number | null;
   activated_at?: string | null;
@@ -72,7 +75,19 @@ const buildMemberCardDataFromProfile = (
     firstName: profile.first_name ?? null,
     lastName: profile.last_name ?? null,
     fullName: `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim() || null,
+    clubDisplayName:
+      profile.organization?.club_display_name ??
+      compat.club_display_name ??
+      null,
+    organizationSlug:
+      profile.organization?.slug ??
+      compat.organization_slug ??
+      null,
     organizationName: profile.organization?.name ?? compat.organization_name ?? null,
+    organizationLogoUrl:
+      profile.organization?.card_logo_url ??
+      compat.organization_logo_url ??
+      null,
     cardNumber:
       card?.number ??
       profile.card_no ??

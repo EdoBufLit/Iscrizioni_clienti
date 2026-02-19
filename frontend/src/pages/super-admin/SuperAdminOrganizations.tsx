@@ -261,6 +261,13 @@ const SuperAdminOrganizations = () => {
                                 >
                                   Integrazione
                                 </button>
+                                <span className="text-neutral-300">|</span>
+                                <button
+                                  onClick={() => openModal("branding", org)}
+                                  className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
+                                >
+                                  Branding
+                                </button>
                               </>
                             )}
                           </>
@@ -280,6 +287,13 @@ const SuperAdminOrganizations = () => {
                                   className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
                                 >
                                   Integrazione
+                                </button>
+                                <span className="text-neutral-300">|</span>
+                                <button
+                                  onClick={() => openModal("branding", org)}
+                                  className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
+                                >
+                                  Branding
                                 </button>
                               </>
                             )}

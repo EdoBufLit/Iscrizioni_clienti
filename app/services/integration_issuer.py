@@ -1,13 +1,10 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from pathlib import Path
-from urllib.parse import quote_plus
 
 from fastapi import HTTPException
 from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-import requests
 
 from app import audit
 from app.config import settings
@@ -15,6 +12,12 @@ from app.email_templates.member_card_email import build_member_card_email
 from app.models import Member, MemberStatus, Organization, SignupSource, Token, TokenType
 from app.services.card import assign_next_card_with_batch
 from app.services.card_verification import build_card_verification_token
+from app.services.org_branding import (
+    resolve_assonam_logo_url,
+    resolve_card_email_subject,
+    resolve_card_logo_url,
+    resolve_club_display_name,
+)
 from app.utils import generate_token, hash_token, send_email_html
 
 
@@ -43,7 +46,12 @@ class IssueMemberResult:
     member_id: int
     card_number: int
     card_year: int
+    card_verification_token: str
     card_verification_url: str
+    card_download_url: str
+    card_wallet_apple_url: str | None
+    card_wallet_google_url: str | None
+    wallet_enabled: bool
     member_portal_login_hint: str
     email_sent: bool
     org_slug: str
@@ -79,7 +87,7 @@ def _build_magic_link(db: Session, member_id: int, frontend_base: str) -> str:
     return f"{frontend_base}/auth/verify?token={token_str}&role=member"
 
 
-def _build_verification_url(member: Member, backend_base: str) -> str:
+def _build_card_links(member: Member, backend_base: str) -> tuple[str, str, str, str, str]:
     if member.card_no is None or member.card_year is None:
         raise HTTPException(status_code=409, detail="Unable to issue card verification URL")
 
@@ -89,43 +97,11 @@ def _build_verification_url(member: Member, backend_base: str) -> str:
         card_number=member.card_no,
         card_year=member.card_year,
     )
-    return f"{backend_base}/api/cards/verify/{token}"
-
-
-def _fetch_bytes(url: str, timeout_seconds: int = 10) -> bytes | None:
-    try:
-        response = requests.get(url, timeout=timeout_seconds)
-        if response.status_code != 200:
-            return None
-        if not response.content:
-            return None
-        return response.content
-    except Exception:
-        return None
-
-
-def _load_logo_bytes(logo_url: str) -> bytes | None:
-    candidate_paths = [
-        Path("frontend/public/logo-transparent.png"),
-        Path("frontend/dist/logo-transparent.png"),
-        Path("app/static/logo-transparent.png"),
-        Path("logo-transparent.png"),
-    ]
-    for candidate in candidate_paths:
-        try:
-            if candidate.is_file():
-                return candidate.read_bytes()
-        except OSError:
-            continue
-    return _fetch_bytes(logo_url, timeout_seconds=8)
-
-
-def _load_qr_bytes(verification_url: str) -> bytes | None:
-    qr_url = (
-        "https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=0&data="
-        f"{quote_plus(verification_url)}"
-    )
-    return _fetch_bytes(qr_url, timeout_seconds=12)
+    verification_url = f"{backend_base}/api/cards/verify/{token}"
+    download_url = f"{backend_base}/api/cards/{token}/download"
+    wallet_apple_url = f"{backend_base}/api/cards/{token}/wallet/apple"
+    wallet_google_url = f"{backend_base}/api/cards/{token}/wallet/google"
+    return token, verification_url, download_url, wallet_apple_url, wallet_google_url
 
 
 def _cleanup_deleted_conflicts(
@@ -286,7 +262,14 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
 
     configured_frontend = settings.FRONTEND_URL.rstrip("/") if settings.FRONTEND_URL else ""
     frontend_base = (command.frontend_base_url or configured_frontend or backend_base).rstrip("/")
-    verification_url = _build_verification_url(member, backend_base)
+    (
+        verification_token,
+        verification_url,
+        download_url,
+        wallet_apple_url,
+        wallet_google_url,
+    ) = _build_card_links(member, backend_base)
+    wallet_enabled = False
 
     email_sent = False
     login_hint = "email_skipped"
@@ -297,53 +280,32 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
 
     if should_send_email:
         magic_link_url = _build_magic_link(db, member.id, frontend_base)
-        # Prefer PNG for broad email-client compatibility (SVG is often blocked or not rendered).
-        remote_logo_url = f"{frontend_base}/logo-transparent.png"
-        logo_url = remote_logo_url
-        qr_image_src = None
-        inline_images: list[dict] = []
-
-        logo_bytes = _load_logo_bytes(remote_logo_url)
-        if logo_bytes:
-            inline_images.append(
-                {
-                    "cid": "member-card-logo",
-                    "filename": "logo-transparent.png",
-                    "content_type": "image/png",
-                    "data": logo_bytes,
-                }
-            )
-            logo_url = "cid:member-card-logo"
-
-        qr_bytes = _load_qr_bytes(verification_url)
-        if qr_bytes:
-            inline_images.append(
-                {
-                    "cid": "member-card-qr",
-                    "filename": "card-qr.png",
-                    "content_type": "image/png",
-                    "data": qr_bytes,
-                }
-            )
-            qr_image_src = "cid:member-card-qr"
-
+        assonam_logo_url = resolve_assonam_logo_url(
+            frontend_base_url=frontend_base,
+            backend_base_url=backend_base,
+        )
+        organization_logo_url = resolve_card_logo_url(org, base_url=backend_base)
+        club_display_name = resolve_club_display_name(org) or org.name
+        subject = resolve_card_email_subject(org)
         full_name = f"{(member.first_name or '').strip()} {(member.last_name or '').strip()}".strip() or email
         text_body, html_body = build_member_card_email(
             member_full_name=full_name,
             organization_name=org.name,
+            club_display_name=club_display_name,
+            organization_slug=org.slug,
             card_number=member.card_no,
             card_year=member.card_year,
             verification_url=verification_url,
+            download_url=download_url,
             magic_link_url=magic_link_url,
-            logo_url=logo_url,
-            qr_image_src=qr_image_src,
+            assonam_logo_url=assonam_logo_url,
+            organization_logo_url=organization_logo_url,
         )
         email_sent = send_email_html(
             to_email=member.email,
-            subject=f"La tua tessera socio {org.name}",
+            subject=subject,
             text_body=text_body,
             html_body=html_body,
-            inline_images=inline_images or None,
         )
         if email_sent:
             member.card_email_sent_at = datetime.utcnow()
@@ -373,7 +335,12 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
         member_id=member.id,
         card_number=member.card_no,
         card_year=member.card_year,
+        card_verification_token=verification_token,
         card_verification_url=verification_url,
+        card_download_url=download_url,
+        card_wallet_apple_url=wallet_apple_url,
+        card_wallet_google_url=wallet_google_url,
+        wallet_enabled=wallet_enabled,
         member_portal_login_hint=login_hint,
         email_sent=email_sent,
         org_slug=org.slug,

@@ -10,6 +10,7 @@ from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
 from app.services.card_verification import build_card_verification_token
 from app.services.member_activity import get_member_inactive_reason, is_card_active, is_member_active
+from app.services.org_branding import resolve_card_logo_url, resolve_club_display_name
 from app import audit
 import os
 import logging
@@ -417,9 +418,9 @@ def api_auth_me(request: Request, db: Session = Depends(get_db)):
         member.card_year = card_year
         db.commit()
 
+    backend_base = settings.BASE_URL.rstrip("/") if settings.BASE_URL else str(request.base_url).rstrip("/")
     verification_url = None
     if member.card_no is not None and card_year is not None:
-        backend_base = settings.BASE_URL.rstrip("/") if settings.BASE_URL else str(request.base_url).rstrip("/")
         token = build_card_verification_token(
             member_id=member.id,
             org_id=member.org_id,
@@ -429,6 +430,8 @@ def api_auth_me(request: Request, db: Session = Depends(get_db)):
         verification_url = f"{backend_base}/api/cards/verify/{token}"
 
     card_status = "attiva" if is_card_active(member, now=datetime.utcnow()) else "non_attiva"
+    organization_club_display_name = resolve_club_display_name(org) if org else None
+    organization_card_logo_url = resolve_card_logo_url(org, base_url=backend_base) if org else None
 
     return {
         "id": member.id,
@@ -454,6 +457,8 @@ def api_auth_me(request: Request, db: Session = Depends(get_db)):
             "id": org.id,
             "name": org.name,
             "slug": org.slug,
+            "club_display_name": organization_club_display_name,
+            "card_logo_url": organization_card_logo_url,
         } if org else None,
     }
 

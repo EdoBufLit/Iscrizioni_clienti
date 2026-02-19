@@ -185,20 +185,56 @@ def test_issue_member_captures_html_email_with_verification_url(client, db):
 
         payload_out = response.json()
         assert payload_out["member_portal_login_hint"] == "magic_link_sent"
+        assert payload_out["card_verification_token"]
+        assert payload_out["card_download_url"].endswith(
+            f"/api/cards/{payload_out['card_verification_token']}/download"
+        )
+        assert payload_out["wallet_enabled"] is False
 
         captured = get_captured_emails()
         assert len(captured) == 1
+        assert captured[0]["subject"] == f"La tua tessera {org.name}"
         assert payload_out["card_verification_url"] in captured[0]["text_body"]
+        assert payload_out["card_download_url"] in captured[0]["text_body"]
         assert captured[0]["html_body"] is not None
         assert "<html" in captured[0]["html_body"].lower()
         assert "Accedi area riservata" in captured[0]["html_body"]
-        assert ("cid:member-card-qr" in captured[0]["html_body"]) or ("api.qrserver.com" in captured[0]["html_body"])
-        assert ("cid:member-card-logo" in captured[0]["html_body"]) or ("logo-transparent.png" in captured[0]["html_body"])
-        assert "assonam-logo.svg" not in captured[0]["html_body"]
-        inline_images = captured[0].get("inline_images") or []
-        if inline_images:
-            image_cids = {img.get("cid") for img in inline_images}
-            assert "member-card-logo" in image_cids
+        assert "Scarica tessera" in captured[0]["html_body"]
+        assert "api.qrserver.com" in captured[0]["html_body"]
+        assert "logo-transparent.png" in captured[0]["html_body"]
+        assert not (captured[0].get("inline_images") or [])
+    finally:
+        settings.EMAIL_MODE = original_email_mode
+        clear_captured_emails()
+
+
+def test_issue_member_uses_custom_card_email_subject_template(client, db):
+    original_email_mode = settings.EMAIL_MODE
+    settings.EMAIL_MODE = "test"
+    clear_captured_emails()
+    try:
+        org, _batch, raw_key = _create_org_with_key(db)
+        org.club_display_name = "Golden Age Club - speakeasy"
+        org.card_email_subject = "La tua tessera {club_display_name}"
+        db.commit()
+
+        response = client.post(
+            "/api/integrations/members/issue",
+            json={
+                "org_slug": org.slug,
+                "external_customer_id": f"ext-mail-subject-{uuid.uuid4().hex[:10]}",
+                "email": "subject.member@example.com",
+                "first_name": "Subject",
+                "last_name": "Member",
+                "send_email": True,
+            },
+            headers={"X-ASSONAM-API-KEY": raw_key},
+        )
+        assert response.status_code == 200, response.text
+
+        captured = get_captured_emails()
+        assert len(captured) == 1
+        assert captured[0]["subject"] == "La tua tessera Golden Age Club - speakeasy"
     finally:
         settings.EMAIL_MODE = original_email_mode
         clear_captured_emails()

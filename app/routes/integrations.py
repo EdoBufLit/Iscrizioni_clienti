@@ -33,7 +33,12 @@ class IssueMemberResponse(BaseModel):
     member_id: int
     card_number: int
     card_year: int
+    card_verification_token: str
     card_verification_url: str
+    card_download_url: str
+    card_wallet_apple_url: str | None = None
+    card_wallet_google_url: str | None = None
+    wallet_enabled: bool = False
     member_portal_login_hint: str
 
 
@@ -123,6 +128,11 @@ def issue_member(
         member_id=result.member_id,
         card_number=result.card_number,
         card_year=result.card_year,
+        card_verification_token=result.card_verification_token,
         card_verification_url=result.card_verification_url,
+        card_download_url=result.card_download_url,
+        card_wallet_apple_url=result.card_wallet_apple_url,
+        card_wallet_google_url=result.card_wallet_google_url,
+        wallet_enabled=result.wallet_enabled,
         member_portal_login_hint=result.member_portal_login_hint,
     )
