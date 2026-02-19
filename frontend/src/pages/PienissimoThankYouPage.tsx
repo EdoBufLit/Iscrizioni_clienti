@@ -112,8 +112,15 @@ const PienissimoThankYouPage = () => {
     }
   };
 
-  const downloadUrl = successData?.card_download_url ?? null;
-  const verifyUrl = successData?.card_verification_url ?? null;
+  // Build URLs relative to the current origin to avoid HTTP/HTTPS mixed-content blocks.
+  // The backend may return http:// absolute URLs even when the page is served over https://.
+  const token = successData?.card_verification_token ?? null;
+  const downloadUrl = token
+    ? `/api/cards/${token}/download.pdf`
+    : null;
+  const verifyUrl = token
+    ? `/api/cards/verify/${token}`
+    : successData?.card_verification_url ?? null;
   const walletAppleUrl = successData?.card_wallet_apple_url ?? null;
   const walletGoogleUrl = successData?.card_wallet_google_url ?? null;
 
