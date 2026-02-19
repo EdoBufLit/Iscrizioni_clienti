@@ -75,6 +75,34 @@ _ALLOWED_MEMBER_PAYMENT_METHODS = {
 }
 
 
+def _compute_org_card_stock(db: Session, org_id: int, now: datetime | None = None) -> dict[str, int]:
+    card_stats = db.query(
+        func.sum(CardBatch.end_no - CardBatch.start_no + 1).label("total"),
+        func.sum(
+            func.max(CardBatch.end_no - CardBatch.next_no + 1, 0)
+        ).label("remaining"),
+    ).filter(
+        CardBatch.org_id == org_id,
+        CardBatch.released_at.is_(None),
+    ).first()
+
+    total = int(card_stats.total or 0)
+    remaining = int(card_stats.remaining or 0)
+    active_used = int(
+        db.query(func.count(Member.id)).filter(
+            Member.org_id == org_id,
+            *member_active_filters(now=now),
+        ).scalar()
+        or 0
+    )
+
+    return {
+        "total": total,
+        "used": active_used,
+        "remaining": remaining,
+    }
+
+
 def _normalize_member_payment_method(raw_value: Optional[str], required: bool = False) -> Optional[str]:
     if raw_value is None:
         if required:
@@ -510,22 +538,10 @@ def org_metrics(request: Request, db: Session = Depends(get_db)):
     documents_pending_review = doc_stats.pending or 0
     documents_rejected = doc_stats.rejected or 0
 
-    # Query 3: Card batch aggregation in SQL (avoids Python loops)
-    card_stats = db.query(
-        func.sum(CardBatch.end_no - CardBatch.start_no + 1).label("total"),
-        func.sum(
-            func.max(CardBatch.end_no - CardBatch.next_no + 1, 0)
-        ).label("remaining"),
-    ).filter(CardBatch.org_id == org_id).first()
-
-    if card_stats.total:
-        cards_total = int(card_stats.total)
-        cards_remaining = int(card_stats.remaining or 0)
-        cards_used = cards_total - cards_remaining
-    else:
-        cards_total = None
-        cards_remaining = None
-        cards_used = None
+    card_stock = _compute_org_card_stock(db, org_id, now=datetime.utcnow())
+    cards_total = card_stock["total"]
+    cards_remaining = card_stock["remaining"]
+    cards_used = card_stock["used"]
 
     return {
         "members_count": members_count,
@@ -1520,16 +1536,7 @@ def card_stock(request: Request, db: Session = Depends(get_db)):
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    batches = db.query(CardBatch).filter(CardBatch.org_id == admin.org_id).all()
-
-    if not batches:
-        return {"total": 0, "used": 0, "remaining": 0}
-
-    total = sum(b.end_no - b.start_no + 1 for b in batches)
-    remaining = sum(max(b.end_no - b.next_no + 1, 0) for b in batches)
-    used = total - remaining
-
-    return {"total": total, "used": used, "remaining": remaining}
+    return _compute_org_card_stock(db, admin.org_id, now=datetime.utcnow())
 
 
 @router.get("/cards/movements")

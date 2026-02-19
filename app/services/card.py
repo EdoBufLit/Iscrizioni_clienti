@@ -15,9 +15,9 @@ def assign_next_card_with_batch(db: Session, org_id: int) -> Tuple[int, int]:
 
     Logic:
     1. Find all batches for this org, ordered by start_no (deterministic order)
-    2. Find the first batch that still has capacity (next_no <= end_no)
-    3. If a batch is exhausted (next_no > end_no), move to the next batch
-    4. Atomically increment next_no and return the assigned number
+    2. Walk numbers from next_no to end_no
+    3. Skip card numbers already used (legacy overlap/collision safety)
+    4. Atomically persist next_no and return the assigned number
 
     Concurrency safety:
     - Uses BEGIN IMMEDIATE for SQLite write lock
@@ -26,7 +26,7 @@ def assign_next_card_with_batch(db: Session, org_id: int) -> Tuple[int, int]:
     # 1. Acquire write lock (SQLite-specific, prevents concurrent writes)
     db.execute(text("BEGIN IMMEDIATE"))
 
-    # 2. Load all batches for this org, ordered by start_no for deterministic progression
+    # 2. Load all active batches for this org, ordered for deterministic progression
     stmt = select(CardBatch).filter(
         CardBatch.org_id == org_id,
         CardBatch.released_at.is_(None),
@@ -41,67 +41,48 @@ def assign_next_card_with_batch(db: Session, org_id: int) -> Tuple[int, int]:
             detail="Nessun lotto tessere assegnato a questa associazione"
         )
 
-    # 3. Find the first batch with remaining capacity
-    batch = None
-    for b in batches:
-        # Determine the next available number for this batch
-        effective_next = b.next_no if b.next_no is not None else b.start_no
+    # 3. Find the first free number across all active batches.
+    for batch in batches:
+        candidate = batch.next_no if batch.next_no is not None else batch.start_no
+        if candidate > batch.end_no:
+            continue
 
-        # Check if this batch has capacity
-        if effective_next <= b.end_no:
-            batch = b
-            break
+        while candidate <= batch.end_no:
+            existing_member_id = (
+                db.execute(select(Member.id).filter(Member.card_no == candidate)).scalars().first()
+            )
+            if existing_member_id is None:
+                batch.next_no = candidate + 1
+                db.add(batch)
+                db.commit()
+                logger.info(
+                    "Assigned card %d from batch %d (range %d-%d) for org %d",
+                    candidate,
+                    batch.id,
+                    batch.start_no,
+                    batch.end_no,
+                    org_id,
+                )
+                return candidate, batch.id
 
-    # 4. If all batches are exhausted, raise error
-    if batch is None:
-        db.rollback()
-        raise HTTPException(
-            status_code=409,
-            detail="Tutti i lotti tessere sono esauriti per questa associazione"
-        )
+            logger.warning(
+                "Card number collision for org %d: %d already assigned to member %d, skipping",
+                org_id,
+                candidate,
+                existing_member_id,
+            )
+            candidate += 1
 
-    # 5. Initialize next_no if this is a fresh batch
-    if batch.next_no is None:
-        batch.next_no = batch.start_no
+        # Mark exhausted so future allocations skip this batch quickly.
+        batch.next_no = batch.end_no + 1
+        db.add(batch)
 
-    # 6. Get the card number to assign
-    candidate = batch.next_no
-
-    # 7. Safety check: verify we're within range (should always pass given above logic)
-    if candidate > batch.end_no:
-        db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Errore interno: numero tessera {candidate} fuori dal range {batch.start_no}-{batch.end_no}"
-        )
-
-    # 8. Global uniqueness check (defensive - should never happen with proper batch management)
-    stmt_check = select(Member).filter(Member.card_no == candidate)
-    existing = db.execute(stmt_check).scalars().first()
-    if existing:
-        db.rollback()
-        logger.error(
-            "Card number collision: %d already assigned to member %d",
-            candidate, existing.id
-        )
-        raise HTTPException(
-            status_code=500,
-            detail=f"Conflitto numero tessera: {candidate} già assegnato"
-        )
-
-    # 9. Increment next_no for this batch
-    batch.next_no = candidate + 1
-    db.add(batch)
-
-    # 10. Commit the transaction
+    # 4. If all batches are exhausted (or fully colliding), surface business error.
     db.commit()
-
-    logger.info(
-        "Assigned card %d from batch %d (range %d-%d) for org %d",
-        candidate, batch.id, batch.start_no, batch.end_no, org_id
+    raise HTTPException(
+        status_code=409,
+        detail="Tutti i lotti tessere sono esauriti per questa associazione"
     )
-
-    return candidate, batch.id
 
 
 def assign_next_card(db: Session, org_id: int) -> int:

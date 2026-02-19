@@ -1023,3 +1023,11 @@ pm --prefix frontend run build -> OK
 - `python -m pytest tests/test_org_admin_member_filters.py tests/test_member_active_state_regression.py tests/test_org_admin_send_access.py tests/test_member_card_expiration_maintenance.py tests/test_super_admin_association_delete_release_range.py -q` -> **10 passed**
 - `npm --prefix frontend run build` -> **OK**
 
+
+---
+## Review (Fix KPI tessere + ingest 500 - Feb 19, 2026)
+- Corretto calcolo cards used in org-admin su soci attivi (non su next_no batch) in /api/org-admin/cards e /api/org-admin/metrics.
+- Hardened card allocation: collisioni legacy su card_no ora vengono saltate, evitando 500 su /api/ingest/pienissimo/{org_slug}.
+- Test: python -m pytest tests/test_member_active_state_regression.py tests/test_ingest_pienissimo.py -q -> 7 passed.
+- Build FE: npm --prefix frontend run build -> OK.
+

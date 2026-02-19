@@ -106,6 +106,10 @@ def test_deleted_member_is_inactive_everywhere(client, db):
     assert member is not None
     assert member.deleted_at is None
 
+    stock_before_delete = client.get("/api/org-admin/cards")
+    assert stock_before_delete.status_code == 200, stock_before_delete.text
+    assert stock_before_delete.json()["used"] == 1
+
     token_str = f"old-member-token-{suffix}"
     old_magic_link = Token(
         member_id=member.id,
@@ -151,3 +155,11 @@ def test_deleted_member_is_inactive_everywhere(client, db):
     assert active_list_res.status_code == 200, active_list_res.text
     active_ids = [item["id"] for item in active_list_res.json()["items"]]
     assert member.id not in active_ids
+
+    stock_after_delete = client.get("/api/org-admin/cards")
+    assert stock_after_delete.status_code == 200, stock_after_delete.text
+    assert stock_after_delete.json()["used"] == 0
+
+    metrics_after_delete = client.get("/api/org-admin/metrics")
+    assert metrics_after_delete.status_code == 200, metrics_after_delete.text
+    assert metrics_after_delete.json()["cards_used"] == 0

@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 import pytest
 from sqlalchemy import func
@@ -203,3 +204,42 @@ def test_ingest_rate_limit_returns_429(client, db):
     finally:
         settings.INGEST_RATE_LIMIT_MAX_REQUESTS = previous_limit
         settings.INGEST_RATE_LIMIT_WINDOW_SECONDS = previous_window
+
+
+def test_ingest_skips_legacy_card_collision_and_returns_200(client, db):
+    org, batch = _create_org_with_batch(db, slug_prefix="ingest-collision")
+    _create_integration_key(db, org_id=org.id, active=True)
+
+    legacy_org = Organization(
+        name=f"Legacy Org {uuid.uuid4().hex[:8]}",
+        slug=f"legacy-org-{uuid.uuid4().hex[:8]}",
+        is_active=True,
+        privacy_version="v1",
+    )
+    db.add(legacy_org)
+    db.commit()
+    db.refresh(legacy_org)
+
+    legacy_member = Member(
+        org_id=legacy_org.id,
+        first_name="Legacy",
+        last_name="Collision",
+        email=f"legacy.collision.{uuid.uuid4().hex[:6]}@example.com",
+        status=MemberStatus.ACTIVE,
+        card_no=batch.start_no,
+        card_year=datetime.utcnow().year,
+    )
+    db.add(legacy_member)
+    db.commit()
+
+    response = client.post(
+        f"/api/ingest/pienissimo/{org.slug}",
+        json={
+            "email": f"collision.{uuid.uuid4().hex[:6]}@example.com",
+            "send_email": False,
+        },
+    )
+    assert response.status_code == 200, response.text
+
+    payload = response.json()
+    assert payload["card_number"] == batch.start_no + 1
