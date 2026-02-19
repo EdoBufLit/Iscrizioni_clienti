@@ -122,6 +122,11 @@ def test_org_admin_cannot_pay_other_org_member(client, db):
 def test_member_cannot_create_manual_payment(client, db):
     org = _create_org(db, "manual-pay-member", "Manual Pay Member")
     member = _create_member(db, org.id, "manualpay_member_only@example.com")
+    member.status = MemberStatus.ACTIVE
+    member.card_no = 7777
+    member.card_year = datetime.utcnow().year
+    member.deleted_at = None
+    db.commit()
 
     client.post("/api/org-admin/auth/logout")
 

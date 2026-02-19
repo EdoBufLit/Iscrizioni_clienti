@@ -193,6 +193,8 @@ def test_issue_member_captures_html_email_with_verification_url(client, db):
         assert "<html" in captured[0]["html_body"].lower()
         assert "Accedi area riservata" in captured[0]["html_body"]
         assert "api.qrserver.com" in captured[0]["html_body"]
+        assert "logo-transparent.png" in captured[0]["html_body"]
+        assert "assonam-logo.svg" not in captured[0]["html_body"]
     finally:
         settings.EMAIL_MODE = original_email_mode
         clear_captured_emails()

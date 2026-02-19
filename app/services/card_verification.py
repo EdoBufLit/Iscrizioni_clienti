@@ -2,10 +2,12 @@ import base64
 import hashlib
 import hmac
 import json
+from datetime import datetime
+from types import SimpleNamespace
 from typing import Optional, TypedDict
 
 from app.config import settings
-from app.models import MemberStatus
+from app.services.member_activity import is_card_active
 
 _TOKEN_PREFIX = "card-verify-v1"
 
@@ -91,16 +93,17 @@ def parse_card_verification_token(token: str) -> Optional[CardVerificationPayloa
     }
 
 
-def to_card_status(status: object, card_number: Optional[int]) -> str:
-    if card_number is None:
-        return "non_attiva"
-
-    normalized = status
-    if isinstance(status, MemberStatus):
-        normalized = status.value
-    elif status is None:
-        normalized = ""
-    else:
-        normalized = str(status)
-
-    return "attiva" if str(normalized).lower() == MemberStatus.ACTIVE.value else "non_attiva"
+def to_card_status(
+    status: object,
+    card_number: Optional[int],
+    card_year: Optional[int] = None,
+    deleted_at: object | None = None,
+    now: datetime | None = None,
+) -> str:
+    stub_member = SimpleNamespace(
+        status=status,
+        card_no=card_number,
+        card_year=card_year,
+        deleted_at=deleted_at,
+    )
+    return "attiva" if is_card_active(stub_member, now=now) else "non_attiva"

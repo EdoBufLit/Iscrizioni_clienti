@@ -20,6 +20,8 @@ from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
 from app import audit
 from app.services.association_delete import delete_association_and_release_range
+from app.services.member_activity import get_member_lifecycle_status, is_member_active
+from app.services.member_maintenance import expire_and_purge_members
 
 import logging
 
@@ -163,6 +165,11 @@ class CreateIntegrationKeyBody(BaseModel):
 
     name: str = "pienissimo"
     scopes: list[str] = Field(default_factory=lambda: ["issue_member"])
+
+
+class RunMaintenanceBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    purge_pii: bool = True
 
 
 def _get_org_or_404(db: Session, org_id: int) -> Organization:
@@ -456,6 +463,45 @@ def disable_org_integration_key(
     return {"ok": True, **_serialize_integration_key(key)}
 
 
+@router.post("/maintenance/run")
+def run_maintenance(
+    request: Request,
+    body: RunMaintenanceBody | None = None,
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+    now = datetime.utcnow()
+    payload = body or RunMaintenanceBody()
+
+    result = expire_and_purge_members(
+        db=db,
+        now=now,
+        purge_pii=payload.purge_pii,
+    )
+
+    audit.log_operation(
+        db,
+        action="auto_expire_members",
+        entity_type="member",
+        actor_admin_id=admin.id,
+        actor_role=AdminRole.SUPER_ADMIN.value,
+        metadata={
+            "expired_count": result["expired_count"],
+            "purged_count": result["purged_count"],
+            "current_year": result["current_year"],
+        },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+
+    return {
+        "ok": True,
+        "ran_at": now.isoformat() + "Z",
+        **result,
+    }
+
+
 @router.get("/members/{member_id}")
 def super_admin_member_detail(
     request: Request,
@@ -479,8 +525,13 @@ def super_admin_member_detail(
         "phone": member.phone,
         "fiscal_code": member.fiscal_code,
         "payment_method": _serialize_member_payment_method(member.payment_method),
-        "status": member.status.value if hasattr(member.status, "value") else str(member.status),
+        "status": get_member_lifecycle_status(member, now=datetime.utcnow()),
+        "workflow_status": member.status.value if hasattr(member.status, "value") else str(member.status),
+        "is_active": is_member_active(member, now=datetime.utcnow()),
+        "deleted_at": member.deleted_at.isoformat() if member.deleted_at else None,
         "card_no": member.card_no,
+        "card_number": member.card_no,
+        "card_year": member.card_year,
         "joined_at": member.joined_at.isoformat() if member.joined_at else None,
         "member_type": member.member_type,
         "internal_notes": member.internal_notes,
@@ -1195,6 +1246,10 @@ def get_org_batches(
     """Get all card batches for an organization."""
     _require_super_admin(request, db)
 
+    now = datetime.utcnow()
+    current_year = now.year
+    next_reset = datetime(current_year + 1, 1, 1)
+
     org = db.query(Organization).filter(Organization.id == org_id).first()
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
@@ -1211,12 +1266,16 @@ def get_org_batches(
                 "start_no": b.start_no,
                 "end_no": b.end_no,
                 "next_no": b.next_no,
+                "year": current_year,
+                "is_active": bool(b.released_at is None and b.next_no <= b.end_no),
                 "total": b.end_no - b.start_no + 1,
                 "assigned": b.next_no - b.start_no,
                 "remaining": max(b.end_no - b.next_no + 1, 0),
             }
             for b in batches
         ],
+        "current_year": current_year,
+        "next_reset_at": next_reset.isoformat() + "Z",
         "summary": {
             "total": sum(b.end_no - b.start_no + 1 for b in batches),
             "assigned": sum(b.next_no - b.start_no for b in batches),

@@ -1,5 +1,6 @@
 import pytest
 from datetime import datetime, timedelta
+import uuid
 
 from app.db import SessionLocal
 from app.models import (
@@ -49,17 +50,24 @@ def _login_member(client, db, member_id: int):
 
 
 def test_reject_without_note_returns_400(client, db):
-    org = Organization(name="DocFlow Org", slug="docflow-org", is_active=True)
+    suffix = uuid.uuid4().hex[:8]
+    org = Organization(name=f"DocFlow Org {suffix}", slug=f"docflow-org-{suffix}", is_active=True)
     db.add(org)
     db.commit()
     db.refresh(org)
 
-    admin = AdminUser(email="docflow-admin@example.com", role=AdminRole.ORG_ADMIN, org_id=org.id, is_active=True)
+    admin = AdminUser(email=f"docflow-admin-{suffix}@example.com", role=AdminRole.ORG_ADMIN, org_id=org.id, is_active=True)
     db.add(admin)
     db.commit()
     db.refresh(admin)
 
-    member = Member(org_id=org.id, first_name="Doc", last_name="User", email="docflow@example.com", status="pending_docs")
+    member = Member(
+        org_id=org.id,
+        first_name="Doc",
+        last_name="User",
+        email=f"docflow-{suffix}@example.com",
+        status="pending_docs",
+    )
     db.add(member)
     db.commit()
     db.refresh(member)
@@ -85,12 +93,22 @@ def test_reject_without_note_returns_400(client, db):
 
 
 def test_member_resubmit_only_when_rejected(client, db):
-    org = Organization(name="DocFlow Org 2", slug="docflow-org-2", is_active=True)
+    suffix = uuid.uuid4().hex[:8]
+    org = Organization(name=f"DocFlow Org 2 {suffix}", slug=f"docflow-org-2-{suffix}", is_active=True)
     db.add(org)
     db.commit()
     db.refresh(org)
 
-    member = Member(org_id=org.id, first_name="Resub", last_name="User", email="resub@example.com", status="pending_docs")
+    member = Member(
+        org_id=org.id,
+        first_name="Resub",
+        last_name="User",
+        email=f"resub-{suffix}@example.com",
+        status="active",
+        card_no=9000 + int(suffix[:2], 16),
+        card_year=datetime.utcnow().year,
+        joined_at=datetime.utcnow(),
+    )
     db.add(member)
     db.commit()
     db.refresh(member)
@@ -130,19 +148,26 @@ def test_member_resubmit_only_when_rejected(client, db):
 
 
 def test_org_admin_cannot_review_other_org_document(client, db):
-    org = Organization(name="DocFlow Org A", slug="docflow-org-a", is_active=True)
-    other_org = Organization(name="DocFlow Org B", slug="docflow-org-b", is_active=True)
+    suffix = uuid.uuid4().hex[:8]
+    org = Organization(name=f"DocFlow Org A {suffix}", slug=f"docflow-org-a-{suffix}", is_active=True)
+    other_org = Organization(name=f"DocFlow Org B {suffix}", slug=f"docflow-org-b-{suffix}", is_active=True)
     db.add_all([org, other_org])
     db.commit()
     db.refresh(org)
     db.refresh(other_org)
 
-    admin = AdminUser(email="docflow-admin-a@example.com", role=AdminRole.ORG_ADMIN, org_id=org.id, is_active=True)
+    admin = AdminUser(email=f"docflow-admin-a-{suffix}@example.com", role=AdminRole.ORG_ADMIN, org_id=org.id, is_active=True)
     db.add(admin)
     db.commit()
     db.refresh(admin)
 
-    member = Member(org_id=other_org.id, first_name="Other", last_name="Org", email="otherorg@example.com", status="pending_docs")
+    member = Member(
+        org_id=other_org.id,
+        first_name="Other",
+        last_name="Org",
+        email=f"otherorg-{suffix}@example.com",
+        status="pending_docs",
+    )
     db.add(member)
     db.commit()
     db.refresh(member)

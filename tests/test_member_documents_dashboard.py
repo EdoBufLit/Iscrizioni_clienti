@@ -1,5 +1,6 @@
 import pytest
 from datetime import datetime
+import uuid
 
 from app.db import SessionLocal
 from app.models import Organization, Member, MemberDocument, MemberStatus, DocStatus
@@ -14,18 +15,13 @@ def db():
 
 
 def test_member_document_reject_and_resubmit(client, db):
-    org = db.query(Organization).filter_by(slug="member-docs-org").first()
-    if not org:
-        org = Organization(name="Member Docs Org", slug="member-docs-org", is_active=True)
-        db.add(org)
-        db.commit()
-        db.refresh(org)
+    suffix = uuid.uuid4().hex[:8]
+    org = Organization(name=f"Member Docs Org {suffix}", slug=f"member-docs-org-{suffix}", is_active=True)
+    db.add(org)
+    db.commit()
+    db.refresh(org)
 
-    email = "member.docs@example.com"
-    existing = db.query(Member).filter_by(email=email).first()
-    if existing:
-        db.delete(existing)
-        db.commit()
+    email = f"member.docs.{suffix}@example.com"
 
     member = Member(
         org_id=org.id,
@@ -33,7 +29,10 @@ def test_member_document_reject_and_resubmit(client, db):
         last_name="Rossi",
         email=email,
         password_hash=get_password_hash("TestPass123!"),
-        status=MemberStatus.PENDING_VERIFICATION,
+        status=MemberStatus.ACTIVE,
+        card_no=8000 + int(suffix[:2], 16),
+        card_year=datetime.utcnow().year,
+        joined_at=datetime.utcnow(),
         signup_ip="127.0.0.1",
         signup_user_agent="pytest",
     )

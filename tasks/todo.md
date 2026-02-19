@@ -1,3 +1,14 @@
+- [x] Individuare perché il logo ASSONAM non viene renderizzato nella mail tessera inviata da flusso API/thank-you
+- [x] Correggere URL logo nel template email integrazione usando asset compatibile client mail
+- [x] Aggiungere regressione test su HTML email per evitare ritorno a SVG non compatibile
+- [x] Eseguire test mirati integrazione/ingest e documentare risultato
+
+## Review (Fix logo mail tessera API - Feb 19, 2026)
+- `python -m pytest tests/test_integration_issue_member.py::test_issue_member_captures_html_email_with_verification_url -q` -> 1 passed
+- `python -m pytest tests/test_ingest_pienissimo.py::test_ingest_retry_100x_is_idempotent_and_sends_email_once -q` -> 1 passed
+- Fix applicato in `app/services/integration_issuer.py`: `logo_url` ora usa `frontend_base/logo-transparent.png` (PNG, più compatibile in email)
+
+---
 - [x] Riprodurre errore 500 creazione integration key da super admin e identificare causa
 - [x] Hardening backend create/rotate key con gestione vincoli legacy UNIQUE(org_id,name) su integration_api_keys
 - [x] Restituire errore applicativo (409) al posto di 500 generico su conflitti di vincolo
@@ -933,3 +944,82 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] 
 pm --prefix frontend run build -> OK
 - [x] DATABASE_URL=sqlite:///tmp_assoc_delete.db python -m alembic upgrade head -> OK
+
+---
+## Spec (Fix coerenza socio/tessera/accesso/QR - Feb 19, 2026)
+- Obiettivo: garantire che socio eliminato/disattivato non possa accedere e che verifica tessera mostri sempre stato coerente (HTML leggibile + JSON compatibile).
+- Vincoli: source-of-truth unica per stato socio/tessera, backward compatibility JSON, QR browser-first in HTML, test regressione su integrazione+delete.
+## Plan (Fix coerenza socio/tessera/accesso/QR)
+- [ ] Introdurre utility centrale `is_member_active` / `is_card_active` (+ reason code) e riusarla in auth + card status.
+- [ ] Hardening auth member (`/api/auth/login`, `/member/auth`, `get_current_member`, whoami): negare accesso/token a account non attivo con 403 coerente.
+- [ ] Rifattorizzare `GET /api/cards/verify/{token}` con content negotiation HTML/JSON, pagina mobile-readable e motivo non attiva.
+- [ ] Allineare soft-delete socio e query/liste admin affinché tessera eliminata non risulti mai attiva.
+- [ ] Aggiornare/aggiungere test regressione (QR verify JSON+HTML, delete->non attiva, login negato, lista attivi esclusa) ed eseguire test mirati.
+## Review (Fix coerenza socio/tessera/accesso/QR)
+- [ ] Da completare.
+## Execution Update (Fix coerenza socio/tessera/accesso/QR - Feb 19, 2026)
+- [x] Aggiunta utility centrale in `app/services/member_activity.py` con `is_member_active`, `is_card_active`, reason codes e label utente.
+- [x] Hardening auth member in `app/routes/member.py`: login/magic-link/session check bloccano account non attivo con HTTP 403 `account non attivo`.
+- [x] Rifattorizzata verifica tessera in `app/routes/public.py` con content negotiation HTML/JSON e pagina mobile-readable con motivo NON ATTIVA.
+- [x] Allineato soft-delete in `app/routes/org_admin.py` (deleted_at + status rejected) e filtri active in query admin/listing.
+- [x] Aggiunti test regressione in `tests/test_member_active_state_regression.py` + update test QR/login/send-access.
+## Review (Fix coerenza socio/tessera/accesso/QR - Feb 19, 2026)
+- `python -m pytest tests/test_member_card_verification.py tests/test_member_active_state_regression.py tests/test_email_flows.py tests/test_org_admin_send_access.py -q` -> **11 passed**
+- Regressione chiave coperta: integrazione -> delete -> login negato + verify magic link negato + QR JSON/HTML NON ATTIVA + lista active esclusa.
+- `python -m py_compile ...` non eseguibile in questo workspace per permessi su `__pycache__` (WinError 13); validazione fatta con pytest mirati.
+
+---
+## Spec (Scadenza annuale tessere + auto-expire/purge - Feb 19, 2026)
+- Obiettivo: rendere la tessera valida fino al 31/12 dell'anno `card_year` e dal 01/01 successivo bloccare accesso socio, segnare tessera non attiva (motivo Scaduta) e applicare rimozione automatica con soft delete + purge PII.
+- Vincoli: compatibilita QR JSON/HTML esistente, mantenere audit essenziale (org_id, card_no, card_year), endpoint manuale super-admin per maintenance.
+## Plan (Scadenza annuale tessere)
+- [ ] Estendere modello/migration con `members.expired_at`, `members.purged_at` e indice `(card_year, deleted_at)` + aggiornamento init_db legacy.
+- [ ] Rafforzare source-of-truth stato: `is_member_active`/reason per scadenza annuale e motivo `Scaduta` coerente anche dopo auto-expire.
+- [ ] Implementare service `expire_and_purge_members()` con soft delete + status expired + purge PII + output contatori.
+- [ ] Esporre trigger manuale protetto super-admin `POST /api/super-admin/maintenance/run` con audit `auto_expire_members`.
+- [ ] Aggiornare query/listing dove necessario per non mostrare scaduti come attivi.
+- [ ] Aggiungere test regressione: member scaduto -> verify non attiva (Scaduta), login negato, maintenance -> deleted_at/expired_at/purged_at + PII purgata.
+## Review (Scadenza annuale tessere)
+- [ ] Da completare.
+## Execution Update (Scadenza annuale tessere + auto-expire/purge - Feb 19, 2026)
+- [x] Esteso modello `Member` con `expired_at`, `purged_at`, indice `ix_members_card_year_deleted` e nuovo stato `expired`.
+- [x] Aggiunta migration Alembic `k2l3m4n5o6p7_add_member_expiration_and_purge_fields.py` + aggiornamento fallback legacy in `init_db.py`.
+- [x] Rafforzata source-of-truth in `app/services/member_activity.py`: scadenza annuale (`card_year < now.year`) e reason `expired` anche dopo auto-expire.
+- [x] Implementato service `app/services/member_maintenance.py` con `expire_and_purge_members()` (soft delete + status expired + purge PII).
+- [x] Esposto trigger protetto `POST /api/super-admin/maintenance/run` con audit `auto_expire_members`.
+- [x] Aggiunto runner CLI `python -m app.maintenance` per schedulazione esterna cron.
+- [x] Allineata lista org-admin per non mostrare scaduti come attivi (`status=active` via source-of-truth) e normalizzazione status scaduto.
+- [x] Aggiunti test regressione scadenza/maintenance in `tests/test_member_card_expiration_maintenance.py`.
+## Review (Scadenza annuale tessere + auto-expire/purge - Feb 19, 2026)
+- `python -m py_compile app/models.py app/services/member_activity.py app/services/member_maintenance.py app/maintenance.py app/routes/super_admin.py app/routes/org_admin.py app/routes/public.py alembic/versions/k2l3m4n5o6p7_add_member_expiration_and_purge_fields.py tests/test_member_card_expiration_maintenance.py` -> **OK**
+- `python -m alembic upgrade head` -> **OK** (upgrade fino a `k2l3m4n5o6p7`)
+- `python -m pytest tests/test_member_card_expiration_maintenance.py tests/test_member_card_verification.py tests/test_member_active_state_regression.py tests/test_org_admin_member_filters.py tests/test_email_flows.py tests/test_org_admin_send_access.py -q` -> **14 passed**
+- [x] Documentato cron esterno in docs/member_expiration_maintenance.md (CLI python -m app.maintenance).
+
+---
+## Spec (Frontend org-admin/super-admin coerenza tessere - Feb 19, 2026)
+- Obiettivo: allineare UI Vite/React alla nuova logica backend su soci attivi/scaduti/eliminati, mostrare gestione lotti annuale in super-admin e rimuovere anno hardcoded dalla grafica tessera.
+- Vincoli: usare `is_active`/stato calcolato backend (mai solo `card_no`), mantenere compatibilita API esistente, zero regressioni build.
+## Plan (Frontend org-admin/super-admin coerenza tessere)
+- [x] Estendere contratto API backend/org-admin members con `status` lifecycle, `workflow_status`, `deleted_at`, `card_year`, `card_number`, `is_active`.
+- [x] Aggiornare tipi TS in `frontend/src/lib/api.ts` per nuovi campi members + batches annuali + maintenance trigger.
+- [x] Aggiornare tab Soci org-admin: default Attivi, filtro Mostra (Attivi/Tutti/Scaduti/Eliminati), badge non attivi coerenti.
+- [x] Rimuovere logiche UI implicite basate su sola presenza tessera (`card_no`) per stato attivo; usare `is_active`.
+- [x] Estendere vista super-admin lotti con anno corrente server-provided, stato lotto, reset 01/01 e bottone manutenzione annuale.
+- [x] Rendere dinamico anno grafica tessera (fallback a anno corrente).
+- [x] Eseguire test backend mirati + build frontend e documentare review.
+## Execution Update (Frontend org-admin/super-admin coerenza tessere - Feb 19, 2026)
+- [x] Backend `app/routes/org_admin.py`: lista/detail soci ora espongono `status` lifecycle (`ACTIVE/EXPIRED/DELETED/PENDING`), `workflow_status`, `is_active`, `deleted_at`, `card_year`, `card_number`.
+- [x] Backend `app/services/member_activity.py`: aggiunta utility `get_member_lifecycle_status`.
+- [x] Backend `app/routes/super_admin.py`: endpoint lotti ora include `current_year`, `next_reset_at`, `batch.year`, `batch.is_active`.
+- [x] Frontend `frontend/src/lib/api.ts`: aggiornati tipi `OrgAdminMember`, `OrgBatch`, `OrgBatchesResult`; aggiunta API `runAnnualMaintenance()`.
+- [x] Frontend `OrgAdminMembers.tsx`: filtro stato convertito a Mostra Attivi/Tutti/Scaduti/Eliminati con default Attivi.
+- [x] Frontend `MembersTable.tsx`: badge lifecycle (`SCADUTO`/`ELIMINATO`) + visualizzazione tessera con anno (`card_number / card_year`).
+- [x] Frontend `OrgAdminMemberDetail.tsx`: uso `is_active` per disabilitare invio accesso su account non attivi; refresh dati post-azioni.
+- [x] Frontend super-admin `OrganizationManageModal.tsx`: sezione "Tessere per anno / Lotti" con anno server, reset 01/01, stato lotto e bottone "Esegui manutenzione annuale".
+- [x] Frontend grafica tessera: rimosso hardcoded `2026`, fallback dinamico a `new Date().getFullYear()`.
+## Review (Frontend org-admin/super-admin coerenza tessere - Feb 19, 2026)
+- `python -m py_compile app/services/member_activity.py app/routes/org_admin.py app/routes/super_admin.py app/services/member_maintenance.py app/maintenance.py` -> **OK**
+- `python -m pytest tests/test_org_admin_member_filters.py tests/test_member_active_state_regression.py tests/test_org_admin_send_access.py tests/test_member_card_expiration_maintenance.py tests/test_super_admin_association_delete_release_range.py -q` -> **10 passed**
+- `npm --prefix frontend run build` -> **OK**
+

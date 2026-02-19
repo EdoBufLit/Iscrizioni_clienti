@@ -1,5 +1,6 @@
 import pytest
 from datetime import datetime, timedelta
+from sqlalchemy import func
 
 from app.config import settings
 from app.db import SessionLocal
@@ -50,12 +51,21 @@ def test_org_admin_send_access_ok(client, db):
             db.commit()
             db.refresh(admin)
 
+        existing_member = db.query(Member).filter(Member.email == "laura.bianchi@example.com").first()
+        if existing_member:
+            db.delete(existing_member)
+            db.commit()
+
+        next_card = (db.query(func.max(Member.card_no)).filter(Member.org_id == org.id).scalar() or 6100) + 1
         member = Member(
             org_id=org.id,
             first_name="Laura",
             last_name="Bianchi",
             email="laura.bianchi@example.com",
-            status="pending_docs",
+            status="active",
+            card_no=next_card,
+            card_year=datetime.utcnow().year,
+            joined_at=datetime.utcnow(),
         )
         db.add(member)
         db.commit()
@@ -101,12 +111,16 @@ def test_org_admin_send_access_missing_email(client, db):
         db.commit()
         db.refresh(admin)
 
+    next_card = (db.query(func.max(Member.card_no)).filter(Member.org_id == org.id).scalar() or 6200) + 1
     member = Member(
         org_id=org.id,
         first_name="No",
         last_name="Email",
         email=None,
-        status="pending_docs",
+        status="active",
+        card_no=next_card,
+        card_year=datetime.utcnow().year,
+        joined_at=datetime.utcnow(),
     )
     db.add(member)
     db.commit()
@@ -145,12 +159,21 @@ def test_org_admin_send_access_permission(client, db):
         db.commit()
         db.refresh(admin)
 
+    existing_member = db.query(Member).filter(Member.email == "other.org@example.com").first()
+    if existing_member:
+        db.delete(existing_member)
+        db.commit()
+
+    next_card = (db.query(func.max(Member.card_no)).filter(Member.org_id == other_org.id).scalar() or 6300) + 1
     member = Member(
         org_id=other_org.id,
         first_name="Other",
         last_name="Org",
         email="other.org@example.com",
-        status="pending_docs",
+        status="active",
+        card_no=next_card,
+        card_year=datetime.utcnow().year,
+        joined_at=datetime.utcnow(),
     )
     db.add(member)
     db.commit()

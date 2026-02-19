@@ -5,6 +5,7 @@ import pytest
 from app.db import SessionLocal
 from app.models import Member, MemberStatus, Organization
 from app.security import get_password_hash
+from app.services.card_verification import build_card_verification_token
 
 
 @pytest.fixture
@@ -14,7 +15,8 @@ def db():
     session.close()
 
 
-def test_member_card_verification_payload_and_endpoint(client, db):
+def _ensure_active_member(db):
+    current_year = datetime.utcnow().year
     org = db.query(Organization).filter_by(slug="card-verify-org").first()
     if not org:
         org = Organization(name="Card Verify Org", slug="card-verify-org", is_active=True)
@@ -33,8 +35,8 @@ def test_member_card_verification_payload_and_endpoint(client, db):
             password_hash=get_password_hash("TestPass123!"),
             status=MemberStatus.ACTIVE,
             card_no=9876,
-            card_year=2026,
-            joined_at=datetime(2026, 1, 5),
+            card_year=current_year,
+            joined_at=datetime(current_year, 1, 5),
             signup_ip="127.0.0.1",
             signup_user_agent="pytest",
         )
@@ -46,13 +48,19 @@ def test_member_card_verification_payload_and_endpoint(client, db):
         member.password_hash = get_password_hash("TestPass123!")
         member.status = MemberStatus.ACTIVE
         member.card_no = 9876
-        member.card_year = 2026
-        member.joined_at = datetime(2026, 1, 5)
+        member.card_year = current_year
+        member.joined_at = datetime(current_year, 1, 5)
         member.deleted_at = None
 
     db.commit()
+    db.refresh(member)
+    return org, member
 
-    login_res = client.post("/api/auth/login", data={"email": email, "password": "TestPass123!"})
+
+def test_member_card_verification_payload_and_endpoint(client, db):
+    org, member = _ensure_active_member(db)
+
+    login_res = client.post("/api/auth/login", data={"email": member.email, "password": "TestPass123!"})
     assert login_res.status_code == 200
 
     me_res = client.get("/api/auth/me")
@@ -61,7 +69,7 @@ def test_member_card_verification_payload_and_endpoint(client, db):
 
     assert me_data["card_no"] == 9876
     assert me_data["card"]["number"] == 9876
-    assert me_data["card"]["year"] == 2026
+    assert me_data["card"]["year"] == datetime.utcnow().year
     assert me_data["card"]["status"] == "attiva"
     assert me_data["card"]["verification_url"]
 
@@ -73,9 +81,28 @@ def test_member_card_verification_payload_and_endpoint(client, db):
     verify_data = verify_res.json()
     assert verify_data["valid"] is True
     assert verify_data["card"]["number"] == 9876
-    assert verify_data["card"]["year"] == 2026
+    assert verify_data["card"]["year"] == datetime.utcnow().year
     assert verify_data["card"]["status"] == "attiva"
     assert verify_data["organization"]["name"] == org.name
+
+
+def test_member_card_verify_html_response_for_browser(client, db):
+    org, member = _ensure_active_member(db)
+    token = build_card_verification_token(
+        member_id=member.id,
+        org_id=org.id,
+        card_number=member.card_no,
+        card_year=member.card_year,
+    )
+
+    res = client.get(
+        f"/api/cards/verify/{token}",
+        headers={"Accept": "text/html"},
+    )
+    assert res.status_code == 200
+    assert "text/html" in res.headers.get("content-type", "")
+    assert "TESSERA ATTIVA" in res.text
+    assert "Mostra dati tecnici (JSON)" in res.text
 
 
 def test_member_card_verify_invalid_token(client):

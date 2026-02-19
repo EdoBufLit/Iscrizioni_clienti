@@ -4,6 +4,7 @@ import {
   setOrganizationCardRange,
   addOrgCardBatch,
   fetchOrgBatches,
+  runAnnualMaintenance,
   uploadSuperAdminStatute,
   type SuperAdminOrganization,
   type OrgBatch,
@@ -62,6 +63,10 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
     remaining: number;
   } | null>(null);
   const [loadingBatches, setLoadingBatches] = useState(false);
+  const [maintenanceRunning, setMaintenanceRunning] = useState(false);
+  const [maintenanceMessage, setMaintenanceMessage] = useState("");
+  const [batchesCurrentYear, setBatchesCurrentYear] = useState<number | null>(null);
+  const [nextResetAt, setNextResetAt] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -73,6 +78,9 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
     setSubmitError("");
     setBatches([]);
     setBatchesSummary(null);
+    setMaintenanceMessage("");
+    setBatchesCurrentYear(null);
+    setNextResetAt(null);
   }, [open, modalType, selectedOrg?.id]);
 
   useEffect(() => {
@@ -86,6 +94,8 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
         if (!active) return;
         setBatches(result.batches);
         setBatchesSummary(result.summary);
+        setBatchesCurrentYear(result.current_year);
+        setNextResetAt(result.next_reset_at);
       })
       .catch(() => {
         if (!active) return;
@@ -147,6 +157,35 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
       setSubmitError(err instanceof Error ? err.message : "Errore operazione");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleRunMaintenance = async () => {
+    if (maintenanceRunning) return;
+    const confirmed = window.confirm(
+      "Confermi l'esecuzione della manutenzione annuale? Verranno scaduti e purgati i soci con tessera di anni precedenti."
+    );
+    if (!confirmed) return;
+
+    setMaintenanceRunning(true);
+    setMaintenanceMessage("");
+    setSubmitError("");
+    try {
+      const result = await runAnnualMaintenance(true);
+      setMaintenanceMessage(
+        `Manutenzione completata: ${result.expired_count} soci scaduti, ${result.purged_count} soci purgati.`
+      );
+      if (selectedOrg) {
+        const refreshed = await fetchOrgBatches(selectedOrg.id);
+        setBatches(refreshed.batches);
+        setBatchesSummary(refreshed.summary);
+        setBatchesCurrentYear(refreshed.current_year);
+        setNextResetAt(refreshed.next_reset_at);
+      }
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Errore esecuzione manutenzione");
+    } finally {
+      setMaintenanceRunning(false);
     }
   };
 
@@ -343,6 +382,36 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
 
           {modalType === "view-batches" && (
             <div>
+              <div className="mb-4 rounded-md border border-neutral-200 bg-neutral-50 px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+                  <div>
+                    <p className="text-neutral-500">Anno corrente (server)</p>
+                    <p className="font-semibold text-neutral-900 tabular-nums">
+                      {batchesCurrentYear ?? "-"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-neutral-500">Reset annuale</p>
+                    <p className="font-medium text-neutral-800">
+                      {nextResetAt
+                        ? `Previsto il ${new Date(nextResetAt).toLocaleDateString("it-IT")}`
+                        : "A inizio anno (01/01)"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded-md border border-brand/30 bg-brand/5 px-3 py-2 text-xs font-semibold text-brand transition hover:bg-brand/10 disabled:opacity-60"
+                    onClick={handleRunMaintenance}
+                    disabled={maintenanceRunning}
+                  >
+                    {maintenanceRunning ? "Manutenzione..." : "Esegui manutenzione annuale"}
+                  </button>
+                </div>
+                {maintenanceMessage && (
+                  <p className="mt-2 text-xs text-emerald-700">{maintenanceMessage}</p>
+                )}
+              </div>
+
               {loadingBatches ? (
                 <p className="text-sm text-neutral-500">Caricamento lotti...</p>
               ) : batches.length === 0 ? (
@@ -353,6 +422,9 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                     <thead>
                       <tr className="border-b text-left text-xs text-neutral-500">
                         <th className="py-2 font-medium">Range</th>
+                        <th className="py-2 font-medium text-right">Next</th>
+                        <th className="py-2 font-medium text-right">Anno</th>
+                        <th className="py-2 font-medium text-right">Stato</th>
                         <th className="py-2 font-medium text-right">Totale</th>
                         <th className="py-2 font-medium text-right">Assegnate</th>
                         <th className="py-2 font-medium text-right">Rimanenti</th>
@@ -362,6 +434,19 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                       {batches.map((batch) => (
                         <tr key={batch.id} className="border-b border-neutral-100">
                           <td className="py-2 tabular-nums">{batch.start_no} - {batch.end_no}</td>
+                          <td className="py-2 text-right tabular-nums">{batch.next_no}</td>
+                          <td className="py-2 text-right tabular-nums">{batch.year}</td>
+                          <td className="py-2 text-right">
+                            <span
+                              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+                                batch.is_active
+                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                  : "border-neutral-200 bg-neutral-50 text-neutral-600"
+                              }`}
+                            >
+                              {batch.is_active ? "Attivo" : "Chiuso"}
+                            </span>
+                          </td>
                           <td className="py-2 text-right tabular-nums">{batch.total}</td>
                           <td className="py-2 text-right tabular-nums">{batch.assigned}</td>
                           <td className="py-2 text-right tabular-nums font-medium text-brand">{batch.remaining}</td>

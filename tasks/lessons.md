@@ -29,3 +29,5 @@
 - Quando una route di provisioning può colpire DB legacy, non fare commit() cieco: intercettare IntegrityError e gestire fallback/409 per evitare 500 lato UI.
 - Se il requisito dice ingest pubblico senza auth, rimuovere anche variabili/env/header legacy (es. INGEST_SECRET) da config, CORS e documentazione, non solo dal controller.
 - Quando il repository usa Vite + React Router, implementare nuove pagine pubbliche nel routing Vite esistente e non in struttura Next.js App Router.
+- Nelle UI soci/tessere non usare mai card_no come proxy di attivazione: usare sempre is_active e status lifecycle calcolati dal backend per evitare falsi attivi su scaduti/eliminati.
+- Nei template email usare logo PNG/JPG con URL assoluto stabile (preferibilmente frontend base), evitando SVG che molti client mail non renderizzano.

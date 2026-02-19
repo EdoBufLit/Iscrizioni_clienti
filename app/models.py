@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Enum, UniqueConstraint, Text, JSON, TypeDecorator
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Enum, UniqueConstraint, Text, JSON, TypeDecorator, Index
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -10,6 +10,7 @@ class MemberStatus(str, enum.Enum):
     PENDING_CARDS = "pending_cards"
     ACTIVE = "active"
     REJECTED = "rejected"
+    EXPIRED = "expired"
 
 
 class PaymentMethod(str, enum.Enum):
@@ -224,6 +225,8 @@ class Member(Base):
     decision_by_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
     decision_notes = Column(Text, nullable=True)
 
+    expired_at = Column(DateTime, nullable=True)
+    purged_at = Column(DateTime, nullable=True)
     deleted_at = Column(DateTime, nullable=True)
     deleted_by_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
 
@@ -236,6 +239,7 @@ class Member(Base):
     __table_args__ = (
         UniqueConstraint('org_id', 'card_no', name='uix_org_card'),
         UniqueConstraint('org_id', 'signup_source', 'external_customer_id', name='uix_member_external_source'),
+        Index("ix_members_card_year_deleted", "card_year", "deleted_at"),
     )
 
 

@@ -8,7 +8,8 @@ from app.utils import generate_token, send_email, hash_token, save_upload_file
 from app.security import get_password_hash, verify_password
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
-from app.services.card_verification import build_card_verification_token, to_card_status
+from app.services.card_verification import build_card_verification_token
+from app.services.member_activity import get_member_inactive_reason, is_card_active, is_member_active
 from app import audit
 import os
 import logging
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _ALLOWED_PAYMENT_METHODS = {PaymentMethod.CASH.value, PaymentMethod.BONIFICO.value}
+_ACCOUNT_NOT_ACTIVE_DETAIL = "account non attivo"
 
 
 def _normalize_payment_method(raw_value: str | None) -> str | None:
@@ -53,41 +55,7 @@ def get_current_member(request: Request, db: Session):
     member = db.query(Member).filter(Member.id == member_id).first()
     if not member:
         return None
-
-    # Check if deleted
-    if member.deleted_at is not None:
-        return None
-
-    # Strictly require approved status for full access?
-    # Requirement: "removed member loses member access immediately (member login must fail and member-only endpoints must 403)"
-    # This implies checking deleted_at.
-    # What about status? "Member login endpoint must refuse login if status != approved OR deleted_at IS NOT NULL."
-    # But usually pending members access the portal to see "Application Pending".
-    # The requirement text says: "Reject action... must revoke member access: Member login endpoint must refuse login if status != approved OR deleted_at IS NOT NULL."
-    # So if I am REJECTED or DELETED, I cannot login.
-    # If I am PENDING, I should probably be able to login (implied by "status != approved" might be too strict if it includes pending).
-    # Wait, "status != approved" means ONLY approved can login.
-    # Let's strictly follow: "refuse login if status != approved".
-    # But wait, how does a user see they are pending?
-    # If the requirement literally means "only ACTIVE members can login", then pending members get locked out.
-    # Usually we want pending members to see a status page.
-    # However, "Reject action... reject must revoke... login must refuse if status != approved".
-    # This phrasing is slightly ambiguous. Does it mean "If rejected, refuse"? Or "Unless approved, refuse"?
-    # Context: "If an application exists with status in pending_* OR approved... block resubmit".
-    # If they can't login, they can't see status.
-    # But maybe the prompt implies strict access control.
-    # Let's assume PENDING members CAN login (to wait), but REJECTED/DELETED cannot.
-    # Re-reading: "Member login endpoint must refuse login if status != approved OR deleted_at IS NOT NULL."
-    # This sounds like a constraint on the *Reject* action's consequence.
-    # If I am pending, I am not rejected.
-    # Let's check G) Delete/remove action: "removed member loses member access immediately".
-    # And F) Reject action: "reject must revoke... login must refuse...".
-    # I will enforce: Login fails if status == REJECTED or deleted_at is not None.
-    # If status is PENDING, I allow login (so they can see "Pending").
-    # If the user insists on strict "only approved", they will complain. But blocking pending users usually breaks the flow (how do they know?).
-    # I'll stick to: REJECTED or DELETED -> No access.
-
-    if member.status == MemberStatus.REJECTED:
+    if not is_member_active(member, now=datetime.utcnow()):
         return None
 
     return member
@@ -135,7 +103,8 @@ def auth_magic_link(request: Request, token: str, db: Session = Depends(get_db))
     if not member:
         return RedirectResponse(url="/login")
 
-    # Log user in — allow any member status
+    if not is_member_active(member, now=now):
+        raise HTTPException(status_code=403, detail=_ACCOUNT_NOT_ACTIVE_DETAIL)
     request.session["member_id"] = token_entry.member_id
     audit.member_verified(member_id=token_entry.member_id, ip=get_client_ip(request))
 
@@ -276,21 +245,27 @@ from sqlalchemy import func
 def api_auth_login(request: Request, email: str = Form(...), password: str = Form(default=""), db: Session = Depends(get_db)):
     """
     Login: if password is provided, try password auth. Otherwise send a magic-link.
-    Always returns 200 for security (no user enumeration).
+    Unknown emails keep anti-enumeration behavior; known non-active members get 403.
     """
     auth_limiter.check(get_client_ip(request))
 
     email_norm = email.strip().lower()
-    # Query member including deleted check? No, we filter next.
-    # We want to find the valid member record.
-    # If multiple records exist (e.g. one rejected/deleted and one active), we want the active one.
-    # We should query for non-deleted, non-rejected.
+    now = datetime.utcnow()
+    matching_members = (
+        db.query(Member)
+        .filter(func.lower(Member.email) == email_norm)
+        .order_by(Member.id.desc())
+        .all()
+    )
 
-    member = db.query(Member).filter(
-        func.lower(Member.email) == email_norm,
-        Member.deleted_at.is_(None),
-        Member.status != MemberStatus.REJECTED
-    ).order_by(Member.id.desc()).first()
+    member = next(
+        (candidate for candidate in matching_members if is_member_active(candidate, now=now)),
+        None,
+    )
+    if member is None and matching_members:
+        inactive_reason = get_member_inactive_reason(matching_members[0], now=now)
+        logger.info("Blocked login for non-active member email=%s reason=%s", email_norm, inactive_reason)
+        raise HTTPException(status_code=403, detail=_ACCOUNT_NOT_ACTIVE_DETAIL)
 
     # Password-based login
     if password and member and member.password_hash and verify_password(password, member.password_hash):
@@ -305,7 +280,7 @@ def api_auth_login(request: Request, email: str = Form(...), password: str = For
             member_id=member.id,
             purpose=TokenType.LOGIN_MAGIC_LINK,
             token_hash=hash_token(token_str),
-            expires_at=datetime.utcnow() + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES)
+            expires_at=now + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES)
         )
         db.add(token)
         db.commit()
@@ -370,8 +345,10 @@ def api_auth_register(
             if normalized_payment_method is not None:
                 existing.payment_method = normalized_payment_method
             db.commit()
-            request.session["member_id"] = existing.id
-            return {"status": "ok", "message": "Account attivato.", "authenticated": True}
+            if is_member_active(existing, now=datetime.utcnow()):
+                request.session["member_id"] = existing.id
+                return {"status": "ok", "message": "Account attivato.", "authenticated": True}
+            return {"status": "ok", "message": "Registrazione ricevuta.", "authenticated": False}
         # Already registered — don't reveal
         return {"status": "ok", "message": "Registrazione ricevuta."}
 
@@ -393,11 +370,12 @@ def api_auth_register(
     db.commit()
     db.refresh(member)
 
-    # Automatically log in
-    request.session["member_id"] = member.id
-    audit.member_verified(member_id=member.id, ip=get_client_ip(request))
+    if is_member_active(member, now=datetime.utcnow()):
+        request.session["member_id"] = member.id
+        audit.member_verified(member_id=member.id, ip=get_client_ip(request))
+        return {"status": "ok", "message": "Registrazione completata.", "authenticated": True}
 
-    return {"status": "ok", "message": "Registrazione completata.", "authenticated": True}
+    return {"status": "ok", "message": "Registrazione ricevuta.", "authenticated": False}
 
 
 @router.post("/api/auth/logout")
@@ -450,7 +428,7 @@ def api_auth_me(request: Request, db: Session = Depends(get_db)):
         )
         verification_url = f"{backend_base}/api/cards/verify/{token}"
 
-    card_status = to_card_status(member.status, member.card_no)
+    card_status = "attiva" if is_card_active(member, now=datetime.utcnow()) else "non_attiva"
 
     return {
         "id": member.id,
@@ -508,12 +486,8 @@ def api_auth_whoami(request: Request, db: Session = Depends(get_db)):
     # 3. Member
     member_id = request.session.get("member_id")
     if member_id:
-        member = db.query(Member).filter(
-            Member.id == member_id,
-            Member.deleted_at.is_(None),
-            Member.status != MemberStatus.REJECTED,
-        ).first()
-        if member:
+        member = db.query(Member).filter(Member.id == member_id).first()
+        if is_member_active(member, now=datetime.utcnow()):
             return {"authenticated": True, "role": "member", "redirect_to": "/dashboard"}
 
     return {"authenticated": False}

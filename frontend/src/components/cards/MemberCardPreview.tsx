@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ASSONAM_CARD_YEAR_LABEL, ASSONAM_LOGO_SRC } from "../../lib/brand";
+import { ASSONAM_LOGO_SRC, getCurrentCardYearLabel } from "../../lib/brand";
 
 export type MemberCardPreviewData = {
   firstName?: string | null;
@@ -94,7 +94,7 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
   const displayName = toDisplayName(cardData);
   const organizationName = toSafeText(cardData.organizationName);
   const cardNumber = toDisplayCardNumber(cardData.cardNumber);
-  const cardYear = toDisplayYear(cardData.cardYear) || ASSONAM_CARD_YEAR_LABEL;
+  const cardYear = toDisplayYear(cardData.cardYear) || getCurrentCardYearLabel();
   const qrImageUrl = useMemo(() => toQrImageUrl(cardData.verificationUrl), [cardData.verificationUrl]);
   const verificationUrl = cardData.verificationUrl?.trim() ? cardData.verificationUrl.trim() : null;
 

@@ -11,10 +11,10 @@ import DebouncedSearchInput from "./components/DebouncedSearchInput";
 import MembersTable from "./components/MembersTable";
 
 const STATUS_OPTIONS = [
-  { value: "", label: "Tutti gli stati" },
-  { value: "active", label: "Attivo" },
-  { value: "pending", label: "In attesa" },
-  { value: "suspended", label: "Sospeso" },
+  { value: "active", label: "Mostra: Attivi" },
+  { value: "all", label: "Mostra: Tutti" },
+  { value: "expired", label: "Mostra: Scaduti" },
+  { value: "deleted", label: "Mostra: Eliminati" },
 ];
 
 const ACCESS_OPTIONS = [
@@ -64,7 +64,7 @@ const OrgAdminMembers = () => {
   const [error, setError] = useState(false);
 
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState("active");
   const [access, setAccess] = useState("");
   const [source, setSource] = useState("");
   const [docs, setDocs] = useState("");
@@ -118,7 +118,7 @@ const OrgAdminMembers = () => {
   const endIndex = Math.min(page * PAGE_SIZE, total);
   const hasFilters =
     Boolean(debouncedSearch) ||
-    Boolean(status) ||
+    status !== "active" ||
     Boolean(access) ||
     Boolean(source) ||
     Boolean(docs) ||
@@ -131,7 +131,7 @@ const OrgAdminMembers = () => {
 
   const resetFilters = useCallback(() => {
     setDebouncedSearch("");
-    setStatus("");
+    setStatus("active");
     setAccess("");
     setSource("");
     setDocs("");
@@ -167,7 +167,7 @@ const OrgAdminMembers = () => {
         <div>
           <h2 className="text-xl font-semibold text-neutral-900">Soci</h2>
           <p className="mt-1 text-sm text-neutral-500">
-            Elenco dei soci iscritti all'associazione.
+            Elenco soci. Vista predefinita: solo soci attivi.
           </p>
         </div>
         {!adminLoading && admin && (

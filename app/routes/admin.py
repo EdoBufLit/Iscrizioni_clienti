@@ -8,6 +8,7 @@ from app.services.card import assign_next_card_with_batch
 from app import audit
 from app.config import settings
 from app.security import verify_password
+from app.services.member_activity import member_active_filters
 from app import audit
 from datetime import datetime
 import os
@@ -54,9 +55,13 @@ def admin_dashboard(request: Request, db: Session = Depends(get_db)):
     # Stats for Org
     org_id = admin.org_id
 
-    total_members = db.query(Member).filter(Member.org_id == org_id).count()
-    active_members = db.query(Member).filter(Member.org_id == org_id, Member.status == MemberStatus.ACTIVE).count()
-    pending_members = db.query(Member).filter(Member.org_id == org_id, Member.status != MemberStatus.ACTIVE).count()
+    total_members = db.query(Member).filter(Member.org_id == org_id, Member.deleted_at.is_(None)).count()
+    active_members = db.query(Member).filter(Member.org_id == org_id, *member_active_filters(now=datetime.utcnow())).count()
+    pending_members = db.query(Member).filter(
+        Member.org_id == org_id,
+        Member.deleted_at.is_(None),
+        Member.status != MemberStatus.ACTIVE,
+    ).count()
 
     # Inventory
     batches = db.query(CardBatch).filter(CardBatch.org_id == org_id).all()
@@ -101,7 +106,7 @@ def list_members(request: Request, status: str = None, db: Session = Depends(get
     if not admin:
         return RedirectResponse(url="/admin")
 
-    query = db.query(Member).filter(Member.org_id == admin.org_id)
+    query = db.query(Member).filter(Member.org_id == admin.org_id, Member.deleted_at.is_(None))
     if status:
         query = query.filter(Member.status == status)
 

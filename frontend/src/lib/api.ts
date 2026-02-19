@@ -438,7 +438,12 @@ export type OrgAdminMember = {
   name: string;
   email: string | null;
   status: string | null;
+  workflow_status?: string | null;
+  is_active: boolean;
+  deleted_at: string | null;
   card_no: number | null;
+  card_number: number | null;
+  card_year?: number | null;
   joined_at: string | null;
   docs_count: number;
   is_paid?: boolean;
@@ -544,7 +549,12 @@ export type SuperAdminMemberDetail = {
   fiscal_code: string | null;
   payment_method: string | null;
   status: string;
+  workflow_status?: string | null;
+  is_active?: boolean;
+  deleted_at?: string | null;
   card_no: number | null;
+  card_number?: number | null;
+  card_year?: number | null;
   joined_at: string | null;
   member_type?: string | null;
   internal_notes?: string | null;
@@ -916,12 +926,16 @@ export type OrgBatch = {
   start_no: number;
   end_no: number;
   next_no: number;
+  year: number;
+  is_active: boolean;
   total: number;
   assigned: number;
   remaining: number;
 };
 
 export type OrgBatchesResult = {
+  current_year: number;
+  next_reset_at: string;
   batches: OrgBatch[];
   summary: {
     total: number;
@@ -935,6 +949,29 @@ export async function fetchOrgBatches(orgId: number): Promise<OrgBatchesResult> 
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (res.status === 404) throw new Error("Organizzazione non trovata");
   if (!res.ok) throw new Error("Errore nel caricamento lotti");
+  return res.json();
+}
+
+export type MaintenanceRunResult = {
+  ok: boolean;
+  ran_at: string;
+  expired_count: number;
+  purged_count: number;
+  current_year: number;
+  member_ids: number[];
+};
+
+export async function runAnnualMaintenance(
+  purgePii: boolean = true,
+): Promise<MaintenanceRunResult> {
+  const res = await fetch("/api/super-admin/maintenance/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ purge_pii: purgePii }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 403) throw new Error("Operazione consentita solo a super-admin");
+  if (!res.ok) throw new Error("Errore esecuzione manutenzione annuale");
   return res.json();
 }
 

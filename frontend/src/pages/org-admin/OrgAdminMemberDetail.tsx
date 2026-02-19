@@ -61,7 +61,12 @@ interface MemberDetail {
   fiscal_code: string | null;
   payment_method?: string | null;
   status: string;
+  workflow_status?: string | null;
+  is_active: boolean;
+  deleted_at?: string | null;
   card_no?: number;
+  card_number?: number | null;
+  card_year?: number | null;
   joined_at?: string;
   member_type?: string | null;
   internal_notes?: string | null;
@@ -244,19 +249,8 @@ export default function OrgAdminMemberDetail() {
         throw new Error(payload?.detail ?? "Errore durante la revisione");
       }
 
-      const result = await res.json();
-
-      // Update local state
-      setMember(prev => {
-        if (!prev) return null;
-        return {
-            ...prev,
-            status: result.member_status,
-            documents: prev.documents.map(d =>
-                d.id === docId ? { ...d, status: result.doc_status, rejection_note: null } : d
-            )
-        };
-      });
+      await res.json();
+      await fetchMember();
 
       setActionMessage("Documento approvato con successo.");
       setActionError(null);
@@ -285,17 +279,8 @@ export default function OrgAdminMemberDetail() {
         const payload = await res.json().catch(() => null);
         throw new Error(payload?.detail ?? "Errore durante il rigetto");
       }
-      const result = await res.json();
-      setMember(prev => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          status: result.member_status,
-          documents: prev.documents.map(d =>
-            d.id === rejectingDoc.id ? { ...d, status: result.doc_status, rejection_note: note } : d
-          )
-        };
-      });
+      await res.json();
+      await fetchMember();
       setRejectingDoc(null);      setActionMessage("Documento rigettato.");
       setActionError(null);
     } catch (err) {
@@ -317,18 +302,8 @@ export default function OrgAdminMemberDetail() {
       });
       if (!res.ok) throw new Error("Errore durante il salvataggio della decisione");
 
-      const result = await res.json();
-
-      // Update local state
-      setMember(prev => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          status: result.status,
-          decision_notes: notes,
-          decision_at: new Date().toISOString() // optimistic update
-        };
-      });
+      await res.json();
+      await fetchMember();
       alert("Decisione salvata con successo!");
 
     } catch (err) {
@@ -437,7 +412,8 @@ export default function OrgAdminMemberDetail() {
   if (error) return <div className="p-8 text-center text-red-600">{error}</div>;
   if (!member) return <div className="p-8 text-center">Socio non trovato</div>;
 
-  const isDecisionMade = member.status === "active" || member.status === "rejected";
+  const workflowStatus = member.workflow_status ?? "";
+  const isDecisionMade = workflowStatus === "active" || workflowStatus === "rejected";
   const documentStatus =
     member.document_status ??
     (docs.length === 0
@@ -593,19 +569,24 @@ export default function OrgAdminMemberDetail() {
                     <div className="flex justify-between items-center">
                         <dt className="text-neutral-500">Stato</dt>
                         <dd className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          member.status === "active" ? "bg-green-100 text-green-700" :
-                          member.status === "pending_verification" ? "bg-amber-100 text-amber-700" :
-                          member.status === "rejected" ? "bg-red-100 text-red-700" :
+                          member.status === "ACTIVE" ? "bg-green-100 text-green-700" :
+                          member.status === "EXPIRED" ? "bg-red-100 text-red-700" :
+                          member.status === "DELETED" ? "bg-slate-200 text-slate-700" :
+                          member.status === "PENDING" ? "bg-amber-100 text-amber-700" :
                           "bg-neutral-100 text-neutral-700"
                         }`}>
-                          {member.status === "active" ? "Attivo" :
-                           member.status === "pending_verification" ? "In Verifica" :
-                           member.status === "rejected" ? "Respinto" : member.status}
+                          {member.status === "ACTIVE" ? "Attivo" :
+                           member.status === "EXPIRED" ? "Scaduto" :
+                           member.status === "DELETED" ? "Eliminato" :
+                           member.status === "PENDING" ? "In attesa" : member.status}
                         </dd>
                     </div>
                     <div className="flex justify-between">
                         <dt className="text-neutral-500">Tessera N.</dt>
-                        <dd className="font-mono font-medium">{member.card_no || "Non assegnata"}</dd>
+                        <dd className="font-mono font-medium">
+                          {member.card_number ?? member.card_no ?? "Non assegnata"}
+                          {member.card_year ? ` / ${member.card_year}` : ""}
+                        </dd>
                     </div>
                     <div className="flex justify-between">
                         <dt className="text-neutral-500">Data Iscrizione</dt>
@@ -621,6 +602,11 @@ export default function OrgAdminMemberDetail() {
                             <p className="text-sm text-neutral-700">
                                 {member.has_access ? "Accesso attivo" : "Accesso non attivo"}
                             </p>
+                            {!member.is_active && (
+                                <p className="mt-1 text-xs text-red-600">
+                                    Account non attivo: invio accesso disabilitato.
+                                </p>
+                            )}
                             {lastAccessLabel && (
                                 <p className="mt-1 text-xs text-neutral-500">
                                     Ultimo invio: {lastAccessLabel}
@@ -630,7 +616,7 @@ export default function OrgAdminMemberDetail() {
                         <button
                             type="button"
                             onClick={handleSendAccess}
-                            disabled={sendingAccess || member.has_access || !member.email}
+                            disabled={sendingAccess || member.has_access || !member.email || !member.is_active}
                             className="btn-primary"
                             data-tour="admin-send-access"
                         >
@@ -810,7 +796,7 @@ export default function OrgAdminMemberDetail() {
       </div>
 
             <MemberDecisionPanel
-        status={member.status}
+        status={workflowStatus || member.status}
         decisionAt={member.decision_at}
         initialNotes={member.decision_notes}
         isSubmitting={isSubmittingDecision}

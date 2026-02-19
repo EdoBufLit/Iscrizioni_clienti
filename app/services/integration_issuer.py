@@ -208,7 +208,8 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
 
     if should_send_email:
         magic_link_url = _build_magic_link(db, member.id, frontend_base)
-        logo_url = f"{backend_base}/assonam-logo.svg"
+        # Prefer PNG for broad email-client compatibility (SVG is often blocked or not rendered).
+        logo_url = f"{frontend_base}/logo-transparent.png"
         full_name = f"{(member.first_name or '').strip()} {(member.last_name or '').strip()}".strip() or email
         text_body, html_body = build_member_card_email(
             member_full_name=full_name,

@@ -31,6 +31,11 @@ from app.models import (
 )
 from app.utils import generate_token, hash_token, send_email, save_upload_file
 from app.services.card import assign_next_card_with_batch
+from app.services.member_activity import (
+    get_member_lifecycle_status,
+    is_member_active,
+    member_active_filters,
+)
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
 from app import audit
@@ -138,6 +143,9 @@ def _send_member_magic_link(
     request: Request,
     member: Member,
 ) -> tuple[bool, datetime]:
+    if not is_member_active(member, now=datetime.utcnow()):
+        raise HTTPException(status_code=403, detail="account non attivo")
+
     token_str = generate_token()
     token = Token(
         member_id=member.id,
@@ -548,16 +556,26 @@ def list_org_members(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
+    current_time = datetime.utcnow()
+    current_year = current_time.year
+    status_filter = (status or "").strip().lower()
+
     query = db.query(Member).filter(
         Member.org_id == admin.org_id,
-        Member.deleted_at.is_(None),  # Exclude deleted
     )
 
-    exclude_rejected = True
-    if status in {"suspended", "rejected"}:
-        exclude_rejected = False
+    if status_filter == "deleted":
+        query = query.filter(Member.deleted_at.isnot(None))
+    elif status_filter != "all":
+        query = query.filter(Member.deleted_at.is_(None))
+
+    exclude_rejected = (
+        status_filter in {"", "active", "pending"}
+        and status_filter != "all"
+        and status_filter != "deleted"
+    )
     if exclude_rejected:
-        query = query.filter(Member.status != MemberStatus.REJECTED)
+        query = query.filter(Member.status.notin_([MemberStatus.REJECTED, MemberStatus.EXPIRED]))
 
     if q:
         pattern = f"%{q}%"
@@ -570,10 +588,10 @@ def list_org_members(
             )
         )
 
-    if status:
-        if status == "active":
-            query = query.filter(Member.status == MemberStatus.ACTIVE)
-        elif status == "pending":
+    if status_filter:
+        if status_filter == "active":
+            query = query.filter(*member_active_filters(now=current_time))
+        elif status_filter == "pending":
             query = query.filter(
                 Member.status.in_([
                     MemberStatus.PENDING_VERIFICATION,
@@ -581,9 +599,14 @@ def list_org_members(
                     MemberStatus.PENDING_CARDS,
                 ])
             )
-        elif status in {"suspended", "rejected"}:
+        elif status_filter in {"suspended", "rejected"}:
             query = query.filter(Member.status == MemberStatus.REJECTED)
-        else:
+        elif status_filter == "expired":
+            query = query.filter(
+                Member.card_year.isnot(None),
+                Member.card_year < current_year,
+            )
+        elif status_filter != "all":
             query = query.filter(Member.status == status)
 
     if access in {"with", "without"}:
@@ -695,8 +718,13 @@ def list_org_members(
                 "id": m.id,
                 "name": f"{m.first_name} {m.last_name}",
                 "email": m.email,
-                "status": m.status.value if m.status else None,
+                "status": get_member_lifecycle_status(m, now=current_time),
+                "workflow_status": m.status.value if m.status else None,
+                "is_active": is_member_active(m, now=current_time),
+                "deleted_at": m.deleted_at.isoformat() if m.deleted_at else None,
                 "card_no": m.card_no,
+                "card_number": m.card_no,
+                "card_year": m.card_year,
                 "joined_at": m.joined_at.isoformat() if m.joined_at else None,
                 "created_at": m.joined_at.isoformat() if m.joined_at else None, # fallback if no created_at
                 "docs_count": docs_counts.get(m.id, 0),
@@ -833,10 +861,14 @@ def get_member_detail(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    member = db.query(Member).filter(Member.id == member_id, Member.org_id == admin.org_id).first()
+    member = db.query(Member).filter(
+        Member.id == member_id,
+        Member.org_id == admin.org_id,
+    ).first()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
 
+    current_time = datetime.utcnow()
     last_token = _get_last_access_email_token(db, member.id)
     last_access_email_at = last_token.created_at.isoformat() if last_token and last_token.created_at else None
     payments = (
@@ -887,8 +919,13 @@ def get_member_detail(
         "phone": member.phone,
         "fiscal_code": member.fiscal_code,
         "payment_method": _serialize_member_payment_method(member.payment_method),
-        "status": member.status.value if member.status else None,
+        "status": get_member_lifecycle_status(member, now=current_time),
+        "workflow_status": member.status.value if member.status else None,
+        "is_active": is_member_active(member, now=current_time),
+        "deleted_at": member.deleted_at.isoformat() if member.deleted_at else None,
         "card_no": member.card_no,
+        "card_number": member.card_no,
+        "card_year": member.card_year,
         "joined_at": member.joined_at.isoformat() if member.joined_at else None,
         "member_type": member.member_type,
         "internal_notes": member.internal_notes,
@@ -1037,10 +1074,11 @@ def send_member_access(
         Member.id == member_id,
         Member.org_id == admin.org_id,
         Member.deleted_at.is_(None),
-        Member.status != MemberStatus.REJECTED,
     ).first()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
+    if not is_member_active(member, now=datetime.utcnow()):
+        raise HTTPException(status_code=403, detail="account non attivo")
 
     if not member.email:
         raise HTTPException(status_code=400, detail="Inserisci email per inviare accesso.")
@@ -1282,16 +1320,14 @@ def delete_member(
     if member.org_id != admin.org_id:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    # Soft delete
-    member.deleted_at = datetime.utcnow()
+    now = datetime.utcnow()
+    member.deleted_at = now
     member.deleted_by_admin_id = admin.id
-
-    # Also invalidate tokens?
-    # Tokens table has expires_at. We could delete valid tokens.
-    # But since authentication checks deleted_at, it might be redundant but safer.
-    # Let's mark tokens as used or delete them.
-    # db.query(Token).filter(Token.member_id == member.id).update({Token.used_at: datetime.utcnow()})
-    # Simpler: just relying on deleted_at check in auth.
+    member.status = MemberStatus.REJECTED
+    member.decision_at = now
+    member.decision_by_admin_id = admin.id
+    if not member.decision_notes:
+        member.decision_notes = "Disattivato da amministratore"
 
     db.commit()
 

@@ -2,18 +2,26 @@ import { memo } from "react";
 import Skeleton from "../../../components/ui/Skeleton";
 import { type OrgAdminMember } from "../../../lib/api";
 
-const STATUS_LABEL: Record<string, string> = {
+const LIFECYCLE_LABEL: Record<string, string> = {
+  ACTIVE: "ATTIVO",
+  EXPIRED: "SCADUTO",
+  DELETED: "ELIMINATO",
+  PENDING: "IN ATTESA",
+};
+
+const LIFECYCLE_CHIP: Record<string, string> = {
+  ACTIVE: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  EXPIRED: "border-red-200 bg-red-50 text-red-700",
+  DELETED: "border-slate-300 bg-slate-100 text-slate-700",
+  PENDING: "border-amber-200 bg-amber-50 text-amber-700",
+};
+
+const WORKFLOW_LABEL: Record<string, string> = {
   pending_verification: "Verifica email",
   pending_docs: "Documenti",
   pending_cards: "Tessera",
+  rejected: "Rigettato",
   active: "Attivo",
-};
-
-const STATUS_CHIP: Record<string, string> = {
-  active: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  pending_verification: "border-blue-200 bg-blue-50 text-blue-700",
-  pending_docs: "border-amber-200 bg-amber-50 text-amber-700",
-  pending_cards: "border-amber-200 bg-amber-50 text-amber-700",
 };
 
 const thClass =
@@ -155,11 +163,16 @@ const MembersTable = memo(function MembersTable({
                         {m.status && (
                           <span
                             className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-                              STATUS_CHIP[m.status] ??
+                              LIFECYCLE_CHIP[m.status] ??
                               "border-neutral-200 bg-neutral-50 text-neutral-600"
                             }`}
                           >
-                            {STATUS_LABEL[m.status] ?? m.status}
+                            {LIFECYCLE_LABEL[m.status] ?? m.status}
+                          </span>
+                        )}
+                        {m.workflow_status && m.workflow_status !== "active" && (
+                          <span className="inline-flex items-center rounded-full border border-neutral-200 bg-neutral-100 px-2.5 py-0.5 text-xs font-medium text-neutral-700">
+                            {WORKFLOW_LABEL[m.workflow_status] ?? m.workflow_status}
                           </span>
                         )}
                         {m.is_paid && (
@@ -178,7 +191,10 @@ const MembersTable = memo(function MembersTable({
                         "-"
                       )}
                     </td>
-                    <td className={`${tdClass} tabular-nums`}>{m.card_no ?? "-"}</td>
+                    <td className={`${tdClass} tabular-nums`}>
+                      {m.card_number ?? m.card_no ?? "-"}
+                      {m.card_year ? ` / ${m.card_year}` : ""}
+                    </td>
                     <td className={`${tdClass} tabular-nums`}>
                       {m.joined_at
                         ? new Date(m.joined_at).toLocaleDateString("it-IT")

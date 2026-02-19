@@ -1,7 +1,10 @@
 import pytest
+from sqlalchemy import func
+import uuid
 from app.config import settings
+from app.db import SessionLocal
 from app.utils import get_captured_emails, clear_captured_emails
-from app.models import Member, MemberStatus, AdminUser, AdminRole, Organization
+from app.models import Member, MemberStatus, AdminUser, AdminRole, Organization, CardBatch
 from datetime import datetime
 from unittest.mock import patch
 
@@ -33,25 +36,51 @@ def test_member_magic_link_flow(client):
     assert res.status_code == 200
     assert len(get_captured_emails()) == 0
 
-    # Create member (manually or via join flow)
-    # Using manual DB insertion via client fixture would need direct DB access.
-    # The `client` fixture creates a clean DB. Let's use the register endpoint if available
-    # or just use `POST /api/join/{slug}` if we have an org.
-    # `test_smoke.py` creates "my-association".
+    db = SessionLocal()
+    try:
+        org = db.query(Organization).filter(Organization.slug == "my-association").first()
+        if org is None:
+            org = Organization(name="My Association", slug="my-association", is_active=True)
+            db.add(org)
+            db.commit()
+            db.refresh(org)
 
-    join_res = client.post(
-        "/api/join/my-association",
-        data={
-            "first_name": "Test",
-            "last_name": "Member",
-            "email": email,
-            "phone": "123",
-            "fiscal_code": "CF123",
-            "accept_statute": "true",
-            "accept_privacy": "true",
-        }
-    )
-    assert join_res.status_code == 200
+        batch = db.query(CardBatch).filter(CardBatch.org_id == org.id).first()
+        if batch is None:
+            batch = CardBatch(org_id=org.id, start_no=4500, end_no=4550, next_no=4500)
+            db.add(batch)
+            db.commit()
+
+        max_card = db.query(func.max(Member.card_no)).filter(Member.org_id == org.id).scalar() or 4499
+        next_card = int(max_card) + 1
+        member = db.query(Member).filter(Member.email == email).first()
+        if member is None:
+            member = Member(
+                org_id=org.id,
+                first_name="Test",
+                last_name="Member",
+                email=email,
+                phone="123",
+                fiscal_code="CF123",
+                status=MemberStatus.ACTIVE,
+                card_no=next_card,
+                card_year=datetime.utcnow().year,
+                joined_at=datetime.utcnow(),
+                signup_ip="127.0.0.1",
+                signup_user_agent="pytest",
+            )
+            db.add(member)
+        else:
+            member.org_id = org.id
+            member.first_name = "Test"
+            member.last_name = "Member"
+            member.status = MemberStatus.ACTIVE
+            member.card_no = member.card_no or next_card
+            member.card_year = datetime.utcnow().year
+            member.deleted_at = None
+        db.commit()
+    finally:
+        db.close()
 
     # Now valid login request (case insensitive)
     clear_captured_emails()
@@ -91,7 +120,7 @@ def test_org_admin_magic_link_flow(client):
     client.post("/api/super-admin/auth/login", json={"email": "admin@assonam.it", "password": "admin"})
 
     # Create org admin
-    email = "org.admin@example.com"
+    email = f"org.admin.{uuid.uuid4().hex[:8]}@example.com"
     create_res = client.post("/api/super-admin/org-admins", json={"email": email, "org_id": 1})
     assert create_res.status_code == 200
     client.post("/api/super-admin/auth/logout")
@@ -126,12 +155,12 @@ def test_org_admin_deleted_flow(client):
     client.post("/api/super-admin/auth/login", json={"email": "admin@assonam.it", "password": "admin"})
 
     # Create org admin
-    email = "deleted.admin@example.com"
+    email = f"deleted.admin.{uuid.uuid4().hex[:8]}@example.com"
     create_res = client.post("/api/super-admin/org-admins", json={"email": email, "org_id": 1})
     admin_id = create_res.json()["id"]
 
     # Create another admin so we can delete this one (last admin check)
-    client.post("/api/super-admin/org-admins", json={"email": "other@example.com", "org_id": 1})
+    client.post("/api/super-admin/org-admins", json={"email": f"other.{uuid.uuid4().hex[:8]}@example.com", "org_id": 1})
 
     # Delete admin
     client.delete(f"/api/super-admin/org-admins/{admin_id}")
@@ -151,7 +180,7 @@ def test_super_admin_create_flow_email(client):
     clear_captured_emails()
 
     # Create org admin
-    email = "new.admin@example.com"
+    email = f"new.admin.{uuid.uuid4().hex[:8]}@example.com"
     res = client.post("/api/super-admin/org-admins", json={"email": email, "org_id": 1})
     assert res.status_code == 200
 
