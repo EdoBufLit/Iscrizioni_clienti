@@ -214,7 +214,11 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
                 >
                   <span
                     className="flex items-center justify-center rounded-xl px-2 py-1"
-                    style={{ background: "rgba(0,0,0,0.28)", backdropFilter: "blur(4px)" }}
+                    style={{
+                      background: "rgba(0,0,0,0.28)",
+                      backdropFilter: "blur(4px)",
+                      transform: isOasi2Card ? "translateX(-6px)" : undefined,
+                    }}
                   >
                     <LogoImg
                       src={organizationLogoUrl}

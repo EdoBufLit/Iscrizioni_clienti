@@ -127,7 +127,7 @@ def generate_card_image_bytes(
     # Organization logo in top area (no watermark in oasi-2)
     if org_logo_path and os.path.exists(org_logo_path):
         if is_oasi2:
-            _paste_logo(img, org_logo_path, 270, 78, int(_W * 0.33), 14, opacity=0.99)
+            _paste_logo(img, org_logo_path, 270, 78, int(_W * 0.33) - 6, 14, opacity=0.99)
         else:
             _paste_logo(img, org_logo_path, 200, 52, (_W - 200) // 2, 14, opacity=0.95)
         draw = ImageDraw.Draw(img)
