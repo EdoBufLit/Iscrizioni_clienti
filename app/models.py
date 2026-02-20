@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Enum, UniqueConstraint, Text, JSON, TypeDecorator, Index
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Enum, UniqueConstraint, Text, JSON, TypeDecorator, Index, and_, func
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -242,6 +242,15 @@ class Member(Base):
     __table_args__ = (
         UniqueConstraint('org_id', 'card_no', name='uix_org_card'),
         UniqueConstraint('org_id', 'signup_source', 'external_customer_id', name='uix_member_external_source'),
+        Index(
+            "uq_members_org_year_lower_email_active",
+            "org_id",
+            "card_year",
+            func.lower(email),
+            unique=True,
+            sqlite_where=and_(deleted_at.is_(None), email.isnot(None), card_year.isnot(None)),
+            postgresql_where=and_(deleted_at.is_(None), email.isnot(None), card_year.isnot(None)),
+        ),
         Index("ix_members_card_year_deleted", "card_year", "deleted_at"),
     )
 

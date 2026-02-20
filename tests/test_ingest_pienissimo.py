@@ -102,6 +102,8 @@ def test_ingest_with_active_key_creates_active_member_with_card(client, db):
     assert payload["card_download_url"].endswith(
         f"/api/cards/{payload['card_verification_token']}/download.pdf"
     )
+    assert payload["verify_url"] == payload["card_verification_url"]
+    assert payload["download_pdf_url"] == payload["card_download_url"]
     assert payload["wallet_enabled"] is False
 
     member = db.query(Member).filter(Member.id == payload["member_id"]).first()
@@ -140,6 +142,7 @@ def test_ingest_retry_100x_is_idempotent_and_sends_email_once(client, db):
     try:
         member_ids = set()
         card_numbers = set()
+        statuses = set()
         for _ in range(100):
             response = client.post(
                 f"/api/ingest/pienissimo/{org.slug}",
@@ -151,11 +154,16 @@ def test_ingest_retry_100x_is_idempotent_and_sends_email_once(client, db):
             )
             assert response.status_code == 200, response.text
             payload = response.json()
+            statuses.add(payload["status"])
             member_ids.add(payload["member_id"])
             card_numbers.add(payload["card_number"])
+            assert payload["verify_url"]
+            assert payload["download_pdf_url"]
 
         assert len(member_ids) == 1
         assert len(card_numbers) == 1
+        assert "ok" in statuses
+        assert "already_issued" in statuses
 
         members = (
             db.query(Member)
@@ -239,3 +247,72 @@ def test_ingest_skips_legacy_card_collision_and_returns_200(client, db):
 
     payload = response.json()
     assert payload["card_number"] == batch.start_no + 1
+
+
+def test_ingest_second_call_returns_already_issued_without_side_effects(client, db):
+    org, batch = _create_org_with_batch(db, slug_prefix="ingest-already")
+    _create_integration_key(db, org_id=org.id, active=True)
+
+    previous_email_mode = settings.EMAIL_MODE
+    clear_captured_emails()
+    settings.EMAIL_MODE = "test"
+    request_email = f"already.{uuid.uuid4().hex[:6]}@example.com"
+    try:
+        first = client.post(
+            f"/api/ingest/pienissimo/{org.slug}",
+            json={"email": request_email, "first_name": "Mario", "last_name": "Rossi"},
+        )
+        assert first.status_code == 200, first.text
+        first_payload = first.json()
+        assert first_payload["status"] == "ok"
+
+        db.refresh(batch)
+        next_after_first = batch.next_no
+        captured_after_first = len(get_captured_emails())
+        assert captured_after_first == 1
+
+        second = client.post(
+            f"/api/ingest/pienissimo/{org.slug}",
+            json={"email": request_email, "first_name": "Mario", "last_name": "Rossi"},
+        )
+        assert second.status_code == 200, second.text
+        second_payload = second.json()
+        assert second_payload["status"] == "already_issued"
+        assert second_payload["member_id"] == first_payload["member_id"]
+        assert second_payload["card_number"] == first_payload["card_number"]
+        assert second_payload["verify_url"] == second_payload["card_verification_url"]
+        assert second_payload["download_pdf_url"] == second_payload["card_download_url"]
+
+        db.refresh(batch)
+        assert batch.next_no == next_after_first
+        assert len(get_captured_emails()) == captured_after_first
+    finally:
+        settings.EMAIL_MODE = previous_email_mode
+        clear_captured_emails()
+
+
+def test_ingest_blocks_deleted_member_email(client, db):
+    org, _batch = _create_org_with_batch(db, slug_prefix="ingest-deleted")
+    _create_integration_key(db, org_id=org.id, active=True)
+
+    request_email = f"deleted.block.{uuid.uuid4().hex[:6]}@example.com"
+    deleted_member = Member(
+        org_id=org.id,
+        first_name="Deleted",
+        last_name="Member",
+        email=request_email,
+        status=MemberStatus.REJECTED,
+        deleted_at=datetime.utcnow(),
+        signup_source=SignupSource.PIENISSIMO.value,
+    )
+    db.add(deleted_member)
+    db.commit()
+
+    response = client.post(
+        f"/api/ingest/pienissimo/{org.slug}",
+        json={"email": request_email, "send_email": False},
+    )
+    assert response.status_code == 409, response.text
+    payload = response.json()
+    assert payload["status"] == "not_active"
+    assert payload["error"] == "member_deleted"

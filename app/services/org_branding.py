@@ -5,7 +5,7 @@ from app.models import Organization
 _SUBJECT_FALLBACK_TEMPLATE = "La tua tessera {club_display_name}"
 _CLUB_DISPLAY_NAME_BY_SLUG_OVERRIDE = {
     # Customer-facing naming override requested for card rendering.
-    "oasi-2": "Golden Age - Speakeasy",
+    "oasi-2": "Golden Age Club - Speakeasy",
 }
 _CARD_LOGO_BY_SLUG_FALLBACK = {
     # Requested by customer branding: dedicated Golden Age logo for oasi-2 cards.
@@ -39,14 +39,16 @@ def _to_absolute_url(value: str, base_url: str | None = None) -> str:
 def resolve_club_display_name(org: Organization | None) -> str:
     if org is None:
         return ""
+    explicit = _normalize_text(getattr(org, "club_display_name", None))
+    if explicit:
+        return explicit
+
     slug = _normalize_text(getattr(org, "slug", None))
     if slug:
         slug_override = _CLUB_DISPLAY_NAME_BY_SLUG_OVERRIDE.get(slug)
         if slug_override:
             return slug_override
-    explicit = _normalize_text(getattr(org, "club_display_name", None))
-    if explicit:
-        return explicit
+
     return _normalize_text(getattr(org, "name", None)) or ""
 
 

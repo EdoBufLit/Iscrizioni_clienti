@@ -108,6 +108,40 @@ def init_db():
         _add_column_if_missing(conn, "organizations", "card_email_subject", "VARCHAR")
         _add_column_if_missing(conn, "organizations", "card_logo_url", "VARCHAR")
         _add_column_if_missing(conn, "card_batches", "released_at", "DATETIME")
+        # Ingest idempotency safety index (active member per org/year/email).
+        conn.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_members_org_year_lower_email_active
+                    ON members (org_id, card_year, lower(email))
+                 WHERE deleted_at IS NULL
+                   AND email IS NOT NULL
+                   AND card_year IS NOT NULL
+                """
+            )
+        )
+        # Keep oasi-2 naming aligned with current customer-facing branding.
+        conn.execute(
+            text(
+                """
+                UPDATE organizations
+                   SET club_display_name = :club_display_name
+                 WHERE lower(trim(slug)) = 'oasi-2'
+                   AND (
+                        club_display_name IS NULL
+                        OR trim(club_display_name) = ''
+                        OR lower(trim(club_display_name)) IN (
+                            lower(:old_name),
+                            lower(:club_display_name)
+                        )
+                   )
+                """
+            ),
+            {
+                "club_display_name": "Golden Age Club - Speakeasy",
+                "old_name": "Golden Age - Speakeasy",
+            },
+        )
 
     db = SessionLocal()
 

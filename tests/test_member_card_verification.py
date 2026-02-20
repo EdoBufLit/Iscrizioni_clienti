@@ -23,7 +23,7 @@ def _ensure_active_member(db):
         db.add(org)
         db.commit()
         db.refresh(org)
-    org.club_display_name = "Golden Age - Speakeasy"
+    org.club_display_name = "Golden Age Club - Speakeasy"
     org.card_logo_url = "https://cdn.example.com/golden-age.png"
 
     email = "card.verify.member@example.com"
@@ -121,7 +121,7 @@ def test_public_org_info_endpoint_returns_safe_branding_fields(client, db):
     payload = res.json()
 
     assert payload["slug"] == org.slug
-    assert payload["club_display_name"] == "Golden Age - Speakeasy"
+    assert payload["club_display_name"] == "Golden Age Club - Speakeasy"
     assert payload["card_logo_url"] == "https://cdn.example.com/golden-age.png"
     assert payload["wallet_enabled"] is False
 
@@ -144,7 +144,7 @@ def test_public_org_info_uses_oasi2_logo_fallback_when_card_logo_missing(client,
     res = client.get(f"/api/public/orgs/{slug}")
     assert res.status_code == 200, res.text
     payload = res.json()
-    assert payload["club_display_name"] == "Golden Age - Speakeasy"
+    assert payload["club_display_name"] == "Golden Age Club - Speakeasy"
     assert payload["card_logo_url"].endswith("/static/card-logos/oasi-2.png")
 
 
@@ -161,7 +161,7 @@ def test_member_card_download_page_and_wallet_placeholder_endpoints(client, db):
     assert download_res.status_code == 200, download_res.text
     assert "text/html" in download_res.headers.get("content-type", "")
     assert "Scarica tessera (PDF)" in download_res.text
-    assert "Golden Age - Speakeasy" in download_res.text
+    assert "Golden Age Club - Speakeasy" in download_res.text
 
     pdf_hint_res = client.get(f"/api/cards/{token}/download?format=pdf")
     assert pdf_hint_res.status_code == 200, pdf_hint_res.text

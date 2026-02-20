@@ -65,6 +65,7 @@ class IssueMemberCommand:
     backend_base_url: str | None = None
     frontend_base_url: str | None = None
     send_email_once: bool = False
+    allow_deleted_reissue: bool = True
 
 
 @dataclass(frozen=True)
@@ -172,6 +173,25 @@ def _cleanup_deleted_conflicts(
     return len(deleted_members)
 
 
+def _has_deleted_member_email_conflict(
+    db: Session,
+    *,
+    org_id: int,
+    email: str,
+) -> bool:
+    deleted_member = (
+        db.query(Member.id)
+        .filter(
+            Member.org_id == org_id,
+            Member.deleted_at.isnot(None),
+            func.lower(Member.email) == email,
+        )
+        .order_by(Member.id.desc())
+        .first()
+    )
+    return deleted_member is not None
+
+
 def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> IssueMemberResult:
     org = _resolve_active_organization(db, command.org_id)
 
@@ -191,13 +211,19 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
     fiscal_code = _normalize_text(command.fiscal_code)
     signup_source = _normalize_text(command.signup_source) or SignupSource.PIENISSIMO.value
 
-    _cleanup_deleted_conflicts(
-        db,
-        org_id=org.id,
-        signup_source=signup_source,
-        external_customer_id=external_customer_id,
-        email=email,
-    )
+    if command.allow_deleted_reissue:
+        _cleanup_deleted_conflicts(
+            db,
+            org_id=org.id,
+            signup_source=signup_source,
+            external_customer_id=external_customer_id,
+            email=email,
+        )
+    elif _has_deleted_member_email_conflict(db, org_id=org.id, email=email):
+        raise HTTPException(
+            status_code=409,
+            detail="socio eliminato: contatta l'associazione",
+        )
 
     member = (
         db.query(Member)
@@ -271,13 +297,28 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
         member.decision_notes = "Auto-approved via integration"
         member.is_manual = False
 
-    if member.card_no is None:
+    issued_new_card = False
+    member_card_year = None
+    if member.card_year is not None:
+        try:
+            member_card_year = int(member.card_year)
+        except (TypeError, ValueError):
+            member_card_year = None
+
+    needs_new_card = (
+        member.card_no is None
+        or member_card_year is None
+        or member_card_year < now.year
+    )
+    if needs_new_card:
         assigned_card, batch_id = assign_next_card_with_batch(db, org.id)
         member.card_no = assigned_card
         member.batch_id = batch_id
         member.card_year = now.year
-    elif member.card_year is None:
-        member.card_year = now.year
+        member.card_email_sent_at = None
+        issued_new_card = True
+        if outcome == "reused":
+            outcome = "reissued"
 
     db.commit()
     db.refresh(member)
@@ -301,7 +342,7 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
     email_sent = False
     login_hint = "email_skipped"
     should_send_email = bool(command.send_email and member.email)
-    if command.send_email_once and member.card_email_sent_at is not None:
+    if command.send_email_once and member.card_email_sent_at is not None and not issued_new_card:
         should_send_email = False
         login_hint = "magic_link_already_sent"
 
@@ -324,6 +365,7 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
                 member_full_name=full_name,
                 organization_name=org.name,
                 club_display_name=club_display_name,
+                organization_slug=org.slug,
                 card_number=member.card_no,
                 card_year=member.card_year,
                 card_status="attiva",
@@ -384,6 +426,7 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
             "integration_name": command.integration_name,
             "email_sent": email_sent,
             "outcome": outcome,
+            "issued_new_card": issued_new_card,
         },
         ip=command.request_ip,
         user_agent=command.request_user_agent,
@@ -430,5 +473,6 @@ def issue_member_from_ingest(
             backend_base_url=command.backend_base_url,
             frontend_base_url=command.frontend_base_url,
             send_email_once=True,
+            allow_deleted_reissue=False,
         ),
     )

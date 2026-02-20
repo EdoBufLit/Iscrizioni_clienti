@@ -59,6 +59,8 @@ const PienissimoThankYouPage = () => {
   const isEmailValid = EMAIL_REGEX.test(normalizedEmail);
   const isLoading = status === "loading";
   const isSuccess = status === "success";
+  const ingestStatus = successData?.status ?? null;
+  const isAlreadyIssued = ingestStatus === "already_issued";
 
   const canSubmit = Boolean(orgSlug) && !isLoading && normalizedEmail.length > 0 && isEmailValid;
 
@@ -115,12 +117,12 @@ const PienissimoThankYouPage = () => {
   // Build URLs relative to the current origin to avoid HTTP/HTTPS mixed-content blocks.
   // The backend may return http:// absolute URLs even when the page is served over https://.
   const token = successData?.card_verification_token ?? null;
-  const downloadUrl = token
-    ? `/api/cards/${token}/download.pdf`
-    : null;
-  const verifyUrl = token
-    ? `/api/cards/verify/${token}`
-    : successData?.card_verification_url ?? null;
+  const downloadUrl =
+    successData?.download_pdf_url ??
+    (token ? `/api/cards/${token}/download.pdf` : successData?.card_download_url ?? null);
+  const verifyUrl =
+    successData?.verify_url ??
+    (token ? `/api/cards/verify/${token}` : successData?.card_verification_url ?? null);
   const walletAppleUrl = successData?.card_wallet_apple_url ?? null;
   const walletGoogleUrl = successData?.card_wallet_google_url ?? null;
 
@@ -132,18 +134,30 @@ const PienissimoThankYouPage = () => {
           {/* ── Branding header ── */}
           <div className="mb-6 flex flex-col items-center gap-3 sm:flex-row sm:items-center sm:gap-4">
             {cardLogoUrl && (
-              <img
-                src={cardLogoUrl}
-                alt={`Logo ${clubDisplayName}`}
-                className="object-contain"
+              <div
+                className="inline-flex items-center justify-center"
                 style={{
-                  height: "clamp(48px, 10vw, 72px)",
-                  maxWidth: "clamp(120px, 40vw, 220px)",
-                  minWidth: 80,
-                  minHeight: 40,
+                  background: "rgba(0,0,0,0.65)",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  borderRadius: 14,
+                  padding: "10px 12px",
+                  backdropFilter: "blur(8px)",
+                  WebkitBackdropFilter: "blur(8px)",
                 }}
-                loading="lazy"
-              />
+              >
+                <img
+                  src={cardLogoUrl}
+                  alt={`Logo ${clubDisplayName}`}
+                  className="object-contain"
+                  style={{
+                    height: "clamp(48px, 10vw, 72px)",
+                    maxWidth: "clamp(120px, 40vw, 230px)",
+                    minWidth: 90,
+                    minHeight: 40,
+                  }}
+                  loading="lazy"
+                />
+              </div>
             )}
             <div className="text-center sm:text-left">
               <h1 className="text-2xl font-bold leading-tight text-neutral-900 sm:text-3xl">
@@ -158,11 +172,14 @@ const PienissimoThankYouPage = () => {
             <div className="space-y-4">
               <div className="rounded-xl border border-[#c6a04f]/30 bg-[#2d0015]/5 px-4 py-4">
                 <p className="text-base font-semibold text-neutral-800">
-                  Tessera pronta! Scaricala in PDF o verificala.
+                  {isAlreadyIssued
+                    ? "Hai gia una tessera attiva. Puoi scaricarla o verificarla qui."
+                    : "Tessera pronta! Scaricala in PDF o verificala."}
                 </p>
                 <p className="mt-1 text-sm text-neutral-500">
-                  Ti abbiamo inviato un'email con la tessera. Se non la ricevi entro 5 minuti,
-                  controlla Spam/Promozioni.
+                  {isAlreadyIssued
+                    ? "Usa i pulsanti qui sotto per scaricare o verificare la tessera gia emessa."
+                    : "Ti abbiamo inviato un'email con la tessera. Se non la ricevi entro 5 minuti, controlla Spam/Promozioni."}
                 </p>
               </div>
 

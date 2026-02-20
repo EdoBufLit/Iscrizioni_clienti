@@ -118,7 +118,9 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
   const displayName = toDisplayName(cardData);
   const clubDisplayName = toSafeText(cardData.clubDisplayName);
   const organizationName = toSafeText(cardData.organizationName);
+  const organizationSlug = toSafeText(cardData.organizationSlug).toLowerCase();
   const organizationLogoUrl = toSafeText(cardData.organizationLogoUrl);
+  const isOasi2Card = organizationSlug === "oasi-2";
   const organizationLabel = clubDisplayName !== EMPTY ? clubDisplayName : organizationName;
   const cardNumber = toDisplayCardNumber(cardData.cardNumber);
   const cardYear = toDisplayYear(cardData.cardYear) || getCurrentCardYearLabel();
@@ -126,7 +128,7 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
   const verificationUrl = cardData.verificationUrl?.trim() ? cardData.verificationUrl.trim() : null;
 
   // Bordeaux palette
-  const frontBg = "linear-gradient(135deg, #3a0015 0%, #5a0828 40%, #2d0015 100%)";
+  const frontBg = isOasi2Card ? "#3a0015" : "linear-gradient(135deg, #3a0015 0%, #5a0828 40%, #2d0015 100%)";
   const backBg  = "linear-gradient(135deg, #2a0010 0%, #450620 50%, #2d0015 100%)";
   const boxShadow = "0 24px 48px rgba(40,0,10,0.40), 0 8px 16px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.06)";
 
@@ -161,21 +163,22 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
               boxShadow,
             }}
           >
-            {/* Guilloche-style pattern overlay */}
-            <span
-              className="pointer-events-none absolute inset-0 opacity-[0.035]"
-              style={{
-                backgroundImage:
-                  "repeating-linear-gradient(0deg, transparent, transparent 8px, rgba(198,160,79,1) 8px, rgba(198,160,79,1) 9px)," +
-                  "repeating-linear-gradient(90deg, transparent, transparent 8px, rgba(198,160,79,1) 8px, rgba(198,160,79,1) 9px)",
-              }}
-            />
-            {/* Radial light accents */}
-            <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_20%,rgba(198,160,79,0.12),transparent_55%)]" />
-            <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_85%_80%,rgba(198,160,79,0.08),transparent_50%)]" />
+            {!isOasi2Card && (
+              <>
+                <span
+                  className="pointer-events-none absolute inset-0 opacity-[0.035]"
+                  style={{
+                    backgroundImage:
+                      "repeating-linear-gradient(0deg, transparent, transparent 8px, rgba(198,160,79,1) 8px, rgba(198,160,79,1) 9px)," +
+                      "repeating-linear-gradient(90deg, transparent, transparent 8px, rgba(198,160,79,1) 8px, rgba(198,160,79,1) 9px)",
+                  }}
+                />
+                <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_20%,rgba(198,160,79,0.12),transparent_55%)]" />
+                <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_85%_80%,rgba(198,160,79,0.08),transparent_50%)]" />
+              </>
+            )}
 
-            {/* Watermark: org logo for ALL orgs */}
-            {organizationLogoUrl !== EMPTY && (
+            {!isOasi2Card && organizationLogoUrl !== EMPTY && (
               <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
                 <img
                   src={organizationLogoUrl}
@@ -187,17 +190,28 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
               </span>
             )}
 
-            {/* Top gold accent bar */}
-            <span className="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#c6a04f] to-transparent" />
-            {/* Bottom gold accent bar */}
-            <span className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] bg-gradient-to-r from-transparent via-[#c6a04f]/50 to-transparent" />
-            {/* Left gold vertical accent */}
-            <span className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-gradient-to-b from-transparent via-[#c6a04f]/35 to-transparent" />
+            {isOasi2Card ? (
+              <>
+                <span className="pointer-events-none absolute inset-x-0 top-0 h-[1px] bg-[#c6a04f]/75" />
+                <span className="pointer-events-none absolute inset-x-0 bottom-0 h-[1px] bg-[#c6a04f]/60" />
+              </>
+            ) : (
+              <>
+                <span className="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-[#c6a04f] to-transparent" />
+                <span className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] bg-gradient-to-r from-transparent via-[#c6a04f]/50 to-transparent" />
+                <span className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-gradient-to-b from-transparent via-[#c6a04f]/35 to-transparent" />
+              </>
+            )}
 
             <span className="relative flex h-full flex-col px-5 py-4 sm:px-7 sm:py-5">
-              {/* Org logo: small pill above header (non-watermark display) */}
               {organizationLogoUrl !== EMPTY && (
-                <span className="mb-1 flex justify-center sm:mb-2">
+                <span
+                  className={
+                    isOasi2Card
+                      ? "pointer-events-none absolute inset-x-0 top-3 flex justify-center"
+                      : "mb-1 flex justify-center sm:mb-2"
+                  }
+                >
                   <span
                     className="flex items-center justify-center rounded-xl px-2 py-1"
                     style={{ background: "rgba(0,0,0,0.28)", backdropFilter: "blur(4px)" }}
@@ -205,12 +219,12 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
                     <LogoImg
                       src={organizationLogoUrl}
                       alt="Logo associazione"
-                      className="object-contain opacity-90"
+                      className="object-contain opacity-95"
                       style={{
-                        height: "clamp(22px, 4vw, 34px)",
-                        minHeight: 22,
-                        minWidth: 50,
-                        maxWidth: 160,
+                        height: isOasi2Card ? "clamp(34px, 7vw, 54px)" : "clamp(22px, 4vw, 34px)",
+                        minHeight: isOasi2Card ? 34 : 22,
+                        minWidth: isOasi2Card ? 120 : 50,
+                        maxWidth: isOasi2Card ? 260 : 160,
                       }}
                     />
                   </span>
@@ -218,7 +232,7 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
               )}
 
               {/* Header row: year label + ASSONAM logo */}
-              <span className="flex items-start justify-between">
+              <span className={`flex items-start justify-between ${isOasi2Card ? "mt-14" : ""}`}>
                 <span className="flex flex-col">
                   <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#c9a8b0]/80 sm:text-[11px]">
                     Tessera Socio
@@ -233,7 +247,7 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
 
                 {/* ASSONAM logo — always visible, with contrast plate */}
                 <span
-                  className="flex flex-shrink-0 items-center rounded-xl px-1.5 py-1"
+                  className={`flex flex-shrink-0 items-center rounded-xl px-1.5 py-1 ${isOasi2Card ? "absolute right-5 top-4" : ""}`}
                   style={{ background: "rgba(0,0,0,0.22)", backdropFilter: "blur(4px)" }}
                 >
                   <LogoImg

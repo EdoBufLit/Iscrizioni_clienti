@@ -341,7 +341,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                       onChange={(e) =>
                         setFormData((prev) => ({ ...prev, club_display_name: e.target.value }))
                       }
-                      placeholder="Golden Age - Speakeasy"
+                      placeholder="Golden Age Club - Speakeasy"
                     />
                   </div>
                   <div>

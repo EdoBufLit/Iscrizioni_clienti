@@ -118,6 +118,8 @@ export type PienissimoIngestResponse = {
   card_url: string;
   card_verification_url: string;
   card_download_url: string;
+  verify_url?: string;
+  download_pdf_url?: string;
   card_wallet_apple_url?: string | null;
   card_wallet_google_url?: string | null;
   wallet_enabled: boolean;

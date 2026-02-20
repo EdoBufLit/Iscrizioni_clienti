@@ -68,11 +68,23 @@ def _make_opacity_png(path: str, opacity: float, scale: int = 2) -> io.BytesIO |
         return None
 
 
-def _draw_bg(c: canvas.Canvas, x: float, y: float, w: float, h: float, *, is_back: bool = False) -> None:
+def _draw_bg(
+    c: canvas.Canvas,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    *,
+    is_back: bool = False,
+    is_oasi2: bool = False,
+) -> None:
     """Draw bordeaux gradient background (simulated with layered rects)."""
     base = _BDX_BACK if is_back else _BDX_DARK
     c.setFillColor(base)
     c.roundRect(x, y, w, h, radius=_R, fill=1, stroke=0)
+
+    if is_oasi2 and not is_back:
+        return
 
     mid = _BDX_BACK2 if is_back else _BDX_MID
     c.setFillColor(mid)
@@ -95,9 +107,17 @@ def _draw_border(c: canvas.Canvas, x: float, y: float, w: float, h: float) -> No
     c.roundRect(x, y, w, h, radius=_R, fill=0, stroke=1)
 
 
-def _draw_gold_bar(c: canvas.Canvas, x: float, y: float, w: float, h: float) -> None:
+def _draw_gold_bar(
+    c: canvas.Canvas,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    *,
+    thickness: float = 3.0,
+) -> None:
     c.setFillColor(_GOLD)
-    c.rect(x, y + h - 3, w, 3, fill=1, stroke=0)
+    c.rect(x, y + h - thickness, w, thickness, fill=1, stroke=0)
 
 
 def _label(c: canvas.Canvas, text: str, x: float, y: float, size: float = 7.5) -> None:
@@ -159,12 +179,12 @@ def _draw_front(
     assoc_label = club_display_name if is_oasi2 else organization_name
 
     # Background
-    _draw_bg(c, x, y, w, h)
-    _draw_gold_bar(c, x, y, w, h)
+    _draw_bg(c, x, y, w, h, is_oasi2=is_oasi2)
+    _draw_gold_bar(c, x, y, w, h, thickness=1.2 if is_oasi2 else 3.0)
     _draw_border(c, x, y, w, h)
 
-    # Watermark logo (all orgs)
-    if org_logo_path and os.path.exists(org_logo_path):
+    # Watermark logo (all orgs except oasi-2)
+    if org_logo_path and os.path.exists(org_logo_path) and not is_oasi2:
         wm_buf = _make_opacity_png(org_logo_path, opacity=0.09)
         if wm_buf:
             wm_reader = ImageReader(wm_buf)
@@ -178,14 +198,22 @@ def _draw_front(
                 preserveAspectRatio=True,
             )
 
-    # Org logo small top-center (non-watermark orgs)
-    if org_logo_path and os.path.exists(org_logo_path) and not is_oasi2:
-        lw, lh = _logo_dims(org_logo_path, 140, 32)
+    # Org logo in top area (always visible, no watermark style)
+    if org_logo_path and os.path.exists(org_logo_path):
+        if is_oasi2:
+            lw, lh = _logo_dims(org_logo_path, 170, 54)
+            logo_x = x + w * 0.52 - (lw / 2)
+            logo_y = y + h - lh - 10
+        else:
+            lw, lh = _logo_dims(org_logo_path, 140, 32)
+            logo_x = x + (w - lw) / 2
+            logo_y = y + h - 3 - lh - 6
         c.drawImage(
             org_logo_path,
-            x + (w - lw) / 2,
-            y + h - 3 - lh - 6,
-            lw, lh,
+            logo_x,
+            logo_y,
+            lw,
+            lh,
             mask="auto",
             preserveAspectRatio=True,
         )

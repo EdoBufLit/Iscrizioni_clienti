@@ -187,7 +187,7 @@ def test_issue_member_captures_html_email_with_verification_url(client, db):
         assert payload_out["member_portal_login_hint"] == "magic_link_sent"
         assert payload_out["card_verification_token"]
         assert payload_out["card_download_url"].endswith(
-            f"/api/cards/{payload_out['card_verification_token']}/download"
+            f"/api/cards/{payload_out['card_verification_token']}/download.pdf"
         )
         assert payload_out["wallet_enabled"] is False
 
@@ -201,8 +201,13 @@ def test_issue_member_captures_html_email_with_verification_url(client, db):
         assert "Accedi area riservata" in captured[0]["html_body"]
         assert "Scarica tessera" in captured[0]["html_body"]
         assert "api.qrserver.com" in captured[0]["html_body"]
-        assert "logo-transparent.png" in captured[0]["html_body"]
-        assert not (captured[0].get("inline_images") or [])
+        assert (
+            "logo-transparent.png" in captured[0]["html_body"]
+            or "cid:card_front@assonam" in captured[0]["html_body"]
+        )
+        inline_images = captured[0].get("inline_images") or []
+        if inline_images:
+            assert any(img.get("cid") == "card_front@assonam" for img in inline_images)
     finally:
         settings.EMAIL_MODE = original_email_mode
         clear_captured_emails()
@@ -214,7 +219,7 @@ def test_issue_member_uses_custom_card_email_subject_template(client, db):
     clear_captured_emails()
     try:
         org, _batch, raw_key = _create_org_with_key(db)
-        org.club_display_name = "Golden Age Club - speakeasy"
+        org.club_display_name = "Golden Age Club - Speakeasy"
         org.card_email_subject = "La tua tessera {club_display_name}"
         db.commit()
 
@@ -234,7 +239,7 @@ def test_issue_member_uses_custom_card_email_subject_template(client, db):
 
         captured = get_captured_emails()
         assert len(captured) == 1
-        assert captured[0]["subject"] == "La tua tessera Golden Age Club - speakeasy"
+        assert captured[0]["subject"] == "La tua tessera Golden Age Club - Speakeasy"
     finally:
         settings.EMAIL_MODE = original_email_mode
         clear_captured_emails()

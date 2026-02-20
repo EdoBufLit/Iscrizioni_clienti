@@ -1236,3 +1236,43 @@ pm --prefix frontend run build -> OK
   - `app/routes/public.py`, `app/routes/ingest_pienissimo.py`, `app/routes/member.py`, `app/routes/super_admin.py`
   - `app/services/integration_issuer.py`, `app/utils.py`
   - `tests/test_security_hardening_audit.py`, `tests/test_ingest_pienissimo.py`
+
+---
+## Spec (Oasi-2 mono-color card + ingest already_issued idempotenza - Feb 20, 2026)
+- Obiettivo: rendere la tessera `oasi-2` mono-colore senza watermark centrale, migliorare visibilita logo in thank-you e rendere ingest idempotente su email gia tesserata con risposta `already_issued`.
+- Vincoli: nessuna regressione per altre organizzazioni; mantenere invariati campi testuali tessera; riuso `club_display_name` come fonte naming.
+
+## Plan (Oasi-2 mono-color card + ingest already_issued idempotenza)
+- [x] Aggiornare backend ingest (`/api/ingest/pienissimo/{org_slug}`): normalizzazione email, check attivo current-year, risposta `already_issued` senza side-effect, blocco deleted.
+- [x] Aggiungere protezione anti-race DB con indice unico parziale su org+anno+email normalizzata attiva.
+- [x] Aggiornare naming branding a `Golden Age Club - Speakeasy` via `club_display_name` (override + data update `oasi-2`).
+- [x] Restyle card `oasi-2` su frontend preview + renderer backend (HTML download, email fallback, PDF, PNG): sfondo mono-colore, logo org in alto, no watermark.
+- [x] Migliorare Thank You page: stato `already_issued`, messaggio dedicato e logo plate nero con blur/backdrop responsive.
+- [x] Aggiornare test backend/frontend toccati e validare con pytest mirati + build frontend.
+
+## Review (Oasi-2 mono-color card + ingest already_issued idempotenza - Feb 20, 2026)
+- [x] Compilata in sezione Review - Update.
+
+## Execution Update (Oasi-2 mono-color card + ingest already_issued idempotenza - Feb 20, 2026)
+- [x] Backend ingest hardening: check preventivo su email normalizzata + socio attivo current-year (`is_member_active`) con risposta `200 already_issued` e link tessera (`verify_url`, `download_pdf_url`) senza nuovi side-effect.
+- [x] Policy deleted: blocco emissione su email di socio soft-deleted (409 `member_deleted`) senza riattivazione automatica.
+- [x] Service issuer allineato: opzione `allow_deleted_reissue`, supporto reissue annuale (nuovo anno) e tracciamento audit `issued_new_card`.
+- [x] DB: migration `m4n5o6p7q8r9` con indice unico parziale `uq_members_org_year_lower_email_active` e data-fix `oasi-2` -> `Golden Age Club - Speakeasy`; fallback startup in `init_db.py`.
+- [x] Card UI `oasi-2` allineata su FE preview e renderer backend (download HTML, email fallback, PDF, PNG): fondo mono-colore bordeaux, watermark rimosso, logo org in alto, ASSONAM mantenuto.
+- [x] Thank-you page aggiornata: logo con plate nero (blur/backdrop) e copy dedicata in stato `already_issued` con bottoni download/verifica.
+- [x] Rename completato: stringa legacy sostituita con `Golden Age Club - Speakeasy` via `club_display_name` dove applicabile (incluse aspettative test).
+
+## Review (Oasi-2 mono-color card + ingest already_issued idempotenza - Feb 20, 2026) - Update
+- `python -m py_compile app/routes/ingest_pienissimo.py app/services/integration_issuer.py app/services/org_branding.py app/services/card_image.py app/services/card_pdf.py app/routes/public.py init_db.py` -> **OK**
+- `python -m py_compile tests/test_ingest_pienissimo.py tests/test_member_card_verification.py tests/test_integration_issue_member.py` -> **OK**
+- `python -m pytest tests/test_ingest_pienissimo.py tests/test_member_card_verification.py tests/test_integration_issue_member.py -q` -> **20 passed**
+- `npm --prefix frontend run build` -> **OK**
+- `python -m alembic upgrade head` -> **OK** (applicata `m4n5o6p7q8r9`)
+## Visual QA Update (Oasi-2 branding check - Feb 20, 2026)
+- Screenshot Playwright generati:
+  - `tasks/screenshots/oasi2-card-download-desktop.png`
+  - `tasks/screenshots/oasi2-thankyou-desktop.png`
+  - `tasks/screenshots/oasi2-thankyou-mobile.png`
+- Verifica visuale: card `oasi-2` con fondo mono-colore bordeaux, logo associazione posizionato in alto (non watermark), logo ASSONAM in alto a destra, campi testuali invariati.
+- Verifica thank-you: logo header su plate nero con blur/backdrop, resa leggibile sia desktop che mobile.
+

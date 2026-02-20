@@ -63,31 +63,24 @@ def build_member_card_email(
             "background:linear-gradient(135deg,#3a0015 0%,#5a0828 40%,#2d0015 100%);"
             "box-shadow:0 16px 40px rgba(40,0,10,0.30);"
         )
-        if is_oasi2_card and safe_org_logo_url:
+        if is_oasi2_card:
             card_bg = (
-                "border-radius:20px;overflow:hidden;background-color:#3a0015;"
-                f"background-image:linear-gradient(135deg,rgba(58,0,21,0.94) 0%,rgba(90,8,40,0.92) 40%,rgba(45,0,21,0.94) 100%),url('{safe_org_logo_url}');"
-                "background-repeat:no-repeat,no-repeat;"
-                "background-position:center center,center center;"
-                "background-size:cover,58% auto;"
+                "border-radius:20px;overflow:hidden;background:#3a0015;"
                 "box-shadow:0 16px 40px rgba(40,0,10,0.30);"
             )
 
         org_logo_header = ""
-        if safe_org_logo_url and not is_oasi2_card:
+        if safe_org_logo_url:
+            logo_height = "56px" if is_oasi2_card else "44px"
+            logo_max_width = "240px" if is_oasi2_card else "220px"
             org_logo_header = f"""\
                   <tr>
                     <td align="center" style="padding:14px 24px 2px 24px;">
-                      <img src="{safe_org_logo_url}" alt="Logo" style="height:44px;max-width:220px;object-fit:contain;" />
+                      <img src="{safe_org_logo_url}" alt="Logo" style="height:{logo_height};max-width:{logo_max_width};object-fit:contain;" />
                     </td>
                   </tr>"""
 
-        org_logo_inline = ""
-        if safe_org_logo_url and is_oasi2_card:
-            org_logo_inline = (
-                f'<img src="{safe_org_logo_url}" alt="Logo" '
-                'style="height:28px;max-width:100px;object-fit:contain;opacity:0.92;margin-right:8px;" />'
-            )
+        top_border_style = "1px solid rgba(198,160,79,0.55)" if is_oasi2_card else "3px solid #c6a04f"
 
         card_block = f"""\
             <tr>
@@ -95,7 +88,7 @@ def build_member_card_email(
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="{card_bg}">
                   {org_logo_header}
                   <tr>
-                    <td style="padding:18px 22px;border-top:3px solid #c6a04f;border-bottom:1px solid rgba(198,160,79,0.20);">
+                    <td style="padding:18px 22px;border-top:{top_border_style};border-bottom:1px solid rgba(198,160,79,0.20);">
                       <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                         <tr>
                           <td valign="top">
@@ -103,7 +96,6 @@ def build_member_card_email(
                             <p style="margin:4px 0 0;font-size:28px;font-weight:700;color:#d4b45c;">{safe_card_year}</p>
                           </td>
                           <td align="right" valign="top">
-                            {org_logo_inline}
                             <img src="{safe_assonam_logo_url}" alt="ASSONAM" style="height:50px;max-width:170px;object-fit:contain;" />
                           </td>
                         </tr>

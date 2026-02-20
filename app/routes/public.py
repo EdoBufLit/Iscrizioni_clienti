@@ -416,36 +416,31 @@ def _render_card_download_html(
           </div>
         """
 
+    top_border_style = "1px solid rgba(198,160,79,0.55)" if is_oasi2_card else "3px solid #c6a04f"
+    label_tone = "#c9a8b0" if is_oasi2_card else "#8aaba8"
+    association_tone = "#fdf6e3" if is_oasi2_card else "#d0e2df"
+
     card_section_style = (
         "background:linear-gradient(135deg,#0b2e2c 0%,#143f3c 45%,#0f3a37 100%);"
         "border-radius:20px;overflow:hidden;border:1px solid #0f4b46;"
         "box-shadow:0 14px 28px rgba(12,42,39,0.25);"
     )
-    if safe_org_logo and is_oasi2_card:
+    if is_oasi2_card:
         card_section_style = (
-            "background-color:#0f3a37;"
-            f"background-image:linear-gradient(135deg,rgba(11,46,44,0.94) 0%,rgba(20,63,60,0.92) 45%,rgba(15,58,55,0.94) 100%),url('{safe_org_logo}');"
-            "background-repeat:no-repeat,no-repeat;"
-            "background-position:center center,center center;"
-            "background-size:cover,58% auto;"
-            "border-radius:20px;overflow:hidden;border:1px solid #0f4b46;"
-            "box-shadow:0 14px 28px rgba(12,42,39,0.25);"
+            "background:#3a0015;"
+            "border-radius:20px;overflow:hidden;border:1px solid rgba(198,160,79,0.34);"
+            "box-shadow:0 14px 28px rgba(40,0,10,0.30);"
         )
 
-    org_logo_header_block = ""
-    if safe_org_logo and not is_oasi2_card:
-        org_logo_header_block = f"""
+    org_logo_top_block = ""
+    if safe_org_logo:
+        logo_height = "56px" if is_oasi2_card else "44px"
+        logo_max_width = "240px" if is_oasi2_card else "220px"
+        org_logo_top_block = f"""
         <div style="padding:14px 22px 0 22px;text-align:center;">
-          <img src="{safe_org_logo}" alt="Logo associazione" style="height:44px;max-width:220px;object-fit:contain;" />
+          <img src="{safe_org_logo}" alt="Logo associazione" style="height:{logo_height};max-width:{logo_max_width};object-fit:contain;" />
         </div>
         """
-
-    org_logo_header_inline = ""
-    if safe_org_logo and is_oasi2_card:
-        org_logo_header_inline = (
-            f'<img src="{safe_org_logo}" alt="Logo associazione" '
-            'style="height:30px;max-width:110px;object-fit:contain;opacity:0.92;" />'
-        )
 
     pdf_hint = ""
     if requested_pdf_format:
@@ -470,27 +465,26 @@ def _render_card_download_html(
       </header>
 
       <section style="{card_section_style}">
-        {org_logo_header_block}
-        <div style="padding:20px 22px;border-top:3px solid #c6a04f;border-bottom:1px solid rgba(198,160,79,0.25);display:flex;align-items:flex-start;justify-content:space-between;gap:14px;">
+        {org_logo_top_block}
+        <div style="padding:20px 22px;border-top:{top_border_style};border-bottom:1px solid rgba(198,160,79,0.25);display:flex;align-items:flex-start;justify-content:space-between;gap:14px;">
           <div>
             <p style="margin:0;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#c6a04f;">Tessera socio</p>
             <p style="margin:4px 0 0;font-size:32px;font-weight:700;color:#d4b45c;">{safe_card_year}</p>
             <p style="margin:8px 0 0;font-size:13px;color:{status_tone};font-weight:700;">{status_title}</p>
           </div>
           <div style="display:flex;align-items:center;gap:10px;margin-left:auto;">
-            {org_logo_header_inline}
             <img src="{safe_assonam_logo}" alt="Logo ASSONAM" style="height:46px;max-width:170px;object-fit:contain;" />
           </div>
         </div>
         <div style="padding:20px 22px;">
-          <p style="margin:0;font-size:12px;letter-spacing:1.6px;text-transform:uppercase;color:#8aaba8;">Nome e cognome</p>
+          <p style="margin:0;font-size:12px;letter-spacing:1.6px;text-transform:uppercase;color:{label_tone};">Nome e cognome</p>
           <p style="margin:7px 0 0;font-size:30px;line-height:1.12;color:#ffffff;font-weight:700;">{safe_member}</p>
-          <p style="margin:16px 0 0;font-size:12px;letter-spacing:1.6px;text-transform:uppercase;color:#8aaba8;">Associazione</p>
-          <p style="margin:6px 0 0;font-size:16px;color:#d0e2df;">{safe_association}</p>
+          <p style="margin:16px 0 0;font-size:12px;letter-spacing:1.6px;text-transform:uppercase;color:{label_tone};">Associazione</p>
+          <p style="margin:6px 0 0;font-size:16px;color:{association_tone};">{safe_association}</p>
         </div>
         <div style="padding:14px 22px 22px;border-top:1px solid rgba(198,160,79,0.25);display:flex;justify-content:space-between;align-items:flex-end;gap:14px;">
           <div>
-            <p style="margin:0;font-size:12px;letter-spacing:1.6px;text-transform:uppercase;color:#8aaba8;">N. tessera</p>
+            <p style="margin:0;font-size:12px;letter-spacing:1.6px;text-transform:uppercase;color:{label_tone};">N. tessera</p>
             <p style="margin:7px 0 0;font-size:24px;font-family:Courier New,monospace;font-weight:700;letter-spacing:2px;color:#d4b45c;">{safe_card_number}</p>
           </div>
           <span style="display:inline-block;width:56px;height:38px;border-radius:8px;background:linear-gradient(145deg,#d4b45c 0%,#a8883a 50%,#d4b45c 100%);"></span>
@@ -853,6 +847,7 @@ def card_image_png(token: str, request: Request, db: Session = Depends(get_db)):
             ),
             organization_name=organization.name if organization else "N/D",
             club_display_name=club_display_name or (organization.name if organization else "N/D"),
+            organization_slug=organization.slug if organization else None,
             card_number=card_number or 0,
             card_year=card_year or 0,
             card_status=card_status,
