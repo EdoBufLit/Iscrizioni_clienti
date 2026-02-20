@@ -23,7 +23,7 @@ _CREAM      = HexColor("#fdf6e3")
 _MUTED      = HexColor("#c9a8b0")
 _STATUS_OK  = HexColor("#4ade80")
 _STATUS_ERR = HexColor("#f87171")
-_OASI2_LOGO_SHIFT_X = -9
+_OASI2_LOGO_SHIFT_X = -7
 
 # ─── Card geometry on A4 ──────────────────────────────────────────────────────
 _PAGE_W, _PAGE_H = A4  # 595.27 × 841.89 pt

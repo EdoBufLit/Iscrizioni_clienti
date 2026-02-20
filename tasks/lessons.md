@@ -63,3 +63,4 @@
 - Per micro-allineamenti logo su card multi-renderer (React/HTML/PDF/PNG), usare sempre centro geometrico + offset condiviso: evita drift visivo tra canali.
 - Nei micro-tuning visuali richiesti su screenshot (2-3px), applicare passi piccoli e simmetrici su tutti i renderer per evitare over-correction.
 - In fase finale di pixel-tuning, preferire step da 1px e fermarsi appena il feedback passa da "troppo a destra" a "quasi giusto".
+- Quando il cliente specifica una direzione esplicita ("verso destra/sinistra"), applicare il delta solo in quella direzione e confermarlo nel commit message.

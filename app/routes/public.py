@@ -436,7 +436,7 @@ def _render_card_download_html(
     if safe_org_logo:
         logo_height = "56px" if is_oasi2_card else "44px"
         logo_max_width = "240px" if is_oasi2_card else "220px"
-        logo_shift = "transform:translateX(-9px);" if is_oasi2_card else ""
+        logo_shift = "transform:translateX(-7px);" if is_oasi2_card else ""
         org_logo_top_block = f"""
         <div style="padding:14px 22px 0 22px;text-align:center;">
           <img src="{safe_org_logo}" alt="Logo associazione" style="height:{logo_height};max-width:{logo_max_width};object-fit:contain;{logo_shift}" />
