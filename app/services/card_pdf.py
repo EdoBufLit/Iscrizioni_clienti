@@ -203,7 +203,7 @@ def _draw_front(
         if is_oasi2:
             lw, lh = _logo_dims(org_logo_path, 170, 54)
             # Slight left nudge requested by customer for oasi-2.
-            logo_x = x + w * 0.52 - (lw / 2) - 6
+            logo_x = x + w * 0.52 - (lw / 2) - 8
             logo_y = y + h - lh - 10
         else:
             lw, lh = _logo_dims(org_logo_path, 140, 32)
