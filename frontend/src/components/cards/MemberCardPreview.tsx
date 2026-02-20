@@ -217,7 +217,7 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
                     style={{
                       background: "rgba(0,0,0,0.28)",
                       backdropFilter: "blur(4px)",
-                      transform: isOasi2Card ? "translateX(-7px)" : undefined,
+                      transform: isOasi2Card ? "translateX(-5px)" : undefined,
                     }}
                   >
                     <LogoImg
