@@ -15,7 +15,7 @@ _CREAM = (253, 246, 227)
 _MUTED = (201, 168, 176)
 _GREEN = (74, 222, 128)
 _RED = (248, 113, 113)
-_OASI2_LOGO_SHIFT_X = -5
+_OASI2_LOGO_SHIFT_X = -4
 
 # Credit-card ratio canvas (1.586 : 1)
 _W = 856

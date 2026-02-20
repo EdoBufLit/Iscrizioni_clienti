@@ -73,7 +73,7 @@ def build_member_card_email(
         if safe_org_logo_url:
             logo_height = "56px" if is_oasi2_card else "44px"
             logo_max_width = "240px" if is_oasi2_card else "220px"
-            logo_shift = "transform:translateX(-5px);" if is_oasi2_card else ""
+            logo_shift = "transform:translateX(-4px);" if is_oasi2_card else ""
             org_logo_header = f"""\
                   <tr>
                     <td align="center" style="padding:14px 24px 2px 24px;">
