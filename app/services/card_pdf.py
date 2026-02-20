@@ -23,6 +23,7 @@ _CREAM      = HexColor("#fdf6e3")
 _MUTED      = HexColor("#c9a8b0")
 _STATUS_OK  = HexColor("#4ade80")
 _STATUS_ERR = HexColor("#f87171")
+_OASI2_LOGO_SHIFT_X = -12
 
 # ─── Card geometry on A4 ──────────────────────────────────────────────────────
 _PAGE_W, _PAGE_H = A4  # 595.27 × 841.89 pt
@@ -203,7 +204,7 @@ def _draw_front(
         if is_oasi2:
             lw, lh = _logo_dims(org_logo_path, 170, 54)
             # Slight left nudge requested by customer for oasi-2.
-            logo_x = x + w * 0.52 - (lw / 2) - 8
+            logo_x = x + (w - lw) / 2 + _OASI2_LOGO_SHIFT_X
             logo_y = y + h - lh - 10
         else:
             lw, lh = _logo_dims(org_logo_path, 140, 32)

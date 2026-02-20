@@ -15,6 +15,7 @@ _CREAM = (253, 246, 227)
 _MUTED = (201, 168, 176)
 _GREEN = (74, 222, 128)
 _RED = (248, 113, 113)
+_OASI2_LOGO_SHIFT_X = -12
 
 # Credit-card ratio canvas (1.586 : 1)
 _W = 856
@@ -127,7 +128,9 @@ def generate_card_image_bytes(
     # Organization logo in top area (no watermark in oasi-2)
     if org_logo_path and os.path.exists(org_logo_path):
         if is_oasi2:
-            _paste_logo(img, org_logo_path, 270, 78, int(_W * 0.33) - 8, 14, opacity=0.99)
+            logo_box_w = 270
+            logo_box_x = int(((_W - logo_box_w) / 2) + _OASI2_LOGO_SHIFT_X)
+            _paste_logo(img, org_logo_path, logo_box_w, 78, logo_box_x, 14, opacity=0.99)
         else:
             _paste_logo(img, org_logo_path, 200, 52, (_W - 200) // 2, 14, opacity=0.95)
         draw = ImageDraw.Draw(img)
