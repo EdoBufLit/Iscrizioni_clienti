@@ -61,3 +61,4 @@
 - Se il cliente evidenzia un'area logo su screenshot reali, verificare sempre resa finale su card/download/thank-you (desktop+mobile) e adattare dimensioni/plate prima di considerare il task chiuso.
 - Nel fallback SPA, non restituire mai `index.html` per path asset con estensione (`.js`, `.css`, ecc.): per file mancanti va restituito 404 reale, altrimenti si genera MIME mismatch e pagina bianca.
 - Per micro-allineamenti logo su card multi-renderer (React/HTML/PDF/PNG), usare sempre centro geometrico + offset condiviso: evita drift visivo tra canali.
+- Nei micro-tuning visuali richiesti su screenshot (2-3px), applicare passi piccoli e simmetrici su tutti i renderer per evitare over-correction.
