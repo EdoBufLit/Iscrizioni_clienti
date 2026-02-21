@@ -36,7 +36,7 @@ def _advisory_lock_key(org_id: int, year: int) -> int:
     return raw_key
 
 
-def _acquire_allocation_lock(db: Session, *, org_id: int, year: int) -> None:
+def _acquire_allocation_lock(db: Session, *, org_id: int, year: int, immediate_sqlite: bool = True) -> None:
     dialect = db.get_bind().dialect.name
     if dialect == "postgresql":
         db.execute(
@@ -46,7 +46,8 @@ def _acquire_allocation_lock(db: Session, *, org_id: int, year: int) -> None:
         return
     if dialect == "sqlite":
         db.execute(text("PRAGMA busy_timeout = 5000"))
-        db.execute(text("BEGIN IMMEDIATE"))
+        if immediate_sqlite:
+            db.execute(text("BEGIN IMMEDIATE"))
 
 
 def _ordered_batches_query(org_id: int, year: int):
@@ -85,13 +86,81 @@ def _occupied_numbers(
     occupied_rows = db.execute(
         select(Member.card_no).where(
             Member.org_id == org_id,
-            Member.deleted_at.is_(None),
             Member.card_no.isnot(None),
             Member.card_no >= start_no,
             Member.card_no <= end_no,
         )
     ).all()
     return {int(row[0]) for row in occupied_rows if row[0] is not None}
+
+
+def release_card_number(
+    db: Session,
+    *,
+    org_id: int,
+    year: int | None,
+    card_no: int | None,
+    batch_id: int | None = None,
+) -> None:
+    if card_no is None:
+        return
+    if card_no <= 0:
+        return
+
+    lock_year = year if year is not None and year > 0 else None
+    if lock_year is not None:
+        _acquire_allocation_lock(db, org_id=org_id, year=lock_year, immediate_sqlite=False)
+
+    batch: CardBatch | None = None
+    if batch_id is not None:
+        id_filters = [
+            CardBatch.id == batch_id,
+            CardBatch.org_id == org_id,
+            CardBatch.released_at.is_(None),
+        ]
+        if year is not None and year > 0:
+            batch = db.query(CardBatch).filter(*id_filters, CardBatch.year == year).first()
+        if batch is None:
+            batch = db.query(CardBatch).filter(*id_filters).first()
+    if batch is None:
+        range_filters = [
+            CardBatch.org_id == org_id,
+            CardBatch.released_at.is_(None),
+            CardBatch.start_no <= card_no,
+            CardBatch.end_no >= card_no,
+        ]
+        if year is not None and year > 0:
+            batch = (
+                db.query(CardBatch)
+                .filter(*range_filters, CardBatch.year == year)
+                .order_by(CardBatch.start_no.asc(), CardBatch.id.asc())
+                .first()
+            )
+        if batch is None:
+            batch = (
+                db.query(CardBatch)
+                .filter(*range_filters)
+                .order_by(CardBatch.year.desc(), CardBatch.start_no.asc(), CardBatch.id.asc())
+                .first()
+            )
+    if batch is None:
+        return
+
+    if lock_year is None or lock_year != batch.year:
+        _acquire_allocation_lock(db, org_id=org_id, year=batch.year, immediate_sqlite=False)
+
+    current_next = _batch_next_candidate(batch)
+    if card_no < current_next:
+        batch.next_no = card_no
+        db.add(batch)
+        logger.info(
+            "card_released_rewind_next_no org_id=%s year=%s batch_id=%s card_no=%s next_no=%s",
+            org_id,
+            year,
+            batch.id,
+            card_no,
+            batch.next_no,
+        )
 
 
 def allocate_next_card(db: Session, org_id: int, year: int) -> CardAllocationResult:

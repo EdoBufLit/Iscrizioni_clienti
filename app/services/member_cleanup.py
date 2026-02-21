@@ -4,6 +4,7 @@ from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.models import CardMovement, Member, MemberDocument, MemberPayment, OperationLog, Token
+from app.services.card_allocation import release_card_number
 
 
 def _normalize_email(value: str | None) -> str | None:
@@ -92,6 +93,13 @@ def cleanup_deleted_member_traces(
     candidates = query.all()
     cleaned = 0
     for member in candidates:
+        release_card_number(
+            db,
+            org_id=member.org_id,
+            year=member.card_year,
+            card_no=member.card_no,
+            batch_id=member.batch_id,
+        )
         if purge_deleted_member_identifiers(member):
             cleaned += 1
 

@@ -30,7 +30,7 @@ from app.models import (
     TokenType,
 )
 from app.utils import generate_token, hash_token, send_email, save_upload_file
-from app.services.card_allocation import allocate_next_card
+from app.services.card_allocation import allocate_next_card, release_card_number
 from app.services.member_activity import (
     get_member_lifecycle_status,
     is_member_active,
@@ -1363,6 +1363,15 @@ def delete_member(
 
     now = datetime.utcnow()
     released_card_no = member.card_no
+    released_card_year = member.card_year
+    released_batch_id = member.batch_id
+    release_card_number(
+        db,
+        org_id=member.org_id,
+        year=released_card_year,
+        card_no=released_card_no,
+        batch_id=released_batch_id,
+    )
     member.deleted_at = now
     member.deleted_by_admin_id = admin.id
     member.status = MemberStatus.REJECTED

@@ -1304,3 +1304,26 @@ pm --prefix frontend run build -> OK
   - `python -m pytest tests/test_optional_identity_document.py tests/test_signup_fixes.py -q` -> **9 passed**
   - `python -m pytest tests/test_card_assignment.py tests/test_ingest_pienissimo.py tests/test_integration_issue_member.py tests/test_org_admin_decision.py tests/test_org_admin_manual_payment.py tests/test_optional_identity_document.py tests/test_signup_fixes.py tests/test_member_active_state_regression.py tests/test_super_admin_association_delete_release_range.py -q` -> **35 passed**
   - setup locale schema test: `if (Test-Path test_qa.db) { Remove-Item -Force test_qa.db }; $env:DATABASE_URL='sqlite:///test_qa.db'; python -c "from init_db import init_db; init_db()"` -> **OK**
+
+---
+## Spec (Riuso numeri tessera dopo delete - Feb 21, 2026)
+- Obiettivo: quando una tessera viene eliminata, il numero deve tornare disponibile subito e la prossima emissione deve riutilizzare i numeri liberati prima di avanzare.
+- Vincoli: mantenere lock/concurrency-safe su allocazione, nessun doppio numero in richieste parallele, nessuna regressione su ingest/manual/admin.
+
+## Plan (Riuso numeri tessera dopo delete)
+- [x] Ripristinare allocazione basata su `next_no` con lock forte, evitando duplicati in concorrenza.
+- [x] Introdurre helper centralizzato `release_card_number(...)` per riavvolgere `batch.next_no` quando un numero viene liberato.
+- [x] Integrare il rilascio nei flussi che azzerano card (`org_admin delete`, `member maintenance`, cleanup deleted ingest/legacy).
+- [x] Aggiornare test: regressione delete->reissue e test esplicito di riuso numero rilasciato.
+- [x] Eseguire pytest mirato e registrare esiti.
+
+## Review (Riuso numeri tessera dopo delete - Feb 21, 2026)
+- `app/services/card_allocation.py` aggiornato con `release_card_number(...)` + fallback robusto di risoluzione batch (anche in casi legacy con anno non allineato).
+- `app/routes/org_admin.py`: su delete membro ora viene fatto rewind di `next_no` prima di azzerare i campi tessera.
+- `app/services/member_maintenance.py`, `app/services/integration_issuer.py`, `app/services/member_cleanup.py`: rilascio numero integrato nei punti di cleanup card.
+- Test aggiornati:
+  - `tests/test_card_assignment.py`: nuovo test `test_released_cards_are_reused_before_advancing_progressive`.
+  - `tests/test_member_active_state_regression.py`: atteso riuso dello stesso numero dopo delete/reissue.
+- Comandi eseguiti:
+  - `python -m pytest tests/test_card_assignment.py::test_allocate_is_concurrency_safe_for_10_parallel_requests tests/test_member_card_expiration_maintenance.py::test_maintenance_frees_email_and_card_number_for_new_issue -q` -> **2 passed**
+  - `python -m pytest tests/test_card_assignment.py tests/test_member_active_state_regression.py tests/test_ingest_pienissimo.py tests/test_integration_issue_member.py tests/test_member_card_expiration_maintenance.py tests/test_org_admin_decision.py tests/test_org_admin_manual_payment.py tests/test_super_admin_association_delete_release_range.py -q` -> **30 passed**

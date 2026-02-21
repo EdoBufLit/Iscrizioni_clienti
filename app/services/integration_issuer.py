@@ -13,7 +13,7 @@ from app import audit
 from app.config import settings
 from app.email_templates.member_card_email import build_member_card_email
 from app.models import Member, MemberStatus, Organization, SignupSource, Token, TokenType
-from app.services.card_allocation import allocate_next_card
+from app.services.card_allocation import allocate_next_card, release_card_number
 from app.services.card_verification import build_card_verification_token
 from app.services.org_branding import (
     resolve_assonam_logo_url,
@@ -159,6 +159,13 @@ def _cleanup_deleted_conflicts(
         return 0
 
     for member in deleted_members:
+        release_card_number(
+            db,
+            org_id=org_id,
+            year=member.card_year,
+            card_no=member.card_no,
+            batch_id=member.batch_id,
+        )
         member.email = None
         member.phone = None
         member.fiscal_code = None

@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.models import Member, MemberStatus
+from app.services.card_allocation import release_card_number
 
 
 def _purge_member_pii(member: Member, now: datetime) -> None:
@@ -45,6 +46,13 @@ def expire_and_purge_members(
     member_ids: list[int] = []
 
     for member in candidates:
+        release_card_number(
+            db,
+            org_id=member.org_id,
+            year=member.card_year,
+            card_no=member.card_no,
+            batch_id=member.batch_id,
+        )
         member.deleted_at = current_time
         member.expired_at = member.expired_at or current_time
         member.status = MemberStatus.EXPIRED

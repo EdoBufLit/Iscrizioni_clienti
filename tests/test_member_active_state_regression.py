@@ -185,4 +185,4 @@ def test_deleted_member_is_inactive_everywhere(client, db):
     )
     assert reissue_res.status_code == 200, reissue_res.text
     reissue_data = reissue_res.json()
-    assert reissue_data["card_number"] == issue_data["card_number"] + 1
+    assert reissue_data["card_number"] == issue_data["card_number"]

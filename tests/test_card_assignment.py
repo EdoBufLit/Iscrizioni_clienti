@@ -12,7 +12,7 @@ from fastapi import HTTPException
 
 from app.db import SessionLocal
 from app.models import CardBatch, Organization
-from app.services.card_allocation import allocate_next_card
+from app.services.card_allocation import allocate_next_card, release_card_number
 
 
 @pytest.fixture
@@ -84,6 +84,48 @@ def test_exhausted_first_batch_uses_second_without_409(db):
     db.commit()
 
     assert allocation.card_no == 200
+
+
+def test_released_cards_are_reused_before_advancing_progressive(db):
+    current_year = datetime.utcnow().year
+    org = _create_org(db, "card-alloc-reuse")
+    batch = _create_batch(
+        db,
+        org_id=org.id,
+        year=current_year,
+        start_no=3801,
+        end_no=3810,
+        next_no=3801,
+    )
+
+    first = allocate_next_card(db, org.id, current_year)
+    db.commit()
+    second = allocate_next_card(db, org.id, current_year)
+    db.commit()
+    assert [first.card_no, second.card_no] == [3801, 3802]
+
+    release_card_number(
+        db,
+        org_id=org.id,
+        year=current_year,
+        card_no=3801,
+        batch_id=batch.id,
+    )
+    release_card_number(
+        db,
+        org_id=org.id,
+        year=current_year,
+        card_no=3802,
+        batch_id=batch.id,
+    )
+    db.commit()
+
+    reused_first = allocate_next_card(db, org.id, current_year)
+    db.commit()
+    reused_second = allocate_next_card(db, org.id, current_year)
+    db.commit()
+
+    assert [reused_first.card_no, reused_second.card_no] == [3801, 3802]
 
 
 def test_allocate_returns_409_when_all_batches_exhausted(db):
