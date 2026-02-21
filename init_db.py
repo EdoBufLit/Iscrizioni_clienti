@@ -11,6 +11,7 @@ Deployment checklist:
 """
 import logging
 import os
+from datetime import datetime
 
 from sqlalchemy import inspect, text
 
@@ -107,7 +108,18 @@ def init_db():
         _add_column_if_missing(conn, "organizations", "club_display_name", "VARCHAR")
         _add_column_if_missing(conn, "organizations", "card_email_subject", "VARCHAR")
         _add_column_if_missing(conn, "organizations", "card_logo_url", "VARCHAR")
+        _add_column_if_missing(conn, "card_batches", "year", "INTEGER")
         _add_column_if_missing(conn, "card_batches", "released_at", "DATETIME")
+        conn.execute(
+            text(
+                """
+                UPDATE card_batches
+                   SET year = :current_year
+                 WHERE year IS NULL
+                """
+            ),
+            {"current_year": datetime.utcnow().year},
+        )
         # Ingest idempotency safety index (active member per org/year/email).
         conn.execute(
             text(
@@ -203,6 +215,7 @@ def init_db():
             logger.info("Creating seed card batch...")
             batch = CardBatch(
                 org_id=org.id,
+                year=datetime.utcnow().year,
                 start_no=100,
                 end_no=200,
                 next_no=100

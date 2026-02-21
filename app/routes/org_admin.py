@@ -30,7 +30,7 @@ from app.models import (
     TokenType,
 )
 from app.utils import generate_token, hash_token, send_email, save_upload_file
-from app.services.card import assign_next_card_with_batch
+from app.services.card_allocation import allocate_next_card
 from app.services.member_activity import (
     get_member_lifecycle_status,
     is_member_active,
@@ -76,8 +76,10 @@ _ALLOWED_MEMBER_PAYMENT_METHODS = {
 
 
 def _compute_org_card_stock(db: Session, org_id: int, now: datetime | None = None) -> dict[str, int]:
+    target_year = int((now or datetime.utcnow()).year)
     batches = db.query(CardBatch.start_no, CardBatch.end_no).filter(
         CardBatch.org_id == org_id,
+        CardBatch.year == target_year,
         CardBatch.released_at.is_(None),
     ).all()
     if not batches:
@@ -92,6 +94,7 @@ def _compute_org_card_stock(db: Session, org_id: int, now: datetime | None = Non
         db.query(func.count(func.distinct(Member.card_no))).filter(
             Member.org_id == org_id,
             Member.deleted_at.is_(None),
+            Member.card_year == target_year,
             Member.card_no.isnot(None),
             or_(*range_filters),
         ).scalar()
@@ -1179,10 +1182,14 @@ def member_decision(
         if member.card_no is None:
             # Idempotency: do not reassign card numbers
             try:
-                assigned, batch_id = assign_next_card_with_batch(db, member.org_id)
-                member.card_no = assigned
-                member.batch_id = batch_id
-                member.card_year = datetime.utcnow().year
+                allocation = allocate_next_card(
+                    db,
+                    org_id=member.org_id,
+                    year=datetime.utcnow().year,
+                )
+                member.card_no = allocation.card_no
+                member.batch_id = allocation.batch_id
+                member.card_year = allocation.year
             except HTTPException as exc:
                 if exc.status_code == 409:
                     # Cards exhausted - member approved but waiting for card
@@ -1270,10 +1277,14 @@ def create_manual_payment(
     if member.status != MemberStatus.REJECTED:
         if member.card_no is None:
             try:
-                assigned, batch_id = assign_next_card_with_batch(db, member.org_id)
-                member.card_no = assigned
-                member.batch_id = batch_id
-                member.card_year = datetime.utcnow().year
+                allocation = allocate_next_card(
+                    db,
+                    org_id=member.org_id,
+                    year=datetime.utcnow().year,
+                )
+                member.card_no = allocation.card_no
+                member.batch_id = allocation.batch_id
+                member.card_year = allocation.year
                 card_assigned = True
             except HTTPException as exc:
                 if exc.status_code == 409:

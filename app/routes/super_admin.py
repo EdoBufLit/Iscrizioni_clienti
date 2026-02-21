@@ -1073,10 +1073,12 @@ async def upload_org_statute(
 class SetCardRange(BaseModel):
     from_no: int
     to_no: int
+    year: Optional[int] = None
 
 class AddCardBatch(BaseModel):
     from_no: int
     to_no: int
+    year: Optional[int] = None
 
 def check_card_overlap(db: Session, start_no: int, end_no: int, exclude_batch_id: Optional[int] = None):
     """
@@ -1096,6 +1098,47 @@ def check_card_overlap(db: Session, start_no: int, end_no: int, exclude_batch_id
     return query.first()
 
 
+def _resolve_batch_year(raw_year: Optional[int]) -> int:
+    default_year = datetime.utcnow().year
+    if raw_year is None:
+        return default_year
+    if raw_year < 2000 or raw_year > default_year + 20:
+        raise HTTPException(status_code=400, detail="Anno lotto non valido")
+    return raw_year
+
+
+def _count_assigned_cards_for_batch(db: Session, batch: CardBatch) -> int:
+    return int(
+        db.query(func.count(func.distinct(Member.card_no))).filter(
+            Member.org_id == batch.org_id,
+            Member.deleted_at.is_(None),
+            Member.card_year == batch.year,
+            Member.card_no.isnot(None),
+            Member.card_no >= batch.start_no,
+            Member.card_no <= batch.end_no,
+        ).scalar()
+        or 0
+    )
+
+
+def _serialize_batch_usage(db: Session, batch: CardBatch) -> dict[str, int | bool | None]:
+    total = int(batch.end_no - batch.start_no + 1)
+    assigned = _count_assigned_cards_for_batch(db, batch)
+    remaining = max(total - assigned, 0)
+    batch_next_no = batch.next_no if batch.next_no is not None else batch.start_no
+    return {
+        "id": batch.id,
+        "start_no": batch.start_no,
+        "end_no": batch.end_no,
+        "next_no": batch.next_no,
+        "year": batch.year,
+        "is_active": bool(batch.released_at is None and batch_next_no <= batch.end_no),
+        "total": total,
+        "assigned": assigned,
+        "remaining": remaining,
+    }
+
+
 @router.post("/organizations/{org_id}/card-range")
 def set_initial_card_range(
     request: Request,
@@ -1112,6 +1155,7 @@ def set_initial_card_range(
          raise HTTPException(status_code=400, detail="Range must be positive integers")
     if body.from_no > body.to_no:
          raise HTTPException(status_code=400, detail="FROM must be less than or equal to TO")
+    batch_year = _resolve_batch_year(body.year)
 
     org = db.query(Organization).filter(Organization.id == org_id).first()
     if not org:
@@ -1138,6 +1182,7 @@ def set_initial_card_range(
 
     batch = CardBatch(
         org_id=org_id,
+        year=batch_year,
         start_no=body.from_no,
         end_no=body.to_no,
         next_no=body.from_no,
@@ -1165,7 +1210,7 @@ def set_initial_card_range(
     )
     db.commit()
 
-    return {"ok": True, "start_no": body.from_no, "end_no": body.to_no}
+    return {"ok": True, "year": batch_year, "start_no": body.from_no, "end_no": body.to_no}
 
 
 @router.post("/orgs/{org_id}/cards/add-batch")
@@ -1185,6 +1230,7 @@ def add_card_batch(
         raise HTTPException(status_code=400, detail="I numeri devono essere interi positivi")
     if body.from_no > body.to_no:
         raise HTTPException(status_code=400, detail="Il numero iniziale deve essere minore o uguale al finale")
+    batch_year = _resolve_batch_year(body.year)
 
     org = db.query(Organization).filter(Organization.id == org_id).first()
     if not org:
@@ -1202,6 +1248,7 @@ def add_card_batch(
 
     batch = CardBatch(
         org_id=org_id,
+        year=batch_year,
         start_no=body.from_no,
         end_no=body.to_no,
         next_no=body.from_no,
@@ -1234,14 +1281,17 @@ def add_card_batch(
     # Return updated stock summary
     batches = db.query(CardBatch).filter(
         CardBatch.org_id == org_id,
+        CardBatch.year == batch_year,
         CardBatch.released_at.is_(None),
     ).order_by(CardBatch.start_no).all()
-    total = sum(b.end_no - b.start_no + 1 for b in batches)
-    remaining = sum(max(b.end_no - b.next_no + 1, 0) for b in batches)
+    serialized_batches = [_serialize_batch_usage(db, b) for b in batches]
+    total = int(sum(int(item["total"]) for item in serialized_batches))
+    remaining = int(sum(int(item["remaining"]) for item in serialized_batches))
 
     return {
         "ok": True,
         "batch_id": batch.id,
+        "year": batch_year,
         "start_no": body.from_no,
         "end_no": body.to_no,
         "cards_total": total,
@@ -1253,14 +1303,15 @@ def add_card_batch(
 def get_org_batches(
     request: Request,
     org_id: int,
+    year: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
     """Get all card batches for an organization."""
     _require_super_admin(request, db)
 
     now = datetime.utcnow()
-    current_year = now.year
-    next_reset = datetime(current_year + 1, 1, 1)
+    target_year = _resolve_batch_year(year if year is not None else now.year)
+    next_reset = datetime(target_year + 1, 1, 1)
 
     org = db.query(Organization).filter(Organization.id == org_id).first()
     if not org:
@@ -1268,30 +1319,22 @@ def get_org_batches(
 
     batches = db.query(CardBatch).filter(
         CardBatch.org_id == org_id,
+        CardBatch.year == target_year,
         CardBatch.released_at.is_(None),
     ).order_by(CardBatch.start_no).all()
+    serialized_batches = [_serialize_batch_usage(db, b) for b in batches]
+    summary_total = int(sum(int(item["total"]) for item in serialized_batches))
+    summary_assigned = int(sum(int(item["assigned"]) for item in serialized_batches))
+    summary_remaining = int(sum(int(item["remaining"]) for item in serialized_batches))
 
     return {
-        "batches": [
-            {
-                "id": b.id,
-                "start_no": b.start_no,
-                "end_no": b.end_no,
-                "next_no": b.next_no,
-                "year": current_year,
-                "is_active": bool(b.released_at is None and b.next_no <= b.end_no),
-                "total": b.end_no - b.start_no + 1,
-                "assigned": b.next_no - b.start_no,
-                "remaining": max(b.end_no - b.next_no + 1, 0),
-            }
-            for b in batches
-        ],
-        "current_year": current_year,
+        "batches": serialized_batches,
+        "current_year": target_year,
         "next_reset_at": next_reset.isoformat() + "Z",
         "summary": {
-            "total": sum(b.end_no - b.start_no + 1 for b in batches),
-            "assigned": sum(b.next_no - b.start_no for b in batches),
-            "remaining": sum(max(b.end_no - b.next_no + 1, 0) for b in batches),
+            "total": summary_total,
+            "assigned": summary_assigned,
+            "remaining": summary_remaining,
         }
     }
 

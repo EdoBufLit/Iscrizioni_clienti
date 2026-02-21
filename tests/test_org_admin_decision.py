@@ -1,8 +1,10 @@
 import pytest
+from sqlalchemy import func
 from app.db import SessionLocal
-from app.models import AdminUser, AdminRole, Organization, Member, MemberStatus, OrgAdminToken
+from app.models import AdminUser, AdminRole, Organization, Member, MemberStatus, OrgAdminToken, CardBatch
 from app.utils import hash_token
 from datetime import datetime, timedelta
+import uuid
 
 @pytest.fixture
 def db():
@@ -11,6 +13,9 @@ def db():
     session.close()
 
 def test_org_admin_decision(client, db):
+    unique_suffix = uuid.uuid4().hex[:8]
+    current_year = datetime.utcnow().year
+
     # Setup: Ensure Org exists
     org = db.query(Organization).filter_by(slug="decision-org").first()
     if not org:
@@ -18,6 +23,24 @@ def test_org_admin_decision(client, db):
         db.add(org)
         db.commit()
         db.refresh(org)
+
+    batch = db.query(CardBatch).filter(
+        CardBatch.org_id == org.id,
+        CardBatch.year == current_year,
+        CardBatch.released_at.is_(None),
+    ).first()
+    if not batch:
+        max_end_no = db.query(func.max(CardBatch.end_no)).scalar() or 25000
+        start_no = int(max_end_no) + 100
+        batch = CardBatch(
+            org_id=org.id,
+            year=current_year,
+            start_no=start_no,
+            end_no=start_no + 50,
+            next_no=start_no,
+        )
+        db.add(batch)
+        db.commit()
 
     # Setup: Create Org Admin
     admin_email = "decision_admin@example.com"
@@ -38,7 +61,7 @@ def test_org_admin_decision(client, db):
         org_id=org.id,
         first_name="To",
         last_name="Approve",
-        email="approve@example.com",
+        email=f"approve-{unique_suffix}@example.com",
         status=MemberStatus.PENDING_DOCS
     )
     db.add(member_approve)
@@ -48,7 +71,7 @@ def test_org_admin_decision(client, db):
         org_id=org.id,
         first_name="To",
         last_name="Reject",
-        email="reject@example.com",
+        email=f"reject-{unique_suffix}@example.com",
         status=MemberStatus.PENDING_DOCS
     )
     db.add(member_reject)
@@ -57,7 +80,7 @@ def test_org_admin_decision(client, db):
     db.refresh(member_reject)
 
     # Authenticate Org Admin
-    token_str = "decisiontoken123"
+    token_str = f"decisiontoken-{unique_suffix}"
     expiry = datetime.utcnow() + timedelta(minutes=15)
     token = OrgAdminToken(
         admin_id=admin.id,
@@ -99,14 +122,14 @@ def test_org_admin_decision(client, db):
     assert member_reject.decision_by_admin_id == admin.id
 
     # Test Cross-Org Access (Forbidden)
-    other_org = Organization(name="Other Org", slug="other-org", is_active=True)
+    other_org = Organization(name="Other Org", slug=f"other-org-{unique_suffix}", is_active=True)
     db.add(other_org)
     db.commit()
     other_member = Member(
         org_id=other_org.id,
         first_name="Other",
         last_name="Guy",
-        email="other@example.com",
+        email=f"other-{unique_suffix}@example.com",
         status=MemberStatus.PENDING_DOCS
     )
     db.add(other_member)

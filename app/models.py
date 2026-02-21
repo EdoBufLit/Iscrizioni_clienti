@@ -180,6 +180,7 @@ class CardBatch(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     org_id = Column(Integer, ForeignKey("organizations.id"))
+    year = Column(Integer, nullable=False, default=lambda: datetime.utcnow().year)
     start_no = Column(Integer)
     end_no = Column(Integer)
     next_no = Column(Integer) # Tracks the next available number

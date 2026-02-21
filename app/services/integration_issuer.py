@@ -13,7 +13,7 @@ from app import audit
 from app.config import settings
 from app.email_templates.member_card_email import build_member_card_email
 from app.models import Member, MemberStatus, Organization, SignupSource, Token, TokenType
-from app.services.card import assign_next_card_with_batch
+from app.services.card_allocation import allocate_next_card
 from app.services.card_verification import build_card_verification_token
 from app.services.org_branding import (
     resolve_assonam_logo_url,
@@ -311,10 +311,14 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
         or member_card_year < now.year
     )
     if needs_new_card:
-        assigned_card, batch_id = assign_next_card_with_batch(db, org.id)
-        member.card_no = assigned_card
-        member.batch_id = batch_id
-        member.card_year = now.year
+        allocation = allocate_next_card(
+            db,
+            org_id=org.id,
+            year=now.year,
+        )
+        member.card_no = allocation.card_no
+        member.batch_id = allocation.batch_id
+        member.card_year = allocation.year
         member.card_email_sent_at = None
         issued_new_card = True
         if outcome == "reused":

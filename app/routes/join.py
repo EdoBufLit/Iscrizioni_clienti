@@ -18,7 +18,7 @@ from app.models import (
     AdminRole,
 )
 from app.utils import generate_token, send_email, save_upload_file, hash_token
-from app.services.card import assign_next_card_with_batch
+from app.services.card_allocation import allocate_next_card
 from app.services.member_cleanup import cleanup_deleted_member_traces, purge_deleted_members_permanently
 from app.services.member_activity import is_member_active
 from app.config import settings
@@ -376,12 +376,17 @@ async def api_join_continue(
 
         # Assign Card
         try:
-            assigned, batch_id = assign_next_card_with_batch(db, member.org_id)
-            member.card_no = assigned
-            member.batch_id = batch_id
-            member.card_year = datetime.utcnow().year
+            allocation = allocate_next_card(
+                db,
+                org_id=member.org_id,
+                year=datetime.utcnow().year,
+            )
+            member.card_no = allocation.card_no
+            member.batch_id = allocation.batch_id
+            member.card_year = allocation.year
             member.status = MemberStatus.ACTIVE
             member.joined_at = datetime.utcnow()
+            assigned = allocation.card_no
         except HTTPException as exc:
             if exc.status_code == 409:
                 # Cards exhausted - member goes to PENDING_CARDS status

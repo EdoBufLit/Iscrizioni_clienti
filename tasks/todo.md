@@ -1276,3 +1276,31 @@ pm --prefix frontend run build -> OK
 - Verifica visuale: card `oasi-2` con fondo mono-colore bordeaux, logo associazione posizionato in alto (non watermark), logo ASSONAM in alto a destra, campi testuali invariati.
 - Verifica thank-you: logo header su plate nero con blur/backdrop, resa leggibile sia desktop che mobile.
 
+
+---
+## Spec (Allocazione tessere multi-lotto annuale + concurrency-safe - Feb 21, 2026)
+- Obiettivo: supportare più lotti attivi nello stesso anno per associazione e garantire emissione continua senza blocco quando un lotto termina.
+- Vincoli: funzione unica `allocate_next_card(org_id, year)` con lock transazionale, fallback automatico tra lotti disponibili, errore chiaro `card_range_exhausted` (409), integrazione su flussi manuali + ingest Pienissimo.
+
+## Plan (Allocazione tessere multi-lotto annuale + concurrency-safe)
+- [x] Implementare servizio unico `app/services/card_allocation.py` con `allocate_next_card(db, org_id, year)` e lock concurrency-safe.
+- [x] Aggiornare `CardBatch` e creazione lotti per supportare `year` (migrazione Alembic + fallback startup `init_db.py`).
+- [x] Sostituire tutti i punti di emissione tessera (manual signup/join, org-admin decision/payment, admin legacy, ingest/integration issuer) con la nuova funzione.
+- [x] Aggiornare KPI/sommari lotti `assegnate/rimanenti` evitando `next_no - start_no` dove esposto in API.
+- [x] Aggiungere logging allocation (`org_id`, `year`, `batch_id`, `card_no`) e evento `batch_exhausted_fallback`.
+- [x] Aggiungere test obbligatori: fallback A->B, A esaurito ma B disponibile, tutti esauriti -> 409, concorrenza 10 emissioni parallele uniche.
+- [x] Eseguire test mirati e documentare Review con evidenze.
+
+## Review (Allocazione tessere multi-lotto annuale + concurrency-safe - Feb 21, 2026)
+- Nuovo servizio: `app/services/card_allocation.py` con lock transazionale (`pg_advisory_xact_lock` su PostgreSQL, `BEGIN IMMEDIATE` su SQLite), filtro lotti per `org_id/year/released_at`, fallback automatico e logging `batch_exhausted_fallback` + `card_allocated`.
+- Compatibilità: wrapper legacy `app/services/card.py` ora delega a `allocate_next_card(...)`.
+- Emissione aggiornata nei flussi: `app/routes/join.py`, `app/routes/org_admin.py`, `app/routes/admin.py`, `app/services/integration_issuer.py`.
+- Supporto anno lotto: `CardBatch.year` in `app/models.py`, migrazione `alembic/versions/n5o6p7q8r9s0_add_card_batch_year.py`, fallback bootstrap in `init_db.py`.
+- KPI/sommari lotti super-admin: `app/routes/super_admin.py` usa conteggi reali su membri per `assigned/remaining` (non `next_no-start_no`) e supporta `year` nei payload lotto.
+- Test obbligatori implementati in `tests/test_card_assignment.py` (fallback A->B, A esaurito con B disponibile, esaurimento totale 409, concorrenza 10 parallele senza duplicati).
+- Aggiornamento test regressione org-admin decision: `tests/test_org_admin_decision.py` ora garantisce lotto disponibile per anno corrente.
+- Comandi eseguiti:
+  - `python -m pytest tests/test_card_assignment.py tests/test_ingest_pienissimo.py tests/test_integration_issue_member.py tests/test_org_admin_decision.py tests/test_org_admin_manual_payment.py -q` -> **22 passed**
+  - `python -m pytest tests/test_optional_identity_document.py tests/test_signup_fixes.py -q` -> **9 passed**
+  - `python -m pytest tests/test_card_assignment.py tests/test_ingest_pienissimo.py tests/test_integration_issue_member.py tests/test_org_admin_decision.py tests/test_org_admin_manual_payment.py tests/test_optional_identity_document.py tests/test_signup_fixes.py tests/test_member_active_state_regression.py tests/test_super_admin_association_delete_release_range.py -q` -> **35 passed**
+  - setup locale schema test: `if (Test-Path test_qa.db) { Remove-Item -Force test_qa.db }; $env:DATABASE_URL='sqlite:///test_qa.db'; python -c "from init_db import init_db; init_db()"` -> **OK**
