@@ -49,7 +49,8 @@ def upgrade() -> None:
             batch_op.add_column(sa.Column(_YEAR_COLUMN, sa.Integer(), nullable=True))
 
     current_year = datetime.utcnow().year
-    op.execute(
+    bind = op.get_bind()
+    bind.execute(
         sa.text(
             """
             UPDATE card_batches
