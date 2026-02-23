@@ -37,6 +37,12 @@ jobs:
             export DATABASE_URL='${{ secrets.DATABASE_URL }}'
             export UPLOAD_DIR='${{ secrets.UPLOAD_DIR }}'
             export SPA_DIR='${{ secrets.SPA_DIR }}'
+            export FRONTEND_URL='${{ secrets.FRONTEND_URL }}'
+
+            # Google Wallet (optional: use file path or base64 fallback)
+            export GOOGLE_WALLET_ISSUER_ID='${{ secrets.GOOGLE_WALLET_ISSUER_ID }}'
+            export GOOGLE_APPLICATION_CREDENTIALS='${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}'
+            export GOOGLE_WALLET_SA_B64='${{ secrets.GOOGLE_WALLET_SA_B64 }}'
 
             # SMTP (set these secrets only if you want real email sending)
             export SMTP_HOST='${{ secrets.SMTP_HOST }}'
@@ -50,6 +56,11 @@ jobs:
             export GIT_SHA='${{ github.sha }}'
             export BUILD_TIME="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
-            docker compose up -d --build
+            COMPOSE_FILES="-f docker-compose.yml"
+            if [ -f "docker-compose.prod.yml" ] && [ -f "secrets/google-wallet-sa.json" ]; then
+              COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.prod.yml"
+            fi
+
+            docker compose $COMPOSE_FILES up -d --build
             docker image prune -f || true
 
