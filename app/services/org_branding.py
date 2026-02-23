@@ -11,6 +11,15 @@ _CARD_LOGO_BY_SLUG_FALLBACK = {
     # Requested by customer branding: dedicated Golden Age logo for oasi-2 cards.
     "oasi-2": "/static/card-logos/oasi-2.png",
 }
+_WALLET_BRANDING_BY_SLUG_FALLBACK = {
+    "oasi-2": {
+        "bg_color": "#0B3C75",
+        "logo_url": "/static/card-logos/oasi-2.png",
+        "hero_image_url": "/static/wallet-heroes/oasi-2-hero.png",
+        "title_override": "Golden Age Club - Speakeasy",
+    }
+}
+_DEFAULT_WALLET_BG_COLOR = "#0B3C75"
 
 
 def _normalize_text(value: str | None) -> str | None:
@@ -98,3 +107,71 @@ def resolve_assonam_logo_url(*, frontend_base_url: str | None = None, backend_ba
     if _normalize_text(backend_base_url):
         return _to_absolute_url("/logo-transparent.png", base_url=backend_base_url)
     return "/logo-transparent.png"
+
+
+def _wallet_branding_defaults_for_org(org: Organization | None) -> dict[str, str]:
+    slug = _normalize_text(getattr(org, "slug", None) if org else None)
+    if not slug:
+        return {}
+    return dict(_WALLET_BRANDING_BY_SLUG_FALLBACK.get(slug, {}))
+
+
+def _is_hex_color(value: str | None) -> bool:
+    cleaned = _normalize_text(value)
+    if not cleaned:
+        return False
+    if len(cleaned) != 7 or not cleaned.startswith("#"):
+        return False
+    return all(ch in "0123456789abcdefABCDEF" for ch in cleaned[1:])
+
+
+def resolve_wallet_bg_color(org: Organization | None) -> str:
+    explicit = _normalize_text(getattr(org, "wallet_bg_color", None) if org else None)
+    if _is_hex_color(explicit):
+        return str(explicit).upper()
+    defaults = _wallet_branding_defaults_for_org(org)
+    fallback = _normalize_text(defaults.get("bg_color"))
+    if _is_hex_color(fallback):
+        return str(fallback).upper()
+    return _DEFAULT_WALLET_BG_COLOR
+
+
+def resolve_wallet_logo_url(org: Organization | None, *, base_url: str | None = None) -> str | None:
+    explicit = _normalize_text(getattr(org, "wallet_logo_url", None) if org else None)
+    if explicit:
+        return _to_absolute_url(explicit, base_url=base_url)
+    defaults = _wallet_branding_defaults_for_org(org)
+    fallback = _normalize_text(defaults.get("logo_url"))
+    if fallback:
+        return _to_absolute_url(fallback, base_url=base_url)
+    return None
+
+
+def resolve_wallet_hero_image_url(org: Organization | None, *, base_url: str | None = None) -> str | None:
+    explicit = _normalize_text(getattr(org, "wallet_hero_image_url", None) if org else None)
+    if explicit:
+        return _to_absolute_url(explicit, base_url=base_url)
+    defaults = _wallet_branding_defaults_for_org(org)
+    fallback = _normalize_text(defaults.get("hero_image_url"))
+    if fallback:
+        return _to_absolute_url(fallback, base_url=base_url)
+    return None
+
+
+def resolve_wallet_title_override(org: Organization | None) -> str | None:
+    explicit = _normalize_text(getattr(org, "wallet_title_override", None) if org else None)
+    if explicit:
+        return explicit
+    defaults = _wallet_branding_defaults_for_org(org)
+    fallback = _normalize_text(defaults.get("title_override"))
+    return fallback
+
+
+def wallet_branding_defaults(org: Organization | None, *, base_url: str | None = None) -> dict[str, object]:
+    return {
+        "wallet_bg_color": resolve_wallet_bg_color(org),
+        "wallet_logo_url": resolve_wallet_logo_url(org, base_url=base_url),
+        "wallet_hero_image_url": resolve_wallet_hero_image_url(org, base_url=base_url),
+        "wallet_title_override": resolve_wallet_title_override(org),
+        "wallet_is_test_prefix": bool(getattr(org, "wallet_is_test_prefix", False) if org else False),
+    }

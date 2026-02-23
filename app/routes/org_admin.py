@@ -38,9 +38,15 @@ from app.services.member_activity import (
     member_active_filters,
 )
 from app.services.member_card_delivery import maybe_send_member_card_ready_email
+from app.services.org_branding import wallet_branding_defaults
 from app.services.statute_upload import (
     enforce_statute_request_size_from_headers,
     save_statute_pdf,
+)
+from app.services.wallet_asset_upload import (
+    enforce_wallet_asset_request_size_from_headers,
+    save_wallet_hero_image_file,
+    save_wallet_logo_file,
 )
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
@@ -370,6 +376,9 @@ class PatchOrgOrganization(BaseModel):
     address_line2: Optional[str] = None
     postal_code: Optional[str] = None
     country: Optional[str] = None
+    wallet_bg_color: Optional[str] = None
+    wallet_title_override: Optional[str] = None
+    wallet_is_test_prefix: Optional[bool] = None
 
 
 @router.get("/organization")
@@ -382,6 +391,7 @@ def get_organization_detail(
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     org = admin.organization
+    wallet_defaults = wallet_branding_defaults(org, base_url=str(request.base_url).rstrip("/"))
     return {
         "id": org.id,
         "name": org.name,
@@ -401,6 +411,15 @@ def get_organization_detail(
         "statute_updated_at": org.statute_updated_at,
         "statute_url": f"/api/organizations/{org.slug}/statute" if org.statute_pdf_path else None,
         "has_statute": bool(org.statute_pdf_path),
+        "wallet_bg_color": org.wallet_bg_color,
+        "wallet_logo_url": org.wallet_logo_url,
+        "wallet_hero_image_url": org.wallet_hero_image_url,
+        "wallet_title_override": org.wallet_title_override,
+        "wallet_is_test_prefix": bool(org.wallet_is_test_prefix),
+        "wallet_effective_bg_color": wallet_defaults["wallet_bg_color"],
+        "wallet_effective_logo_url": wallet_defaults["wallet_logo_url"],
+        "wallet_effective_hero_image_url": wallet_defaults["wallet_hero_image_url"],
+        "wallet_effective_title_override": wallet_defaults["wallet_title_override"],
     }
 
 
@@ -416,6 +435,22 @@ def patch_organization(
 
     org = admin.organization
     update_data = body.model_dump(exclude_unset=True)
+
+    if "wallet_bg_color" in update_data:
+        raw_color = str(update_data.get("wallet_bg_color") or "").strip()
+        if raw_color == "":
+            update_data["wallet_bg_color"] = None
+        else:
+            is_hex = len(raw_color) == 7 and raw_color.startswith("#") and all(
+                ch in "0123456789abcdefABCDEF" for ch in raw_color[1:]
+            )
+            if not is_hex:
+                raise HTTPException(status_code=422, detail="wallet_bg_color deve essere in formato #RRGGBB")
+            update_data["wallet_bg_color"] = raw_color.upper()
+
+    if "wallet_title_override" in update_data:
+        raw_title = str(update_data.get("wallet_title_override") or "").strip()
+        update_data["wallet_title_override"] = raw_title or None
 
     for key, value in update_data.items():
         setattr(org, key, value)
@@ -505,6 +540,80 @@ async def upload_statute(
         "statute_version": new_version,
         "updated_at": org.statute_updated_at,
         "has_statute": True
+    }
+
+
+@router.post("/organization/wallet-assets")
+async def upload_wallet_assets(
+    request: Request,
+    logo: UploadFile | None = File(None),
+    hero_image: UploadFile | None = File(None),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if logo is None and hero_image is None:
+        raise HTTPException(status_code=400, detail="Carica almeno un asset (logo o hero image).")
+
+    org = admin.organization
+    audit_metadata: dict[str, object] = {}
+
+    try:
+        enforce_wallet_asset_request_size_from_headers(request.headers)
+        if logo is not None:
+            logo_rel_path, logo_size, logo_sha = await save_wallet_logo_file(logo, org_id=org.id)
+            org.wallet_logo_url = f"/uploads/{logo_rel_path.replace(os.sep, '/')}"
+            audit_metadata["logo"] = {
+                "filename": logo.filename,
+                "size": logo_size,
+                "sha256": logo_sha,
+                "url": org.wallet_logo_url,
+            }
+        if hero_image is not None:
+            hero_rel_path, hero_size, hero_sha = await save_wallet_hero_image_file(hero_image, org_id=org.id)
+            org.wallet_hero_image_url = f"/uploads/{hero_rel_path.replace(os.sep, '/')}"
+            audit_metadata["hero_image"] = {
+                "filename": hero_image.filename,
+                "size": hero_size,
+                "sha256": hero_sha,
+                "url": org.wallet_hero_image_url,
+            }
+    except HTTPException as exc:
+        if exc.status_code in {400, 413, 415, 422}:
+            logger.warning(
+                "Rejected wallet asset upload status=%s request_id=%s org_id=%s content_length=%s logo=%s hero=%s",
+                exc.status_code,
+                getattr(request.state, "request_id", None),
+                admin.org_id,
+                request.headers.get("content-length"),
+                getattr(logo, "filename", None),
+                getattr(hero_image, "filename", None),
+            )
+        raise
+
+    db.commit()
+
+    audit.log_operation(
+        db,
+        action="org.wallet_assets.upload",
+        entity_type="organization",
+        entity_id=org.id,
+        actor_admin_id=admin.id,
+        actor_role="org_admin",
+        metadata=audit_metadata,
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+
+    wallet_defaults = wallet_branding_defaults(org, base_url=str(request.base_url).rstrip("/"))
+    return {
+        "ok": True,
+        "wallet_logo_url": org.wallet_logo_url,
+        "wallet_hero_image_url": org.wallet_hero_image_url,
+        "wallet_effective_logo_url": wallet_defaults["wallet_logo_url"],
+        "wallet_effective_hero_image_url": wallet_defaults["wallet_hero_image_url"],
     }
 
 

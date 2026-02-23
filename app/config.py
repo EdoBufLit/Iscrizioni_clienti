@@ -35,6 +35,7 @@ class Settings:
     GOOGLE_WALLET_HTTP_TIMEOUT_SECONDS: int = int(
         os.getenv("GOOGLE_WALLET_HTTP_TIMEOUT_SECONDS", "15")
     )
+    WALLET_DEMO_MODE: bool = os.getenv("WALLET_DEMO_MODE", "false").lower() in ("true", "1", "yes")
 
     # Super admin bootstrap
     SUPER_ADMIN_EMAIL: str = os.getenv("SUPER_ADMIN_EMAIL", "admin@assonam.it")

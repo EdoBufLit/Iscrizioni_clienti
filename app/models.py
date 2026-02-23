@@ -135,6 +135,11 @@ class Organization(Base):
     club_display_name = Column(String, nullable=True)
     card_email_subject = Column(String, nullable=True)
     card_logo_url = Column(String, nullable=True)
+    wallet_bg_color = Column(String, nullable=True)
+    wallet_logo_url = Column(String, nullable=True)
+    wallet_hero_image_url = Column(String, nullable=True)
+    wallet_title_override = Column(String, nullable=True)
+    wallet_is_test_prefix = Column(Boolean, nullable=False, default=False, server_default="false")
     is_active = Column(Boolean, default=True)
     deleted_at = Column(DateTime, nullable=True)
 

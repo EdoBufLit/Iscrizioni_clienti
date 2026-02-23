@@ -144,6 +144,11 @@ def init_db():
         _add_column_if_missing(conn, "organizations", "club_display_name", "VARCHAR")
         _add_column_if_missing(conn, "organizations", "card_email_subject", "VARCHAR")
         _add_column_if_missing(conn, "organizations", "card_logo_url", "VARCHAR")
+        _add_column_if_missing(conn, "organizations", "wallet_bg_color", "VARCHAR")
+        _add_column_if_missing(conn, "organizations", "wallet_logo_url", "TEXT")
+        _add_column_if_missing(conn, "organizations", "wallet_hero_image_url", "TEXT")
+        _add_column_if_missing(conn, "organizations", "wallet_title_override", "VARCHAR")
+        _add_column_if_missing(conn, "organizations", "wallet_is_test_prefix", "INTEGER DEFAULT 0")
         _add_column_if_missing(conn, "card_batches", "year", "INTEGER")
         _add_column_if_missing(conn, "card_batches", "released_at", "DATETIME")
         conn.execute(
@@ -188,6 +193,26 @@ def init_db():
             {
                 "club_display_name": "Golden Age Club - Speakeasy",
                 "old_name": "Golden Age - Speakeasy",
+            },
+        )
+        # Wallet branding defaults for Golden Age (oasi-2); safe no-op when already customized.
+        conn.execute(
+            text(
+                """
+                UPDATE organizations
+                   SET wallet_bg_color = COALESCE(NULLIF(trim(wallet_bg_color), ''), :wallet_bg_color),
+                       wallet_logo_url = COALESCE(NULLIF(trim(wallet_logo_url), ''), :wallet_logo_url),
+                       wallet_hero_image_url = COALESCE(NULLIF(trim(wallet_hero_image_url), ''), :wallet_hero_image_url),
+                       wallet_title_override = COALESCE(NULLIF(trim(wallet_title_override), ''), :wallet_title_override),
+                       wallet_is_test_prefix = COALESCE(wallet_is_test_prefix, 0)
+                 WHERE lower(trim(slug)) = 'oasi-2'
+                """
+            ),
+            {
+                "wallet_bg_color": "#0B3C75",
+                "wallet_logo_url": "/static/card-logos/oasi-2.png",
+                "wallet_hero_image_url": "/static/wallet-heroes/oasi-2-hero.png",
+                "wallet_title_override": "Golden Age Club - Speakeasy",
             },
         )
 

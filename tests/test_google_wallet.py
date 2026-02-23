@@ -11,6 +11,7 @@ from app.security import get_password_hash
 from app.config import settings
 from app.services.google_wallet import (
     GoogleWalletSaveLinkResult,
+    _build_generic_object_payload,
     ensure_google_wallet_generic_object,
     load_google_wallet_service_account_info,
 )
@@ -52,6 +53,13 @@ def _create_active_member(db, *, slug_prefix: str = "wallet-test") -> Member:
     db.commit()
     db.refresh(member)
     return member
+
+
+def _force_public_wallet_urls(monkeypatch):
+    import app.services.google_wallet as wallet_service
+
+    monkeypatch.setattr(wallet_service, "_build_backend_base_url", lambda: "https://assonam.test")
+    monkeypatch.setattr(wallet_service, "_build_frontend_base_url", lambda: "https://assonam.test")
 
 
 def test_google_wallet_loader_prefers_file_over_b64(monkeypatch, tmp_path):
@@ -194,3 +202,72 @@ def test_google_wallet_object_create_409_is_handled_idempotently(db, monkeypatch
 
     assert payload["classId"] == "issuer.assonam_membership_v1"
     assert any(method == "PATCH" for method, _ in calls)
+
+
+def test_google_wallet_object_payload_applies_org_branding(db, monkeypatch):
+    member = _create_active_member(db, slug_prefix="wallet-branding-custom")
+    org = member.organization
+    assert org is not None
+    org.wallet_bg_color = "#123ABC"
+    org.wallet_logo_url = "https://cdn.example.com/wallet/logo.png"
+    org.wallet_hero_image_url = "https://cdn.example.com/wallet/hero.png"
+    org.wallet_title_override = "Golden Age Club"
+    org.wallet_is_test_prefix = False
+    db.commit()
+
+    _force_public_wallet_urls(monkeypatch)
+    monkeypatch.setattr(settings, "WALLET_DEMO_MODE", False, raising=False)
+
+    payload = _build_generic_object_payload(
+        member=member,
+        class_id="issuer.assonam_membership_v1",
+        object_id=f"issuer.branding.{member.id}.{member.card_year}",
+    )
+
+    assert payload["hexBackgroundColor"] == "#123ABC"
+    assert payload["cardTitle"]["defaultValue"]["value"] == "Golden Age Club"
+    assert payload["logo"]["sourceUri"]["uri"] == "https://cdn.example.com/wallet/logo.png"
+    assert payload["heroImage"]["sourceUri"]["uri"] == "https://cdn.example.com/wallet/hero.png"
+    assert any(item["id"] == "validity" for item in payload["textModulesData"])
+
+
+def test_google_wallet_object_payload_uses_assonam_fallback_without_org_branding(db, monkeypatch):
+    member = _create_active_member(db, slug_prefix="wallet-branding-fallback")
+    _force_public_wallet_urls(monkeypatch)
+    monkeypatch.setattr(settings, "WALLET_DEMO_MODE", False, raising=False)
+
+    payload = _build_generic_object_payload(
+        member=member,
+        class_id="issuer.assonam_membership_v1",
+        object_id=f"issuer.fallback.{member.id}.{member.card_year}",
+    )
+
+    assert payload["hexBackgroundColor"] == "#0B3C75"
+    assert payload["cardTitle"]["defaultValue"]["value"] == "ASSO.N.A.M."
+    assert payload["logo"]["sourceUri"]["uri"].endswith("/logo-transparent.png")
+    assert "heroImage" not in payload
+
+
+def test_google_wallet_object_payload_uses_oasi2_branding_fallback(db, monkeypatch):
+    member = _create_active_member(db, slug_prefix="wallet-branding-oasi2")
+    org = member.organization
+    assert org is not None
+    org.slug = "oasi-2"
+    org.wallet_bg_color = None
+    org.wallet_logo_url = None
+    org.wallet_hero_image_url = None
+    org.wallet_title_override = None
+
+    _force_public_wallet_urls(monkeypatch)
+    monkeypatch.setattr(settings, "WALLET_DEMO_MODE", False, raising=False)
+
+    payload = _build_generic_object_payload(
+        member=member,
+        class_id="issuer.assonam_membership_v1",
+        object_id=f"issuer.oasi2.{member.id}.{member.card_year}",
+    )
+
+    assert payload["hexBackgroundColor"] == "#0B3C75"
+    assert payload["cardTitle"]["defaultValue"]["value"] == "Golden Age Club - Speakeasy"
+    assert payload["logo"]["sourceUri"]["uri"].endswith("/static/card-logos/oasi-2.png")
+    assert payload["heroImage"]["sourceUri"]["uri"].endswith("/static/wallet-heroes/oasi-2-hero.png")

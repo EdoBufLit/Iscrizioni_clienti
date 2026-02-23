@@ -16,7 +16,15 @@ from app.config import settings
 from app.models import Member, Organization
 from app.services.card_verification import build_card_verification_token
 from app.services.member_activity import is_member_active
-from app.services.org_branding import resolve_assonam_logo_url, resolve_club_display_name
+from app.services.org_branding import (
+    resolve_assonam_logo_url,
+    resolve_card_logo_url,
+    resolve_club_display_name,
+    resolve_wallet_bg_color,
+    resolve_wallet_hero_image_url,
+    resolve_wallet_logo_url,
+    resolve_wallet_title_override,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -281,6 +289,20 @@ def _member_state(member: Member) -> str:
     return "ACTIVE" if is_member_active(member, now=datetime.utcnow()) else "INACTIVE"
 
 
+def _wallet_demo_mode_enabled() -> bool:
+    return bool(getattr(settings, "WALLET_DEMO_MODE", False))
+
+
+def _wallet_test_prefix(org: Organization | None) -> str:
+    if not _wallet_demo_mode_enabled():
+        return ""
+    if org is None:
+        return ""
+    if bool(getattr(org, "wallet_is_test_prefix", False)):
+        return "[SOLO TEST] "
+    return ""
+
+
 def _organization_label(org: Organization | None) -> str:
     if org is None:
         return "ASSONAM"
@@ -298,26 +320,36 @@ def _build_generic_class_payload(*, class_id: str) -> dict[str, Any]:
 def _build_generic_object_payload(*, member: Member, class_id: str, object_id: str) -> dict[str, Any]:
     org = member.organization
     backend_base_url = _build_backend_base_url()
+    frontend_base_url = _build_frontend_base_url()
     verify_url = _build_member_verify_url(member, backend_base_url)
     login_url = _build_member_login_url()
     organization_label = _organization_label(org)
     full_name = _member_full_name(member)
     card_year = int(member.card_year or datetime.utcnow().year)
     card_number = int(member.card_no or 0)
+    member_state = _member_state(member)
 
     assonam_logo_url = resolve_assonam_logo_url(
-        frontend_base_url=_build_frontend_base_url(),
+        frontend_base_url=frontend_base_url,
         backend_base_url=backend_base_url,
     )
+    org_wallet_logo_url = resolve_wallet_logo_url(org, base_url=backend_base_url)
+    org_wallet_hero_url = resolve_wallet_hero_image_url(org, base_url=backend_base_url)
+    # If no dedicated wallet logo is configured, re-use the card/org logo before falling back to ASSONAM.
+    card_logo_fallback_url = resolve_card_logo_url(org, base_url=backend_base_url) if org_wallet_logo_url is None else None
+    logo_url = org_wallet_logo_url or card_logo_fallback_url or assonam_logo_url
+    logo_description = "Logo associazione" if (org_wallet_logo_url or card_logo_fallback_url) else "Logo ASSO.N.A.M."
+    card_title = resolve_wallet_title_override(org) or "ASSO.N.A.M."
+    card_title = f"{_wallet_test_prefix(org)}{card_title}".strip()
 
     payload: dict[str, Any] = {
         "id": object_id,
         "classId": class_id,
-        "state": _member_state(member),
-        "cardTitle": _localized_string("ASSO.N.A.M."),
+        "state": member_state,
+        "cardTitle": _localized_string(card_title),
         "header": _localized_string(full_name),
         "subheader": _localized_string(f"Tessera {card_year} - n. {card_number}"),
-        "hexBackgroundColor": "#0B3C75",
+        "hexBackgroundColor": resolve_wallet_bg_color(org),
         "textModulesData": [
             {
                 "id": "association",
@@ -327,7 +359,12 @@ def _build_generic_object_payload(*, member: Member, class_id: str, object_id: s
             {
                 "id": "status",
                 "header": "Stato",
-                "body": "Attivo" if _member_state(member) == "ACTIVE" else "Non attivo",
+                "body": "Attivo" if member_state == "ACTIVE" else "Non attivo",
+            },
+            {
+                "id": "validity",
+                "header": "Validita",
+                "body": str(card_year),
             },
             {
                 "id": "email",
@@ -354,15 +391,26 @@ def _build_generic_object_payload(*, member: Member, class_id: str, object_id: s
         },
     }
 
-    if _is_public_wallet_image_url(assonam_logo_url):
+    if _is_public_wallet_image_url(logo_url):
         payload["logo"] = {
-            "sourceUri": {"uri": assonam_logo_url},
-            "contentDescription": _localized_string("Logo ASSO.N.A.M."),
+            "sourceUri": {"uri": logo_url},
+            "contentDescription": _localized_string(logo_description),
         }
-    elif assonam_logo_url:
+    elif logo_url:
         logger.info(
             "Skipping Google Wallet logo because URL is not publicly reachable url=%s",
-            assonam_logo_url,
+            logo_url,
+        )
+
+    if org_wallet_hero_url and _is_public_wallet_image_url(org_wallet_hero_url):
+        payload["heroImage"] = {
+            "sourceUri": {"uri": org_wallet_hero_url},
+            "contentDescription": _localized_string(f"Hero {organization_label}"),
+        }
+    elif org_wallet_hero_url:
+        logger.info(
+            "Skipping Google Wallet hero image because URL is not publicly reachable url=%s",
+            org_wallet_hero_url,
         )
     return payload
 

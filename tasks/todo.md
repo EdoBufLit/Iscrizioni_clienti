@@ -1473,3 +1473,55 @@ pm --prefix frontend run build -> OK
   - `python -m pytest tests\\test_org_admin_statute_upload.py -q` -> `3 passed`
   - `python -m pytest tests\\test_org_admin_manual_member.py::test_org_admin_cannot_override_org_id tests\\test_ingest_pienissimo.py::test_ingest_requires_email_even_when_external_id_is_provided -q` -> `2 passed`
   - `npm --prefix frontend run build` -> OK
+---
+## Spec (Diagnosi upload statuto bloccato a ~1MB in org-admin - Feb 23, 2026)
+- Obiettivo: verificare perche' la UI org-admin mostra "File troppo grande (max 10 MB)" gia' oltre ~1 MB.
+- Vincolo: confermare se il limite e' applicativo (frontend/FastAPI) o infrastrutturale (proxy), evitando fix cosmetici non risolutivi.
+
+## Plan (Diagnosi upload statuto bloccato a ~1MB in org-admin)
+- [x] Controllare pre-check frontend pagina `Associazione > Statuto`.
+- [x] Controllare limite backend/statute upload e test esistenti.
+- [x] Verificare presenza/assenza config reverse proxy nel repo e documentazione operativa.
+- [x] Documentare esito e fix operativo da applicare sul server.
+
+## Review (Diagnosi upload statuto bloccato a ~1MB in org-admin - Feb 23, 2026)
+- Frontend gia' a `10 * 1024 * 1024` in `frontend/src/pages/org-admin/OrgAdminSettings.tsx` (pre-check client-side 10 MB).
+- Backend gia' a `10 MB` in `app/services/statute_upload.py` con test dedicati (`tests/test_org_admin_statute_upload.py`).
+- Il messaggio UI resta "max 10 MB" anche se il blocco avviene prima, perche' `frontend/src/lib/api.ts` usa un fallback generico su HTTP `413`.
+- Root cause confermata dalla documentazione operativa esistente: reverse proxy Nginx con limite body di default (~1 MB) prima di FastAPI.
+- Fix reale: applicare `client_max_body_size 12M;` nel vhost Nginx (snippet gia' presente in `ops/nginx/assonam-upload-limit.conf.example`, guida in `docs/UPLOAD_STATUTE_10MB.md`).
+
+---
+## Google Wallet Branding per Associazione (Feb 23, 2026)
+- [ ] Ricognizione Wallet branding per org (modello Organization, wallet service, OrgAdminSettings, asset Golden Age, static/uploads)
+- [ ] Aggiungere campi branding Google Wallet a `organizations` + migration Alembic + fallback bootstrap `init_db.py`
+- [ ] Implementare upload asset Wallet org-admin (`/api/org-admin/organization/wallet-assets`) con validazioni mime/size e URL pubblici
+- [ ] Esporre `/uploads` come static in FastAPI + snippet/config Nginx di esempio
+- [ ] Applicare branding per-organization nel payload Google Wallet (logo/hero/bg/title/test-prefix/env) con fallback ASSONAM
+- [ ] Aggiornare UI OrgAdminSettings con sezione "Google Wallet Branding" (color picker, title, test flag, upload logo/hero, preview)
+- [ ] Precompilare Golden Age (`oasi-2`) con asset/logo e hero image fallback riusando design esistente
+- [ ] Aggiungere test backend minimi (payload branding fallback/custom + upload endpoint) e aggiornare test save-link mock
+- [ ] Aggiungere docs `docs/WALLET_BRANDING.md` + note deploy/static `/uploads`
+- [ ] Eseguire verifiche (`pytest` mirati, `alembic upgrade head`, `npm build`) e documentare Review
+
+## Review (Google Wallet branding per associazione - In corso)
+- Pending
+- [x] Ricognizione Wallet branding per org (modello Organization, wallet service, OrgAdminSettings, asset Golden Age, static/uploads)
+- [x] Aggiungere campi branding Google Wallet a `organizations` + migration Alembic + fallback bootstrap `init_db.py`
+- [x] Implementare upload asset Wallet org-admin (`/api/org-admin/organization/wallet-assets`) con validazioni mime/size e URL pubblici
+- [x] Esporre `/uploads` come static in FastAPI + snippet/config Nginx di esempio
+- [x] Applicare branding per-organization nel payload Google Wallet (logo/hero/bg/title/test-prefix/env) con fallback ASSONAM / Golden Age
+- [x] Aggiornare UI OrgAdminSettings con sezione "Google Wallet Branding" (color picker, title, test flag, upload logo/hero, preview)
+- [x] Precompilare Golden Age (`oasi-2`) con asset/logo e hero image fallback riusando design esistente
+- [x] Aggiungere test backend minimi (payload branding fallback/custom + upload endpoint) e aggiornare test save-link mock
+- [x] Aggiungere docs `docs/WALLET_BRANDING.md` + note deploy/static `/uploads`
+- [x] Eseguire verifiche (`pytest` mirati, `alembic upgrade head`, `npm build`) e documentare Review
+
+## Review (Google Wallet branding per associazione - Feb 23, 2026)
+- Backend: aggiunti campi `wallet_*` su `organizations`, endpoint upload assets org-admin, mount `/uploads`, fallback Golden Age (`oasi-2`) e branding applicato al payload Google Wallet (`logo`, `heroImage`, `hexBackgroundColor`, titolo, moduli testo).
+- Frontend: nuova sezione `Google Wallet Branding` in `OrgAdminSettings` con color picker, titolo override, flag demo, upload logo/hero e link preview.
+- Golden Age: asset fallback logo riusato (`app/static/card-logos/oasi-2.png`) + nuova hero image `app/static/wallet-heroes/oasi-2-hero.png`.
+- Docs/infra: aggiunti `docs/WALLET_BRANDING.md` e snippet Nginx `ops/nginx/assonam-uploads-static.conf.example`.
+- Test: `python -m pytest tests/test_google_wallet.py tests/test_org_admin_statute_upload.py -q` -> 13 passed.
+- Build: `npm --prefix frontend run build` -> OK.
+- Migration: `python -m alembic upgrade head` -> OK (pulito residuo locale `_alembic_tmp_organizations` lasciato da un run Alembic interrotto su SQLite).

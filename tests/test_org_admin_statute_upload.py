@@ -9,6 +9,16 @@ from app.db import SessionLocal
 from app.models import AdminRole, AdminUser, OrgAdminToken, Organization
 from app.utils import hash_token
 
+_PNG_1X1 = (
+    b"\x89PNG\r\n\x1a\n"
+    b"\x00\x00\x00\rIHDR"
+    b"\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00"
+    b"\x1f\x15\xc4\x89"
+    b"\x00\x00\x00\rIDATx\x9cc`\x00\x00\x00\x02\x00\x01"
+    b"\xe2!\xbc3"
+    b"\x00\x00\x00\x00IEND\xaeB`\x82"
+)
+
 
 @pytest.fixture
 def db():
@@ -109,3 +119,49 @@ def test_org_admin_statute_upload_accepts_small_pdf(client, db):
         os.remove(full_path)
     except OSError:
         pass
+
+
+def test_org_admin_wallet_assets_upload_accepts_logo_and_hero(client, db):
+    org, admin = _create_org_admin(db)
+    _login_org_admin(client, db, admin.id)
+
+    response = client.post(
+        "/api/org-admin/organization/wallet-assets",
+        files={
+            "logo": ("logo.png", _PNG_1X1, "image/png"),
+            "hero_image": ("hero.png", _PNG_1X1, "image/png"),
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["wallet_logo_url"].startswith("/uploads/org/")
+    assert payload["wallet_hero_image_url"].startswith("/uploads/org/")
+
+    db.refresh(org)
+    assert org.wallet_logo_url == payload["wallet_logo_url"]
+    assert org.wallet_hero_image_url == payload["wallet_hero_image_url"]
+
+    for rel_url in [org.wallet_logo_url, org.wallet_hero_image_url]:
+        rel_path = rel_url.replace("/uploads/", "", 1).replace("/", os.sep)
+        full_path = os.path.join(settings.UPLOAD_DIR, rel_path)
+        assert os.path.exists(full_path)
+        try:
+            os.remove(full_path)
+        except OSError:
+            pass
+
+
+def test_org_admin_wallet_assets_upload_rejects_invalid_logo_type(client, db):
+    _org, admin = _create_org_admin(db)
+    _login_org_admin(client, db, admin.id)
+
+    response = client.post(
+        "/api/org-admin/organization/wallet-assets",
+        files={"logo": ("logo.txt", b"hello", "text/plain")},
+    )
+
+    assert response.status_code == 415, response.text
+    payload = response.json()
+    assert "logo" in payload["detail"].lower()

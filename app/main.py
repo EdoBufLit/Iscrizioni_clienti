@@ -182,6 +182,9 @@ _static_path = Path("app/static")
 if _static_path.is_dir():
     app.mount("/static", StaticFiles(directory=_static_path), name="static")
 
+_uploads_path = Path(settings.UPLOAD_DIR)
+app.mount("/uploads", StaticFiles(directory=_uploads_path, check_dir=False), name="uploads")
+
 # ── Routers ───────────────────────────────────────────────────────
 
 app.include_router(join.router)
