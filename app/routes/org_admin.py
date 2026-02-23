@@ -30,7 +30,7 @@ from app.models import (
     TokenType,
     SignupSource,
 )
-from app.utils import generate_token, hash_token, send_email, save_upload_file
+from app.utils import generate_token, hash_token, send_email
 from app.services.card_allocation import allocate_next_card, release_card_number
 from app.services.member_activity import (
     get_member_lifecycle_status,
@@ -38,6 +38,10 @@ from app.services.member_activity import (
     member_active_filters,
 )
 from app.services.member_card_delivery import maybe_send_member_card_ready_email
+from app.services.statute_upload import (
+    enforce_statute_request_size_from_headers,
+    save_statute_pdf,
+)
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
 from app import audit
@@ -444,12 +448,21 @@ async def upload_statute(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    # Max 10MB
-    rel_path, size, sha = await save_upload_file(
-        file,
-        allowed_types=["application/pdf"],
-        max_size=10 * 1024 * 1024
-    )
+    try:
+        enforce_statute_request_size_from_headers(request.headers)
+        rel_path, size, sha = await save_statute_pdf(file)
+    except HTTPException as exc:
+        if exc.status_code in {413, 415, 422}:
+            logger.warning(
+                "Rejected statute upload status=%s request_id=%s org_id=%s content_length=%s filename=%s mime=%s",
+                exc.status_code,
+                getattr(request.state, "request_id", None),
+                admin.org_id,
+                request.headers.get("content-length"),
+                file.filename,
+                file.content_type,
+            )
+        raise
 
     org = admin.organization
 

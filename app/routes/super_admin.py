@@ -22,6 +22,10 @@ from app import audit
 from app.services.association_delete import delete_association_and_release_range
 from app.services.member_activity import get_member_lifecycle_status, is_member_active
 from app.services.member_maintenance import expire_and_purge_members
+from app.services.statute_upload import (
+    enforce_statute_request_size_from_headers,
+    save_statute_pdf,
+)
 
 import logging
 
@@ -1029,11 +1033,21 @@ async def upload_org_statute(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    rel_path, size, sha = await save_upload_file(
-        file,
-        allowed_types=["application/pdf"],
-        max_size=10 * 1024 * 1024,
-    )
+    try:
+        enforce_statute_request_size_from_headers(request.headers)
+        rel_path, size, sha = await save_statute_pdf(file)
+    except HTTPException as exc:
+        if exc.status_code in {413, 415, 422}:
+            logger.warning(
+                "Rejected super-admin statute upload status=%s request_id=%s org_id=%s content_length=%s filename=%s mime=%s",
+                exc.status_code,
+                getattr(request.state, "request_id", None),
+                org_id,
+                request.headers.get("content-length"),
+                file.filename,
+                file.content_type,
+            )
+        raise
 
     new_version = "v1"
     if org.statute_version:

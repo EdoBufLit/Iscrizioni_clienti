@@ -3,11 +3,14 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.bootstrap import bootstrap_super_admin
@@ -17,6 +20,7 @@ from app.middleware import (
     RequestIdMiddleware,
     SecurityHeadersMiddleware,
     SessionCsrfMiddleware,
+    get_request_id,
 )
 from app.routes import (
     admin,
@@ -86,6 +90,62 @@ app = FastAPI(
 )
 
 # ── Middleware stack (last added = outermost) ─────────────────────
+
+# Exception handlers (JSON + request_id for frontend-friendly errors)
+def _first_validation_message(errors: list[dict]) -> str:
+    if not errors:
+        return "Dati non validi."
+
+    first = errors[0] or {}
+    msg = first.get("msg")
+    loc = first.get("loc") or []
+    if not isinstance(msg, str) or not msg.strip():
+        return "Dati non validi."
+
+    loc_parts = [str(item) for item in loc if item not in {"body"}]
+    if not loc_parts:
+        return msg
+    return f"{'.'.join(loc_parts)}: {msg}"
+
+
+def _http_detail_message(detail: object, default: str) -> str:
+    if isinstance(detail, str) and detail.strip():
+        return detail
+    return default
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_error_handler(request: Request, exc: RequestValidationError):
+    errors = exc.errors()
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": errors,
+            "message": _first_validation_message(errors),
+            "request_id": get_request_id(request),
+        },
+    )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    default_message = "Richiesta non completata."
+    if exc.status_code >= 500:
+        default_message = "Errore server, riprova."
+    elif exc.status_code == 413:
+        default_message = "File troppo grande. Max 10 MB."
+    elif exc.status_code == 415:
+        default_message = "Formato non valido."
+
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "detail": exc.detail,
+            "message": _http_detail_message(exc.detail, default_message),
+            "request_id": get_request_id(request),
+        },
+        headers=exc.headers,
+    )
 
 # 1. Session — innermost, closest to route handlers
 # max_age=1800 = 30 minutes session timeout for security
