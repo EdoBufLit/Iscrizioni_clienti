@@ -131,3 +131,82 @@ def test_member_can_fetch_and_download_organization_statute(client, db):
     assert download.status_code == 200
     assert "application/pdf" in download.headers.get("content-type", "")
     assert download.content.startswith(b"%PDF-1.4")
+
+    alias_download = client.get("/api/me/documents/statute")
+    assert alias_download.status_code == 200
+    assert alias_download.content.startswith(b"%PDF-1.4")
+
+
+def test_member_statute_endpoint_is_scoped_to_logged_member_org(client, db):
+    suffix = uuid.uuid4().hex[:8]
+    org_a = Organization(
+        name=f"Statute A {suffix}",
+        slug=f"statute-a-{suffix}",
+        is_active=True,
+        statute_version="v1",
+        statute_pdf_path=f"statutes/{suffix}/a.pdf",
+    )
+    org_b = Organization(
+        name=f"Statute B {suffix}",
+        slug=f"statute-b-{suffix}",
+        is_active=True,
+        statute_version="v1",
+        statute_pdf_path=f"statutes/{suffix}/b.pdf",
+    )
+    db.add_all([org_a, org_b])
+    db.commit()
+    db.refresh(org_a)
+    db.refresh(org_b)
+
+    path_a = os.path.join(settings.UPLOAD_DIR, org_a.statute_pdf_path)
+    path_b = os.path.join(settings.UPLOAD_DIR, org_b.statute_pdf_path)
+    os.makedirs(os.path.dirname(path_a), exist_ok=True)
+    with open(path_a, "wb") as handle:
+        handle.write(b"%PDF-1.4\n% org-a\n")
+    with open(path_b, "wb") as handle:
+        handle.write(b"%PDF-1.4\n% org-b\n")
+
+    member_a = Member(
+        org_id=org_a.id,
+        first_name="A",
+        last_name="User",
+        email=f"member.a.{suffix}@example.com",
+        password_hash=get_password_hash("TestPass123!"),
+        status=MemberStatus.ACTIVE,
+        card_no=6000 + int(suffix[:2], 16),
+        card_year=datetime.utcnow().year,
+        joined_at=datetime.utcnow(),
+        signup_ip="127.0.0.1",
+        signup_user_agent="pytest",
+    )
+    member_b = Member(
+        org_id=org_b.id,
+        first_name="B",
+        last_name="User",
+        email=f"member.b.{suffix}@example.com",
+        password_hash=get_password_hash("TestPass123!"),
+        status=MemberStatus.ACTIVE,
+        card_no=6100 + int(suffix[:2], 16),
+        card_year=datetime.utcnow().year,
+        joined_at=datetime.utcnow(),
+        signup_ip="127.0.0.1",
+        signup_user_agent="pytest",
+    )
+    db.add_all([member_a, member_b])
+    db.commit()
+
+    login_a = client.post("/api/auth/login", data={"email": member_a.email, "password": "TestPass123!"})
+    assert login_a.status_code == 200
+    res_a = client.get("/api/me/documents/statute")
+    assert res_a.status_code == 200
+    assert b"org-a" in res_a.content
+    assert b"org-b" not in res_a.content
+
+    client.post("/api/auth/logout")
+
+    login_b = client.post("/api/auth/login", data={"email": member_b.email, "password": "TestPass123!"})
+    assert login_b.status_code == 200
+    res_b = client.get("/api/me/documents/statute")
+    assert res_b.status_code == 200
+    assert b"org-b" in res_b.content
+    assert b"org-a" not in res_b.content

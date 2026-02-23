@@ -13,6 +13,7 @@ const Contatti = lazy(() => import("./pages/Contatti"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Login = lazy(() => import("./pages/Login"));
 const MagicLinkVerify = lazy(() => import("./pages/MagicLinkVerify"));
+const WalletGoogleAdd = lazy(() => import("./pages/WalletGoogleAdd"));
 const ReservedAreaRedirect = lazy(() => import("./pages/ReservedAreaRedirect"));
 const PienissimoThankYouPage = lazy(() => import("./pages/PienissimoThankYouPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -67,6 +68,7 @@ const App = () => {
           <Route path="area-riservata" element={<ReservedAreaRedirect />} />
           <Route path="pienissimo/thank-you/:orgSlug" element={<PienissimoThankYouPage />} />
           <Route path="auth/verify" element={<MagicLinkVerify />} />
+          <Route path="wallet/google/add" element={<WalletGoogleAdd />} />
           <Route path="dashboard" element={<DashboardLayout />}>
             <Route index element={<DashboardHome />} />
             <Route path="profilo" element={<DashboardProfile />} />

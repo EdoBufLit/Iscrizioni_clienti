@@ -12,6 +12,7 @@ from app.models import (
     DocStatus,
     OrgAdminToken,
     MemberPayment,
+    SignupSource,
 )
 from app.security import get_password_hash
 from app.utils import hash_token
@@ -81,6 +82,7 @@ def test_org_admin_member_filters(client, db):
         password_hash=get_password_hash("Pass1234!"),
         status=MemberStatus.ACTIVE,
         is_manual=True,
+        signup_source=SignupSource.ADMIN.value,
         joined_at=datetime.utcnow(),
         signup_ip="127.0.0.1",
         signup_user_agent="pytest",
@@ -93,6 +95,7 @@ def test_org_admin_member_filters(client, db):
         fiscal_code="CCCCDDDD22",
         status=MemberStatus.PENDING_DOCS,
         is_manual=False,
+        signup_source=SignupSource.PIENISSIMO.value,
         joined_at=datetime.utcnow(),
         signup_ip="127.0.0.1",
         signup_user_agent="pytest",
@@ -105,6 +108,7 @@ def test_org_admin_member_filters(client, db):
         fiscal_code="EEEFFFF33",
         status=MemberStatus.REJECTED,
         is_manual=False,
+        signup_source=SignupSource.ASSONAM_FORM.value,
         joined_at=datetime.utcnow(),
         signup_ip="127.0.0.1",
         signup_user_agent="pytest",
@@ -184,10 +188,17 @@ def test_org_admin_member_filters(client, db):
 
     resp = client.get("/api/org-admin/members?status=suspended")
     assert resp.status_code == 200
-    emails = [i["email"] for i in resp.json()["items"]]
+    suspended_items = resp.json()["items"]
+    emails = [i["email"] for i in suspended_items]
     assert "m3@example.com" in emails
+    suspended_by_email = {i["email"]: i for i in suspended_items}
+    assert suspended_by_email["m3@example.com"]["signup_source"] == SignupSource.ASSONAM_FORM.value
 
     resp = client.get("/api/org-admin/members")
     assert resp.status_code == 200
-    emails = [i["email"] for i in resp.json()["items"]]
+    items = resp.json()["items"]
+    emails = [i["email"] for i in items]
     assert "other@example.com" not in emails
+    by_email = {i["email"]: i for i in items}
+    assert by_email["m1@example.com"]["signup_source"] == SignupSource.ADMIN.value
+    assert by_email["m2@example.com"]["signup_source"] == SignupSource.PIENISSIMO.value

@@ -1365,3 +1365,77 @@ pm --prefix frontend run build -> OK
 - `python -m alembic upgrade head` -> **OK** (migrazione `p6q7r8s9t0u1`)
 - `python -m pytest tests\\test_member_documents_dashboard.py::test_member_can_fetch_and_download_organization_statute tests\\test_signup_fixes.py::test_web_register_sets_signup_source_assonam_form tests\\test_document_workflow.py::test_document_approval_sends_card_email_once_for_active_member tests\\test_ingest_pienissimo.py::test_ingest_retry_100x_is_idempotent_and_sends_email_once tests\\test_integration_issue_member.py::test_issue_member_captures_html_email_with_verification_url -q` -> **5 passed**
 - Nota compatibilità locale/test DB: aggiunto fallback bootstrap in `init_db.py` per colonna `members.card_delivered_at` e normalizzazione `signup_source` su schema legacy non ancora migrato.
+
+---
+## Spec (Google Wallet Android per tessera socio + credenziali sicure - Feb 23, 2026)
+- Obiettivo: permettere al socio autenticato di generare un link "Aggiungi a Google Wallet" (Android) dalla propria area riservata, con class/object Generic pass gestiti lato backend e credenziali service account non committate.
+- Vincoli: solo Google Wallet (no Apple, no OAuth utente), gestione credenziali via file path o ENV base64, Alembic migration per campi wallet, docs operative per deploy (Docker/Hetzner).
+- Sicurezza: nessun JSON credenziali nel repo; `secrets/` gitignored con README; log senza leak di private key/JWT/secrets.
+
+## Plan (Google Wallet Android + credenziali sicure)
+- [ ] Task 0 ricognizione completa (modelli socio/tessera, endpoint verifica QR, `/api/auth/me`, pagina FE tessera, config/env, docker).
+- [ ] Task 1: hardening credenziali (`.gitignore`, `secrets/README.md`, config/env loader file/b64, compose produzione overlay).
+- [ ] Task 2: migration Alembic + model fields `google_wallet_*` su `members` (fallback startup `init_db.py` per schema legacy locale/test).
+- [ ] Task 3: servizio backend Google Wallet (credenziali, REST client, ensure generic class/object, JWT save link, logging) + endpoint socio `POST /api/me/wallet/google/save-link`.
+- [ ] Task 4: frontend area socio (pagina tessera in `DashboardHome`) con bottone "Aggiungi a Google Wallet", loading/error e redirect.
+- [ ] Task 5: documentazione `docs/GOOGLE_WALLET.md` + note Hetzner/Docker secret e ENV base64.
+- [ ] Task 6: test minimi (loader credenziali file/b64 + endpoint save-link no-env / mock success) e verifiche build/pytest/alembic.
+
+## Review (Google Wallet Android + credenziali sicure - Feb 23, 2026)
+- [ ] Da compilare a fine implementazione.
+
+## Review (Google Wallet Android + credenziali sicure - Feb 23, 2026) - Update
+- Credenziali sicure: `.gitignore` aggiornato per `secrets/`, `google-wallet*.json`, `*.b64`; aggiunto `secrets/README.md` con istruzioni locali/server (nessun JSON committato).
+- Backend config: aggiunte env `GOOGLE_WALLET_ISSUER_ID`, `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_WALLET_SA_B64`, timeout HTTP wallet.
+- Backend service: nuovo `app/services/google_wallet.py` con loader credenziali file/b64, token service-account (`wallet_object.issuer`), ensure `genericClass`/`genericObject`, JWT `Save to Google Wallet`, logging error-safe.
+- Endpoint socio: `POST /api/me/wallet/google/save-link` in `app/routes/member.py` con auth, idempotenza object/class, persistenza campi `google_wallet_*`, gestione errori config/API.
+- DB: migrazione Alembic `q1r2s3t4u5v6` + campi `google_wallet_*` su `members`; fallback schema legacy in `init_db.py`.
+- Frontend: bottone `Aggiungi a Google Wallet` in dashboard tessera (`DashboardHome`) con loading/error e redirect al save URL; client API dedicato in `frontend/src/lib/api.ts`.
+- Infra/docs: `docker-compose.prod.yml` overlay per mount read-only secret Google Wallet; `docs/GOOGLE_WALLET.md` con setup locale/prod, base64 fallback e troubleshooting.
+- Test minimi aggiunti: `tests/test_google_wallet.py` (loader file/b64 + endpoint no-creds + mock success).
+- Comandi eseguiti:
+  - `python -m py_compile app\\services\\google_wallet.py app\\routes\\member.py app\\models.py app\\config.py init_db.py tests\\test_google_wallet.py` -> **OK**
+  - `python -m alembic upgrade head` -> **OK** (migrazione `q1r2s3t4u5v6`)
+  - `python -m pytest tests\\test_google_wallet.py -q` -> **4 passed**
+  - `npm --prefix frontend run build` -> **OK**
+- Nota operativa: non ho usato il file JSON reale indicato nel prompt (`C:\\Users\\edoar\\Downloads\\...json`); va spostato in `secrets/` o montato come secret in produzione per evitare leak/commit accidentali.
+- Live test (credenziali reali + issuer `3388000000023089481`): endpoint `POST /api/me/wallet/google/save-link` verificato in locale su DB temporaneo -> **200 OK**, `classId` e `objectId` persistiti, save URL generato.
+- Fix runtime emerso dal live test: Google Wallet rifiutava `logo.sourceUri` con URL locale (`http://localhost:8000/...`) in create object (400). Aggiornato `app/services/google_wallet.py` per omettere il logo quando l'URL non è pubblico/raggiungibile (localhost/127.0.0.1).
+
+---
+## Spec (Email tessera pronta + CTA Wallet handoff + statuto + badge Pienissimo + test - Feb 23, 2026)
+- Obiettivo: completare il flusso end-to-end post-verifica socio con email aggiornata (accesso area riservata + CTA Google Wallet Android + link tessera/statuto), aggiungere pagina frontend `/wallet/google/add`, mantenere/finire statuto area socio e fix badge Pienissimo, con test minimi backend.
+- Vincoli: riuso endpoint `/api/me/wallet/google/save-link` e flussi auth/magic-link esistenti; nessuna nuova auth; nessun secret nei commit; nessuna regressione su dashboard/documenti/admin.
+- Nota: campo origine iscrizione `signup_source` e statuto area socio sono già presenti da task precedenti, quindi questo task completa alias/coverage/test e rifiniture UI/email.
+
+## Plan (Email tessera pronta + CTA Wallet handoff + statuto + badge Pienissimo + test)
+- [ ] Ricognizione finale dei punti già implementati vs gap (email template/call-site, route wallet handoff, alias statuto, test coverage).
+- [ ] Backend: arricchire email tessera pronta (CTA wallet handoff, area riservata, vedi tessera, statuto) e allineare copy "email"; riusare trigger idempotente esistente.
+- [ ] Backend: aggiungere alias endpoint sicuro `GET /api/me/documents/statute` (download) e, se necessario, rifinire source admin (`signup_source=admin`).
+- [ ] Frontend: nuova pagina pubblica `/wallet/google/add` con auto-redirect se autenticato, CTA login/magic-link se non autenticato, messaggi UX chiari; registrare route in `App.tsx`.
+- [ ] Test: aggiornare/aggiungere pytest per email content + alias statuto + esposizione `signup_source` in lista org-admin + mantenere save-link mock test; build frontend e pytest mirati.
+- [ ] Commit ordinati + preparazione descrizione PR (se il push/PR remoto non è disponibile, produrre testo PR pronto).
+
+## Review (Email tessera pronta + CTA Wallet handoff + statuto + badge Pienissimo + test - Feb 23, 2026)
+- [ ] Da compilare a fine implementazione.
+## Review (Email tessera pronta + CTA Wallet handoff + statuto + badge Pienissimo + test - Feb 23, 2026) - Update
+- Email `tessera pronta`: template `app/email_templates/member_card_email.py` esteso con CTA `Aggiungi a Google Wallet (Android)`, link area riservata, `Vedi la tua tessera`, `Scarica lo statuto`, copy aggiornato con "email" e nota iPhone.
+- Trigger idempotente riusato (`card_delivered_at`) senza nuovi campi DB; call-site aggiornati in `app/services/member_card_delivery.py` e `app/services/integration_issuer.py` per passare URL frontend/handoff.
+- Nuova pagina frontend pubblica `frontend/src/pages/WalletGoogleAdd.tsx` + route `/wallet/google/add` in `frontend/src/App.tsx`: auto-call `POST /api/me/wallet/google/save-link`, redirect a Google Wallet se auth, altrimenti CTA login + invio magic-link via `/api/auth/login` (password vuota).
+- Backend statuto: alias download sicuro `GET /api/me/documents/statute` aggiunto in `app/routes/member.py` (riusa il controllo org del socio già esistente).
+- Origine iscrizione admin: `create_org_member` ora imposta `signup_source='admin'` (`SignupSource.ADMIN`) in `app/routes/org_admin.py`; nessuna migration nuova richiesta perché il campo `signup_source` esiste già e la colonna è TEXT.
+- Test backend aggiornati/aggiunti:
+  - contenuto email post-verifica include CTA Wallet + link documenti/statuto + copy "email"
+  - email integrazione include CTA Wallet handoff
+  - alias statuto `/api/me/documents/statute`
+  - scoping statuto per sessione/org (A vede A, B vede B)
+  - org-admin manual create => `signup_source=admin`
+  - lista org-admin espone `signup_source` (admin/pienissimo/web)
+- FE test automatici non aggiunti: nel progetto non è presente setup Vitest/Playwright; verificata build Vite/TS invece.
+- Comandi eseguiti:
+  - `python -m py_compile app\\email_templates\\member_card_email.py app\\services\\member_card_delivery.py app\\services\\integration_issuer.py app\\routes\\member.py app\\routes\\org_admin.py app\\models.py` -> **OK**
+  - `npm --prefix frontend run build` -> **OK**
+  - `python -m pytest ...` (8 test mirati su email/statuto/signup_source/wallet) -> **8 passed**
+  - `python -m pytest tests\\test_google_wallet.py -q` -> **4 passed**
+  - `python -m alembic upgrade head` -> **OK**
+- Nota runtime locale Google Wallet: mantenuto fix che omette il logo nel pass se `BASE_URL/FRONTEND_URL` puntano a `localhost`, per evitare 400 da Google Wallet Objects API.

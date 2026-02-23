@@ -28,6 +28,7 @@ from app.models import (
     OperationLog,
     Token,
     TokenType,
+    SignupSource,
 )
 from app.utils import generate_token, hash_token, send_email, save_upload_file
 from app.services.card_allocation import allocate_next_card, release_card_number
@@ -837,6 +838,7 @@ def create_org_member(
         member_type=member_type,
         internal_notes=internal_notes,
         is_manual=body.is_manual,
+        signup_source=SignupSource.ADMIN.value,
         signup_ip=get_client_ip(request),
         signup_user_agent=request.headers.get("user-agent"),
     )

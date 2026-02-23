@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 import hashlib
+from urllib.parse import quote_plus
 
 from fastapi import HTTPException
 from sqlalchemy import and_, func, or_
@@ -369,6 +370,11 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
         club_display_name = resolve_club_display_name(org) or org.name
         subject = resolve_card_email_subject(org)
         full_name = f"{(member.first_name or '').strip()} {(member.last_name or '').strip()}".strip() or email
+        wallet_add_url = f"{frontend_base.rstrip('/')}/wallet/google/add"
+        if member.email:
+            wallet_add_url = f"{wallet_add_url}?email={quote_plus(member.email)}"
+        card_view_url = magic_link_url
+        statute_url = f"{frontend_base.rstrip('/')}/dashboard/documenti"
 
         # Generate card PNG for inline email embed (CID)
         card_image_bytes: bytes | None = None
@@ -412,6 +418,10 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
             assonam_logo_url=assonam_logo_url,
             organization_logo_url=organization_logo_url,
             card_image_cid=card_image_cid,
+            access_email_hint=member.email,
+            google_wallet_add_url=wallet_add_url,
+            card_view_url=card_view_url,
+            statute_url=statute_url,
         )
         email_sent = send_email_html(
             to_email=member.email,

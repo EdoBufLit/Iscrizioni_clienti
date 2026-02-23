@@ -2,7 +2,7 @@ import pytest
 from datetime import datetime, timedelta
 
 from app.db import SessionLocal
-from app.models import AdminUser, AdminRole, Organization, Member, OrgAdminToken
+from app.models import AdminUser, AdminRole, Organization, Member, OrgAdminToken, SignupSource
 from app.utils import hash_token
 
 
@@ -48,6 +48,11 @@ def test_org_admin_can_create_member(client, db):
 
     _login_org_admin(client, db, admin.id)
 
+    existing = db.query(Member).filter_by(email="mario.rossi@example.com", org_id=org.id).first()
+    if existing:
+        db.delete(existing)
+        db.commit()
+
     payload = {
         "first_name": "Mario",
         "last_name": "Rossi",
@@ -66,6 +71,7 @@ def test_org_admin_can_create_member(client, db):
     assert member.org_id == org.id
     assert member.first_name == "Mario"
     assert member.is_manual is True
+    assert member.signup_source == SignupSource.ADMIN.value
 
 
 def test_org_admin_cannot_override_org_id(client, db):

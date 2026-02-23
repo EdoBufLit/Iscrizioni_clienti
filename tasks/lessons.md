@@ -66,3 +66,4 @@
 - Quando il cliente specifica una direzione esplicita ("verso destra/sinistra"), applicare il delta solo in quella direzione e confermarlo nel commit message.
 - Se il cliente continua con micro-adjust successivi, mantenere una scala monotona (es. -9, -7, -5, -4) e non saltare con offset grandi.
 - Se i numeri tessera devono essere riutilizzabili dopo delete, non basta pulire member.card_no: va anche riavvolto card_batches.next_no (con lock) al numero rilasciato, altrimenti l’allocazione continua dal progressivo successivo.
+- Se il cliente fornisce un `issuer_id`/`classId` ufficiale per integrazioni esterne (es. Google Wallet), allineare subito il naming canonico nel backend (o renderlo configurabile) invece di presumere un suffisso generico locale.

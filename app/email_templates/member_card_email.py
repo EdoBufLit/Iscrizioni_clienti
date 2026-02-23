@@ -19,6 +19,9 @@ def build_member_card_email(
     header_title: str | None = None,
     header_subtitle: str | None = None,
     access_email_hint: str | None = None,
+    google_wallet_add_url: str | None = None,
+    card_view_url: str | None = None,
+    statute_url: str | None = None,
 ) -> tuple[str, str]:
     """Build member card email (text + HTML).
 
@@ -38,6 +41,9 @@ def build_member_card_email(
     safe_verification_url = html.escape(verification_url)
     safe_download_url = html.escape(download_url)
     safe_magic_link_url = html.escape(magic_link_url)
+    safe_google_wallet_add_url = html.escape((google_wallet_add_url or "").strip())
+    safe_card_view_url = html.escape((card_view_url or "").strip())
+    safe_statute_url = html.escape((statute_url or "").strip())
     safe_assonam_logo_url = html.escape(assonam_logo_url)
     safe_org_logo_url = html.escape(organization_logo_url) if organization_logo_url else ""
     resolved_header_title = (header_title or "").strip()
@@ -140,6 +146,7 @@ def build_member_card_email(
 
     # ── Plain text ─────────────────────────────────────────────────────────────
     text_body = (
+        "Iscrizione confermata e tessera abilitata.\n"
         "La tua tessera digitale e pronta.\n\n"
         f"Club: {club_display_name}\n"
         f"Socio: {member_full_name}\n"
@@ -148,12 +155,16 @@ def build_member_card_email(
         f"Anno: {card_year}\n\n"
         f"Scarica tessera (PDF): {download_url}\n"
         + (
-            f"Ora puoi accedere alla tua area riservata con la tua mail: {access_email_hint}.\n"
+            f"Ora puoi accedere alla tua area riservata con la tua email: {access_email_hint}.\n"
             if access_email_hint
             else ""
         )
         + f"Link area riservata: {magic_link_url}\n"
-        f"Verifica tessera: {verification_url}\n"
+        + (f"Aggiungi a Google Wallet (Android): {google_wallet_add_url}\n" if google_wallet_add_url else "")
+        + (f"Vedi la tua tessera: {card_view_url}\n" if card_view_url else "")
+        + (f"Scarica lo statuto: {statute_url}\n" if statute_url else "")
+        + f"Verifica tessera: {verification_url}\n"
+        + "Nota: se sei su iPhone, al momento Google Wallet non e disponibile.\n"
     )
 
     # ── HTML body ─────────────────────────────────────────────────────────────
@@ -182,7 +193,7 @@ def build_member_card_email(
                 )}
                 <p style="margin:8px 0 0;font-size:14px;color:#c9a8b0;">{safe_header_subtitle}</p>
                 {(
-                    f'<p style="margin:10px 0 0;font-size:13px;color:#fdf6e3;">Ora puoi accedere alla tua area riservata con la tua mail: <strong style="color:#fdf6e3;">{safe_access_email_hint}</strong>.</p>'
+                    f'<p style="margin:10px 0 0;font-size:13px;color:#fdf6e3;">Ora puoi accedere alla tua area riservata con la tua email: <strong style="color:#fdf6e3;">{safe_access_email_hint}</strong>.</p>'
                     if safe_access_email_hint
                     else ""
                 )}
@@ -214,10 +225,27 @@ def build_member_card_email(
                          style="display:inline-block;padding:12px 22px;border-radius:10px;background:#0b3c75;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;margin:0 6px 10px 6px;">
                         Accedi area riservata
                       </a>
+                      {(
+                        f'''<a href="{safe_google_wallet_add_url}"
+                         style="display:inline-block;padding:12px 22px;border-radius:10px;background:#1f6f43;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;margin:0 6px 10px 6px;">
+                        Aggiungi a Google Wallet (Android)
+                      </a>'''
+                        if safe_google_wallet_add_url
+                        else ""
+                      )}
                       <a href="{safe_verification_url}"
                          style="display:inline-block;padding:12px 22px;border-radius:10px;background:#1a0009;border:1px solid rgba(198,160,79,0.35);color:#d4b45c;text-decoration:none;font-size:14px;font-weight:700;margin:0 6px 10px 6px;">
                         Verifica tessera
                       </a>
+                      {(
+                        f'''<p style="margin:8px 0 0;font-size:12px;color:#c9a8b0;">
+                        {f'<a href="{safe_card_view_url}" style="color:#f6e7b6;text-decoration:none;">Vedi la tua tessera</a>' if safe_card_view_url else ''}
+                        {(' &nbsp;|&nbsp; ' if safe_card_view_url and safe_statute_url else '')}
+                        {f'<a href="{safe_statute_url}" style="color:#f6e7b6;text-decoration:none;">Scarica lo statuto</a>' if safe_statute_url else ''}
+                      </p>'''
+                        if (safe_card_view_url or safe_statute_url)
+                        else ""
+                      )}
                     </td>
                   </tr>
                 </table>
@@ -228,7 +256,7 @@ def build_member_card_email(
             <tr>
               <td style="padding:16px 20px 0 20px;text-align:center;">
                 <p style="margin:0;font-size:12px;color:#7a5565;">
-                  Se non riesci ad aprire il PDF, usa il pulsante &ldquo;Verifica tessera&rdquo; dal browser.
+                  Se sei su iPhone, al momento Google Wallet non &egrave; disponibile. Se non riesci ad aprire il PDF, usa il pulsante &ldquo;Verifica tessera&rdquo; dal browser.
                 </p>
               </td>
             </tr>

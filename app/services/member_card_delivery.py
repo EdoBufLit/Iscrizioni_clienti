@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 import logging
 import os
+from urllib.parse import quote_plus
 
 from fastapi import Request
 from sqlalchemy.orm import Session
@@ -105,6 +106,11 @@ def _send_member_card_ready_email(
         or member.email
     )
     login_url = f"{frontend_base_url.rstrip('/')}/login"
+    wallet_add_url = f"{frontend_base_url.rstrip('/')}/wallet/google/add"
+    if member.email:
+        wallet_add_url = f"{wallet_add_url}?email={quote_plus(member.email)}"
+    card_view_url = f"{frontend_base_url.rstrip('/')}/dashboard"
+    statute_url = f"{frontend_base_url.rstrip('/')}/dashboard/documenti"
 
     card_image_bytes: bytes | None = None
     try:
@@ -158,6 +164,9 @@ def _send_member_card_ready_email(
         header_title="La tua tessera ASSO.N.A.M. è pronta",
         header_subtitle="Il tuo documento è stato verificato e la tua tessera socio è ora disponibile.",
         access_email_hint=member.email,
+        google_wallet_add_url=wallet_add_url,
+        card_view_url=card_view_url,
+        statute_url=statute_url,
     )
 
     return send_email_html(

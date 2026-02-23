@@ -259,10 +259,13 @@ def test_document_approval_sends_card_email_once_for_active_member(client, db):
         assert len(captured) == 1
         assert captured[0]["subject"] == "La tua tessera ASSO.N.A.M. è pronta"
         assert (
-            f"Ora puoi accedere alla tua area riservata con la tua mail: {member.email}."
+            f"Ora puoi accedere alla tua area riservata con la tua email: {member.email}."
             in (captured[0]["text_body"] or "")
         )
         assert "/login" in (captured[0]["text_body"] or "")
+        assert "/wallet/google/add" in (captured[0]["text_body"] or "")
+        assert "/dashboard/documenti" in (captured[0]["text_body"] or "")
+        assert "Google Wallet (Android)" in (captured[0]["html_body"] or "")
 
         second = client.post(f"/api/org-admin/documents/{doc.id}/approve")
         assert second.status_code == 200, second.text

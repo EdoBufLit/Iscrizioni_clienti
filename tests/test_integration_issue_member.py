@@ -200,6 +200,8 @@ def test_issue_member_captures_html_email_with_verification_url(client, db):
         assert "<html" in captured[0]["html_body"].lower()
         assert "Accedi area riservata" in captured[0]["html_body"]
         assert "Scarica tessera" in captured[0]["html_body"]
+        assert "Aggiungi a Google Wallet (Android)" in captured[0]["html_body"]
+        assert "/wallet/google/add" in (captured[0]["text_body"] or "")
         assert "api.qrserver.com" in captured[0]["html_body"]
         assert (
             "logo-transparent.png" in captured[0]["html_body"]
