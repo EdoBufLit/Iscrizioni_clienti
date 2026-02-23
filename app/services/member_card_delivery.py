@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import os
 from urllib.parse import quote_plus
@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.email_templates.member_card_email import build_member_card_email
-from app.models import DocStatus, Member, MemberDocument, Organization
+from app.models import DocStatus, Member, MemberDocument, Organization, Token, TokenType
 from app.services.card_verification import build_card_verification_token
 from app.services.member_activity import is_member_active
 from app.services.org_branding import (
@@ -18,7 +18,7 @@ from app.services.org_branding import (
     resolve_card_logo_url,
     resolve_club_display_name,
 )
-from app.utils import send_email_html
+from app.utils import generate_token, hash_token, send_email_html
 
 logger = logging.getLogger(__name__)
 
@@ -84,8 +84,22 @@ def _build_card_links(member: Member, backend_base_url: str) -> tuple[str, str, 
     return token, verification_url, download_url
 
 
+def _build_member_magic_link(db: Session, member_id: int, frontend_base_url: str) -> str:
+    token_str = generate_token()
+    token = Token(
+        member_id=member_id,
+        purpose=TokenType.LOGIN_MAGIC_LINK,
+        token_hash=hash_token(token_str),
+        expires_at=datetime.utcnow() + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES),
+    )
+    db.add(token)
+    db.flush()
+    return f"{frontend_base_url.rstrip('/')}/auth/verify?token={token_str}&role=member"
+
+
 def _send_member_card_ready_email(
     *,
+    db: Session,
     member: Member,
     org: Organization,
     backend_base_url: str,
@@ -106,9 +120,18 @@ def _send_member_card_ready_email(
         or member.email
     )
     login_url = f"{frontend_base_url.rstrip('/')}/login"
-    wallet_add_url = f"{frontend_base_url.rstrip('/')}/wallet/google/add"
-    if member.email:
-        wallet_add_url = f"{wallet_add_url}?email={quote_plus(member.email)}"
+    try:
+        magic_link_url = _build_member_magic_link(db, member.id, frontend_base_url)
+    except Exception:
+        logger.exception("Unable to generate member magic link for card-ready email member_id=%s", member.id)
+        magic_link_url = login_url
+
+    if "token=" in magic_link_url and "role=member" in magic_link_url:
+        wallet_add_url = f"{magic_link_url}&next=/wallet/google/add"
+    else:
+        wallet_add_url = f"{frontend_base_url.rstrip('/')}/wallet/google/add"
+        if member.email:
+            wallet_add_url = f"{wallet_add_url}?email={quote_plus(member.email)}"
     card_view_url = f"{frontend_base_url.rstrip('/')}/dashboard"
     statute_url = f"{frontend_base_url.rstrip('/')}/dashboard/documenti"
 
@@ -157,7 +180,7 @@ def _send_member_card_ready_email(
         card_year=member.card_year,
         verification_url=verification_url,
         download_url=download_url,
-        magic_link_url=login_url,
+        magic_link_url=magic_link_url,
         assonam_logo_url=assonam_logo_url,
         organization_logo_url=organization_logo_url,
         card_image_cid=card_image_cid,
@@ -230,6 +253,7 @@ def maybe_send_member_card_ready_email(db: Session, request: Request, member_id:
 
     try:
         sent = _send_member_card_ready_email(
+            db=db,
             member=member,
             org=org,
             backend_base_url=backend_base_url,

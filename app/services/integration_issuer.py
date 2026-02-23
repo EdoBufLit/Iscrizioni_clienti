@@ -370,9 +370,12 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
         club_display_name = resolve_club_display_name(org) or org.name
         subject = resolve_card_email_subject(org)
         full_name = f"{(member.first_name or '').strip()} {(member.last_name or '').strip()}".strip() or email
-        wallet_add_url = f"{frontend_base.rstrip('/')}/wallet/google/add"
-        if member.email:
-            wallet_add_url = f"{wallet_add_url}?email={quote_plus(member.email)}"
+        if "token=" in magic_link_url and "role=member" in magic_link_url:
+            wallet_add_url = f"{magic_link_url}&next=/wallet/google/add"
+        else:
+            wallet_add_url = f"{frontend_base.rstrip('/')}/wallet/google/add"
+            if member.email:
+                wallet_add_url = f"{wallet_add_url}?email={quote_plus(member.email)}"
         card_view_url = magic_link_url
         statute_url = f"{frontend_base.rstrip('/')}/dashboard/documenti"
 

@@ -2,6 +2,14 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { verifyMemberToken, verifyOrgAdminToken } from "../lib/api";
 
+const resolveSafeNextPath = (raw: string | null): string | null => {
+  const value = (raw ?? "").trim();
+  if (!value) return null;
+  if (!value.startsWith("/")) return null;
+  if (value.startsWith("//")) return null;
+  return value;
+};
+
 const MagicLinkVerify = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -10,6 +18,7 @@ const MagicLinkVerify = () => {
   useEffect(() => {
     const token = searchParams.get("token");
     const role = searchParams.get("role");
+    const nextPath = resolveSafeNextPath(searchParams.get("next"));
 
     if (!token) {
       setErrorMessage("Link non valido: token mancante.");
@@ -25,7 +34,7 @@ const MagicLinkVerify = () => {
         }
         if (role === "member") {
           await verifyMemberToken(token);
-          navigate("/dashboard", { replace: true });
+          navigate(nextPath || "/dashboard", { replace: true });
           return;
         }
         setErrorMessage("Link non valido: ruolo non specificato.");

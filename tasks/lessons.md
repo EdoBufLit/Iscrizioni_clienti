@@ -68,3 +68,5 @@
 - Se i numeri tessera devono essere riutilizzabili dopo delete, non basta pulire member.card_no: va anche riavvolto card_batches.next_no (con lock) al numero rilasciato, altrimenti l’allocazione continua dal progressivo successivo.
 - Se il cliente fornisce un `issuer_id`/`classId` ufficiale per integrazioni esterne (es. Google Wallet), allineare subito il naming canonico nel backend (o renderlo configurabile) invece di presumere un suffisso generico locale.
 - Se un secret esiste in GitHub ma il runtime lo vede mancante, verificare sempre due passaggi distinti: export nel workflow CI/CD e pass-through nel `docker-compose` verso il container (averlo nel repo secrets UI non basta).
+- Per CTA email che devono portare l'utente subito a una funzione autenticata (es. Google Wallet add), usare magic-link + deep-link `next` verso la pagina target invece di forzare prima l'area riservata/login manuale.
+- L'etichetta Google Wallet "[SOLO TEST]" non è generata dal codice app: resta finché issuer/class non sono approvati in produzione da Google Wallet.

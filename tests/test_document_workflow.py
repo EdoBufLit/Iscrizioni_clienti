@@ -262,7 +262,10 @@ def test_document_approval_sends_card_email_once_for_active_member(client, db):
             f"Ora puoi accedere alla tua area riservata con la tua email: {member.email}."
             in (captured[0]["text_body"] or "")
         )
-        assert "/login" in (captured[0]["text_body"] or "")
+        assert (
+            "/auth/verify" in (captured[0]["text_body"] or "")
+            or "/login" in (captured[0]["text_body"] or "")
+        )
         assert "/wallet/google/add" in (captured[0]["text_body"] or "")
         assert "/dashboard/documenti" in (captured[0]["text_body"] or "")
         assert "Google Wallet (Android)" in (captured[0]["html_body"] or "")
