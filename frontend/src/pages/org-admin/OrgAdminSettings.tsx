@@ -4,6 +4,7 @@ import {
   fetchOrgAdminOrganization,
   patchOrgAdminOrganization,
   uploadOrgAdminStatute,
+  uploadOrgAdminWalletAssets,
   AuthError,
   type OrgAdminOrganizationDetail,
 } from "../../lib/api";
@@ -39,6 +40,21 @@ const OrgAdminSettings = () => {
   const [uploadMsg, setUploadMsg] = useState("");
   const [uploadError, setUploadError] = useState("");
 
+  // Google Wallet branding
+  const [walletForm, setWalletForm] = useState({
+    wallet_bg_color: "#0B3C75",
+    wallet_title_override: "",
+    wallet_is_test_prefix: false,
+  });
+  const [walletSaving, setWalletSaving] = useState(false);
+  const [walletSaveMsg, setWalletSaveMsg] = useState("");
+  const [walletSaveError, setWalletSaveError] = useState("");
+  const [walletLogoFile, setWalletLogoFile] = useState<File | null>(null);
+  const [walletHeroFile, setWalletHeroFile] = useState<File | null>(null);
+  const [walletAssetsUploading, setWalletAssetsUploading] = useState(false);
+  const [walletAssetsMsg, setWalletAssetsMsg] = useState("");
+  const [walletAssetsError, setWalletAssetsError] = useState("");
+
   useEffect(() => {
     fetchOrgAdminOrganization()
       .then((data) => {
@@ -51,6 +67,12 @@ const OrgAdminSettings = () => {
           email: data.email || "",
           phone: data.phone || "",
           website: data.website || "",
+        });
+        setWalletForm({
+          wallet_bg_color: data.wallet_bg_color || data.wallet_effective_bg_color || "#0B3C75",
+          wallet_title_override:
+            data.wallet_title_override || data.wallet_effective_title_override || "",
+          wallet_is_test_prefix: Boolean(data.wallet_is_test_prefix),
         });
       })
       .catch((err) => {
@@ -129,6 +151,113 @@ const OrgAdminSettings = () => {
       }
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleWalletBrandingSave = async () => {
+    if (walletSaving) return;
+    setWalletSaving(true);
+    setWalletSaveMsg("");
+    setWalletSaveError("");
+    try {
+      const payload = {
+        wallet_bg_color: walletForm.wallet_bg_color.trim() || null,
+        wallet_title_override: walletForm.wallet_title_override.trim() || null,
+        wallet_is_test_prefix: walletForm.wallet_is_test_prefix,
+      };
+      await patchOrgAdminOrganization(payload);
+      setOrg((prev) =>
+        prev
+          ? {
+              ...prev,
+              ...payload,
+              wallet_effective_bg_color: payload.wallet_bg_color || prev.wallet_effective_bg_color,
+              wallet_effective_title_override:
+                payload.wallet_title_override || prev.wallet_effective_title_override,
+            }
+          : prev,
+      );
+      setWalletSaveMsg("Branding Google Wallet salvato.");
+    } catch (err) {
+      if (err instanceof AuthError) {
+        navigate("/org-admin/login", { replace: true });
+      } else {
+        setWalletSaveError(err instanceof Error ? err.message : "Errore nel salvataggio branding.");
+      }
+    } finally {
+      setWalletSaving(false);
+    }
+  };
+
+  const handleWalletAssetsUpload = async () => {
+    if ((!walletLogoFile && !walletHeroFile) || walletAssetsUploading) return;
+
+    const validateImage = (
+      file: File | null,
+      options: { label: string; maxBytes: number; allowedExt: string[]; allowedMime: string[] },
+    ): string | null => {
+      if (!file) return null;
+      const ext = `.${(file.name.split(".").pop() || "").toLowerCase()}`;
+      const hasValidExt = options.allowedExt.includes(ext);
+      const hasValidMime = !file.type || options.allowedMime.includes(file.type);
+      if (!hasValidExt || !hasValidMime) return `Formato non valido per ${options.label}.`;
+      if (file.size > options.maxBytes) return `${options.label} troppo grande (max 2 MB).`;
+      return null;
+    };
+
+    const logoError =
+      validateImage(walletLogoFile, {
+        label: "logo",
+        maxBytes: 2 * 1024 * 1024,
+        allowedExt: [".png", ".jpg", ".jpeg", ".svg"],
+        allowedMime: ["image/png", "image/jpeg", "image/svg+xml"],
+      }) || null;
+    const heroError =
+      validateImage(walletHeroFile, {
+        label: "hero image",
+        maxBytes: 2 * 1024 * 1024,
+        allowedExt: [".png", ".jpg", ".jpeg"],
+        allowedMime: ["image/png", "image/jpeg"],
+      }) || null;
+    const validationError = logoError || heroError;
+    if (validationError) {
+      setWalletAssetsMsg("");
+      setWalletAssetsError(validationError);
+      return;
+    }
+
+    setWalletAssetsUploading(true);
+    setWalletAssetsMsg("");
+    setWalletAssetsError("");
+    try {
+      const result = await uploadOrgAdminWalletAssets({
+        logo: walletLogoFile,
+        heroImage: walletHeroFile,
+      });
+      setOrg((prev) =>
+        prev
+          ? {
+              ...prev,
+              wallet_logo_url: result.wallet_logo_url ?? prev.wallet_logo_url,
+              wallet_hero_image_url: result.wallet_hero_image_url ?? prev.wallet_hero_image_url,
+              wallet_effective_logo_url:
+                result.wallet_effective_logo_url ?? prev.wallet_effective_logo_url,
+              wallet_effective_hero_image_url:
+                result.wallet_effective_hero_image_url ?? prev.wallet_effective_hero_image_url,
+            }
+          : prev,
+      );
+      setWalletAssetsMsg("Asset Google Wallet caricati.");
+      setWalletLogoFile(null);
+      setWalletHeroFile(null);
+    } catch (err) {
+      if (err instanceof AuthError) {
+        navigate("/org-admin/login", { replace: true });
+      } else {
+        setWalletAssetsError(err instanceof Error ? err.message : "Errore nel caricamento asset.");
+      }
+    } finally {
+      setWalletAssetsUploading(false);
     }
   };
 
@@ -359,6 +488,186 @@ const OrgAdminSettings = () => {
             <p className="text-sm text-red-700">{uploadError}</p>
           </div>
         )}
+      </div>
+
+      <div className="surface mt-8 p-7">
+        <h3 className="text-sm font-semibold text-neutral-900">Google Wallet Branding</h3>
+        <p className="mt-1 text-sm text-neutral-500">
+          Personalizza logo, hero image e colore della tessera in Google Wallet (Android).
+        </p>
+
+        <div className="mt-6 grid gap-5 md:grid-cols-2">
+          <div>
+            <label htmlFor="wallet-bg-color" className={labelClass}>
+              Colore sfondo Wallet
+            </label>
+            <div className="mt-1 flex items-center gap-3">
+              <input
+                id="wallet-bg-color"
+                type="color"
+                className="h-10 w-14 rounded-md border border-neutral-200 bg-white p-1"
+                value={
+                  /^#[0-9A-Fa-f]{6}$/.test(walletForm.wallet_bg_color.trim())
+                    ? walletForm.wallet_bg_color.trim()
+                    : "#0B3C75"
+                }
+                onChange={(e) =>
+                  setWalletForm((prev) => ({ ...prev, wallet_bg_color: e.target.value }))
+                }
+              />
+              <input
+                className={inputClass}
+                type="text"
+                placeholder="#0B3C75"
+                value={walletForm.wallet_bg_color}
+                onChange={(e) =>
+                  setWalletForm((prev) => ({ ...prev, wallet_bg_color: e.target.value }))
+                }
+              />
+            </div>
+            {org?.wallet_effective_bg_color && !org.wallet_bg_color && (
+              <p className="mt-2 text-xs text-neutral-500">
+                Fallback attivo: {org.wallet_effective_bg_color} (es. Golden Age).
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label htmlFor="wallet-title" className={labelClass}>
+              Titolo Wallet (override)
+            </label>
+            <input
+              id="wallet-title"
+              className={inputClass}
+              type="text"
+              placeholder="ASSO.N.A.M. / Golden Age Club"
+              value={walletForm.wallet_title_override}
+              onChange={(e) =>
+                setWalletForm((prev) => ({ ...prev, wallet_title_override: e.target.value }))
+              }
+            />
+            {org?.wallet_effective_title_override && !org.wallet_title_override && (
+              <p className="mt-2 text-xs text-neutral-500">
+                Fallback attivo: {org.wallet_effective_title_override}
+              </p>
+            )}
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="inline-flex items-center gap-3 text-sm text-neutral-700">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-neutral-300 text-brand focus:ring-brand/30"
+                checked={walletForm.wallet_is_test_prefix}
+                onChange={(e) =>
+                  setWalletForm((prev) => ({
+                    ...prev,
+                    wallet_is_test_prefix: e.target.checked,
+                  }))
+                }
+              />
+              Abilita prefisso demo ("[SOLO TEST]") solo quando `WALLET_DEMO_MODE=true`
+            </label>
+          </div>
+        </div>
+
+        {walletSaveMsg && (
+          <div className="mt-5 rounded-md border border-emerald-200/60 bg-emerald-50 px-4 py-3">
+            <p className="text-sm text-emerald-700">{walletSaveMsg}</p>
+          </div>
+        )}
+        {walletSaveError && (
+          <div className="mt-5 rounded-md border border-red-200/60 bg-red-50 px-4 py-3">
+            <p className="text-sm text-red-700">{walletSaveError}</p>
+          </div>
+        )}
+
+        <div className="mt-6 flex justify-end">
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={walletSaving}
+            onClick={handleWalletBrandingSave}
+          >
+            {walletSaving ? "Salvataggio..." : "Salva branding Wallet"}
+          </button>
+        </div>
+
+        <div className="mt-8 border-t border-neutral-100 pt-6">
+          <h4 className="text-sm font-semibold text-neutral-900">Asset immagini</h4>
+          <p className="mt-1 text-sm text-neutral-500">
+            Logo (PNG/JPG/SVG) e Hero image larga (PNG/JPG, consigliata ~1032x336).
+          </p>
+
+          <div className="mt-5 grid gap-5 md:grid-cols-2">
+            <div>
+              <label className={labelClass}>Logo Wallet</label>
+              <input
+                type="file"
+                accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml"
+                className="mt-2 block w-full text-sm text-neutral-600 file:mr-3 file:rounded-md file:border file:border-neutral-200 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-neutral-700 file:transition hover:file:border-neutral-300 hover:file:text-neutral-900"
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setWalletLogoFile(e.target.files?.[0] ?? null)
+                }
+              />
+              {(org?.wallet_logo_url || org?.wallet_effective_logo_url) && (
+                <a
+                  href={org.wallet_logo_url || org.wallet_effective_logo_url || "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 inline-flex items-center text-xs font-medium text-brand hover:underline"
+                >
+                  Apri immagine logo
+                </a>
+              )}
+            </div>
+
+            <div>
+              <label className={labelClass}>Hero image Wallet</label>
+              <input
+                type="file"
+                accept=".png,.jpg,.jpeg,image/png,image/jpeg"
+                className="mt-2 block w-full text-sm text-neutral-600 file:mr-3 file:rounded-md file:border file:border-neutral-200 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-neutral-700 file:transition hover:file:border-neutral-300 hover:file:text-neutral-900"
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setWalletHeroFile(e.target.files?.[0] ?? null)
+                }
+              />
+              {(org?.wallet_hero_image_url || org?.wallet_effective_hero_image_url) && (
+                <a
+                  href={org.wallet_hero_image_url || org.wallet_effective_hero_image_url || "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 inline-flex items-center text-xs font-medium text-brand hover:underline"
+                >
+                  Apri hero image
+                </a>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={walletAssetsUploading || (!walletLogoFile && !walletHeroFile)}
+              onClick={handleWalletAssetsUpload}
+            >
+              {walletAssetsUploading ? "Caricamento..." : "Carica asset Wallet"}
+            </button>
+            <p className="text-xs text-neutral-400">Max 2 MB per file. URL pubblici serviti da `/uploads`.</p>
+          </div>
+
+          {walletAssetsMsg && (
+            <div className="mt-4 rounded-md border border-emerald-200/60 bg-emerald-50 px-4 py-3">
+              <p className="text-sm text-emerald-700">{walletAssetsMsg}</p>
+            </div>
+          )}
+          {walletAssetsError && (
+            <div className="mt-4 rounded-md border border-red-200/60 bg-red-50 px-4 py-3">
+              <p className="text-sm text-red-700">{walletAssetsError}</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

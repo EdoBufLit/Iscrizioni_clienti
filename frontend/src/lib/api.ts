@@ -488,6 +488,15 @@ export type OrgAdminOrganizationDetail = {
   statute_updated_at: string | null;
   statute_url: string | null;
   has_statute: boolean;
+  wallet_bg_color: string | null;
+  wallet_logo_url: string | null;
+  wallet_hero_image_url: string | null;
+  wallet_title_override: string | null;
+  wallet_is_test_prefix: boolean;
+  wallet_effective_bg_color?: string | null;
+  wallet_effective_logo_url?: string | null;
+  wallet_effective_hero_image_url?: string | null;
+  wallet_effective_title_override?: string | null;
 };
 
 export async function fetchOrgAdminOrganization(): Promise<OrgAdminOrganizationDetail> {
@@ -509,6 +518,9 @@ export async function patchOrgAdminOrganization(data: {
   address_line2?: string;
   postal_code?: string;
   country?: string;
+  wallet_bg_color?: string | null;
+  wallet_title_override?: string | null;
+  wallet_is_test_prefix?: boolean;
 }): Promise<{ ok: boolean }> {
   const res = await fetch("/api/org-admin/organization", {
     method: "PATCH",
@@ -517,6 +529,36 @@ export async function patchOrgAdminOrganization(data: {
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error("Failed to update organization");
+  return res.json();
+}
+
+export async function uploadOrgAdminWalletAssets(
+  input: { logo?: File | null; heroImage?: File | null },
+): Promise<{
+  ok: boolean;
+  wallet_logo_url: string | null;
+  wallet_hero_image_url: string | null;
+  wallet_effective_logo_url?: string | null;
+  wallet_effective_hero_image_url?: string | null;
+}> {
+  const body = new FormData();
+  if (input.logo) body.append("logo", input.logo);
+  if (input.heroImage) body.append("hero_image", input.heroImage);
+  const res = await fetch("/api/org-admin/organization/wallet-assets", {
+    method: "POST",
+    body,
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 413) {
+    throw new Error(await parseApiErrorDetail(res, "File troppo grande (max 2 MB per asset)."));
+  }
+  if (res.status === 415 || res.status === 422 || res.status === 400) {
+    throw new Error(await parseApiErrorDetail(res, "Asset non valido."));
+  }
+  if (res.status >= 500) {
+    throw new Error("Errore server, riprova.");
+  }
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento asset Wallet"));
   return res.json();
 }
 
