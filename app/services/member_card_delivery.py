@@ -1,0 +1,249 @@
+from __future__ import annotations
+
+from datetime import datetime
+import logging
+import os
+
+from fastapi import Request
+from sqlalchemy.orm import Session
+
+from app.config import settings
+from app.email_templates.member_card_email import build_member_card_email
+from app.models import DocStatus, Member, MemberDocument, Organization
+from app.services.card_verification import build_card_verification_token
+from app.services.member_activity import is_member_active
+from app.services.org_branding import (
+    resolve_assonam_logo_url,
+    resolve_card_logo_url,
+    resolve_club_display_name,
+)
+from app.utils import send_email_html
+
+logger = logging.getLogger(__name__)
+
+
+def _resolve_org_logo_disk_path(org: Organization | None) -> str | None:
+    if org is None:
+        return None
+    if org.logo_path:
+        candidate = os.path.join(settings.UPLOAD_DIR, org.logo_path)
+        return candidate if os.path.exists(candidate) else None
+    slug = (getattr(org, "slug", None) or "").strip().lower()
+    if slug:
+        static_candidate = os.path.normpath(
+            os.path.join(os.path.dirname(__file__), "..", "static", "card-logos", f"{slug}.png")
+        )
+        return static_candidate if os.path.exists(static_candidate) else None
+    return None
+
+
+def _resolve_assonam_disk_path() -> str | None:
+    static_dir = (settings.FRONTEND_STATIC_DIR or "").strip()
+    if static_dir:
+        candidate = os.path.join(static_dir, "logo-transparent.png")
+        return candidate if os.path.exists(candidate) else None
+    candidate = os.path.normpath(
+        os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "..",
+            "frontend",
+            "public",
+            "logo-transparent.png",
+        )
+    )
+    return candidate if os.path.exists(candidate) else None
+
+
+def _build_backend_base_url(request: Request) -> str:
+    configured_base = (settings.BASE_URL or "").strip().rstrip("/")
+    if configured_base:
+        return configured_base
+    return str(request.base_url).rstrip("/")
+
+
+def _build_frontend_base_url(request: Request) -> str:
+    configured_frontend = (settings.FRONTEND_URL or "").strip().rstrip("/")
+    if configured_frontend:
+        return configured_frontend
+    return _build_backend_base_url(request)
+
+
+def _build_card_links(member: Member, backend_base_url: str) -> tuple[str, str, str]:
+    if member.card_no is None or member.card_year is None:
+        raise ValueError("Member has no active card assigned")
+    token = build_card_verification_token(
+        member_id=member.id,
+        org_id=member.org_id,
+        card_number=member.card_no,
+        card_year=member.card_year,
+    )
+    verification_url = f"{backend_base_url}/api/cards/verify/{token}"
+    download_url = f"{backend_base_url}/api/cards/{token}/download.pdf"
+    return token, verification_url, download_url
+
+
+def _send_member_card_ready_email(
+    *,
+    member: Member,
+    org: Organization,
+    backend_base_url: str,
+    frontend_base_url: str,
+) -> bool:
+    if not member.email:
+        return False
+
+    _token, verification_url, download_url = _build_card_links(member, backend_base_url)
+    club_display_name = resolve_club_display_name(org) or org.name
+    assonam_logo_url = resolve_assonam_logo_url(
+        frontend_base_url=frontend_base_url,
+        backend_base_url=backend_base_url,
+    )
+    organization_logo_url = resolve_card_logo_url(org, base_url=backend_base_url)
+    full_name = (
+        f"{(member.first_name or '').strip()} {(member.last_name or '').strip()}".strip()
+        or member.email
+    )
+    login_url = f"{frontend_base_url.rstrip('/')}/login"
+
+    card_image_bytes: bytes | None = None
+    try:
+        from app.services.card_image import generate_card_image_bytes
+
+        card_image_bytes = generate_card_image_bytes(
+            member_full_name=full_name,
+            organization_name=org.name,
+            club_display_name=club_display_name,
+            organization_slug=org.slug,
+            card_number=member.card_no,
+            card_year=member.card_year,
+            card_status="attiva",
+            org_logo_path=_resolve_org_logo_disk_path(org),
+            assonam_logo_path=_resolve_assonam_disk_path(),
+        )
+    except Exception:
+        logger.exception(
+            "Unable to generate inline card image for member_id=%s org_id=%s",
+            member.id,
+            member.org_id,
+        )
+        card_image_bytes = None
+
+    card_image_cid: str | None = None
+    inline_images: list[dict] = []
+    if card_image_bytes:
+        card_image_cid = "card_front@assonam"
+        inline_images.append(
+            {
+                "cid": card_image_cid,
+                "content_type": "image/png",
+                "data": card_image_bytes,
+                "filename": "tessera.png",
+            }
+        )
+
+    text_body, html_body = build_member_card_email(
+        member_full_name=full_name,
+        organization_name=org.name,
+        club_display_name=club_display_name,
+        organization_slug=org.slug,
+        card_number=member.card_no,
+        card_year=member.card_year,
+        verification_url=verification_url,
+        download_url=download_url,
+        magic_link_url=login_url,
+        assonam_logo_url=assonam_logo_url,
+        organization_logo_url=organization_logo_url,
+        card_image_cid=card_image_cid,
+        header_title="La tua tessera ASSO.N.A.M. è pronta",
+        header_subtitle="Il tuo documento è stato verificato e la tua tessera socio è ora disponibile.",
+        access_email_hint=member.email,
+    )
+
+    return send_email_html(
+        to_email=member.email,
+        subject="La tua tessera ASSO.N.A.M. è pronta",
+        text_body=text_body,
+        html_body=html_body,
+        inline_images=inline_images if inline_images else None,
+    )
+
+
+def maybe_send_member_card_ready_email(db: Session, request: Request, member_id: int) -> dict[str, object]:
+    """Best-effort, idempotent delivery of the member card email.
+
+    Used after document approvals and activation flows. Returns a small outcome payload
+    so callers can log/debug without affecting endpoint responses.
+    """
+
+    member_query = db.query(Member).filter(Member.id == member_id)
+    try:
+        member_query = member_query.with_for_update()
+    except Exception:
+        # SQLite does not support FOR UPDATE; the normal query is still fine for tests/dev.
+        pass
+
+    member = member_query.first()
+    if not member:
+        return {"sent": False, "reason": "member_not_found"}
+
+    org = member.organization
+    if not org:
+        return {"sent": False, "reason": "organization_missing"}
+
+    delivered_marker = member.card_delivered_at or member.card_email_sent_at
+    if delivered_marker is not None:
+        return {"sent": False, "reason": "already_delivered"}
+
+    if not is_member_active(member, now=datetime.utcnow()):
+        return {"sent": False, "reason": "member_not_active"}
+
+    if not member.email:
+        return {"sent": False, "reason": "member_email_missing"}
+
+    if member.card_no is None or member.card_year is None:
+        return {"sent": False, "reason": "card_missing"}
+
+    has_approved_doc = (
+        db.query(MemberDocument.id)
+        .filter(
+            MemberDocument.member_id == member.id,
+            MemberDocument.status == DocStatus.APPROVED.value,
+        )
+        .first()
+        is not None
+    )
+    if not has_approved_doc:
+        return {"sent": False, "reason": "no_approved_documents"}
+
+    backend_base_url = _build_backend_base_url(request)
+    frontend_base_url = _build_frontend_base_url(request)
+
+    try:
+        sent = _send_member_card_ready_email(
+            member=member,
+            org=org,
+            backend_base_url=backend_base_url,
+            frontend_base_url=frontend_base_url,
+        )
+    except Exception:
+        logger.exception(
+            "Failed to send post-verification card email for member_id=%s org_id=%s",
+            member.id,
+            member.org_id,
+        )
+        return {"sent": False, "reason": "email_send_failed"}
+
+    if not sent:
+        logger.warning(
+            "Card email send returned false for member_id=%s org_id=%s",
+            member.id,
+            member.org_id,
+        )
+        return {"sent": False, "reason": "email_send_failed"}
+
+    delivered_at = datetime.utcnow()
+    member.card_delivered_at = delivered_at
+    member.card_email_sent_at = delivered_at
+    db.commit()
+    return {"sent": True, "reason": "sent", "delivered_at": delivered_at.isoformat()}

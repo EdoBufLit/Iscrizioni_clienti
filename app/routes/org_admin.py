@@ -36,6 +36,7 @@ from app.services.member_activity import (
     is_member_active,
     member_active_filters,
 )
+from app.services.member_card_delivery import maybe_send_member_card_ready_email
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
 from app import audit
@@ -1228,6 +1229,15 @@ def member_decision(
     )
     db.commit()
 
+    if body.decision == "approve":
+        try:
+            maybe_send_member_card_ready_email(db, request, member.id)
+        except Exception:
+            logger.exception(
+                "Failed card email hook after member approval for member_id=%s",
+                member.id,
+            )
+
     return {"ok": True, "status": member.status.value}
 
 
@@ -1324,6 +1334,14 @@ def create_manual_payment(
         user_agent=request.headers.get("user-agent"),
     )
     db.commit()
+
+    try:
+        maybe_send_member_card_ready_email(db, request, member.id)
+    except Exception:
+        logger.exception(
+            "Failed card email hook after manual payment for member_id=%s",
+            member.id,
+        )
 
     return {
         "ok": True,
@@ -1447,6 +1465,16 @@ def _apply_doc_review(
         user_agent=request.headers.get("user-agent"),
     )
     db.commit()
+
+    if status == DocStatus.APPROVED.value:
+        try:
+            maybe_send_member_card_ready_email(db, request, doc.member_id)
+        except Exception:
+            logger.exception(
+                "Failed post-verification card email hook for member_id=%s doc_id=%s",
+                doc.member_id,
+                doc.id,
+            )
 
 
 @router.post("/documents/{doc_id}/approve")

@@ -1,7 +1,9 @@
 import pytest
 from datetime import datetime
 import uuid
+import os
 
+from app.config import settings
 from app.db import SessionLocal
 from app.models import Organization, Member, MemberDocument, MemberStatus, DocStatus
 from app.security import get_password_hash
@@ -79,3 +81,53 @@ def test_member_document_reject_and_resubmit(client, db):
         item.get("replaces_document_id") == doc.id and item["status"] == "pending"
         for item in data["items"]
     )
+
+
+def test_member_can_fetch_and_download_organization_statute(client, db):
+    suffix = uuid.uuid4().hex[:8]
+    org = Organization(
+        name=f"Statute Org {suffix}",
+        slug=f"statute-org-{suffix}",
+        is_active=True,
+        statute_version="v1",
+        statute_pdf_path=f"statutes/{suffix}/statuto.pdf",
+    )
+    db.add(org)
+    db.commit()
+    db.refresh(org)
+
+    full_path = os.path.join(settings.UPLOAD_DIR, org.statute_pdf_path)
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+    with open(full_path, "wb") as handle:
+        handle.write(b"%PDF-1.4\n% test statute\n")
+
+    member = Member(
+        org_id=org.id,
+        first_name="Anna",
+        last_name="Verdi",
+        email=f"statute.member.{suffix}@example.com",
+        password_hash=get_password_hash("TestPass123!"),
+        status=MemberStatus.ACTIVE,
+        card_no=7000 + int(suffix[:2], 16),
+        card_year=datetime.utcnow().year,
+        joined_at=datetime.utcnow(),
+        signup_ip="127.0.0.1",
+        signup_user_agent="pytest",
+    )
+    db.add(member)
+    db.commit()
+
+    login = client.post("/api/auth/login", data={"email": member.email, "password": "TestPass123!"})
+    assert login.status_code == 200
+
+    meta = client.get("/api/me/organization/statute")
+    assert meta.status_code == 200, meta.text
+    meta_payload = meta.json()
+    assert meta_payload["available"] is True
+    assert meta_payload["download_url"] == "/api/me/organization/statute/download"
+    assert meta_payload["filename"].startswith("statuto_")
+
+    download = client.get(meta_payload["download_url"])
+    assert download.status_code == 200
+    assert "application/pdf" in download.headers.get("content-type", "")
+    assert download.content.startswith(b"%PDF-1.4")

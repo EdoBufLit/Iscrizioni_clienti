@@ -1327,3 +1327,41 @@ pm --prefix frontend run build -> OK
 - Comandi eseguiti:
   - `python -m pytest tests/test_card_assignment.py::test_allocate_is_concurrency_safe_for_10_parallel_requests tests/test_member_card_expiration_maintenance.py::test_maintenance_frees_email_and_card_number_for_new_issue -q` -> **2 passed**
   - `python -m pytest tests/test_card_assignment.py tests/test_member_active_state_regression.py tests/test_ingest_pienissimo.py tests/test_integration_issue_member.py tests/test_member_card_expiration_maintenance.py tests/test_org_admin_decision.py tests/test_org_admin_manual_payment.py tests/test_super_admin_association_delete_release_range.py -q` -> **30 passed**
+
+---
+## Spec (Statuto area socio + badge Pienissimo + email tessera post-verifica - Feb 23, 2026)
+- Obiettivo A: rendere sempre disponibile in area socio (Documenti) lo statuto dell'associazione con endpoint autenticato e download sicuro.
+- Obiettivo B: mostrare badge `INTEGRAZIONE PIENISSIMO` solo per soci creati via ingest/API Pienissimo (`signup_source = pienissimo`), non per iscrizioni web/manual.
+- Obiettivo C: inviare automaticamente la tessera al socio dopo approvazione/verifica documenti, in modo idempotente (una sola volta per tessera/anno), senza rompere i flussi Pienissimo esistenti.
+- Vincoli: riuso infrastruttura esistente (`Organization.statute_pdf_path`, mailer/tessera), migrazioni Alembic per cambi schema, test minimi backend/FE.
+
+## Plan (Statuto + badge Pienissimo + email tessera post-verifica)
+- [x] Ricognizione completata e mappatura punti di integrazione (modelli, route, FE dashboard, table badge, email/tessera).
+- [ ] Backend A: aggiungere endpoint socio `/api/me/organization/statute` + `/api/me/organization/statute/download` riusando `Organization.statute_pdf_path`.
+- [ ] Frontend A: aggiungere card "Statuto dell'associazione" nella pagina `DashboardDocuments` con stati loading/available/not-available e download robusto.
+- [ ] Backend B: hardening `signup_source` (migration default/backfill) e verifica flussi web/ingest; mantenere `pienissimo` solo per ingest.
+- [ ] Frontend B: correggere logica badge in tabella soci per mostrare la pill solo con `signup_source === pienissimo`.
+- [ ] Backend C: aggiungere campo idempotenza invio tessera post-verifica (riuso o nuova colonna dedicata) + migration/backfill.
+- [ ] Backend C: introdurre servizio condiviso per invio email tessera e agganciarlo all'approvazione documenti (approve/review) con guard anti-duplicate.
+- [ ] Test: aggiungere test minimi per statuto area socio, badge/signup_source, email tessera post-verifica idempotente.
+- [ ] Verifica finale: pytest mirati + build frontend + `alembic upgrade head`, poi compilare Review con esiti.
+
+## Review (Statuto + badge Pienissimo + email tessera post-verifica - Feb 23, 2026)
+- [ ] Da compilare a fine implementazione.
+
+## Execution Update (Statuto + badge Pienissimo + email tessera post-verifica - Feb 23, 2026)
+- [x] Ricognizione completata (modelli `Organization/Member/MemberDocument`, flusso `ingest_pienissimo`, tabella soci org-admin, mailer/tessera).
+- [x] Backend A: aggiunti endpoint socio `/api/me/organization/statute` e `/api/me/organization/statute/download` riusando `Organization.statute_pdf_path`.
+- [x] Frontend A: aggiunta card "Statuto dell'associazione" in `DashboardDocuments` con loading/available/not available + download via `fetch`/blob.
+- [x] Backend B: hardening `signup_source` con default/backfill (migrazione + fallback startup `init_db.py`) mantenendo `pienissimo` come unico source integrazione.
+- [x] Frontend B: badge `INTEGRAZIONE PIENISSIMO` mostrato solo per `signup_source` `pienissimo`/`pienissimo_api`.
+- [x] Backend C: aggiunto `members.card_delivered_at` (migrazione + backfill da `card_email_sent_at`) e sincronizzazione delivery nel flusso integrazione.
+- [x] Backend C: nuovo servizio idempotente `member_card_delivery` agganciato a review documenti + attivazione socio (decision/manual payment).
+- [x] Test minimi aggiunti: statuto area socio, signup_source web, email tessera post-verifica idempotente.
+
+## Review (Statuto + badge Pienissimo + email tessera post-verifica - Feb 23, 2026) - Update
+- `python -m py_compile app\\routes\\member.py app\\routes\\org_admin.py app\\services\\integration_issuer.py app\\services\\member_card_delivery.py app\\email_templates\\member_card_email.py tests\\test_member_documents_dashboard.py tests\\test_document_workflow.py tests\\test_signup_fixes.py` -> **OK**
+- `npm --prefix frontend run build` -> **OK**
+- `python -m alembic upgrade head` -> **OK** (migrazione `p6q7r8s9t0u1`)
+- `python -m pytest tests\\test_member_documents_dashboard.py::test_member_can_fetch_and_download_organization_statute tests\\test_signup_fixes.py::test_web_register_sets_signup_source_assonam_form tests\\test_document_workflow.py::test_document_approval_sends_card_email_once_for_active_member tests\\test_ingest_pienissimo.py::test_ingest_retry_100x_is_idempotent_and_sends_email_once tests\\test_integration_issue_member.py::test_issue_member_captures_html_email_with_verification_url -q` -> **5 passed**
+- Nota compatibilità locale/test DB: aggiunto fallback bootstrap in `init_db.py` per colonna `members.card_delivered_at` e normalizzazione `signup_source` su schema legacy non ancora migrato.

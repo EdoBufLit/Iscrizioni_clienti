@@ -99,6 +99,37 @@ def init_db():
         _add_column_if_missing(conn, "members", "signup_source", "TEXT")
         _add_column_if_missing(conn, "members", "external_customer_id", "TEXT")
         _add_column_if_missing(conn, "members", "card_email_sent_at", "DATETIME")
+        _add_column_if_missing(conn, "members", "card_delivered_at", "DATETIME")
+        conn.execute(
+            text(
+                """
+                UPDATE members
+                   SET card_delivered_at = card_email_sent_at
+                 WHERE card_delivered_at IS NULL
+                   AND card_email_sent_at IS NOT NULL
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE members
+                   SET signup_source = 'pienissimo'
+                 WHERE signup_source IS NOT NULL
+                   AND lower(trim(signup_source)) IN ('pienissimo', 'pienissimo_api')
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE members
+                   SET signup_source = 'assonam_form'
+                 WHERE signup_source IS NULL
+                    OR trim(signup_source) = ''
+                """
+            )
+        )
         _add_column_if_missing(conn, "member_documents", "rejection_note", "TEXT")
         _add_column_if_missing(conn, "member_documents", "reviewed_by_admin_id", "INTEGER REFERENCES admin_users(id)")
         _add_column_if_missing(conn, "member_documents", "replaces_document_id", "INTEGER REFERENCES member_documents(id)")

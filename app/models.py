@@ -207,6 +207,7 @@ class Member(Base):
     card_year = Column(Integer, nullable=True)
     batch_id = Column(Integer, ForeignKey("card_batches.id"), nullable=True)
     card_email_sent_at = Column(DateTime, nullable=True)
+    card_delivered_at = Column(DateTime, nullable=True)
 
     joined_at = Column(DateTime, nullable=True)
     member_type = Column(String, nullable=True)
@@ -219,7 +220,7 @@ class Member(Base):
     accepted_privacy_at = Column(DateTime, nullable=True)
     accepted_privacy_version = Column(String, nullable=True)
 
-    signup_source = Column(String, nullable=True)
+    signup_source = Column(String, nullable=True, server_default=SignupSource.ASSONAM_FORM.value)
     external_customer_id = Column(String, nullable=True)
 
     signup_ip = Column(String, nullable=True)

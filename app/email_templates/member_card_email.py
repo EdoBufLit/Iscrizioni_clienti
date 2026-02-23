@@ -16,6 +16,9 @@ def build_member_card_email(
     assonam_logo_url: str,
     organization_logo_url: str | None = None,
     card_image_cid: str | None = None,
+    header_title: str | None = None,
+    header_subtitle: str | None = None,
+    access_email_hint: str | None = None,
 ) -> tuple[str, str]:
     """Build member card email (text + HTML).
 
@@ -37,6 +40,11 @@ def build_member_card_email(
     safe_magic_link_url = html.escape(magic_link_url)
     safe_assonam_logo_url = html.escape(assonam_logo_url)
     safe_org_logo_url = html.escape(organization_logo_url) if organization_logo_url else ""
+    resolved_header_title = (header_title or "").strip()
+    resolved_header_subtitle = (header_subtitle or "").strip() or "La tua tessera digitale è pronta."
+    safe_header_title = html.escape(resolved_header_title)
+    safe_header_subtitle = html.escape(resolved_header_subtitle)
+    safe_access_email_hint = html.escape((access_email_hint or "").strip())
     qr_url = (
         "https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=0&data="
         f"{quote_plus(verification_url)}"
@@ -139,7 +147,12 @@ def build_member_card_email(
         f"Tessera n.: {card_number}\n"
         f"Anno: {card_year}\n\n"
         f"Scarica tessera (PDF): {download_url}\n"
-        f"Accedi area riservata: {magic_link_url}\n"
+        + (
+            f"Ora puoi accedere alla tua area riservata con la tua mail: {access_email_hint}.\n"
+            if access_email_hint
+            else ""
+        )
+        + f"Link area riservata: {magic_link_url}\n"
         f"Verifica tessera: {verification_url}\n"
     )
 
@@ -162,7 +175,17 @@ def build_member_card_email(
             <tr>
               <td style="padding:0 16px 14px 16px;text-align:center;">
                 <p style="margin:0;font-size:22px;font-weight:700;color:#d4b45c;">{safe_club}</p>
-                <p style="margin:8px 0 0;font-size:14px;color:#c9a8b0;">La tua tessera digitale &egrave; pronta.</p>
+                {(
+                    f'<p style="margin:8px 0 0;font-size:20px;font-weight:700;color:#f6e7b6;">{safe_header_title}</p>'
+                    if safe_header_title
+                    else ""
+                )}
+                <p style="margin:8px 0 0;font-size:14px;color:#c9a8b0;">{safe_header_subtitle}</p>
+                {(
+                    f'<p style="margin:10px 0 0;font-size:13px;color:#fdf6e3;">Ora puoi accedere alla tua area riservata con la tua mail: <strong style="color:#fdf6e3;">{safe_access_email_hint}</strong>.</p>'
+                    if safe_access_email_hint
+                    else ""
+                )}
               </td>
             </tr>
 

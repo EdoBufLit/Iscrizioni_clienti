@@ -2,6 +2,7 @@ import pytest
 from datetime import datetime, timedelta
 import uuid
 
+from app.config import settings
 from app.db import SessionLocal
 from app.models import (
     AdminUser,
@@ -13,7 +14,9 @@ from app.models import (
     Token,
     TokenType,
     DocStatus,
+    MemberStatus,
 )
+from app.utils import clear_captured_emails, get_captured_emails
 from app.utils import hash_token
 
 
@@ -190,3 +193,80 @@ def test_org_admin_cannot_review_other_org_document(client, db):
 
     res = client.post(f"/api/org-admin/documents/{doc.id}/approve")
     assert res.status_code == 403
+
+
+def test_document_approval_sends_card_email_once_for_active_member(client, db):
+    suffix = uuid.uuid4().hex[:8]
+    org = Organization(name=f"DocFlow Mail Org {suffix}", slug=f"docflow-mail-org-{suffix}", is_active=True)
+    db.add(org)
+    db.commit()
+    db.refresh(org)
+
+    admin = AdminUser(
+        email=f"docflow-mail-admin-{suffix}@example.com",
+        role=AdminRole.ORG_ADMIN,
+        org_id=org.id,
+        is_active=True,
+    )
+    db.add(admin)
+    db.commit()
+    db.refresh(admin)
+
+    member = Member(
+        org_id=org.id,
+        first_name="Giulia",
+        last_name="Bianchi",
+        email=f"docflow-mail-member-{suffix}@example.com",
+        status=MemberStatus.ACTIVE,
+        card_no=9500 + int(suffix[:2], 16),
+        card_year=datetime.utcnow().year,
+        joined_at=datetime.utcnow(),
+        signup_ip="127.0.0.1",
+        signup_user_agent="pytest",
+    )
+    db.add(member)
+    db.commit()
+    db.refresh(member)
+
+    doc = MemberDocument(
+        member_id=member.id,
+        doc_type="identity",
+        rel_path=f"{org.id}/{member.id}/doc.pdf",
+        original_filename="doc.pdf",
+        mime_type="application/pdf",
+        size_bytes=16,
+        sha256="fakehash",
+        status=DocStatus.PENDING.value,
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+
+    previous_email_mode = settings.EMAIL_MODE
+    settings.EMAIL_MODE = "test"
+    clear_captured_emails()
+    try:
+        _login_org_admin(client, db, admin.id)
+
+        first = client.post(f"/api/org-admin/documents/{doc.id}/approve")
+        assert first.status_code == 200, first.text
+
+        db.refresh(member)
+        assert member.card_delivered_at is not None
+        assert member.card_email_sent_at is not None
+
+        captured = get_captured_emails()
+        assert len(captured) == 1
+        assert captured[0]["subject"] == "La tua tessera ASSO.N.A.M. è pronta"
+        assert (
+            f"Ora puoi accedere alla tua area riservata con la tua mail: {member.email}."
+            in (captured[0]["text_body"] or "")
+        )
+        assert "/login" in (captured[0]["text_body"] or "")
+
+        second = client.post(f"/api/org-admin/documents/{doc.id}/approve")
+        assert second.status_code == 200, second.text
+        assert len(get_captured_emails()) == 1
+    finally:
+        settings.EMAIL_MODE = previous_email_mode
+        clear_captured_emails()

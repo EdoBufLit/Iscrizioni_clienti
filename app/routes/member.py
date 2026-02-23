@@ -157,6 +157,70 @@ def download_document(request: Request, doc_id: int, db: Session = Depends(get_d
     return FileResponse(file_path, filename=doc.original_filename, media_type=doc.mime_type)
 
 
+def _resolve_member_statute(member: Member) -> tuple[Organization, str]:
+    org = member.organization
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    if not org.statute_pdf_path:
+        raise HTTPException(status_code=404, detail="Statute not available")
+
+    full_path = os.path.join(settings.UPLOAD_DIR, org.statute_pdf_path)
+    if not os.path.exists(full_path):
+        raise HTTPException(status_code=404, detail="Statute file not found")
+    return org, full_path
+
+
+@router.get("/api/me/organization/statute")
+def get_my_organization_statute(request: Request, db: Session = Depends(get_db)):
+    member = get_current_member(request, db)
+    if not member:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    org = member.organization
+    if not org or not org.statute_pdf_path:
+        return {
+            "available": False,
+            "filename": None,
+            "mime_type": None,
+            "download_url": None,
+        }
+
+    full_path = os.path.join(settings.UPLOAD_DIR, org.statute_pdf_path)
+    if not os.path.exists(full_path):
+        logger.warning(
+            "Statute metadata requested but file missing on disk for org_id=%s rel_path=%s",
+            org.id,
+            org.statute_pdf_path,
+        )
+        return {
+            "available": False,
+            "filename": None,
+            "mime_type": None,
+            "download_url": None,
+        }
+
+    return {
+        "available": True,
+        "filename": f"statuto_{org.slug}.pdf",
+        "mime_type": "application/pdf",
+        "download_url": "/api/me/organization/statute/download",
+    }
+
+
+@router.get("/api/me/organization/statute/download")
+def download_my_organization_statute(request: Request, db: Session = Depends(get_db)):
+    member = get_current_member(request, db)
+    if not member:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    org, full_path = _resolve_member_statute(member)
+    return FileResponse(
+        full_path,
+        media_type="application/pdf",
+        filename=f"statuto_{org.slug}.pdf",
+    )
+
+
 @router.post("/api/member/documents/{doc_id}/resubmit")
 async def resubmit_document(
     request: Request,

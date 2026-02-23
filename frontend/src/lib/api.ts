@@ -284,11 +284,50 @@ export type MemberDocumentsResponse = {
   items: MemberDocumentItem[];
 };
 
+export type MemberOrganizationStatuteResponse = {
+  available: boolean;
+  filename?: string | null;
+  mime_type?: string | null;
+  download_url?: string | null;
+};
+
 export async function fetchMemberDocuments(): Promise<MemberDocumentsResponse> {
   const res = await fetch("/api/member/documents");
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error("Failed to fetch documents");
   return res.json();
+}
+
+export async function fetchMemberOrganizationStatute(): Promise<MemberOrganizationStatuteResponse> {
+  const res = await fetch("/api/me/organization/statute");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error("Errore nel caricamento dello statuto");
+  return res.json();
+}
+
+export async function downloadMemberOrganizationStatute(
+  input?: {
+    url?: string | null;
+    filename?: string | null;
+  },
+): Promise<void> {
+  const targetUrl = input?.url?.trim() || "/api/me/organization/statute/download";
+  const res = await fetch(targetUrl, { method: "GET" });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null);
+    throw new Error(payload?.detail ?? "Impossibile scaricare lo statuto");
+  }
+
+  const blob = await res.blob();
+  const objectUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = input?.filename?.trim() || "statuto.pdf";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(objectUrl);
 }
 
 export async function resubmitMemberDocument(

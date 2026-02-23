@@ -5,7 +5,7 @@ from datetime import datetime
 import pytest
 
 from app.db import SessionLocal
-from app.models import Organization, Member
+from app.models import Organization, Member, SignupSource
 
 
 @pytest.fixture
@@ -129,3 +129,24 @@ def test_request_id_header_present(client, db):
     resp = client.get("/health")
     assert "x-request-id" in resp.headers, "Missing X-Request-Id header"
     assert len(resp.headers["x-request-id"]) > 0
+
+
+def test_web_register_sets_signup_source_assonam_form(client, db):
+    org = _ensure_org(db, "register-source-test-org", statute=False)
+    email = f"register-source-{int(datetime.utcnow().timestamp() * 1000)}@example.com"
+
+    resp = client.post(
+        "/api/auth/register",
+        data={
+            "email": email,
+            "password": "TestPass123!",
+            "first_name": "Mario",
+            "last_name": "Rossi",
+            "org_slug": org.slug,
+        },
+    )
+    assert resp.status_code == 200, resp.text
+
+    member = db.query(Member).filter(Member.org_id == org.id, Member.email == email).first()
+    assert member is not None
+    assert member.signup_source == SignupSource.ASSONAM_FORM.value

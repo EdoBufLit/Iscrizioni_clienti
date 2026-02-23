@@ -5,15 +5,18 @@ from sqlalchemy import func
 from app.db import get_db
 from app.models import AdminUser, AdminRole, Member, CardBatch, MemberDocument, DocStatus, MemberStatus, Organization, PaymentMethod
 from app.services.card_allocation import allocate_next_card
+from app.services.member_card_delivery import maybe_send_member_card_ready_email
 from app import audit
 from app.config import settings
 from app.security import verify_password
 from app.services.member_activity import member_active_filters
 from app import audit
 from datetime import datetime
+import logging
 import os
 
 router = APIRouter(prefix="/admin")
+logger = logging.getLogger(__name__)
 
 
 def get_current_admin(request: Request, db: Session):
@@ -239,8 +242,10 @@ def review_doc(request: Request, member_id: int, doc_id: int, action: str = Form
 
     doc = db.query(MemberDocument).filter(MemberDocument.id == doc_id, MemberDocument.member_id == member_id).first()
     if doc:
+        approved = False
         if action == "approve":
             doc.status = DocStatus.APPROVED
+            approved = True
         elif action == "reject":
             doc.status = DocStatus.REJECTED
 
@@ -248,5 +253,15 @@ def review_doc(request: Request, member_id: int, doc_id: int, action: str = Form
         doc.reviewed_at = datetime.utcnow()
         doc.reviewed_by = admin.id
         db.commit()
+
+        if approved:
+            try:
+                maybe_send_member_card_ready_email(db, request, doc.member_id)
+            except Exception:
+                logger.exception(
+                    "Failed post-verification card email hook (legacy admin) for member_id=%s doc_id=%s",
+                    doc.member_id,
+                    doc.id,
+                )
 
     return RedirectResponse(url=f"/admin/members/{member_id}", status_code=status.HTTP_302_FOUND)

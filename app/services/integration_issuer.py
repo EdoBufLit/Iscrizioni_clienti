@@ -327,6 +327,7 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
         member.batch_id = allocation.batch_id
         member.card_year = allocation.year
         member.card_email_sent_at = None
+        member.card_delivered_at = None
         issued_new_card = True
         if outcome == "reused":
             outcome = "reissued"
@@ -353,7 +354,8 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
     email_sent = False
     login_hint = "email_skipped"
     should_send_email = bool(command.send_email and member.email)
-    if command.send_email_once and member.card_email_sent_at is not None and not issued_new_card:
+    delivered_marker = member.card_delivered_at or member.card_email_sent_at
+    if command.send_email_once and delivered_marker is not None and not issued_new_card:
         should_send_email = False
         login_hint = "magic_link_already_sent"
 
@@ -419,7 +421,9 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
             inline_images=inline_images if inline_images else None,
         )
         if email_sent:
-            member.card_email_sent_at = datetime.utcnow()
+            delivered_at = datetime.utcnow()
+            member.card_email_sent_at = delivered_at
+            member.card_delivered_at = delivered_at
             db.commit()
         login_hint = "magic_link_sent" if email_sent else "magic_link_send_failed"
 

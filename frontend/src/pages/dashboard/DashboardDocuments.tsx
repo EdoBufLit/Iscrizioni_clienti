@@ -2,9 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AuthError,
+  downloadMemberOrganizationStatute,
   fetchMemberDocuments,
+  fetchMemberOrganizationStatute,
   resubmitMemberDocument,
   type MemberDocumentItem,
+  type MemberOrganizationStatuteResponse,
 } from "../../lib/api";
 
 const DOC_LABELS: Record<string, string> = {
@@ -62,14 +65,43 @@ const DashboardDocuments = () => {
   const [uploadingId, setUploadingId] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [statute, setStatute] = useState<MemberOrganizationStatuteResponse | null>(null);
+  const [statuteLoading, setStatuteLoading] = useState(true);
+  const [statuteError, setStatuteError] = useState<string | null>(null);
+  const [statuteDownloading, setStatuteDownloading] = useState(false);
 
   const loadDocuments = async () => {
     setLoading(true);
+    setStatuteLoading(true);
     setError(null);
+    setStatuteError(null);
     try {
-      const data = await fetchMemberDocuments();
+      const [documentsResult, statuteResult] = await Promise.allSettled([
+        fetchMemberDocuments(),
+        fetchMemberOrganizationStatute(),
+      ]);
+
+      if (documentsResult.status === "rejected") {
+        throw documentsResult.reason;
+      }
+
+      const data = documentsResult.value;
       setItems(data.items ?? []);
       setRequiredTypes(data.required_types?.length ? data.required_types : ["identity", "fiscal_code"]);
+
+      if (statuteResult.status === "fulfilled") {
+        setStatute(statuteResult.value);
+      } else if (statuteResult.reason instanceof AuthError) {
+        navigate("/login", { replace: true });
+        return;
+      } else {
+        setStatute({ available: false });
+        setStatuteError(
+          statuteResult.reason instanceof Error
+            ? statuteResult.reason.message
+            : "Errore nel caricamento dello statuto",
+        );
+      }
     } catch (err) {
       if (err instanceof AuthError) {
         navigate("/login", { replace: true });
@@ -78,6 +110,7 @@ const DashboardDocuments = () => {
       setError(err instanceof Error ? err.message : "Errore nel caricamento documenti");
     } finally {
       setLoading(false);
+      setStatuteLoading(false);
     }
   };
 
@@ -132,12 +165,76 @@ const DashboardDocuments = () => {
     }
   };
 
+  const handleStatuteDownload = async () => {
+    if (!statute?.available) return;
+    setStatuteError(null);
+    setStatuteDownloading(true);
+    try {
+      await downloadMemberOrganizationStatute({
+        url: statute.download_url ?? "/api/me/organization/statute/download",
+        filename: statute.filename ?? "statuto.pdf",
+      });
+    } catch (err) {
+      if (err instanceof AuthError) {
+        navigate("/login", { replace: true });
+        return;
+      }
+      setStatuteError(err instanceof Error ? err.message : "Impossibile scaricare lo statuto");
+    } finally {
+      setStatuteDownloading(false);
+    }
+  };
+
   return (
     <div>
       <h1 className="text-xl font-semibold text-neutral-900">Documenti</h1>
       <p className="mt-1 text-sm text-neutral-500">
         Consulta lo stato dei documenti richiesti e carica una nuova versione se necessario.
       </p>
+
+      <div className="surface mt-6 p-7">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-neutral-900">Statuto dell&apos;associazione</p>
+            <p className="mt-1 text-sm text-neutral-500">
+              Puoi consultare e scaricare lo statuto in qualsiasi momento dalla tua area riservata.
+            </p>
+          </div>
+          {!(loading || statuteLoading) && statute?.available && (
+            <button
+              type="button"
+              className="btn-primary disabled:opacity-60"
+              onClick={handleStatuteDownload}
+              disabled={statuteDownloading}
+            >
+              {statuteDownloading ? "Scaricamento..." : "Scarica statuto"}
+            </button>
+          )}
+        </div>
+
+        <div className="mt-4 rounded-lg border border-neutral-100 bg-white/80 px-4 py-3 text-sm text-neutral-600">
+          {loading || statuteLoading ? (
+            <p>Caricamento statuto...</p>
+          ) : statute?.available ? (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="font-medium text-neutral-800">{statute.filename ?? "Statuto"}</p>
+                <p className="mt-1 text-xs text-neutral-400">
+                  {statute.mime_type ?? "application/pdf"}
+                </p>
+              </div>
+              <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+                Disponibile
+              </span>
+            </div>
+          ) : (
+            <p>Lo statuto non è disponibile. Contatta l&apos;associazione.</p>
+          )}
+          {statuteError && (
+            <p className="mt-2 text-xs text-red-600">{statuteError}</p>
+          )}
+        </div>
+      </div>
 
       {loading ? (
         <div className="surface mt-8 p-7">

@@ -28,13 +28,6 @@ const thClass =
   "px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.15em] text-neutral-400";
 const tdClass = "px-5 py-3.5 text-sm text-neutral-700";
 
-function formatIntegrationSourceLabel(source: string): string {
-  return source
-    .replace(/[_-]+/g, " ")
-    .trim()
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
 type MembersTableProps = {
   error: boolean;
   isLoading: boolean;
@@ -137,8 +130,8 @@ const MembersTable = memo(function MembersTable({
               members.map((m, i) => {
                 const sourceRaw = (m.signup_source ?? "").trim();
                 const sourceLower = sourceRaw.toLowerCase();
-                const isIntegration =
-                  sourceLower.length > 0 && sourceLower !== "assonam_form";
+                const isPienissimoIntegration =
+                  sourceLower === "pienissimo" || sourceLower === "pienissimo_api";
 
                 return (
                   <tr
@@ -150,9 +143,9 @@ const MembersTable = memo(function MembersTable({
                     <td className={`${tdClass} font-medium text-neutral-900`}>
                       <div className="flex flex-wrap items-center gap-2">
                         <span>{m.name}</span>
-                        {isIntegration && (
+                        {isPienissimoIntegration && (
                           <span className="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-cyan-700">
-                            INTEGRAZIONE {formatIntegrationSourceLabel(sourceRaw)}
+                            INTEGRAZIONE PIENISSIMO
                           </span>
                         )}
                       </div>
