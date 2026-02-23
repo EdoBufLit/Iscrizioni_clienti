@@ -387,9 +387,17 @@ def ensure_google_wallet_generic_class(*, class_id: str, access_token: str) -> N
         access_token=access_token,
         payload=create_payload,
     )
+    if create_response.status_code in {200, 201}:
+        logger.info("Google Wallet generic class created class_id=%s", class_id)
+        return
+    if create_response.status_code == 409:
+        logger.info(
+            "Google Wallet generic class already exists after create attempt (race/idempotent) class_id=%s",
+            class_id,
+        )
+        return
     if create_response.status_code not in {200, 201}:
         _raise_google_wallet_api_error(create_response, action="create_generic_class")
-    logger.info("Google Wallet generic class created class_id=%s", class_id)
 
 
 def ensure_google_wallet_generic_object(
@@ -414,10 +422,30 @@ def ensure_google_wallet_generic_object(
             access_token=access_token,
             payload=object_payload,
         )
-        if create_response.status_code not in {200, 201}:
-            _raise_google_wallet_api_error(create_response, action="create_generic_object")
-        logger.info("Google Wallet generic object created object_id=%s member_id=%s", object_id, member.id)
-        return object_payload
+        if create_response.status_code in {200, 201}:
+            logger.info("Google Wallet generic object created object_id=%s member_id=%s", object_id, member.id)
+            return object_payload
+        if create_response.status_code == 409:
+            logger.info(
+                "Google Wallet generic object already exists after create attempt (race/idempotent), patching object_id=%s member_id=%s",
+                object_id,
+                member.id,
+            )
+            patch_after_conflict = _wallet_request(
+                method="PATCH",
+                path=f"/genericObject/{encoded_id}",
+                access_token=access_token,
+                payload=object_payload,
+            )
+            if patch_after_conflict.status_code not in {200, 201}:
+                _raise_google_wallet_api_error(patch_after_conflict, action="patch_generic_object_after_conflict")
+            logger.info(
+                "Google Wallet generic object patched after create conflict object_id=%s member_id=%s",
+                object_id,
+                member.id,
+            )
+            return object_payload
+        _raise_google_wallet_api_error(create_response, action="create_generic_object")
 
     if get_response.status_code != 200:
         _raise_google_wallet_api_error(get_response, action="get_generic_object")

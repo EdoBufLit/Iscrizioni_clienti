@@ -11,6 +11,7 @@ from app.security import get_password_hash
 from app.config import settings
 from app.services.google_wallet import (
     GoogleWalletSaveLinkResult,
+    ensure_google_wallet_generic_object,
     load_google_wallet_service_account_info,
 )
 
@@ -152,3 +153,44 @@ def test_member_wallet_google_save_link_returns_url_with_mock(client, db, monkey
     assert member.google_wallet_last_error is None
     assert member.google_wallet_last_synced_at is not None
     assert member.google_wallet_added_at is not None
+
+
+def test_google_wallet_object_create_409_is_handled_idempotently(db, monkeypatch):
+    member = _create_active_member(db, slug_prefix="wallet-409")
+
+    class _Resp:
+        def __init__(self, status_code: int, text: str = ""):
+            self.status_code = status_code
+            self.text = text
+
+    calls: list[tuple[str, str]] = []
+    responses = iter(
+        [
+            _Resp(404, "not found"),   # GET object
+            _Resp(409, "already exists"),  # POST create (race)
+            _Resp(200, "{}"),  # PATCH after conflict
+        ]
+    )
+
+    import app.services.google_wallet as wallet_service
+
+    def _fake_wallet_request(*, method, path, access_token, payload=None):
+        calls.append((method, path))
+        return next(responses)
+
+    monkeypatch.setattr(wallet_service, "_wallet_request", _fake_wallet_request)
+    monkeypatch.setattr(
+        wallet_service,
+        "_build_generic_object_payload",
+        lambda **kwargs: {"id": kwargs["object_id"], "classId": kwargs["class_id"]},
+    )
+
+    payload = ensure_google_wallet_generic_object(
+        member=member,
+        class_id="issuer.assonam_membership_v1",
+        object_id=f"issuer.test.{member.id}.{member.card_year}",
+        access_token="fake-token",
+    )
+
+    assert payload["classId"] == "issuer.assonam_membership_v1"
+    assert any(method == "PATCH" for method, _ in calls)
