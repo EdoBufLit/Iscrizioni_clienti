@@ -530,7 +530,19 @@ export async function uploadOrgAdminStatute(
     body,
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
-  if (!res.ok) throw new Error("Failed to upload statute");
+  if (res.status === 413) {
+    throw new Error(await parseApiErrorDetail(res, "File troppo grande (max 10 MB)."));
+  }
+  if (res.status === 415) {
+    throw new Error(await parseApiErrorDetail(res, "Formato non valido: carica un PDF."));
+  }
+  if (res.status === 422) {
+    throw new Error(await parseApiErrorDetail(res, "File non valido."));
+  }
+  if (res.status >= 500) {
+    throw new Error("Errore server, riprova.");
+  }
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento dello statuto"));
   return res.json();
 }
 
@@ -545,7 +557,19 @@ export async function uploadSuperAdminStatute(
     body,
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
-  if (!res.ok) throw new Error("Failed to upload statute");
+  if (res.status === 413) {
+    throw new Error(await parseApiErrorDetail(res, "File troppo grande (max 10 MB)."));
+  }
+  if (res.status === 415) {
+    throw new Error(await parseApiErrorDetail(res, "Formato non valido: carica un PDF."));
+  }
+  if (res.status === 422) {
+    throw new Error(await parseApiErrorDetail(res, "File non valido."));
+  }
+  if (res.status >= 500) {
+    throw new Error("Errore server, riprova.");
+  }
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento dello statuto"));
   return res.json();
 }
 

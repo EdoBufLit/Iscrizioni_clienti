@@ -89,6 +89,20 @@ const OrgAdminSettings = () => {
 
   const handleStatuteUpload = async () => {
     if (!statuteFile || uploading) return;
+
+    const hasPdfExtension = statuteFile.name.toLowerCase().endsWith(".pdf");
+    const hasPdfMime = !statuteFile.type || statuteFile.type === "application/pdf";
+    if (!hasPdfExtension || !hasPdfMime) {
+      setUploadMsg("");
+      setUploadError("Formato non valido: carica un PDF.");
+      return;
+    }
+    if (statuteFile.size > 10 * 1024 * 1024) {
+      setUploadMsg("");
+      setUploadError("File troppo grande (max 10 MB).");
+      return;
+    }
+
     setUploading(true);
     setUploadMsg("");
     setUploadError("");
@@ -111,7 +125,7 @@ const OrgAdminSettings = () => {
       if (err instanceof AuthError) {
         navigate("/org-admin/login", { replace: true });
       } else {
-        setUploadError("Errore nel caricamento del file.");
+        setUploadError(err instanceof Error ? err.message : "Errore nel caricamento del file.");
       }
     } finally {
       setUploading(false);
