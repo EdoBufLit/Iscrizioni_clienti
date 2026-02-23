@@ -1439,3 +1439,37 @@ pm --prefix frontend run build -> OK
   - `python -m pytest tests\\test_google_wallet.py -q` -> **4 passed**
   - `python -m alembic upgrade head` -> **OK**
 - Nota runtime locale Google Wallet: mantenuto fix che omette il logo nel pass se `BASE_URL/FRONTEND_URL` puntano a `localhost`, per evitare 400 da Google Wallet Objects API.
+---
+## Spec (Fix upload statuto 413 + CSP Google Fonts - Feb 23, 2026)
+- Obiettivo: rendere affidabile l'upload dello statuto fino a 10 MB (proxy a 12 MB), con errori chiari backend/frontend.
+- Diagnosi live: POST /api/org-admin/organization/statute > ~1 MB viene bloccato da nginx/1.24.0 con 413 prima di FastAPI (curl), mentre upload piccoli arrivano al backend (401 senza sessione).
+- Vincoli: limite app hard 10 MB, fix proxy non illimitato, nessuna regressione su altri upload/endpoints, log sicuri, docs operative per proxy esterno al repo.
+
+## Plan (Fix upload statuto 413 + CSP Google Fonts)
+- [x] Ricognizione/diagnosi completata: punto 413 identificato (nginx live) con evidenze curl.
+- [ ] Backend: hardening upload statuto (Content-Length check se presente, mapping errori 413/415, messaggi chiari) e allineamento super-admin statuto.
+- [ ] Backend: handler globali HTTPException / RequestValidationError JSON user-friendly.
+- [ ] Frontend: API + UI org-admin settings per mostrare messaggi reali su 413/415/5xx.
+- [ ] Test: upload statuto >10MB => 413; formato non valido => 415; PDF valido => 200.
+- [ ] CSP/Fonts: rimuovere Google Fonts oppure aggiornare CSP in modo coerente.
+- [ ] Docs/Ops: snippet Nginx client_max_body_size 12M + reload; nota proxy config non versionata nel repo.
+- [ ] Verifica finale: pytest mirati + build frontend e Review.
+
+## Review (Fix upload statuto 413 + CSP Google Fonts - Feb 23, 2026)
+- [ ] Da compilare a fine implementazione.
+## Review (Fix upload statuto 413 + CSP Google Fonts - Feb 23, 2026) - Update
+- Diagnosi live completata: `413 Request Entity Too Large` confermato da `nginx/1.24.0 (Ubuntu)` prima di FastAPI (probe `curl` con multipart ~2MB); request piccola raggiunge backend e risponde `401` JSON.
+- Backend: nuovo helper condiviso `app/services/statute_upload.py` con limite hard file 10MB, pre-check header request 12MB, mapping errori `413/415/422` e messaggi chiari; applicato a route org-admin e super-admin statuto.
+- Backend: handler globali JSON per `RequestValidationError` e `HTTPException` con `message` user-friendly + `request_id` (mantiene `detail` delle 422).
+- Frontend: `uploadOrgAdminStatute`/`uploadSuperAdminStatute` ora distinguono `413/415/422/5xx`; `OrgAdminSettings` mostra il motivo reale e fa pre-check client-side PDF/10MB.
+- CSP: `app/middleware.py` aggiornato per consentire Google Fonts (`style-src`, `font-src`, `connect-src`).
+- Ops/proxy: aggiunti `docs/UPLOAD_STATUTE_10MB.md` e snippet `ops/nginx/assonam-upload-limit.conf.example` con `client_max_body_size 12M` + reload/verifica.
+- Test aggiunti: `tests/test_org_admin_statute_upload.py` (`>10MB => 413`, non-PDF => 415, PDF valido => 200`).
+- Comandi eseguiti:
+  - `curl -I https://assonam.it/api/org-admin/organization/statute` -> `Server: nginx/1.24.0 (Ubuntu)`
+  - `curl POST multipart ~2MB` -> `413 Request Entity Too Large` (Nginx)
+  - `curl POST multipart ~100KB` -> `401 Unauthorized` JSON (backend raggiunto)
+  - `python -m py_compile app\\main.py app\\middleware.py app\\routes\\org_admin.py app\\routes\\super_admin.py app\\services\\statute_upload.py tests\\test_org_admin_statute_upload.py` -> OK
+  - `python -m pytest tests\\test_org_admin_statute_upload.py -q` -> `3 passed`
+  - `python -m pytest tests\\test_org_admin_manual_member.py::test_org_admin_cannot_override_org_id tests\\test_ingest_pienissimo.py::test_ingest_requires_email_even_when_external_id_is_provided -q` -> `2 passed`
+  - `npm --prefix frontend run build` -> OK
