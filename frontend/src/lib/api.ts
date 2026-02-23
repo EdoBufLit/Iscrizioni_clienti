@@ -265,6 +265,27 @@ export async function fetchMe(): Promise<MemberProfile> {
   return res.json();
 }
 
+export type GoogleWalletSaveLinkResponse = {
+  url: string;
+  classId: string;
+  objectId: string;
+};
+
+export async function createMemberGoogleWalletSaveLink(): Promise<GoogleWalletSaveLinkResponse> {
+  const res = await fetch("/api/me/wallet/google/save-link", {
+    method: "POST",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  const payload = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(
+      payload?.detail ??
+        "Impossibile generare link Wallet, riprova.",
+    );
+  }
+  return payload;
+}
+
 export type MemberDocumentItem = {
   id: number;
   type: string;

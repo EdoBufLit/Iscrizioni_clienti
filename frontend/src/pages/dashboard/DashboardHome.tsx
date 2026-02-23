@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import {
   MemberCardPreview,
@@ -6,6 +7,7 @@ import {
 } from "../../components/cards/MemberCardPreview";
 import Skeleton from "../../components/ui/Skeleton";
 import type { DashboardContext } from "./DashboardLayout";
+import { AuthError, createMemberGoogleWalletSaveLink } from "../../lib/api";
 
 const STATUS_STYLE: Record<string, { label: string; color: string }> = {
   active: {
@@ -115,6 +117,8 @@ const toDateText = (value?: string | null): string => {
 
 const DashboardHome = () => {
   const { user, loading, profileError, reloadProfile } = useOutletContext<DashboardContext>();
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [walletError, setWalletError] = useState<string | null>(null);
 
   const statusInfo = user
     ? STATUS_STYLE[user.status] ?? { label: user.status, color: "border-neutral-200 bg-neutral-50 text-neutral-600" }
@@ -124,6 +128,34 @@ const DashboardHome = () => {
   const cardData: MemberCardPreviewData = isMemberCardPreviewData(cardDataCandidate)
     ? cardDataCandidate
     : {};
+  const canShowGoogleWalletButton = Boolean(
+    user &&
+      cardData.cardNumber != null &&
+      cardData.verificationUrl &&
+      String(cardData.cardStatus ?? "").toLowerCase() === "attiva",
+  );
+
+  const handleAddToGoogleWallet = async () => {
+    if (walletLoading) return;
+    setWalletError(null);
+    setWalletLoading(true);
+    try {
+      const payload = await createMemberGoogleWalletSaveLink();
+      window.location.href = payload.url;
+    } catch (error) {
+      if (error instanceof AuthError) {
+        window.location.href = "/login";
+        return;
+      }
+      setWalletError(
+        error instanceof Error
+          ? error.message
+          : "Impossibile generare link Wallet, riprova",
+      );
+    } finally {
+      setWalletLoading(false);
+    }
+  };
 
   return (
     <div data-tour="member-dashboard-home">
@@ -238,6 +270,30 @@ const DashboardHome = () => {
             <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-600">
               Tessera ASSO.N.A.M. separata dalle card KPI: clicca per ruotare fronte/retro e verificare il QR verso endpoint backend.
             </p>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => {
+                  void handleAddToGoogleWallet();
+                }}
+                disabled={!canShowGoogleWalletButton || walletLoading}
+                title={
+                  canShowGoogleWalletButton
+                    ? "Aggiungi la tessera a Google Wallet"
+                    : "Disponibile quando la tessera è attiva"
+                }
+              >
+                {walletLoading ? "Generazione link..." : "Aggiungi a Google Wallet"}
+              </button>
+              <span className="text-xs text-neutral-500">
+                Disponibile su Android (Google Wallet)
+              </span>
+            </div>
+            {walletError && (
+              <p className="mt-2 text-sm text-red-600">{walletError}</p>
+            )}
 
             <div className="mx-auto mt-8 max-w-3xl" data-tour="member-card-number">
               <MemberCardPreview cardData={cardData} />

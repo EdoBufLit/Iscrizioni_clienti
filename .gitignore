@@ -18,3 +18,8 @@ frontend/.claude/
 nul
 test_qa.db
 .pytest_cache/
+/secrets/*
+!/secrets/README.md
+/secrets/*.json
+google-wallet*.json
+*.b64

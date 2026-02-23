@@ -102,6 +102,7 @@ class AdminRole(str, enum.Enum):
 class SignupSource(str, enum.Enum):
     ASSONAM_FORM = "assonam_form"
     PIENISSIMO = "pienissimo"
+    ADMIN = "admin"
 
 
 class TokenType(str, enum.Enum):
@@ -208,6 +209,11 @@ class Member(Base):
     batch_id = Column(Integer, ForeignKey("card_batches.id"), nullable=True)
     card_email_sent_at = Column(DateTime, nullable=True)
     card_delivered_at = Column(DateTime, nullable=True)
+    google_wallet_class_id = Column(String, nullable=True)
+    google_wallet_object_id = Column(String, nullable=True)
+    google_wallet_added_at = Column(DateTime, nullable=True)
+    google_wallet_last_error = Column(Text, nullable=True)
+    google_wallet_last_synced_at = Column(DateTime, nullable=True)
 
     joined_at = Column(DateTime, nullable=True)
     member_type = Column(String, nullable=True)

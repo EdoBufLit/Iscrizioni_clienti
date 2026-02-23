@@ -100,6 +100,11 @@ def init_db():
         _add_column_if_missing(conn, "members", "external_customer_id", "TEXT")
         _add_column_if_missing(conn, "members", "card_email_sent_at", "DATETIME")
         _add_column_if_missing(conn, "members", "card_delivered_at", "DATETIME")
+        _add_column_if_missing(conn, "members", "google_wallet_class_id", "TEXT")
+        _add_column_if_missing(conn, "members", "google_wallet_object_id", "TEXT")
+        _add_column_if_missing(conn, "members", "google_wallet_added_at", "DATETIME")
+        _add_column_if_missing(conn, "members", "google_wallet_last_error", "TEXT")
+        _add_column_if_missing(conn, "members", "google_wallet_last_synced_at", "DATETIME")
         conn.execute(
             text(
                 """

@@ -15,3 +15,5 @@ alembic
 reportlab
 qrcode[pil]
 Pillow
+google-auth
+PyJWT

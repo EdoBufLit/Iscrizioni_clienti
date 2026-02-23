@@ -29,6 +29,13 @@ class Settings:
     GIT_SHA: str = os.getenv("GIT_SHA", "")
     BUILD_TIME: str = os.getenv("BUILD_TIME", "")
 
+    GOOGLE_WALLET_ISSUER_ID: str = os.getenv("GOOGLE_WALLET_ISSUER_ID", "")
+    GOOGLE_WALLET_SA_B64: str = os.getenv("GOOGLE_WALLET_SA_B64", "")
+    GOOGLE_APPLICATION_CREDENTIALS: str = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+    GOOGLE_WALLET_HTTP_TIMEOUT_SECONDS: int = int(
+        os.getenv("GOOGLE_WALLET_HTTP_TIMEOUT_SECONDS", "15")
+    )
+
     # Super admin bootstrap
     SUPER_ADMIN_EMAIL: str = os.getenv("SUPER_ADMIN_EMAIL", "admin@assonam.it")
     SUPER_ADMIN_PASSWORD: str = os.getenv("SUPER_ADMIN_PASSWORD", "admin")

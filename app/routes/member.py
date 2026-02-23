@@ -9,6 +9,11 @@ from app.security import get_password_hash, verify_password
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
 from app.services.card_verification import build_card_verification_token
+from app.services.google_wallet import (
+    GoogleWalletApiError,
+    GoogleWalletConfigError,
+    generate_google_wallet_save_link_for_member,
+)
 from app.services.member_activity import get_member_inactive_reason, is_card_active, is_member_active
 from app.services.member_cleanup import cleanup_deleted_member_traces, purge_deleted_members_permanently
 from app.services.org_branding import resolve_card_logo_url, resolve_club_display_name
@@ -219,6 +224,60 @@ def download_my_organization_statute(request: Request, db: Session = Depends(get
         media_type="application/pdf",
         filename=f"statuto_{org.slug}.pdf",
     )
+
+
+@router.get("/api/me/documents/statute")
+def download_my_statute_via_documents_alias(request: Request, db: Session = Depends(get_db)):
+    return download_my_organization_statute(request, db)
+
+
+@router.post("/api/me/wallet/google/save-link")
+def create_google_wallet_save_link(request: Request, db: Session = Depends(get_db)):
+    member = get_current_member(request, db)
+    if not member:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    if member.card_no is None or member.card_year is None:
+        raise HTTPException(status_code=409, detail="Tessera non disponibile per Google Wallet")
+
+    try:
+        result = generate_google_wallet_save_link_for_member(member)
+    except GoogleWalletConfigError as exc:
+        logger.warning("Google Wallet config error for member_id=%s: %s", member.id, str(exc))
+        member.google_wallet_last_error = str(exc)
+        db.commit()
+        raise HTTPException(status_code=500, detail=str(exc))
+    except GoogleWalletApiError as exc:
+        detail = f"Google Wallet API error ({exc.status_code})"
+        logger.error(
+            "Google Wallet API error for member_id=%s status=%s response=%s",
+            member.id,
+            exc.status_code,
+            (exc.response_body or "")[:500],
+        )
+        member.google_wallet_last_error = f"{detail}: {str(exc)}"
+        db.commit()
+        raise HTTPException(status_code=502, detail=detail)
+    except Exception:
+        logger.exception("Unexpected Google Wallet error for member_id=%s", member.id)
+        member.google_wallet_last_error = "Unexpected Google Wallet error"
+        db.commit()
+        raise HTTPException(status_code=500, detail="Errore interno Google Wallet")
+
+    now = datetime.utcnow()
+    member.google_wallet_class_id = result.class_id
+    member.google_wallet_object_id = result.object_id
+    member.google_wallet_last_error = None
+    member.google_wallet_last_synced_at = now
+    if member.google_wallet_added_at is None:
+        member.google_wallet_added_at = now
+    db.commit()
+
+    return {
+        "url": result.url,
+        "classId": result.class_id,
+        "objectId": result.object_id,
+    }
 
 
 @router.post("/api/member/documents/{doc_id}/resubmit")
