@@ -11,7 +11,8 @@ All environment variables used by the application. Variables marked **required**
 | `FRONTEND_URL` | **Yes** | _(empty)_ | Public URL of the frontend (e.g. `https://assonam.it`). Used for magic links. If missing, falls back to `BASE_URL` + `/app`. |
 | `INGEST_RATE_LIMIT_MAX_REQUESTS` | No | `20` | Max public ingest calls allowed per `org_slug + client_ip` within the rate-limit window. |
 | `INGEST_RATE_LIMIT_WINDOW_SECONDS` | No | `300` | Duration (seconds) of the public ingest rate-limit window. |
-| `DATABASE_URL` | No | `sqlite:///data/app.db` (local) or `sqlite:////app/data/app.db` (Docker) | SQLAlchemy database URL. Auto-detected based on environment. |
+| `DATABASE_URL` | No | `sqlite:///./data/app.db` (local) or `sqlite:////app/data/app.db` (Docker) | SQLAlchemy database URL. Switch to PostgreSQL with `postgresql+psycopg2://assonam:${POSTGRES_PASSWORD}@db:5432/assonam`. |
+| `POSTGRES_PASSWORD` | No | _(empty)_ | Password for the bundled Docker Compose PostgreSQL service (`db`). Required only when using PostgreSQL. |
 | `UPLOAD_DIR` | No | `<project_root>/data/uploads` | Directory for storing uploaded member documents. |
 | `SPA_DIR` | No | `frontend/dist` | Path to the built frontend SPA directory. |
 

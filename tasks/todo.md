@@ -1525,3 +1525,36 @@ pm --prefix frontend run build -> OK
 - Test: `python -m pytest tests/test_google_wallet.py tests/test_org_admin_statute_upload.py -q` -> 13 passed.
 - Build: `npm --prefix frontend run build` -> OK.
 - Migration: `python -m alembic upgrade head` -> OK (pulito residuo locale `_alembic_tmp_organizations` lasciato da un run Alembic interrotto su SQLite).
+
+---
+## Spec (Safe production migration SQLite -> PostgreSQL with rollback - Feb 25, 2026)
+- Obiettivo: aggiungere supporto PostgreSQL via Docker Compose mantenendo SQLite come fallback immediato tramite `DATABASE_URL`, senza cancellare file dati e senza migrazioni distruttive automatiche.
+- Vincoli: compatibilità runtime con SQLite e Postgres, documentare backup/pgloader/rollback/verifica, nessun `DROP` automatico, nessuna rimozione supporto SQLite.
+
+## Plan (Safe production migration SQLite -> PostgreSQL with rollback)
+- [ ] Ricognizione config DB/SQLAlchemy/Alembic e Docker Compose per identificare punti SQLite-specifici che romperebbero Postgres.
+- [ ] Aggiornare `docker-compose.yml` con servizio `db` PostgreSQL 16, volume persistente `pgdata` e `depends_on` per `web`.
+- [ ] Rendere `app/db.py` (e, se serve, Alembic/env) DB-agnostic per SQLite/Postgres mantenendo fallback SQLite.
+- [ ] Aggiornare `requirements.txt` e documentazione env (`DATABASE_URL`, `POSTGRES_PASSWORD`) senza imporre switch immediato in produzione.
+- [ ] Creare `MIGRATION.md` con backup SQLite, comando `pgloader`, switch `DATABASE_URL`, rollback e checklist verifica row-count.
+- [ ] Creare `scripts/check_db.py` per stampare `engine.url` e `engine.dialect.name`.
+- [ ] Verifica finale non distruttiva (script/check sintassi) e compilazione Review con risultati.
+
+## Review (Safe production migration SQLite -> PostgreSQL with rollback - Feb 25, 2026)
+- [ ] Da compilare a fine implementazione.
+
+## Execution Update (Safe production migration SQLite -> PostgreSQL with rollback - Feb 25, 2026)
+- [x] Ricognizione config DB/SQLAlchemy/Alembic e Docker Compose completata; identificato blocco Postgres su `check_same_thread` applicato sempre.
+- [x] `docker-compose.yml` aggiornato con servizio `db` (`postgres:16`), volume `pgdata` e `web.depends_on: db`.
+- [x] Runtime DB reso multi-database in `app/db.py` (SQLite/Postgres) con fallback SQLite preservato.
+- [x] Alembic reso compatibile multi-database (`render_as_batch` solo SQLite, `connect_args` SQLite condizionale).
+- [x] `requirements.txt` aggiornato con `psycopg2-binary`.
+- [x] Documentazione env aggiornata (`ENV_REQUIRED.md`) con switch `DATABASE_URL` e `POSTGRES_PASSWORD`.
+- [x] Creati `MIGRATION.md` (backup/pgloader/switch/rollback/verifica) e `scripts/check_db.py` (engine URL + dialect).
+- [x] Verifica finale non distruttiva completata (py_compile + check script + compose config).
+
+## Review (Safe production migration SQLite -> PostgreSQL with rollback - Feb 25, 2026) - Update
+- `python -m py_compile app\\db.py alembic\\env.py scripts\\check_db.py` -> **OK**
+- `python scripts\\check_db.py` -> **OK** (`engine.url=sqlite:///./data/app.db`, `engine.dialect.name=sqlite`)
+- `docker compose config` -> **OK** (warning attesi su env non impostate; compose renderizza servizio `db`, `depends_on`, volume `pgdata` e default SQLite)
+- Nessuna migrazione eseguita, nessun `DROP`, nessun file SQLite eliminato/modificato.

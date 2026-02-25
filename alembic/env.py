@@ -24,6 +24,7 @@ if config.config_file_name is not None:
 # add your model's MetaData object here
 # for 'autogenerate' support
 target_metadata = Base.metadata
+IS_SQLITE = SQLALCHEMY_DATABASE_URL.startswith("sqlite")
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
@@ -50,7 +51,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        render_as_batch=True,
+        render_as_batch=IS_SQLITE,
     )
 
     with context.begin_transaction():
@@ -65,16 +66,17 @@ def run_migrations_online() -> None:
 
     """
     # Use the URL from app.db logic instead of config.ini
-    connectable = create_engine(
-        SQLALCHEMY_DATABASE_URL,
-        poolclass=pool.NullPool,
-    )
+    engine_kwargs = {"poolclass": pool.NullPool}
+    if IS_SQLITE:
+        engine_kwargs["connect_args"] = {"check_same_thread": False}
+
+    connectable = create_engine(SQLALCHEMY_DATABASE_URL, **engine_kwargs)
 
     with connectable.connect() as connection:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            render_as_batch=True,
+            render_as_batch=IS_SQLITE,
         )
 
         with context.begin_transaction():

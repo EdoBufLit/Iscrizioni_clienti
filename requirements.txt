@@ -17,3 +17,4 @@ qrcode[pil]
 Pillow
 google-auth
 PyJWT
+psycopg2-binary
