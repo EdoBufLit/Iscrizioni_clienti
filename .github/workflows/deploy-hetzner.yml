@@ -118,6 +118,96 @@ jobs:
                 dimitri/pgloader:latest \
                 pgloader "sqlite:///tmp/app.db" "postgresql://assonam:${POSTGRES_PASSWORD}@db:5432/assonam"
 
+              echo "[migrate] Repairing common SQLite->Postgres schema issues (booleans + id sequences/defaults)"
+              docker compose $COMPOSE_FILES exec -T db psql -U assonam -d assonam -v ON_ERROR_STOP=1 <<'SQL'
+              DO $$
+              DECLARE
+                rec RECORD;
+                next_id BIGINT;
+                seq_regclass TEXT;
+              BEGIN
+                -- Normalize boolean-like columns often imported as bigint/text by pgloader from SQLite.
+                FOR rec IN
+                  SELECT *
+                  FROM (
+                    VALUES
+                      ('organizations', 'is_active', 'TRUE'),
+                      ('organizations', 'wallet_is_test_prefix', 'FALSE'),
+                      ('admin_users', 'is_active', 'TRUE'),
+                      ('members', 'is_manual', 'FALSE'),
+                      ('integration_api_keys', 'is_active', 'TRUE')
+                  ) AS v(table_name, column_name, default_sql)
+                LOOP
+                  IF EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = rec.table_name
+                      AND column_name = rec.column_name
+                  ) THEN
+                    EXECUTE format(
+                      'ALTER TABLE public.%I ALTER COLUMN %I TYPE boolean USING CASE
+                         WHEN %I IS NULL THEN NULL
+                         WHEN lower(trim(%I::text)) IN (''1'',''t'',''true'',''y'',''yes'',''on'') THEN TRUE
+                         ELSE FALSE
+                       END',
+                      rec.table_name,
+                      rec.column_name,
+                      rec.column_name,
+                      rec.column_name
+                    );
+                    EXECUTE format(
+                      'ALTER TABLE public.%I ALTER COLUMN %I SET DEFAULT %s',
+                      rec.table_name,
+                      rec.column_name,
+                      rec.default_sql
+                    );
+                  END IF;
+                END LOOP;
+
+                -- Ensure every integer/bigint PK id column has a sequence/DEFAULT for INSERTs.
+                FOR rec IN
+                  SELECT c.table_name
+                  FROM information_schema.columns c
+                  JOIN information_schema.table_constraints tc
+                    ON tc.table_schema = c.table_schema
+                   AND tc.table_name = c.table_name
+                   AND tc.constraint_type = 'PRIMARY KEY'
+                  JOIN information_schema.key_column_usage kcu
+                    ON kcu.constraint_schema = tc.constraint_schema
+                   AND kcu.constraint_name = tc.constraint_name
+                   AND kcu.table_schema = tc.table_schema
+                   AND kcu.table_name = tc.table_name
+                   AND kcu.column_name = c.column_name
+                  WHERE c.table_schema = 'public'
+                    AND c.column_name = 'id'
+                    AND c.data_type IN ('integer', 'bigint')
+                LOOP
+                  EXECUTE format('CREATE SEQUENCE IF NOT EXISTS public.%I_id_seq', rec.table_name);
+                  seq_regclass := format('public.%s_id_seq', rec.table_name);
+
+                  EXECUTE format(
+                    'ALTER TABLE public.%I ALTER COLUMN id SET DEFAULT nextval(%L::regclass)',
+                    rec.table_name,
+                    seq_regclass
+                  );
+                  EXECUTE format(
+                    'ALTER SEQUENCE public.%I_id_seq OWNED BY public.%I.id',
+                    rec.table_name,
+                    rec.table_name
+                  );
+
+                  EXECUTE format('SELECT COALESCE(MAX(id), 0) + 1 FROM public.%I', rec.table_name)
+                    INTO next_id;
+                  EXECUTE format(
+                    'SELECT setval(%L::regclass, %s, false)',
+                    seq_regclass,
+                    next_id::TEXT
+                  );
+                END LOOP;
+              END $$;
+              SQL
+
               echo "[migrate] Import complete. Verifying DATABASE_URL is not SQLite before restarting the app"
               if [ -z "${DATABASE_URL:-}" ]; then
                 echo "[migrate] DATABASE_URL is empty. Set it to the Postgres URL and re-run."

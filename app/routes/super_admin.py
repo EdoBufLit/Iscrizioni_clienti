@@ -1153,6 +1153,25 @@ def _serialize_batch_usage(db: Session, batch: CardBatch) -> dict[str, int | boo
     }
 
 
+def _begin_card_allocation_transaction(db: Session) -> None:
+    """Serialize card-range allocation for both SQLite and Postgres."""
+    db.commit()
+
+    bind = db.get_bind()
+    dialect_name = ""
+    if bind is not None and getattr(bind, "dialect", None) is not None:
+        dialect_name = (bind.dialect.name or "").lower()
+
+    if dialect_name == "sqlite":
+        db.execute(text("BEGIN IMMEDIATE"))
+        return
+
+    if dialect_name == "postgresql":
+        # Lock the shared batch table so overlap checks + inserts stay serialized.
+        db.execute(text("LOCK TABLE card_batches IN SHARE ROW EXCLUSIVE MODE"))
+        return
+
+
 @router.post("/organizations/{org_id}/card-range")
 def set_initial_card_range(
     request: Request,
@@ -1162,8 +1181,7 @@ def set_initial_card_range(
 ):
     admin = _require_super_admin(request, db)
     # Ensure strict serialization for card allocation
-    db.commit()
-    db.execute(text("BEGIN IMMEDIATE"))
+    _begin_card_allocation_transaction(db)
 
     if body.from_no <= 0 or body.to_no <= 0:
          raise HTTPException(status_code=400, detail="Range must be positive integers")
@@ -1237,8 +1255,7 @@ def add_card_batch(
     """Add a new card batch with explicit from/to range."""
     admin = _require_super_admin(request, db)
     # Ensure strict serialization for card allocation
-    db.commit()
-    db.execute(text("BEGIN IMMEDIATE"))
+    _begin_card_allocation_transaction(db)
 
     if body.from_no <= 0 or body.to_no <= 0:
         raise HTTPException(status_code=400, detail="I numeri devono essere interi positivi")
