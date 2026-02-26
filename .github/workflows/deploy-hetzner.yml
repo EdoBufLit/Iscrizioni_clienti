@@ -4,6 +4,16 @@ on:
   push:
     branches:
       - association-signup-feature-1416851812972636353
+  workflow_dispatch:
+    inputs:
+      MIGRATE:
+        description: Run SQLite -> Postgres import before deploy restart
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 jobs:
   deploy:
@@ -35,6 +45,7 @@ jobs:
             # ---- Optional env ----
             # If not set as secrets, these will just be empty and app uses defaults/fallbacks.
             export DATABASE_URL='${{ secrets.DATABASE_URL }}'
+            export POSTGRES_PASSWORD='${{ secrets.POSTGRES_PASSWORD }}'
             export UPLOAD_DIR='${{ secrets.UPLOAD_DIR }}'
             export SPA_DIR='${{ secrets.SPA_DIR }}'
             export FRONTEND_URL='${{ secrets.FRONTEND_URL }}'
@@ -61,6 +72,65 @@ jobs:
               COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.prod.yml"
             fi
 
+            MIGRATE='${{ github.event.inputs.MIGRATE || 'false' }}'
+            echo "[deploy] MIGRATE=${MIGRATE}"
+
+            if [ "$MIGRATE" = "true" ]; then
+              echo "[migrate] MIGRATE=true: starting Postgres service only"
+              echo "[migrate] Reminder: DATABASE_URL GitHub secret must already be set to the Postgres URL before cutover restart."
+
+              if [ -z "${POSTGRES_PASSWORD:-}" ]; then
+                echo "[migrate] POSTGRES_PASSWORD is empty. Set the GitHub secret and re-run."
+                exit 1
+              fi
+
+              docker compose $COMPOSE_FILES up -d db
+
+              echo "[migrate] Waiting for Postgres readiness (up to 60s)"
+              PG_READY=0
+              for i in $(seq 1 60); do
+                if docker compose $COMPOSE_FILES exec -T db pg_isready -U assonam -d assonam; then
+                  PG_READY=1
+                  echo "[migrate] Postgres is ready"
+                  break
+                fi
+                sleep 1
+              done
+
+              if [ "$PG_READY" -ne 1 ]; then
+                echo "[migrate] Postgres did not become ready within 60s"
+                exit 1
+              fi
+
+              SQLITE_SOURCE="$(pwd)/data/app.db"
+              if [ ! -f "$SQLITE_SOURCE" ]; then
+                SQLITE_SOURCE="/opt/assonam/app/data/app.db"
+              fi
+              if [ ! -f "$SQLITE_SOURCE" ]; then
+                echo "[migrate] SQLite source file not found (checked $(pwd)/data/app.db and /opt/assonam/app/data/app.db)"
+                exit 1
+              fi
+
+              echo "[migrate] Running pgloader import on network app_default from $SQLITE_SOURCE"
+              docker run --rm \
+                --network app_default \
+                -v "$SQLITE_SOURCE:/tmp/app.db:ro" \
+                dimitri/pgloader:latest \
+                pgloader "sqlite:///tmp/app.db" "postgresql://assonam:${POSTGRES_PASSWORD}@db:5432/assonam"
+
+              echo "[migrate] Import complete. Verifying DATABASE_URL is not SQLite before restarting the app"
+              if [ -z "${DATABASE_URL:-}" ]; then
+                echo "[migrate] DATABASE_URL is empty. Set it to the Postgres URL and re-run."
+                exit 1
+              fi
+              if echo "$DATABASE_URL" | grep -qi "sqlite"; then
+                echo "[migrate] DATABASE_URL is still SQLite. Set it to Postgres and re-run."
+                exit 1
+              fi
+            fi
+
+            echo "[deploy] Running docker compose up -d --build"
             docker compose $COMPOSE_FILES up -d --build
+            echo "[deploy] Pruning images"
             docker image prune -f || true
 
