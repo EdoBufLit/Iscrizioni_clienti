@@ -132,7 +132,8 @@ jobs:
                 exists="$(psql_query "SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='${table_name}' AND column_name='${column_name}' LIMIT 1;")"
                 if [ "$exists" = "1" ]; then
                   echo "[migrate] Repair boolean ${table_name}.${column_name}"
-                  psql_exec "ALTER TABLE public.${table_name} ALTER COLUMN ${column_name} TYPE boolean USING CASE
+                  psql_exec "ALTER TABLE public.${table_name} ALTER COLUMN ${column_name} DROP DEFAULT;
+                  ALTER TABLE public.${table_name} ALTER COLUMN ${column_name} TYPE boolean USING CASE
                     WHEN ${column_name} IS NULL THEN NULL
                     WHEN lower(trim(${column_name}::text)) IN ('1','t','true','y','yes','on') THEN TRUE
                     ELSE FALSE
