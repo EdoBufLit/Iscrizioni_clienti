@@ -172,6 +172,9 @@ jobs:
                 echo "[migrate] DATABASE_URL is still SQLite. Set it to Postgres and re-run."
                 exit 1
               fi
+
+              echo "[migrate] Running Alembic migrations on Postgres before app restart"
+              docker compose $COMPOSE_FILES run --rm --build web alembic upgrade head
             fi
 
             echo "[deploy] Running docker compose up -d --build"

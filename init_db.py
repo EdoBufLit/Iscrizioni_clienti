@@ -204,7 +204,7 @@ def init_db():
                        wallet_logo_url = COALESCE(NULLIF(trim(wallet_logo_url), ''), :wallet_logo_url),
                        wallet_hero_image_url = COALESCE(NULLIF(trim(wallet_hero_image_url), ''), :wallet_hero_image_url),
                        wallet_title_override = COALESCE(NULLIF(trim(wallet_title_override), ''), :wallet_title_override),
-                       wallet_is_test_prefix = COALESCE(wallet_is_test_prefix, 0)
+                       wallet_is_test_prefix = COALESCE(wallet_is_test_prefix, FALSE)
                  WHERE lower(trim(slug)) = 'oasi-2'
                 """
             ),
