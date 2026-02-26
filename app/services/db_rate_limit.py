@@ -9,6 +9,21 @@ from sqlalchemy.orm import Session
 from app.models import IngestRateLimit
 
 
+def _begin_rate_limit_tx(db: Session) -> None:
+    bind = db.get_bind()
+    dialect_name = ""
+    if bind is not None and getattr(bind, "dialect", None) is not None:
+        dialect_name = (bind.dialect.name or "").lower()
+
+    if dialect_name == "sqlite":
+        db.execute(text("BEGIN IMMEDIATE"))
+        return
+
+    if dialect_name == "postgresql":
+        # SQLAlchemy session auto-begins transactions on first statement on Postgres.
+        return
+
+
 def enforce_db_rate_limit(
     db: Session,
     *,
@@ -25,7 +40,7 @@ def enforce_db_rate_limit(
     normalized_ip = (client_ip or "unknown").strip()[:64]
 
     try:
-        db.execute(text("BEGIN IMMEDIATE"))
+        _begin_rate_limit_tx(db)
 
         row = (
             db.query(IngestRateLimit)
