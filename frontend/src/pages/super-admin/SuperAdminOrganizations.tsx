@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
-import { useOutletContext, useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate, useOutletContext } from "react-router-dom";
 import {
-  fetchSuperAdminOrganizations,
-  deleteOrganization,
   AuthError,
+  deleteOrganization,
+  fetchSuperAdminOrganizations,
   type SuperAdminOrganization,
   type SuperAdminProfile,
 } from "../../lib/api";
+import { useSuperAdminOrganizationsQueryState } from "../../hooks/useSuperAdminOrganizationsQueryState";
 import Skeleton from "../../components/ui/Skeleton";
 import OrganizationManageModal, {
   type OrganizationModalType,
@@ -16,15 +17,51 @@ import SuperAdminPienissimoIntegrationCard from "./components/SuperAdminPienissi
 const thClass =
   "px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.15em] text-neutral-400";
 const tdClass = "px-5 py-3.5 text-sm text-neutral-700";
+const PAGE_SIZE_OPTIONS = [50, 100];
+const SEARCH_DEBOUNCE_MS = 400;
+const DEFAULT_SORT = "created_at:desc";
+
+const getVisiblePages = (page: number, totalPages: number): Array<number | "ellipsis"> => {
+  if (totalPages <= 1) {
+    return [1];
+  }
+
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  if (page <= 3) {
+    return [1, 2, 3, 4, "ellipsis", totalPages];
+  }
+
+  if (page >= totalPages - 2) {
+    return [1, "ellipsis", totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+  }
+
+  return [1, "ellipsis", page - 1, page, page + 1, "ellipsis", totalPages];
+};
 
 const SuperAdminOrganizations = () => {
   const navigate = useNavigate();
   const { profile } = useOutletContext<{ profile: SuperAdminProfile | null }>();
   const isSuperAdmin = profile?.role === "super_admin";
+  const {
+    q,
+    page,
+    pageSize,
+    setSearchQuery,
+    setPage,
+    setPageSize,
+  } = useSuperAdminOrganizationsQueryState();
 
   const [orgs, setOrgs] = useState<SuperAdminOrganization[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState("");
+  const [searchInput, setSearchInput] = useState(q);
+  const [reloadToken, setReloadToken] = useState(0);
 
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState<OrganizationModalType>("create");
@@ -38,32 +75,103 @@ const SuperAdminOrganizations = () => {
   const [deleting, setDeleting] = useState(false);
   const [integrationOrg, setIntegrationOrg] = useState<SuperAdminOrganization | null>(null);
 
-  const loadOrgs = useCallback(() => {
-    if (orgs.length === 0) {
-      setLoading(true);
+  const requestIdRef = useRef(0);
+  const hasLoadedOnceRef = useRef(false);
+
+  useEffect(() => {
+    setSearchInput(q);
+  }, [q]);
+
+  useEffect(() => {
+    if (searchInput.trim() === q) {
+      return;
     }
 
-    fetchSuperAdminOrganizations()
-      .then((res) => {
-        setOrgs(res.data);
-        setError("");
-      })
-      .catch((err) => {
-        if (err instanceof AuthError) {
-          navigate("/super-admin/login", { replace: true });
-        } else {
-          setError("Errore nel caricamento.");
-        }
-      })
-      .finally(() => setLoading(false));
-  }, [orgs.length, navigate]);
+    const timeoutId = window.setTimeout(() => {
+      setSearchQuery(searchInput);
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [q, searchInput, setSearchQuery]);
+
+  const refreshOrganizations = useCallback(() => {
+    setReloadToken((current) => current + 1);
+  }, []);
 
   useEffect(() => {
     if (!profile) {
       return;
     }
-    loadOrgs();
-  }, [profile, loadOrgs]);
+
+    const controller = new AbortController();
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+
+    if (!hasLoadedOnceRef.current) {
+      setLoading(true);
+    } else {
+      setIsFetching(true);
+    }
+
+    fetchSuperAdminOrganizations({
+      page,
+      pageSize,
+      q: q || undefined,
+      sort: DEFAULT_SORT,
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (requestId !== requestIdRef.current) {
+          return;
+        }
+
+        if (response.total > 0 && page > response.total_pages) {
+          setPage(response.total_pages);
+          return;
+        }
+
+        if (response.total === 0 && page !== 1) {
+          setPage(1);
+          return;
+        }
+
+        setOrgs(response.items);
+        setTotal(response.total);
+        setTotalPages(response.total_pages);
+        setError("");
+      })
+      .catch((err: unknown) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        if (requestId !== requestIdRef.current) {
+          return;
+        }
+
+        if (err instanceof AuthError) {
+          navigate("/super-admin/login", { replace: true });
+          return;
+        }
+
+        const message =
+          err instanceof Error && err.message.trim()
+            ? err.message
+            : "Errore nel caricamento delle associazioni.";
+        setError(message);
+      })
+      .finally(() => {
+        if (requestId !== requestIdRef.current) {
+          return;
+        }
+
+        hasLoadedOnceRef.current = true;
+        setLoading(false);
+        setIsFetching(false);
+      });
+
+    return () => controller.abort();
+  }, [navigate, page, pageSize, profile, q, reloadToken, setPage]);
 
   const openModal = useCallback((type: OrganizationModalType, org?: SuperAdminOrganization) => {
     setModalType(type);
@@ -77,8 +185,8 @@ const SuperAdminOrganizations = () => {
 
   const handleModalSaved = useCallback(() => {
     setShowModal(false);
-    loadOrgs();
-  }, [loadOrgs]);
+    refreshOrganizations();
+  }, [refreshOrganizations]);
 
   const handleSwitchToAddBatch = useCallback(() => {
     if (!selectedOrg) {
@@ -103,33 +211,45 @@ const SuperAdminOrganizations = () => {
     setIntegrationOrg(null);
   }, []);
 
+  const applySearchImmediately = useCallback(() => {
+    setSearchQuery(searchInput);
+  }, [searchInput, setSearchQuery]);
+
+  const clearSearch = useCallback(() => {
+    setSearchInput("");
+    setSearchQuery("");
+  }, [setSearchQuery]);
+
   const confirmDelete = async () => {
-    if (!deleteConfirm || deleting) return;
+    if (!deleteConfirm || deleting) {
+      return;
+    }
     if (deleteMode === "purge" && purgeSlugInput.trim() !== deleteConfirm.slug) {
       setDeleteError("Per confermare il purge devi digitare esattamente lo slug dell'associazione.");
       return;
     }
+
     setDeleting(true);
     setDeleteError("");
     setDeleteSuccess("");
+
     try {
       const result = await deleteOrganization(deleteConfirm.id, {
         mode: deleteMode,
         releaseRange: true,
         force: deleteMode === "purge",
       });
-      const range =
-        result.releasedRange
-          ? `${result.releasedRange.start}-${result.releasedRange.end}`
-          : "nessuno";
+      const range = result.releasedRange
+        ? `${result.releasedRange.start}-${result.releasedRange.end}`
+        : "nessuno";
       setDeleteSuccess(
         deleteMode === "archive"
           ? `Associazione archiviata. Range liberato: ${range}.`
-          : `Associazione eliminata definitivamente. Range liberato: ${range}.`
+          : `Associazione eliminata definitivamente. Range liberato: ${range}.`,
       );
       setDeleteConfirm(null);
       setPurgeSlugInput("");
-      loadOrgs();
+      refreshOrganizations();
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : "Errore durante l'eliminazione");
     } finally {
@@ -137,13 +257,22 @@ const SuperAdminOrganizations = () => {
     }
   };
 
+  const totalLabel =
+    total === 1 ? "1 associazione" : `${total.toLocaleString("it-IT")} associazioni`;
+  const startIndex = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const endIndex = total === 0 ? 0 : Math.min(page * pageSize, total);
+  const visiblePages = getVisiblePages(page, totalPages);
+
   if (loading && !orgs.length) {
     return (
       <div>
         <Skeleton className="h-6 w-64" />
         <Skeleton className="mt-3 h-4 w-96" />
-        <div className="mt-10">
-          <Skeleton className="h-48 w-full rounded-lg" />
+        <div className="mt-6">
+          <Skeleton className="h-24 w-full rounded-2xl" />
+        </div>
+        <div className="mt-6">
+          <Skeleton className="h-56 w-full rounded-lg" />
         </div>
       </div>
     );
@@ -164,7 +293,7 @@ const SuperAdminOrganizations = () => {
         )}
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h2 className="text-xl font-semibold text-neutral-900">Associazioni</h2>
           <p className="mt-1 text-sm text-neutral-500">
@@ -180,7 +309,111 @@ const SuperAdminOrganizations = () => {
         </button>
       </div>
 
+      <div className="surface mt-8 px-5 py-5">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div className="w-full max-w-3xl">
+            <label
+              htmlFor="super-admin-org-search"
+              className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500"
+            >
+              Ricerca globale
+            </label>
+            <div className="relative mt-2">
+              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400">
+                <svg
+                  className="h-5 w-5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={1.8}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-3.5-3.5" />
+                </svg>
+              </span>
+              <input
+                id="super-admin-org-search"
+                type="search"
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    applySearchImmediately();
+                  }
+                }}
+                placeholder="Cerca associazioni..."
+                className="w-full rounded-2xl border border-neutral-200 bg-white px-12 py-3 text-sm text-neutral-700 shadow-subtle outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/10"
+              />
+              {searchInput && (
+                <button
+                  type="button"
+                  onClick={clearSearch}
+                  className="absolute right-3 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-500 transition hover:border-neutral-300 hover:text-neutral-800"
+                  aria-label="Pulisci ricerca"
+                >
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M18 6 6 18" />
+                    <path d="m6 6 12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            <p className="mt-2 text-xs text-neutral-400">
+              Cerca su tutte le associazioni per nome, slug ed email. Invio forza la ricerca
+              immediata.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="rounded-2xl border border-neutral-200 bg-white px-3 py-2 shadow-subtle">
+              <label className="text-[11px] font-semibold uppercase tracking-[0.15em] text-neutral-400">
+                Righe
+              </label>
+              <select
+                className="mt-1 block bg-transparent text-sm font-medium text-neutral-700 outline-none"
+                value={pageSize}
+                onChange={(event) => setPageSize(Number(event.target.value))}
+              >
+                {PAGE_SIZE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option} per pagina
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-5 flex flex-col gap-2 border-t border-white/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-neutral-500">
+            {total === 0 ? "0 associazioni" : `${startIndex}-${endIndex} di ${totalLabel}`}
+          </div>
+          <div className="flex items-center gap-3 text-xs text-neutral-400">
+            {isFetching && <span>Aggiornamento elenco...</span>}
+            <span>
+              Pagina {page} di {totalPages}
+            </span>
+          </div>
+        </div>
+      </div>
+
       <div className="surface mt-8 overflow-hidden" data-component="superadmin-orgs-table">
+        {isFetching && (
+          <div className="border-b border-white/60 bg-brand/[0.04] px-5 py-3 text-xs font-medium uppercase tracking-[0.16em] text-brand">
+            Caricamento risultati...
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="border-b border-white/60 bg-white/40">
@@ -197,14 +430,16 @@ const SuperAdminOrganizations = () => {
               {orgs.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-5 py-12 text-center text-sm text-neutral-500">
-                    Nessuna associazione trovata.
+                    {q
+                      ? "Nessuna associazione trovata per la ricerca corrente."
+                      : "Nessuna associazione trovata."}
                   </td>
                 </tr>
               ) : (
-                orgs.map((org, i) => (
+                orgs.map((org, index) => (
                   <tr
                     key={org.id}
-                    className={`transition hover:bg-brand/[0.02] ${i % 2 === 1 ? "bg-white/30" : ""}`}
+                    className={`transition hover:bg-brand/[0.02] ${index % 2 === 1 ? "bg-white/30" : ""}`}
                   >
                     <td className={`${tdClass} font-medium text-neutral-900`}>{org.name}</td>
                     <td className={tdClass}>{org.slug}</td>
@@ -217,20 +452,22 @@ const SuperAdminOrganizations = () => {
                           Archiviata
                         </span>
                       ) : (
-                      <span
-                        className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-                          org.is_active
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                            : "border-neutral-200 bg-neutral-50 text-neutral-600"
-                        }`}
-                      >
-                        {org.is_active ? "Attiva" : "Disattivata"}
-                      </span>
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+                            org.is_active
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : "border-neutral-200 bg-neutral-50 text-neutral-600"
+                          }`}
+                        >
+                          {org.is_active ? "Attiva" : "Disattivata"}
+                        </span>
                       )}
                     </td>
                     <td className={`${tdClass} tabular-nums`}>
                       {org.card_min ? (
-                        <span>{org.card_min} - {org.card_max}</span>
+                        <span>
+                          {org.card_min} - {org.card_max}
+                        </span>
                       ) : (
                         <span className="text-neutral-400">-</span>
                       )}
@@ -318,6 +555,52 @@ const SuperAdminOrganizations = () => {
             </tbody>
           </table>
         </div>
+
+        {totalPages > 1 && (
+          <div className="flex flex-col gap-3 border-t border-white/60 px-5 py-4 text-sm text-neutral-600 md:flex-row md:items-center md:justify-between">
+            <button
+              type="button"
+              className="rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 transition hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => setPage(page - 1)}
+              disabled={page <= 1}
+            >
+              Precedente
+            </button>
+
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {visiblePages.map((value, index) =>
+                value === "ellipsis" ? (
+                  <span key={`ellipsis-${index}`} className="px-1 text-neutral-400">
+                    ...
+                  </span>
+                ) : (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setPage(value)}
+                    className={`min-w-[40px] rounded-md border px-3 py-1.5 text-sm font-medium transition ${
+                      value === page
+                        ? "border-brand bg-brand text-white"
+                        : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300"
+                    }`}
+                    aria-current={value === page ? "page" : undefined}
+                  >
+                    {value}
+                  </button>
+                ),
+              )}
+            </div>
+
+            <button
+              type="button"
+              className="rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 transition hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => setPage(page + 1)}
+              disabled={page >= totalPages}
+            >
+              Successiva
+            </button>
+          </div>
+        )}
       </div>
 
       {deleteConfirm && (

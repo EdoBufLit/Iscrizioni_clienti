@@ -840,27 +840,43 @@ export type SuperAdminOrganization = {
 };
 
 export type SuperAdminOrganizationsResponse = {
-  data: SuperAdminOrganization[];
-  meta: {
+  items: SuperAdminOrganization[];
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+  data?: SuperAdminOrganization[];
+  meta?: {
     page: number;
     limit: number;
+    page_size?: number;
     total: number;
+    total_pages?: number;
   };
 };
 
 export async function fetchSuperAdminOrganizations(
-  page: number = 1,
-  limit: number = 50,
-  q?: string
+  params?: {
+    page?: number;
+    pageSize?: number;
+    q?: string;
+    sort?: string;
+    signal?: AbortSignal;
+  }
 ): Promise<SuperAdminOrganizationsResponse> {
   const sp = new URLSearchParams();
-  sp.set("page", String(page));
-  sp.set("limit", String(limit));
-  if (q) sp.set("q", q);
+  sp.set("page", String(params?.page ?? 1));
+  sp.set("page_size", String(params?.pageSize ?? 50));
+  if (params?.q) sp.set("q", params.q);
+  if (params?.sort) sp.set("sort", params.sort);
 
-  const res = await fetch(`/api/super-admin/organizations?${sp.toString()}`);
+  const query = sp.toString();
+  const res = await fetch(`/api/admin/organizations${query ? `?${query}` : ""}`, {
+    signal: params?.signal,
+  });
   if (res.status === 401) throw new AuthError("Not authenticated");
-  if (!res.ok) throw new Error("Failed to fetch organizations");
+  if (res.status === 403) throw new Error("Accesso negato");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento associazioni"));
   return res.json();
 }
 

@@ -1558,3 +1558,29 @@ pm --prefix frontend run build -> OK
 - `python scripts\\check_db.py` -> **OK** (`engine.url=sqlite:///./data/app.db`, `engine.dialect.name=sqlite`)
 - `docker compose config` -> **OK** (warning attesi su env non impostate; compose renderizza servizio `db`, `depends_on`, volume `pgdata` e default SQLite)
 - Nessuna migrazione eseguita, nessun `DROP`, nessun file SQLite eliminato/modificato.
+
+---
+## Spec (Super Admin Associazioni: paginazione reale + search server-side - Feb 27, 2026)
+- Obiettivo: correggere la lista Super Admin Associazioni per mostrare tutte le organizzazioni con paginazione reale e ricerca server-side sull'intero dataset, preservando lo stato in URL.
+- Scope: backend FastAPI endpoint admin organizations + frontend React `SuperAdminOrganizations`; nessuna migration DB prevista.
+- Vincoli: riusare auth super-admin esistente, minimizzare modifiche collaterali, mantenere compatibilita con endpoint/consumatori legacy dove serve.
+
+## Plan (Super Admin Associazioni: paginazione reale + search server-side)
+- [x] Ricognizione finale endpoint/lista esistenti, payload attuale e campi ricercabili su `organizations`.
+- [x] Backend: introdurre handler condiviso con `q`, `page`, `page_size`, `sort`, filtri soft-delete coerenti, `COUNT(*)` e risposta `{items,page,page_size,total,total_pages}`; mantenere compatibilita path legacy.
+- [x] Backend: aggiungere test minimi per paginazione e ricerca su piu pagine.
+- [x] Frontend: aggiornare API client e pagina `SuperAdminOrganizations` con stato URL (`q/page/pageSize`), debounce, ricerca elegante, loading/error/empty state e paginazione.
+- [x] Verifiche finali: pytest mirati backend + build frontend, poi compilare review con esiti.
+
+## Review (Super Admin Associazioni: paginazione reale + search server-side - Feb 27, 2026)
+- Backend: `GET /api/admin/organizations` aggiunto come alias super-admin del listing organizzazioni; supporta `q`, `page`, `page_size`, `sort` e mantiene compatibilita payload legacy con `data/meta` oltre al nuovo `items/page/page_size/total/total_pages`.
+- Backend query: count e lista applicano gli stessi filtri server-side su `name`, `slug`, `email`, `club_display_name`; i range tessere vengono aggregati via subquery per evitare duplicati e mantenere paginazione corretta.
+- Frontend: `SuperAdminOrganizations` ora usa querystring persistente (`q`, `page`, `pageSize`), search bar con debounce 400ms + Enter + clear, fetch cancellabile e paginazione con Prev/Next e numeri pagina.
+- UX: ricerca globale server-side, reset a pagina 1 quando cambia il termine o il page size, loading state durante refresh, empty state dedicato e banner errore se l'API fallisce.
+- Hook: aggiunto `frontend/src/hooks/useSuperAdminOrganizationsQueryState.ts` per centralizzare lettura/scrittura dello stato lista nell'URL.
+- Test: `python -m pytest tests\\test_super_admin_organizations_pagination.py -q` -> **2 passed**.
+- Build: `npm --prefix frontend run build` -> **OK**.
+- Smoke test UI (Feb 27, 2026): eseguito su istanza locale isolata `127.0.0.1:8011` con DB temporaneo `tmp_smoke_super_admin_orgs.db` e 120 org seed + 1 org baseline di bootstrap (`total=121`).
+- Evidenze smoke: login super-admin OK; `/super-admin/associazioni` mostra default `1-50 di 121 associazioni`; pagina 3 raggiungibile (`101-121 di 121`); ricerca `Oasi` restituisce `1-17 di 17`; reload preserva `q/page/pageSize`; clear rimuove `q` e torna a pagina 1.
+- Bug trovato e corretto durante lo smoke: `pageSize` default in URL scendeva a `10` quando il parametro mancava, perche' `Number(null) === 0`; fix applicato in `frontend/src/hooks/useSuperAdminOrganizationsQueryState.ts`.
+- Screenshot: `test-results/smoke-super-admin-organizations-page3.png`, `test-results/smoke-super-admin-organizations-search.png`.

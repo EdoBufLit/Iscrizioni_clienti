@@ -1,12 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import Literal, Optional
 import secrets
 import re
+import math
 
-from sqlalchemy import and_, func, text
+from sqlalchemy import and_, func, or_, text
 from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.db import get_db
@@ -40,6 +41,13 @@ _ALLOWED_MEMBER_PAYMENT_METHODS = {
     PaymentMethod.BONIFICO.value,
 }
 _ALLOWED_INTEGRATION_SCOPES = {"issue_member"}
+_ORGANIZATION_SORT_FIELDS = {
+    "created_at": Organization.created_at,
+    "name": Organization.name,
+    "slug": Organization.slug,
+    "city": Organization.city,
+    "updated_at": Organization.updated_at,
+}
 
 
 def _require_super_admin(request: Request, db: Session) -> AdminUser:
@@ -65,6 +73,146 @@ def _serialize_member_payment_method(value) -> str | None:
         return None
     upper = text.upper()
     return upper if upper in _ALLOWED_MEMBER_PAYMENT_METHODS else text
+
+
+def _normalize_org_search_term(raw_q: Optional[str]) -> Optional[str]:
+    if raw_q is None:
+        return None
+    cleaned = raw_q.strip()
+    return cleaned or None
+
+
+def _organization_search_filter(raw_q: Optional[str]):
+    search_term = _normalize_org_search_term(raw_q)
+    if not search_term:
+        return None
+
+    pattern = f"%{search_term}%"
+    return or_(
+        Organization.name.ilike(pattern),
+        Organization.slug.ilike(pattern),
+        Organization.email.ilike(pattern),
+        Organization.club_display_name.ilike(pattern),
+    )
+
+
+def _organization_sort_order(raw_sort: Optional[str]):
+    default_field = "created_at"
+    default_direction = "desc"
+
+    field_name = default_field
+    direction = default_direction
+    normalized = (raw_sort or "").strip().lower()
+    if normalized:
+        candidate_field, separator, candidate_direction = normalized.partition(":")
+        if (
+            separator
+            and candidate_field in _ORGANIZATION_SORT_FIELDS
+            and candidate_direction in {"asc", "desc"}
+        ):
+            field_name = candidate_field
+            direction = candidate_direction
+
+    sort_column = _ORGANIZATION_SORT_FIELDS[field_name]
+    primary = sort_column.asc() if direction == "asc" else sort_column.desc()
+    if field_name == "name":
+        return [primary, Organization.id.asc()]
+    return [primary, Organization.name.asc(), Organization.id.asc()]
+
+
+def _serialize_organization_row(
+    org: Organization,
+    *,
+    card_min: Optional[int],
+    card_max: Optional[int],
+):
+    return {
+        "id": org.id,
+        "name": org.name,
+        "slug": org.slug,
+        "email": org.email,
+        "club_display_name": org.club_display_name,
+        "card_email_subject": org.card_email_subject,
+        "card_logo_url": org.card_logo_url,
+        "description": org.description,
+        "is_active": org.is_active,
+        "is_archived": org.deleted_at is not None,
+        "deleted_at": org.deleted_at,
+        "created_at": org.created_at,
+        "city": org.city,
+        "province": org.province,
+        "card_min": card_min,
+        "card_max": card_max,
+    }
+
+
+def _list_organizations_payload(
+    *,
+    q: Optional[str],
+    page: int,
+    page_size: int,
+    sort: Optional[str],
+    db: Session,
+):
+    filters = []
+    search_filter = _organization_search_filter(q)
+    if search_filter is not None:
+        filters.append(search_filter)
+
+    card_ranges_subquery = (
+        db.query(
+            CardBatch.org_id.label("org_id"),
+            func.min(CardBatch.start_no).label("card_min"),
+            func.max(CardBatch.end_no).label("card_max"),
+        )
+        .filter(CardBatch.released_at.is_(None))
+        .group_by(CardBatch.org_id)
+        .subquery()
+    )
+
+    total = (
+        db.query(func.count(Organization.id))
+        .filter(*filters)
+        .scalar()
+        or 0
+    )
+    total_pages = max(1, math.ceil(total / page_size)) if page_size else 1
+
+    results = (
+        db.query(
+            Organization,
+            card_ranges_subquery.c.card_min,
+            card_ranges_subquery.c.card_max,
+        )
+        .outerjoin(card_ranges_subquery, card_ranges_subquery.c.org_id == Organization.id)
+        .filter(*filters)
+        .order_by(*_organization_sort_order(sort))
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+
+    items = [
+        _serialize_organization_row(org, card_min=card_min, card_max=card_max)
+        for org, card_min, card_max in results
+    ]
+
+    return {
+        "items": items,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages,
+        # Legacy payload preserved for existing consumers.
+        "data": items,
+        "meta": {
+            "page": page,
+            "limit": page_size,
+            "page_size": page_size,
+            "total": total,
+            "total_pages": total_pages,
+        },
+    }
 
 
 class LoginBody(BaseModel):
@@ -879,68 +1027,25 @@ def delete_organization(
 
 
 @router.get("/organizations")
+@associations_router.get("/organizations")
 def list_organizations(
     request: Request,
-    page: int = 1,
-    limit: int = 50,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=10, le=200),
+    limit: Optional[int] = Query(None, ge=10, le=200),
     q: Optional[str] = None,
+    sort: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     _require_super_admin(request, db)
-
-    # Query organizations with aggregated card ranges
-    # Use outerjoin to include organizations without cards
-    query = db.query(
-        Organization,
-        func.min(CardBatch.start_no).label("card_min"),
-        func.max(CardBatch.end_no).label("card_max")
-    ).outerjoin(
-        CardBatch,
-        and_(
-            CardBatch.org_id == Organization.id,
-            CardBatch.released_at.is_(None),
-        ),
+    resolved_page_size = limit or page_size
+    return _list_organizations_payload(
+        q=q,
+        page=page,
+        page_size=resolved_page_size,
+        sort=sort,
+        db=db,
     )
-
-    if q:
-        search = f"%{q}%"
-        query = query.filter(Organization.name.ilike(search) | Organization.slug.ilike(search))
-
-    query = query.group_by(Organization.id)
-
-    total_query = db.query(func.count(Organization.id))
-    if q:
-        search = f"%{q}%"
-        total_query = total_query.filter(Organization.name.ilike(search) | Organization.slug.ilike(search))
-    total = total_query.scalar()
-
-    results = query.order_by(Organization.name).offset((page - 1) * limit).limit(limit).all()
-
-    data = []
-    for org, c_min, c_max in results:
-        item = {
-            "id": org.id,
-            "name": org.name,
-            "slug": org.slug,
-            "club_display_name": org.club_display_name,
-            "card_email_subject": org.card_email_subject,
-            "card_logo_url": org.card_logo_url,
-            "description": org.description,
-            "is_active": org.is_active,
-            "is_archived": org.deleted_at is not None,
-            "deleted_at": org.deleted_at,
-            "created_at": org.created_at,
-            "city": org.city,
-            "province": org.province,
-            "card_min": c_min,
-            "card_max": c_max
-        }
-        data.append(item)
-
-    return {
-        "data": data,
-        "meta": {"page": page, "limit": limit, "total": total}
-    }
 
 
 @router.patch("/organizations/{org_id}")
