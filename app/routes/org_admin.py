@@ -129,6 +129,29 @@ def _compute_org_card_stock(db: Session, org_id: int, now: datetime | None = Non
     }
 
 
+def _org_admin_batch_status_label(batch: CardBatch) -> str:
+    next_no = batch.next_no if batch.next_no is not None else batch.start_no
+    if batch.released_at is not None:
+        return "Rilasciato"
+    if batch.is_enabled is False:
+        return "Disattivo"
+    if next_no > batch.end_no:
+        return "Esaurito"
+    return "Attivo"
+
+
+def _serialize_org_admin_card_lot(batch: CardBatch) -> dict[str, object]:
+    return {
+        "id": batch.id,
+        "created_at": batch.created_at.isoformat() if batch.created_at else None,
+        "year": batch.year,
+        "range_start": batch.start_no,
+        "range_end": batch.end_no,
+        "quantity": int(batch.end_no - batch.start_no + 1),
+        "status_label": _org_admin_batch_status_label(batch),
+    }
+
+
 def _normalize_member_payment_method(raw_value: Optional[str], required: bool = False) -> Optional[str]:
     if raw_value is None:
         if required:
@@ -1758,32 +1781,27 @@ def card_movements(
     offset: int = 0,
     db: Session = Depends(get_db),
 ):
-    """Return card movements scoped to the org admin's organization."""
+    """Return current-year card lots assigned by ASSONAM for the org admin."""
     admin = _get_current_org_admin(request, db)
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    query = db.query(CardMovement).filter(CardMovement.org_id == admin.org_id)
+    current_year = int(datetime.utcnow().year)
+    query = db.query(CardBatch).filter(
+        CardBatch.org_id == admin.org_id,
+        CardBatch.year == current_year,
+        CardBatch.released_at.is_(None),
+    )
     total = query.count()
-    movements = (
-        query.order_by(CardMovement.created_at.desc())
+    batches = (
+        query.order_by(CardBatch.created_at.desc(), CardBatch.id.desc())
         .offset(offset)
         .limit(min(limit, 100))
         .all()
     )
 
-    items = []
-    for mv in movements:
-        item = {
-            "id": mv.id,
-            "card_no": mv.card_no,
-            "delta": mv.delta,
-            "reason": mv.reason,
-            "created_at": mv.created_at.isoformat() if mv.created_at else None,
-            "member_name": None,
-        }
-        if mv.member:
-            item["member_name"] = f"{mv.member.first_name} {mv.member.last_name}"
-        items.append(item)
-
-    return {"items": items, "total": total}
+    return {
+        "items": [_serialize_org_admin_card_lot(batch) for batch in batches],
+        "total": total,
+        "current_year": current_year,
+    }

@@ -705,16 +705,18 @@ export async function fetchCardStock(): Promise<CardStock> {
 
 export type CardMovement = {
   id: number;
-  card_no: number | null;
-  delta: number;
-  reason: string;
   created_at: string | null;
-  member_name: string | null;
+  year: number;
+  range_start: number;
+  range_end: number;
+  quantity: number;
+  status_label: string;
 };
 
 export type CardMovementsResponse = {
   items: CardMovement[];
   total: number;
+  current_year?: number;
 };
 
 export async function fetchCardMovements(params?: {

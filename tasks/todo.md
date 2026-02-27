@@ -1610,3 +1610,26 @@ pm --prefix frontend run build -> OK
 
 - Smoke test UI (Feb 27, 2026): istanza locale `127.0.0.1:8012` su DB temporaneo `tmp_smoke_card_lots.db`; login super admin OK, ricerca associazione smoke OK, modal lotti OK, modifica lotto vuoto OK, eliminazione lotto vuoto OK, lotto con assegnazioni bloccato in UI OK.
 - Screenshot smoke: `test-results/smoke-card-lots-initial.png`, `test-results/smoke-card-lots-final.png`.
+
+---
+## Spec (Org Admin tessere: tabella movimenti lotti live - Feb 27, 2026)
+- Obiettivo: nella sezione Org Admin > Tessere mostrare nella tabella `Movimenti` i lotti assegnati da ASSONAM per l'anno corrente come range e quantita, senza contatori assegnate/libere.
+- Vincoli: la tabella deve riflettere modifiche o eliminazioni fatte dal super admin sui lotti; impatto minimo su backend e frontend esistenti.
+
+## Plan (Org Admin tessere: tabella movimenti lotti live)
+- [ ] Verificare endpoint e UI attuali della tabella movimenti org-admin.
+- [ ] Backend: far restituire a `/api/org-admin/cards/movements` i lotti correnti live da `card_batches` con range, quantita e stato, limitati all'anno corrente.
+- [ ] Frontend: aggiornare tabella `Movimenti` in `OrgAdminCards` per mostrare data, range, quantita e stato dei lotti ASSONAM, senza colonne assegnate/libere.
+- [ ] Test/verifiche: aggiungere pytest sul refresh live dopo patch/delete del super admin ed eseguire build frontend.
+## Review (Org Admin tessere: tabella movimenti lotti live - Feb 27, 2026)
+- `/api/org-admin/cards/movements` ora restituisce i lotti correnti live da `card_batches` per l'organizzazione dell'org admin, limitati all'anno corrente e non rilasciati, con `range_start`, `range_end`, `quantity` e `status_label`.
+- La tabella `Movimenti` dell'area Org Admin mostra solo `Data`, `Range`, `Quantita'` e `Stato`; non espone piu' dettagli su assegnate/libere, che restano nelle altre sezioni.
+- La vista e' live rispetto alle azioni del super admin: se un lotto viene modificato o eliminato da ASSONAM, l'org admin vede il nuovo range/stato oppure la sua rimozione al successivo refresh.
+- Verifiche eseguite:
+- `python -m pytest tests\\test_org_admin_card_lot_movements.py -q`
+- `python -m pytest tests\\test_super_admin_card_lot_management.py tests\\test_card_assignment.py -q`
+- `npm --prefix frontend run build`
+
+- Smoke test UI (Feb 27, 2026): istanza locale `127.0.0.1:8013` su DB temporaneo `tmp_smoke_org_admin_movements.db`; login org-admin via token OK, tabella `Movimenti` mostra solo il lotto anno corrente con range `910000-910024` e quantita `25`, lotto anno precedente nascosto, refresh dopo PATCH super-admin OK (`910100-910109`, `Disattivo`, quantita `10`), refresh dopo DELETE OK con empty state.
+- Screenshot smoke: `test-results/smoke-org-admin-movements-initial.png`, `test-results/smoke-org-admin-movements-updated.png`, `test-results/smoke-org-admin-movements-deleted.png`.
+
