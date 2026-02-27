@@ -1,3 +1,4 @@
+import sqlalchemy as sa
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Enum, UniqueConstraint, Text, JSON, TypeDecorator, Index, and_, func
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -190,7 +191,7 @@ class CardBatch(Base):
     start_no = Column(Integer)
     end_no = Column(Integer)
     next_no = Column(Integer) # Tracks the next available number
-    is_enabled = Column(Boolean, default=True, nullable=False, server_default="1")
+    is_enabled = Column(Boolean, default=True, nullable=False, server_default=sa.true())
     notes = Column(Text, nullable=True)
     released_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

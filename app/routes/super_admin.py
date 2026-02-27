@@ -1268,7 +1268,14 @@ def _count_linked_members_for_batch(db: Session, batch: CardBatch) -> int:
 
 
 def _batch_manual_enabled(batch: CardBatch) -> bool:
-    return batch.is_enabled is not False
+    value = batch.is_enabled
+    if value is None:
+        return True
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value != 0
+    return bool(value)
 
 
 def _batch_is_assignable(batch: CardBatch) -> bool:

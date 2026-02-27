@@ -1633,3 +1633,26 @@ pm --prefix frontend run build -> OK
 - Smoke test UI (Feb 27, 2026): istanza locale `127.0.0.1:8013` su DB temporaneo `tmp_smoke_org_admin_movements.db`; login org-admin via token OK, tabella `Movimenti` mostra solo il lotto anno corrente con range `910000-910024` e quantita `25`, lotto anno precedente nascosto, refresh dopo PATCH super-admin OK (`910100-910109`, `Disattivo`, quantita `10`), refresh dopo DELETE OK con empty state.
 - Screenshot smoke: `test-results/smoke-org-admin-movements-initial.png`, `test-results/smoke-org-admin-movements-updated.png`, `test-results/smoke-org-admin-movements-deleted.png`.
 
+## Spec (Org Admin metrics/cards 500: fix BOOLEAN is_enabled - Feb 27, 2026)
+- Obiettivo: eliminare il 500 su `/api/org-admin/metrics` e `/api/org-admin/cards` in Postgres convertendo `card_batches.is_enabled` da `INTEGER` legacy a `BOOLEAN` reale, mantenendo compatibilita con i dati esistenti.
+- Scope: migration Alembic su `card_batches`, model `CardBatch`, bootstrap/schema helper `init_db.py`, query/route che filtrano `is_enabled`, test regressione su stock e route org-admin.
+- Vincoli: preferire fix schema-first; fallback query `= 1` solo se la migrazione fosse impossibile, ma va evitato. Default coerente: lotti attivi di default (`TRUE`).
+
+## Plan (Org Admin metrics/cards 500: fix BOOLEAN is_enabled)
+- [x] Analizzare model, migrazioni esistenti e query che usano `CardBatch.is_enabled`.
+- [ ] Aggiungere migration Alembic sicura per convertire `card_batches.is_enabled` a `BOOLEAN` e allineare bootstrap/schema helpers.
+- [ ] Allineare model e codice applicativo per usare `bool` coerente nei flussi org-admin/super-admin.
+- [ ] Aggiungere test regressione su `_compute_org_card_stock`, `/api/org-admin/metrics` e `/api/org-admin/cards`.
+- [ ] Verificare i comandi deploy applicabili nel contesto locale e documentare esito/review.
+
+## Review (Org Admin metrics/cards 500: fix BOOLEAN is_enabled - Feb 27, 2026)
+- Aggiunta migration Alembic `t3u4v5w6x7y8_repair_card_batch_is_enabled_boolean.py` che normalizza `card_batches.is_enabled` a `BOOLEAN NOT NULL DEFAULT TRUE`; su Postgres converte in-place con `ALTER COLUMN ... TYPE boolean USING (...)`, preservando il comportamento legacy dei lotti senza flag esplicito (`NULL -> TRUE`).
+- Allineato il model `CardBatch.is_enabled` a `server_default=sa.true()` e corretto il bootstrap `init_db.py` per aggiungere la colonna come `BOOLEAN DEFAULT TRUE`, con backfill compatibile sia con schemi boolean sia integer legacy.
+- Rafforzati i read path che derivano lo stato lotto (`org_admin` e `super_admin`) per trattare correttamente anche eventuali valori legacy `0/1` durante la finestra di deploy.
+- Aggiunto test regressione `tests/test_org_admin_card_batch_boolean_regression.py` che verifica `_compute_org_card_stock`, `/api/org-admin/cards` e `/api/org-admin/metrics` con batch attivo/disattivo.
+- Verifiche eseguite:
+- `python -m pytest tests\test_org_admin_card_batch_boolean_regression.py tests\test_org_admin_card_lot_movements.py tests\test_super_admin_card_lot_management.py tests\test_member_active_state_regression.py -q`
+- Smoke migration isolata: esecuzione diretta della nuova migration su tabella temporanea `card_batches(is_enabled INTEGER)` con esito OK; output finale `BOOLEAN`, `NOT NULL`, default `1`, valori convertiti `[(1,1),(2,0),(3,1)]`.
+- Nota verifica: `alembic upgrade head` su DB SQLite completamente pulito fallisce ancora su una migration legacy preesistente (`m4n5o6p7q8r9`, colonna `members.deleted_at` non ancora presente in quella fase). Il problema non e introdotto da questo fix ma va corretto separatamente se serve supportare l'upgrade full-chain da zero su SQLite.
+- Deploy locale non eseguito: Docker Engine non disponibile in questa sessione (`//./pipe/dockerDesktopLinuxEngine` non trovato). Comando previsto per il servizio app/web: `docker compose exec web alembic upgrade head` seguito da restart del servizio.
+

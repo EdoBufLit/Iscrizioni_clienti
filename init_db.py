@@ -40,6 +40,17 @@ def _add_column_if_missing(conn, table: str, column: str, col_type: str):
         logger.info("Added column %s.%s", table, column)
 
 
+def _column_type_name(conn, table: str, column: str) -> str:
+    try:
+        columns = inspect(conn).get_columns(table)
+    except Exception:
+        return ""
+    for col in columns:
+        if col["name"] == column:
+            return type(col["type"]).__name__.lower()
+    return ""
+
+
 def init_db():
     """Initialize database schema and seed data.
 
@@ -150,7 +161,7 @@ def init_db():
         _add_column_if_missing(conn, "organizations", "wallet_title_override", "VARCHAR")
         _add_column_if_missing(conn, "organizations", "wallet_is_test_prefix", "INTEGER DEFAULT 0")
         _add_column_if_missing(conn, "card_batches", "year", "INTEGER")
-        _add_column_if_missing(conn, "card_batches", "is_enabled", "INTEGER DEFAULT 1")
+        _add_column_if_missing(conn, "card_batches", "is_enabled", "BOOLEAN DEFAULT TRUE")
         _add_column_if_missing(conn, "card_batches", "notes", "TEXT")
         _add_column_if_missing(conn, "card_batches", "released_at", "DATETIME")
         conn.execute(
@@ -163,15 +174,27 @@ def init_db():
             ),
             {"current_year": datetime.utcnow().year},
         )
-        conn.execute(
-            text(
-                """
-                UPDATE card_batches
-                   SET is_enabled = 1
-                 WHERE is_enabled IS NULL
-                """
+        is_enabled_type = _column_type_name(conn, "card_batches", "is_enabled")
+        if "bool" in is_enabled_type:
+            conn.execute(
+                text(
+                    """
+                    UPDATE card_batches
+                       SET is_enabled = TRUE
+                     WHERE is_enabled IS NULL
+                    """
+                )
             )
-        )
+        else:
+            conn.execute(
+                text(
+                    """
+                    UPDATE card_batches
+                       SET is_enabled = 1
+                     WHERE is_enabled IS NULL
+                    """
+                )
+            )
         # Ingest idempotency safety index (active member per org/year/email).
         conn.execute(
             text(

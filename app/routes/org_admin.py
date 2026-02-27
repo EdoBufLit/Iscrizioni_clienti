@@ -129,11 +129,21 @@ def _compute_org_card_stock(db: Session, org_id: int, now: datetime | None = Non
     }
 
 
+def _batch_enabled_flag(value: object) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value != 0
+    return bool(value)
+
+
 def _org_admin_batch_status_label(batch: CardBatch) -> str:
     next_no = batch.next_no if batch.next_no is not None else batch.start_no
     if batch.released_at is not None:
         return "Rilasciato"
-    if batch.is_enabled is False:
+    if not _batch_enabled_flag(batch.is_enabled):
         return "Disattivo"
     if next_no > batch.end_no:
         return "Esaurito"
