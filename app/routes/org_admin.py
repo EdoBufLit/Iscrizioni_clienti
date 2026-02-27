@@ -92,6 +92,7 @@ def _compute_org_card_stock(db: Session, org_id: int, now: datetime | None = Non
     batches = db.query(CardBatch.start_no, CardBatch.end_no).filter(
         CardBatch.org_id == org_id,
         CardBatch.year == target_year,
+        CardBatch.is_enabled.is_(True),
         CardBatch.released_at.is_(None),
     ).all()
     if not batches:

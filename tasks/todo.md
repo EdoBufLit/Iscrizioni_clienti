@@ -1584,3 +1584,29 @@ pm --prefix frontend run build -> OK
 - Evidenze smoke: login super-admin OK; `/super-admin/associazioni` mostra default `1-50 di 121 associazioni`; pagina 3 raggiungibile (`101-121 di 121`); ricerca `Oasi` restituisce `1-17 di 17`; reload preserva `q/page/pageSize`; clear rimuove `q` e torna a pagina 1.
 - Bug trovato e corretto durante lo smoke: `pageSize` default in URL scendeva a `10` quando il parametro mancava, perche' `Number(null) === 0`; fix applicato in `frontend/src/hooks/useSuperAdminOrganizationsQueryState.ts`.
 - Screenshot: `test-results/smoke-super-admin-organizations-page3.png`, `test-results/smoke-super-admin-organizations-search.png`.
+
+---
+## Spec (Super Admin lotti tessere: modifica + eliminazione sicura - Feb 27, 2026)
+- Obiettivo: permettere al super admin ASSONAM di modificare ed eliminare i lotti tessere di un'associazione senza introdurre inconsistenze su assegnazioni, range e disponibilita.
+- Scope: model/schema `card_batches`, endpoint FastAPI super-admin, audit esistente, UI React nel modal `Lotti tessere` del super admin.
+- Vincoli: solo super admin; range e anno modificabili solo in assenza di assegnazioni/link a soci; eliminazione consentita solo se nessuna tessera del lotto risulta assegnata o collegata a soci; minimizzare impatto su altre sezioni.
+
+## Plan (Super Admin lotti tessere: modifica + eliminazione sicura)
+- [x] Ricognizione finale di `CardBatch`, allocation/stock helpers, endpoint batch esistenti e UI modal lotti.
+- [x] Backend/schema: aggiungere campi minimi al lotto (`is_enabled`, `notes`) con migration Alembic + fallback `init_db.py`; aggiornare allocation/stock helpers per rispettare lo stato attivo/disattivo.
+- [x] Backend API: implementare PATCH/DELETE `/api/admin/organizations/{org_id}/card-lots/{lot_id}` con validazioni su assegnazioni reali, overlap range, audit e risposta batch aggiornata.
+- [x] Frontend: estendere tabella lotti nel modal super-admin con azioni Modifica/Elimina, modal edit, doppia conferma delete, errori backend e campi disabilitati quando il range non e modificabile.
+- [x] Test/verifiche: aggiungere pytest mirati per update/delete/allocazione con lotto disattivato, eseguire pytest selettivi + build frontend, poi compilare review.
+
+## Review (Super Admin lotti tessere: modifica + eliminazione sicura - Feb 27, 2026)
+- `card_batches` ora supporta stato manuale (`is_enabled`) e note (`notes`) tramite model, migration Alembic e bootstrap fallback in `init_db.py`.
+- Il backend espone `PATCH/DELETE /api/admin/organizations/{org_id}/card-lots/{lot_id}` con vincoli su assegnazioni/link a soci, controllo overlap globale sui range e audit su `operation_logs`.
+- Allocation e stock rispettano i lotti disattivati: i batch non abilitati non vengono piu considerati per nuove assegnazioni o disponibilita org-admin.
+- La UI Super Admin dei lotti mostra badge stato coerenti, note, azioni `Modifica`/`Elimina`, modal edit con campi bloccati quando esistono assegnazioni e conferma forte `ELIMINA` per la cancellazione.
+- Verifiche eseguite:
+- `python -m pytest tests\\test_super_admin_card_lot_management.py tests\\test_super_admin_association_delete_release_range.py -q`
+- `python -m pytest tests\\test_super_admin_organizations_pagination.py -q`
+- `npm --prefix frontend run build`
+
+- Smoke test UI (Feb 27, 2026): istanza locale `127.0.0.1:8012` su DB temporaneo `tmp_smoke_card_lots.db`; login super admin OK, ricerca associazione smoke OK, modal lotti OK, modifica lotto vuoto OK, eliminazione lotto vuoto OK, lotto con assegnazioni bloccato in UI OK.
+- Screenshot smoke: `test-results/smoke-card-lots-initial.png`, `test-results/smoke-card-lots-final.png`.

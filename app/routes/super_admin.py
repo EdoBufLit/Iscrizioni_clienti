@@ -1199,6 +1199,14 @@ class AddCardBatch(BaseModel):
     to_no: int
     year: Optional[int] = None
 
+
+class PatchCardLot(BaseModel):
+    status: Optional[Literal["active", "inactive"]] = None
+    year: Optional[int] = None
+    notes: Optional[str] = None
+    range_start: Optional[int] = None
+    range_end: Optional[int] = None
+
 def check_card_overlap(db: Session, start_no: int, end_no: int, exclude_batch_id: Optional[int] = None):
     """
     Check if the given range [start_no, end_no] overlaps with any existing CardBatch globally.
@@ -1240,22 +1248,97 @@ def _count_assigned_cards_for_batch(db: Session, batch: CardBatch) -> int:
     )
 
 
-def _serialize_batch_usage(db: Session, batch: CardBatch) -> dict[str, int | bool | None]:
+def _count_linked_members_for_batch(db: Session, batch: CardBatch) -> int:
+    range_filter = and_(
+        Member.card_year == batch.year,
+        Member.card_no.isnot(None),
+        Member.card_no >= batch.start_no,
+        Member.card_no <= batch.end_no,
+    )
+    return int(
+        db.query(func.count(func.distinct(Member.id))).filter(
+            Member.org_id == batch.org_id,
+            or_(
+                Member.batch_id == batch.id,
+                range_filter,
+            ),
+        ).scalar()
+        or 0
+    )
+
+
+def _batch_manual_enabled(batch: CardBatch) -> bool:
+    return batch.is_enabled is not False
+
+
+def _batch_is_assignable(batch: CardBatch) -> bool:
+    batch_next_no = batch.next_no if batch.next_no is not None else batch.start_no
+    return bool(
+        _batch_manual_enabled(batch)
+        and batch.released_at is None
+        and batch_next_no <= batch.end_no
+    )
+
+
+def _batch_status_label(batch: CardBatch) -> str:
+    if batch.released_at is not None:
+        return "Rilasciato"
+    if not _batch_manual_enabled(batch):
+        return "Disattivo"
+    if not _batch_is_assignable(batch):
+        return "Esaurito"
+    return "Attivo"
+
+
+def _serialize_batch_usage(db: Session, batch: CardBatch) -> dict[str, object]:
     total = int(batch.end_no - batch.start_no + 1)
     assigned = _count_assigned_cards_for_batch(db, batch)
+    linked_members = _count_linked_members_for_batch(db, batch)
     remaining = max(total - assigned, 0)
-    batch_next_no = batch.next_no if batch.next_no is not None else batch.start_no
     return {
         "id": batch.id,
         "start_no": batch.start_no,
         "end_no": batch.end_no,
         "next_no": batch.next_no,
         "year": batch.year,
-        "is_active": bool(batch.released_at is None and batch_next_no <= batch.end_no),
+        "is_enabled": _batch_manual_enabled(batch),
+        "is_active": _batch_is_assignable(batch),
+        "status_label": _batch_status_label(batch),
+        "notes": batch.notes,
         "total": total,
         "assigned": assigned,
         "remaining": remaining,
+        "linked_members": linked_members,
+        "range_editable": linked_members == 0,
+        "deletable": assigned == 0 and linked_members == 0,
     }
+
+
+def _normalize_batch_notes(raw_notes: Optional[str]) -> Optional[str]:
+    if raw_notes is None:
+        return None
+    normalized = raw_notes.strip()
+    return normalized or None
+
+
+def _get_organization_and_batch_or_404(
+    db: Session,
+    org_id: int,
+    lot_id: int,
+) -> tuple[Organization, CardBatch]:
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    batch = db.query(CardBatch).filter(
+        CardBatch.id == lot_id,
+        CardBatch.org_id == org_id,
+        CardBatch.released_at.is_(None),
+    ).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="Lotto tessere non trovato")
+
+    return org, batch
 
 
 def _begin_card_allocation_transaction(db: Session) -> None:
@@ -1472,6 +1555,171 @@ def get_org_batches(
             "assigned": summary_assigned,
             "remaining": summary_remaining,
         }
+    }
+
+
+@associations_router.patch("/organizations/{org_id}/card-lots/{lot_id}")
+def patch_org_card_lot(
+    request: Request,
+    org_id: int,
+    lot_id: int,
+    body: PatchCardLot,
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+    org, batch = _get_organization_and_batch_or_404(db, org_id, lot_id)
+    payload = body.model_dump(exclude_unset=True)
+    if not payload:
+        return {"ok": True, "item": _serialize_batch_usage(db, batch)}
+
+    current_enabled = _batch_manual_enabled(batch)
+    current_notes = _normalize_batch_notes(batch.notes)
+    requested_year = batch.year
+    requested_start = batch.start_no
+    requested_end = batch.end_no
+
+    if "year" in payload:
+        requested_year = _resolve_batch_year(payload["year"])
+    if "range_start" in payload and payload["range_start"] is not None:
+        requested_start = int(payload["range_start"])
+    if "range_end" in payload and payload["range_end"] is not None:
+        requested_end = int(payload["range_end"])
+
+    range_changed = requested_start != batch.start_no or requested_end != batch.end_no
+    year_changed = requested_year != batch.year
+    if range_changed:
+        if requested_start <= 0 or requested_end <= 0:
+            raise HTTPException(status_code=400, detail="I numeri devono essere interi positivi")
+        if requested_start > requested_end:
+            raise HTTPException(
+                status_code=400,
+                detail="Il numero iniziale deve essere minore o uguale al finale",
+            )
+
+    linked_members = _count_linked_members_for_batch(db, batch)
+    if linked_members > 0 and (range_changed or year_changed):
+        raise HTTPException(
+            status_code=409,
+            detail="Impossibile modificare il range o l'anno: esistono tessere gia assegnate",
+        )
+
+    if range_changed:
+        _begin_card_allocation_transaction(db)
+        conflict = check_card_overlap(
+            db,
+            requested_start,
+            requested_end,
+            exclude_batch_id=batch.id,
+        )
+        if conflict:
+            conflicting_org = db.query(Organization).filter(Organization.id == conflict.org_id).first()
+            org_name = conflicting_org.name if conflicting_org else f"Org #{conflict.org_id}"
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Intervallo tessere in conflitto con {org_name} "
+                    f"({conflict.start_no}-{conflict.end_no})"
+                ),
+            )
+
+    changes: dict[str, object] = {}
+
+    if "status" in payload:
+        next_enabled = payload["status"] == "active"
+        if next_enabled != current_enabled:
+            batch.is_enabled = next_enabled
+            changes["status"] = payload["status"]
+
+    if "notes" in payload:
+        next_notes = _normalize_batch_notes(payload["notes"])
+        if next_notes != current_notes:
+            batch.notes = next_notes
+            changes["notes"] = next_notes
+
+    if year_changed:
+        batch.year = requested_year
+        changes["year"] = requested_year
+
+    if range_changed:
+        batch.start_no = requested_start
+        batch.end_no = requested_end
+        batch.next_no = requested_start
+        changes["range"] = {
+            "start_no": requested_start,
+            "end_no": requested_end,
+        }
+
+    if not changes:
+        return {"ok": True, "item": _serialize_batch_usage(db, batch)}
+
+    db.flush()
+    audit.log_operation(
+        db,
+        action="org.cards.batch_updated",
+        entity_type="card_batch",
+        entity_id=batch.id,
+        actor_admin_id=admin.id,
+        actor_role="super_admin",
+        metadata={
+            "org_id": org.id,
+            "batch_id": batch.id,
+            "changes": changes,
+        },
+        ip=get_client_ip(request),
+    )
+    db.commit()
+    db.refresh(batch)
+
+    return {
+        "ok": True,
+        "item": _serialize_batch_usage(db, batch),
+    }
+
+
+@associations_router.delete("/organizations/{org_id}/card-lots/{lot_id}")
+def delete_org_card_lot(
+    request: Request,
+    org_id: int,
+    lot_id: int,
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+    org, batch = _get_organization_and_batch_or_404(db, org_id, lot_id)
+
+    assigned = _count_assigned_cards_for_batch(db, batch)
+    linked_members = _count_linked_members_for_batch(db, batch)
+    if assigned > 0 or linked_members > 0:
+        raise HTTPException(
+            status_code=409,
+            detail="Impossibile eliminare: esistono tessere gia assegnate",
+        )
+
+    snapshot = {
+        "org_id": org.id,
+        "batch_id": batch.id,
+        "year": batch.year,
+        "start_no": batch.start_no,
+        "end_no": batch.end_no,
+        "is_enabled": _batch_manual_enabled(batch),
+        "notes": batch.notes,
+    }
+
+    db.delete(batch)
+    audit.log_operation(
+        db,
+        action="org.cards.batch_deleted",
+        entity_type="card_batch",
+        entity_id=lot_id,
+        actor_admin_id=admin.id,
+        actor_role="super_admin",
+        metadata=snapshot,
+        ip=get_client_ip(request),
+    )
+    db.commit()
+
+    return {
+        "ok": True,
+        "deleted_lot_id": lot_id,
     }
 
 

@@ -150,6 +150,8 @@ def init_db():
         _add_column_if_missing(conn, "organizations", "wallet_title_override", "VARCHAR")
         _add_column_if_missing(conn, "organizations", "wallet_is_test_prefix", "INTEGER DEFAULT 0")
         _add_column_if_missing(conn, "card_batches", "year", "INTEGER")
+        _add_column_if_missing(conn, "card_batches", "is_enabled", "INTEGER DEFAULT 1")
+        _add_column_if_missing(conn, "card_batches", "notes", "TEXT")
         _add_column_if_missing(conn, "card_batches", "released_at", "DATETIME")
         conn.execute(
             text(
@@ -160,6 +162,15 @@ def init_db():
                 """
             ),
             {"current_year": datetime.utcnow().year},
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE card_batches
+                   SET is_enabled = 1
+                 WHERE is_enabled IS NULL
+                """
+            )
         )
         # Ingest idempotency safety index (active member per org/year/email).
         conn.execute(

@@ -4,6 +4,8 @@ import {
   patchSuperAdminOrganization,
   setOrganizationCardRange,
   addOrgCardBatch,
+  patchOrgCardLot,
+  deleteOrgCardLot,
   fetchOrgBatches,
   runAnnualMaintenance,
   uploadSuperAdminStatute,
@@ -36,6 +38,14 @@ type ModalFormData = {
   to_no: string;
 };
 
+type BatchEditFormData = {
+  status: "active" | "inactive";
+  year: string;
+  notes: string;
+  range_start: string;
+  range_end: string;
+};
+
 const createInitialFormData = (): ModalFormData => ({
   name: "",
   slug: "",
@@ -49,6 +59,29 @@ const createInitialFormData = (): ModalFormData => ({
   from_no: "",
   to_no: "",
 });
+
+const createBatchEditFormData = (batch: OrgBatch): BatchEditFormData => ({
+  status: batch.is_enabled ? "active" : "inactive",
+  year: String(batch.year),
+  notes: batch.notes ?? "",
+  range_start: String(batch.start_no),
+  range_end: String(batch.end_no),
+});
+
+const BATCH_DELETE_CONFIRMATION_TEXT = "ELIMINA";
+
+const batchStatusClassName = (batch: OrgBatch): string => {
+  if (batch.status_label === "Attivo") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (batch.status_label === "Disattivo") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  if (batch.status_label === "Esaurito") {
+    return "border-neutral-200 bg-neutral-100 text-neutral-600";
+  }
+  return "border-neutral-200 bg-neutral-50 text-neutral-600";
+};
 
 const OrganizationManageModal = memo(function OrganizationManageModal({
   open,
@@ -74,10 +107,63 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
   const [maintenanceMessage, setMaintenanceMessage] = useState("");
   const [batchesCurrentYear, setBatchesCurrentYear] = useState<number | null>(null);
   const [nextResetAt, setNextResetAt] = useState<string | null>(null);
+  const [editingBatch, setEditingBatch] = useState<OrgBatch | null>(null);
+  const [editBatchFormData, setEditBatchFormData] = useState<BatchEditFormData | null>(null);
+  const [deleteBatchTarget, setDeleteBatchTarget] = useState<OrgBatch | null>(null);
+  const [deleteBatchConfirmation, setDeleteBatchConfirmation] = useState("");
+  const [batchActionSubmitting, setBatchActionSubmitting] = useState(false);
+  const [batchActionError, setBatchActionError] = useState("");
 
   const normalizeOptionalString = (value: string): string | null => {
     const normalized = value.trim();
     return normalized.length > 0 ? normalized : null;
+  };
+
+  const refreshBatches = async (orgId: number) => {
+    setLoadingBatches(true);
+    setSubmitError("");
+    try {
+      const result = await fetchOrgBatches(orgId);
+      setBatches(result.batches);
+      setBatchesSummary(result.summary);
+      setBatchesCurrentYear(result.current_year);
+      setNextResetAt(result.next_reset_at);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Errore nel caricamento dei lotti");
+      throw err;
+    } finally {
+      setLoadingBatches(false);
+    }
+  };
+
+  const openEditBatchDialog = (batch: OrgBatch) => {
+    setBatchActionError("");
+    setDeleteBatchTarget(null);
+    setDeleteBatchConfirmation("");
+    setEditingBatch(batch);
+    setEditBatchFormData(createBatchEditFormData(batch));
+  };
+
+  const closeEditBatchDialog = () => {
+    setEditingBatch(null);
+    setEditBatchFormData(null);
+    setBatchActionError("");
+    setBatchActionSubmitting(false);
+  };
+
+  const openDeleteBatchDialog = (batch: OrgBatch) => {
+    setBatchActionError("");
+    setEditingBatch(null);
+    setEditBatchFormData(null);
+    setDeleteBatchTarget(batch);
+    setDeleteBatchConfirmation("");
+  };
+
+  const closeDeleteBatchDialog = () => {
+    setDeleteBatchTarget(null);
+    setDeleteBatchConfirmation("");
+    setBatchActionError("");
+    setBatchActionSubmitting(false);
   };
 
   useEffect(() => {
@@ -93,6 +179,12 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
     setMaintenanceMessage("");
     setBatchesCurrentYear(null);
     setNextResetAt(null);
+    setEditingBatch(null);
+    setEditBatchFormData(null);
+    setDeleteBatchTarget(null);
+    setDeleteBatchConfirmation("");
+    setBatchActionSubmitting(false);
+    setBatchActionError("");
   }, [open, modalType, selectedOrg?.id]);
 
   useEffect(() => {
@@ -115,6 +207,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
     }
     let active = true;
     setLoadingBatches(true);
+    setSubmitError("");
     fetchOrgBatches(selectedOrg.id)
       .then((result) => {
         if (!active) return;
@@ -211,11 +304,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
         `Manutenzione completata: ${result.expired_count} soci scaduti, ${result.purged_count} soci purgati.`
       );
       if (selectedOrg) {
-        const refreshed = await fetchOrgBatches(selectedOrg.id);
-        setBatches(refreshed.batches);
-        setBatchesSummary(refreshed.summary);
-        setBatchesCurrentYear(refreshed.current_year);
-        setNextResetAt(refreshed.next_reset_at);
+        await refreshBatches(selectedOrg.id);
       }
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Errore esecuzione manutenzione");
@@ -224,33 +313,135 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
     }
   };
 
+  const handleSaveBatch = async (event: FormEvent) => {
+    event.preventDefault();
+    if (
+      batchActionSubmitting ||
+      !selectedOrg ||
+      !editingBatch ||
+      !editBatchFormData
+    ) {
+      return;
+    }
+
+    setBatchActionSubmitting(true);
+    setBatchActionError("");
+
+    try {
+      const payload: {
+        status?: "active" | "inactive";
+        year?: number;
+        notes?: string | null;
+        range_start?: number;
+        range_end?: number;
+      } = {};
+
+      const nextStatus = editBatchFormData.status;
+      if (nextStatus !== (editingBatch.is_enabled ? "active" : "inactive")) {
+        payload.status = nextStatus;
+      }
+
+      const nextNotes = normalizeOptionalString(editBatchFormData.notes);
+      const currentNotes = editingBatch.notes ?? null;
+      if (nextNotes !== currentNotes) {
+        payload.notes = nextNotes;
+      }
+
+      const parsedYear = Number.parseInt(editBatchFormData.year, 10);
+      if (Number.isNaN(parsedYear) || parsedYear < 2000) {
+        throw new Error("Anno lotto non valido");
+      }
+      if (parsedYear !== editingBatch.year) {
+        payload.year = parsedYear;
+      }
+
+      if (editingBatch.range_editable) {
+        const parsedStart = Number.parseInt(editBatchFormData.range_start, 10);
+        const parsedEnd = Number.parseInt(editBatchFormData.range_end, 10);
+        if (Number.isNaN(parsedStart) || Number.isNaN(parsedEnd)) {
+          throw new Error("Inserisci un range valido");
+        }
+        if (parsedStart <= 0 || parsedEnd <= 0) {
+          throw new Error("I numeri devono essere positivi");
+        }
+        if (parsedStart > parsedEnd) {
+          throw new Error("Il numero iniziale deve essere minore o uguale al finale");
+        }
+        if (parsedStart !== editingBatch.start_no || parsedEnd !== editingBatch.end_no) {
+          payload.range_start = parsedStart;
+          payload.range_end = parsedEnd;
+        }
+      }
+
+      if (Object.keys(payload).length === 0) {
+        closeEditBatchDialog();
+        return;
+      }
+
+      await patchOrgCardLot(selectedOrg.id, editingBatch.id, payload);
+      await refreshBatches(selectedOrg.id);
+      closeEditBatchDialog();
+    } catch (err) {
+      setBatchActionError(err instanceof Error ? err.message : "Errore durante la modifica del lotto");
+    } finally {
+      setBatchActionSubmitting(false);
+    }
+  };
+
+  const handleDeleteBatch = async () => {
+    if (
+      batchActionSubmitting ||
+      !selectedOrg ||
+      !deleteBatchTarget ||
+      deleteBatchConfirmation.trim().toUpperCase() !== BATCH_DELETE_CONFIRMATION_TEXT
+    ) {
+      return;
+    }
+
+    setBatchActionSubmitting(true);
+    setBatchActionError("");
+
+    try {
+      await deleteOrgCardLot(selectedOrg.id, deleteBatchTarget.id);
+      await refreshBatches(selectedOrg.id);
+      closeDeleteBatchDialog();
+    } catch (err) {
+      setBatchActionError(err instanceof Error ? err.message : "Errore durante l'eliminazione del lotto");
+    } finally {
+      setBatchActionSubmitting(false);
+    }
+  };
+
+  const panelClassName =
+    modalType === "view-batches"
+      ? "modal-panel w-full max-w-6xl max-h-[90vh] overflow-y-auto p-6"
+      : "modal-panel max-w-lg max-h-[90vh] overflow-y-auto p-6";
+
   if (!open) {
     return null;
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div
-        className="modal-panel max-w-lg p-6 max-h-[90vh] overflow-y-auto"
-        data-component="superadmin-org-manage-modal"
-      >
-        <h3 className="text-lg font-semibold text-neutral-900">
-          {modalType === "create" && "Nuova associazione"}
-          {modalType === "range" && `Imposta range tessere: ${selectedOrg?.name}`}
-          {modalType === "add-batch" && `Aggiungi lotto tessere: ${selectedOrg?.name}`}
-          {modalType === "view-batches" && `Lotti tessere: ${selectedOrg?.name}`}
-          {modalType === "branding" && `Branding tessera: ${selectedOrg?.name}`}
-        </h3>
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className={panelClassName} data-component="superadmin-org-manage-modal">
+          <h3 className="text-lg font-semibold text-neutral-900">
+            {modalType === "create" && "Nuova associazione"}
+            {modalType === "range" && `Imposta range tessere: ${selectedOrg?.name}`}
+            {modalType === "add-batch" && `Aggiungi lotto tessere: ${selectedOrg?.name}`}
+            {modalType === "view-batches" && `Lotti tessere: ${selectedOrg?.name}`}
+            {modalType === "branding" && `Branding tessera: ${selectedOrg?.name}`}
+          </h3>
 
-        <div className="mt-4 min-h-[48px]">
-          {submitError && (
-            <div className="rounded-md border border-red-200/60 bg-red-50 px-4 py-3">
-              <p className="text-sm text-red-700">{submitError}</p>
-            </div>
-          )}
-        </div>
+          <div className="mt-4 min-h-[48px]">
+            {submitError && (
+              <div className="rounded-md border border-red-200/60 bg-red-50 px-4 py-3">
+                <p className="text-sm text-red-700">{submitError}</p>
+              </div>
+            )}
+          </div>
 
-        <form className="mt-2 grid gap-4" onSubmit={handleSubmit}>
+          <form className="mt-2 grid gap-4" onSubmit={handleSubmit}>
           {modalType === "create" && (
             <>
               <div>
@@ -507,42 +698,88 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                 <p className="text-sm text-neutral-500">Nessun lotto configurato.</p>
               ) : (
                 <>
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-left text-xs text-neutral-500">
-                        <th className="py-2 font-medium">Range</th>
-                        <th className="py-2 font-medium text-right">Next</th>
-                        <th className="py-2 font-medium text-right">Anno</th>
-                        <th className="py-2 font-medium text-right">Stato</th>
-                        <th className="py-2 font-medium text-right">Totale</th>
-                        <th className="py-2 font-medium text-right">Assegnate</th>
-                        <th className="py-2 font-medium text-right">Rimanenti</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {batches.map((batch) => (
-                        <tr key={batch.id} className="border-b border-neutral-100">
-                          <td className="py-2 tabular-nums">{batch.start_no} - {batch.end_no}</td>
-                          <td className="py-2 text-right tabular-nums">{batch.next_no}</td>
-                          <td className="py-2 text-right tabular-nums">{batch.year}</td>
-                          <td className="py-2 text-right">
-                            <span
-                              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-                                batch.is_active
-                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                  : "border-neutral-200 bg-neutral-50 text-neutral-600"
-                              }`}
-                            >
-                              {batch.is_active ? "Attivo" : "Chiuso"}
-                            </span>
-                          </td>
-                          <td className="py-2 text-right tabular-nums">{batch.total}</td>
-                          <td className="py-2 text-right tabular-nums">{batch.assigned}</td>
-                          <td className="py-2 text-right tabular-nums font-medium text-brand">{batch.remaining}</td>
+                  <div className="overflow-x-auto rounded-xl border border-neutral-200/80">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-neutral-50/80">
+                        <tr className="border-b text-left text-[11px] uppercase tracking-[0.14em] text-neutral-500">
+                          <th className="px-4 py-3 font-medium">Range</th>
+                          <th className="px-4 py-3 font-medium text-right">Next</th>
+                          <th className="px-4 py-3 font-medium text-right">Anno</th>
+                          <th className="px-4 py-3 font-medium text-right">Stato</th>
+                          <th className="px-4 py-3 font-medium text-right">Totale</th>
+                          <th className="px-4 py-3 font-medium text-right">Assegnate</th>
+                          <th className="px-4 py-3 font-medium text-right">Rimanenti</th>
+                          <th className="px-4 py-3 font-medium text-right">Azioni</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-100 bg-white">
+                        {batches.map((batch) => (
+                          <tr key={batch.id}>
+                            <td className="px-4 py-3">
+                              <div className="font-medium text-neutral-900 tabular-nums">
+                                {batch.start_no} - {batch.end_no}
+                              </div>
+                              {batch.notes && (
+                                <p className="mt-1 max-w-[18rem] text-xs leading-5 text-neutral-500">
+                                  {batch.notes}
+                                </p>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums">{batch.next_no}</td>
+                            <td className="px-4 py-3 text-right tabular-nums">{batch.year}</td>
+                            <td className="px-4 py-3 text-right">
+                              <span
+                                className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${batchStatusClassName(batch)}`}
+                                title={
+                                  batch.range_editable
+                                    ? undefined
+                                    : "Non modificabile per range o anno: esistono assegnazioni"
+                                }
+                              >
+                                {batch.status_label}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums">{batch.total}</td>
+                            <td className="px-4 py-3 text-right tabular-nums">
+                              {batch.assigned}
+                              {batch.linked_members > batch.assigned && (
+                                <div className="text-[11px] text-neutral-400">
+                                  link: {batch.linked_members}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums font-medium text-brand">
+                              {batch.remaining}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  type="button"
+                                  className="rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-semibold text-neutral-700 transition hover:border-neutral-300 hover:text-neutral-900"
+                                  onClick={() => openEditBatchDialog(batch)}
+                                >
+                                  Modifica
+                                </button>
+                                <button
+                                  type="button"
+                                  className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                  onClick={() => openDeleteBatchDialog(batch)}
+                                  disabled={!batch.deletable}
+                                  title={
+                                    batch.deletable
+                                      ? "Elimina lotto"
+                                      : "Impossibile eliminare: esistono tessere gia assegnate"
+                                  }
+                                >
+                                  Elimina
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                   {batchesSummary && (
                     <div className="mt-4 rounded-md bg-neutral-50 px-4 py-3">
                       <div className="flex justify-between text-sm">
@@ -657,9 +894,227 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
               </button>
             </div>
           )}
-        </form>
+          </form>
+        </div>
       </div>
-    </div>
+      {editingBatch && editBatchFormData && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+          <div className="modal-panel w-full max-w-2xl p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h4 className="text-lg font-semibold text-neutral-900">Modifica lotto</h4>
+                <p className="mt-1 text-sm text-neutral-500">
+                  Aggiorna stato, anno, note e, se consentito, il range del lotto.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-semibold text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900"
+                onClick={closeEditBatchDialog}
+              >
+                Chiudi
+              </button>
+            </div>
+
+            {batchActionError && (
+              <div className="mt-4 rounded-md border border-red-200/60 bg-red-50 px-4 py-3">
+                <p className="text-sm text-red-700">{batchActionError}</p>
+              </div>
+            )}
+
+            <form className="mt-5 grid gap-4" onSubmit={handleSaveBatch}>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-medium text-neutral-600">Stato</label>
+                  <select
+                    className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
+                    value={editBatchFormData.status}
+                    onChange={(event) =>
+                      setEditBatchFormData((prev) =>
+                        prev ? { ...prev, status: event.target.value as "active" | "inactive" } : prev
+                      )
+                    }
+                  >
+                    <option value="active">Attivo</option>
+                    <option value="inactive">Disattivo</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-600">Anno</label>
+                  <input
+                    type="number"
+                    min="2000"
+                    title={
+                      editingBatch.range_editable
+                        ? undefined
+                        : "Non modificabile perche esistono assegnazioni"
+                    }
+                    disabled={!editingBatch.range_editable}
+                    className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-100"
+                    value={editBatchFormData.year}
+                    onChange={(event) =>
+                      setEditBatchFormData((prev) =>
+                        prev ? { ...prev, year: event.target.value } : prev
+                      )
+                    }
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-neutral-600">Note</label>
+                <textarea
+                  rows={3}
+                  className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
+                  placeholder="Descrizione interna del lotto"
+                  value={editBatchFormData.notes}
+                  onChange={(event) =>
+                    setEditBatchFormData((prev) =>
+                      prev ? { ...prev, notes: event.target.value } : prev
+                    )
+                  }
+                />
+              </div>
+
+              <div className="rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-neutral-900">Range lotto</p>
+                    <p className="mt-1 text-xs text-neutral-500">
+                      {editingBatch.range_editable
+                        ? "Puoi modificare il range solo per lotti senza assegnazioni."
+                        : "Non modificabile perche esistono assegnazioni."}
+                    </p>
+                  </div>
+                  {!editingBatch.range_editable && (
+                    <span
+                      className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700"
+                      title="Non modificabile perche esistono assegnazioni"
+                    >
+                      Bloccato
+                    </span>
+                  )}
+                </div>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600">Da</label>
+                    <input
+                      type="number"
+                      min="1"
+                      title={
+                        editingBatch.range_editable
+                          ? undefined
+                          : "Non modificabile perche esistono assegnazioni"
+                      }
+                      disabled={!editingBatch.range_editable}
+                      className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-100"
+                      value={editBatchFormData.range_start}
+                      onChange={(event) =>
+                        setEditBatchFormData((prev) =>
+                          prev ? { ...prev, range_start: event.target.value } : prev
+                        )
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600">A</label>
+                    <input
+                      type="number"
+                      min="1"
+                      title={
+                        editingBatch.range_editable
+                          ? undefined
+                          : "Non modificabile perche esistono assegnazioni"
+                      }
+                      disabled={!editingBatch.range_editable}
+                      className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-100"
+                      value={editBatchFormData.range_end}
+                      onChange={(event) =>
+                        setEditBatchFormData((prev) =>
+                          prev ? { ...prev, range_end: event.target.value } : prev
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  className="rounded-md border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900"
+                  onClick={closeEditBatchDialog}
+                >
+                  Annulla
+                </button>
+                <button
+                  type="submit"
+                  className="inline-flex items-center justify-center rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white shadow-subtle transition hover:-translate-y-px hover:bg-brand-dark hover:shadow-card active:translate-y-0 disabled:opacity-50"
+                  disabled={batchActionSubmitting}
+                >
+                  {batchActionSubmitting ? "Salvataggio..." : "Salva modifiche"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {deleteBatchTarget && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+          <div className="modal-panel w-full max-w-lg p-6">
+            <h4 className="text-lg font-semibold text-neutral-900">Elimina lotto</h4>
+            <p className="mt-2 text-sm leading-6 text-neutral-600">
+              Questa azione rimuove il lotto{" "}
+              <span className="font-semibold tabular-nums">
+                {deleteBatchTarget.start_no} - {deleteBatchTarget.end_no}
+              </span>
+              . Procedi solo se il lotto non contiene tessere gia assegnate.
+            </p>
+
+            {batchActionError && (
+              <div className="mt-4 rounded-md border border-red-200/60 bg-red-50 px-4 py-3">
+                <p className="text-sm text-red-700">{batchActionError}</p>
+              </div>
+            )}
+
+            <div className="mt-5 rounded-xl border border-red-200/70 bg-red-50/80 p-4">
+              <p className="text-sm font-semibold text-red-800">Conferma obbligatoria</p>
+              <p className="mt-1 text-xs leading-5 text-red-700">
+                Scrivi <span className="font-semibold">{BATCH_DELETE_CONFIRMATION_TEXT}</span> per confermare l'eliminazione.
+              </p>
+              <input
+                type="text"
+                className="mt-3 w-full rounded-md border border-red-200 bg-white px-3 py-2 text-sm text-neutral-800"
+                placeholder={BATCH_DELETE_CONFIRMATION_TEXT}
+                value={deleteBatchConfirmation}
+                onChange={(event) => setDeleteBatchConfirmation(event.target.value)}
+              />
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                className="rounded-md border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900"
+                onClick={closeDeleteBatchDialog}
+              >
+                Annulla
+              </button>
+              <button
+                type="button"
+                className="rounded-md border border-red-200 bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={handleDeleteBatch}
+                disabled={
+                  batchActionSubmitting ||
+                  deleteBatchConfirmation.trim().toUpperCase() !== BATCH_DELETE_CONFIRMATION_TEXT
+                }
+              >
+                {batchActionSubmitting ? "Eliminazione..." : "Conferma eliminazione"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 });
 

@@ -1170,10 +1170,16 @@ export type OrgBatch = {
   end_no: number;
   next_no: number;
   year: number;
+  is_enabled: boolean;
   is_active: boolean;
+  status_label: string;
+  notes: string | null;
   total: number;
   assigned: number;
   remaining: number;
+  linked_members: number;
+  range_editable: boolean;
+  deletable: boolean;
 };
 
 export type OrgBatchesResult = {
@@ -1192,6 +1198,52 @@ export async function fetchOrgBatches(orgId: number): Promise<OrgBatchesResult> 
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (res.status === 404) throw new Error("Organizzazione non trovata");
   if (!res.ok) throw new Error("Errore nel caricamento lotti");
+  return res.json();
+}
+
+export type PatchOrgCardLotPayload = {
+  status?: "active" | "inactive";
+  year?: number;
+  notes?: string | null;
+  range_start?: number;
+  range_end?: number;
+};
+
+export async function patchOrgCardLot(
+  orgId: number,
+  lotId: number,
+  payload: PatchOrgCardLotPayload,
+): Promise<{ ok: boolean; item: OrgBatch }> {
+  const res = await fetch(`/api/admin/organizations/${orgId}/card-lots/${lotId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Lotto tessere non trovato");
+  if (res.status === 409) {
+    throw new Error(await parseApiErrorDetail(res, "Operazione bloccata"));
+  }
+  if (res.status === 400) {
+    throw new Error(await parseApiErrorDetail(res, "Dati lotto non validi"));
+  }
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nella modifica del lotto"));
+  return res.json();
+}
+
+export async function deleteOrgCardLot(
+  orgId: number,
+  lotId: number,
+): Promise<{ ok: boolean; deleted_lot_id: number }> {
+  const res = await fetch(`/api/admin/organizations/${orgId}/card-lots/${lotId}`, {
+    method: "DELETE",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Lotto tessere non trovato");
+  if (res.status === 409) {
+    throw new Error(await parseApiErrorDetail(res, "Operazione bloccata"));
+  }
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nell'eliminazione del lotto"));
   return res.json();
 }
 

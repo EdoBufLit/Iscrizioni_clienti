@@ -56,6 +56,7 @@ def _ordered_batches_query(org_id: int, year: int):
         .where(
             CardBatch.org_id == org_id,
             CardBatch.year == year,
+            CardBatch.is_enabled.is_(True),
             CardBatch.released_at.is_(None),
         )
         .order_by(

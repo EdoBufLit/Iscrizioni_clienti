@@ -67,7 +67,11 @@ def admin_dashboard(request: Request, db: Session = Depends(get_db)):
     ).count()
 
     # Inventory
-    batches = db.query(CardBatch).filter(CardBatch.org_id == org_id).all()
+    batches = db.query(CardBatch).filter(
+        CardBatch.org_id == org_id,
+        CardBatch.is_enabled.is_(True),
+        CardBatch.released_at.is_(None),
+    ).all()
     total_cards = sum([b.end_no - b.start_no + 1 for b in batches])
     remaining_cards = sum([max(0, b.end_no - b.next_no + 1) for b in batches])
     used_cards = total_cards - remaining_cards
