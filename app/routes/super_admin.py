@@ -152,6 +152,7 @@ def _serialize_organization_row(
         "created_at": org.created_at,
         "city": org.city,
         "province": org.province,
+        "auto_approve_signup": bool(org.auto_approve_signup),
         "card_min": card_min,
         "card_max": card_max,
     }
@@ -246,6 +247,7 @@ class CreateOrganization(BaseModel):
     phone: Optional[str] = None
     website: Optional[str] = None
     is_active: bool = True
+    auto_approve_signup: bool = False
 
 
 class PatchOrganization(BaseModel):
@@ -265,6 +267,7 @@ class PatchOrganization(BaseModel):
     phone: Optional[str] = None
     website: Optional[str] = None
     is_active: Optional[bool] = None
+    auto_approve_signup: Optional[bool] = None
 
 
 def _normalize_tag_culture(value: Optional[str]) -> Optional[str]:
@@ -1040,6 +1043,7 @@ def create_organization(
         phone=body.phone,
         website=body.website,
         is_active=body.is_active,
+        auto_approve_signup=body.auto_approve_signup,
         created_by_admin_id=admin.id,
     )
     db.add(org)
@@ -1141,7 +1145,36 @@ def list_organizations(
     )
 
 
+@router.get("/organizations/{org_id}")
+@associations_router.get("/organizations/{org_id}")
+def get_organization(
+    request: Request,
+    org_id: int,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    card_range = (
+        db.query(
+            func.min(CardBatch.start_no).label("card_min"),
+            func.max(CardBatch.end_no).label("card_max"),
+        )
+        .filter(CardBatch.org_id == org_id, CardBatch.released_at.is_(None))
+        .first()
+    )
+
+    return _serialize_organization_row(
+        org,
+        card_min=(card_range.card_min if card_range else None),
+        card_max=(card_range.card_max if card_range else None),
+    )
+
+
 @router.patch("/organizations/{org_id}")
+@associations_router.patch("/organizations/{org_id}")
 def update_organization(
     request: Request,
     org_id: int,
@@ -1170,6 +1203,8 @@ def update_organization(
         update_data["card_email_subject"] = _normalize_tag_culture(
             update_data.get("card_email_subject")
         )
+    if "auto_approve_signup" in update_data:
+        update_data["auto_approve_signup"] = bool(update_data["auto_approve_signup"])
 
     for key, value in update_data.items():
         setattr(org, key, value)

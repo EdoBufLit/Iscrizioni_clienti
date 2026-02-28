@@ -17,7 +17,9 @@ REQUIRED_ORG_COLUMNS = {
     "club_display_name",
     "card_email_subject",
     "card_logo_url",
+    "auto_approve_signup",
 }
+
 
 def validate_schema(engine):
     """
@@ -34,7 +36,9 @@ def validate_schema(engine):
     if "organizations" not in existing_tables:
         # If the table is missing, init_db probably hasn't run or failed.
         # But validate_schema is called AFTER init_db.
-        logger.warning("Table 'organizations' missing in SQLite DB. Startup validation incomplete.")
+        logger.warning(
+            "Table 'organizations' missing in SQLite DB. Startup validation incomplete."
+        )
         return
 
     columns = {col["name"] for col in inspector.get_columns("organizations")}

@@ -9,6 +9,7 @@ Deployment checklist:
 2. Run: alembic upgrade head
 3. Start the application
 """
+
 import logging
 import os
 from datetime import datetime
@@ -20,7 +21,10 @@ import app.models
 from app.models import Organization, AdminUser, AdminRole, CardBatch
 from app.security import get_password_hash
 from app.config import settings
-from app.services.member_cleanup import cleanup_deleted_member_traces, purge_deleted_members_permanently
+from app.services.member_cleanup import (
+    cleanup_deleted_member_traces,
+    purge_deleted_members_permanently,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -78,10 +82,14 @@ def init_db():
         Base.metadata.create_all(bind=engine)
 
         # If this is a fresh install (tables created but no alembic version), stamp it
-        if "organizations" in existing_tables and "alembic_version" not in existing_tables:
+        if (
+            "organizations" in existing_tables
+            and "alembic_version" not in existing_tables
+        ):
             logger.info("Fresh database detected. Stamping alembic head...")
             from alembic.config import Config
             from alembic import command
+
             alembic_cfg = Config("alembic.ini")
             try:
                 command.stamp(alembic_cfg, "head")
@@ -90,23 +98,36 @@ def init_db():
 
     # Legacy column migrations - DEPRECATED, kept for backwards compatibility
     with engine.begin() as conn:
-        _add_column_if_missing(conn, "card_movements", "admin_id", "INTEGER REFERENCES admin_users(id)")
+        _add_column_if_missing(
+            conn, "card_movements", "admin_id", "INTEGER REFERENCES admin_users(id)"
+        )
         _add_column_if_missing(conn, "card_movements", "paid_ref", "TEXT")
         # Add password_hash column for members (password-based login)
         _add_column_if_missing(conn, "members", "password_hash", "TEXT")
         # Add decision / soft-delete columns for members
         _add_column_if_missing(conn, "members", "decision_at", "DATETIME")
-        _add_column_if_missing(conn, "members", "decision_by_admin_id", "INTEGER REFERENCES admin_users(id)")
+        _add_column_if_missing(
+            conn,
+            "members",
+            "decision_by_admin_id",
+            "INTEGER REFERENCES admin_users(id)",
+        )
         _add_column_if_missing(conn, "members", "decision_notes", "TEXT")
         _add_column_if_missing(conn, "members", "expired_at", "DATETIME")
         _add_column_if_missing(conn, "members", "purged_at", "DATETIME")
         _add_column_if_missing(conn, "members", "deleted_at", "DATETIME")
-        _add_column_if_missing(conn, "members", "deleted_by_admin_id", "INTEGER REFERENCES admin_users(id)")
+        _add_column_if_missing(
+            conn, "members", "deleted_by_admin_id", "INTEGER REFERENCES admin_users(id)"
+        )
         _add_column_if_missing(conn, "members", "card_year", "INTEGER")
         _add_column_if_missing(conn, "members", "member_type", "TEXT")
         _add_column_if_missing(conn, "members", "internal_notes", "TEXT")
         _add_column_if_missing(conn, "members", "is_manual", "INTEGER DEFAULT 0")
         _add_column_if_missing(conn, "members", "payment_method", "TEXT")
+        _add_column_if_missing(conn, "members", "birth_date", "DATE")
+        _add_column_if_missing(conn, "members", "birth_place", "TEXT")
+        _add_column_if_missing(conn, "members", "birth_place_code", "TEXT")
+        _add_column_if_missing(conn, "members", "gender", "TEXT")
         _add_column_if_missing(conn, "members", "signup_source", "TEXT")
         _add_column_if_missing(conn, "members", "external_customer_id", "TEXT")
         _add_column_if_missing(conn, "members", "card_email_sent_at", "DATETIME")
@@ -115,7 +136,9 @@ def init_db():
         _add_column_if_missing(conn, "members", "google_wallet_object_id", "TEXT")
         _add_column_if_missing(conn, "members", "google_wallet_added_at", "DATETIME")
         _add_column_if_missing(conn, "members", "google_wallet_last_error", "TEXT")
-        _add_column_if_missing(conn, "members", "google_wallet_last_synced_at", "DATETIME")
+        _add_column_if_missing(
+            conn, "members", "google_wallet_last_synced_at", "DATETIME"
+        )
         conn.execute(
             text(
                 """
@@ -147,9 +170,21 @@ def init_db():
             )
         )
         _add_column_if_missing(conn, "member_documents", "rejection_note", "TEXT")
-        _add_column_if_missing(conn, "member_documents", "reviewed_by_admin_id", "INTEGER REFERENCES admin_users(id)")
-        _add_column_if_missing(conn, "member_documents", "replaces_document_id", "INTEGER REFERENCES member_documents(id)")
-        _add_column_if_missing(conn, "operation_logs", "actor_member_id", "INTEGER REFERENCES members(id)")
+        _add_column_if_missing(
+            conn,
+            "member_documents",
+            "reviewed_by_admin_id",
+            "INTEGER REFERENCES admin_users(id)",
+        )
+        _add_column_if_missing(
+            conn,
+            "member_documents",
+            "replaces_document_id",
+            "INTEGER REFERENCES member_documents(id)",
+        )
+        _add_column_if_missing(
+            conn, "operation_logs", "actor_member_id", "INTEGER REFERENCES members(id)"
+        )
         _add_column_if_missing(conn, "organizations", "deleted_at", "DATETIME")
         # Card-branding fields: keep startup resilient even if alembic wasn't run yet.
         _add_column_if_missing(conn, "organizations", "club_display_name", "VARCHAR")
@@ -158,10 +193,19 @@ def init_db():
         _add_column_if_missing(conn, "organizations", "wallet_bg_color", "VARCHAR")
         _add_column_if_missing(conn, "organizations", "wallet_logo_url", "TEXT")
         _add_column_if_missing(conn, "organizations", "wallet_hero_image_url", "TEXT")
-        _add_column_if_missing(conn, "organizations", "wallet_title_override", "VARCHAR")
-        _add_column_if_missing(conn, "organizations", "wallet_is_test_prefix", "INTEGER DEFAULT 0")
+        _add_column_if_missing(
+            conn, "organizations", "wallet_title_override", "VARCHAR"
+        )
+        _add_column_if_missing(
+            conn, "organizations", "wallet_is_test_prefix", "INTEGER DEFAULT 0"
+        )
+        _add_column_if_missing(
+            conn, "organizations", "auto_approve_signup", "INTEGER DEFAULT 0"
+        )
         _add_column_if_missing(conn, "card_batches", "year", "INTEGER")
-        _add_column_if_missing(conn, "card_batches", "is_enabled", "BOOLEAN DEFAULT TRUE")
+        _add_column_if_missing(
+            conn, "card_batches", "is_enabled", "BOOLEAN DEFAULT TRUE"
+        )
         _add_column_if_missing(conn, "card_batches", "notes", "TEXT")
         _add_column_if_missing(conn, "card_batches", "released_at", "DATETIME")
         conn.execute(
@@ -268,7 +312,9 @@ def init_db():
                 purged_deleted_members,
             )
         # ── Seed organization ──────────────────────────────────────
-        org = db.query(Organization).filter(Organization.slug == "my-association").first()
+        org = (
+            db.query(Organization).filter(Organization.slug == "my-association").first()
+        )
         if not org:
             logger.info("Creating seed organization...")
             org = Organization(
@@ -279,7 +325,7 @@ def init_db():
                 city="Roma",
                 country="Italy",
                 description="Associazione di prova",
-                is_active=True
+                is_active=True,
             )
             db.add(org)
             db.commit()
@@ -292,10 +338,14 @@ def init_db():
 
         # Also ensure the old admin@example.com is an org admin if it exists
         sa_email = settings.SUPER_ADMIN_EMAIL
-        old_admin = db.query(AdminUser).filter(
-            AdminUser.email == "admin@example.com",
-            AdminUser.email != sa_email,
-        ).first()
+        old_admin = (
+            db.query(AdminUser)
+            .filter(
+                AdminUser.email == "admin@example.com",
+                AdminUser.email != sa_email,
+            )
+            .first()
+        )
         if old_admin and old_admin.role != AdminRole.SUPER_ADMIN:
             old_admin.org_id = old_admin.org_id or org.id
             old_admin.role = AdminRole.ORG_ADMIN
@@ -313,7 +363,7 @@ def init_db():
                 year=datetime.utcnow().year,
                 start_no=100,
                 end_no=200,
-                next_no=100
+                next_no=100,
             )
             db.add(batch)
             db.commit()
@@ -324,6 +374,7 @@ def init_db():
         logger.exception("Database seed failed.")
     finally:
         db.close()
+
 
 if __name__ == "__main__":
     init_db()

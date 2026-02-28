@@ -1,9 +1,26 @@
 import sqlalchemy as sa
-from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey, Boolean, Enum, UniqueConstraint, Text, JSON, TypeDecorator, Index, and_, func
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Date,
+    DateTime,
+    ForeignKey,
+    Boolean,
+    Enum,
+    UniqueConstraint,
+    Text,
+    JSON,
+    TypeDecorator,
+    Index,
+    and_,
+    func,
+)
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
 from .db import Base
+
 
 class MemberStatus(str, enum.Enum):
     PENDING_VERIFICATION = "pending_verification"
@@ -21,10 +38,13 @@ class PaymentMethod(str, enum.Enum):
 
 class SafeMemberStatusType(TypeDecorator):
     """Stores MemberStatus as plain strings; normalises legacy uppercase values on read."""
+
     impl = String
     cache_ok = True
 
-    _LEGACY_MAP = {e.name: e.value for e in MemberStatus}   # e.g. "PENDING_DOCS" -> "pending_docs"
+    _LEGACY_MAP = {
+        e.name: e.value for e in MemberStatus
+    }  # e.g. "PENDING_DOCS" -> "pending_docs"
 
     def process_bind_param(self, value, dialect):
         if value is None:
@@ -45,6 +65,7 @@ class SafeMemberStatusType(TypeDecorator):
 
 class SafePaymentMethodType(TypeDecorator):
     """Stores payment method as strings while normalizing legacy aliases on read/write."""
+
     impl = String
     cache_ok = True
 
@@ -95,6 +116,7 @@ class DocStatus(str, enum.Enum):
     APPROVED = "approved"
     REJECTED = "rejected"
 
+
 class AdminRole(str, enum.Enum):
     SUPER_ADMIN = "super_admin"
     ORG_ADMIN = "org_admin"
@@ -110,6 +132,7 @@ class TokenType(str, enum.Enum):
     SIGNUP_CONTINUE = "signup_continue"
     LOGIN_MAGIC_LINK = "login_magic_link"
 
+
 class Organization(Base):
     __tablename__ = "organizations"
 
@@ -117,7 +140,9 @@ class Organization(Base):
     name = Column(String, index=True)
     slug = Column(String, unique=True, index=True)
     statute_version = Column(String)
-    statute_pdf_path = Column(String, nullable=True) # Path relative to static or uploads
+    statute_pdf_path = Column(
+        String, nullable=True
+    )  # Path relative to static or uploads
     statute_updated_at = Column(DateTime, nullable=True)
     privacy_version = Column(String)
 
@@ -140,7 +165,12 @@ class Organization(Base):
     wallet_logo_url = Column(String, nullable=True)
     wallet_hero_image_url = Column(String, nullable=True)
     wallet_title_override = Column(String, nullable=True)
-    wallet_is_test_prefix = Column(Boolean, nullable=False, default=False, server_default="false")
+    wallet_is_test_prefix = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    auto_approve_signup = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     is_active = Column(Boolean, default=True)
     deleted_at = Column(DateTime, nullable=True)
 
@@ -150,8 +180,13 @@ class Organization(Base):
 
     members = relationship("Member", back_populates="organization")
     batches = relationship("CardBatch", back_populates="organization")
-    integration_api_keys = relationship("IntegrationApiKey", back_populates="organization")
-    admins = relationship("AdminUser", back_populates="organization", foreign_keys="AdminUser.org_id")
+    integration_api_keys = relationship(
+        "IntegrationApiKey", back_populates="organization"
+    )
+    admins = relationship(
+        "AdminUser", back_populates="organization", foreign_keys="AdminUser.org_id"
+    )
+
 
 class OperationLog(Base):
     __tablename__ = "operation_logs"
@@ -168,6 +203,7 @@ class OperationLog(Base):
     ip = Column(String, nullable=True)
     user_agent = Column(String, nullable=True)
 
+
 class AdminUser(Base):
     __tablename__ = "admin_users"
 
@@ -175,12 +211,17 @@ class AdminUser(Base):
     email = Column(String, unique=True, index=True)
     password_hash = Column(String)
     role = Column(Enum(AdminRole), default=AdminRole.ORG_ADMIN)
-    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=True) # Null for super_admin
+    org_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=True
+    )  # Null for super_admin
     is_active = Column(Boolean, default=True, nullable=False, server_default="1")
     created_at = Column(DateTime, default=datetime.utcnow)
     deleted_at = Column(DateTime, nullable=True)
 
-    organization = relationship("Organization", back_populates="admins", foreign_keys=[org_id])
+    organization = relationship(
+        "Organization", back_populates="admins", foreign_keys=[org_id]
+    )
+
 
 class CardBatch(Base):
     __tablename__ = "card_batches"
@@ -190,13 +231,14 @@ class CardBatch(Base):
     year = Column(Integer, nullable=False, default=lambda: datetime.utcnow().year)
     start_no = Column(Integer)
     end_no = Column(Integer)
-    next_no = Column(Integer) # Tracks the next available number
+    next_no = Column(Integer)  # Tracks the next available number
     is_enabled = Column(Boolean, default=True, nullable=False, server_default=sa.true())
     notes = Column(Text, nullable=True)
     released_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     organization = relationship("Organization", back_populates="batches")
+
 
 class Member(Base):
     __tablename__ = "members"
@@ -238,7 +280,9 @@ class Member(Base):
     accepted_privacy_at = Column(DateTime, nullable=True)
     accepted_privacy_version = Column(String, nullable=True)
 
-    signup_source = Column(String, nullable=True, server_default=SignupSource.ASSONAM_FORM.value)
+    signup_source = Column(
+        String, nullable=True, server_default=SignupSource.ASSONAM_FORM.value
+    )
     external_customer_id = Column(String, nullable=True)
 
     signup_ip = Column(String, nullable=True)
@@ -260,16 +304,25 @@ class Member(Base):
     batch = relationship("CardBatch")
 
     __table_args__ = (
-        UniqueConstraint('org_id', 'card_no', name='uix_org_card'),
-        UniqueConstraint('org_id', 'signup_source', 'external_customer_id', name='uix_member_external_source'),
+        UniqueConstraint("org_id", "card_no", name="uix_org_card"),
+        UniqueConstraint(
+            "org_id",
+            "signup_source",
+            "external_customer_id",
+            name="uix_member_external_source",
+        ),
         Index(
             "uq_members_org_year_lower_email_active",
             "org_id",
             "card_year",
             func.lower(email),
             unique=True,
-            sqlite_where=and_(deleted_at.is_(None), email.isnot(None), card_year.isnot(None)),
-            postgresql_where=and_(deleted_at.is_(None), email.isnot(None), card_year.isnot(None)),
+            sqlite_where=and_(
+                deleted_at.is_(None), email.isnot(None), card_year.isnot(None)
+            ),
+            postgresql_where=and_(
+                deleted_at.is_(None), email.isnot(None), card_year.isnot(None)
+            ),
         ),
         Index("ix_members_card_year_deleted", "card_year", "deleted_at"),
     )
@@ -305,18 +358,21 @@ class IngestRateLimit(Base):
     window_started_at = Column(DateTime, nullable=False)
     request_count = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
 
     __table_args__ = (
         UniqueConstraint("org_slug", "client_ip", name="uix_ingest_rate_limits_org_ip"),
     )
+
 
 class MemberDocument(Base):
     __tablename__ = "member_documents"
 
     id = Column(Integer, primary_key=True, index=True)
     member_id = Column(Integer, ForeignKey("members.id"))
-    doc_type = Column(String) # "identity", "fiscal_code"
+    doc_type = Column(String)  # "identity", "fiscal_code"
     rel_path = Column(String)
     original_filename = Column(String)
     mime_type = Column(String)
@@ -331,7 +387,9 @@ class MemberDocument(Base):
     reviewed_at = Column(DateTime, nullable=True)
     reviewed_by = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
     reviewed_by_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
-    replaces_document_id = Column(Integer, ForeignKey("member_documents.id"), nullable=True)
+    replaces_document_id = Column(
+        Integer, ForeignKey("member_documents.id"), nullable=True
+    )
 
     member = relationship("Member", back_populates="documents")
 
@@ -352,6 +410,7 @@ class MemberPayment(Base):
     member = relationship("Member", back_populates="payments")
     organization = relationship("Organization")
     admin = relationship("AdminUser")
+
 
 class Token(Base):
     __tablename__ = "tokens"
@@ -404,7 +463,9 @@ class OnboardingTour(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, nullable=False)
     role = Column(String, nullable=False)  # "member" | "org_admin"
-    tour_key = Column(String, nullable=False)  # "member_dashboard_v1" | "org_admin_dashboard_v1"
+    tour_key = Column(
+        String, nullable=False
+    )  # "member_dashboard_v1" | "org_admin_dashboard_v1"
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     skipped_at = Column(DateTime, nullable=True)

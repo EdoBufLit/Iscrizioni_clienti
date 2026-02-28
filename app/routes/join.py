@@ -53,7 +53,6 @@ _ALLOWED_PAYMENT_METHODS = {
     PaymentMethod.CASH.value,
     PaymentMethod.BONIFICO.value,
 }
-_AUTO_ISSUE_SIGNUP_SLUGS = {"t-a-g-culture"}
 _AUTO_ISSUE_CARD_VIEW_TEMPLATE = "/associazioni/{org_slug}/tessera?card_token={card_token}&status=active_card&wallet=1"
 
 
@@ -86,7 +85,7 @@ def _normalize_payment_method(
 
 
 def _is_auto_issue_signup(org: Organization) -> bool:
-    return (org.slug or "").strip().lower() in _AUTO_ISSUE_SIGNUP_SLUGS
+    return bool(getattr(org, "auto_approve_signup", False))
 
 
 def _build_auto_issue_external_customer_id(email: str) -> str:

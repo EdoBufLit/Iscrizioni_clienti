@@ -34,6 +34,7 @@ type ModalFormData = {
   province: string;
   description_short: string;
   is_active: boolean;
+  auto_approve_signup: boolean;
   from_no: string;
   to_no: string;
 };
@@ -56,6 +57,7 @@ const createInitialFormData = (): ModalFormData => ({
   province: "",
   description_short: "",
   is_active: true,
+  auto_approve_signup: false,
   from_no: "",
   to_no: "",
 });
@@ -198,6 +200,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
       club_display_name: selectedOrg.club_display_name ?? "",
       card_email_subject: selectedOrg.card_email_subject ?? "",
       card_logo_url: selectedOrg.card_logo_url ?? "",
+      auto_approve_signup: Boolean(selectedOrg.auto_approve_signup),
     }));
   }, [open, modalType, selectedOrg]);
 
@@ -249,6 +252,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
           province: formData.province || undefined,
           description_short: formData.description_short || undefined,
           is_active: formData.is_active,
+          auto_approve_signup: formData.auto_approve_signup,
         };
         const newOrg = await createSuperAdminOrganization(payload);
         if (statuteFile && newOrg.id) {
@@ -277,6 +281,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
           club_display_name: normalizeOptionalString(formData.club_display_name),
           card_email_subject: normalizeOptionalString(formData.card_email_subject),
           card_logo_url: normalizeOptionalString(formData.card_logo_url),
+          auto_approve_signup: formData.auto_approve_signup,
         });
       }
 
@@ -853,6 +858,33 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                 <p className="mt-1 text-xs text-neutral-500">
                   Se vuoto, viene usato il logo ufficiale associazione (se presente).
                 </p>
+              </div>
+              <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-neutral-600">
+                  Impostazioni iscrizioni
+                </p>
+                <div className="mt-3 flex items-start gap-3">
+                  <input
+                    id="auto_approve_signup"
+                    type="checkbox"
+                    className="mt-0.5 rounded border-gray-300 text-brand focus:ring-brand"
+                    checked={formData.auto_approve_signup}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        auto_approve_signup: e.target.checked,
+                      }))
+                    }
+                  />
+                  <div>
+                    <label htmlFor="auto_approve_signup" className="text-sm font-medium text-neutral-800">
+                      Iscrizione automatica
+                    </label>
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Se attivo, i nuovi soci vengono approvati subito e ricevono immediatamente la tessera.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           )}

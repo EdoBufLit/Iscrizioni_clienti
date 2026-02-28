@@ -879,6 +879,7 @@ export type SuperAdminOrganization = {
   created_at: string | null;
   city: string | null;
   province: string | null;
+  auto_approve_signup?: boolean;
   card_min: number | null;
   card_max: number | null;
 };
@@ -1026,6 +1027,7 @@ export async function createSuperAdminOrganization(data: {
   province?: string;
   description_short?: string;
   is_active?: boolean;
+  auto_approve_signup?: boolean;
 }): Promise<SuperAdminOrganization> {
   const res = await fetch("/api/super-admin/organizations", {
     method: "POST",
@@ -1047,6 +1049,7 @@ export async function patchSuperAdminOrganization(
     card_logo_url?: string | null;
     description?: string;
     is_active?: boolean;
+    auto_approve_signup?: boolean;
   },
 ): Promise<SuperAdminOrganization> {
   const res = await fetch(`/api/super-admin/organizations/${orgId}`, {

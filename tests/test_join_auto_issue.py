@@ -35,6 +35,7 @@ def _ensure_org(db, slug: str, *, with_batch: bool) -> Organization:
             privacy_version="v1",
             statute_pdf_path=f"{slug}/statute.pdf",
             is_active=True,
+            auto_approve_signup=(slug == "t-a-g-culture"),
         )
         db.add(org)
         db.commit()
@@ -45,6 +46,7 @@ def _ensure_org(db, slug: str, *, with_batch: bool) -> Organization:
         org.privacy_version = org.privacy_version or "v1"
         org.statute_version = org.statute_version or "v1"
         org.statute_pdf_path = org.statute_pdf_path or f"{slug}/statute.pdf"
+        setattr(org, "auto_approve_signup", slug == "t-a-g-culture")
         db.commit()
         db.refresh(org)
 
@@ -100,7 +102,7 @@ def test_tag_signup_auto_issues_active_card_and_returns_active_page(client, db):
     settings.EMAIL_MODE = "test"
     clear_captured_emails()
     try:
-        response = _join_submit(client, org.slug, email)
+        response = _join_submit(client, str(org.slug), email)
         assert response.status_code == 200, response.text
 
         payload = response.json()
@@ -159,7 +161,7 @@ def test_other_org_signup_stays_pending_review(client, db):
     org = _ensure_org(db, f"manual-review-{uuid.uuid4().hex[:6]}", with_batch=False)
     email = f"manual-review-{uuid.uuid4().hex[:8]}@example.com"
 
-    response = _join_submit(client, org.slug, email)
+    response = _join_submit(client, str(org.slug), email)
     assert response.status_code == 200, response.text
 
     payload = response.json()
@@ -176,3 +178,55 @@ def test_other_org_signup_stays_pending_review(client, db):
     assert member.status == MemberStatus.PENDING_VERIFICATION
     assert member.card_no is None
     assert member.card_year is None
+
+
+def test_org_with_auto_approve_signup_true_auto_issues_card(client, db):
+    slug = f"auto-approve-{uuid.uuid4().hex[:6]}"
+    org = _ensure_org(db, slug, with_batch=True)
+    setattr(org, "auto_approve_signup", True)
+    db.commit()
+    db.refresh(org)
+
+    email = f"{slug}-{uuid.uuid4().hex[:8]}@example.com"
+    response = _join_submit(client, str(org.slug), email)
+    assert response.status_code == 200, response.text
+
+    payload = response.json()
+    assert payload["status"] == "issued"
+    assert payload.get("active_card_page_url")
+
+    member = (
+        db.query(Member)
+        .filter(Member.org_id == org.id, Member.email == email)
+        .order_by(Member.id.desc())
+        .first()
+    )
+    assert member is not None
+    assert member.status == MemberStatus.ACTIVE
+    assert member.card_no is not None
+
+
+def test_org_with_auto_approve_signup_false_stays_pending(client, db):
+    slug = f"manual-approve-{uuid.uuid4().hex[:6]}"
+    org = _ensure_org(db, slug, with_batch=True)
+    setattr(org, "auto_approve_signup", False)
+    db.commit()
+    db.refresh(org)
+
+    email = f"{slug}-{uuid.uuid4().hex[:8]}@example.com"
+    response = _join_submit(client, str(org.slug), email)
+    assert response.status_code == 200, response.text
+
+    payload = response.json()
+    assert payload["status"] == "received"
+    assert payload.get("active_card_page_url") is None
+
+    member = (
+        db.query(Member)
+        .filter(Member.org_id == org.id, Member.email == email)
+        .order_by(Member.id.desc())
+        .first()
+    )
+    assert member is not None
+    assert member.status == MemberStatus.PENDING_VERIFICATION
+    assert member.card_no is None
