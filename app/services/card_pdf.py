@@ -1,4 +1,5 @@
 """Server-side PDF generator for membership cards — bordeaux theme."""
+
 from __future__ import annotations
 
 import io
@@ -10,25 +11,25 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
 # ─── Bordeaux palette ──────────────────────────────────────────────────────────
-_BDX_DARK   = HexColor("#3a0015")
-_BDX_MID    = Color(0.353, 0.031, 0.157, 0.7)
-_BDX_LIGHT  = Color(0.45, 0.05, 0.20, 0.5)
-_BDX_BACK   = HexColor("#2a0010")
-_BDX_BACK2  = Color(0.40, 0.04, 0.18, 0.5)
-_GOLD       = HexColor("#c6a04f")
-_GOLD_BRT   = HexColor("#d4b45c")
-_GOLD_DIV   = Color(0.776, 0.627, 0.310, 0.3)
-_WHITE      = HexColor("#ffffff")
-_CREAM      = HexColor("#fdf6e3")
-_MUTED      = HexColor("#c9a8b0")
-_STATUS_OK  = HexColor("#4ade80")
+_BDX_DARK = HexColor("#3a0015")
+_BDX_MID = Color(0.353, 0.031, 0.157, 0.7)
+_BDX_LIGHT = Color(0.45, 0.05, 0.20, 0.5)
+_BDX_BACK = HexColor("#2a0010")
+_BDX_BACK2 = Color(0.40, 0.04, 0.18, 0.5)
+_GOLD = HexColor("#c6a04f")
+_GOLD_BRT = HexColor("#d4b45c")
+_GOLD_DIV = Color(0.776, 0.627, 0.310, 0.3)
+_WHITE = HexColor("#ffffff")
+_CREAM = HexColor("#fdf6e3")
+_MUTED = HexColor("#c9a8b0")
+_STATUS_OK = HexColor("#4ade80")
 _STATUS_ERR = HexColor("#f87171")
 _OASI2_LOGO_SHIFT_X = -4
 
 # ─── Card geometry on A4 ──────────────────────────────────────────────────────
 _PAGE_W, _PAGE_H = A4  # 595.27 × 841.89 pt
 _CARD_W = 510.0
-_CARD_H = _CARD_W / 1.586          # ≈ 321 pt
+_CARD_H = _CARD_W / 1.586  # ≈ 321 pt
 _CARD_X = (_PAGE_W - _CARD_W) / 2  # horizontal center
 _CARD_Y = (_PAGE_H - _CARD_H) / 2  # vertical center
 _R = 14  # corner radius
@@ -36,10 +37,12 @@ _R = 14  # corner radius
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
+
 def _logo_dims(path: str, max_w: float, max_h: float) -> tuple[float, float]:
     """Return draw dimensions that fit logo within max_w × max_h preserving ratio."""
     try:
         from PIL import Image as PILImage
+
         with PILImage.open(path) as img:
             iw, ih = img.size
             ratio = min(max_w / iw, max_h / ih)
@@ -52,6 +55,7 @@ def _make_opacity_png(path: str, opacity: float, scale: int = 2) -> io.BytesIO |
     """Return PNG bytes of image rendered at given opacity (0-1)."""
     try:
         from PIL import Image as PILImage
+
         with PILImage.open(path) as img:
             img = img.convert("RGBA")
             img.thumbnail(
@@ -149,7 +153,10 @@ def _chip(c: canvas.Canvas, x: float, y: float) -> None:
 def _generate_qr_reader(url: str) -> ImageReader:
     """Return an ImageReader for a QR code of the given URL."""
     import qrcode
-    qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=12, border=2)
+
+    qr = qrcode.QRCode(
+        error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=12, border=2
+    )
     qr.add_data(url)
     qr.make(fit=True)
     pil_img = qr.make_image(fill_color="black", back_color="white")
@@ -160,6 +167,7 @@ def _generate_qr_reader(url: str) -> ImageReader:
 
 
 # ─── Front page ───────────────────────────────────────────────────────────────
+
 
 def _draw_front(
     c: canvas.Canvas,
@@ -177,7 +185,7 @@ def _draw_front(
     x, y, w, h = _CARD_X, _CARD_Y, _CARD_W, _CARD_H
     norm_slug = (organization_slug or "").strip().lower()
     is_oasi2 = norm_slug == "oasi-2"
-    assoc_label = club_display_name if is_oasi2 else organization_name
+    assoc_label = club_display_name or organization_name
 
     # Background
     _draw_bg(c, x, y, w, h, is_oasi2=is_oasi2)
@@ -194,7 +202,8 @@ def _draw_front(
                 wm_reader,
                 x + (w - wm_w) / 2,
                 y + (h - wm_h) / 2,
-                wm_w, wm_h,
+                wm_w,
+                wm_h,
                 mask="auto",
                 preserveAspectRatio=True,
             )
@@ -227,7 +236,8 @@ def _draw_front(
             assonam_logo_path,
             x + w - lw - 14,
             y + h - lh - 12,
-            lw, lh,
+            lw,
+            lh,
             mask="auto",
             preserveAspectRatio=True,
         )
@@ -273,6 +283,7 @@ def _draw_front(
 
 
 # ─── Back page ────────────────────────────────────────────────────────────────
+
 
 def _draw_back(
     c: canvas.Canvas,
@@ -331,6 +342,7 @@ def _draw_back(
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
+
 
 def generate_card_pdf_bytes(
     *,

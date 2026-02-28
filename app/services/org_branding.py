@@ -6,6 +6,7 @@ _SUBJECT_FALLBACK_TEMPLATE = "La tua tessera {club_display_name}"
 _CLUB_DISPLAY_NAME_BY_SLUG_OVERRIDE = {
     # Customer-facing naming override requested for card rendering.
     "oasi-2": "Golden Age Club - Speakeasy",
+    "t-a-g-culture": "TAG CULTURE",
 }
 _CARD_LOGO_BY_SLUG_FALLBACK = {
     # Requested by customer branding: dedicated Golden Age logo for oasi-2 cards.
@@ -29,6 +30,13 @@ def _normalize_text(value: str | None) -> str | None:
     return cleaned if cleaned else None
 
 
+def _normalize_tag_culture_name(value: str | None) -> str | None:
+    cleaned = _normalize_text(value)
+    if not cleaned:
+        return cleaned
+    return cleaned.replace("T.A.G.", "TAG")
+
+
 def _is_absolute_url(value: str) -> bool:
     lowered = value.lower()
     return lowered.startswith("http://") or lowered.startswith("https://")
@@ -48,7 +56,7 @@ def _to_absolute_url(value: str, base_url: str | None = None) -> str:
 def resolve_club_display_name(org: Organization | None) -> str:
     if org is None:
         return ""
-    explicit = _normalize_text(getattr(org, "club_display_name", None))
+    explicit = _normalize_tag_culture_name(getattr(org, "club_display_name", None))
     if explicit:
         return explicit
 
@@ -58,13 +66,16 @@ def resolve_club_display_name(org: Organization | None) -> str:
         if slug_override:
             return slug_override
 
-    return _normalize_text(getattr(org, "name", None)) or ""
+    return _normalize_tag_culture_name(getattr(org, "name", None)) or ""
 
 
 def resolve_card_email_subject(org: Organization | None) -> str:
     club_name = resolve_club_display_name(org)
     org_name = _normalize_text(getattr(org, "name", None) if org else None) or club_name
-    template = _normalize_text(getattr(org, "card_email_subject", None) if org else None) or _SUBJECT_FALLBACK_TEMPLATE
+    template = (
+        _normalize_text(getattr(org, "card_email_subject", None) if org else None)
+        or _SUBJECT_FALLBACK_TEMPLATE
+    )
     values = {
         "club_display_name": club_name or org_name,
         "org_name": org_name,
@@ -80,7 +91,9 @@ def resolve_card_email_subject(org: Organization | None) -> str:
     return _SUBJECT_FALLBACK_TEMPLATE.format(**values)
 
 
-def resolve_card_logo_url(org: Organization | None, *, base_url: str | None = None) -> str | None:
+def resolve_card_logo_url(
+    org: Organization | None, *, base_url: str | None = None
+) -> str | None:
     if org is None:
         return None
 
@@ -101,7 +114,9 @@ def resolve_card_logo_url(org: Organization | None, *, base_url: str | None = No
     return None
 
 
-def resolve_assonam_logo_url(*, frontend_base_url: str | None = None, backend_base_url: str | None = None) -> str:
+def resolve_assonam_logo_url(
+    *, frontend_base_url: str | None = None, backend_base_url: str | None = None
+) -> str:
     if _normalize_text(frontend_base_url):
         return _to_absolute_url("/logo-transparent.png", base_url=frontend_base_url)
     if _normalize_text(backend_base_url):
@@ -136,7 +151,9 @@ def resolve_wallet_bg_color(org: Organization | None) -> str:
     return _DEFAULT_WALLET_BG_COLOR
 
 
-def resolve_wallet_logo_url(org: Organization | None, *, base_url: str | None = None) -> str | None:
+def resolve_wallet_logo_url(
+    org: Organization | None, *, base_url: str | None = None
+) -> str | None:
     explicit = _normalize_text(getattr(org, "wallet_logo_url", None) if org else None)
     if explicit:
         return _to_absolute_url(explicit, base_url=base_url)
@@ -147,8 +164,12 @@ def resolve_wallet_logo_url(org: Organization | None, *, base_url: str | None = 
     return None
 
 
-def resolve_wallet_hero_image_url(org: Organization | None, *, base_url: str | None = None) -> str | None:
-    explicit = _normalize_text(getattr(org, "wallet_hero_image_url", None) if org else None)
+def resolve_wallet_hero_image_url(
+    org: Organization | None, *, base_url: str | None = None
+) -> str | None:
+    explicit = _normalize_text(
+        getattr(org, "wallet_hero_image_url", None) if org else None
+    )
     if explicit:
         return _to_absolute_url(explicit, base_url=base_url)
     defaults = _wallet_branding_defaults_for_org(org)
@@ -159,7 +180,9 @@ def resolve_wallet_hero_image_url(org: Organization | None, *, base_url: str | N
 
 
 def resolve_wallet_title_override(org: Organization | None) -> str | None:
-    explicit = _normalize_text(getattr(org, "wallet_title_override", None) if org else None)
+    explicit = _normalize_text(
+        getattr(org, "wallet_title_override", None) if org else None
+    )
     if explicit:
         return explicit
     defaults = _wallet_branding_defaults_for_org(org)
@@ -167,11 +190,15 @@ def resolve_wallet_title_override(org: Organization | None) -> str | None:
     return fallback
 
 
-def wallet_branding_defaults(org: Organization | None, *, base_url: str | None = None) -> dict[str, object]:
+def wallet_branding_defaults(
+    org: Organization | None, *, base_url: str | None = None
+) -> dict[str, object]:
     return {
         "wallet_bg_color": resolve_wallet_bg_color(org),
         "wallet_logo_url": resolve_wallet_logo_url(org, base_url=base_url),
         "wallet_hero_image_url": resolve_wallet_hero_image_url(org, base_url=base_url),
         "wallet_title_override": resolve_wallet_title_override(org),
-        "wallet_is_test_prefix": bool(getattr(org, "wallet_is_test_prefix", False) if org else False),
+        "wallet_is_test_prefix": bool(
+            getattr(org, "wallet_is_test_prefix", False) if org else False
+        ),
     }

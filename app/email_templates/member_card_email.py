@@ -34,7 +34,7 @@ def build_member_card_email(
 
     safe_name = html.escape(member_full_name or "")
     safe_club = html.escape(club_display_name or organization_name or "")
-    association_label = club_display_name if is_oasi2_card else organization_name
+    association_label = club_display_name or organization_name
     safe_association = html.escape((association_label or "").strip())
     safe_card_number = html.escape(str(card_number))
     safe_card_year = html.escape(str(card_year))

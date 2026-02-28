@@ -18,15 +18,21 @@ from app.services.member_activity import (
     get_member_inactive_reason,
     member_inactive_reason_label,
 )
-from app.services.org_branding import resolve_assonam_logo_url, resolve_card_logo_url, resolve_club_display_name
+from app.services.org_branding import (
+    resolve_assonam_logo_url,
+    resolve_card_logo_url,
+    resolve_club_display_name,
+)
 from app.services.card_pdf import generate_card_pdf_bytes
 from app.services.card_image import generate_card_image_bytes
+from app.services.municipalities import search_municipalities
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
 # ── Legacy HTML redirects ─────────────────────────────────────────
+
 
 @router.get("/associazioni")
 def list_associazioni(request: Request, q: str = None, db: Session = Depends(get_db)):
@@ -53,21 +59,27 @@ def associazioni_detail(request: Request, slug: str, db: Session = Depends(get_d
 
 # ── Public JSON API ───────────────────────────────────────────────
 
+
 def _org_to_dict_summary(org: Organization) -> dict:
+    display_name = resolve_club_display_name(org) or org.name
     return {
         "id": org.id,
-        "name": org.name,
+        "name": display_name,
         "slug": org.slug,
         "city": org.city,
         "province": org.province,
-        "description_short": (org.description or "")[:100] + "..." if org.description and len(org.description) > 100 else org.description,
-        "logo_url": f"/api/organizations/{org.slug}/logo" if org.logo_path else None
+        "description_short": (org.description or "")[:100] + "..."
+        if org.description and len(org.description) > 100
+        else org.description,
+        "logo_url": f"/api/organizations/{org.slug}/logo" if org.logo_path else None,
     }
 
+
 def _org_to_dict_detail(org: Organization) -> dict:
+    display_name = resolve_club_display_name(org) or org.name
     return {
         "id": org.id,
-        "name": org.name,
+        "name": display_name,
         "slug": org.slug,
         "description": org.description,
         "address_line1": org.address_line1,
@@ -82,7 +94,9 @@ def _org_to_dict_detail(org: Organization) -> dict:
         "logo_url": f"/api/organizations/{org.slug}/logo" if org.logo_path else None,
         "is_active": org.is_active,
         "statute_version": org.statute_version,
-        "statute_url": f"/api/organizations/{org.slug}/statute" if org.statute_pdf_path else None,
+        "statute_url": f"/api/organizations/{org.slug}/statute"
+        if org.statute_pdf_path
+        else None,
         "has_statute": bool(org.statute_pdf_path),
     }
 
@@ -134,7 +148,11 @@ def _build_qr_data_uri(value: str) -> str | None:
 @router.get("/api/organizations")
 def api_list_organizations(q: str = None, db: Session = Depends(get_db)):
     # Only active organizations
-    query = db.query(Organization).filter(Organization.is_active == True).order_by(Organization.name)
+    query = (
+        db.query(Organization)
+        .filter(Organization.is_active == True)
+        .order_by(Organization.name)
+    )
 
     if q:
         search = f"%{q}%"
@@ -142,6 +160,11 @@ def api_list_organizations(q: str = None, db: Session = Depends(get_db)):
 
     orgs = query.all()
     return [_org_to_dict_summary(o) for o in orgs]
+
+
+@router.get("/api/municipalities")
+def api_search_municipalities(q: str = "", limit: int = 10):
+    return search_municipalities(q, limit=limit)
 
 
 @router.get("/api/organizations/{slug}")
@@ -181,7 +204,7 @@ def api_public_org_info(org_slug: str, request: Request, db: Session = Depends(g
 
     return {
         "slug": org.slug,
-        "name": org.name,
+        "name": club_display_name,
         "club_display_name": club_display_name,
         "card_logo_url": card_logo_url,
         "wallet_enabled": False,
@@ -205,7 +228,7 @@ def get_organization_logo(slug: str, db: Session = Depends(get_db)):
     # logo_path is relative to UPLOAD_DIR
     full_path = os.path.join(settings.UPLOAD_DIR, org.logo_path)
     if not os.path.exists(full_path):
-         raise HTTPException(status_code=404, detail="File missing on disk")
+        raise HTTPException(status_code=404, detail="File missing on disk")
 
     return FileResponse(full_path)
 
@@ -227,9 +250,11 @@ def get_organization_statute(slug: str, db: Session = Depends(get_db)):
     # statute_pdf_path is relative to UPLOAD_DIR
     full_path = os.path.join(settings.UPLOAD_DIR, org.statute_pdf_path)
     if not os.path.exists(full_path):
-         raise HTTPException(status_code=404, detail="File missing on disk")
+        raise HTTPException(status_code=404, detail="File missing on disk")
 
-    return FileResponse(full_path, media_type="application/pdf", filename=f"statuto_{org.slug}.pdf")
+    return FileResponse(
+        full_path, media_type="application/pdf", filename=f"statuto_{org.slug}.pdf"
+    )
 
 
 # ── SEO: Sitemap ─────────────────────────────────────────────────
@@ -317,7 +342,9 @@ def _render_card_status_html(
     checked_at_label = checked_at.strftime("%d/%m/%Y %H:%M UTC")
     safe_org = html.escape((organization_name or "N/D").strip() or "N/D")
     safe_member = html.escape(_member_initials(member_first_name, member_last_name))
-    safe_card_number = html.escape(str(card_number)) if card_number is not None else "N/D"
+    safe_card_number = (
+        html.escape(str(card_number)) if card_number is not None else "N/D"
+    )
     safe_card_year = html.escape(str(card_year)) if card_year is not None else "N/D"
     safe_reason = html.escape(reason_label)
     json_link = f"/api/cards/verify/{token}?format=json"
@@ -381,11 +408,15 @@ def _render_card_download_html(
 ) -> str:
     normalized_org_slug = (organization_slug or "").strip().lower()
     is_oasi2_card = normalized_org_slug == "oasi-2"
-    safe_club = html.escape((club_display_name or organization_name or "Associazione").strip())
-    association_label = club_display_name if is_oasi2_card else organization_name
+    safe_club = html.escape(
+        (club_display_name or organization_name or "Associazione").strip()
+    )
+    association_label = club_display_name or organization_name
     safe_association = html.escape((association_label or "N/D").strip() or "N/D")
     safe_member = html.escape(_member_display_name(member_first_name, member_last_name))
-    safe_card_number = html.escape(str(card_number)) if card_number is not None else "N/D"
+    safe_card_number = (
+        html.escape(str(card_number)) if card_number is not None else "N/D"
+    )
     safe_card_year = html.escape(str(card_year)) if card_year is not None else "N/D"
     safe_checked_at = html.escape(checked_at.strftime("%d/%m/%Y %H:%M UTC"))
     safe_verify_url = html.escape(verification_url)
@@ -397,13 +428,17 @@ def _render_card_download_html(
 
     qr_data_uri = _build_qr_data_uri(verification_url)
     qr_block = (
-        f'<img src="{html.escape(qr_data_uri)}" alt="QR verifica tessera" '
-        'style="width:184px;height:184px;border-radius:14px;background:#ffffff;'
-        'padding:8px;border:1px solid #dbe3e1;" />'
-    ) if qr_data_uri else (
-        '<div style="width:184px;height:184px;border-radius:14px;background:#f3f6f5;'
-        'border:1px solid #dbe3e1;display:inline-flex;align-items:center;justify-content:center;'
-        'font-size:13px;color:#526a67;font-weight:600;">QR non disponibile</div>'
+        (
+            f'<img src="{html.escape(qr_data_uri)}" alt="QR verifica tessera" '
+            'style="width:184px;height:184px;border-radius:14px;background:#ffffff;'
+            'padding:8px;border:1px solid #dbe3e1;" />'
+        )
+        if qr_data_uri
+        else (
+            '<div style="width:184px;height:184px;border-radius:14px;background:#f3f6f5;'
+            "border:1px solid #dbe3e1;display:inline-flex;align-items:center;justify-content:center;"
+            'font-size:13px;color:#526a67;font-weight:600;">QR non disponibile</div>'
+        )
     )
 
     status_title = "TESSERA ATTIVA" if is_valid else "TESSERA NON ATTIVA"
@@ -416,7 +451,9 @@ def _render_card_download_html(
           </div>
         """
 
-    top_border_style = "1px solid rgba(198,160,79,0.55)" if is_oasi2_card else "3px solid #c6a04f"
+    top_border_style = (
+        "1px solid rgba(198,160,79,0.55)" if is_oasi2_card else "3px solid #c6a04f"
+    )
     label_tone = "#c9a8b0" if is_oasi2_card else "#8aaba8"
     association_tone = "#fdf6e3" if is_oasi2_card else "#d0e2df"
 
@@ -560,14 +597,27 @@ def verify_member_card(request: Request, token: str, db: Session = Depends(get_d
     else:
         inactive_reason = get_member_inactive_reason(member, now=checked_at)
         if inactive_reason == "" and (
-            member.card_no != payload["card_number"] or member.card_year != payload["card_year"]
+            member.card_no != payload["card_number"]
+            or member.card_year != payload["card_year"]
         ):
             inactive_reason = MEMBER_INACTIVE_REASON_NOT_APPROVED
 
     is_valid = inactive_reason == ""
     card_status = "attiva" if is_valid else "non_attiva"
-    card_number = member.card_no if member and member.card_no is not None else payload["card_number"]
-    card_year = member.card_year if member and member.card_year is not None else payload["card_year"]
+    card_number = (
+        member.card_no
+        if member and member.card_no is not None
+        else payload["card_number"]
+    )
+    card_year = (
+        member.card_year
+        if member and member.card_year is not None
+        else payload["card_year"]
+    )
+
+    organization_display_name = resolve_club_display_name(organization) or (
+        organization.name if organization else None
+    )
 
     response_payload = {
         "valid": is_valid,
@@ -581,7 +631,7 @@ def verify_member_card(request: Request, token: str, db: Session = Depends(get_d
             "last_name": member.last_name if member else None,
         },
         "organization": {
-            "name": organization.name if organization else None,
+            "name": organization_display_name,
             "slug": organization.slug if organization else None,
         },
         "checked_at": checked_at.isoformat() + "Z",
@@ -597,7 +647,7 @@ def verify_member_card(request: Request, token: str, db: Session = Depends(get_d
             token=token,
             is_valid=is_valid,
             reason=inactive_reason,
-            organization_name=organization.name if organization else None,
+            organization_name=organization_display_name,
             member_first_name=member.first_name if member else None,
             member_last_name=member.last_name if member else None,
             card_number=card_number,
@@ -634,7 +684,9 @@ def download_member_card(token: str, request: Request, db: Session = Depends(get
         organization = (
             member.organization
             if member and member.organization
-            else db.query(Organization).filter(Organization.id == payload["org_id"]).first()
+            else db.query(Organization)
+            .filter(Organization.id == payload["org_id"])
+            .first()
         )
         card_number = payload["card_number"]
         card_year = payload["card_year"]
@@ -644,7 +696,8 @@ def download_member_card(token: str, request: Request, db: Session = Depends(get
     else:
         inactive_reason = get_member_inactive_reason(member, now=checked_at)
         if inactive_reason == "" and (
-            member.card_no != payload["card_number"] or member.card_year != payload["card_year"]
+            member.card_no != payload["card_number"]
+            or member.card_year != payload["card_year"]
         ):
             inactive_reason = MEMBER_INACTIVE_REASON_NOT_APPROVED
         if member.card_no is not None:
@@ -700,6 +753,7 @@ def card_wallet_google(token: str):
 
 # ── Disk-path helpers (used by PDF and PNG endpoints) ─────────────────────────
 
+
 def _resolve_logo_disk_path(org: Organization | None) -> str | None:
     """Return the absolute disk path for the org logo, or None if unavailable."""
     if org is None:
@@ -710,7 +764,9 @@ def _resolve_logo_disk_path(org: Organization | None) -> str | None:
     slug = (getattr(org, "slug", None) or "").strip().lower()
     if slug:
         static_p = os.path.normpath(
-            os.path.join(os.path.dirname(__file__), "..", "static", "card-logos", f"{slug}.png")
+            os.path.join(
+                os.path.dirname(__file__), "..", "static", "card-logos", f"{slug}.png"
+            )
         )
         return static_p if os.path.exists(static_p) else None
     return None
@@ -723,12 +779,20 @@ def _resolve_assonam_disk_path() -> str | None:
         p = os.path.join(static_dir, "logo-transparent.png")
         return p if os.path.exists(p) else None
     rel = os.path.normpath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "public", "logo-transparent.png")
+        os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "..",
+            "frontend",
+            "public",
+            "logo-transparent.png",
+        )
     )
     return rel if os.path.exists(rel) else None
 
 
 # ── PDF direct download ────────────────────────────────────────────────────────
+
 
 @router.get("/api/cards/{token}/download.pdf")
 def download_card_pdf(token: str, request: Request, db: Session = Depends(get_db)):
@@ -756,18 +820,29 @@ def download_card_pdf(token: str, request: Request, db: Session = Depends(get_db
     else:
         inactive_reason = get_member_inactive_reason(member, now=checked_at)
         if inactive_reason == "" and (
-            member.card_no != payload["card_number"] or member.card_year != payload["card_year"]
+            member.card_no != payload["card_number"]
+            or member.card_year != payload["card_year"]
         ):
             inactive_reason = MEMBER_INACTIVE_REASON_NOT_APPROVED
 
     is_valid = inactive_reason == ""
     card_status = "attiva" if is_valid else "non_attiva"
-    card_number = (member.card_no if member and member.card_no is not None else payload["card_number"])
-    card_year = (member.card_year if member and member.card_year is not None else payload["card_year"])
+    card_number = (
+        member.card_no
+        if member and member.card_no is not None
+        else payload["card_number"]
+    )
+    card_year = (
+        member.card_year
+        if member and member.card_year is not None
+        else payload["card_year"]
+    )
 
     backend_base = _get_backend_base_url(request)
     verification_url = f"{backend_base}/api/cards/verify/{token}"
-    club_display_name = resolve_club_display_name(organization) or (organization.name if organization else "")
+    club_display_name = resolve_club_display_name(organization) or (
+        organization.name if organization else ""
+    )
     org_logo_path = _resolve_logo_disk_path(organization)
     assonam_logo_path = _resolve_assonam_disk_path()
 
@@ -778,7 +853,8 @@ def download_card_pdf(token: str, request: Request, db: Session = Depends(get_db
                 member.last_name if member else None,
             ),
             organization_name=organization.name if organization else "N/D",
-            club_display_name=club_display_name or (organization.name if organization else "N/D"),
+            club_display_name=club_display_name
+            or (organization.name if organization else "N/D"),
             organization_slug=organization.slug if organization else None,
             card_number=card_number or 0,
             card_year=card_year or 0,
@@ -801,6 +877,7 @@ def download_card_pdf(token: str, request: Request, db: Session = Depends(get_db
 
 
 # ── Card image PNG ─────────────────────────────────────────────────────────────
+
 
 @router.get("/api/cards/{token}/image.png")
 def card_image_png(token: str, request: Request, db: Session = Depends(get_db)):
@@ -828,15 +905,26 @@ def card_image_png(token: str, request: Request, db: Session = Depends(get_db)):
     else:
         inactive_reason = get_member_inactive_reason(member, now=checked_at)
         if inactive_reason == "" and (
-            member.card_no != payload["card_number"] or member.card_year != payload["card_year"]
+            member.card_no != payload["card_number"]
+            or member.card_year != payload["card_year"]
         ):
             inactive_reason = MEMBER_INACTIVE_REASON_NOT_APPROVED
 
     is_valid = inactive_reason == ""
     card_status = "attiva" if is_valid else "non_attiva"
-    card_number = (member.card_no if member and member.card_no is not None else payload["card_number"])
-    card_year = (member.card_year if member and member.card_year is not None else payload["card_year"])
-    club_display_name = resolve_club_display_name(organization) or (organization.name if organization else "")
+    card_number = (
+        member.card_no
+        if member and member.card_no is not None
+        else payload["card_number"]
+    )
+    card_year = (
+        member.card_year
+        if member and member.card_year is not None
+        else payload["card_year"]
+    )
+    club_display_name = resolve_club_display_name(organization) or (
+        organization.name if organization else ""
+    )
     org_logo_path = _resolve_logo_disk_path(organization)
     assonam_logo_path = _resolve_assonam_disk_path()
 
@@ -847,7 +935,8 @@ def card_image_png(token: str, request: Request, db: Session = Depends(get_db)):
                 member.last_name if member else None,
             ),
             organization_name=organization.name if organization else "N/D",
-            club_display_name=club_display_name or (organization.name if organization else "N/D"),
+            club_display_name=club_display_name
+            or (organization.name if organization else "N/D"),
             organization_slug=organization.slug if organization else None,
             card_number=card_number or 0,
             card_year=card_year or 0,
@@ -857,6 +946,8 @@ def card_image_png(token: str, request: Request, db: Session = Depends(get_db)):
         )
     except Exception as exc:
         logger.exception("Card image generation failed.")
-        raise HTTPException(status_code=500, detail="Errore generazione immagine") from exc
+        raise HTTPException(
+            status_code=500, detail="Errore generazione immagine"
+        ) from exc
 
     return Response(content=png_bytes, media_type="image/png")

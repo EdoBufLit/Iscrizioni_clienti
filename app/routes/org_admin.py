@@ -91,6 +91,12 @@ _ALLOWED_MEMBER_PAYMENT_METHODS = {
 }
 
 
+def _normalize_tag_culture(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    return value.replace("T.A.G.", "TAG")
+
+
 def _compute_org_card_stock(
     db: Session, org_id: int, now: datetime | None = None
 ) -> dict[str, int]:
@@ -532,7 +538,10 @@ def patch_organization(
 
     if "wallet_title_override" in update_data:
         raw_title = str(update_data.get("wallet_title_override") or "").strip()
-        update_data["wallet_title_override"] = raw_title or None
+        update_data["wallet_title_override"] = _normalize_tag_culture(raw_title) or None
+
+    if "name" in update_data:
+        update_data["name"] = _normalize_tag_culture(update_data.get("name"))
 
     for key, value in update_data.items():
         setattr(org, key, value)

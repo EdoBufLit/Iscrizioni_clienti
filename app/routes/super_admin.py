@@ -12,8 +12,15 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.db import get_db
 from app.models import (
-    AdminUser, AdminRole, Organization, OrgAdminToken, CardBatch, CardMovement,
-    Member, PaymentMethod, IntegrationApiKey
+    AdminUser,
+    AdminRole,
+    Organization,
+    OrgAdminToken,
+    CardBatch,
+    CardMovement,
+    Member,
+    PaymentMethod,
+    IntegrationApiKey,
 )
 from app.security import hash_api_key, verify_password
 from app.utils import generate_token, hash_token, send_email, save_upload_file
@@ -54,10 +61,14 @@ def _require_super_admin(request: Request, db: Session) -> AdminUser:
     admin_id = request.session.get("admin_id")
     if not admin_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    admin = db.query(AdminUser).filter(
-        AdminUser.id == admin_id,
-        AdminUser.role == AdminRole.SUPER_ADMIN,
-    ).first()
+    admin = (
+        db.query(AdminUser)
+        .filter(
+            AdminUser.id == admin_id,
+            AdminUser.role == AdminRole.SUPER_ADMIN,
+        )
+        .first()
+    )
     if not admin:
         raise HTTPException(status_code=403, detail="Forbidden")
     return admin
@@ -170,12 +181,7 @@ def _list_organizations_payload(
         .subquery()
     )
 
-    total = (
-        db.query(func.count(Organization.id))
-        .filter(*filters)
-        .scalar()
-        or 0
-    )
+    total = db.query(func.count(Organization.id)).filter(*filters).scalar() or 0
     total_pages = max(1, math.ceil(total / page_size)) if page_size else 1
 
     results = (
@@ -184,7 +190,9 @@ def _list_organizations_payload(
             card_ranges_subquery.c.card_min,
             card_ranges_subquery.c.card_max,
         )
-        .outerjoin(card_ranges_subquery, card_ranges_subquery.c.org_id == Organization.id)
+        .outerjoin(
+            card_ranges_subquery, card_ranges_subquery.c.org_id == Organization.id
+        )
         .filter(*filters)
         .order_by(*_organization_sort_order(sort))
         .offset((page - 1) * page_size)
@@ -219,6 +227,7 @@ class LoginBody(BaseModel):
     email: str
     password: str
 
+
 class CreateOrganization(BaseModel):
     name: str
     slug: Optional[str] = None
@@ -237,6 +246,7 @@ class CreateOrganization(BaseModel):
     phone: Optional[str] = None
     website: Optional[str] = None
     is_active: bool = True
+
 
 class PatchOrganization(BaseModel):
     name: Optional[str] = None
@@ -257,6 +267,12 @@ class PatchOrganization(BaseModel):
     is_active: Optional[bool] = None
 
 
+def _normalize_tag_culture(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    return value.replace("T.A.G.", "TAG")
+
+
 @auth_router.post("/login")
 def super_admin_login(
     request: Request,
@@ -264,18 +280,27 @@ def super_admin_login(
     db: Session = Depends(get_db),
 ):
     auth_limiter.check(get_client_ip(request))
-    admin = db.query(AdminUser).filter(
-        AdminUser.email == body.email,
-        AdminUser.role == AdminRole.SUPER_ADMIN,
-    ).first()
+    admin = (
+        db.query(AdminUser)
+        .filter(
+            AdminUser.email == body.email,
+            AdminUser.role == AdminRole.SUPER_ADMIN,
+        )
+        .first()
+    )
 
     if not admin:
-        logger.warning("super_admin_login: no admin found for email (hash=%s)", body.email[:3] + "***")
+        logger.warning(
+            "super_admin_login: no admin found for email (hash=%s)",
+            body.email[:3] + "***",
+        )
         audit.super_admin_login_failed(ip=get_client_ip(request))
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     if not admin.password_hash:
-        logger.warning("super_admin_login: admin id=%d has empty password_hash", admin.id)
+        logger.warning(
+            "super_admin_login: admin id=%d has empty password_hash", admin.id
+        )
         audit.super_admin_login_failed(ip=get_client_ip(request))
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -346,11 +371,15 @@ def _normalize_integration_name(raw_value: str | None) -> str:
 
 def _normalize_integration_scopes(raw_scopes: list[str] | None) -> list[str]:
     provided_scopes = raw_scopes or ["issue_member"]
-    cleaned_scopes = sorted({scope.strip() for scope in provided_scopes if scope and scope.strip()})
+    cleaned_scopes = sorted(
+        {scope.strip() for scope in provided_scopes if scope and scope.strip()}
+    )
     if not cleaned_scopes:
         raise HTTPException(status_code=400, detail="Almeno uno scope e obbligatorio.")
 
-    invalid_scopes = [scope for scope in cleaned_scopes if scope not in _ALLOWED_INTEGRATION_SCOPES]
+    invalid_scopes = [
+        scope for scope in cleaned_scopes if scope not in _ALLOWED_INTEGRATION_SCOPES
+    ]
     if invalid_scopes:
         raise HTTPException(
             status_code=400,
@@ -388,8 +417,7 @@ def _create_integration_key(
     def _is_key_hash_unique_conflict(error: IntegrityError) -> bool:
         message = str(getattr(error, "orig", error)).lower()
         return (
-            "unique" in message
-            and "integration_api_keys.key_hash" in message
+            "unique" in message and "integration_api_keys.key_hash" in message
         ) or "uq_integration_api_keys_key_hash" in message
 
     def _reuse_legacy_unique_row(
@@ -480,9 +508,13 @@ def list_org_integration_keys(
 
     query = db.query(IntegrationApiKey).filter(IntegrationApiKey.org_id == org_id)
     if name is not None:
-        query = query.filter(IntegrationApiKey.name == _normalize_integration_name(name))
+        query = query.filter(
+            IntegrationApiKey.name == _normalize_integration_name(name)
+        )
 
-    keys = query.order_by(IntegrationApiKey.created_at.desc(), IntegrationApiKey.id.desc()).all()
+    keys = query.order_by(
+        IntegrationApiKey.created_at.desc(), IntegrationApiKey.id.desc()
+    ).all()
     return {"items": [_serialize_integration_key(key) for key in keys]}
 
 
@@ -668,10 +700,14 @@ def super_admin_member_detail(
 ):
     _require_super_admin(request, db)
 
-    member = db.query(Member).filter(
-        Member.id == member_id,
-        Member.deleted_at.is_(None),
-    ).first()
+    member = (
+        db.query(Member)
+        .filter(
+            Member.id == member_id,
+            Member.deleted_at.is_(None),
+        )
+        .first()
+    )
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
 
@@ -684,7 +720,9 @@ def super_admin_member_detail(
         "fiscal_code": member.fiscal_code,
         "payment_method": _serialize_member_payment_method(member.payment_method),
         "status": get_member_lifecycle_status(member, now=datetime.utcnow()),
-        "workflow_status": member.status.value if hasattr(member.status, "value") else str(member.status),
+        "workflow_status": member.status.value
+        if hasattr(member.status, "value")
+        else str(member.status),
         "is_active": is_member_active(member, now=datetime.utcnow()),
         "deleted_at": member.deleted_at.isoformat() if member.deleted_at else None,
         "card_no": member.card_no,
@@ -698,7 +736,9 @@ def super_admin_member_detail(
             "id": member.organization.id,
             "name": member.organization.name,
             "slug": member.organization.slug,
-        } if member.organization else None,
+        }
+        if member.organization
+        else None,
     }
 
 
@@ -715,32 +755,42 @@ def create_org_admin(
         raise HTTPException(status_code=404, detail="Organization not found")
 
     email_norm = body.email.strip().lower()
-    existing = db.query(AdminUser).filter(
-        func.lower(AdminUser.email) == email_norm,
-    ).first()
+    existing = (
+        db.query(AdminUser)
+        .filter(
+            func.lower(AdminUser.email) == email_norm,
+        )
+        .first()
+    )
 
     if existing:
         if existing.deleted_at is not None:
-             # Restore
-             existing.deleted_at = None
-             existing.is_active = True
-             existing.password_hash = "" # Reset credentials
-             existing.org_id = body.org_id
-             db.commit()
+            # Restore
+            existing.deleted_at = None
+            existing.is_active = True
+            existing.password_hash = ""  # Reset credentials
+            existing.org_id = body.org_id
+            db.commit()
 
-             audit.org_admin_restored_on_create(admin_id=existing.id, org_id=existing.org_id, email_hash=audit._hash_email(email_norm))
+            audit.org_admin_restored_on_create(
+                admin_id=existing.id,
+                org_id=existing.org_id,
+                email_hash=audit._hash_email(email_norm),
+            )
 
-             return {
-                 "id": existing.id,
-                 "email": existing.email,
-                 "org_id": existing.org_id,
-                 "org_name": org.name,
-                 "is_active": existing.is_active,
-                 "created_at": existing.created_at.isoformat() if existing.created_at else None,
-                 "restored": True
-             }
+            return {
+                "id": existing.id,
+                "email": existing.email,
+                "org_id": existing.org_id,
+                "org_name": org.name,
+                "is_active": existing.is_active,
+                "created_at": existing.created_at.isoformat()
+                if existing.created_at
+                else None,
+                "restored": True,
+            }
         else:
-             raise HTTPException(status_code=409, detail="admin_exists")
+            raise HTTPException(status_code=409, detail="admin_exists")
 
     admin = AdminUser(
         email=email_norm,
@@ -757,7 +807,8 @@ def create_org_admin(
     token = OrgAdminToken(
         admin_id=admin.id,
         token_hash=hash_token(token_str),
-        expires_at=datetime.utcnow() + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES),
+        expires_at=datetime.utcnow()
+        + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES),
     )
     db.add(token)
     db.commit()
@@ -768,9 +819,11 @@ def create_org_admin(
         subject="Invito area amministrazione associazione",
         body=f"Sei stato invitato come amministratore di {org.name}.\nAccedi qui: {link}",
     ):
-         logger.warning("Failed to send org admin invite to %s", email_norm)
+        logger.warning("Failed to send org admin invite to %s", email_norm)
 
-    audit.org_admin_created(admin_id=admin.id, org_id=admin.org_id, email_hash=audit._hash_email(email_norm))
+    audit.org_admin_created(
+        admin_id=admin.id, org_id=admin.org_id, email_hash=audit._hash_email(email_norm)
+    )
 
     return {
         "id": admin.id,
@@ -779,7 +832,7 @@ def create_org_admin(
         "org_name": org.name,
         "is_active": admin.is_active,
         "created_at": admin.created_at.isoformat() if admin.created_at else None,
-        "created": True
+        "created": True,
     }
 
 
@@ -791,7 +844,9 @@ def list_org_admins(
 ):
     _require_super_admin(request, db)
 
-    query = db.query(AdminUser).filter(AdminUser.role == AdminRole.ORG_ADMIN, AdminUser.deleted_at.is_(None))
+    query = db.query(AdminUser).filter(
+        AdminUser.role == AdminRole.ORG_ADMIN, AdminUser.deleted_at.is_(None)
+    )
     if org_id is not None:
         query = query.filter(AdminUser.org_id == org_id)
 
@@ -818,10 +873,14 @@ def delete_org_admin(
 ):
     admin = _require_super_admin(request, db)
 
-    target = db.query(AdminUser).filter(
-        AdminUser.id == admin_id,
-        AdminUser.role == AdminRole.ORG_ADMIN,
-    ).first()
+    target = (
+        db.query(AdminUser)
+        .filter(
+            AdminUser.id == admin_id,
+            AdminUser.role == AdminRole.ORG_ADMIN,
+        )
+        .first()
+    )
 
     if not target:
         raise HTTPException(status_code=404, detail="Org admin not found")
@@ -830,22 +889,36 @@ def delete_org_admin(
         return {"ok": True, "already_deleted": True}
 
     # Safety check: do NOT allow deleting the last active org-admin for that admin’s organization
-    active_count = db.query(func.count(AdminUser.id)).filter(
-        AdminUser.org_id == target.org_id,
-        AdminUser.role == AdminRole.ORG_ADMIN,
-        AdminUser.deleted_at.is_(None),
-        AdminUser.is_active.is_(True)
-    ).scalar()
+    active_count = (
+        db.query(func.count(AdminUser.id))
+        .filter(
+            AdminUser.org_id == target.org_id,
+            AdminUser.role == AdminRole.ORG_ADMIN,
+            AdminUser.deleted_at.is_(None),
+            AdminUser.is_active.is_(True),
+        )
+        .scalar()
+    )
 
     if active_count <= 1 and target.is_active:
-         raise HTTPException(status_code=409, detail="Impossibile eliminare l'ultimo admin attivo dell'organizzazione.")
+        raise HTTPException(
+            status_code=409,
+            detail="Impossibile eliminare l'ultimo admin attivo dell'organizzazione.",
+        )
 
     target.deleted_at = datetime.utcnow()
     target.is_active = False
     db.commit()
 
-    audit.org_admin_deleted(admin_id=target.id, org_id=target.org_id, super_admin_id=admin.id)
-    logger.info("super_admin.org_admin_deleted: admin_id=%d org_id=%d by super_admin=%d", target.id, target.org_id, admin.id)
+    audit.org_admin_deleted(
+        admin_id=target.id, org_id=target.org_id, super_admin_id=admin.id
+    )
+    logger.info(
+        "super_admin.org_admin_deleted: admin_id=%d org_id=%d by super_admin=%d",
+        target.id,
+        target.org_id,
+        admin.id,
+    )
 
     return {"ok": True}
 
@@ -858,10 +931,14 @@ def restore_org_admin(
 ):
     admin = _require_super_admin(request, db)
 
-    target = db.query(AdminUser).filter(
-        AdminUser.id == admin_id,
-        AdminUser.role == AdminRole.ORG_ADMIN,
-    ).first()
+    target = (
+        db.query(AdminUser)
+        .filter(
+            AdminUser.id == admin_id,
+            AdminUser.role == AdminRole.ORG_ADMIN,
+        )
+        .first()
+    )
 
     if not target:
         raise HTTPException(status_code=404, detail="Org admin not found")
@@ -871,11 +948,18 @@ def restore_org_admin(
 
     target.deleted_at = None
     target.is_active = True
-    target.password_hash = "" # Reset credentials
+    target.password_hash = ""  # Reset credentials
     db.commit()
 
-    audit.org_admin_restored(admin_id=target.id, org_id=target.org_id, super_admin_id=admin.id)
-    logger.info("super_admin.org_admin_restored: admin_id=%d org_id=%d by super_admin=%d", target.id, target.org_id, admin.id)
+    audit.org_admin_restored(
+        admin_id=target.id, org_id=target.org_id, super_admin_id=admin.id
+    )
+    logger.info(
+        "super_admin.org_admin_restored: admin_id=%d org_id=%d by super_admin=%d",
+        target.id,
+        target.org_id,
+        admin.id,
+    )
 
     return {"ok": True}
 
@@ -889,10 +973,14 @@ def patch_org_admin(
 ):
     _require_super_admin(request, db)
 
-    target = db.query(AdminUser).filter(
-        AdminUser.id == admin_id,
-        AdminUser.role == AdminRole.ORG_ADMIN,
-    ).first()
+    target = (
+        db.query(AdminUser)
+        .filter(
+            AdminUser.id == admin_id,
+            AdminUser.role == AdminRole.ORG_ADMIN,
+        )
+        .first()
+    )
     if not target:
         raise HTTPException(status_code=404, detail="Org admin not found")
 
@@ -909,6 +997,7 @@ def patch_org_admin(
 
 # ── Organization Management ──────────────────────────────────────
 
+
 @router.post("/organizations")
 def create_organization(
     request: Request,
@@ -920,21 +1009,25 @@ def create_organization(
     # Slug Logic
     slug = body.slug
     if not slug:
-        slug = re.sub(r'[^a-z0-9]+', '-', body.name.lower()).strip('-')
+        slug = re.sub(r"[^a-z0-9]+", "-", body.name.lower()).strip("-")
 
     # Unique check
     if db.query(Organization).filter(Organization.slug == slug).first():
-            raise HTTPException(status_code=409, detail="Slug already exists")
+        raise HTTPException(status_code=409, detail="Slug already exists")
 
     description = body.description
     if not description and body.description_short:
         description = body.description_short
 
+    normalized_name = _normalize_tag_culture(body.name) or body.name
+    normalized_club_display_name = _normalize_tag_culture(body.club_display_name)
+    normalized_card_email_subject = _normalize_tag_culture(body.card_email_subject)
+
     org = Organization(
-        name=body.name,
+        name=normalized_name,
         slug=slug,
-        club_display_name=body.club_display_name,
-        card_email_subject=body.card_email_subject,
+        club_display_name=normalized_club_display_name,
+        card_email_subject=normalized_card_email_subject,
         card_logo_url=body.card_logo_url,
         description=description,
         address_line1=body.address_line1,
@@ -947,7 +1040,7 @@ def create_organization(
         phone=body.phone,
         website=body.website,
         is_active=body.is_active,
-        created_by_admin_id=admin.id
+        created_by_admin_id=admin.id,
     )
     db.add(org)
     db.commit()
@@ -962,7 +1055,7 @@ def create_organization(
         actor_role="super_admin",
         metadata=body.model_dump(exclude_unset=True),
         ip=get_client_ip(request),
-        user_agent=request.headers.get("user-agent")
+        user_agent=request.headers.get("user-agent"),
     )
     db.commit()
     db.refresh(org)
@@ -1058,7 +1151,7 @@ def update_organization(
     admin = _require_super_admin(request, db)
     org = db.query(Organization).filter(Organization.id == org_id).first()
     if not org:
-            raise HTTPException(status_code=404, detail="Organization not found")
+        raise HTTPException(status_code=404, detail="Organization not found")
 
     update_data = body.model_dump(exclude_unset=True)
 
@@ -1066,6 +1159,17 @@ def update_organization(
         short = update_data.pop("description_short")
         if "description" not in update_data:
             update_data["description"] = short
+
+    if "name" in update_data:
+        update_data["name"] = _normalize_tag_culture(update_data.get("name"))
+    if "club_display_name" in update_data:
+        update_data["club_display_name"] = _normalize_tag_culture(
+            update_data.get("club_display_name")
+        )
+    if "card_email_subject" in update_data:
+        update_data["card_email_subject"] = _normalize_tag_culture(
+            update_data.get("card_email_subject")
+        )
 
     for key, value in update_data.items():
         setattr(org, key, value)
@@ -1081,7 +1185,7 @@ def update_organization(
         actor_role="super_admin",
         metadata=update_data,
         ip=get_client_ip(request),
-        user_agent=request.headers.get("user-agent")
+        user_agent=request.headers.get("user-agent"),
     )
     db.commit()
     db.refresh(org)
@@ -1099,12 +1203,12 @@ async def upload_org_logo(
     admin = _require_super_admin(request, db)
     org = db.query(Organization).filter(Organization.id == org_id).first()
     if not org:
-            raise HTTPException(status_code=404, detail="Organization not found")
+        raise HTTPException(status_code=404, detail="Organization not found")
 
     rel_path, size, sha = await save_upload_file(
         file,
         allowed_types=["image/jpeg", "image/png", "image/svg+xml"],
-        max_size=2 * 1024 * 1024
+        max_size=2 * 1024 * 1024,
     )
 
     org.logo_path = rel_path
@@ -1119,7 +1223,7 @@ async def upload_org_logo(
         actor_role="super_admin",
         metadata={"filename": file.filename, "size": size, "sha256": sha},
         ip=get_client_ip(request),
-        user_agent=request.headers.get("user-agent")
+        user_agent=request.headers.get("user-agent"),
     )
     db.commit()
 
@@ -1174,7 +1278,12 @@ async def upload_org_statute(
         entity_id=org.id,
         actor_admin_id=admin.id,
         actor_role="super_admin",
-        metadata={"filename": file.filename, "size": size, "sha256": sha, "version": new_version},
+        metadata={
+            "filename": file.filename,
+            "size": size,
+            "sha256": sha,
+            "version": new_version,
+        },
         ip=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
@@ -1189,10 +1298,12 @@ async def upload_org_statute(
 
 # ── Card stock management ────────────────────────────────────────
 
+
 class SetCardRange(BaseModel):
     from_no: int
     to_no: int
     year: Optional[int] = None
+
 
 class AddCardBatch(BaseModel):
     from_no: int
@@ -1207,7 +1318,10 @@ class PatchCardLot(BaseModel):
     range_start: Optional[int] = None
     range_end: Optional[int] = None
 
-def check_card_overlap(db: Session, start_no: int, end_no: int, exclude_batch_id: Optional[int] = None):
+
+def check_card_overlap(
+    db: Session, start_no: int, end_no: int, exclude_batch_id: Optional[int] = None
+):
     """
     Check if the given range [start_no, end_no] overlaps with any existing CardBatch globally.
     Returns the conflicting batch if found, else None.
@@ -1217,7 +1331,7 @@ def check_card_overlap(db: Session, start_no: int, end_no: int, exclude_batch_id
     query = db.query(CardBatch).filter(
         CardBatch.released_at.is_(None),
         CardBatch.start_no <= end_no,
-        CardBatch.end_no >= start_no
+        CardBatch.end_no >= start_no,
     )
     if exclude_batch_id is not None:
         query = query.filter(CardBatch.id != exclude_batch_id)
@@ -1236,14 +1350,16 @@ def _resolve_batch_year(raw_year: Optional[int]) -> int:
 
 def _count_assigned_cards_for_batch(db: Session, batch: CardBatch) -> int:
     return int(
-        db.query(func.count(func.distinct(Member.card_no))).filter(
+        db.query(func.count(func.distinct(Member.card_no)))
+        .filter(
             Member.org_id == batch.org_id,
             Member.deleted_at.is_(None),
             Member.card_year == batch.year,
             Member.card_no.isnot(None),
             Member.card_no >= batch.start_no,
             Member.card_no <= batch.end_no,
-        ).scalar()
+        )
+        .scalar()
         or 0
     )
 
@@ -1256,13 +1372,15 @@ def _count_linked_members_for_batch(db: Session, batch: CardBatch) -> int:
         Member.card_no <= batch.end_no,
     )
     return int(
-        db.query(func.count(func.distinct(Member.id))).filter(
+        db.query(func.count(func.distinct(Member.id)))
+        .filter(
             Member.org_id == batch.org_id,
             or_(
                 Member.batch_id == batch.id,
                 range_filter,
             ),
-        ).scalar()
+        )
+        .scalar()
         or 0
     )
 
@@ -1337,11 +1455,15 @@ def _get_organization_and_batch_or_404(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    batch = db.query(CardBatch).filter(
-        CardBatch.id == lot_id,
-        CardBatch.org_id == org_id,
-        CardBatch.released_at.is_(None),
-    ).first()
+    batch = (
+        db.query(CardBatch)
+        .filter(
+            CardBatch.id == lot_id,
+            CardBatch.org_id == org_id,
+            CardBatch.released_at.is_(None),
+        )
+        .first()
+    )
     if not batch:
         raise HTTPException(status_code=404, detail="Lotto tessere non trovato")
 
@@ -1379,9 +1501,11 @@ def set_initial_card_range(
     _begin_card_allocation_transaction(db)
 
     if body.from_no <= 0 or body.to_no <= 0:
-         raise HTTPException(status_code=400, detail="Range must be positive integers")
+        raise HTTPException(status_code=400, detail="Range must be positive integers")
     if body.from_no > body.to_no:
-         raise HTTPException(status_code=400, detail="FROM must be less than or equal to TO")
+        raise HTTPException(
+            status_code=400, detail="FROM must be less than or equal to TO"
+        )
     batch_year = _resolve_batch_year(body.year)
 
     org = db.query(Organization).filter(Organization.id == org_id).first()
@@ -1389,22 +1513,33 @@ def set_initial_card_range(
         raise HTTPException(status_code=404, detail="Organization not found")
 
     # Check if org already has batches
-    existing_count = db.query(CardBatch).filter(
-        CardBatch.org_id == org_id,
-        CardBatch.released_at.is_(None),
-    ).count()
+    existing_count = (
+        db.query(CardBatch)
+        .filter(
+            CardBatch.org_id == org_id,
+            CardBatch.released_at.is_(None),
+        )
+        .count()
+    )
     if existing_count > 0:
-        raise HTTPException(status_code=400, detail="L'organizzazione ha già delle tessere assegnate. Usa 'Aggiungi tessere'.")
+        raise HTTPException(
+            status_code=400,
+            detail="L'organizzazione ha già delle tessere assegnate. Usa 'Aggiungi tessere'.",
+        )
 
     # Check global overlap
     conflict = check_card_overlap(db, body.from_no, body.to_no)
     if conflict:
         # Fetch conflicting org name
-        conflicting_org = db.query(Organization).filter(Organization.id == conflict.org_id).first()
-        org_name = conflicting_org.name if conflicting_org else f"Org #{conflict.org_id}"
+        conflicting_org = (
+            db.query(Organization).filter(Organization.id == conflict.org_id).first()
+        )
+        org_name = (
+            conflicting_org.name if conflicting_org else f"Org #{conflict.org_id}"
+        )
         raise HTTPException(
             status_code=409,
-            detail=f"Intervallo tessere in conflitto con {org_name} ({conflict.start_no}–{conflict.end_no})"
+            detail=f"Intervallo tessere in conflitto con {org_name} ({conflict.start_no}–{conflict.end_no})",
         )
 
     batch = CardBatch(
@@ -1433,11 +1568,16 @@ def set_initial_card_range(
         actor_admin_id=admin.id,
         actor_role="super_admin",
         metadata={"from": body.from_no, "to": body.to_no},
-        ip=get_client_ip(request)
+        ip=get_client_ip(request),
     )
     db.commit()
 
-    return {"ok": True, "year": batch_year, "start_no": body.from_no, "end_no": body.to_no}
+    return {
+        "ok": True,
+        "year": batch_year,
+        "start_no": body.from_no,
+        "end_no": body.to_no,
+    }
 
 
 @router.post("/orgs/{org_id}/cards/add-batch")
@@ -1453,9 +1593,14 @@ def add_card_batch(
     _begin_card_allocation_transaction(db)
 
     if body.from_no <= 0 or body.to_no <= 0:
-        raise HTTPException(status_code=400, detail="I numeri devono essere interi positivi")
+        raise HTTPException(
+            status_code=400, detail="I numeri devono essere interi positivi"
+        )
     if body.from_no > body.to_no:
-        raise HTTPException(status_code=400, detail="Il numero iniziale deve essere minore o uguale al finale")
+        raise HTTPException(
+            status_code=400,
+            detail="Il numero iniziale deve essere minore o uguale al finale",
+        )
     batch_year = _resolve_batch_year(body.year)
 
     org = db.query(Organization).filter(Organization.id == org_id).first()
@@ -1465,11 +1610,15 @@ def add_card_batch(
     # Check global overlap (across all organizations)
     conflict = check_card_overlap(db, body.from_no, body.to_no)
     if conflict:
-        conflicting_org = db.query(Organization).filter(Organization.id == conflict.org_id).first()
-        org_name = conflicting_org.name if conflicting_org else f"Org #{conflict.org_id}"
+        conflicting_org = (
+            db.query(Organization).filter(Organization.id == conflict.org_id).first()
+        )
+        org_name = (
+            conflicting_org.name if conflicting_org else f"Org #{conflict.org_id}"
+        )
         raise HTTPException(
             status_code=409,
-            detail=f"Intervallo tessere in conflitto con {org_name} ({conflict.start_no}–{conflict.end_no})"
+            detail=f"Intervallo tessere in conflitto con {org_name} ({conflict.start_no}–{conflict.end_no})",
         )
 
     batch = CardBatch(
@@ -1505,11 +1654,16 @@ def add_card_batch(
     db.commit()
 
     # Return updated stock summary
-    batches = db.query(CardBatch).filter(
-        CardBatch.org_id == org_id,
-        CardBatch.year == batch_year,
-        CardBatch.released_at.is_(None),
-    ).order_by(CardBatch.start_no).all()
+    batches = (
+        db.query(CardBatch)
+        .filter(
+            CardBatch.org_id == org_id,
+            CardBatch.year == batch_year,
+            CardBatch.released_at.is_(None),
+        )
+        .order_by(CardBatch.start_no)
+        .all()
+    )
     serialized_batches = [_serialize_batch_usage(db, b) for b in batches]
     total = int(sum(int(item["total"]) for item in serialized_batches))
     remaining = int(sum(int(item["remaining"]) for item in serialized_batches))
@@ -1543,11 +1697,16 @@ def get_org_batches(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    batches = db.query(CardBatch).filter(
-        CardBatch.org_id == org_id,
-        CardBatch.year == target_year,
-        CardBatch.released_at.is_(None),
-    ).order_by(CardBatch.start_no).all()
+    batches = (
+        db.query(CardBatch)
+        .filter(
+            CardBatch.org_id == org_id,
+            CardBatch.year == target_year,
+            CardBatch.released_at.is_(None),
+        )
+        .order_by(CardBatch.start_no)
+        .all()
+    )
     serialized_batches = [_serialize_batch_usage(db, b) for b in batches]
     summary_total = int(sum(int(item["total"]) for item in serialized_batches))
     summary_assigned = int(sum(int(item["assigned"]) for item in serialized_batches))
@@ -1561,7 +1720,7 @@ def get_org_batches(
             "total": summary_total,
             "assigned": summary_assigned,
             "remaining": summary_remaining,
-        }
+        },
     }
 
 
@@ -1596,7 +1755,9 @@ def patch_org_card_lot(
     year_changed = requested_year != batch.year
     if range_changed:
         if requested_start <= 0 or requested_end <= 0:
-            raise HTTPException(status_code=400, detail="I numeri devono essere interi positivi")
+            raise HTTPException(
+                status_code=400, detail="I numeri devono essere interi positivi"
+            )
         if requested_start > requested_end:
             raise HTTPException(
                 status_code=400,
@@ -1619,8 +1780,14 @@ def patch_org_card_lot(
             exclude_batch_id=batch.id,
         )
         if conflict:
-            conflicting_org = db.query(Organization).filter(Organization.id == conflict.org_id).first()
-            org_name = conflicting_org.name if conflicting_org else f"Org #{conflict.org_id}"
+            conflicting_org = (
+                db.query(Organization)
+                .filter(Organization.id == conflict.org_id)
+                .first()
+            )
+            org_name = (
+                conflicting_org.name if conflicting_org else f"Org #{conflict.org_id}"
+            )
             raise HTTPException(
                 status_code=409,
                 detail=(
@@ -1741,11 +1908,12 @@ def increase_card_stock_legacy(
     _require_super_admin(request, db)
     raise HTTPException(
         status_code=400,
-        detail="Endpoint deprecato. Usa il nuovo formato con range dalla/alla."
+        detail="Endpoint deprecato. Usa il nuovo formato con range dalla/alla.",
     )
 
 
 # ── Test email ──────────────────────────────────────────────────
+
 
 class TestEmailBody(BaseModel):
     to: EmailStr
