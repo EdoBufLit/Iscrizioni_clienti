@@ -4,8 +4,15 @@ import {
   fetchOrganizationDetail,
   joinOrganization,
   registerMember,
+  searchMunicipalities,
+  type MunicipalitySearchItem,
   type OrganizationDetail,
 } from "../lib/api";
+import {
+  calculateCodiceFiscale,
+  normalizeCodiceFiscale,
+  validateCodiceFiscale,
+} from "../lib/codiceFiscale";
 import { applySeo } from "../lib/seo";
 import Skeleton from "../components/ui/Skeleton";
 
@@ -28,6 +35,9 @@ type FormData = {
   nome: string;
   cognome: string;
   dataNascita: string;
+  sesso: "" | "M" | "F";
+  comuneNascita: string;
+  comuneNascitaCode: string;
   codiceFiscale: string;
   email: string;
   telefono: string;
@@ -42,6 +52,9 @@ const initial: FormData = {
   nome: "",
   cognome: "",
   dataNascita: "",
+  sesso: "",
+  comuneNascita: "",
+  comuneNascitaCode: "",
   codiceFiscale: "",
   email: "",
   telefono: "",
@@ -57,10 +70,25 @@ function validateStep1(f: FormData): Record<string, string> {
   if (!f.nome.trim()) e.nome = "Il campo nome è obbligatorio.";
   if (!f.cognome.trim()) e.cognome = "Il campo cognome è obbligatorio.";
   if (!f.dataNascita) e.dataNascita = "Inserisci la data di nascita.";
-  if (!f.codiceFiscale.trim())
+  if (!f.sesso) e.sesso = "Seleziona il sesso.";
+  if (!f.comuneNascita.trim())
+    e.comuneNascita = "Il comune di nascita e obbligatorio.";
+  else if (!f.comuneNascitaCode)
+    e.comuneNascita = "Seleziona un comune valido dall'elenco.";
+  if (!f.codiceFiscale.trim()) {
     e.codiceFiscale = "Il codice fiscale è obbligatorio.";
-  else if (!/^[A-Z0-9]{16}$/i.test(f.codiceFiscale.trim()))
-    e.codiceFiscale = "Il codice fiscale deve contenere 16 caratteri alfanumerici.";
+  } else if (
+    !validateCodiceFiscale({
+      fiscalCode: f.codiceFiscale,
+      firstName: f.nome,
+      lastName: f.cognome,
+      birthDate: f.dataNascita,
+      gender: f.sesso,
+      birthPlaceCode: f.comuneNascitaCode,
+    }).isFormallyValid
+  ) {
+    e.codiceFiscale = "Il codice fiscale non e valido. Verifica formato e checksum.";
+  }
   if (!f.email.trim()) e.email = "L'indirizzo email è obbligatorio.";
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email))
     e.email = "L'indirizzo email non sembra valido.";
@@ -147,6 +175,11 @@ const Iscrizione = () => {
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [userEditedCF, setUserEditedCF] = useState(false);
+  const [municipalitySuggestions, setMunicipalitySuggestions] = useState<MunicipalitySearchItem[]>([]);
+  const [municipalityLoading, setMunicipalityLoading] = useState(false);
+  const [municipalityLookupError, setMunicipalityLookupError] = useState("");
+  const [showMunicipalitySuggestions, setShowMunicipalitySuggestions] = useState(false);
 
   useEffect(() => {
     if (!slug) return;
@@ -168,7 +201,101 @@ const Iscrizione = () => {
     }
   }, [org, slug]);
 
+  useEffect(() => {
+    const query = form.comuneNascita.trim();
+    if (query.length < 2 || form.comuneNascitaCode) {
+      setMunicipalitySuggestions([]);
+      setMunicipalityLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setMunicipalityLoading(true);
+    setMunicipalityLookupError("");
+    const timeoutId = window.setTimeout(() => {
+      searchMunicipalities(query)
+        .then((items) => {
+          if (cancelled) return;
+          setMunicipalitySuggestions(items);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setMunicipalitySuggestions([]);
+          setMunicipalityLookupError("Ricerca comuni temporaneamente non disponibile.");
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setMunicipalityLoading(false);
+          }
+        });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [form.comuneNascita, form.comuneNascitaCode]);
+
+  useEffect(() => {
+    if (
+      userEditedCF ||
+      !form.nome.trim() ||
+      !form.cognome.trim() ||
+      !form.dataNascita ||
+      !form.sesso ||
+      !form.comuneNascitaCode
+    ) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      try {
+        const calculated = calculateCodiceFiscale({
+          firstName: form.nome,
+          lastName: form.cognome,
+          birthDate: form.dataNascita,
+          gender: form.sesso as "M" | "F",
+          birthPlaceCode: form.comuneNascitaCode,
+        });
+        setForm((prev) => (
+          prev.codiceFiscale === calculated
+            ? prev
+            : { ...prev, codiceFiscale: calculated }
+        ));
+      } catch {
+        // Ignore intermediate invalid states while the user is typing.
+      }
+    }, 300);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    form.cognome,
+    form.comuneNascitaCode,
+    form.dataNascita,
+    form.nome,
+    form.sesso,
+    userEditedCF,
+  ]);
+
   const associationName = org?.name;
+  const fiscalCodeValidation = validateCodiceFiscale({
+    fiscalCode: form.codiceFiscale,
+    firstName: form.nome,
+    lastName: form.cognome,
+    birthDate: form.dataNascita,
+    gender: form.sesso,
+    birthPlaceCode: form.comuneNascitaCode,
+  });
+  const liveFiscalCodeError =
+    form.codiceFiscale.trim() && !fiscalCodeValidation.isFormallyValid
+      ? "Il codice fiscale non e valido. Verifica formato e checksum."
+      : "";
+  const fiscalCodeWarning =
+    form.codiceFiscale.trim() &&
+    fiscalCodeValidation.isFormallyValid &&
+    fiscalCodeValidation.matchesExpected === false
+      ? "Il codice fiscale inserito non coincide con quello calcolato dai dati anagrafici. Puoi correggerlo manualmente se necessario."
+      : "";
 
   if (orgLoading) {
     return (
@@ -202,9 +329,51 @@ const Iscrizione = () => {
     }
   };
 
+  const fieldError = (field: string) => {
+    if (field === "codiceFiscale") {
+      return errors.codiceFiscale || liveFiscalCodeError;
+    }
+    return errors[field];
+  };
+
   const handleText = (field: keyof FormData) => (e: ChangeEvent<HTMLInputElement>) => updateField(field, e.target.value);
   const handleFile = (e: ChangeEvent<HTMLInputElement>) => updateField("documentoIdentita", e.target.files?.[0] ?? null);
   const handleCheck = (field: "privacy" | "statuto") => (e: ChangeEvent<HTMLInputElement>) => updateField(field, e.target.checked);
+  const handleGenderChange = (e: ChangeEvent<HTMLSelectElement>) => updateField("sesso", e.target.value as "" | "M" | "F");
+  const handleBirthPlaceChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setShowMunicipalitySuggestions(true);
+    setMunicipalityLookupError("");
+    setForm((prev) => ({
+      ...prev,
+      comuneNascita: value,
+      comuneNascitaCode: "",
+    }));
+    if (errors.comuneNascita) {
+      setErrors((prev) => { const next = { ...prev }; delete next.comuneNascita; return next; });
+    }
+  };
+  const handleFiscalCodeChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const nextValue = normalizeCodiceFiscale(e.target.value).slice(0, 16);
+    setUserEditedCF(nextValue.length > 0);
+    updateField("codiceFiscale", nextValue);
+    if (!nextValue) {
+      setUserEditedCF(false);
+    }
+  };
+  const selectMunicipality = (item: MunicipalitySearchItem) => {
+    setForm((prev) => ({
+      ...prev,
+      comuneNascita: item.name,
+      comuneNascitaCode: item.code,
+    }));
+    setShowMunicipalitySuggestions(false);
+    setMunicipalityLookupError("");
+    setMunicipalitySuggestions([]);
+    if (errors.comuneNascita) {
+      setErrors((prev) => { const next = { ...prev }; delete next.comuneNascita; return next; });
+    }
+  };
 
   const goNext = () => {
     let newErrors = {};
@@ -232,12 +401,16 @@ const Iscrizione = () => {
     setSubmitting(true);
     try {
       // 1. Submit join request to backend (critical - if this fails, show error)
-      await joinOrganization(slug!, {
+      const joinResult = await joinOrganization(slug!, {
         first_name: form.nome,
         last_name: form.cognome,
+        birth_date: form.dataNascita,
+        birth_place: form.comuneNascita,
+        birth_place_code: form.comuneNascitaCode,
+        gender: form.sesso as "M" | "F",
         email: form.email,
         phone: form.telefono,
-        fiscal_code: form.codiceFiscale.toUpperCase(),
+        fiscal_code: normalizeCodiceFiscale(form.codiceFiscale),
         accept_statute: form.statuto,
         accepted_statute_version: org?.has_statute ? (org.statute_version || null) : null,
         accept_privacy: form.privacy,
@@ -246,26 +419,36 @@ const Iscrizione = () => {
       });
 
       // Signup saved successfully — mark as submitted regardless of registration
-      setSubmitted(true);
+      if (!joinResult.active_card_page_url) {
+        setSubmitted(true);
+      }
 
       // 2. Register with password for immediate login (non-blocking)
+      let authenticated = false;
       try {
-        const regResult = await registerMember({
+        const registrationResult = await registerMember({
           email: form.email,
           password: form.password,
           first_name: form.nome,
           last_name: form.cognome,
           phone: form.telefono,
-          fiscal_code: form.codiceFiscale.toUpperCase(),
+          fiscal_code: normalizeCodiceFiscale(form.codiceFiscale),
           org_slug: slug!,
         });
+        authenticated = Boolean(registrationResult.authenticated);
 
-        if (regResult.authenticated) {
-          setTimeout(() => navigate("/dashboard"), 3000);
-        }
       } catch {
         // Registration failed but signup was saved — user can login later
         console.warn("Password registration failed, signup was saved successfully");
+      }
+
+      if (joinResult.active_card_page_url) {
+        window.location.assign(joinResult.active_card_page_url);
+        return;
+      }
+
+      if (authenticated) {
+        setTimeout(() => navigate("/dashboard"), 3000);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Errore sconosciuto";
@@ -276,12 +459,18 @@ const Iscrizione = () => {
   };
 
   const hasErrors = Object.keys(errors).length > 0;
-  const ic = (field: string) => (errors[field] ? inputErr : inputOk);
+  const ic = (field: string) => (fieldError(field) ? inputErr : inputOk);
   const paymentMethodLabel =
     form.modalitaPagamento === "CASH"
       ? "Contanti"
       : form.modalitaPagamento === "BONIFICO"
         ? "Bonifico"
+        : "-";
+  const genderLabel =
+    form.sesso === "M"
+      ? "Maschile"
+      : form.sesso === "F"
+        ? "Femminile"
         : "-";
 
   if (submitted) {
@@ -361,22 +550,88 @@ const Iscrizione = () => {
                   <div>
                     <label htmlFor="nome" className={labelClass}>Nome</label>
                     <input id="nome" className={ic("nome")} type="text" placeholder="Mario" value={form.nome} onChange={handleText("nome")} />
-                    {errors.nome && <p className="mt-1.5 text-xs text-red-600">{errors.nome}</p>}
+                    {fieldError("nome") && <p className="mt-1.5 text-xs text-red-600">{fieldError("nome")}</p>}
                   </div>
                   <div>
                     <label htmlFor="cognome" className={labelClass}>Cognome</label>
                     <input id="cognome" className={ic("cognome")} type="text" placeholder="Rossi" value={form.cognome} onChange={handleText("cognome")} />
-                    {errors.cognome && <p className="mt-1.5 text-xs text-red-600">{errors.cognome}</p>}
+                    {fieldError("cognome") && <p className="mt-1.5 text-xs text-red-600">{fieldError("cognome")}</p>}
                   </div>
                   <div>
                     <label htmlFor="dataNascita" className={labelClass}>Data di nascita</label>
                     <input id="dataNascita" className={ic("dataNascita")} type="date" value={form.dataNascita} onChange={handleText("dataNascita")} />
-                    {errors.dataNascita && <p className="mt-1.5 text-xs text-red-600">{errors.dataNascita}</p>}
+                    {fieldError("dataNascita") && <p className="mt-1.5 text-xs text-red-600">{fieldError("dataNascita")}</p>}
                   </div>
                   <div>
+                    <label htmlFor="sesso" className={labelClass}>Sesso</label>
+                    <select id="sesso" className={ic("sesso")} value={form.sesso} onChange={handleGenderChange}>
+                      <option value="">Seleziona...</option>
+                      <option value="M">Maschile</option>
+                      <option value="F">Femminile</option>
+                    </select>
+                    {fieldError("sesso") && <p className="mt-1.5 text-xs text-red-600">{fieldError("sesso")}</p>}
+                  </div>
+                  <div className="relative md:col-span-2" onBlur={() => window.setTimeout(() => setShowMunicipalitySuggestions(false), 120)}>
+                    <label htmlFor="comuneNascita" className={labelClass}>Comune di nascita</label>
+                    <input
+                      id="comuneNascita"
+                      className={ic("comuneNascita")}
+                      type="text"
+                      autoComplete="off"
+                      placeholder="Roma"
+                      value={form.comuneNascita}
+                      onChange={handleBirthPlaceChange}
+                      onFocus={() => setShowMunicipalitySuggestions(true)}
+                    />
+                    {showMunicipalitySuggestions && !form.comuneNascitaCode && form.comuneNascita.trim().length >= 2 && (
+                      <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-xl">
+                        {municipalityLoading ? (
+                          <p className="px-4 py-3 text-sm text-neutral-500">Ricerca comuni in corso...</p>
+                        ) : municipalitySuggestions.length > 0 ? (
+                          <ul className="max-h-64 overflow-y-auto py-1">
+                            {municipalitySuggestions.map((item) => (
+                              <li key={item.code}>
+                                <button
+                                  className="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-neutral-700 transition hover:bg-neutral-50"
+                                  type="button"
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    selectMunicipality(item);
+                                  }}
+                                >
+                                  <span>{item.name}</span>
+                                  <span className="text-xs text-neutral-400">
+                                    {[item.province, item.region].filter(Boolean).join(" - ")}
+                                  </span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="px-4 py-3 text-sm text-neutral-500">Nessun comune trovato.</p>
+                        )}
+                      </div>
+                    )}
+                    {fieldError("comuneNascita") ? (
+                      <p className="mt-1.5 text-xs text-red-600">{fieldError("comuneNascita")}</p>
+                    ) : municipalityLookupError ? (
+                      <p className="mt-1.5 text-xs text-amber-600">{municipalityLookupError}</p>
+                    ) : form.comuneNascitaCode ? (
+                      <p className="mt-1.5 text-xs text-neutral-400">Codice catastale: {form.comuneNascitaCode}</p>
+                    ) : (
+                      <p className="mt-1.5 text-xs text-neutral-400">Seleziona il comune dalla lista per calcolare il codice fiscale.</p>
+                    )}
+                  </div>
+                  <div className="md:col-span-2">
                     <label htmlFor="codiceFiscale" className={labelClass}>Codice fiscale</label>
-                    <input id="codiceFiscale" className={`${ic("codiceFiscale")} uppercase`} type="text" maxLength={16} placeholder="RSSMRA85A01H501Z" value={form.codiceFiscale} onChange={handleText("codiceFiscale")} />
-                    {errors.codiceFiscale && <p className="mt-1.5 text-xs text-red-600">{errors.codiceFiscale}</p>}
+                    <input id="codiceFiscale" className={`${ic("codiceFiscale")} uppercase`} type="text" maxLength={16} placeholder="RSSMRA85A01H501Z" value={form.codiceFiscale} onChange={handleFiscalCodeChange} />
+                    {fieldError("codiceFiscale") ? (
+                      <p className="mt-1.5 text-xs text-red-600">{fieldError("codiceFiscale")}</p>
+                    ) : fiscalCodeWarning ? (
+                      <p className="mt-1.5 text-xs text-amber-600">{fiscalCodeWarning}</p>
+                    ) : (
+                      <p className="mt-1.5 text-xs text-neutral-400">Il codice fiscale viene precompilato automaticamente e resta modificabile.</p>
+                    )}
                   </div>
                 </div>
 
@@ -527,7 +782,9 @@ const Iscrizione = () => {
                       { label: "Nome", value: form.nome },
                       { label: "Cognome", value: form.cognome },
                       { label: "Data di nascita", value: form.dataNascita },
-                      { label: "Codice fiscale", value: form.codiceFiscale.toUpperCase() },
+                      { label: "Sesso", value: genderLabel },
+                      { label: "Comune di nascita", value: form.comuneNascita },
+                      { label: "Codice fiscale", value: normalizeCodiceFiscale(form.codiceFiscale) },
                     ].map((item) => (
                       <div key={item.label}>
                         <dt className="text-xs text-neutral-500">{item.label}</dt>

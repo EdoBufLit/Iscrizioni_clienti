@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   fetchPublicOrganizationInfo,
   ingestPienissimoMember,
@@ -13,6 +13,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const PienissimoThankYouPage = () => {
   const { orgSlug } = useParams<{ orgSlug: string }>();
+  const [searchParams] = useSearchParams();
 
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -56,11 +57,20 @@ const PienissimoThankYouPage = () => {
   }, [orgSlug]);
 
   const normalizedEmail = useMemo(() => email.trim().toLowerCase(), [email]);
+  const queryCardToken = useMemo(() => {
+    const raw = (searchParams.get("card_token") ?? "").trim();
+    return raw || null;
+  }, [searchParams]);
+  const queryStatus = useMemo(
+    () => (searchParams.get("status") ?? "").trim().toLowerCase(),
+    [searchParams],
+  );
+  const queryWalletEnabled = searchParams.get("wallet") === "1";
   const isEmailValid = EMAIL_REGEX.test(normalizedEmail);
   const isLoading = status === "loading";
-  const isSuccess = status === "success";
-  const ingestStatus = successData?.status ?? null;
-  const isAlreadyIssued = ingestStatus === "already_issued";
+  const isSuccess = status === "success" || Boolean(queryCardToken);
+  const ingestStatus = successData?.status ?? (queryCardToken ? (queryStatus || "already_issued") : null);
+  const isAlreadyIssued = ingestStatus === "already_issued" || ingestStatus === "active_card";
 
   const canSubmit = Boolean(orgSlug) && !isLoading && normalizedEmail.length > 0 && isEmailValid;
 
@@ -116,7 +126,7 @@ const PienissimoThankYouPage = () => {
 
   // Build URLs relative to the current origin to avoid HTTP/HTTPS mixed-content blocks.
   // The backend may return http:// absolute URLs even when the page is served over https://.
-  const token = successData?.card_verification_token ?? null;
+  const token = successData?.card_verification_token ?? queryCardToken;
   const downloadUrl =
     successData?.download_pdf_url ??
     (token ? `/api/cards/${token}/download.pdf` : successData?.card_download_url ?? null);
@@ -124,7 +134,12 @@ const PienissimoThankYouPage = () => {
     successData?.verify_url ??
     (token ? `/api/cards/verify/${token}` : successData?.card_verification_url ?? null);
   const walletAppleUrl = successData?.card_wallet_apple_url ?? null;
-  const walletGoogleUrl = successData?.card_wallet_google_url ?? null;
+  const walletGoogleUrl =
+    successData?.card_wallet_google_url ??
+    (queryWalletEnabled ? "/wallet/google/add" : null);
+  const effectiveWalletEnabled = successData
+    ? Boolean(successData.wallet_enabled)
+    : (queryWalletEnabled || walletEnabled);
 
   return (
     <section className="py-16" data-reveal="fade-up">
@@ -204,7 +219,7 @@ const PienissimoThankYouPage = () => {
               )}
 
               {/* Wallet links — only show if actually enabled */}
-              {walletEnabled && (walletAppleUrl || walletGoogleUrl) && (
+              {effectiveWalletEnabled && (walletAppleUrl || walletGoogleUrl) && (
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {walletAppleUrl && (
                     <a

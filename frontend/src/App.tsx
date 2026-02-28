@@ -62,6 +62,7 @@ const App = () => {
           <Route path="associazioni" element={<Associazioni />} />
           <Route path="associazioni/:slug" element={<AffiliazioneDettaglio />} />
           <Route path="associazioni/:slug/iscrizione" element={<Iscrizione />} />
+          <Route path="associazioni/:orgSlug/tessera" element={<PienissimoThankYouPage />} />
           <Route path="contatti" element={<Contatti />} />
           <Route path="privacy" element={<Privacy />} />
           <Route path="login" element={<Login />} />

@@ -101,12 +101,36 @@ export type PublicOrganizationInfo = {
   wallet_enabled: boolean;
 };
 
+export type MunicipalitySearchItem = {
+  name: string;
+  province: string | null;
+  region: string | null;
+  code: string;
+};
+
 export async function fetchPublicOrganizationInfo(
   orgSlug: string,
 ): Promise<PublicOrganizationInfo> {
   const res = await fetch(`/api/public/orgs/${encodeURIComponent(orgSlug)}`);
   if (res.status === 404) throw new Error("Organization not found");
   if (!res.ok) throw new Error("Failed to fetch public organization info");
+  return res.json();
+}
+
+export async function searchMunicipalities(
+  query: string,
+  limit = 8,
+): Promise<MunicipalitySearchItem[]> {
+  const trimmed = query.trim();
+  if (trimmed.length < 2) {
+    return [];
+  }
+  const params = new URLSearchParams({
+    q: trimmed,
+    limit: String(limit),
+  });
+  const res = await fetch(`/api/municipalities?${params.toString()}`);
+  if (!res.ok) throw new Error("Failed to fetch municipalities");
   return res.json();
 }
 
@@ -216,6 +240,10 @@ export async function joinOrganization(
   data: {
     first_name: string;
     last_name: string;
+    birth_date: string;
+    birth_place: string;
+    birth_place_code: string;
+    gender: "M" | "F";
     email: string;
     phone: string;
     fiscal_code: string;
@@ -225,10 +253,24 @@ export async function joinOrganization(
     payment_method: "CASH" | "BONIFICO";
     id_document?: File | null;
   },
-): Promise<{ status: string; organization?: string; id?: number; email_sent?: boolean }> {
+): Promise<{
+  status: string;
+  organization?: string;
+  id?: number;
+  email_sent?: boolean;
+  warnings?: string[];
+  active_card_page_url?: string;
+  card_verification_token?: string;
+  card_verification_url?: string;
+  card_download_url?: string;
+}> {
   const body = new FormData();
   body.append("first_name", data.first_name);
   body.append("last_name", data.last_name);
+  body.append("birth_date", data.birth_date);
+  body.append("birth_place", data.birth_place);
+  body.append("birth_place_code", data.birth_place_code);
+  body.append("gender", data.gender);
   body.append("email", data.email);
   body.append("phone", data.phone);
   body.append("fiscal_code", data.fiscal_code);
