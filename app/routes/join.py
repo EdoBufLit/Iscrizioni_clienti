@@ -316,7 +316,10 @@ def check_signup_allowed(
     )
 
     if latest_member:
-        if latest_member.deleted_at is not None:
+        latest_member_status = (
+            str(getattr(latest_member, "status", "") or "").strip().lower()
+        )
+        if latest_member.deleted_at is not None or latest_member_status == "deleted":
             # Deleted, allow resubmission
             pass
         elif latest_member.status == MemberStatus.REJECTED:

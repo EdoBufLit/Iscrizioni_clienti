@@ -230,3 +230,63 @@ def test_org_with_auto_approve_signup_false_stays_pending(client, db):
     assert member is not None
     assert member.status == MemberStatus.PENDING_VERIFICATION
     assert member.card_no is None
+
+
+def test_join_submit_ignores_soft_deleted_status_member_for_existing_active_card(
+    client, db
+):
+    org = _ensure_org(db, f"join-soft-delete-{uuid.uuid4().hex[:6]}", with_batch=True)
+    setattr(org, "auto_approve_signup", True)
+    db.commit()
+    db.refresh(org)
+    email = f"soft-delete-{uuid.uuid4().hex[:8]}@example.com"
+    current_year = datetime.utcnow().year
+    batch = (
+        db.query(CardBatch)
+        .filter(
+            CardBatch.org_id == org.id,
+            CardBatch.year == current_year,
+            CardBatch.is_enabled.is_(True),
+            CardBatch.released_at.is_(None),
+        )
+        .order_by(CardBatch.id.desc())
+        .first()
+    )
+    assert batch is not None
+
+    legacy_member = Member(
+        org_id=org.id,
+        first_name="Legacy",
+        last_name="Deleted",
+        email=email,
+        phone="3330001111",
+        fiscal_code=f"SD{uuid.uuid4().hex[:14].upper()}",
+        status=MemberStatus.ACTIVE,
+        deleted_at=datetime.utcnow(),
+        card_no=max(int(batch.start_no) - 1, 1),
+        card_year=current_year,
+        signup_source=SignupSource.ASSONAM_FORM.value,
+        external_customer_id=f"email:{email}",
+    )
+    db.add(legacy_member)
+    db.commit()
+    db.refresh(legacy_member)
+    legacy_card_no = legacy_member.card_no
+
+    response = _join_submit(client, str(org.slug), email)
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["status"] == "issued"
+
+    db.expire_all()
+    new_member = (
+        db.query(Member)
+        .filter(Member.org_id == org.id, Member.email == email)
+        .order_by(Member.id.desc())
+        .first()
+    )
+    assert new_member is not None
+    assert new_member.status == MemberStatus.ACTIVE
+    assert new_member.card_no is not None
+    assert new_member.card_no != legacy_card_no
+    assert new_member.external_customer_id == f"email:{email}"
