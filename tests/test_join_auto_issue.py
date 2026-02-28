@@ -112,6 +112,7 @@ def test_tag_signup_auto_issues_active_card_and_returns_active_page(client, db):
             f"/associazioni/{org.slug}/tessera?card_token="
             in payload["active_card_page_url"]
         )
+        assert "status=issued" in payload["active_card_page_url"]
         assert payload["email_sent"] is True
         assert payload["card_verification_token"]
         assert payload["card_verification_url"].endswith(

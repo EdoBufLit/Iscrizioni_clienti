@@ -53,7 +53,9 @@ _ALLOWED_PAYMENT_METHODS = {
     PaymentMethod.CASH.value,
     PaymentMethod.BONIFICO.value,
 }
-_AUTO_ISSUE_CARD_VIEW_TEMPLATE = "/associazioni/{org_slug}/tessera?card_token={card_token}&status=active_card&wallet=1"
+_AUTO_ISSUE_CARD_VIEW_TEMPLATE = (
+    "/associazioni/{org_slug}/tessera?card_token={card_token}&status=issued&wallet=1"
+)
 
 
 def _normalize_payment_method(
