@@ -92,6 +92,24 @@ alembic revision --autogenerate -m "description"
 alembic downgrade -1
 ```
 
+### Runtime Build/Version Checks
+
+Use these commands on production to confirm which backend build is serving requests:
+
+```bash
+# Public version payload (includes git_sha/build_time when env is set)
+curl -s https://<your-domain>/api/version | jq
+
+# Local compose health/version check
+curl -s http://127.0.0.1:8000/api/version | jq
+
+# Verify running containers and detect stale replicas
+docker compose ps
+docker compose logs web --tail=200
+```
+
+`/api/version` is intended for runtime diagnostics and returns `version`, `git_sha`, `build_time`, and `request_id`.
+
 ## Integration API (Issuer Tessera)
 
 External management systems can issue members directly as active through:

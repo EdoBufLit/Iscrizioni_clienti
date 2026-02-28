@@ -27,6 +27,16 @@ def test_version(client):
     assert "build_time" in data
 
 
+def test_api_version(client):
+    r = client.get("/api/version")
+    assert r.status_code == 200
+    data = r.json()
+    assert "version" in data
+    assert "git_sha" in data
+    assert "build_time" in data
+    assert "request_id" in data
+
+
 def test_root_redirects_to_app(client):
     r = client.get("/", follow_redirects=False)
     # The root endpoint now renders home.html (200 OK) or 404 if SPA not built

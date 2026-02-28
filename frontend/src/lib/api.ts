@@ -93,6 +93,17 @@ export async function fetchOrganizationDetail(
   return res.json();
 }
 
+
+function resolveClientVersion(): string {
+  const raw =
+    import.meta.env.VITE_BUILD_SHA ||
+    import.meta.env.VITE_APP_VERSION ||
+    import.meta.env.MODE ||
+    "dev";
+  const normalized = String(raw).trim();
+  return normalized || "dev";
+}
+
 export type PublicOrganizationInfo = {
   slug: string;
   name: string;
@@ -264,6 +275,7 @@ export async function joinOrganization(
   card_verification_url?: string;
   card_download_url?: string;
 }> {
+  const clientVersion = resolveClientVersion();
   const body = new FormData();
   body.append("first_name", data.first_name);
   body.append("last_name", data.last_name);
@@ -280,12 +292,16 @@ export async function joinOrganization(
   }
   body.append("accept_privacy", String(data.accept_privacy));
   body.append("payment_method", data.payment_method);
+  body.append("client_version", clientVersion);
 
   if (data.id_document) {
     body.append("id_document", data.id_document);
   }
   const res = await fetch(`/api/join/${encodeURIComponent(orgSlug)}/submit`, {
     method: "POST",
+    headers: {
+      "X-Client-Version": clientVersion,
+    },
     body,
   });
   if (res.status === 404) throw new Error("Associazione non trovata.");

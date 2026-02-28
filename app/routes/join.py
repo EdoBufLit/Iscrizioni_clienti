@@ -101,6 +101,11 @@ def _resolve_frontend_base_url(request: Request) -> str:
     return str(request.base_url).rstrip("/")
 
 
+def _resolve_client_version(request: Request, form_value: str | None) -> str | None:
+    raw = (form_value or request.headers.get("x-client-version") or "").strip()
+    return raw or None
+
+
 def _normalize_gender(raw_value: str | None) -> str:
     normalized = (raw_value or "").strip().upper()
     if normalized not in {"M", "F"}:
@@ -621,14 +626,26 @@ async def api_join_submit_multipart(
     accepted_statute_version: Optional[str] = Form(None),
     accept_privacy: bool = Form(...),
     payment_method: Optional[str] = Form(None),
+    client_version: Optional[str] = Form(None),
     accepted_privacy_version: Optional[str] = Form(None),  # Usually implied by org
     id_document: Optional[UploadFile] = File(None),
     fiscal_code_document: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
     join_limiter.check(get_client_ip(request))
+    request_id = get_request_id(request)
+    request_user_agent = request.headers.get("user-agent")
+    effective_client_version = _resolve_client_version(request, client_version)
+    normalized_org_slug = org_slug.strip().lower()
 
-    org = db.query(Organization).filter(Organization.slug == org_slug).first()
+    org = (
+        db.query(Organization)
+        .filter(
+            func.lower(Organization.slug) == normalized_org_slug,
+            Organization.deleted_at.is_(None),
+        )
+        .first()
+    )
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
@@ -664,6 +681,25 @@ async def api_join_submit_multipart(
         birth_place_code=municipality["code"],
         org_slug=org_slug,
         email=normalized_email,
+    )
+    logger.info(
+        "join_submit_start request_id=%s git_sha=%s org_slug=%s org_id=%s auto_approve_signup=%s email=%s fiscal_code=%s user_agent=%s client_version=%s",
+        request_id,
+        settings.GIT_SHA or "unknown",
+        org.slug,
+        org.id,
+        auto_issue_enabled,
+        normalized_email,
+        normalized_fiscal_code,
+        request_user_agent,
+        effective_client_version or "-",
+    )
+    logger.info(
+        "join_submit_branch request_id=%s branch=%s org_slug=%s org_id=%s",
+        request_id,
+        "AUTO_APPROVE" if auto_issue_enabled else "MANUAL_REVIEW",
+        org.slug,
+        org.id,
     )
 
     existing = check_signup_allowed(
@@ -704,7 +740,7 @@ async def api_join_submit_multipart(
                 member.signup_source = SignupSource.ASSONAM_FORM.value
             member.payment_method = normalized_payment_method
             member.signup_ip = client_ip
-            member.signup_user_agent = request.headers.get("user-agent")
+            member.signup_user_agent = request_user_agent
 
             # Remove old documents (files + DB rows)
             old_docs = (
@@ -745,7 +781,7 @@ async def api_join_submit_multipart(
                 accepted_privacy_version=org.privacy_version,
                 signup_source=SignupSource.ASSONAM_FORM.value,
                 signup_ip=client_ip,
-                signup_user_agent=request.headers.get("user-agent"),
+                signup_user_agent=request_user_agent,
             )
             db.add(member)
             db.flush()
@@ -823,9 +859,27 @@ async def api_join_submit_multipart(
                 normalized_email
             )
             member.signup_source = SignupSource.ASSONAM_FORM.value
+            logger.info(
+                "join_submit_commit_before request_id=%s phase=prepare_auto_issue member_id=%s org_id=%s",
+                request_id,
+                member.id,
+                org.id,
+            )
             db.commit()
+            logger.info(
+                "join_submit_commit_after request_id=%s phase=prepare_auto_issue member_id=%s org_id=%s",
+                request_id,
+                member.id,
+                org.id,
+            )
             member_persisted = True
 
+            logger.info(
+                "join_submit_auto_issue_call request_id=%s member_id=%s org_id=%s",
+                request_id,
+                member.id,
+                org.id,
+            )
             auto_issue_result = issue_member_from_integration(
                 db,
                 IssueMemberCommand(
@@ -840,7 +894,9 @@ async def api_join_submit_multipart(
                     signup_source=SignupSource.ASSONAM_FORM.value,
                     integration_name="web_signup_auto",
                     request_ip=client_ip,
-                    request_user_agent=request.headers.get("user-agent"),
+                    request_user_agent=request_user_agent,
+                    request_id=request_id,
+                    client_version=effective_client_version,
                     backend_base_url=(
                         settings.BASE_URL or str(request.base_url).rstrip("/")
                     ).rstrip("/"),
@@ -852,13 +908,36 @@ async def api_join_submit_multipart(
             )
             db.refresh(member)
         else:
+            logger.info(
+                "join_submit_commit_before request_id=%s phase=manual_review member_id=%s org_id=%s",
+                request_id,
+                member.id,
+                org.id,
+            )
             db.commit()
+            logger.info(
+                "join_submit_commit_after request_id=%s phase=manual_review member_id=%s org_id=%s",
+                request_id,
+                member.id,
+                org.id,
+            )
             member_persisted = True
 
-    except HTTPException:
+    except HTTPException as exc:
+        logger.warning(
+            "join_submit_http_exception request_id=%s status_code=%s detail=%s rollback=1",
+            request_id,
+            exc.status_code,
+            exc.detail,
+        )
         db.rollback()
         raise
     except IntegrityError:
+        logger.warning(
+            "join_submit_integrity_error request_id=%s rollback=1",
+            request_id,
+            exc_info=True,
+        )
         db.rollback()
         if not member_persisted:
             for p in [rel_path_id, rel_path_fc]:
@@ -872,6 +951,10 @@ async def api_join_submit_multipart(
             detail="Esiste già una iscrizione associata a questi dati.",
         )
     except Exception as e:
+        logger.exception(
+            "join_submit_unexpected_exception request_id=%s rollback=1",
+            request_id,
+        )
         db.rollback()
         if not member_persisted:
             # Cleanup only when the signup was not persisted yet.
@@ -881,16 +964,33 @@ async def api_join_submit_multipart(
                         os.remove(os.path.join(settings.UPLOAD_DIR, p))
                     except OSError:
                         pass
-        rid = get_request_id(request)
-        logger.exception("Error in multipart submit [request_id=%s]", rid)
         raise HTTPException(
             status_code=500,
-            detail=f"Errore nel salvataggio della richiesta. (ref: {rid})",
+            detail=f"Errore nel salvataggio della richiesta. (ref: {request_id})",
         )
 
     audit.join_submitted(org_slug=org_slug, org_id=org.id, ip=client_ip)
 
+    if auto_issue_enabled and auto_issue_result is None:
+        logger.error(
+            "join_submit_guardrail_block_manual_email request_id=%s org_id=%s reason=auto_issue_missing_result",
+            request_id,
+            org.id,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Errore emissione tessera automatica. (ref: {request_id})",
+        )
+
     if auto_issue_result is not None:
+        logger.info(
+            "join_submit_auto_issue_completed request_id=%s org_id=%s member_id=%s outcome=%s email_sent=%s",
+            request_id,
+            org.id,
+            auto_issue_result.member_id,
+            auto_issue_result.outcome,
+            auto_issue_result.email_sent,
+        )
         return {
             "status": "issued",
             "id": auto_issue_result.member_id,
@@ -905,6 +1005,14 @@ async def api_join_submit_multipart(
     # Send confirmation to user (Post-commit)
     email_sent = False
     try:
+        logger.info(
+            "join_submit_email_before_send request_id=%s template=%s org_id=%s member_id=%s email=%s",
+            request_id,
+            "manual_review",
+            org.id,
+            member.id,
+            normalized_email,
+        )
         display_name = resolve_club_display_name(org) or org.name
         if send_email(
             to_email=email,
@@ -912,10 +1020,31 @@ async def api_join_submit_multipart(
             body="Abbiamo ricevuto la tua richiesta e i documenti. Un amministratore li verificherà a breve.",
         ):
             email_sent = True
+            logger.info(
+                "join_submit_email_after_send request_id=%s template=%s sent=%s org_id=%s member_id=%s",
+                request_id,
+                "manual_review",
+                email_sent,
+                org.id,
+                member.id,
+            )
         else:
-            logger.warning("Failed to send submission email to %s", email)
+            logger.warning(
+                "join_submit_email_after_send request_id=%s template=%s sent=%s org_id=%s member_id=%s",
+                request_id,
+                "manual_review",
+                email_sent,
+                org.id,
+                member.id,
+            )
     except Exception:
-        logger.exception("Exception sending submission email to %s", email)
+        logger.exception(
+            "join_submit_email_exception request_id=%s template=%s org_id=%s member_id=%s",
+            request_id,
+            "manual_review",
+            org.id,
+            member.id,
+        )
 
     return {
         "status": "received",

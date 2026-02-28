@@ -1,5 +1,6 @@
 from datetime import datetime
 import uuid
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy import func
@@ -336,3 +337,51 @@ def test_join_submit_uses_active_card_status_when_card_already_exists(client, db
     assert payload["status"] == "issued"
     assert payload["active_card_page_url"] is not None
     assert "status=active_card" in payload["active_card_page_url"]
+
+
+def test_auto_approve_signup_uses_card_active_email_template(client, db):
+    org = _ensure_org(db, f"join-template-auto-{uuid.uuid4().hex[:6]}", with_batch=True)
+    setattr(org, "auto_approve_signup", True)
+    db.commit()
+    db.refresh(org)
+
+    email = f"template-auto-{uuid.uuid4().hex[:8]}@example.com"
+    with (
+        patch(
+            "app.services.integration_issuer.send_email_html", return_value=True
+        ) as send_card_email,
+        patch("app.routes.join.send_email", return_value=True) as send_manual_email,
+    ):
+        response = _join_submit(client, str(org.slug), email)
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["status"] == "issued"
+    assert send_card_email.called
+    assert send_manual_email.call_count == 0
+
+
+def test_manual_review_signup_uses_manual_review_email_template(client, db):
+    org = _ensure_org(
+        db, f"join-template-manual-{uuid.uuid4().hex[:6]}", with_batch=False
+    )
+    setattr(org, "auto_approve_signup", False)
+    db.commit()
+    db.refresh(org)
+
+    email = f"template-manual-{uuid.uuid4().hex[:8]}@example.com"
+    with (
+        patch(
+            "app.services.integration_issuer.send_email_html", return_value=True
+        ) as send_card_email,
+        patch("app.routes.join.send_email", return_value=True) as send_manual_email,
+    ):
+        response = _join_submit(client, str(org.slug), email)
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["status"] == "received"
+    assert send_card_email.call_count == 0
+    assert send_manual_email.call_count == 1
+    _, kwargs = send_manual_email.call_args
+    assert "Un amministratore li verificherà a breve." in kwargs.get("body", "")

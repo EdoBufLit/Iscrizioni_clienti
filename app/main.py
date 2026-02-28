@@ -89,8 +89,8 @@ app = FastAPI(
     openapi_url=None if _is_https else "/openapi.json",
 )
 
-# ── Middleware stack (last added = outermost) ─────────────────────
 
+# ── Middleware stack (last added = outermost) ─────────────────────
 # Exception handlers (JSON + request_id for frontend-friendly errors)
 def _first_validation_message(errors: list[dict]) -> str:
     if not errors:
@@ -115,7 +115,9 @@ def _http_detail_message(detail: object, default: str) -> str:
 
 
 @app.exception_handler(RequestValidationError)
-async def request_validation_error_handler(request: Request, exc: RequestValidationError):
+async def request_validation_error_handler(
+    request: Request, exc: RequestValidationError
+):
     errors = exc.errors()
     return JSONResponse(
         status_code=422,
@@ -147,6 +149,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
         headers=exc.headers,
     )
 
+
 # 1. Session — innermost, closest to route handlers
 # max_age=1800 = 30 minutes session timeout for security
 app.add_middleware(
@@ -162,7 +165,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-ASSONAM-API-KEY"],
+    allow_headers=["Content-Type", "X-ASSONAM-API-KEY", "X-Client-Version"],
     allow_credentials=True,
 )
 
@@ -183,7 +186,9 @@ if _static_path.is_dir():
     app.mount("/static", StaticFiles(directory=_static_path), name="static")
 
 _uploads_path = Path(settings.UPLOAD_DIR)
-app.mount("/uploads", StaticFiles(directory=_uploads_path, check_dir=False), name="uploads")
+app.mount(
+    "/uploads", StaticFiles(directory=_uploads_path, check_dir=False), name="uploads"
+)
 
 # ── Routers ───────────────────────────────────────────────────────
 
@@ -215,6 +220,16 @@ def version():
         "version": settings.PROJECT_VERSION,
         "git_sha": settings.GIT_SHA or None,
         "build_time": settings.BUILD_TIME or None,
+    }
+
+
+@app.get("/api/version")
+def api_version(request: Request):
+    return {
+        "version": settings.PROJECT_VERSION,
+        "git_sha": settings.GIT_SHA or None,
+        "build_time": settings.BUILD_TIME or None,
+        "request_id": get_request_id(request),
     }
 
 

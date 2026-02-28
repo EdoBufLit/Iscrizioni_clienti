@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 import hashlib
+import logging
 from urllib.parse import quote_plus
 
 from fastapi import HTTPException
@@ -30,6 +31,9 @@ from app.services.org_branding import (
     resolve_club_display_name,
 )
 from app.utils import generate_token, hash_token, send_email_html
+
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_org_logo_disk_path(org: Organization) -> str | None:
@@ -79,6 +83,8 @@ class IssueMemberCommand:
     integration_name: str | None = None
     request_ip: str | None = None
     request_user_agent: str | None = None
+    request_id: str | None = None
+    client_version: str | None = None
     backend_base_url: str | None = None
     frontend_base_url: str | None = None
     send_email_once: bool = False
@@ -254,6 +260,8 @@ def _has_deleted_member_email_conflict(
 def issue_member_from_integration(
     db: Session, command: IssueMemberCommand
 ) -> IssueMemberResult:
+    request_id = _normalize_text(command.request_id) or "-"
+    client_version = _normalize_text(command.client_version) or "-"
     org = _resolve_active_organization(db, command.org_id)
 
     external_customer_id = _normalize_text(command.external_customer_id)
@@ -275,6 +283,17 @@ def issue_member_from_integration(
     )
     decision_note = (
         _normalize_text(command.decision_note) or "Auto-approved via integration"
+    )
+    logger.info(
+        "integration_issue_start request_id=%s git_sha=%s org_id=%s org_slug=%s email=%s signup_source=%s integration_name=%s client_version=%s",
+        request_id,
+        settings.GIT_SHA or "unknown",
+        org.id,
+        org.slug,
+        email,
+        signup_source,
+        command.integration_name,
+        client_version,
     )
 
     if command.allow_deleted_reissue:
@@ -324,11 +343,27 @@ def issue_member_from_integration(
         )
         db.add(member)
         try:
+            logger.info(
+                "integration_issue_commit_before request_id=%s phase=create_member org_id=%s email=%s",
+                request_id,
+                org.id,
+                email,
+            )
             db.commit()
+            logger.info(
+                "integration_issue_commit_after request_id=%s phase=create_member org_id=%s",
+                request_id,
+                org.id,
+            )
             db.refresh(member)
             outcome = "created"
         except IntegrityError:
             # Handle concurrent idempotent inserts gracefully.
+            logger.warning(
+                "integration_issue_integrity_error request_id=%s phase=create_member rollback=1",
+                request_id,
+                exc_info=True,
+            )
             db.rollback()
             member = (
                 db.query(Member)
@@ -391,7 +426,21 @@ def issue_member_from_integration(
         if outcome == "reused":
             outcome = "reissued"
 
+    logger.info(
+        "integration_issue_commit_before request_id=%s phase=upsert_member_and_card member_id=%s org_id=%s outcome=%s",
+        request_id,
+        member.id,
+        org.id,
+        outcome,
+    )
     db.commit()
+    logger.info(
+        "integration_issue_commit_after request_id=%s phase=upsert_member_and_card member_id=%s org_id=%s outcome=%s",
+        request_id,
+        member.id,
+        org.id,
+        outcome,
+    )
     db.refresh(member)
 
     fallback_backend_base = settings.BASE_URL.rstrip("/") if settings.BASE_URL else ""
@@ -428,8 +477,24 @@ def issue_member_from_integration(
     if command.send_email_once and delivered_marker is not None and not issued_new_card:
         should_send_email = False
         login_hint = "magic_link_already_sent"
+        logger.info(
+            "integration_issue_email_skipped request_id=%s template=%s member_id=%s reason=%s",
+            request_id,
+            "card_active",
+            member.id,
+            "send_email_once_already_sent",
+        )
 
     if should_send_email:
+        logger.info(
+            "integration_issue_email_before_send request_id=%s template=%s member_id=%s org_id=%s email=%s outcome=%s",
+            request_id,
+            "card_active",
+            member.id,
+            org.id,
+            member.email,
+            outcome,
+        )
         magic_link_url = _build_magic_link(db, member.id, frontend_base)
         assonam_logo_url = resolve_assonam_logo_url(
             frontend_base_url=frontend_base,
@@ -508,12 +573,37 @@ def issue_member_from_integration(
             html_body=html_body,
             inline_images=inline_images if inline_images else None,
         )
+        logger.info(
+            "integration_issue_email_after_send request_id=%s template=%s member_id=%s sent=%s",
+            request_id,
+            "card_active",
+            member.id,
+            email_sent,
+        )
         if email_sent:
             delivered_at = datetime.utcnow()
             member.card_email_sent_at = delivered_at
             member.card_delivered_at = delivered_at
+            logger.info(
+                "integration_issue_commit_before request_id=%s phase=mark_card_delivered member_id=%s",
+                request_id,
+                member.id,
+            )
             db.commit()
+            logger.info(
+                "integration_issue_commit_after request_id=%s phase=mark_card_delivered member_id=%s",
+                request_id,
+                member.id,
+            )
         login_hint = "magic_link_sent" if email_sent else "magic_link_send_failed"
+    else:
+        logger.info(
+            "integration_issue_email_skipped request_id=%s template=%s member_id=%s reason=%s",
+            request_id,
+            "card_active",
+            member.id,
+            "disabled_or_missing_email",
+        )
 
     audit.log_operation(
         db,
@@ -527,6 +617,8 @@ def issue_member_from_integration(
             ).hexdigest()[:16],
             "signup_source": signup_source,
             "integration_name": command.integration_name,
+            "request_id": request_id,
+            "client_version": client_version,
             "email_sent": email_sent,
             "outcome": outcome,
             "issued_new_card": issued_new_card,
@@ -574,6 +666,8 @@ def issue_member_from_ingest(
             integration_name=command.integration_name,
             request_ip=command.request_ip,
             request_user_agent=command.request_user_agent,
+            request_id=command.request_id,
+            client_version=command.client_version,
             backend_base_url=command.backend_base_url,
             frontend_base_url=command.frontend_base_url,
             send_email_once=True,
