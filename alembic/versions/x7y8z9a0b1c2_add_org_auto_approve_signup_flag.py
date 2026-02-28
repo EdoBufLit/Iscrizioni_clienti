@@ -34,12 +34,28 @@ def upgrade() -> None:
             ),
         )
     elif not isinstance(columns["auto_approve_signup"]["type"], sa.Boolean):
+        bind.execute(
+            sa.text(
+                """
+                ALTER TABLE organizations
+                ALTER COLUMN auto_approve_signup DROP DEFAULT
+                """
+            )
+        )
         op.alter_column(
             "organizations",
             "auto_approve_signup",
-            existing_type=columns["auto_approve_signup"]["type"],
+            existing_type=sa.Integer(),
             type_=sa.Boolean(),
             postgresql_using="(auto_approve_signup::int <> 0)",
+        )
+        bind.execute(
+            sa.text(
+                """
+                ALTER TABLE organizations
+                ALTER COLUMN auto_approve_signup SET DEFAULT false
+                """
+            )
         )
 
     bind.execute(
