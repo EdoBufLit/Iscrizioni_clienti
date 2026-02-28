@@ -67,6 +67,8 @@ class IssueMemberCommand:
     frontend_base_url: str | None = None
     send_email_once: bool = False
     allow_deleted_reissue: bool = True
+    decision_note: str | None = None
+    card_view_url_template: str | None = None
 
 
 @dataclass(frozen=True)
@@ -85,6 +87,7 @@ class IssueMemberResult:
     email_sent: bool
     org_slug: str
     outcome: str
+    card_page_url: str | None
 
 
 def _normalize_text(value: str | None) -> str | None:
@@ -133,6 +136,27 @@ def _build_card_links(member: Member, backend_base: str) -> tuple[str, str, str,
     return token, verification_url, download_url, wallet_apple_url, wallet_google_url
 
 
+def _build_frontend_card_page_url(
+    *,
+    frontend_base: str,
+    card_view_url_template: str | None,
+    org_slug: str,
+    card_token: str,
+) -> str | None:
+    template = _normalize_text(card_view_url_template)
+    if not template:
+        return None
+
+    path = template.format(
+        org_slug=org_slug,
+        card_token=card_token,
+    )
+    if path.startswith("http://") or path.startswith("https://"):
+        return path
+    normalized_path = path if path.startswith("/") else f"/{path}"
+    return f"{frontend_base.rstrip('/')}{normalized_path}"
+
+
 def _cleanup_deleted_conflicts(
     db: Session,
     *,
@@ -170,6 +194,10 @@ def _cleanup_deleted_conflicts(
         member.email = None
         member.phone = None
         member.fiscal_code = None
+        member.birth_date = None
+        member.birth_place = None
+        member.birth_place_code = None
+        member.gender = None
         member.password_hash = None
         member.external_customer_id = None
         member.card_no = None
@@ -218,6 +246,7 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
     phone = _normalize_text(command.phone)
     fiscal_code = _normalize_text(command.fiscal_code)
     signup_source = _normalize_text(command.signup_source) or SignupSource.PIENISSIMO.value
+    decision_note = _normalize_text(command.decision_note) or "Auto-approved via integration"
 
     if command.allow_deleted_reissue:
         _cleanup_deleted_conflicts(
@@ -259,7 +288,7 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
             external_customer_id=external_customer_id,
             joined_at=now,
             decision_at=now,
-            decision_notes="Auto-approved via integration",
+            decision_notes=decision_note,
             is_manual=False,
             signup_ip=command.request_ip,
             signup_user_agent=command.request_user_agent,
@@ -302,7 +331,7 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
         if not member.joined_at:
             member.joined_at = now
         member.decision_at = now
-        member.decision_notes = "Auto-approved via integration"
+        member.decision_notes = decision_note
         member.is_manual = False
 
     issued_new_card = False
@@ -350,6 +379,12 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
         wallet_apple_url,
         wallet_google_url,
     ) = _build_card_links(member, backend_base)
+    card_page_url = _build_frontend_card_page_url(
+        frontend_base=frontend_base,
+        card_view_url_template=command.card_view_url_template,
+        org_slug=org.slug,
+        card_token=verification_token,
+    )
     wallet_enabled = False
 
     email_sent = False
@@ -376,7 +411,7 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
             wallet_add_url = f"{frontend_base.rstrip('/')}/wallet/google/add"
             if member.email:
                 wallet_add_url = f"{wallet_add_url}?email={quote_plus(member.email)}"
-        card_view_url = magic_link_url
+        card_view_url = card_page_url or magic_link_url
         statute_url = f"{frontend_base.rstrip('/')}/dashboard/documenti"
 
         # Generate card PNG for inline email embed (CID)
@@ -476,6 +511,7 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
         email_sent=email_sent,
         org_slug=org.slug,
         outcome=outcome,
+        card_page_url=card_page_url,
     )
 
 
@@ -502,5 +538,7 @@ def issue_member_from_ingest(
             frontend_base_url=command.frontend_base_url,
             send_email_once=True,
             allow_deleted_reissue=False,
+            decision_note=command.decision_note,
+            card_view_url_template=command.card_view_url_template,
         ),
     )
