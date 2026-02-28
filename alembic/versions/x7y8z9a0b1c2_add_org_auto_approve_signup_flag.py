@@ -21,7 +21,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
-    columns = {col["name"] for col in inspector.get_columns("organizations")}
+    columns = {col["name"]: col for col in inspector.get_columns("organizations")}
 
     if "auto_approve_signup" not in columns:
         op.add_column(
@@ -30,9 +30,35 @@ def upgrade() -> None:
                 "auto_approve_signup",
                 sa.Boolean(),
                 nullable=False,
-                server_default=sa.false(),
+                server_default=sa.text("false"),
             ),
         )
+    elif not isinstance(columns["auto_approve_signup"]["type"], sa.Boolean):
+        op.alter_column(
+            "organizations",
+            "auto_approve_signup",
+            existing_type=columns["auto_approve_signup"]["type"],
+            type_=sa.Boolean(),
+            postgresql_using="(auto_approve_signup::int <> 0)",
+        )
+
+    bind.execute(
+        sa.text(
+            """
+            UPDATE organizations
+               SET auto_approve_signup = FALSE
+             WHERE auto_approve_signup IS NULL
+            """
+        )
+    )
+
+    op.alter_column(
+        "organizations",
+        "auto_approve_signup",
+        existing_type=sa.Boolean(),
+        nullable=False,
+        server_default=sa.text("false"),
+    )
 
     bind.execute(
         sa.text(
