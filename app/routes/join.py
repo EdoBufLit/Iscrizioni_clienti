@@ -54,7 +54,7 @@ _ALLOWED_PAYMENT_METHODS = {
     PaymentMethod.BONIFICO.value,
 }
 _AUTO_ISSUE_CARD_VIEW_TEMPLATE = (
-    "/associazioni/{org_slug}/tessera?card_token={card_token}&status=issued&wallet=1"
+    "/associazioni/{org_slug}/tessera?card_token={card_token}&status={status}&wallet=1"
 )
 
 

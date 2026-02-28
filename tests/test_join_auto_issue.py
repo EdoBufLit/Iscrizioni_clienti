@@ -291,3 +291,48 @@ def test_join_submit_ignores_soft_deleted_status_member_for_existing_active_card
     assert new_member.card_no is not None
     assert new_member.card_no != legacy_card_no
     assert new_member.external_customer_id == f"email:{email}"
+
+
+def test_join_submit_uses_active_card_status_when_card_already_exists(client, db):
+    org = _ensure_org(db, f"join-existing-card-{uuid.uuid4().hex[:6]}", with_batch=True)
+    setattr(org, "auto_approve_signup", True)
+    db.commit()
+    db.refresh(org)
+
+    email = f"existing-card-{uuid.uuid4().hex[:8]}@example.com"
+    current_year = datetime.utcnow().year
+    batch = (
+        db.query(CardBatch)
+        .filter(
+            CardBatch.org_id == org.id,
+            CardBatch.year == current_year,
+            CardBatch.is_enabled.is_(True),
+            CardBatch.released_at.is_(None),
+        )
+        .order_by(CardBatch.id.desc())
+        .first()
+    )
+    assert batch is not None
+
+    member = Member(
+        org_id=org.id,
+        first_name="Reuse",
+        last_name="Card",
+        email=email,
+        phone="3331112222",
+        fiscal_code=f"RC{uuid.uuid4().hex[:14].upper()}",
+        status=MemberStatus.PENDING_VERIFICATION,
+        card_no=int(batch.start_no),
+        card_year=current_year,
+        signup_source=SignupSource.ASSONAM_FORM.value,
+        external_customer_id=f"email:{email}",
+    )
+    db.add(member)
+    db.commit()
+
+    response = _join_submit(client, str(org.slug), email)
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["status"] == "issued"
+    assert payload["active_card_page_url"] is not None
+    assert "status=active_card" in payload["active_card_page_url"]

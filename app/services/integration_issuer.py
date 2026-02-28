@@ -13,7 +13,14 @@ import os
 from app import audit
 from app.config import settings
 from app.email_templates.member_card_email import build_member_card_email
-from app.models import Member, MemberStatus, Organization, SignupSource, Token, TokenType
+from app.models import (
+    Member,
+    MemberStatus,
+    Organization,
+    SignupSource,
+    Token,
+    TokenType,
+)
 from app.services.card_allocation import allocate_next_card, release_card_number
 from app.services.card_verification import build_card_verification_token
 from app.services.org_branding import (
@@ -32,7 +39,9 @@ def _resolve_org_logo_disk_path(org: Organization) -> str | None:
     slug = (getattr(org, "slug", None) or "").strip().lower()
     if slug:
         static_p = os.path.normpath(
-            os.path.join(os.path.dirname(__file__), "..", "static", "card-logos", f"{slug}.png")
+            os.path.join(
+                os.path.dirname(__file__), "..", "static", "card-logos", f"{slug}.png"
+            )
         )
         return static_p if os.path.exists(static_p) else None
     return None
@@ -44,7 +53,14 @@ def _resolve_assonam_disk_path() -> str | None:
         p = os.path.join(static_dir, "logo-transparent.png")
         return p if os.path.exists(p) else None
     rel = os.path.normpath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "public", "logo-transparent.png")
+        os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "..",
+            "frontend",
+            "public",
+            "logo-transparent.png",
+        )
     )
     return rel if os.path.exists(rel) else None
 
@@ -112,16 +128,21 @@ def _build_magic_link(db: Session, member_id: int, frontend_base: str) -> str:
         member_id=member_id,
         purpose=TokenType.LOGIN_MAGIC_LINK,
         token_hash=hash_token(token_str),
-        expires_at=datetime.utcnow() + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES),
+        expires_at=datetime.utcnow()
+        + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES),
     )
     db.add(token)
     db.commit()
     return f"{frontend_base}/auth/verify?token={token_str}&role=member"
 
 
-def _build_card_links(member: Member, backend_base: str) -> tuple[str, str, str, str, str]:
+def _build_card_links(
+    member: Member, backend_base: str
+) -> tuple[str, str, str, str, str]:
     if member.card_no is None or member.card_year is None:
-        raise HTTPException(status_code=409, detail="Unable to issue card verification URL")
+        raise HTTPException(
+            status_code=409, detail="Unable to issue card verification URL"
+        )
 
     token = build_card_verification_token(
         member_id=member.id,
@@ -142,6 +163,7 @@ def _build_frontend_card_page_url(
     card_view_url_template: str | None,
     org_slug: str,
     card_token: str,
+    status: str = "issued",
 ) -> str | None:
     template = _normalize_text(card_view_url_template)
     if not template:
@@ -150,6 +172,7 @@ def _build_frontend_card_page_url(
     path = template.format(
         org_slug=org_slug,
         card_token=card_token,
+        status=status,
     )
     if path.startswith("http://") or path.startswith("https://"):
         return path
@@ -228,7 +251,9 @@ def _has_deleted_member_email_conflict(
     return deleted_member is not None
 
 
-def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> IssueMemberResult:
+def issue_member_from_integration(
+    db: Session, command: IssueMemberCommand
+) -> IssueMemberResult:
     org = _resolve_active_organization(db, command.org_id)
 
     external_customer_id = _normalize_text(command.external_customer_id)
@@ -245,8 +270,12 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
     last_name = _normalize_text(command.last_name)
     phone = _normalize_text(command.phone)
     fiscal_code = _normalize_text(command.fiscal_code)
-    signup_source = _normalize_text(command.signup_source) or SignupSource.PIENISSIMO.value
-    decision_note = _normalize_text(command.decision_note) or "Auto-approved via integration"
+    signup_source = (
+        _normalize_text(command.signup_source) or SignupSource.PIENISSIMO.value
+    )
+    decision_note = (
+        _normalize_text(command.decision_note) or "Auto-approved via integration"
+    )
 
     if command.allow_deleted_reissue:
         _cleanup_deleted_conflicts(
@@ -370,8 +399,12 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
     if not backend_base:
         backend_base = "http://localhost:8000"
 
-    configured_frontend = settings.FRONTEND_URL.rstrip("/") if settings.FRONTEND_URL else ""
-    frontend_base = (command.frontend_base_url or configured_frontend or backend_base).rstrip("/")
+    configured_frontend = (
+        settings.FRONTEND_URL.rstrip("/") if settings.FRONTEND_URL else ""
+    )
+    frontend_base = (
+        command.frontend_base_url or configured_frontend or backend_base
+    ).rstrip("/")
     (
         verification_token,
         verification_url,
@@ -384,6 +417,7 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
         card_view_url_template=command.card_view_url_template,
         org_slug=org.slug,
         card_token=verification_token,
+        status="active_card" if outcome == "reused" else "issued",
     )
     wallet_enabled = False
 
@@ -404,7 +438,10 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
         organization_logo_url = resolve_card_logo_url(org, base_url=backend_base)
         club_display_name = resolve_club_display_name(org) or org.name
         subject = resolve_card_email_subject(org)
-        full_name = f"{(member.first_name or '').strip()} {(member.last_name or '').strip()}".strip() or email
+        full_name = (
+            f"{(member.first_name or '').strip()} {(member.last_name or '').strip()}".strip()
+            or email
+        )
         if "token=" in magic_link_url and "role=member" in magic_link_url:
             wallet_add_url = f"{magic_link_url}&next=/wallet/google/add"
         else:
@@ -418,6 +455,7 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
         card_image_bytes: bytes | None = None
         try:
             from app.services.card_image import generate_card_image_bytes
+
             card_image_bytes = generate_card_image_bytes(
                 member_full_name=full_name,
                 organization_name=org.name,
@@ -436,12 +474,14 @@ def issue_member_from_integration(db: Session, command: IssueMemberCommand) -> I
         inline_images: list[dict] = []
         if card_image_bytes:
             card_image_cid = "card_front@assonam"
-            inline_images.append({
-                "cid": card_image_cid,
-                "content_type": "image/png",
-                "data": card_image_bytes,
-                "filename": "tessera.png",
-            })
+            inline_images.append(
+                {
+                    "cid": card_image_cid,
+                    "content_type": "image/png",
+                    "data": card_image_bytes,
+                    "filename": "tessera.png",
+                }
+            )
 
         text_body, html_body = build_member_card_email(
             member_full_name=full_name,
