@@ -13,6 +13,10 @@ def _purge_member_pii(member: Member, now: datetime) -> None:
     member.email = None
     member.phone = None
     member.fiscal_code = None
+    member.birth_date = None
+    member.birth_place = None
+    member.birth_place_code = None
+    member.gender = None
     member.password_hash = None
     member.first_name = "EXPIRED"
     member.last_name = "MEMBER"

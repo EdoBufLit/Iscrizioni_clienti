@@ -14,6 +14,7 @@ from app.models import (
     OrgAdminToken,
 )
 from app.utils import hash_token
+from tests.signup_payloads import build_join_submit_data
 
 
 @pytest.fixture
@@ -89,16 +90,15 @@ def test_join_submit_without_identity_document_ok(client, db):
 
     resp = client.post(
         f"/api/join/{org.slug}/submit",
-        data={
-            "first_name": "NoDoc",
-            "last_name": "Submit",
-            "email": email,
-            "phone": "333000111",
-            "fiscal_code": "NODCSM80A01H501Z",
-            "payment_method": "CASH",
-            "accept_statute": "true",
-            "accept_privacy": "true",
-        },
+        data=build_join_submit_data(
+            first_name="NoDoc",
+            last_name="Submit",
+            email=email,
+            phone="333000111",
+            payment_method="CASH",
+            accept_statute="true",
+            accept_privacy="true",
+        ),
     )
     assert resp.status_code == 200, resp.text
     payload = resp.json()

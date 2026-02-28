@@ -4,6 +4,7 @@ from app.models import AdminUser, AdminRole, Organization, Member, MemberStatus,
 from app.utils import hash_token
 from datetime import datetime, timedelta
 import os
+from tests.signup_payloads import build_join_submit_data
 
 @pytest.fixture
 def db():
@@ -40,16 +41,15 @@ def test_document_flow(client, db):
         'id_document': ('id.pdf', b'%PDF-1.4 content', 'application/pdf'),
         'fiscal_code_document': ('fc.pdf', b'%PDF-1.4 content', 'application/pdf')
     }
-    data = {
-        'first_name': 'Doc',
-        'last_name': 'Test',
-        'email': 'doc.test@example.com',
-        'phone': '1234567890',
-        'fiscal_code': 'DOCTST90A01H501Z',
-        'payment_method': 'CASH',
-        'accept_statute': 'true',
-        'accept_privacy': 'true'
-    }
+    data = build_join_submit_data(
+        first_name="Doc",
+        last_name="Test",
+        email="doc.test@example.com",
+        phone="1234567890",
+        payment_method="CASH",
+        accept_statute="true",
+        accept_privacy="true",
+    )
 
     # Clean up previous run if any
     existing = db.query(Member).filter_by(email='doc.test@example.com').first()

@@ -4,6 +4,7 @@ import pytest
 
 from app.db import SessionLocal
 from app.models import Member, Organization, PaymentMethod
+from tests.signup_payloads import build_join_submit_data
 
 
 @pytest.fixture
@@ -46,17 +47,17 @@ def _ensure_org(db, slug: str) -> Organization:
 
 
 def _join_submit(client, org_slug: str, email: str, payment_method: str | None):
-    data = {
-        "first_name": "Pay",
-        "last_name": "Method",
-        "email": email,
-        "phone": "333111222",
-        "fiscal_code": "PAYMTH90A01H501Z",
-        "accept_statute": "true",
-        "accept_privacy": "true",
-    }
-    if payment_method is not None:
-        data["payment_method"] = payment_method
+    data = build_join_submit_data(
+        first_name="Pay",
+        last_name="Method",
+        email=email,
+        phone="333111222",
+        payment_method=payment_method or "CASH",
+        accept_statute="true",
+        accept_privacy="true",
+    )
+    if payment_method is None:
+        data.pop("payment_method", None)
     return client.post(f"/api/join/{org_slug}/submit", data=data)
 
 

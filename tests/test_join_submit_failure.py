@@ -3,6 +3,7 @@ from unittest.mock import patch
 import os
 import shutil
 from app.config import settings
+from tests.signup_payloads import build_join_submit_data
 
 def test_join_submit_email_returns_false(client):
     """
@@ -18,16 +19,15 @@ def test_join_submit_email_returns_false(client):
         "id_document": ("id_false.pdf", b"%PDF-1.4 empty", "application/pdf"),
         "fiscal_code_document": ("fc_false.pdf", b"%PDF-1.4 empty", "application/pdf"),
     }
-    data = {
-        "first_name": "Email",
-        "last_name": "Fail",
-        "email": email,
-        "phone": "111222333",
-        "fiscal_code": "MLFAIL80A01H501Z",
-        "payment_method": "CASH",
-        "accept_statute": "true",
-        "accept_privacy": "true",
-    }
+    data = build_join_submit_data(
+        first_name="Email",
+        last_name="Fail",
+        email=email,
+        phone="111222333",
+        payment_method="CASH",
+        accept_statute="true",
+        accept_privacy="true",
+    )
 
     # 2. Mock send_email to return False
     with patch("app.routes.join.send_email", return_value=False):
@@ -68,16 +68,15 @@ def test_join_submit_email_raises_exception(client):
         "id_document": ("id_crash.pdf", b"%PDF-1.4 empty", "application/pdf"),
         "fiscal_code_document": ("fc_crash.pdf", b"%PDF-1.4 empty", "application/pdf"),
     }
-    data = {
-        "first_name": "Email",
-        "last_name": "Crash",
-        "email": email,
-        "phone": "444555666",
-        "fiscal_code": "CRASH80A01H501Z",
-        "payment_method": "BONIFICO",
-        "accept_statute": "true",
-        "accept_privacy": "true",
-    }
+    data = build_join_submit_data(
+        first_name="Email",
+        last_name="Crash",
+        email=email,
+        phone="444555666",
+        payment_method="BONIFICO",
+        accept_statute="true",
+        accept_privacy="true",
+    )
 
     # 2. Mock send_email to raise Exception
     with patch("app.routes.join.send_email", side_effect=Exception("SMTP Boom")):

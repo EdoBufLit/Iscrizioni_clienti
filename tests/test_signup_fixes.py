@@ -6,6 +6,7 @@ import pytest
 
 from app.db import SessionLocal
 from app.models import Organization, Member, SignupSource
+from tests.signup_payloads import build_join_submit_data
 
 
 @pytest.fixture
@@ -53,16 +54,17 @@ def _ensure_org(db, slug: str, *, statute: bool = True, active: bool = True) -> 
 
 
 def _submit(client, slug: str, email: str, accept_statute: str = "true"):
-    return client.post(f"/api/join/{slug}/submit", data={
-        "first_name": "Test",
-        "last_name": "User",
-        "email": email,
-        "phone": "3331112222",
-        "fiscal_code": "TSTFIX90A01H501Z",
-        "accept_statute": accept_statute,
-        "accept_privacy": "true",
-        "payment_method": "CASH",
-    })
+    return client.post(
+        f"/api/join/{slug}/submit",
+        data=build_join_submit_data(
+            first_name="Test",
+            last_name="User",
+            email=email,
+            payment_method="CASH",
+            accept_statute=accept_statute,
+            accept_privacy="true",
+        ),
+    )
 
 
 def test_org_without_statute_allows_signup(client, db):

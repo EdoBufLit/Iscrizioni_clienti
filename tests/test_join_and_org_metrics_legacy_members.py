@@ -13,6 +13,7 @@ from app.models import (
     Organization,
 )
 from app.utils import hash_token
+from tests.signup_payloads import build_join_submit_data
 
 
 @pytest.fixture
@@ -81,16 +82,15 @@ def test_join_submit_allows_resubmission_for_legacy_active_but_inactive_member(c
 
     res = client.post(
         f"/api/join/{org.slug}/submit",
-        data={
-            "first_name": "Nuovo",
-            "last_name": "Socio",
-            "email": email,
-            "phone": "3331231234",
-            "fiscal_code": f"LGB{suffix[:8].upper()}",
-            "payment_method": "CASH",
-            "accept_statute": "false",
-            "accept_privacy": "true",
-        },
+        data=build_join_submit_data(
+            first_name="Nuovo",
+            last_name="Socio",
+            email=email,
+            phone="3331231234",
+            payment_method="CASH",
+            accept_statute="false",
+            accept_privacy="true",
+        ),
     )
     assert res.status_code == 200, res.text
     payload = res.json()
@@ -151,4 +151,3 @@ def test_org_metrics_and_csv_exclude_legacy_expired_and_rejected_members(client,
     assert f"pending-{suffix}@example.com" in body
     assert f"expired-{suffix}@example.com" not in body
     assert f"rejected-{suffix}@example.com" not in body
-

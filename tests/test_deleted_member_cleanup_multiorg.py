@@ -6,6 +6,7 @@ import pytest
 from app.db import SessionLocal
 from app.models import Member, MemberStatus, Organization
 from app.services.member_cleanup import cleanup_deleted_member_traces
+from tests.signup_payloads import build_join_submit_data
 
 
 @pytest.fixture
@@ -121,31 +122,29 @@ def test_join_submit_cleans_deleted_legacy_traces_per_association(client, db):
 
     res_a = client.post(
         f"/api/join/{org_a.slug}/submit",
-        data={
-            "first_name": "Nuovo",
-            "last_name": "SocioA",
-            "email": email_a,
-            "phone": "3330001111",
-            "fiscal_code": fiscal_a,
-            "payment_method": "CASH",
-            "accept_statute": "false",
-            "accept_privacy": "true",
-        },
+        data=build_join_submit_data(
+            first_name="Nuovo",
+            last_name="SocioA",
+            email=email_a,
+            phone="3330001111",
+            payment_method="CASH",
+            accept_statute="false",
+            accept_privacy="true",
+        ),
     )
     assert res_a.status_code == 200, res_a.text
 
     res_b = client.post(
         f"/api/join/{org_b.slug}/submit",
-        data={
-            "first_name": "Nuovo",
-            "last_name": "SocioB",
-            "email": email_b,
-            "phone": "3330002222",
-            "fiscal_code": fiscal_b,
-            "payment_method": "BONIFICO",
-            "accept_statute": "false",
-            "accept_privacy": "true",
-        },
+        data=build_join_submit_data(
+            first_name="Nuovo",
+            last_name="SocioB",
+            email=email_b,
+            phone="3330002222",
+            payment_method="BONIFICO",
+            accept_statute="false",
+            accept_privacy="true",
+        ),
     )
     assert res_b.status_code == 200, res_b.text
 
