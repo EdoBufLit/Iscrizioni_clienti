@@ -1,7 +1,7 @@
 """Normalize TAG CULTURE naming in organizations table.
 
 Revision ID: v5w6x7y8z9a0
-Revises: t3u4v5w6x7y8
+Revises: u4v5w6x7y8z9
 Create Date: 2026-02-28 21:05:00.000000
 """
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "v5w6x7y8z9a0"
-down_revision: Union[str, Sequence[str], None] = "t3u4v5w6x7y8"
+down_revision: Union[str, Sequence[str], None] = "u4v5w6x7y8z9"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

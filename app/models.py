@@ -1,5 +1,5 @@
 import sqlalchemy as sa
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Enum, UniqueConstraint, Text, JSON, TypeDecorator, Index, and_, func
+from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey, Boolean, Enum, UniqueConstraint, Text, JSON, TypeDecorator, Index, and_, func
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -208,6 +208,10 @@ class Member(Base):
     email = Column(String, index=True)
     phone = Column(String)
     fiscal_code = Column(String)
+    birth_date = Column(Date, nullable=True)
+    birth_place = Column(String, nullable=True)
+    birth_place_code = Column(String, nullable=True)
+    gender = Column(String, nullable=True)
     payment_method = Column(SafePaymentMethodType(), nullable=True)
     password_hash = Column(String, nullable=True)
     status = Column(SafeMemberStatusType(), default=MemberStatus.PENDING_DOCS.value)
