@@ -45,9 +45,13 @@ def build_member_card_email(
     safe_card_view_url = html.escape((card_view_url or "").strip())
     safe_statute_url = html.escape((statute_url or "").strip())
     safe_assonam_logo_url = html.escape(assonam_logo_url)
-    safe_org_logo_url = html.escape(organization_logo_url) if organization_logo_url else ""
+    safe_org_logo_url = (
+        html.escape(organization_logo_url) if organization_logo_url else ""
+    )
     resolved_header_title = (header_title or "").strip()
-    resolved_header_subtitle = (header_subtitle or "").strip() or "La tua tessera digitale è pronta."
+    resolved_header_subtitle = (
+        header_subtitle or ""
+    ).strip() or "La tua tessera digitale è pronta."
     safe_header_title = html.escape(resolved_header_title)
     safe_header_subtitle = html.escape(resolved_header_subtitle)
     safe_access_email_hint = html.escape((access_email_hint or "").strip())
@@ -95,7 +99,9 @@ def build_member_card_email(
                     </td>
                   </tr>"""
 
-        top_border_style = "1px solid rgba(198,160,79,0.55)" if is_oasi2_card else "3px solid #c6a04f"
+        top_border_style = (
+            "1px solid rgba(198,160,79,0.55)" if is_oasi2_card else "3px solid #c6a04f"
+        )
 
         card_block = f"""\
             <tr>
@@ -160,8 +166,12 @@ def build_member_card_email(
             else ""
         )
         + f"Link area riservata: {magic_link_url}\n"
-        + (f"Aggiungi a Google Wallet (Android): {google_wallet_add_url}\n" if google_wallet_add_url else "")
-        + (f"Vedi la tua tessera: {card_view_url}\n" if card_view_url else "")
+        + (
+            f"Aggiungi a Google Wallet (Android): {google_wallet_add_url}\n"
+            if google_wallet_add_url
+            else ""
+        )
+        + (f"Apri tessera: {card_view_url}\n" if card_view_url else "")
         + (f"Scarica lo statuto: {statute_url}\n" if statute_url else "")
         + f"Verifica tessera: {verification_url}\n"
         + "Nota: se sei su iPhone, al momento Google Wallet non e disponibile.\n"
@@ -185,18 +195,26 @@ def build_member_card_email(
             <!-- Header -->
             <tr>
               <td style="padding:0 16px 14px 16px;text-align:center;">
-                <p style="margin:0;font-size:22px;font-weight:700;color:#d4b45c;">{safe_club}</p>
-                {(
-                    f'<p style="margin:8px 0 0;font-size:20px;font-weight:700;color:#f6e7b6;">{safe_header_title}</p>'
-                    if safe_header_title
-                    else ""
-                )}
-                <p style="margin:8px 0 0;font-size:14px;color:#c9a8b0;">{safe_header_subtitle}</p>
-                {(
-                    f'<p style="margin:10px 0 0;font-size:13px;color:#fdf6e3;">Ora puoi accedere alla tua area riservata con la tua email: <strong style="color:#fdf6e3;">{safe_access_email_hint}</strong>.</p>'
-                    if safe_access_email_hint
-                    else ""
-                )}
+                <p style="margin:0;font-size:22px;font-weight:700;color:#d4b45c;">{
+        safe_club
+    }</p>
+                {
+        (
+            f'<p style="margin:8px 0 0;font-size:20px;font-weight:700;color:#f6e7b6;">{safe_header_title}</p>'
+            if safe_header_title
+            else ""
+        )
+    }
+                <p style="margin:8px 0 0;font-size:14px;color:#c9a8b0;">{
+        safe_header_subtitle
+    }</p>
+                {
+        (
+            f'<p style="margin:10px 0 0;font-size:13px;color:#fdf6e3;">Ora puoi accedere alla tua area riservata con la tua email: <strong style="color:#fdf6e3;">{safe_access_email_hint}</strong>.</p>'
+            if safe_access_email_hint
+            else ""
+        )
+    }
               </td>
             </tr>
 
@@ -221,31 +239,45 @@ def build_member_card_email(
                          style="display:inline-block;padding:12px 22px;border-radius:10px;background:#7a1535;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;margin:0 6px 10px 6px;">
                         Scarica tessera (PDF)
                       </a>
+                      {
+        (
+            f'''<a href="{safe_card_view_url}"
+                         style="display:inline-block;padding:12px 22px;border-radius:10px;background:#8a5f00;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;margin:0 6px 10px 6px;">
+                        Apri tessera
+                      </a>'''
+            if safe_card_view_url
+            else ""
+        )
+    }
                       <a href="{safe_magic_link_url}"
                          style="display:inline-block;padding:12px 22px;border-radius:10px;background:#0b3c75;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;margin:0 6px 10px 6px;">
                         Accedi area riservata
                       </a>
-                      {(
-                        f'''<a href="{safe_google_wallet_add_url}"
+                      {
+        (
+            f'''<a href="{safe_google_wallet_add_url}"
                          style="display:inline-block;padding:12px 22px;border-radius:10px;background:#1f6f43;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;margin:0 6px 10px 6px;">
                         Aggiungi a Google Wallet (Android)
                       </a>'''
-                        if safe_google_wallet_add_url
-                        else ""
-                      )}
+            if safe_google_wallet_add_url
+            else ""
+        )
+    }
                       <a href="{safe_verification_url}"
                          style="display:inline-block;padding:12px 22px;border-radius:10px;background:#1a0009;border:1px solid rgba(198,160,79,0.35);color:#d4b45c;text-decoration:none;font-size:14px;font-weight:700;margin:0 6px 10px 6px;">
                         Verifica tessera
                       </a>
-                      {(
-                        f'''<p style="margin:8px 0 0;font-size:12px;color:#c9a8b0;">
-                        {f'<a href="{safe_card_view_url}" style="color:#f6e7b6;text-decoration:none;">Vedi la tua tessera</a>' if safe_card_view_url else ''}
-                        {(' &nbsp;|&nbsp; ' if safe_card_view_url and safe_statute_url else '')}
-                        {f'<a href="{safe_statute_url}" style="color:#f6e7b6;text-decoration:none;">Scarica lo statuto</a>' if safe_statute_url else ''}
+                      {
+        (
+            f'''<p style="margin:8px 0 0;font-size:12px;color:#c9a8b0;">
+                        {f'<a href="{safe_card_view_url}" style="color:#f6e7b6;text-decoration:none;">Apri tessera</a>' if safe_card_view_url else ""}
+                        {(" &nbsp;|&nbsp; " if safe_card_view_url and safe_statute_url else "")}
+                        {f'<a href="{safe_statute_url}" style="color:#f6e7b6;text-decoration:none;">Scarica lo statuto</a>' if safe_statute_url else ""}
                       </p>'''
-                        if (safe_card_view_url or safe_statute_url)
-                        else ""
-                      )}
+            if (safe_card_view_url or safe_statute_url)
+            else ""
+        )
+    }
                     </td>
                   </tr>
                 </table>
