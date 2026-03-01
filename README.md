@@ -110,6 +110,23 @@ docker compose logs web --tail=200
 
 `/api/version` is intended for runtime diagnostics and returns `version`, `git_sha`, `build_time`, and `request_id`.
 
+### Email Outbox Worker
+
+Le email applicative vengono ora accodate nella tabella `email_outbox` e consegnate dal servizio `email-worker`.
+
+```bash
+# Avvia web + worker
+docker compose up -d --build
+
+# Applica le migrazioni dopo il deploy
+docker compose exec -T web alembic upgrade head
+
+# Log del worker
+docker logs -f email-worker
+```
+
+Dettagli operativi e query utili sono in [`DEPLOY.md`](DEPLOY.md).
+
 ## Integration API (Issuer Tessera)
 
 External management systems can issue members directly as active through:

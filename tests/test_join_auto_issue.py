@@ -1,6 +1,5 @@
 from datetime import datetime
 import uuid
-from unittest.mock import patch
 
 import pytest
 from sqlalchemy import func
@@ -9,6 +8,7 @@ from app.config import settings
 from app.db import SessionLocal
 from app.models import (
     CardBatch,
+    EmailOutbox,
     Member,
     MemberStatus,
     Organization,
@@ -95,7 +95,7 @@ def _join_submit(client, slug: str, email: str):
     )
 
 
-def test_tag_signup_auto_issues_active_card_and_returns_active_page(client, db):
+def test_tag_signup_auto_issues_active_card_and_returns_active_page(client, db, drain_email_outbox):
     org = _ensure_org(db, "t-a-g-culture", with_batch=True)
     email = f"tag-auto-{uuid.uuid4().hex[:8]}@example.com"
 
@@ -114,7 +114,8 @@ def test_tag_signup_auto_issues_active_card_and_returns_active_page(client, db):
             in payload["active_card_page_url"]
         )
         assert "status=issued" in payload["active_card_page_url"]
-        assert payload["email_sent"] is True
+        assert payload["email_sent"] is False
+        assert payload["email_status"] == "queued"
         assert payload["card_verification_token"]
         assert payload["card_verification_url"].endswith(
             f"/api/cards/verify/{payload['card_verification_token']}"
@@ -140,6 +141,11 @@ def test_tag_signup_auto_issues_active_card_and_returns_active_page(client, db):
         assert member.birth_place_code == "H501"
         assert member.gender == "M"
         assert member.decision_notes == "Auto-approved via web signup"
+        assert member.card_email_sent_at is None
+        assert member.card_delivered_at is None
+
+        drain_email_outbox()
+        db.refresh(member)
         assert member.card_email_sent_at is not None
         assert member.card_delivered_at is not None
 
@@ -339,29 +345,46 @@ def test_join_submit_uses_active_card_status_when_card_already_exists(client, db
     assert "status=active_card" in payload["active_card_page_url"]
 
 
-def test_auto_approve_signup_uses_card_active_email_template(client, db):
+def test_auto_approve_signup_uses_card_active_email_template(client, db, drain_email_outbox):
     org = _ensure_org(db, f"join-template-auto-{uuid.uuid4().hex[:6]}", with_batch=True)
     setattr(org, "auto_approve_signup", True)
     db.commit()
     db.refresh(org)
 
     email = f"template-auto-{uuid.uuid4().hex[:8]}@example.com"
-    with (
-        patch(
-            "app.services.integration_issuer.send_email_html", return_value=True
-        ) as send_card_email,
-        patch("app.routes.join.send_email", return_value=True) as send_manual_email,
-    ):
+    previous_email_mode = settings.EMAIL_MODE
+    settings.EMAIL_MODE = "test"
+    clear_captured_emails()
+    try:
         response = _join_submit(client, str(org.slug), email)
 
-    assert response.status_code == 200, response.text
-    payload = response.json()
-    assert payload["status"] == "issued"
-    assert send_card_email.called
-    assert send_manual_email.call_count == 0
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["status"] == "issued"
+        assert payload["email_status"] == "queued"
+
+        queued = (
+            db.query(EmailOutbox)
+            .filter(
+                EmailOutbox.to_email == email,
+                EmailOutbox.email_type == "member_card_active",
+            )
+            .order_by(EmailOutbox.created_at.desc())
+            .first()
+        )
+        assert queued is not None
+
+        drain_email_outbox()
+        captured = get_captured_emails()
+        assert len(captured) == 1
+        assert "Aggiungi a Google Wallet (Android)" in (captured[0]["html_body"] or "")
+        assert "Scarica tessera" in (captured[0]["html_body"] or "")
+    finally:
+        settings.EMAIL_MODE = previous_email_mode
+        clear_captured_emails()
 
 
-def test_manual_review_signup_uses_manual_review_email_template(client, db):
+def test_manual_review_signup_uses_manual_review_email_template(client, db, drain_email_outbox):
     org = _ensure_org(
         db, f"join-template-manual-{uuid.uuid4().hex[:6]}", with_batch=False
     )
@@ -370,18 +393,34 @@ def test_manual_review_signup_uses_manual_review_email_template(client, db):
     db.refresh(org)
 
     email = f"template-manual-{uuid.uuid4().hex[:8]}@example.com"
-    with (
-        patch(
-            "app.services.integration_issuer.send_email_html", return_value=True
-        ) as send_card_email,
-        patch("app.routes.join.send_email", return_value=True) as send_manual_email,
-    ):
+    previous_email_mode = settings.EMAIL_MODE
+    settings.EMAIL_MODE = "test"
+    clear_captured_emails()
+    try:
         response = _join_submit(client, str(org.slug), email)
 
-    assert response.status_code == 200, response.text
-    payload = response.json()
-    assert payload["status"] == "received"
-    assert send_card_email.call_count == 0
-    assert send_manual_email.call_count == 1
-    _, kwargs = send_manual_email.call_args
-    assert "Un amministratore li verificherà a breve." in kwargs.get("body", "")
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["status"] == "received"
+        assert payload["email_status"] == "queued"
+
+        queued = (
+            db.query(EmailOutbox)
+            .filter(
+                EmailOutbox.to_email == email,
+                EmailOutbox.email_type == "manual_review_received",
+            )
+            .order_by(EmailOutbox.created_at.desc())
+            .first()
+        )
+        assert queued is not None
+
+        drain_email_outbox()
+        captured = get_captured_emails()
+        assert len(captured) == 1
+        assert "Un amministratore li verifichera a breve." in (
+            captured[0]["text_body"] or ""
+        )
+    finally:
+        settings.EMAIL_MODE = previous_email_mode
+        clear_captured_emails()

@@ -27,7 +27,7 @@ def _login_org_admin(client, db, admin_id: int):
     client.get(f"/api/org-admin/auth/verify?token={token_str}", follow_redirects=False)
 
 
-def test_org_admin_send_access_ok(client, db):
+def test_org_admin_send_access_ok(client, db, drain_email_outbox):
     original_mode = settings.EMAIL_MODE
     settings.EMAIL_MODE = "test"
     clear_captured_emails()
@@ -77,8 +77,10 @@ def test_org_admin_send_access_ok(client, db):
         assert res.status_code == 200
         payload = res.json()
         assert payload["ok"] is True
-        assert payload["email_sent"] is True
+        assert payload["email_sent"] is False
+        assert payload["email_status"] == "queued"
         assert payload["last_access_email_at"] is not None
+        drain_email_outbox()
         assert len(get_captured_emails()) == 1
 
         token_count = db.query(Token).filter(

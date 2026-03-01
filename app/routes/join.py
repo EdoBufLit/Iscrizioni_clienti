@@ -17,7 +17,8 @@ from app.models import (
     AdminUser,
     AdminRole,
 )
-from app.utils import generate_token, send_email, save_upload_file, hash_token
+from app.services.email_outbox import build_email_payload, enqueue_email
+from app.utils import generate_token, save_upload_file, hash_token
 from app.services.card_allocation import allocate_next_card
 from app.services.fiscal_code import validate_fiscal_code
 from app.services.integration_issuer import (
@@ -424,20 +425,28 @@ def api_join_start(
         + timedelta(minutes=settings.JOIN_TOKEN_EXPIRE_MINUTES),
     )
     db.add(token)
+    db.flush()
+
+    link = f"{settings.BASE_URL}/join/continue?token={token_str}"
+    enqueue_email(
+        db,
+        email_type="signup_continue",
+        to_email=email,
+        subject=f"Complete your registration for {display_name}",
+        payload=build_email_payload(
+            text_body=f"Click here to upload documents and complete registration: {link}",
+            meta={
+                "member_id": member.id,
+                "token_purpose": TokenType.SIGNUP_CONTINUE.value,
+            },
+        ),
+        priority=5,
+    )
     db.commit()
 
     audit.join_submitted(org_slug=org_slug, org_id=org.id, ip=get_client_ip(request))
 
-    # Send Email
-    link = f"{settings.BASE_URL}/join/continue?token={token_str}"
-    if not send_email(
-        to_email=email,
-        subject=f"Complete your registration for {display_name}",
-        body=f"Click here to upload documents and complete registration: {link}",
-    ):
-        logger.warning("Failed to send registration email to %s", email)
-
-    return {"status": "started", "organization": display_name}
+    return {"status": "started", "organization": display_name, "email_status": "queued"}
 
 
 @router.post("/api/join/continue")
@@ -568,6 +577,22 @@ async def api_join_continue(
         # Mark token used
         token_entry.used_at = datetime.utcnow()
 
+        org = db.query(Organization).filter(Organization.id == member.org_id).first()
+        display_name = resolve_club_display_name(org) or org.name
+        enqueue_email(
+            db,
+            email_type="signup_complete",
+            to_email=member.email,
+            subject=f"Welcome to {display_name}",
+            payload=build_email_payload(
+                text_body=(
+                    "Your registration is complete. "
+                    f"You can now login at {settings.BASE_URL}/member/login"
+                ),
+                meta={"member_id": member.id},
+            ),
+            priority=5,
+        )
         db.commit()
 
         audit.join_completed(
@@ -576,20 +601,11 @@ async def api_join_continue(
             card_assigned=bool(assigned),
         )
 
-        # Send Welcome Email
-        org = db.query(Organization).filter(Organization.id == member.org_id).first()
-        display_name = resolve_club_display_name(org) or org.name
-        if not send_email(
-            to_email=member.email,
-            subject=f"Welcome to {display_name}",
-            body=f"Your registration is complete. You can now login at {settings.BASE_URL}/member/login",
-        ):
-            logger.warning("Failed to send welcome email to %s", member.email)
-
         return {
             "status": "complete",
             "assigned_card": bool(assigned),
             "member_status": member.status.value,
+            "email_status": "queued",
         }
 
     except HTTPException:
@@ -715,6 +731,7 @@ async def api_join_submit_multipart(
     rel_path_fc = None
     uploaded_docs_count = 0
     auto_issue_result = None
+    manual_review_email_status = "not_requested"
     member_persisted = False
 
     try:
@@ -908,6 +925,22 @@ async def api_join_submit_multipart(
             )
             db.refresh(member)
         else:
+            display_name = resolve_club_display_name(org) or org.name
+            enqueue_email(
+                db,
+                email_type="manual_review_received",
+                to_email=email,
+                subject=f"Richiesta iscrizione {display_name} ricevuta",
+                payload=build_email_payload(
+                    text_body=(
+                        "Abbiamo ricevuto la tua richiesta e i documenti. "
+                        "Un amministratore li verifichera a breve."
+                    ),
+                    meta={"member_id": member.id},
+                ),
+                priority=5,
+            )
+            manual_review_email_status = "queued"
             logger.info(
                 "join_submit_commit_before request_id=%s phase=manual_review member_id=%s org_id=%s",
                 request_id,
@@ -995,6 +1028,7 @@ async def api_join_submit_multipart(
             "status": "issued",
             "id": auto_issue_result.member_id,
             "email_sent": auto_issue_result.email_sent,
+            "email_status": auto_issue_result.email_status,
             "warnings": ["fiscal_code_mismatch"] if fiscal_code_mismatch else [],
             "active_card_page_url": auto_issue_result.card_page_url,
             "card_verification_token": auto_issue_result.card_verification_token,
@@ -1002,53 +1036,10 @@ async def api_join_submit_multipart(
             "card_download_url": auto_issue_result.card_download_url,
         }
 
-    # Send confirmation to user (Post-commit)
-    email_sent = False
-    try:
-        logger.info(
-            "join_submit_email_before_send request_id=%s template=%s org_id=%s member_id=%s email=%s",
-            request_id,
-            "manual_review",
-            org.id,
-            member.id,
-            normalized_email,
-        )
-        display_name = resolve_club_display_name(org) or org.name
-        if send_email(
-            to_email=email,
-            subject=f"Richiesta iscrizione {display_name} ricevuta",
-            body="Abbiamo ricevuto la tua richiesta e i documenti. Un amministratore li verificherà a breve.",
-        ):
-            email_sent = True
-            logger.info(
-                "join_submit_email_after_send request_id=%s template=%s sent=%s org_id=%s member_id=%s",
-                request_id,
-                "manual_review",
-                email_sent,
-                org.id,
-                member.id,
-            )
-        else:
-            logger.warning(
-                "join_submit_email_after_send request_id=%s template=%s sent=%s org_id=%s member_id=%s",
-                request_id,
-                "manual_review",
-                email_sent,
-                org.id,
-                member.id,
-            )
-    except Exception:
-        logger.exception(
-            "join_submit_email_exception request_id=%s template=%s org_id=%s member_id=%s",
-            request_id,
-            "manual_review",
-            org.id,
-            member.id,
-        )
-
     return {
         "status": "received",
         "id": member.id,
-        "email_sent": email_sent,
+        "email_sent": False,
+        "email_status": manual_review_email_status,
         "warnings": ["fiscal_code_mismatch"] if fiscal_code_mismatch else [],
     }

@@ -48,6 +48,9 @@ def test_org_admin_member_documents_rel_path(client, db):
         db.commit()
         db.refresh(member)
 
+    db.query(MemberDocument).filter(MemberDocument.member_id == member.id).delete()
+    db.commit()
+
     # Create a dummy file on disk
     from app.config import settings
     rel_path = f"{org.id}/{member.id}/test_doc.txt"

@@ -30,8 +30,9 @@ from app.models import (
     TokenType,
     SignupSource,
 )
-from app.utils import generate_token, hash_token, send_email
+from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.card_allocation import allocate_next_card, release_card_number
+from app.utils import generate_token, hash_token
 from app.services.member_activity import (
     get_member_lifecycle_status,
     is_member_active,
@@ -253,7 +254,7 @@ def _send_member_magic_link(
     db: Session,
     request: Request,
     member: Member,
-) -> tuple[bool, datetime]:
+) -> tuple[str, datetime]:
     if not is_member_active(member, now=datetime.utcnow()):
         raise HTTPException(status_code=403, detail="account non attivo")
 
@@ -266,8 +267,7 @@ def _send_member_magic_link(
         + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES),
     )
     db.add(token)
-    db.commit()
-    db.refresh(token)
+    db.flush()
 
     frontend_base = settings.FRONTEND_URL.rstrip("/")
     if not frontend_base:
@@ -276,19 +276,25 @@ def _send_member_magic_link(
     link = f"{frontend_base}/auth/verify?token={token_str}&role=member"
     logger.info("Generated member magic link: %s", link.replace(token_str, "***"))
 
-    email_sent = send_email(
+    outbox_id = enqueue_email(
+        db,
+        email_type="member_magic_link",
         to_email=member.email,
         subject="Accesso Area Riservata - ASSO.N.A.M.",
-        body=(
-            "Sei stato registrato come socio. "
-            f"Clicca qui per accedere alla tua area riservata: {link}\n\n"
-            f"Il link scade tra {settings.LOGIN_TOKEN_EXPIRE_MINUTES} minuti."
+        payload=build_email_payload(
+            text_body=(
+                "Sei stato registrato come socio. "
+                f"Clicca qui per accedere alla tua area riservata: {link}\n\n"
+                f"Il link scade tra {settings.LOGIN_TOKEN_EXPIRE_MINUTES} minuti."
+            ),
+            meta={
+                "member_id": member.id,
+                "token_purpose": TokenType.LOGIN_MAGIC_LINK.value,
+            },
         ),
+        priority=1,
     )
-    if not email_sent:
-        logger.warning("Failed to send magic link email to %s", member.email)
-
-    return email_sent, token.created_at or datetime.utcnow()
+    return outbox_id, token.created_at or datetime.utcnow()
 
 
 class CreateMemberBody(BaseModel):
@@ -338,7 +344,7 @@ def request_magic_link(
             + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES),
         )
         db.add(token)
-        db.commit()
+        db.flush()
 
         frontend_base = settings.FRONTEND_URL.rstrip("/")
         if not frontend_base:
@@ -350,12 +356,21 @@ def request_magic_link(
             "Generated org-admin magic link: %s", link.replace(token_str, "***")
         )
 
-        if not send_email(
+        enqueue_email(
+            db,
+            email_type="org_admin_magic_link",
             to_email=email,
             subject="Accesso area amministrazione associazione",
-            body=f"Clicca qui per accedere: {link}",
-        ):
-            logger.warning("Failed to send org admin magic link to %s", email)
+            payload=build_email_payload(
+                text_body=f"Clicca qui per accedere: {link}",
+                meta={
+                    "admin_id": admin.id,
+                    "token_purpose": "org_admin_magic_link",
+                },
+            ),
+            priority=1,
+        )
+        db.commit()
 
     audit.org_admin_magic_link_requested(email=email, ip=get_client_ip(request))
     return {"ok": True}
@@ -1100,13 +1115,14 @@ def create_org_member(
     )
 
     db.add(member)
-    db.commit()
-    db.refresh(member)
+    db.flush()
 
     email_sent = False
+    email_status = "not_requested"
     access_email_sent_at = None
     if body.send_access_email and email:
-        email_sent, access_email_sent_at = _send_member_magic_link(db, request, member)
+        _outbox_id, access_email_sent_at = _send_member_magic_link(db, request, member)
+        email_status = "queued"
 
     audit.log_operation(
         db,
@@ -1118,6 +1134,7 @@ def create_org_member(
         metadata={
             "org_id": admin.org_id,
             "email_sent": email_sent,
+            "email_status": email_status,
             "is_manual": member.is_manual,
         },
         ip=get_client_ip(request),
@@ -1139,6 +1156,7 @@ def create_org_member(
         "internal_notes": member.internal_notes,
         "is_manual": member.is_manual,
         "email_sent": email_sent,
+        "email_status": email_status,
         "access_email_sent_at": access_email_sent_at.isoformat()
         if access_email_sent_at
         else None,
@@ -1426,7 +1444,9 @@ def send_member_access(
                 detail=f"Accesso inviato di recente. Riprova tra {remaining_minutes} minuti.",
             )
 
-    email_sent, sent_at = _send_member_magic_link(db, request, member)
+    _outbox_id, sent_at = _send_member_magic_link(db, request, member)
+    email_sent = False
+    email_status = "queued"
 
     audit.log_operation(
         db,
@@ -1438,6 +1458,7 @@ def send_member_access(
         metadata={
             "org_id": admin.org_id,
             "email_sent": email_sent,
+            "email_status": email_status,
         },
         ip=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
@@ -1447,6 +1468,7 @@ def send_member_access(
     return {
         "ok": True,
         "email_sent": email_sent,
+        "email_status": email_status,
         "last_access_email_at": sent_at.isoformat() if sent_at else None,
     }
 

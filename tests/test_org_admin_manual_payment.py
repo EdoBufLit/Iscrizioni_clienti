@@ -1,5 +1,6 @@
 import pytest
 from datetime import datetime, timedelta
+import uuid
 
 from app.db import SessionLocal
 from app.models import Organization, AdminUser, AdminRole, Member, MemberStatus, CardBatch, MemberPayment, OrgAdminToken
@@ -78,10 +79,11 @@ def _login_org_admin(client, db, admin_id: int):
 
 
 def test_org_admin_manual_payment_sets_paid_and_status(client, db):
-    org = _create_org(db, "manual-pay-org", "Manual Pay Org")
+    suffix = uuid.uuid4().hex[:8]
+    org = _create_org(db, f"manual-pay-org-{suffix}", "Manual Pay Org")
     _create_card_batch(db, org.id)
-    admin = _create_admin(db, "manualpay_admin@example.com", org.id)
-    member = _create_member(db, org.id, "manualpay_member@example.com")
+    admin = _create_admin(db, f"manualpay_admin_{suffix}@example.com", org.id)
+    member = _create_member(db, org.id, f"manualpay_member_{suffix}@example.com")
 
     _login_org_admin(client, db, admin.id)
 
@@ -103,10 +105,11 @@ def test_org_admin_manual_payment_sets_paid_and_status(client, db):
 
 
 def test_org_admin_cannot_pay_other_org_member(client, db):
-    org_a = _create_org(db, "manual-pay-org-a", "Manual Pay Org A")
-    org_b = _create_org(db, "manual-pay-org-b", "Manual Pay Org B")
-    admin = _create_admin(db, "manualpay_admin_b@example.com", org_b.id)
-    member = _create_member(db, org_a.id, "manualpay_member_b@example.com")
+    suffix = uuid.uuid4().hex[:8]
+    org_a = _create_org(db, f"manual-pay-org-a-{suffix}", "Manual Pay Org A")
+    org_b = _create_org(db, f"manual-pay-org-b-{suffix}", "Manual Pay Org B")
+    admin = _create_admin(db, f"manualpay_admin_b_{suffix}@example.com", org_b.id)
+    member = _create_member(db, org_a.id, f"manualpay_member_b_{suffix}@example.com")
 
     _login_org_admin(client, db, admin.id)
 
@@ -120,8 +123,9 @@ def test_org_admin_cannot_pay_other_org_member(client, db):
 
 
 def test_member_cannot_create_manual_payment(client, db):
-    org = _create_org(db, "manual-pay-member", "Manual Pay Member")
-    member = _create_member(db, org.id, "manualpay_member_only@example.com")
+    suffix = uuid.uuid4().hex[:8]
+    org = _create_org(db, f"manual-pay-member-{suffix}", "Manual Pay Member")
+    member = _create_member(db, org.id, f"manualpay_member_only_{suffix}@example.com")
     member.status = MemberStatus.ACTIVE
     member.card_no = 7777
     member.card_year = datetime.utcnow().year

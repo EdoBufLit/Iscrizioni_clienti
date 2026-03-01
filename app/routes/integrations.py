@@ -40,6 +40,7 @@ class IssueMemberResponse(BaseModel):
     card_wallet_google_url: str | None = None
     wallet_enabled: bool = False
     member_portal_login_hint: str
+    email_status: str | None = None
 
 
 def _log_integration_security_event(
@@ -135,4 +136,5 @@ def issue_member(
         card_wallet_google_url=result.card_wallet_google_url,
         wallet_enabled=result.wallet_enabled,
         member_portal_login_hint=result.member_portal_login_hint,
+        email_status=result.email_status,
     )

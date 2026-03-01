@@ -24,13 +24,14 @@ from app.models import (
 )
 from app.services.card_allocation import allocate_next_card, release_card_number
 from app.services.card_verification import build_card_verification_token
+from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.org_branding import (
     resolve_assonam_logo_url,
     resolve_card_email_subject,
     resolve_card_logo_url,
     resolve_club_display_name,
 )
-from app.utils import generate_token, hash_token, send_email_html
+from app.utils import generate_token, hash_token
 
 
 logger = logging.getLogger(__name__)
@@ -107,6 +108,7 @@ class IssueMemberResult:
     wallet_enabled: bool
     member_portal_login_hint: str
     email_sent: bool
+    email_status: str
     org_slug: str
     outcome: str
     card_page_url: str | None
@@ -138,7 +140,7 @@ def _build_magic_link(db: Session, member_id: int, frontend_base: str) -> str:
         + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES),
     )
     db.add(token)
-    db.commit()
+    db.flush()
     return f"{frontend_base}/auth/verify?token={token_str}&role=member"
 
 
@@ -427,21 +429,20 @@ def issue_member_from_integration(
             outcome = "reissued"
 
     logger.info(
-        "integration_issue_commit_before request_id=%s phase=upsert_member_and_card member_id=%s org_id=%s outcome=%s",
+        "integration_issue_flush_before request_id=%s phase=upsert_member_and_card member_id=%s org_id=%s outcome=%s",
         request_id,
         member.id,
         org.id,
         outcome,
     )
-    db.commit()
+    db.flush()
     logger.info(
-        "integration_issue_commit_after request_id=%s phase=upsert_member_and_card member_id=%s org_id=%s outcome=%s",
+        "integration_issue_flush_after request_id=%s phase=upsert_member_and_card member_id=%s org_id=%s outcome=%s",
         request_id,
         member.id,
         org.id,
         outcome,
     )
-    db.refresh(member)
 
     fallback_backend_base = settings.BASE_URL.rstrip("/") if settings.BASE_URL else ""
     backend_base = (command.backend_base_url or fallback_backend_base).rstrip("/")
@@ -471,12 +472,14 @@ def issue_member_from_integration(
     wallet_enabled = False
 
     email_sent = False
+    email_status = "skipped"
     login_hint = "email_skipped"
     should_send_email = bool(command.send_email and member.email)
     delivered_marker = member.card_delivered_at or member.card_email_sent_at
     if command.send_email_once and delivered_marker is not None and not issued_new_card:
         should_send_email = False
         login_hint = "magic_link_already_sent"
+        email_status = "skipped"
         logger.info(
             "integration_issue_email_skipped request_id=%s template=%s member_id=%s reason=%s",
             request_id,
@@ -566,36 +569,33 @@ def issue_member_from_integration(
             card_view_url=card_view_url,
             statute_url=statute_url,
         )
-        email_sent = send_email_html(
+        outbox_id = enqueue_email(
+            db,
+            email_type="member_card_active",
             to_email=member.email,
             subject=subject,
-            text_body=text_body,
-            html_body=html_body,
-            inline_images=inline_images if inline_images else None,
+            payload=build_email_payload(
+                text_body=text_body,
+                html_body=html_body,
+                inline_images=inline_images if inline_images else None,
+                meta={
+                    "member_id": member.id,
+                    "org_id": member.org_id,
+                    "mark_member_card_delivered": True,
+                },
+            ),
+            priority=5,
+            dedupe_key=f"member_card_active:{member.id}:{member.card_year}:{member.card_no}",
         )
+        email_status = "queued"
         logger.info(
-            "integration_issue_email_after_send request_id=%s template=%s member_id=%s sent=%s",
+            "integration_issue_email_after_enqueue request_id=%s template=%s member_id=%s outbox_id=%s",
             request_id,
             "card_active",
             member.id,
-            email_sent,
+            outbox_id,
         )
-        if email_sent:
-            delivered_at = datetime.utcnow()
-            member.card_email_sent_at = delivered_at
-            member.card_delivered_at = delivered_at
-            logger.info(
-                "integration_issue_commit_before request_id=%s phase=mark_card_delivered member_id=%s",
-                request_id,
-                member.id,
-            )
-            db.commit()
-            logger.info(
-                "integration_issue_commit_after request_id=%s phase=mark_card_delivered member_id=%s",
-                request_id,
-                member.id,
-            )
-        login_hint = "magic_link_sent" if email_sent else "magic_link_send_failed"
+        login_hint = "magic_link_queued"
     else:
         logger.info(
             "integration_issue_email_skipped request_id=%s template=%s member_id=%s reason=%s",
@@ -620,6 +620,7 @@ def issue_member_from_integration(
             "request_id": request_id,
             "client_version": client_version,
             "email_sent": email_sent,
+            "email_status": email_status,
             "outcome": outcome,
             "issued_new_card": issued_new_card,
         },
@@ -641,6 +642,7 @@ def issue_member_from_integration(
         wallet_enabled=wallet_enabled,
         member_portal_login_hint=login_hint,
         email_sent=email_sent,
+        email_status=email_status,
         org_slug=org.slug,
         outcome=outcome,
         card_page_url=card_page_url,

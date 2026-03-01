@@ -38,6 +38,9 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       SMTP_FROM: ${SMTP_FROM}
       SMTP_USE_TLS: ${SMTP_USE_TLS}
+      EMAIL_OUTBOX_BATCH_SIZE: ${EMAIL_OUTBOX_BATCH_SIZE:-50}
+      EMAIL_OUTBOX_POLL_SECONDS: ${EMAIL_OUTBOX_POLL_SECONDS:-3}
+      EMAIL_OUTBOX_STALE_AFTER_SECONDS: ${EMAIL_OUTBOX_STALE_AFTER_SECONDS:-300}
 
       # App / misc
       BASE_URL: ${BASE_URL}
@@ -49,6 +52,40 @@ services:
       GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS}
       GOOGLE_WALLET_SA_B64: ${GOOGLE_WALLET_SA_B64}
 
+    restart: always
+
+  email-worker:
+    build: .
+    depends_on:
+      - db
+    command: python -m app.workers.email_sender
+    volumes:
+      - ./data:/app/data
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////app/data/app.db}
+      SKIP_CREATE_ALL: "1"
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM: ${SMTP_FROM}
+      SMTP_USE_TLS: ${SMTP_USE_TLS}
+      BASE_URL: ${BASE_URL}
+      FRONTEND_URL: ${FRONTEND_URL}
+      SECRET_KEY: ${SECRET_KEY}
+      GOOGLE_WALLET_ISSUER_ID: ${GOOGLE_WALLET_ISSUER_ID}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS}
+      GOOGLE_WALLET_SA_B64: ${GOOGLE_WALLET_SA_B64}
+      EMAIL_OUTBOX_BATCH_SIZE: ${EMAIL_OUTBOX_BATCH_SIZE:-50}
+      EMAIL_OUTBOX_POLL_SECONDS: ${EMAIL_OUTBOX_POLL_SECONDS:-3}
+      EMAIL_OUTBOX_STALE_AFTER_SECONDS: ${EMAIL_OUTBOX_STALE_AFTER_SECONDS:-300}
+    healthcheck:
+      test: ["CMD", "python", "-c", "print('ok')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     restart: always
 
 volumes:

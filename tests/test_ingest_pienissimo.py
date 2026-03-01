@@ -128,7 +128,7 @@ def test_ingest_requires_email_even_when_external_id_is_provided(client, db):
     assert response.status_code == 422, response.text
 
 
-def test_ingest_retry_100x_is_idempotent_and_sends_email_once(client, db):
+def test_ingest_retry_100x_is_idempotent_and_sends_email_once(client, db, drain_email_outbox):
     org, batch = _create_org_with_batch(db, slug_prefix="ingest-idem")
     _create_integration_key(db, org_id=org.id, active=True)
 
@@ -176,10 +176,13 @@ def test_ingest_retry_100x_is_idempotent_and_sends_email_once(client, db):
             .all()
         )
         assert len(members) == 1
-        assert members[0].card_email_sent_at is not None
+        assert members[0].card_email_sent_at is None
         db.refresh(batch)
         assert batch.next_no == members[0].card_no + 1
 
+        drain_email_outbox()
+        db.refresh(members[0])
+        assert members[0].card_email_sent_at is not None
         captured = get_captured_emails()
         assert len(captured) == 1
     finally:
@@ -249,7 +252,7 @@ def test_ingest_skips_legacy_card_collision_and_returns_200(client, db):
     assert payload["card_number"] == batch.start_no + 1
 
 
-def test_ingest_second_call_returns_already_issued_without_side_effects(client, db):
+def test_ingest_second_call_returns_already_issued_without_side_effects(client, db, drain_email_outbox):
     org, batch = _create_org_with_batch(db, slug_prefix="ingest-already")
     _create_integration_key(db, org_id=org.id, active=True)
 
@@ -268,6 +271,7 @@ def test_ingest_second_call_returns_already_issued_without_side_effects(client, 
 
         db.refresh(batch)
         next_after_first = batch.next_no
+        drain_email_outbox()
         captured_after_first = len(get_captured_emails())
         assert captured_after_first == 1
 
@@ -285,6 +289,7 @@ def test_ingest_second_call_returns_already_issued_without_side_effects(client, 
 
         db.refresh(batch)
         assert batch.next_no == next_after_first
+        drain_email_outbox()
         assert len(get_captured_emails()) == captured_after_first
     finally:
         settings.EMAIL_MODE = previous_email_mode

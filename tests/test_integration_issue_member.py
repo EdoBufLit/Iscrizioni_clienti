@@ -162,7 +162,7 @@ def test_issue_member_returns_401_without_api_key(client, db):
     assert response.status_code == 401
 
 
-def test_issue_member_captures_html_email_with_verification_url(client, db):
+def test_issue_member_captures_html_email_with_verification_url(client, db, drain_email_outbox):
     original_email_mode = settings.EMAIL_MODE
     settings.EMAIL_MODE = "test"
     clear_captured_emails()
@@ -184,12 +184,14 @@ def test_issue_member_captures_html_email_with_verification_url(client, db):
         assert response.status_code == 200, response.text
 
         payload_out = response.json()
-        assert payload_out["member_portal_login_hint"] == "magic_link_sent"
+        assert payload_out["member_portal_login_hint"] == "magic_link_queued"
+        assert payload_out["email_status"] == "queued"
         assert payload_out["card_verification_token"]
         assert payload_out["card_download_url"].endswith(
             f"/api/cards/{payload_out['card_verification_token']}/download.pdf"
         )
         assert payload_out["wallet_enabled"] is False
+        drain_email_outbox()
 
         captured = get_captured_emails()
         assert len(captured) == 1
@@ -215,7 +217,7 @@ def test_issue_member_captures_html_email_with_verification_url(client, db):
         clear_captured_emails()
 
 
-def test_issue_member_uses_custom_card_email_subject_template(client, db):
+def test_issue_member_uses_custom_card_email_subject_template(client, db, drain_email_outbox):
     original_email_mode = settings.EMAIL_MODE
     settings.EMAIL_MODE = "test"
     clear_captured_emails()
@@ -238,6 +240,7 @@ def test_issue_member_uses_custom_card_email_subject_template(client, db):
             headers={"X-ASSONAM-API-KEY": raw_key},
         )
         assert response.status_code == 200, response.text
+        drain_email_outbox()
 
         captured = get_captured_emails()
         assert len(captured) == 1

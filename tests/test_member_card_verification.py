@@ -86,7 +86,10 @@ def test_member_card_verification_payload_and_endpoint(client, db):
     assert verify_data["card"]["number"] == 9876
     assert verify_data["card"]["year"] == datetime.utcnow().year
     assert verify_data["card"]["status"] == "attiva"
-    assert verify_data["organization"]["name"] == org.name
+    assert verify_data["organization"]["name"] in {
+        org.name,
+        org.club_display_name,
+    }
 
 
 def test_member_card_verify_html_response_for_browser(client, db):

@@ -51,6 +51,11 @@ class Settings:
 
     # Email mode: "normal" (SMTP) or "test" (in-memory capture)
     EMAIL_MODE: str = os.getenv("EMAIL_MODE", "normal")
+    EMAIL_OUTBOX_BATCH_SIZE: int = int(os.getenv("EMAIL_OUTBOX_BATCH_SIZE", "50"))
+    EMAIL_OUTBOX_POLL_SECONDS: int = int(os.getenv("EMAIL_OUTBOX_POLL_SECONDS", "3"))
+    EMAIL_OUTBOX_STALE_AFTER_SECONDS: int = int(
+        os.getenv("EMAIL_OUTBOX_STALE_AFTER_SECONDS", "300")
+    )
 
 settings = Settings()
 

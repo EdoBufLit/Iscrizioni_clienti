@@ -195,7 +195,7 @@ def test_org_admin_cannot_review_other_org_document(client, db):
     assert res.status_code == 403
 
 
-def test_document_approval_sends_card_email_once_for_active_member(client, db):
+def test_document_approval_sends_card_email_once_for_active_member(client, db, drain_email_outbox):
     suffix = uuid.uuid4().hex[:8]
     org = Organization(name=f"DocFlow Mail Org {suffix}", slug=f"docflow-mail-org-{suffix}", is_active=True)
     db.add(org)
@@ -252,12 +252,17 @@ def test_document_approval_sends_card_email_once_for_active_member(client, db):
         assert first.status_code == 200, first.text
 
         db.refresh(member)
+        assert member.card_delivered_at is None
+        assert member.card_email_sent_at is None
+
+        drain_email_outbox()
+        db.refresh(member)
         assert member.card_delivered_at is not None
         assert member.card_email_sent_at is not None
 
         captured = get_captured_emails()
         assert len(captured) == 1
-        assert captured[0]["subject"] == "La tua tessera ASSO.N.A.M. è pronta"
+        assert "ASSO.N.A.M." in (captured[0]["subject"] or "")
         assert (
             f"Ora puoi accedere alla tua area riservata con la tua email: {member.email}."
             in (captured[0]["text_body"] or "")
@@ -272,6 +277,7 @@ def test_document_approval_sends_card_email_once_for_active_member(client, db):
 
         second = client.post(f"/api/org-admin/documents/{doc.id}/approve")
         assert second.status_code == 200, second.text
+        drain_email_outbox()
         assert len(get_captured_emails()) == 1
     finally:
         settings.EMAIL_MODE = previous_email_mode

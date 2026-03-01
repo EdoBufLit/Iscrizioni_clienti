@@ -16,7 +16,11 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch
 
+from app.db import SessionLocal
 from app.main import app
+from app.models import EmailOutbox
+from app.services.email_outbox import drain_outbox_for_tests
+from app.utils import clear_captured_emails
 
 
 @pytest.fixture(scope="session")
@@ -33,3 +37,30 @@ def client():
         os.remove("test_qa.db")
     except OSError:
         pass
+
+
+@pytest.fixture
+def drain_email_outbox():
+    def _drain():
+        return drain_outbox_for_tests()
+
+    return _drain
+
+
+@pytest.fixture(autouse=True)
+def reset_email_delivery_state():
+    clear_captured_emails()
+    db = SessionLocal()
+    try:
+        db.query(EmailOutbox).delete()
+        db.commit()
+    finally:
+        db.close()
+    yield
+    clear_captured_emails()
+    db = SessionLocal()
+    try:
+        db.query(EmailOutbox).delete()
+        db.commit()
+    finally:
+        db.close()

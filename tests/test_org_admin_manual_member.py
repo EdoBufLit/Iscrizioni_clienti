@@ -121,6 +121,7 @@ def test_org_admin_cannot_override_org_id(client, db):
 
 
 def test_super_admin_cannot_create_member(client):
+    client.cookies.clear()
     client.post("/api/super-admin/auth/login", json={"email": "admin@assonam.it", "password": "admin"})
     res = client.post(
         "/api/org-admin/members",

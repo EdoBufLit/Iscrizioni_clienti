@@ -269,6 +269,7 @@ export async function joinOrganization(
   organization?: string;
   id?: number;
   email_sent?: boolean;
+  email_status?: string;
   warnings?: string[];
   active_card_page_url?: string;
   card_verification_token?: string;
@@ -746,6 +747,7 @@ export type OrgAdminMemberCreated = {
   internal_notes: string | null;
   is_manual: boolean;
   email_sent: boolean;
+  email_status?: string;
 };
 
 export type CardStock = {

@@ -3,12 +3,16 @@ import logging
 import os
 import secrets
 import smtplib
+import socket
 import uuid
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Tuple, List, Optional
-from fastapi import UploadFile, HTTPException
+from email.utils import make_msgid
+from typing import List, Optional, Tuple
+
+from fastapi import HTTPException, UploadFile
+
 from .config import settings
 
 logger = logging.getLogger(__name__)
@@ -16,22 +20,39 @@ logger = logging.getLogger(__name__)
 # Global list for email capture in tests
 _captured_emails = []
 
+
+class EmailDeliveryError(Exception):
+    """Base class for SMTP delivery errors."""
+
+
+class RetryableEmailDeliveryError(EmailDeliveryError):
+    """Temporary SMTP error, should be retried."""
+
+
+class PermanentEmailDeliveryError(EmailDeliveryError):
+    """Permanent SMTP error, should not be retried aggressively."""
+
+
 def get_captured_emails() -> List[dict]:
     """Return the list of captured emails (for testing)."""
     return _captured_emails
+
 
 def clear_captured_emails():
     """Clear the captured emails list."""
     global _captured_emails
     _captured_emails = []
 
+
 def generate_token() -> str:
     """Generates a secure random token."""
     return secrets.token_urlsafe(32)
 
+
 def hash_token(token: str) -> str:
     """Hashes a token using SHA256 and the secret key."""
     return hashlib.sha256(f"{token}{settings.SECRET_KEY}".encode()).hexdigest()
+
 
 def compute_sha256(file_path: str) -> str:
     """Computes SHA256 hash of a file."""
@@ -41,11 +62,12 @@ def compute_sha256(file_path: str) -> str:
             sha256_hash.update(byte_block)
     return sha256_hash.hexdigest()
 
+
 async def save_upload_file(
     upload_file: UploadFile,
     max_size: int = 10 * 1024 * 1024,
     allowed_types: List[str] = ["image/jpeg", "image/png", "application/pdf"],
-    sub_directory: str = ""
+    sub_directory: str = "",
 ) -> Tuple[str, int, str]:
     """
     Saves an uploaded file to the upload directory with hardening.
@@ -69,11 +91,15 @@ async def save_upload_file(
     }
 
     if file_ext not in valid_exts.get(upload_file.content_type, []):
-        raise HTTPException(status_code=400, detail="File extension does not match MIME type.")
+        raise HTTPException(
+            status_code=400, detail="File extension does not match MIME type."
+        )
 
     # Generate unique filename: <uuid>_<sanitized_filename>
     # Sanitize: simple alphanumeric + dot/dash/underscore
-    safe_filename = "".join(c for c in upload_file.filename if c.isalnum() or c in "._-")
+    safe_filename = "".join(
+        c for c in upload_file.filename if c.isalnum() or c in "._-"
+    )
     unique_filename = f"{uuid.uuid4()}_{safe_filename}"
     file_path = os.path.join(target_dir, unique_filename)
 
@@ -86,14 +112,23 @@ async def save_upload_file(
             # Read first chunk for magic bytes
             chunk = await upload_file.read(4096)
             if not chunk:
-                 raise HTTPException(status_code=400, detail="Empty file.")
+                raise HTTPException(status_code=400, detail="Empty file.")
 
             # Validate Magic Bytes
-            if upload_file.content_type == "application/pdf" and not chunk.startswith(b"%PDF-"):
+            if (
+                upload_file.content_type == "application/pdf"
+                and not chunk.startswith(b"%PDF-")
+            ):
                 raise HTTPException(status_code=400, detail="Invalid PDF file.")
-            elif upload_file.content_type == "image/jpeg" and not chunk.startswith(b"\xff\xd8\xff"):
+            elif (
+                upload_file.content_type == "image/jpeg"
+                and not chunk.startswith(b"\xff\xd8\xff")
+            ):
                 raise HTTPException(status_code=400, detail="Invalid JPEG file.")
-            elif upload_file.content_type == "image/png" and not chunk.startswith(b"\x89PNG\r\n\x1a\n"):
+            elif (
+                upload_file.content_type == "image/png"
+                and not chunk.startswith(b"\x89PNG\r\n\x1a\n")
+            ):
                 raise HTTPException(status_code=400, detail="Invalid PNG file.")
             elif upload_file.content_type == "image/svg+xml":
                 s_chunk = chunk.strip()
@@ -130,6 +165,212 @@ async def save_upload_file(
     return rel_path, size_bytes, sha256_hash.hexdigest()
 
 
+def _sanitize_header_value(value: str) -> str:
+    cleaned = (value or "").replace("\r", " ").replace("\n", " ").strip()
+    if not cleaned:
+        raise ValueError("Email header value is empty after sanitization.")
+    return cleaned
+
+
+def _build_message(
+    *,
+    to_email: str,
+    subject: str,
+    text_body: str,
+    html_body: Optional[str] = None,
+    inline_images: Optional[List[dict]] = None,
+) -> tuple[object, str]:
+    safe_to = _sanitize_header_value(to_email)
+    safe_subject = _sanitize_header_value(subject)
+    safe_from = _sanitize_header_value(settings.SMTP_FROM)
+
+    has_inline_images = bool(inline_images)
+    if has_inline_images:
+        msg = MIMEMultipart("related")
+        alt = MIMEMultipart("alternative")
+        alt.attach(MIMEText(text_body, "plain", "utf-8"))
+        if html_body:
+            alt.attach(MIMEText(html_body, "html", "utf-8"))
+        msg.attach(alt)
+    else:
+        msg = MIMEMultipart("alternative")
+        msg.attach(MIMEText(text_body, "plain", "utf-8"))
+        if html_body:
+            msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+    provider_message_id = make_msgid()
+    msg["From"] = safe_from
+    msg["To"] = safe_to
+    msg["Subject"] = safe_subject
+    msg["Message-ID"] = provider_message_id
+
+    if has_inline_images:
+        for image in inline_images or []:
+            cid = str(image.get("cid") or "").strip()
+            data = image.get("data") or b""
+            content_type = str(image.get("content_type") or "image/png").strip().lower()
+            filename = str(image.get("filename") or f"{cid or 'inline'}.png")
+            if not cid or not isinstance(data, (bytes, bytearray)) or not data:
+                continue
+            if "/" not in content_type:
+                continue
+            maintype, subtype = content_type.split("/", 1)
+            if maintype != "image":
+                continue
+
+            image_part = MIMEImage(bytes(data), _subtype=subtype)
+            image_part.add_header("Content-ID", f"<{cid}>")
+            image_part.add_header("Content-Disposition", "inline", filename=filename)
+            msg.attach(image_part)
+
+    return msg, provider_message_id
+
+
+def _smtp_error_text(code: int | None, message: object) -> str:
+    parts = []
+    if code is not None:
+        parts.append(f"SMTP {code}")
+    if isinstance(message, bytes):
+        text = message.decode("utf-8", errors="replace")
+    else:
+        text = str(message or "").strip()
+    if text:
+        parts.append(text)
+    return " - ".join(parts) if parts else "SMTP delivery failed"
+
+
+def _is_retryable_smtp_code(code: int | None, message: str) -> bool:
+    if code is None:
+        message_lower = message.lower()
+        return "429" in message_lower or "rate limit" in message_lower
+    if 400 <= code < 500:
+        return True
+    message_lower = message.lower()
+    return "429" in message_lower or "rate limit" in message_lower
+
+
+def _raise_classified_smtp_error(code: int | None, message: object):
+    error_text = _smtp_error_text(code, message)
+    if _is_retryable_smtp_code(code, error_text):
+        raise RetryableEmailDeliveryError(error_text)
+    if code is not None and code >= 500:
+        raise PermanentEmailDeliveryError(error_text)
+    raise RetryableEmailDeliveryError(error_text)
+
+
+def send_email_via_smtp_low_level(
+    *,
+    to_email: str,
+    subject: str,
+    text_body: str,
+    html_body: Optional[str] = None,
+    inline_images: Optional[List[dict]] = None,
+) -> str:
+    logger.info("smtp_send_start to=%s subject=%s", to_email, subject)
+
+    msg, provider_message_id = _build_message(
+        to_email=to_email,
+        subject=subject,
+        text_body=text_body,
+        html_body=html_body,
+        inline_images=inline_images,
+    )
+
+    if settings.EMAIL_MODE == "test":
+        _captured_emails.append(
+            {
+                "to": to_email,
+                "subject": subject,
+                "body": text_body,
+                "text_body": text_body,
+                "html_body": html_body,
+                "inline_images": [
+                    {
+                        "cid": str(item.get("cid") or ""),
+                        "content_type": str(item.get("content_type") or ""),
+                        "size": len(item.get("data") or b""),
+                    }
+                    for item in (inline_images or [])
+                ],
+                "provider_message_id": provider_message_id,
+            }
+        )
+        logger.info("smtp_send_captured provider_message_id=%s", provider_message_id)
+        return provider_message_id
+
+    missing = []
+    if not settings.SMTP_HOST:
+        missing.append("SMTP_HOST")
+    if not settings.SMTP_USER:
+        missing.append("SMTP_USER")
+    if not settings.SMTP_PASSWORD:
+        missing.append("SMTP_PASSWORD")
+    if missing:
+        raise RetryableEmailDeliveryError(
+            f"SMTP configuration incomplete: missing {', '.join(missing)}"
+        )
+
+    try:
+        with smtplib.SMTP(
+            settings.SMTP_HOST,
+            settings.SMTP_PORT,
+            timeout=15,
+        ) as server:
+            server.ehlo()
+            if settings.SMTP_USE_TLS:
+                server.starttls()
+                server.ehlo()
+            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+            server.sendmail(settings.SMTP_FROM, [_sanitize_header_value(to_email)], msg.as_string())
+        logger.info(
+            "smtp_send_ok to=%s provider_message_id=%s",
+            to_email,
+            provider_message_id,
+        )
+        return provider_message_id
+    except smtplib.SMTPRecipientsRefused as exc:
+        recipient_errors = []
+        for recipient, detail in (exc.recipients or {}).items():
+            code = None
+            message = detail
+            if isinstance(detail, tuple) and detail:
+                code = int(detail[0]) if detail[0] is not None else None
+                message = detail[1] if len(detail) > 1 else detail[0]
+            recipient_errors.append((recipient, code, message))
+        if recipient_errors:
+            codes = [code for _, code, _ in recipient_errors if code is not None]
+            message = "; ".join(
+                f"{recipient}: {_smtp_error_text(code, detail)}"
+                for recipient, code, detail in recipient_errors
+            )
+            if codes and all(not _is_retryable_smtp_code(code, message) for code in codes):
+                raise PermanentEmailDeliveryError(message) from exc
+            raise RetryableEmailDeliveryError(message) from exc
+        raise RetryableEmailDeliveryError("SMTP recipients refused") from exc
+    except (
+        socket.timeout,
+        TimeoutError,
+        smtplib.SMTPServerDisconnected,
+        smtplib.SMTPConnectError,
+        smtplib.SMTPDataError,
+        smtplib.SMTPHeloError,
+        OSError,
+    ) as exc:
+        message = str(exc) or exc.__class__.__name__
+        if "429" in message or "rate limit" in message.lower():
+            raise RetryableEmailDeliveryError(message) from exc
+        raise RetryableEmailDeliveryError(message) from exc
+    except smtplib.SMTPAuthenticationError as exc:
+        _raise_classified_smtp_error(int(getattr(exc, "smtp_code", 535)), exc.smtp_error)
+    except smtplib.SMTPResponseException as exc:
+        _raise_classified_smtp_error(int(exc.smtp_code), exc.smtp_error)
+    except ValueError as exc:
+        raise PermanentEmailDeliveryError(str(exc)) from exc
+    except Exception as exc:
+        logger.exception("smtp_send_unexpected_failure to=%s", to_email)
+        raise RetryableEmailDeliveryError(str(exc) or exc.__class__.__name__) from exc
+
+
 def send_email_html(
     to_email: str,
     subject: str,
@@ -141,144 +382,61 @@ def send_email_html(
     Send a multipart/alternative email (plain text + HTML).
     Returns True on success, False on failure.
     """
-    return _send_email_internal(
-        to_email=to_email,
-        subject=subject,
-        text_body=text_body,
-        html_body=html_body,
-        inline_images=inline_images,
-    )
-
-
-def send_email(to_email: str, subject: str, body: str, html_body: Optional[str] = None) -> bool:
-    """
-    Send an email via SMTP if configured, otherwise fall back to simulation.
-    Returns True on success, False on failure.
-    """
-    return _send_email_internal(
-        to_email=to_email,
-        subject=subject,
-        text_body=body,
-        html_body=html_body,
-    )
-
-
-def _send_email_internal(
-    to_email: str,
-    subject: str,
-    text_body: str,
-    html_body: Optional[str] = None,
-    inline_images: Optional[List[dict]] = None,
-) -> bool:
-    logger.info("send_email: to=%s, subject=%s", to_email, subject)
-
-    if settings.EMAIL_MODE == "test":
-        logger.info("send_email: Capturing email in test mode")
-        _captured_emails.append({
-            "to": to_email,
-            "subject": subject,
-            "body": text_body,
-            "text_body": text_body,
-            "html_body": html_body,
-            "inline_images": [
-                {
-                    "cid": str(item.get("cid") or ""),
-                    "content_type": str(item.get("content_type") or ""),
-                    "size": len(item.get("data") or b""),
-                }
-                for item in (inline_images or [])
-            ],
-        })
-        return True
-
-    if settings.SMTP_HOST and settings.SMTP_USER:
-        if not settings.SMTP_PASSWORD:
-            logger.error("send_email: SMTP_HOST/USER set but SMTP_PASSWORD is empty. Email NOT sent.")
-            return False
-
-        try:
-            def _sanitize_header_value(value: str) -> str:
-                cleaned = (value or "").replace("\r", " ").replace("\n", " ").strip()
-                if not cleaned:
-                    raise ValueError("Email header value is empty after sanitization.")
-                return cleaned
-
-            safe_to = _sanitize_header_value(to_email)
-            safe_subject = _sanitize_header_value(subject)
-
-            has_inline_images = bool(inline_images)
-            if has_inline_images:
-                msg = MIMEMultipart("related")
-                alt = MIMEMultipart("alternative")
-                alt.attach(MIMEText(text_body, "plain", "utf-8"))
-                if html_body:
-                    alt.attach(MIMEText(html_body, "html", "utf-8"))
-                msg.attach(alt)
-            else:
-                msg = MIMEMultipart("alternative")
-                msg.attach(MIMEText(text_body, "plain", "utf-8"))
-                if html_body:
-                    msg.attach(MIMEText(html_body, "html", "utf-8"))
-
-            msg["From"] = settings.SMTP_FROM
-            msg["To"] = safe_to
-            msg["Subject"] = safe_subject
-
-            if has_inline_images:
-                for image in inline_images or []:
-                    cid = str(image.get("cid") or "").strip()
-                    data = image.get("data") or b""
-                    content_type = str(image.get("content_type") or "image/png").strip().lower()
-                    filename = str(image.get("filename") or f"{cid or 'inline'}.png")
-                    if not cid or not isinstance(data, (bytes, bytearray)) or not data:
-                        continue
-                    if "/" not in content_type:
-                        continue
-                    maintype, subtype = content_type.split("/", 1)
-                    if maintype != "image":
-                        continue
-
-                    image_part = MIMEImage(bytes(data), _subtype=subtype)
-                    image_part.add_header("Content-ID", f"<{cid}>")
-                    image_part.add_header("Content-Disposition", "inline", filename=filename)
-                    msg.attach(image_part)
-
-            if settings.SMTP_USE_TLS:
-                server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15)
-                server.ehlo()
-                server.starttls()
-            else:
-                server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15)
-                server.ehlo()
-
-            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-            server.sendmail(settings.SMTP_FROM, [safe_to], msg.as_string())
-            server.quit()
-            logger.info("send_email: SMTP delivery OK to=%s", to_email)
-            return True
-        except Exception:
-            logger.exception("send_email: SMTP delivery FAILED to=%s", to_email)
-            return False
-    else:
-        logger.info("send_email: SMTP not configured, using simulation")
-        _send_email_simulation(to_email, subject, text_body, html_body)
-        return True
-
-
-def _send_email_simulation(
-    to_email: str,
-    subject: str,
-    text_body: str,
-    html_body: Optional[str] = None,
-):
-    """Log email to file for development/testing."""
-    log_line = f"To: {to_email}\nSubject: {subject}\nBody: {text_body}\n"
-    if html_body:
-        log_line += f"HTML:\n{html_body}\n"
-    log_line += f"{'-'*40}\n"
-    logger.info("EMAIL [simulation] to=%s subject=%s", to_email, subject)
     try:
-        with open("email_log.txt", "a") as f:
-            f.write(log_line)
-    except OSError:
-        pass
+        send_email_via_smtp_low_level(
+            to_email=to_email,
+            subject=subject,
+            text_body=text_body,
+            html_body=html_body,
+            inline_images=inline_images,
+        )
+        return True
+    except EmailDeliveryError as exc:
+        logger.warning(
+            "send_email_html_failed to=%s subject=%s error=%s",
+            to_email,
+            subject,
+            exc,
+        )
+        return False
+    except Exception:
+        logger.exception(
+            "send_email_html_unexpected_failure to=%s subject=%s",
+            to_email,
+            subject,
+        )
+        return False
+
+
+def send_email(
+    to_email: str,
+    subject: str,
+    body: str,
+    html_body: Optional[str] = None,
+) -> bool:
+    """
+    Send an email and return True on success, False on failure.
+    """
+    try:
+        send_email_via_smtp_low_level(
+            to_email=to_email,
+            subject=subject,
+            text_body=body,
+            html_body=html_body,
+        )
+        return True
+    except EmailDeliveryError as exc:
+        logger.warning(
+            "send_email_failed to=%s subject=%s error=%s",
+            to_email,
+            subject,
+            exc,
+        )
+        return False
+    except Exception:
+        logger.exception(
+            "send_email_unexpected_failure to=%s subject=%s",
+            to_email,
+            subject,
+        )
+        return False

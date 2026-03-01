@@ -22,8 +22,9 @@ from app.models import (
     PaymentMethod,
     IntegrationApiKey,
 )
+from app.services.email_outbox import build_email_payload, enqueue_email
 from app.security import hash_api_key, verify_password
-from app.utils import generate_token, hash_token, send_email, save_upload_file
+from app.utils import generate_token, hash_token, save_upload_file
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
 from app import audit
@@ -814,15 +815,24 @@ def create_org_admin(
         + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES),
     )
     db.add(token)
-    db.commit()
+    db.flush()
 
     link = f"{settings.BASE_URL}/api/org-admin/auth/verify?token={token_str}"
-    if not send_email(
+    outbox_id = enqueue_email(
+        db,
+        email_type="org_admin_invite",
         to_email=email_norm,
         subject="Invito area amministrazione associazione",
-        body=f"Sei stato invitato come amministratore di {org.name}.\nAccedi qui: {link}",
-    ):
-        logger.warning("Failed to send org admin invite to %s", email_norm)
+        payload=build_email_payload(
+            text_body=f"Sei stato invitato come amministratore di {org.name}.\nAccedi qui: {link}",
+            meta={
+                "admin_id": admin.id,
+                "org_id": admin.org_id,
+            },
+        ),
+        priority=1,
+    )
+    db.commit()
 
     audit.org_admin_created(
         admin_id=admin.id, org_id=admin.org_id, email_hash=audit._hash_email(email_norm)
@@ -836,6 +846,8 @@ def create_org_admin(
         "is_active": admin.is_active,
         "created_at": admin.created_at.isoformat() if admin.created_at else None,
         "created": True,
+        "email_status": "queued",
+        "outbox_id": outbox_id,
     }
 
 
@@ -1962,18 +1974,28 @@ def test_email(
 ):
     """Send a test email to verify SMTP configuration. Super admin only."""
     _require_super_admin(request, db)
-    ok = send_email(
+    outbox_id = enqueue_email(
+        db,
+        email_type="test_email",
         to_email=body.to,
         subject="ASSO.N.A.M. — Test Email",
-        body=(
+        payload=build_email_payload(
+            text_body=(
             "Questa email di test conferma che la configurazione SMTP "
             f"del portale ASSO.N.A.M. funziona correttamente.\n\n"
             f"Server: {settings.BASE_URL}\n"
-            f"SMTP Host: {settings.SMTP_HOST or '(simulation)'}"
+                f"SMTP Host: {settings.SMTP_HOST or '(missing)'}"
+            )
         ),
+        priority=9,
     )
+    db.commit()
     return {
-        "ok": ok,
-        "smtp_configured": bool(settings.SMTP_HOST and settings.SMTP_USER),
+        "ok": True,
+        "status": "queued",
+        "outbox_id": outbox_id,
+        "smtp_configured": bool(
+            settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASSWORD
+        ),
         "to": body.to,
     }

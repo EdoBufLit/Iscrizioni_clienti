@@ -2,7 +2,7 @@ import pytest
 from datetime import datetime, timedelta
 
 from app.db import SessionLocal
-from app.models import AdminUser, AdminRole, Organization, OrgAdminToken, Member
+from app.models import AdminUser, AdminRole, Member, MemberStatus, OrgAdminToken, Organization
 from app.utils import hash_token
 
 
@@ -62,6 +62,14 @@ def test_member_activity_logs_visible(client, db):
     res = client.post("/api/org-admin/members", json=payload)
     assert res.status_code == 200
     member_id = res.json()["id"]
+
+    member = db.query(Member).filter(Member.id == member_id).first()
+    assert member is not None
+    member.status = MemberStatus.ACTIVE
+    member.card_no = 8800
+    member.card_year = datetime.utcnow().year
+    member.joined_at = datetime.utcnow()
+    db.commit()
 
     res = client.post(f"/api/org-admin/members/{member_id}/send-access")
     assert res.status_code == 200

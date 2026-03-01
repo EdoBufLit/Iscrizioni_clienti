@@ -16,10 +16,19 @@ from sqlalchemy import (
     and_,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import enum
+import uuid
 from .db import Base
+
+
+def utcnow_aware() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+EMAIL_PAYLOAD_TYPE = JSON().with_variant(JSONB, "postgresql")
 
 
 class MemberStatus(str, enum.Enum):
@@ -133,6 +142,13 @@ class TokenType(str, enum.Enum):
     LOGIN_MAGIC_LINK = "login_magic_link"
 
 
+class EmailOutboxStatus(str, enum.Enum):
+    QUEUED = "queued"
+    SENDING = "sending"
+    SENT = "sent"
+    FAILED = "failed"
+
+
 class Organization(Base):
     __tablename__ = "organizations"
 
@@ -202,6 +218,59 @@ class OperationLog(Base):
     metadata_json = Column(JSON, nullable=True)
     ip = Column(String, nullable=True)
     user_agent = Column(String, nullable=True)
+
+
+class EmailOutbox(Base):
+    __tablename__ = "email_outbox"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    to_email = Column(String, nullable=False, index=True)
+    subject = Column(String, nullable=False)
+    email_type = Column(String, nullable=False, index=True)
+    payload_json = Column(EMAIL_PAYLOAD_TYPE, nullable=False, default=dict)
+    status = Column(
+        String,
+        nullable=False,
+        default=EmailOutboxStatus.QUEUED.value,
+        server_default=EmailOutboxStatus.QUEUED.value,
+        index=True,
+    )
+    priority = Column(Integer, nullable=False, default=5, server_default="5", index=True)
+    attempts = Column(Integer, nullable=False, default=0, server_default="0")
+    next_retry_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utcnow_aware,
+        server_default=sa.func.now(),
+        index=True,
+    )
+    last_error = Column(Text, nullable=True)
+    provider_message_id = Column(Text, nullable=True)
+    sent_at = Column(DateTime(timezone=True), nullable=True)
+    dedupe_key = Column(String, nullable=True, index=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utcnow_aware,
+        server_default=sa.func.now(),
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utcnow_aware,
+        onupdate=utcnow_aware,
+        server_default=sa.func.now(),
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_email_outbox_dispatch",
+            "status",
+            "priority",
+            "next_retry_at",
+            "created_at",
+        ),
+    )
 
 
 class AdminUser(Base):

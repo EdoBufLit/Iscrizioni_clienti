@@ -12,13 +12,14 @@ from app.config import settings
 from app.email_templates.member_card_email import build_member_card_email
 from app.models import DocStatus, Member, MemberDocument, Organization, Token, TokenType
 from app.services.card_verification import build_card_verification_token
+from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.member_activity import is_member_active
 from app.services.org_branding import (
     resolve_assonam_logo_url,
     resolve_card_logo_url,
     resolve_club_display_name,
 )
-from app.utils import generate_token, hash_token, send_email_html
+from app.utils import generate_token, hash_token
 
 logger = logging.getLogger(__name__)
 
@@ -97,16 +98,16 @@ def _build_member_magic_link(db: Session, member_id: int, frontend_base_url: str
     return f"{frontend_base_url.rstrip('/')}/auth/verify?token={token_str}&role=member"
 
 
-def _send_member_card_ready_email(
+def _enqueue_member_card_ready_email(
     *,
     db: Session,
     member: Member,
     org: Organization,
     backend_base_url: str,
     frontend_base_url: str,
-) -> bool:
+) -> str | None:
     if not member.email:
-        return False
+        return None
 
     _token, verification_url, download_url = _build_card_links(member, backend_base_url)
     club_display_name = resolve_club_display_name(org) or org.name
@@ -192,12 +193,24 @@ def _send_member_card_ready_email(
         statute_url=statute_url,
     )
 
-    return send_email_html(
-        to_email=member.email,
-        subject="La tua tessera ASSO.N.A.M. è pronta",
+    payload = build_email_payload(
         text_body=text_body,
         html_body=html_body,
         inline_images=inline_images if inline_images else None,
+        meta={
+            "member_id": member.id,
+            "org_id": member.org_id,
+            "mark_member_card_delivered": True,
+        },
+    )
+    return enqueue_email(
+        db,
+        email_type="member_card_ready",
+        to_email=member.email,
+        subject="La tua tessera ASSO.N.A.M. è pronta",
+        payload=payload,
+        priority=5,
+        dedupe_key=f"member_card_ready:{member.id}:{member.card_year}:{member.card_no}",
     )
 
 
@@ -252,7 +265,7 @@ def maybe_send_member_card_ready_email(db: Session, request: Request, member_id:
     frontend_base_url = _build_frontend_base_url(request)
 
     try:
-        sent = _send_member_card_ready_email(
+        outbox_id = _enqueue_member_card_ready_email(
             db=db,
             member=member,
             org=org,
@@ -261,22 +274,19 @@ def maybe_send_member_card_ready_email(db: Session, request: Request, member_id:
         )
     except Exception:
         logger.exception(
-            "Failed to send post-verification card email for member_id=%s org_id=%s",
+            "Failed to enqueue post-verification card email for member_id=%s org_id=%s",
             member.id,
             member.org_id,
         )
-        return {"sent": False, "reason": "email_send_failed"}
+        return {"sent": False, "queued": False, "reason": "email_enqueue_failed"}
 
-    if not sent:
+    if not outbox_id:
         logger.warning(
-            "Card email send returned false for member_id=%s org_id=%s",
+            "Card email enqueue returned empty outbox id for member_id=%s org_id=%s",
             member.id,
             member.org_id,
         )
-        return {"sent": False, "reason": "email_send_failed"}
+        return {"sent": False, "queued": False, "reason": "email_enqueue_failed"}
 
-    delivered_at = datetime.utcnow()
-    member.card_delivered_at = delivered_at
-    member.card_email_sent_at = delivered_at
     db.commit()
-    return {"sent": True, "reason": "sent", "delivered_at": delivered_at.isoformat()}
+    return {"sent": False, "queued": True, "reason": "queued", "outbox_id": outbox_id}

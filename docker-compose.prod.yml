@@ -7,3 +7,10 @@ services:
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google_wallet_sa.json
     volumes:
       - ./secrets/google-wallet-sa.json:/run/secrets/google_wallet_sa.json:ro
+
+  email-worker:
+    environment:
+      GOOGLE_WALLET_ISSUER_ID: ${GOOGLE_WALLET_ISSUER_ID}
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google_wallet_sa.json
+    volumes:
+      - ./secrets/google-wallet-sa.json:/run/secrets/google_wallet_sa.json:ro

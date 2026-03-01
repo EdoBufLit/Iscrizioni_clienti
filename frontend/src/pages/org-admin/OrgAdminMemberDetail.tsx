@@ -152,7 +152,10 @@ export default function OrgAdminMemberDetail() {
       category = "Accesso";
       tone = "border-blue-200 bg-blue-50 text-blue-700";
       const sent = (meta as Record<string, unknown>)?.email_sent;
-      if (typeof sent === "boolean") {
+      const status = (meta as Record<string, unknown>)?.email_status;
+      if (status === "queued") {
+        details = "Esito: accodata";
+      } else if (typeof sent === "boolean") {
         details = sent ? "Esito: inviato" : "Esito: non inviato";
       }
     } else if (item.action === "member.manual_create") {
@@ -220,7 +223,11 @@ export default function OrgAdminMemberDetail() {
       }
       const data = await res.json();
       setSendAccessMessage(
-        data.email_sent ? "Accesso inviato via email." : "Invio non riuscito, riprova."
+        data.email_status === "queued"
+          ? "Accesso accodato. Verra inviato a breve."
+          : data.email_sent
+            ? "Accesso inviato via email."
+            : "Invio non riuscito, riprova."
       );
       setMember((prev) =>
         prev

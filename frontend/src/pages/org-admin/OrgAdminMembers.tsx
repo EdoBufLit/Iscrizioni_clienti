@@ -52,6 +52,7 @@ type CreatedMember = {
   first_name: string;
   last_name: string;
   email_sent?: boolean;
+  email_status?: string;
 };
 
 const OrgAdminMembers = () => {
@@ -145,7 +146,11 @@ const OrgAdminMembers = () => {
       setShowModal(false);
       setSuccessMessage(
         `Socio ${created.first_name} ${created.last_name} creato con successo.${
-          created.email_sent ? " Accesso inviato via email." : ""
+          created.email_status === "queued"
+            ? " Accesso accodato."
+            : created.email_sent
+              ? " Accesso inviato via email."
+              : ""
         }`
       );
       setCreatedMemberId(created.id);

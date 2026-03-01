@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from app.db import get_db
 from app.models import Member, Token, TokenType, MemberDocument, MemberStatus, PaymentMethod, Organization, AdminUser, AdminRole, DocStatus, SignupSource
-from app.utils import generate_token, send_email, hash_token, save_upload_file
+from app.services.email_outbox import build_email_payload, enqueue_email
+from app.utils import generate_token, hash_token, save_upload_file
 from app.security import get_password_hash, verify_password
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
@@ -420,7 +421,7 @@ def api_auth_login(request: Request, email: str = Form(...), password: str = For
             expires_at=now + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES)
         )
         db.add(token)
-        db.commit()
+        db.flush()
 
         frontend_base = settings.FRONTEND_URL.rstrip("/")
         if not frontend_base:
@@ -429,12 +430,24 @@ def api_auth_login(request: Request, email: str = Form(...), password: str = For
         link = f"{frontend_base}/auth/verify?token={token_str}&role=member"
         logger.info("Generated member magic link: %s", link.replace(token_str, "***"))
 
-        if not send_email(
+        enqueue_email(
+            db,
+            email_type="member_magic_link",
             to_email=email,
             subject="Accesso Area Riservata - ASSO.N.A.M.",
-            body=f"Clicca qui per accedere alla tua area riservata: {link}\n\nIl link scade tra {settings.LOGIN_TOKEN_EXPIRE_MINUTES} minuti."
-        ):
-             logger.warning("Failed to send magic link email to %s", email)
+            payload=build_email_payload(
+                text_body=(
+                    f"Clicca qui per accedere alla tua area riservata: {link}\n\n"
+                    f"Il link scade tra {settings.LOGIN_TOKEN_EXPIRE_MINUTES} minuti."
+                ),
+                meta={
+                    "member_id": member.id,
+                    "token_purpose": TokenType.LOGIN_MAGIC_LINK.value,
+                },
+            ),
+            priority=1,
+        )
+        db.commit()
 
     audit.member_magic_link_requested(email=email, ip=get_client_ip(request))
     return {"status": "ok", "message": "If an account exists, a magic link has been sent."}

@@ -23,7 +23,7 @@ def setup_test_env():
     settings.EMAIL_MODE = original_mode
     clear_captured_emails()
 
-def test_member_magic_link_flow(client):
+def test_member_magic_link_flow(client, drain_email_outbox):
     # 1. Create Member
     email = "test.member@example.com"
     # We can use a direct DB insert or just rely on register if needed, but direct is safer for isolation
@@ -86,12 +86,12 @@ def test_member_magic_link_flow(client):
     clear_captured_emails()
     res = client.post("/api/auth/login", data={"email": " Test.Member@Example.com "})
     assert res.status_code == 200
+    drain_email_outbox()
 
     # Assert email captured
     captured = get_captured_emails()
     assert len(captured) == 1
-    assert captured[0]["to"] == " Test.Member@Example.com " # Or normalized depending on implementation?
-    # Actually `send_email` is called with the input email in `api_auth_login`
+    assert (captured[0]["to"] or "").lower() == email
 
     body = captured[0]["body"]
     assert "token=" in body
@@ -114,7 +114,7 @@ def test_member_magic_link_flow(client):
     assert me_res.status_code == 200
     assert me_res.json()["email"] == email
 
-def test_org_admin_magic_link_flow(client):
+def test_org_admin_magic_link_flow(client, drain_email_outbox):
     # 1. Setup Org Admin
     # Login as super admin to create it
     client.post("/api/super-admin/auth/login", json={"email": "admin@assonam.it", "password": "admin"})
@@ -123,6 +123,7 @@ def test_org_admin_magic_link_flow(client):
     email = f"org.admin.{uuid.uuid4().hex[:8]}@example.com"
     create_res = client.post("/api/super-admin/org-admins", json={"email": email, "org_id": 1})
     assert create_res.status_code == 200
+    drain_email_outbox()
     client.post("/api/super-admin/auth/logout")
 
     clear_captured_emails()
@@ -130,6 +131,7 @@ def test_org_admin_magic_link_flow(client):
     # 2. Request Magic Link
     res = client.post("/api/org-admin/auth/magic-link", data={"email": email})
     assert res.status_code == 200
+    drain_email_outbox()
 
     captured = get_captured_emails()
     assert len(captured) == 1
@@ -173,7 +175,7 @@ def test_org_admin_deleted_flow(client):
     assert res.status_code == 200 # Anti-enumeration
     assert len(get_captured_emails()) == 0 # No email sent
 
-def test_super_admin_create_flow_email(client):
+def test_super_admin_create_flow_email(client, drain_email_outbox):
     # Login as super admin
     client.post("/api/super-admin/auth/login", json={"email": "admin@assonam.it", "password": "admin"})
 
@@ -183,6 +185,7 @@ def test_super_admin_create_flow_email(client):
     email = f"new.admin.{uuid.uuid4().hex[:8]}@example.com"
     res = client.post("/api/super-admin/org-admins", json={"email": email, "org_id": 1})
     assert res.status_code == 200
+    drain_email_outbox()
 
     # Assert email sent automatically
     captured = get_captured_emails()
