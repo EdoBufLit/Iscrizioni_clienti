@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
+from typing import TYPE_CHECKING
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from app.models import Organization
 
 try:
     from twilio.rest import Client as TwilioClient
@@ -51,45 +56,89 @@ def _get_twilio_client():
 
 
 def twilio_alerts_are_configured() -> bool:
-    return bool(
-        settings.TWILIO_ACCOUNT_SID
-        and settings.TWILIO_AUTH_TOKEN
-        and settings.TWILIO_ALERT_FLOW_SID
+    return bool(settings.TWILIO_ACCOUNT_SID and settings.TWILIO_AUTH_TOKEN)
+
+
+def _resolve_low_cards_to(org: "Organization") -> str | None:
+    return to_whatsapp_address(getattr(org, "whatsapp_e164", None))
+
+
+def _resolve_low_cards_flow_sid() -> str | None:
+    return (
+        os.getenv("TWILIO_LOW_CARDS_FLOW_SID")
+        or os.getenv("TWILIO_STUDIO_FLOW_SID")
+        or os.getenv("TWILIO_ALERT_FLOW_SID")
+        or settings.TWILIO_LOW_CARDS_FLOW_SID
+        or settings.TWILIO_ALERT_FLOW_SID
     )
 
 
 def execute_low_cards_alert_flow(
     *,
-    to: str,
-    association_name: str | None,
-    remaining: str | int,
-) -> str:
+    org: "Organization",
+    remaining: int,
+) -> str | None:
     client = _get_twilio_client()
     if client is None:
         raise RuntimeError("Twilio client not configured")
-    if not settings.TWILIO_ALERT_FLOW_SID:
-        raise RuntimeError("Twilio alert flow env not configured")
 
-    whatsapp_to = to_whatsapp_address(to)
-    if not whatsapp_to:
-        raise ValueError(f"Invalid WhatsApp destination for alert flow: {to}")
+    to_whatsapp = _resolve_low_cards_to(org)
+    if not to_whatsapp:
+        logger.warning(
+            "low_cards_alert_missing_whatsapp org_id=%s slug=%s",
+            org.id,
+            org.slug,
+        )
+        return None
 
-    safe_association_name = (association_name or "").strip() or "Associazione"
-    safe_remaining = str(remaining).strip() if remaining is not None else "0"
-    if not safe_remaining:
-        safe_remaining = "0"
+    flow_sid = _resolve_low_cards_flow_sid()
+    if not flow_sid:
+        logger.warning(
+            "low_cards_alert_send_skipped_missing_env env=%s org_id=%s slug=%s",
+            "TWILIO_LOW_CARDS_FLOW_SID|TWILIO_STUDIO_FLOW_SID|TWILIO_ALERT_FLOW_SID",
+            org.id,
+            org.slug,
+        )
+        return None
 
-    execution = (
-        client.studio.v2.flows(settings.TWILIO_ALERT_FLOW_SID)
-        .executions.create(
+    from_whatsapp = os.getenv("TWILIO_WHATSAPP_FROM") or settings.TWILIO_WHATSAPP_FROM
+    if not from_whatsapp:
+        logger.warning(
+            "low_cards_alert_send_skipped_missing_env env=%s org_id=%s slug=%s",
+            "TWILIO_WHATSAPP_FROM",
+            org.id,
+            org.slug,
+        )
+        return None
+
+    logger.info(
+        "low_cards_alert_execution_start slug=%s to=%s remaining=%s",
+        org.slug,
+        to_whatsapp,
+        remaining,
+    )
+    try:
+        execution = client.studio.v2.flows(flow_sid).executions.create(
+            to=to_whatsapp,
+            from_=from_whatsapp,
             parameters={
-                "to": whatsapp_to,
-                "association_name": safe_association_name,
-                "remaining": safe_remaining,
+                "to": to_whatsapp,
+                "association_name": org.name,
+                "remaining": str(remaining),
             },
         )
-    )
-    return str(getattr(execution, "sid", "") or "")
+        execution_sid = str(getattr(execution, "sid", "") or "")
+        logger.info(
+            "low_cards_alert_execution_created sid=%s org_id=%s slug=%s to=%s",
+            execution_sid,
+            org.id,
+            org.slug,
+            to_whatsapp,
+        )
+        return execution_sid or None
+    except Exception:
+        logger.exception("low_cards_alert_execution_failed slug=%s", org.slug)
+        raise
 
 
 def send_admin_sms_notification(message: str) -> str | None:

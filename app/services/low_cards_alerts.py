@@ -8,7 +8,6 @@ from app.models import Organization
 from app.services.card_inventory import get_remaining_cards, get_remaining_cards_by_org
 from app.services.twilio_notifications import (
     execute_low_cards_alert_flow,
-    normalize_e164_phone,
     twilio_alerts_are_configured,
 )
 
@@ -16,18 +15,6 @@ logger = logging.getLogger(__name__)
 
 LOW_CARDS_THRESHOLD = 50
 LOW_CARDS_ALERT_COOLDOWN = timedelta(hours=24)
-
-
-def _resolve_org_alert_phone(org: Organization) -> str | None:
-    for raw_value in (
-        getattr(org, "whatsapp_e164", None),
-        getattr(org, "phone", None),
-    ):
-        value = (raw_value or "").strip()
-        if value:
-            return value
-    return None
-
 
 def run_low_cards_alert_job(
     *,
@@ -104,33 +91,21 @@ def run_low_cards_alert_job(
             stats["skipped_recent"] += 1
             continue
 
-        raw_phone = _resolve_org_alert_phone(org)
-        if not raw_phone:
-            logger.info("low_cards_alert_missing_phone org_slug=%s", org.slug)
-            stats["skipped_missing_phone"] += 1
-            continue
-        normalized_phone = normalize_e164_phone(raw_phone)
-        if not normalized_phone:
-            logger.warning("Invalid phone format for org %s: %s", org.slug, raw_phone)
-            stats["skipped_missing_phone"] += 1
-            continue
-
-        whatsapp_to = f"whatsapp:{normalized_phone}"
-        association_name = (org.name or org.slug or "").strip() or "Associazione"
-        remaining_text = str(remaining)
-        logger.info(
-            "Sending WhatsApp alert to %s org=%s remaining=%s",
-            whatsapp_to,
-            org.slug,
-            remaining_text,
-        )
-
         try:
             execution_sid = execute_low_cards_alert_flow(
-                to=whatsapp_to,
-                association_name=association_name,
-                remaining=remaining_text,
+                org=org,
+                remaining=remaining,
             )
+            if not execution_sid:
+                logger.info(
+                    "low_cards_alert_skipped_unconfigured org_id=%s slug=%s remaining=%s",
+                    org.id,
+                    org.slug,
+                    remaining,
+                )
+                if not getattr(org, "whatsapp_e164", None):
+                    stats["skipped_missing_phone"] += 1
+                continue
             org.last_low_cards_alert_at = current_time
             db.add(org)
             db.commit()
@@ -142,14 +117,15 @@ def run_low_cards_alert_job(
                 remaining,
                 execution_sid,
             )
-        except Exception:
+        except Exception as exc:
             db.rollback()
             stats["errors"] += 1
             logger.exception(
-                "low_cards_alert_failed org_id=%s slug=%s remaining=%s",
+                "low_cards_alert_failed org_id=%s slug=%s remaining=%s reason=%s",
                 org.id,
                 org.slug,
                 remaining,
+                exc,
             )
 
     return stats

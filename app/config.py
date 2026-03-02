@@ -52,6 +52,7 @@ class Settings:
     # Twilio / WhatsApp
     TWILIO_ACCOUNT_SID: str = os.getenv("TWILIO_ACCOUNT_SID", "")
     TWILIO_AUTH_TOKEN: str = os.getenv("TWILIO_AUTH_TOKEN", "")
+    TWILIO_LOW_CARDS_FLOW_SID: str = os.getenv("TWILIO_LOW_CARDS_FLOW_SID", "")
     TWILIO_ALERT_FLOW_SID: str = os.getenv("TWILIO_ALERT_FLOW_SID", "")
     TWILIO_WHATSAPP_FROM: str = os.getenv("TWILIO_WHATSAPP_FROM", "")
     TWILIO_SMS_FROM: str = os.getenv("TWILIO_SMS_FROM", "")
