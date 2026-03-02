@@ -32,6 +32,7 @@ from app.models import (
 )
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.card_allocation import allocate_next_card, release_card_number
+from app.services.card_inventory import compute_org_card_stock
 from app.utils import generate_token, hash_token
 from app.services.member_activity import (
     get_member_lifecycle_status,
@@ -101,53 +102,7 @@ def _normalize_tag_culture(value: Optional[str]) -> Optional[str]:
 def _compute_org_card_stock(
     db: Session, org_id: int, now: datetime | None = None
 ) -> dict[str, int]:
-    target_year = int((now or datetime.utcnow()).year)
-    batches = (
-        db.query(CardBatch.start_no, CardBatch.end_no)
-        .filter(
-            CardBatch.org_id == org_id,
-            CardBatch.year == target_year,
-            CardBatch.is_enabled.is_(True),
-            CardBatch.released_at.is_(None),
-        )
-        .all()
-    )
-    if not batches:
-        return {"total": 0, "used": 0, "remaining": 0}
-
-    total = int(sum((end_no - start_no + 1) for start_no, end_no in batches))
-    range_filters = [
-        and_(Member.card_no >= start_no, Member.card_no <= end_no)
-        for start_no, end_no in batches
-    ]
-    allocated_non_deleted = int(
-        db.query(func.count(func.distinct(Member.card_no)))
-        .filter(
-            Member.org_id == org_id,
-            Member.deleted_at.is_(None),
-            Member.card_year == target_year,
-            Member.card_no.isnot(None),
-            or_(*range_filters),
-        )
-        .scalar()
-        or 0
-    )
-    remaining = max(total - allocated_non_deleted, 0)
-    active_used = int(
-        db.query(func.count(Member.id))
-        .filter(
-            Member.org_id == org_id,
-            *member_active_filters(now=now),
-        )
-        .scalar()
-        or 0
-    )
-
-    return {
-        "total": total,
-        "used": active_used,
-        "remaining": remaining,
-    }
+    return compute_org_card_stock(db, org_id, now=now)
 
 
 def _batch_enabled_flag(value: object) -> bool:

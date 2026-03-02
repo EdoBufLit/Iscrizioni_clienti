@@ -38,6 +38,34 @@ When `SMTP_HOST` is empty the application falls back to writing emails to `email
 | `SMTP_FROM` | No | `noreply@assonam.it` | Sender address for outgoing emails. |
 | `SMTP_USE_TLS` | No | `true` | Enable STARTTLS (`true`, `1`, or `yes` to enable). |
 
+## WhatsApp / Twilio
+
+Required for the WhatsApp bot and the low-cards alert flow.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `TWILIO_ACCOUNT_SID` | **Yes** (Twilio features) | _(empty)_ | Twilio Account SID used by `twilio-python`. |
+| `TWILIO_AUTH_TOKEN` | **Yes** (Twilio features) | _(empty)_ | Twilio Auth Token used by `twilio-python`. |
+| `TWILIO_ALERT_FLOW_SID` | **Yes** (low-cards alerts) | _(empty)_ | Twilio Studio Flow SID (`FW...`) for the low-cards WhatsApp alert. |
+| `TWILIO_WHATSAPP_FROM` | **Yes** (low-cards alerts) | _(empty)_ | WhatsApp sender used for Studio execution (example: `whatsapp:+390299914307`). |
+| `TWILIO_SMS_FROM` | No | _(empty)_ | Optional SMS-capable sender used for admin notifications after a recharge request. |
+| `ADMIN_PHONE_E164` | No | _(empty)_ | Optional admin phone in E.164 format. If present with `TWILIO_SMS_FROM`, the bot sends an SMS notification for new recharge requests. |
+| `LOW_CARDS_ALERT_JOB_INTERVAL_SECONDS` | No | `300` | How often the dedicated `low-cards-worker` re-checks organizations for low-card alerts. |
+
+Association-level storage:
+
+- `organizations.whatsapp_e164`: preferred destination number for low-cards alerts.
+- Fallback lookup order in code: `whatsapp_e164` -> `phone`.
+
+## OpenAI
+
+Optional fallback for generic bot replies outside the tessere ordering flow.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `OPENAI_API_KEY` | No | _(empty)_ | Enables OpenAI fallback in `POST /api/whatsapp/bot`. If missing, the bot uses a static fallback reply. |
+| `OPENAI_MODEL` | No | `gpt-4o-mini` | Chat Completions model used by the WhatsApp bot fallback. |
+
 ## Integration API Keys
 
 No dedicated environment variable is required for issuer integrations. Keys are stored in DB table `integration_api_keys` as salted hashes (`sha256(raw_key + SECRET_KEY)`).

@@ -18,3 +18,5 @@ Pillow
 google-auth
 PyJWT
 psycopg2-binary
+openai
+twilio

@@ -503,7 +503,7 @@ const SuperAdminOrganizations = () => {
                                   onClick={() => openModal("branding", org)}
                                   className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
                                 >
-                                  Branding
+                                  Branding + Alert
                                 </button>
                               </>
                             )}
@@ -530,7 +530,7 @@ const SuperAdminOrganizations = () => {
                                   onClick={() => openModal("branding", org)}
                                   className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
                                 >
-                                  Branding
+                                  Branding + Alert
                                 </button>
                               </>
                             )}

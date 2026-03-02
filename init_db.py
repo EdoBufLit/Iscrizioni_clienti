@@ -18,7 +18,15 @@ from sqlalchemy import inspect, text
 
 from app.db import Base, SessionLocal, engine
 import app.models
-from app.models import Organization, AdminUser, AdminRole, CardBatch, EmailOutbox
+from app.models import (
+    Organization,
+    AdminUser,
+    AdminRole,
+    CardBatch,
+    EmailOutbox,
+    WhatsAppSession,
+    RechargeRequest,
+)
 from app.security import get_password_hash
 from app.config import settings
 from app.services.member_cleanup import (
@@ -102,6 +110,20 @@ def init_db():
             "run 'alembic upgrade head' to align schema history."
         )
         EmailOutbox.__table__.create(bind=engine, checkfirst=True)
+
+    if "whatsapp_sessions" not in inspect(engine).get_table_names():
+        logger.warning(
+            "whatsapp_sessions table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        WhatsAppSession.__table__.create(bind=engine, checkfirst=True)
+
+    if "recharge_requests" not in inspect(engine).get_table_names():
+        logger.warning(
+            "recharge_requests table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        RechargeRequest.__table__.create(bind=engine, checkfirst=True)
 
     # Legacy column migrations - DEPRECATED, kept for backwards compatibility
     with engine.begin() as conn:
@@ -193,6 +215,7 @@ def init_db():
             conn, "operation_logs", "actor_member_id", "INTEGER REFERENCES members(id)"
         )
         _add_column_if_missing(conn, "organizations", "deleted_at", "DATETIME")
+        _add_column_if_missing(conn, "organizations", "whatsapp_e164", "TEXT")
         # Card-branding fields: keep startup resilient even if alembic wasn't run yet.
         _add_column_if_missing(conn, "organizations", "club_display_name", "VARCHAR")
         _add_column_if_missing(conn, "organizations", "card_email_subject", "VARCHAR")
@@ -208,6 +231,9 @@ def init_db():
         )
         _add_column_if_missing(
             conn, "organizations", "auto_approve_signup", "INTEGER DEFAULT 0"
+        )
+        _add_column_if_missing(
+            conn, "organizations", "last_low_cards_alert_at", "DATETIME"
         )
         _add_column_if_missing(conn, "card_batches", "year", "INTEGER")
         _add_column_if_missing(

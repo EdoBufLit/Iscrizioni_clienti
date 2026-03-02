@@ -36,36 +36,41 @@ jobs:
             git checkout -B "$BRANCH" "origin/$BRANCH"
             git reset --hard "origin/$BRANCH"
 
-            # ---- Required env (per ENV_REQUIRED.md) ----
-            export SECRET_KEY='${{ secrets.SECRET_KEY }}'
-            export BASE_URL='${{ secrets.BASE_URL }}'
-            export SUPER_ADMIN_EMAIL='${{ secrets.SUPER_ADMIN_EMAIL }}'
-            export SUPER_ADMIN_PASSWORD='${{ secrets.SUPER_ADMIN_PASSWORD }}'
+            DATABASE_URL='${{ secrets.DATABASE_URL }}'
+            POSTGRES_PASSWORD='${{ secrets.POSTGRES_PASSWORD }}'
+            BUILD_TIME="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
-            # ---- Optional env ----
-            # If not set as secrets, these will just be empty and app uses defaults/fallbacks.
-            export DATABASE_URL='${{ secrets.DATABASE_URL }}'
-            export POSTGRES_PASSWORD='${{ secrets.POSTGRES_PASSWORD }}'
-            export UPLOAD_DIR='${{ secrets.UPLOAD_DIR }}'
-            export SPA_DIR='${{ secrets.SPA_DIR }}'
-            export FRONTEND_URL='${{ secrets.FRONTEND_URL }}'
-
-            # Google Wallet (optional: use file path or base64 fallback)
-            export GOOGLE_WALLET_ISSUER_ID='${{ secrets.GOOGLE_WALLET_ISSUER_ID }}'
-            export GOOGLE_APPLICATION_CREDENTIALS='${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}'
-            export GOOGLE_WALLET_SA_B64='${{ secrets.GOOGLE_WALLET_SA_B64 }}'
-
-            # SMTP (set these secrets only if you want real email sending)
-            export SMTP_HOST='${{ secrets.SMTP_HOST }}'
-            export SMTP_PORT='${{ secrets.SMTP_PORT }}'
-            export SMTP_USER='${{ secrets.SMTP_USER }}'
-            export SMTP_PASSWORD='${{ secrets.SMTP_PASSWORD }}'
-            export SMTP_FROM='${{ secrets.SMTP_FROM }}'
-            export SMTP_USE_TLS='${{ secrets.SMTP_USE_TLS }}'
-
-            # Build metadata
-            export GIT_SHA='${{ github.sha }}'
-            export BUILD_TIME="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            cat > .env <<'EOF'
+            SECRET_KEY=${{ secrets.SECRET_KEY }}
+            BASE_URL=${{ secrets.BASE_URL }}
+            FRONTEND_URL=${{ secrets.FRONTEND_URL }}
+            SUPER_ADMIN_EMAIL=${{ secrets.SUPER_ADMIN_EMAIL }}
+            SUPER_ADMIN_PASSWORD=${{ secrets.SUPER_ADMIN_PASSWORD }}
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
+            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            UPLOAD_DIR=${{ secrets.UPLOAD_DIR }}
+            SPA_DIR=${{ secrets.SPA_DIR }}
+            GOOGLE_WALLET_ISSUER_ID=${{ secrets.GOOGLE_WALLET_ISSUER_ID }}
+            GOOGLE_APPLICATION_CREDENTIALS=${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+            GOOGLE_WALLET_SA_B64=${{ secrets.GOOGLE_WALLET_SA_B64 }}
+            SMTP_HOST=${{ secrets.SMTP_HOST }}
+            SMTP_PORT=${{ secrets.SMTP_PORT }}
+            SMTP_USER=${{ secrets.SMTP_USER }}
+            SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
+            SMTP_FROM=${{ secrets.SMTP_FROM }}
+            SMTP_USE_TLS=${{ secrets.SMTP_USE_TLS }}
+            TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }}
+            TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }}
+            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            OPENAI_MODEL=${{ secrets.OPENAI_MODEL }}
+            TWILIO_ALERT_FLOW_SID=${{ secrets.TWILIO_ALERT_FLOW_SID }}
+            TWILIO_WHATSAPP_FROM=${{ secrets.TWILIO_WHATSAPP_FROM }}
+            ADMIN_PHONE_E164=${{ secrets.ADMIN_PHONE_E164 }}
+            TWILIO_SMS_FROM=${{ secrets.TWILIO_SMS_FROM }}
+            EOF
+            printf 'GIT_SHA=%s\n' '${{ github.sha }}' >> .env
+            printf 'BUILD_TIME=%s\n' "$BUILD_TIME" >> .env
+            chmod 600 .env
 
             COMPOSE_FILES="-f docker-compose.yml"
             if [ -f "docker-compose.prod.yml" ] && [ -f "secrets/google-wallet-sa.json" ]; then

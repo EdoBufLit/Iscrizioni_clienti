@@ -888,6 +888,7 @@ export type SuperAdminOrganization = {
   name: string;
   slug: string;
   club_display_name?: string | null;
+  whatsapp_e164?: string | null;
   card_email_subject?: string | null;
   card_logo_url?: string | null;
   description: string | null;
@@ -1039,6 +1040,7 @@ export async function createSuperAdminOrganization(data: {
   name: string;
   slug?: string;
   club_display_name?: string;
+  whatsapp_e164?: string;
   card_email_subject?: string;
   card_logo_url?: string;
   city?: string;
@@ -1063,6 +1065,7 @@ export async function patchSuperAdminOrganization(
   data: {
     name?: string;
     club_display_name?: string | null;
+    whatsapp_e164?: string | null;
     card_email_subject?: string | null;
     card_logo_url?: string | null;
     description?: string;

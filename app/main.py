@@ -32,6 +32,7 @@ from app.routes import (
     org_admin,
     public,
     super_admin,
+    whatsapp,
 )
 from app.schema_validation import validate_schema
 from app.spa import SPAStaticFiles
@@ -202,6 +203,7 @@ app.include_router(public.router)
 app.include_router(onboarding.router)
 app.include_router(integrations.router)
 app.include_router(ingest_pienissimo.router)
+app.include_router(whatsapp.router)
 
 
 @app.get("/health")

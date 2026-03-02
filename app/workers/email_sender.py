@@ -36,15 +36,15 @@ def main() -> int:
     )
 
     if args.once:
-        stats = process_outbox_once(limit=args.limit)
+        stats = {"email": process_outbox_once(limit=args.limit)}
         logger.info("email_worker_cycle %s", stats)
         return 0
 
     while True:
-        stats = process_outbox_once(limit=args.limit)
+        stats = {"email": process_outbox_once(limit=args.limit)}
         logger.info("email_worker_cycle %s", stats)
         sleep_seconds = max(1, int(settings.EMAIL_OUTBOX_POLL_SECONDS))
-        if stats["claimed"] > 0:
+        if stats["email"]["claimed"] > 0:
             sleep_seconds = 1
         time.sleep(sleep_seconds)
 

@@ -49,6 +49,21 @@ class Settings:
     SMTP_FROM: str = os.getenv("SMTP_FROM", "noreply@assonam.it")
     SMTP_USE_TLS: bool = os.getenv("SMTP_USE_TLS", "true").lower() in ("true", "1", "yes")
 
+    # Twilio / WhatsApp
+    TWILIO_ACCOUNT_SID: str = os.getenv("TWILIO_ACCOUNT_SID", "")
+    TWILIO_AUTH_TOKEN: str = os.getenv("TWILIO_AUTH_TOKEN", "")
+    TWILIO_ALERT_FLOW_SID: str = os.getenv("TWILIO_ALERT_FLOW_SID", "")
+    TWILIO_WHATSAPP_FROM: str = os.getenv("TWILIO_WHATSAPP_FROM", "")
+    TWILIO_SMS_FROM: str = os.getenv("TWILIO_SMS_FROM", "")
+    ADMIN_PHONE_E164: str = os.getenv("ADMIN_PHONE_E164", "")
+    LOW_CARDS_ALERT_JOB_INTERVAL_SECONDS: int = int(
+        os.getenv("LOW_CARDS_ALERT_JOB_INTERVAL_SECONDS", "300")
+    )
+
+    # OpenAI
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
     # Email mode: "normal" (SMTP) or "test" (in-memory capture)
     EMAIL_MODE: str = os.getenv("EMAIL_MODE", "normal")
     EMAIL_OUTBOX_BATCH_SIZE: int = int(os.getenv("EMAIL_OUTBOX_BATCH_SIZE", "50"))

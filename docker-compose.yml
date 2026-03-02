@@ -1,5 +1,35 @@
 version: '3.8'
 
+x-app-env: &app-env
+  DATABASE_URL: ${DATABASE_URL:-sqlite:////app/data/app.db}
+  SKIP_CREATE_ALL: "1"
+  SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL}
+  SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD}
+  SMTP_HOST: ${SMTP_HOST}
+  SMTP_PORT: ${SMTP_PORT}
+  SMTP_USER: ${SMTP_USER}
+  SMTP_PASSWORD: ${SMTP_PASSWORD}
+  SMTP_FROM: ${SMTP_FROM}
+  SMTP_USE_TLS: ${SMTP_USE_TLS}
+  EMAIL_OUTBOX_BATCH_SIZE: ${EMAIL_OUTBOX_BATCH_SIZE:-50}
+  EMAIL_OUTBOX_POLL_SECONDS: ${EMAIL_OUTBOX_POLL_SECONDS:-3}
+  EMAIL_OUTBOX_STALE_AFTER_SECONDS: ${EMAIL_OUTBOX_STALE_AFTER_SECONDS:-300}
+  BASE_URL: ${BASE_URL}
+  FRONTEND_URL: ${FRONTEND_URL}
+  SECRET_KEY: ${SECRET_KEY}
+  GOOGLE_WALLET_ISSUER_ID: ${GOOGLE_WALLET_ISSUER_ID}
+  GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS}
+  GOOGLE_WALLET_SA_B64: ${GOOGLE_WALLET_SA_B64}
+  TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+  TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+  TWILIO_ALERT_FLOW_SID: ${TWILIO_ALERT_FLOW_SID}
+  TWILIO_WHATSAPP_FROM: ${TWILIO_WHATSAPP_FROM}
+  TWILIO_SMS_FROM: ${TWILIO_SMS_FROM}
+  ADMIN_PHONE_E164: ${ADMIN_PHONE_E164}
+  OPENAI_API_KEY: ${OPENAI_API_KEY}
+  OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+  LOW_CARDS_ALERT_JOB_INTERVAL_SECONDS: ${LOW_CARDS_ALERT_JOB_INTERVAL_SECONDS:-300}
+
 services:
   db:
     image: postgres:16
@@ -20,37 +50,7 @@ services:
     volumes:
       - ./data:/app/data
 
-    environment:
-      # DB
-      # SQLite (container default): sqlite:////app/data/app.db
-      # PostgreSQL (compose service): postgresql+psycopg2://assonam:${POSTGRES_PASSWORD}@db:5432/assonam
-      DATABASE_URL: ${DATABASE_URL:-sqlite:////app/data/app.db}
-      SKIP_CREATE_ALL: "1"
-
-      # Super admin
-      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL}
-      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD}
-
-      # SMTP
-      SMTP_HOST: ${SMTP_HOST}
-      SMTP_PORT: ${SMTP_PORT}
-      SMTP_USER: ${SMTP_USER}
-      SMTP_PASSWORD: ${SMTP_PASSWORD}
-      SMTP_FROM: ${SMTP_FROM}
-      SMTP_USE_TLS: ${SMTP_USE_TLS}
-      EMAIL_OUTBOX_BATCH_SIZE: ${EMAIL_OUTBOX_BATCH_SIZE:-50}
-      EMAIL_OUTBOX_POLL_SECONDS: ${EMAIL_OUTBOX_POLL_SECONDS:-3}
-      EMAIL_OUTBOX_STALE_AFTER_SECONDS: ${EMAIL_OUTBOX_STALE_AFTER_SECONDS:-300}
-
-      # App / misc
-      BASE_URL: ${BASE_URL}
-      FRONTEND_URL: ${FRONTEND_URL}
-      SECRET_KEY: ${SECRET_KEY}
-
-      # Google Wallet (optional)
-      GOOGLE_WALLET_ISSUER_ID: ${GOOGLE_WALLET_ISSUER_ID}
-      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS}
-      GOOGLE_WALLET_SA_B64: ${GOOGLE_WALLET_SA_B64}
+    environment: *app-env
 
     restart: always
 
@@ -61,26 +61,22 @@ services:
     command: python -m app.workers.email_sender
     volumes:
       - ./data:/app/data
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-sqlite:////app/data/app.db}
-      SKIP_CREATE_ALL: "1"
-      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL}
-      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD}
-      SMTP_HOST: ${SMTP_HOST}
-      SMTP_PORT: ${SMTP_PORT}
-      SMTP_USER: ${SMTP_USER}
-      SMTP_PASSWORD: ${SMTP_PASSWORD}
-      SMTP_FROM: ${SMTP_FROM}
-      SMTP_USE_TLS: ${SMTP_USE_TLS}
-      BASE_URL: ${BASE_URL}
-      FRONTEND_URL: ${FRONTEND_URL}
-      SECRET_KEY: ${SECRET_KEY}
-      GOOGLE_WALLET_ISSUER_ID: ${GOOGLE_WALLET_ISSUER_ID}
-      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS}
-      GOOGLE_WALLET_SA_B64: ${GOOGLE_WALLET_SA_B64}
-      EMAIL_OUTBOX_BATCH_SIZE: ${EMAIL_OUTBOX_BATCH_SIZE:-50}
-      EMAIL_OUTBOX_POLL_SECONDS: ${EMAIL_OUTBOX_POLL_SECONDS:-3}
-      EMAIL_OUTBOX_STALE_AFTER_SECONDS: ${EMAIL_OUTBOX_STALE_AFTER_SECONDS:-300}
+    environment: *app-env
+    healthcheck:
+      test: ["CMD", "python", "-c", "print('ok')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: always
+
+  low-cards-worker:
+    build: .
+    depends_on:
+      - db
+    command: python -m app.workers.low_cards_scheduler
+    volumes:
+      - ./data:/app/data
+    environment: *app-env
     healthcheck:
       test: ["CMD", "python", "-c", "print('ok')"]
       interval: 30s

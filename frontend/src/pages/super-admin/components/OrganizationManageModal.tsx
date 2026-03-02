@@ -28,6 +28,7 @@ type ModalFormData = {
   name: string;
   slug: string;
   club_display_name: string;
+  whatsapp_e164: string;
   card_email_subject: string;
   card_logo_url: string;
   city: string;
@@ -51,6 +52,7 @@ const createInitialFormData = (): ModalFormData => ({
   name: "",
   slug: "",
   club_display_name: "",
+  whatsapp_e164: "",
   card_email_subject: "",
   card_logo_url: "",
   city: "",
@@ -198,6 +200,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
       name: selectedOrg.name ?? "",
       slug: selectedOrg.slug ?? "",
       club_display_name: selectedOrg.club_display_name ?? "",
+      whatsapp_e164: selectedOrg.whatsapp_e164 ?? "",
       card_email_subject: selectedOrg.card_email_subject ?? "",
       card_logo_url: selectedOrg.card_logo_url ?? "",
       auto_approve_signup: Boolean(selectedOrg.auto_approve_signup),
@@ -246,6 +249,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
           name: formData.name,
           slug: formData.slug || undefined,
           club_display_name: normalizeOptionalString(formData.club_display_name) ?? undefined,
+          whatsapp_e164: normalizeOptionalString(formData.whatsapp_e164) ?? undefined,
           card_email_subject: normalizeOptionalString(formData.card_email_subject) ?? undefined,
           card_logo_url: normalizeOptionalString(formData.card_logo_url) ?? undefined,
           city: formData.city || undefined,
@@ -279,6 +283,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
       } else if (modalType === "branding" && selectedOrg) {
         await patchSuperAdminOrganization(selectedOrg.id, {
           club_display_name: normalizeOptionalString(formData.club_display_name),
+          whatsapp_e164: normalizeOptionalString(formData.whatsapp_e164),
           card_email_subject: normalizeOptionalString(formData.card_email_subject),
           card_logo_url: normalizeOptionalString(formData.card_logo_url),
           auto_approve_signup: formData.auto_approve_signup,
@@ -435,7 +440,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
             {modalType === "range" && `Imposta range tessere: ${selectedOrg?.name}`}
             {modalType === "add-batch" && `Aggiungi lotto tessere: ${selectedOrg?.name}`}
             {modalType === "view-batches" && `Lotti tessere: ${selectedOrg?.name}`}
-            {modalType === "branding" && `Branding tessera: ${selectedOrg?.name}`}
+            {modalType === "branding" && `Branding e alert: ${selectedOrg?.name}`}
           </h3>
 
           <div className="mt-4 min-h-[48px]">
@@ -522,7 +527,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
 
               <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-neutral-600">
-                  Branding tessera
+                  Branding e alert
                 </p>
                 <div className="mt-3 grid gap-3">
                   <div>
@@ -539,6 +544,24 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                       }
                       placeholder="Golden Age Club - Speakeasy"
                     />
+                  </div>
+                  <div>
+                    <label htmlFor="whatsapp_e164" className="block text-xs font-medium text-neutral-600">
+                      WhatsApp alert (E.164)
+                    </label>
+                    <input
+                      id="whatsapp_e164"
+                      className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                      type="text"
+                      value={formData.whatsapp_e164}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, whatsapp_e164: e.target.value }))
+                      }
+                      placeholder="+393331112233"
+                    />
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Numero usato dal job automatico quando le tessere residue scendono sotto soglia.
+                    </p>
                   </div>
                   <div>
                     <label htmlFor="card_email_subject" className="block text-xs font-medium text-neutral-600">
@@ -809,7 +832,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
           {modalType === "branding" && (
             <div className="grid gap-4">
               <p className="text-sm text-neutral-600">
-                Configura nome pubblico, oggetto email e logo dedicato per la tessera digitale.
+                Configura branding tessera e numero WhatsApp usato per gli alert automatici.
               </p>
               <div>
                 <label className="block text-xs font-medium text-neutral-600">
@@ -824,6 +847,23 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                   }
                   placeholder={selectedOrg?.name ?? "Nome club"}
                 />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-600">
+                  WhatsApp alert (E.164)
+                </label>
+                <input
+                  type="text"
+                  className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
+                  value={formData.whatsapp_e164}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, whatsapp_e164: e.target.value }))
+                  }
+                  placeholder="+393331112233"
+                />
+                <p className="mt-1 text-xs text-neutral-500">
+                  Numero destinatario degli alert WhatsApp per tessere residue sotto soglia.
+                </p>
               </div>
               <div>
                 <label className="block text-xs font-medium text-neutral-600">

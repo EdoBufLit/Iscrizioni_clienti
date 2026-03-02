@@ -29,6 +29,7 @@ from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
 from app import audit
 from app.services.association_delete import delete_association_and_release_range
+from app.services.low_cards_alerts import run_low_cards_alert_job
 from app.services.member_activity import get_member_lifecycle_status, is_member_active
 from app.services.member_maintenance import expire_and_purge_members
 from app.services.statute_upload import (
@@ -143,12 +144,17 @@ def _serialize_organization_row(
         "name": org.name,
         "slug": org.slug,
         "email": org.email,
+        "phone": org.phone,
+        "whatsapp_e164": org.whatsapp_e164,
         "club_display_name": org.club_display_name,
         "card_email_subject": org.card_email_subject,
         "card_logo_url": org.card_logo_url,
         "description": org.description,
         "is_active": org.is_active,
         "is_archived": org.deleted_at is not None,
+        "last_low_cards_alert_at": org.last_low_cards_alert_at.isoformat()
+        if org.last_low_cards_alert_at
+        else None,
         "deleted_at": org.deleted_at,
         "created_at": org.created_at,
         "city": org.city,
@@ -246,6 +252,7 @@ class CreateOrganization(BaseModel):
     country: str = "Italy"
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
+    whatsapp_e164: Optional[str] = None
     website: Optional[str] = None
     is_active: bool = True
     auto_approve_signup: bool = False
@@ -266,6 +273,7 @@ class PatchOrganization(BaseModel):
     country: Optional[str] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
+    whatsapp_e164: Optional[str] = None
     website: Optional[str] = None
     is_active: Optional[bool] = None
     auto_approve_signup: Optional[bool] = None
@@ -357,6 +365,11 @@ class CreateIntegrationKeyBody(BaseModel):
 class RunMaintenanceBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
     purge_pii: bool = True
+
+
+class RunLowCardsAlertJobBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    force: bool = False
 
 
 def _get_org_or_404(db: Session, org_id: int) -> Organization:
@@ -684,6 +697,36 @@ def run_maintenance(
             "purged_count": result["purged_count"],
             "current_year": result["current_year"],
         },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+
+    return {
+        "ok": True,
+        "ran_at": now.isoformat() + "Z",
+        **result,
+    }
+
+
+@router.post("/alerts/low-cards/run")
+def run_low_cards_alerts(
+    request: Request,
+    body: RunLowCardsAlertJobBody | None = None,
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+    now = datetime.utcnow()
+    payload = body or RunLowCardsAlertJobBody()
+    result = run_low_cards_alert_job(db=db, now=now, force=payload.force)
+
+    audit.log_operation(
+        db,
+        action="low_cards_alert_job_run",
+        entity_type="organization",
+        actor_admin_id=admin.id,
+        actor_role=AdminRole.SUPER_ADMIN.value,
+        metadata={"force": payload.force, "result": result},
         ip=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
@@ -1053,6 +1096,7 @@ def create_organization(
         country=body.country,
         email=body.email,
         phone=body.phone,
+        whatsapp_e164=body.whatsapp_e164,
         website=body.website,
         is_active=body.is_active,
         auto_approve_signup=body.auto_approve_signup,

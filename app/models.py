@@ -28,7 +28,8 @@ def utcnow_aware() -> datetime:
     return datetime.now(timezone.utc)
 
 
-EMAIL_PAYLOAD_TYPE = JSON().with_variant(JSONB, "postgresql")
+GENERIC_JSON_TYPE = JSON().with_variant(JSONB, "postgresql")
+EMAIL_PAYLOAD_TYPE = GENERIC_JSON_TYPE
 
 
 class MemberStatus(str, enum.Enum):
@@ -172,6 +173,7 @@ class Organization(Base):
     description = Column(Text, nullable=True)
     email = Column(String, nullable=True)
     phone = Column(String, nullable=True)
+    whatsapp_e164 = Column(String, nullable=True)
     website = Column(String, nullable=True)
     logo_path = Column(String, nullable=True)
     club_display_name = Column(String, nullable=True)
@@ -188,6 +190,7 @@ class Organization(Base):
         Boolean, nullable=False, default=False, server_default="false"
     )
     is_active = Column(Boolean, default=True)
+    last_low_cards_alert_at = Column(DateTime, nullable=True)
     deleted_at = Column(DateTime, nullable=True)
 
     created_by_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
@@ -198,6 +201,9 @@ class Organization(Base):
     batches = relationship("CardBatch", back_populates="organization")
     integration_api_keys = relationship(
         "IntegrationApiKey", back_populates="organization"
+    )
+    recharge_requests = relationship(
+        "RechargeRequest", back_populates="organization"
     )
     admins = relationship(
         "AdminUser", back_populates="organization", foreign_keys="AdminUser.org_id"
@@ -271,6 +277,37 @@ class EmailOutbox(Base):
             "created_at",
         ),
     )
+
+
+class WhatsAppSession(Base):
+    __tablename__ = "whatsapp_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    wa_from = Column(String, nullable=False, unique=True, index=True)
+    state = Column(String, nullable=False, default="idle", server_default="idle")
+    data = Column(GENERIC_JSON_TYPE, nullable=False, default=dict)
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+
+class RechargeRequest(Base):
+    __tablename__ = "recharge_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    association_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
+    association_name = Column(String, nullable=False)
+    requester_whatsapp = Column(String, nullable=False)
+    requester_profile_name = Column(String, nullable=True)
+    requested_cards = Column(Integer, nullable=False)
+    notes = Column(Text, nullable=True)
+    status = Column(String, nullable=False, default="new", server_default="new")
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    organization = relationship("Organization", back_populates="recharge_requests")
 
 
 class AdminUser(Base):
