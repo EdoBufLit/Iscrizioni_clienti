@@ -55,31 +55,37 @@ def twilio_alerts_are_configured() -> bool:
         settings.TWILIO_ACCOUNT_SID
         and settings.TWILIO_AUTH_TOKEN
         and settings.TWILIO_ALERT_FLOW_SID
-        and settings.TWILIO_WHATSAPP_FROM
     )
 
 
 def execute_low_cards_alert_flow(
     *,
     to: str,
-    association_name: str,
-    remaining: int,
+    association_name: str | None,
+    remaining: str | int,
 ) -> str:
     client = _get_twilio_client()
     if client is None:
         raise RuntimeError("Twilio client not configured")
-    if not settings.TWILIO_ALERT_FLOW_SID or not settings.TWILIO_WHATSAPP_FROM:
+    if not settings.TWILIO_ALERT_FLOW_SID:
         raise RuntimeError("Twilio alert flow env not configured")
+
+    whatsapp_to = to_whatsapp_address(to)
+    if not whatsapp_to:
+        raise ValueError(f"Invalid WhatsApp destination for alert flow: {to}")
+
+    safe_association_name = (association_name or "").strip() or "Associazione"
+    safe_remaining = str(remaining).strip() if remaining is not None else "0"
+    if not safe_remaining:
+        safe_remaining = "0"
 
     execution = (
         client.studio.v2.flows(settings.TWILIO_ALERT_FLOW_SID)
         .executions.create(
-            to=to,
-            from_=settings.TWILIO_WHATSAPP_FROM,
             parameters={
-                "to": to,
-                "association_name": association_name,
-                "remaining": str(remaining),
+                "to": whatsapp_to,
+                "association_name": safe_association_name,
+                "remaining": safe_remaining,
             },
         )
     )

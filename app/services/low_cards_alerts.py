@@ -8,7 +8,7 @@ from app.models import Organization
 from app.services.card_inventory import get_remaining_cards, get_remaining_cards_by_org
 from app.services.twilio_notifications import (
     execute_low_cards_alert_flow,
-    to_whatsapp_address,
+    normalize_e164_phone,
     twilio_alerts_are_configured,
 )
 
@@ -18,16 +18,14 @@ LOW_CARDS_THRESHOLD = 50
 LOW_CARDS_ALERT_COOLDOWN = timedelta(hours=24)
 
 
-def _resolve_org_whatsapp_destination(org: Organization) -> str | None:
+def _resolve_org_alert_phone(org: Organization) -> str | None:
     for raw_value in (
         getattr(org, "whatsapp_e164", None),
-        getattr(org, "whatsapp_phone", None),
         getattr(org, "phone", None),
-        getattr(org, "mobile", None),
     ):
-        destination = to_whatsapp_address(raw_value)
-        if destination:
-            return destination
+        value = (raw_value or "").strip()
+        if value:
+            return value
     return None
 
 
@@ -106,21 +104,32 @@ def run_low_cards_alert_job(
             stats["skipped_recent"] += 1
             continue
 
-        destination = _resolve_org_whatsapp_destination(org)
-        if not destination:
-            logger.warning(
-                "low_cards_alert_missing_phone org_id=%s slug=%s",
-                org.id,
-                org.slug,
-            )
+        raw_phone = _resolve_org_alert_phone(org)
+        if not raw_phone:
+            logger.info("low_cards_alert_missing_phone org_slug=%s", org.slug)
+            stats["skipped_missing_phone"] += 1
+            continue
+        normalized_phone = normalize_e164_phone(raw_phone)
+        if not normalized_phone:
+            logger.warning("Invalid phone format for org %s: %s", org.slug, raw_phone)
             stats["skipped_missing_phone"] += 1
             continue
 
+        whatsapp_to = f"whatsapp:{normalized_phone}"
+        association_name = (org.name or org.slug or "").strip() or "Associazione"
+        remaining_text = str(remaining)
+        logger.info(
+            "Sending WhatsApp alert to %s org=%s remaining=%s",
+            whatsapp_to,
+            org.slug,
+            remaining_text,
+        )
+
         try:
             execution_sid = execute_low_cards_alert_flow(
-                to=destination,
-                association_name=org.name,
-                remaining=remaining,
+                to=whatsapp_to,
+                association_name=association_name,
+                remaining=remaining_text,
             )
             org.last_low_cards_alert_at = current_time
             db.add(org)
