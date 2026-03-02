@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -115,19 +116,33 @@ def _http_detail_message(detail: object, default: str) -> str:
     return default
 
 
+async def _safe_request_body_text(request: Request) -> str | None:
+    try:
+        raw_body = await request.body()
+    except Exception:
+        return None
+
+    if not raw_body:
+        return None
+    if isinstance(raw_body, (bytes, bytearray)):
+        return raw_body.decode("utf-8", errors="replace")
+    return str(raw_body)
+
+
 @app.exception_handler(RequestValidationError)
 async def request_validation_error_handler(
     request: Request, exc: RequestValidationError
 ):
     errors = exc.errors()
-    return JSONResponse(
-        status_code=422,
-        content={
-            "detail": errors,
-            "message": _first_validation_message(errors),
-            "request_id": get_request_id(request),
-        },
-    )
+    payload = {
+        "detail": errors,
+        "message": _first_validation_message(errors),
+        "request_id": get_request_id(request),
+    }
+    body_text = await _safe_request_body_text(request)
+    if body_text is not None:
+        payload["body"] = body_text
+    return JSONResponse(status_code=422, content=jsonable_encoder(payload))
 
 
 @app.exception_handler(StarletteHTTPException)
