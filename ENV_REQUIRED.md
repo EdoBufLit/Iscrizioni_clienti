@@ -66,6 +66,16 @@ Optional fallback for generic bot replies outside the tessere ordering flow.
 | `OPENAI_API_KEY` | No | _(empty)_ | Enables OpenAI fallback in `POST /api/whatsapp/bot`. If missing, the bot uses a static fallback reply. |
 | `OPENAI_MODEL` | No | `gpt-4o-mini` | Chat Completions model used by the WhatsApp bot fallback. |
 
+Webhook smoke test for Twilio WhatsApp:
+
+```bash
+curl -i -X POST "http://localhost:8000/api/whatsapp/bot" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data "Body=ciao&From=whatsapp:+393891605511&To=whatsapp:+390299914307&MessageSid=SM123&WaId=393891605511&ProfileName=Test&NumMedia=0"
+```
+
+Expected result: HTTP `200`.
+
 ## Integration API Keys
 
 No dedicated environment variable is required for issuer integrations. Keys are stored in DB table `integration_api_keys` as salted hashes (`sha256(raw_key + SECRET_KEY)`).

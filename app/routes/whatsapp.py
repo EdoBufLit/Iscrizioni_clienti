@@ -1,45 +1,132 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+import logging
+import re
+
+from fastapi import APIRouter, Depends, Request
+from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.services.whatsapp_bot import handle_whatsapp_bot_message
 
 router = APIRouter(prefix="/api/whatsapp", tags=["whatsapp"])
+logger = logging.getLogger(__name__)
 
 
-class WhatsAppBotRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class WhatsAppWebhook(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
-    from_: str = Field(min_length=3)
-    body: str = Field(min_length=1)
+    from_: str | None = None
+    body: str | None = None
+    to: str | None = None
+    message_sid: str | None = None
+    wa_id: str | None = None
     profile_name: str | None = None
+    num_media: int | None = None
+    sms_sid: str | None = None
+    sms_status: str | None = None
 
     @model_validator(mode="before")
     @classmethod
-    def _map_from_field(cls, value):
-        if isinstance(value, dict) and "from" in value and "from_" not in value:
-            copied = dict(value)
-            copied["from_"] = copied.pop("from")
-            return copied
-        return value
+    def _normalize_keys(cls, value):
+        if not isinstance(value, dict):
+            return value
+        copied = dict(value)
+        key_map = {
+            "from": "from_",
+            "from_": "from_",
+            "body": "body",
+            "to": "to",
+            "messagesid": "message_sid",
+            "waid": "wa_id",
+            "profilename": "profile_name",
+            "nummedia": "num_media",
+            "smssid": "sms_sid",
+            "smsstatus": "sms_status",
+        }
+        for raw_key, raw_value in value.items():
+            normalized_key = key_map.get(str(raw_key).lower())
+            if normalized_key:
+                copied[normalized_key] = raw_value
+        for address_key in ("from_", "to"):
+            if address_key in copied and isinstance(copied[address_key], str):
+                copied[address_key] = re.sub(
+                    r"^(whatsapp:)\s+(\d)",
+                    r"\1+\2",
+                    copied[address_key].strip(),
+                    flags=re.IGNORECASE,
+                )
+        return copied
 
 
-class WhatsAppBotResponse(BaseModel):
-    reply: str
+async def _read_webhook_payload(request: Request) -> dict[str, object]:
+    content_type = (request.headers.get("content-type") or "").lower()
+    if "application/json" in content_type:
+        payload = await request.json()
+        return payload if isinstance(payload, dict) else {}
+
+    form = await request.form()
+    data: dict[str, object] = {}
+    for key, value in form.multi_items():
+        data[str(key)] = value if isinstance(value, str) else str(value)
+    return data
 
 
-@router.post("/bot", response_model=WhatsAppBotResponse)
-def whatsapp_bot(
-    payload: WhatsAppBotRequest,
+def _truncate_body(value: str | None) -> str:
+    body = (value or "").strip()
+    if len(body) <= 200:
+        return body
+    return f"{body[:200]}..."
+
+
+@router.post("/bot")
+async def whatsapp_bot(
+    request: Request,
     db: Session = Depends(get_db),
 ):
-    reply = handle_whatsapp_bot_message(
-        db,
-        wa_from=payload.from_,
-        body=payload.body,
-        profile_name=payload.profile_name,
+    try:
+        payload_data = await _read_webhook_payload(request)
+        payload = WhatsAppWebhook.model_validate(payload_data)
+    except (ValidationError, ValueError, TypeError):
+        logger.warning(
+            "whatsapp_webhook_parse_failed content_type=%s",
+            request.headers.get("content-type"),
+            exc_info=True,
+        )
+        return {"ok": False}
+
+    logger.info(
+        "whatsapp_webhook received from=%s to=%s message_sid=%s body=%s",
+        payload.from_,
+        payload.to,
+        payload.message_sid,
+        _truncate_body(payload.body),
     )
+
+    if not payload.from_ or not payload.body:
+        logger.warning(
+            "whatsapp_webhook_missing_required_fields from=%s to=%s message_sid=%s",
+            payload.from_,
+            payload.to,
+            payload.message_sid,
+        )
+        return {"ok": False}
+
+    try:
+        reply = handle_whatsapp_bot_message(
+            db,
+            wa_from=payload.from_,
+            body=payload.body,
+            profile_name=payload.profile_name,
+        )
+    except Exception:
+        logger.exception(
+            "whatsapp_webhook_handler_failed from=%s to=%s message_sid=%s",
+            payload.from_,
+            payload.to,
+            payload.message_sid,
+        )
+        return {"ok": False}
+
     return {"reply": reply}

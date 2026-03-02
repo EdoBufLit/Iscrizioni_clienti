@@ -5,6 +5,7 @@ import pytest
 
 from app.db import SessionLocal
 from app.models import Organization, RechargeRequest, WhatsAppSession
+from app.routes import whatsapp as whatsapp_route
 from app.services import whatsapp_bot as whatsapp_bot_service
 
 
@@ -174,23 +175,39 @@ def test_whatsapp_bot_uses_openai_fallback_when_configured(client, monkeypatch):
     assert response.json() == {"reply": "Risposta AI sintetica."}
 
 
-# Manual smoke test:
-# curl -i -X POST "http://localhost:8000/api/whatsapp/bot" \
-#   -H "Content-Type: application/x-www-form-urlencoded" \
-#   --data "Body=ciao&From=whatsapp:+393891605511&To=whatsapp:+390299914307"
-def test_whatsapp_bot_form_payload_returns_422_instead_of_500(client):
+def test_whatsapp_bot_accepts_form_urlencoded_payload(client, monkeypatch):
+    monkeypatch.setattr(
+        whatsapp_route,
+        "handle_whatsapp_bot_message",
+        lambda _db, *, wa_from, body, profile_name=None: (
+            f"echo:{wa_from}:{body}:{profile_name or ''}"
+        ),
+    )
+
     response = client.post(
         "/api/whatsapp/bot",
-        data="Body=ciao&From=whatsapp:+393891605511&To=whatsapp:+390299914307",
+        data=(
+            "Body=ciao&From=whatsapp:+393891605511&To=whatsapp:+390299914307"
+            "&MessageSid=SM123&WaId=393891605511&ProfileName=Test&NumMedia=0"
+        ),
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
 
-    assert response.status_code == 422, response.text
-    payload = response.json()
-    assert payload["request_id"]
-    assert isinstance(payload["detail"], list)
-    assert payload["body"] == "Body=ciao&From=whatsapp:+393891605511&To=whatsapp:+390299914307"
-    assert "bytes is not JSON serializable" not in response.text
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "reply": "echo:whatsapp:+393891605511:ciao:Test",
+    }
+
+
+def test_whatsapp_bot_returns_200_with_ok_false_when_form_parse_fails(client):
+    response = client.post(
+        "/api/whatsapp/bot",
+        data="Body=ciao&From=whatsapp:+393891605511&NumMedia=abc",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"ok": False}
 
 
 def test_docs_route_still_available(client):
