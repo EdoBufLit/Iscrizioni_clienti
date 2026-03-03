@@ -2,12 +2,22 @@ from __future__ import annotations
 
 import argparse
 import logging
+import sys
 import time
 
 from app.config import settings
 from app.services.low_cards_alerts import run_low_cards_alert_job_once
 
 logger = logging.getLogger(__name__)
+
+
+def _configure_worker_logging() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        stream=sys.stdout,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+        force=True,
+    )
 
 
 def _parse_args() -> argparse.Namespace:
@@ -39,6 +49,7 @@ def _run_low_cards_alerts_safely(*, force: bool) -> dict[str, object]:
 
 
 def main() -> int:
+    _configure_worker_logging()
     args = _parse_args()
     interval_seconds = max(30, int(settings.LOW_CARDS_ALERT_JOB_INTERVAL_SECONDS))
     logger.info(

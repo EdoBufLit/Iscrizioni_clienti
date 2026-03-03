@@ -36,11 +36,18 @@ def run_low_cards_alert_job(
         "skipped_not_determinable": 0,
         "errors": 0,
     }
+    logger.info(
+        "low_cards_alert_job_start force=%s threshold=%s now=%s",
+        force,
+        LOW_CARDS_THRESHOLD,
+        current_time.isoformat(),
+    )
 
     if not twilio_alerts_are_configured():
         logger.warning("low_cards_alert_job_skipped missing_twilio_alert_config")
         stats["ok"] = False
         stats["ran"] = False
+        logger.info("low_cards_alert_job_done %s", stats)
         return stats
 
     organizations = (
@@ -83,6 +90,13 @@ def run_low_cards_alert_job(
             continue
 
         stats["eligible"] += 1
+        logger.info(
+            "low_cards_alert_candidate org_id=%s slug=%s remaining=%s force=%s",
+            org.id,
+            org.slug,
+            remaining,
+            force,
+        )
         if (
             not force
             and org.last_low_cards_alert_at is not None
@@ -128,6 +142,7 @@ def run_low_cards_alert_job(
                 exc,
             )
 
+    logger.info("low_cards_alert_job_done %s", stats)
     return stats
 
 

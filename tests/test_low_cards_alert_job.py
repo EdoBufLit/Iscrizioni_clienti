@@ -135,6 +135,9 @@ def test_low_cards_alert_job_sends_twilio_execution_and_respects_cooldown(
             "remaining": 40,
         }
     ]
+    assert "low_cards_alert_job_start" in caplog.text
+    assert "low_cards_alert_candidate" in caplog.text
+    assert "low_cards_alert_job_done" in caplog.text
     assert "low_cards_alert_sent" in caplog.text
     db.refresh(alerted_org)
     assert alerted_org.last_low_cards_alert_at == now
@@ -392,4 +395,7 @@ def test_low_cards_alert_job_skips_unconfigured_execution_without_marking_sent(
     assert result["sent"] == 0
     assert result["errors"] == 0
     assert org.last_low_cards_alert_at is None
+    assert "low_cards_alert_job_start" in caplog.text
+    assert "low_cards_alert_candidate" in caplog.text
+    assert "low_cards_alert_job_done" in caplog.text
     assert f"low_cards_alert_skipped_unconfigured org_id={org.id} slug={org.slug}" in caplog.text

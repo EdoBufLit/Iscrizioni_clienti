@@ -46,6 +46,7 @@ Required for the WhatsApp bot and the low-cards alert flow.
 |---|---|---|---|
 | `TWILIO_ACCOUNT_SID` | **Yes** (Twilio features) | _(empty)_ | Twilio Account SID used by `twilio-python`. |
 | `TWILIO_AUTH_TOKEN` | **Yes** (Twilio features) | _(empty)_ | Twilio Auth Token used by `twilio-python`. |
+| `TWILIO_LOW_CARDS_FLOW_SID` | Recommended (low-cards alerts) | _(empty)_ | Preferred Twilio Studio Flow SID (`FW...`) for low-cards WhatsApp alerts. Falls back to `TWILIO_STUDIO_FLOW_SID` / `TWILIO_ALERT_FLOW_SID` if unset. |
 | `TWILIO_ALERT_FLOW_SID` | **Yes** (low-cards alerts) | _(empty)_ | Twilio Studio Flow SID (`FW...`) for the low-cards WhatsApp alert. |
 | `TWILIO_WHATSAPP_FROM` | **Yes** (low-cards alerts) | _(empty)_ | WhatsApp sender used for Studio execution (example: `whatsapp:+390299914307`). |
 | `TWILIO_SMS_FROM` | No | _(empty)_ | Optional SMS-capable sender used for admin notifications after a recharge request. |
@@ -55,7 +56,7 @@ Required for the WhatsApp bot and the low-cards alert flow.
 Association-level storage:
 
 - `organizations.whatsapp_e164`: preferred destination number for low-cards alerts.
-- Fallback lookup order in code: `whatsapp_e164` -> `phone`.
+- The low-cards alert worker sends only when `whatsapp_e164` is populated and valid.
 
 ## OpenAI
 

@@ -11,6 +11,7 @@ Contenuto propagato nel file `.env`:
 - nuove env WhatsApp/OpenAI:
   - `OPENAI_API_KEY`
   - `OPENAI_MODEL`
+  - `TWILIO_LOW_CARDS_FLOW_SID`
   - `TWILIO_ALERT_FLOW_SID`
   - `TWILIO_WHATSAPP_FROM`
   - `ADMIN_PHONE_E164`
@@ -45,6 +46,7 @@ Creare o verificare in GitHub:
 - `TWILIO_AUTH_TOKEN`
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`
+- `TWILIO_LOW_CARDS_FLOW_SID`
 - `TWILIO_ALERT_FLOW_SID`
 - `TWILIO_WHATSAPP_FROM`
 - `ADMIN_PHONE_E164`
@@ -64,7 +66,7 @@ File server:
 
 ```bash
 cd /opt/assonam
-grep -E 'OPENAI|TWILIO_ALERT_FLOW_SID|TWILIO_WHATSAPP_FROM' .env
+grep -E 'OPENAI|TWILIO_LOW_CARDS_FLOW_SID|TWILIO_ALERT_FLOW_SID|TWILIO_WHATSAPP_FROM' .env
 ```
 
 Dentro il container backend:
@@ -89,6 +91,7 @@ Log low-cards:
 
 ```bash
 docker logs -f low-cards-worker
+docker logs -f --tail=200 app-low-cards-worker-1
 ```
 
 Esecuzione singola outbox email:
@@ -103,6 +106,16 @@ Esecuzione manuale solo alert low-cards:
 docker compose exec -T low-cards-worker python -m app.workers.low_cards_alerts
 docker compose exec -T low-cards-worker python -m app.workers.low_cards_alerts --force
 docker compose exec -T low-cards-worker python -m app.workers.low_cards_scheduler --once
+docker compose exec -T low-cards-worker python - <<'PY'
+from app.db import SessionLocal
+from app.services.low_cards_alerts import run_low_cards_alert_job
+
+db = SessionLocal()
+try:
+    print(run_low_cards_alert_job(db=db, force=True))
+finally:
+    db.close()
+PY
 ```
 
 ## Endpoint Manuali
@@ -160,5 +173,12 @@ ORDER BY next_retry_at ASC, created_at ASC;
 3. Prova il bot con `curl` o via Studio Twilio.
 4. Esegui il job alert manuale: `docker compose exec -T low-cards-worker python -m app.workers.low_cards_alerts --force`
 5. Controlla i log di `email-worker`, `low-cards-worker` e gli execution log di Twilio Studio.
+
+Controlli rapidi worker su server:
+
+```bash
+docker compose ps
+docker logs -f --tail=200 app-low-cards-worker-1
+```
 
 Se SMTP non e configurato correttamente, la mail resta in `email_outbox` con `status='failed'` e `next_retry_at` valorizzato per il retry successivo.
