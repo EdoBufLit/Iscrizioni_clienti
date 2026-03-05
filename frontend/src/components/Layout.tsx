@@ -275,14 +275,14 @@ const Layout = () => {
         ) : (
           <>
             <div className="public-site-glow" aria-hidden="true" />
-            <header className="public-header" ref={publicHeaderRef}>
+            <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm transition-all" ref={publicHeaderRef}>
               <div className="container-shell public-header-inner">
                 <NavLink className="public-brand" to="/" onClick={close}>
                   <img
                     ref={logoRef}
-                    src={`${import.meta.env.BASE_URL}logo-transparent.png`}
+                    src={`${import.meta.env.BASE_URL}assonam-logo.svg`}
                     alt="ASSONAM"
-                    className="public-brand-logo"
+                    className="h-8 md:h-10 w-auto transition-transform"
                   />
                   <span>
                     <span className="public-brand-name">ASSONAM</span>
@@ -308,10 +308,10 @@ const Layout = () => {
                       </NavLink>
                     ))}
                   </nav>
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex shrink-0 items-center gap-3">
                     {showAffiliazioneCta ? (
                       <NavLink
-                        className="btn-primary public-affilia-nav-btn"
+                        className="inline-flex items-center justify-center h-10 px-5 rounded-xl bg-slate-900 text-white text-sm font-bold shadow-md shadow-slate-900/10 hover:-translate-y-0.5 hover:shadow-lg transition-all"
                         to="/affiliazione"
                         onClick={() =>
                           trackUiEvent("click_affiliazione_cta_nav", {
@@ -319,22 +319,19 @@ const Layout = () => {
                           })
                         }
                       >
-                        Affilia la tua Associazione
-                        <span className="public-affilia-nav-arrow" aria-hidden="true">
-                          &rarr;
-                        </span>
+                        Affilia l'Associazione
                       </NavLink>
                     ) : null}
-                    <NavLink className="btn-ghost public-socio-nav-btn px-4 text-sm" to="/associazioni">
+                    <NavLink className="inline-flex items-center justify-center h-10 px-5 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all" to="/associazioni">
                       Diventa Socio
                     </NavLink>
                     <NavLink
-                      className="btn-ghost px-4 text-sm whitespace-nowrap"
+                      className="text-sm font-bold text-slate-500 hover:text-brand transition-colors ml-2"
                       to="/area-riservata"
                       onMouseEnter={prefetchDashboard}
                       onFocus={prefetchDashboard}
                     >
-                      Area Riservata
+                      Login
                     </NavLink>
                   </div>
                 </div>
@@ -357,10 +354,10 @@ const Layout = () => {
                 style={{ display: "none" }}
               >
                 <nav className="container-shell py-4" aria-label="Navigazione principale mobile">
-                  <div className="public-mobile-links">
+                  <div className="flex flex-col gap-3 px-6 pb-6 pt-2">
                     {showAffiliazioneCta ? (
                       <NavLink
-                        className="btn-primary public-mobile-affilia-btn w-full justify-center text-center"
+                        className="inline-flex items-center justify-center h-12 rounded-xl bg-slate-900 text-white font-bold w-full shadow-md"
                         to="/affiliazione"
                         onClick={() => {
                           trackUiEvent("click_affiliazione_cta_nav", {
@@ -369,25 +366,19 @@ const Layout = () => {
                           close();
                         }}
                       >
-                        Affilia la tua Associazione
+                        Affilia l'Associazione
                       </NavLink>
                     ) : null}
-                    <NavLink className="btn-ghost text-center" to="/associazioni" onClick={close}>
+                    <NavLink className="inline-flex items-center justify-center h-12 rounded-xl bg-white border border-slate-200 text-slate-700 font-bold w-full" to="/associazioni" onClick={close}>
                       Diventa Socio
                     </NavLink>
-                    <NavLink
-                      className="btn-ghost text-center"
-                      to="/area-riservata"
-                      onClick={close}
-                      onMouseEnter={prefetchDashboard}
-                      onFocus={prefetchDashboard}
-                    >
-                      Area Riservata
-                    </NavLink>
+                    
+                    <div className="h-px bg-slate-100 my-2"></div>
+
                     {NAV_ITEMS.map((item) => (
                       <NavLink
                         key={item.label}
-                        className={publicLinkClass}
+                        className="text-lg font-bold text-slate-700 py-2"
                         to={item.to}
                         end={item.to === "/"}
                         onClick={close}
@@ -395,6 +386,16 @@ const Layout = () => {
                         {item.label}
                       </NavLink>
                     ))}
+                    
+                    <div className="h-px bg-slate-100 my-2"></div>
+                    
+                    <NavLink
+                      className="text-brand font-bold py-2"
+                      to="/area-riservata"
+                      onClick={close}
+                    >
+                      Accedi all'Area Riservata &rarr;
+                    </NavLink>
                   </div>
                 </nav>
               </div>
