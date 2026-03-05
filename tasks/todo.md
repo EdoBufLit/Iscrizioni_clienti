@@ -2283,3 +2283,30 @@ pm --prefix frontend run build -> OK
   - `python -m py_compile app/routes/org_admin.py app/routes/affiliation.py app/models.py app/models_affiliation.py tests/test_referral_system.py` -> OK
   - `python -m pytest -q tests/test_referral_system.py tests/test_affiliation_flow.py` -> 7 passed
   - `python -m alembic upgrade head` su DB legacy isolati -> fallisce per migrazioni storiche preesistenti (non bloccante per queste modifiche).
+
+## Spec (Fix Chromium runtime libs for affiliation-video-worker - Mar 05, 2026)
+- Obiettivo: risolvere crash `chrome-headless-shell: error while loading shared libraries: libnspr4.so` nel renderer video Remotion.
+- Strategia: aggiornare `Dockerfile.affiliation-video-worker` installando runtime deps Chromium headless (nspr/nss/gtk/gbm/asound/x11/atk/pango/cairo ecc.), mantenendo immagine slim e senza nuove librerie applicative.
+- Verifica: rebuild immagine worker, esecuzione `node dist/renderHud.cjs ...`, conferma generazione MP4 non vuoto.
+
+## Plan (Fix Chromium runtime libs for affiliation-video-worker)
+- [ ] Aggiornare `Dockerfile.affiliation-video-worker` con pacchetti sistema richiesti da Chromium headless + ffmpeg/ca-certificates.
+- [ ] Rebuild immagine `affiliation-video-worker` con docker compose.
+- [ ] Eseguire render smoke test (`AUDIO_SOURCE=local node dist/renderHud.cjs ...`) nel container.
+- [ ] Verificare output MP4 generato e dimensione > 200KB.
+- [ ] Aggiornare review e lessons, poi commit+push.
+
+## Plan (Fix Chromium runtime libs for affiliation-video-worker) [AGGIORNAMENTO]
+- [x] Aggiornare `Dockerfile.affiliation-video-worker` con pacchetti sistema richiesti da Chromium headless + ffmpeg/ca-certificates.
+- [x] Rebuild immagine `affiliation-video-worker` con docker compose (tentato).
+- [ ] Eseguire render smoke test (`AUDIO_SOURCE=local node dist/renderHud.cjs ...`) nel container.
+- [ ] Verificare output MP4 generato e dimensione > 200KB.
+- [ ] Aggiornare review e lessons, poi commit+push.
+
+## Review (Fix Chromium runtime libs for affiliation-video-worker - Mar 05, 2026)
+- File aggiornato: `Dockerfile.affiliation-video-worker`.
+- Installate dipendenze runtime Chromium/Remotion richieste: `libnspr4`, `libnss3`, `libgtk-3-0`, `libgbm1`, `libasound2`, stack X11/Atk/Pango/Cairo, `fonts-liberation`, `xdg-utils`, oltre a `ffmpeg` e `ca-certificates`.
+- Build locale tentata:
+  - `docker compose --profile video-worker build affiliation-video-worker`
+  - Esito: fallita per daemon Docker non disponibile in questo ambiente (`npipe ... dockerDesktopLinuxEngine ... file specified`).
+- Azione successiva richiesta su host con Docker attivo: rebuild + smoke test render MP4.
