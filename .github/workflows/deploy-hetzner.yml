@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - association-signup-feature-1416851812972636353
-      - feat/redesign-landing-wizard
+      - feat/**
   workflow_dispatch:
     inputs:
       MIGRATE:
