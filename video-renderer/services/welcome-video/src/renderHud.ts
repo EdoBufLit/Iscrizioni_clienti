@@ -293,6 +293,13 @@ const main = async (): Promise<void> => {
       audioStrategy = "shared";
     }
   }
+  const sharedAudioAvailable = await fileExists(sharedAudioPath);
+  if (!sharedAudioAvailable) {
+    console.warn(
+      `[renderHud] ${path.basename(sharedAudioPath)} missing. Rendering without audio track.`,
+    );
+    audioStrategy = "no-audio";
+  }
 
   // Render Video
   const entryPoint = path.resolve(__dirname, "../src/remotion/Root.tsx");
@@ -308,7 +315,13 @@ const main = async (): Promise<void> => {
     webpackOverride: (config) => config,
   });
 
-  const inputProps = { orgName, logoUrl, mode, template };
+  const inputProps = {
+    orgName,
+    logoUrl,
+    mode,
+    template,
+    audioEnabled: sharedAudioAvailable,
+  };
   const compositions = await getCompositions(serveUrl, { inputProps });
 
   const compositionId = template === "base" ? "AssonamHUDWelcomeBase" : "AssonamHUDWelcome";

@@ -86,3 +86,4 @@
 - [2026-03-05] Quando rimuovo un comportamento automatico richiesto dal cliente (autosave), verificare che non restino effetti collaterali da `useEffect` legacy prima del rilascio.
 - Quando un worker usa Remotion/Chromium in Docker slim, includere sempre runtime libs browser (libnspr4, libnss3, libgtk-3-0, libgbm1, libasound2 e dipendenze X11) gia nel Dockerfile base, altrimenti il render fallisce a runtime con errori shared library.
 - Nei deploy Docker Compose su host condivisi, fissare sempre COMPOSE_PROJECT_NAME e fare cleanup pre-up dei container stale per evitare conflitti di naming (... already in use) durante recreate.
+- Se Remotion deve caricare audio statico, il file va sempre versionato in public/ e il componente deve poter renderizzare anche senza traccia audio (guardia audioEnabled) per evitare crash 404 in render headless.

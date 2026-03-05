@@ -29,6 +29,24 @@ const RemotionRoot: React.FC = () => {
         defaultProps={{
           orgName: "TEST ORG",
           logoUrl: "",
+          mode: "review",
+          template: "personalized",
+          audioEnabled: true,
+        }}
+      />
+      <Composition
+        id="AssonamHUDWelcomeBase"
+        component={AssonamHUDWelcome}
+        fps={30}
+        width={1920}
+        height={1080}
+        durationInFrames={360}
+        defaultProps={{
+          orgName: "",
+          logoUrl: "",
+          mode: "review",
+          template: "base",
+          audioEnabled: true,
         }}
       />
     </FontLoader>

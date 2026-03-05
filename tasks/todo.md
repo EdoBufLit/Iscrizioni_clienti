@@ -2328,3 +2328,21 @@ pm --prefix frontend run build -> OK
   - `docker compose ... rm -f -s web email-worker low-cards-worker affiliation-video-worker || true`
   - rimozione container stale per pattern nome (`_app-web-1`, `_app-email-worker-1`, `_app-low-cards-worker-1`, `_app-affiliation-video-worker-1`).
 - Effetto atteso: niente più collisioni `container name ... already in use` in fase Recreate/Up.
+
+## Spec (Fix Remotion 404 welcome_hud_audio.wav - Mar 05, 2026)
+- Obiettivo: evitare crash render HUD quando Remotion non trova `welcome_hud_audio.wav` su static server (`/public/...` 404).
+- Requisiti: asset tracciato in `public/`, uso `staticFile("welcome_hud_audio.wav")` senza URL hardcoded, fallback no-audio se file assente.
+
+## Plan (Fix Remotion 404 welcome_hud_audio.wav)
+- [x] Tracciare asset audio in `video-renderer/services/welcome-video/public/welcome_hud_audio.wav`.
+- [x] Aggiornare componente HUD per usare solo `staticFile("welcome_hud_audio.wav")`.
+- [x] Aggiungere guardia in `renderHud` per disattivare audio se il file manca (no crash).
+- [x] Rigenerare `dist` con `npm run build`.
+- [x] Eseguire smoke test `node dist/renderHud.cjs` con output MP4.
+
+## Review (Fix Remotion 404 welcome_hud_audio.wav - Mar 05, 2026)
+- Build eseguita: `npm run build` (welcome-video) -> OK.
+- Test eseguito:
+  - `AUDIO_SOURCE=local node dist/renderHud.cjs --orgId 25 --orgName "Org Test" --mode review --template personalized --output out/welcome_test_25.mp4`
+  - Esito: `status=done`, MP4 generato.
+  - Output verificato: `out/welcome_test_25.mp4` size `1238266` bytes.
