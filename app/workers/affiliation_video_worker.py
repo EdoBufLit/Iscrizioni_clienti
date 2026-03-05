@@ -115,7 +115,10 @@ def main() -> int:
         db.execute(text("SELECT 1"))
 
     try:
-        from app.services.affiliation_video import process_video_jobs_once
+        from app.services.affiliation_video import (
+            VideoJobsTableMissingError,
+            process_video_jobs_once,
+        )
     except Exception as exc:
         raise RuntimeError(
             "Unable to import app.services.affiliation_video. "
@@ -125,8 +128,12 @@ def main() -> int:
     _write_ready_marker()
 
     if args.once:
-        stats = process_video_jobs_once(limit=args.limit)
-        logger.info("affiliation_video_worker_cycle %s", stats)
+        try:
+            stats = process_video_jobs_once(limit=args.limit)
+            logger.info("affiliation_video_worker_cycle %s", stats)
+        except VideoJobsTableMissingError as exc:
+            logger.error(str(exc))
+            time.sleep(max(10, args.poll_seconds))
         return 0
 
     try:
@@ -135,6 +142,11 @@ def main() -> int:
             try:
                 stats = process_video_jobs_once(limit=args.limit)
                 logger.info("affiliation_video_worker_cycle %s", stats)
+            except VideoJobsTableMissingError as exc:
+                logger.error(str(exc))
+                sleep_seconds = max(10, args.poll_seconds)
+                time.sleep(sleep_seconds)
+                continue
             except Exception:
                 logger.exception("affiliation_video_worker_cycle_failed")
             sleep_seconds = 1 if stats.get("claimed", 0) > 0 else max(1, args.poll_seconds)

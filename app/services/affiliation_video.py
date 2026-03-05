@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -24,6 +25,10 @@ logger = logging.getLogger(__name__)
 
 
 _RENDER_SCRIPT_RELATIVE = Path("dist") / "renderHud.cjs"
+
+
+class VideoJobsTableMissingError(RuntimeError):
+    """Raised when the video_jobs table is not available yet."""
 
 
 def _normalize_mode(mode: str) -> str:
@@ -210,27 +215,74 @@ def _render_job(db: Session, job: VideoJob) -> None:
     job.finished_at = datetime.utcnow()
 
 
+def _error_mentions_missing_video_jobs_table(exc: Exception) -> bool:
+    message = str(exc).lower()
+    if "video_jobs" not in message:
+        return False
+    return (
+        "undefinedtable" in message
+        or "does not exist" in message
+        or "no such table" in message
+    )
+
+
+def _claim_jobs_for_processing(db: Session, batch_limit: int) -> list[VideoJob]:
+    claimed_ids: list[int] = []
+    bind = db.get_bind()
+    dialect_name = (bind.dialect.name or "").lower() if bind is not None else ""
+
+    try:
+        for _ in range(batch_limit):
+            query = (
+                db.query(VideoJob)
+                .filter(VideoJob.status == VideoJobStatus.QUEUED.value)
+                .order_by(VideoJob.requested_at.asc(), VideoJob.id.asc())
+            )
+            if dialect_name != "sqlite":
+                query = query.with_for_update(skip_locked=True)
+
+            job = query.first()
+            if job is None:
+                break
+
+            job.status = VideoJobStatus.PROCESSING.value
+            job.started_at = datetime.utcnow()
+            job.finished_at = None
+            job.error_text = None
+            db.flush()
+            if job.id is not None:
+                claimed_ids.append(int(job.id))
+
+        db.commit()
+    except (ProgrammingError, OperationalError) as exc:
+        db.rollback()
+        if _error_mentions_missing_video_jobs_table(exc):
+            raise VideoJobsTableMissingError(
+                "video_jobs table missing — run alembic upgrade head"
+            ) from exc
+        raise
+
+    if not claimed_ids:
+        return []
+
+    return (
+        db.query(VideoJob)
+        .filter(VideoJob.id.in_(claimed_ids))
+        .order_by(VideoJob.requested_at.asc(), VideoJob.id.asc())
+        .all()
+    )
+
+
 def process_video_jobs_once(limit: int | None = None) -> dict[str, int]:
     batch_limit = max(1, int(limit or 1))
     stats = {"claimed": 0, "done": 0, "failed": 0}
 
     with SessionLocal() as db:
-        jobs = (
-            db.query(VideoJob)
-            .filter(VideoJob.status == VideoJobStatus.QUEUED.value)
-            .order_by(VideoJob.requested_at.asc(), VideoJob.id.asc())
-            .limit(batch_limit)
-            .all()
-        )
+        jobs = _claim_jobs_for_processing(db, batch_limit)
         stats["claimed"] = len(jobs)
 
         for job in jobs:
             try:
-                job.status = VideoJobStatus.PROCESSING.value
-                job.started_at = datetime.utcnow()
-                job.error_text = None
-                db.commit()
-
                 _render_job(db, job)
                 db.commit()
                 stats["done"] += 1
