@@ -168,6 +168,9 @@ def init_db():
         _add_column_if_missing(
             conn, "members", "google_wallet_last_synced_at", "DATETIME"
         )
+        _add_column_if_missing(conn, "referrals", "wheel_result", "TEXT")
+        _add_column_if_missing(conn, "referrals", "wheel_spun_at", "DATETIME")
+        _add_column_if_missing(conn, "referrals", "wheel_spun_by_org_admin_id", "INTEGER")
         conn.execute(
             text(
                 """

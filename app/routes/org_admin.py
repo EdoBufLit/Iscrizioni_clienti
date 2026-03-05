@@ -1,10 +1,11 @@
 import csv
 import io
+import json
 
 import os
 import random
 import secrets
-from fastapi import APIRouter, Depends, HTTPException, Request, Form, Body
+from fastapi import APIRouter, Depends, HTTPException, Request, Form, Body, Query
 from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy import func, or_, case, and_, select
 from sqlalchemy.orm import Session
@@ -183,6 +184,94 @@ def _draw_referral_reward() -> dict[str, str]:
         "title": str(last["title"]),
         "description": str(last["description"]),
         "delivery_timing": str(last["delivery_timing"]),
+    }
+
+
+def _derive_referral_invite_status(referral: Referral) -> str:
+    application = referral.application
+    app_status = (application.status or "").strip().lower() if application else ""
+
+    if app_status == AffiliationApplicationStatus.APPROVED.value:
+        return "approved"
+    if app_status == AffiliationApplicationStatus.REJECTED.value:
+        return "rejected"
+    if app_status in {
+        AffiliationApplicationStatus.UNDER_REVIEW.value,
+        AffiliationApplicationStatus.CHANGES_REQUESTED.value,
+    }:
+        if application and application.submitted_at and application.reviewed_at is None:
+            return "completed_by_association"
+        return "under_review"
+    if application and application.submitted_at is not None:
+        return "completed_by_association"
+    return "invited"
+
+
+def _is_referral_wheel_enabled(referral: Referral) -> bool:
+    return (
+        _derive_referral_invite_status(referral) == "approved"
+        and (referral.status or "").strip().lower() == ReferralStatus.APPROVED.value
+    )
+
+
+def _serialize_org_admin_referral(referral: Referral) -> dict[str, object]:
+    application = referral.application
+    raw_wheel_result = referral.wheel_result
+    wheel_result: dict[str, str] | None
+    if isinstance(raw_wheel_result, dict):
+        wheel_result = {
+            "code": str(raw_wheel_result.get("code") or "") or None,
+            "title": str(raw_wheel_result.get("title") or "") or None,
+            "description": str(raw_wheel_result.get("description") or "") or None,
+            "delivery_timing": str(raw_wheel_result.get("delivery_timing") or "") or None,
+        }
+    elif isinstance(raw_wheel_result, str):
+        parsed = None
+        try:
+            parsed = json.loads(raw_wheel_result)
+        except Exception:
+            parsed = None
+        if isinstance(parsed, dict):
+            wheel_result = {
+                "code": str(parsed.get("code") or "") or None,
+                "title": str(parsed.get("title") or "") or None,
+                "description": str(parsed.get("description") or "") or None,
+                "delivery_timing": str(parsed.get("delivery_timing") or "") or None,
+            }
+        else:
+            wheel_result = None
+    else:
+        wheel_result = None
+
+    if wheel_result is None and referral.reward_title:
+        wheel_result = {
+            "code": referral.reward_code,
+            "title": referral.reward_title,
+            "description": referral.reward_description,
+            "delivery_timing": referral.reward_delivery_timing,
+        }
+
+    wheel_spun_at = referral.wheel_spun_at or referral.rewarded_at
+    invite_status = _derive_referral_invite_status(referral)
+
+    return {
+        "id": referral.id,
+        "application_id": referral.application_id,
+        "status": referral.status,
+        "invite_status": invite_status,
+        "wheel_enabled": _is_referral_wheel_enabled(referral),
+        "created_at": referral.created_at.isoformat() if referral.created_at else None,
+        "approved_at": referral.approved_at.isoformat() if referral.approved_at else None,
+        "rewarded_at": referral.rewarded_at.isoformat() if referral.rewarded_at else None,
+        "wheel_spun_at": wheel_spun_at.isoformat() if wheel_spun_at else None,
+        "wheel_spun_by_org_admin_id": referral.wheel_spun_by_org_admin_id,
+        "organization_name": (application.organization_name if application else None) or "-",
+        "applicant_email": application.applicant_email if application else None,
+        "reward_code": referral.reward_code,
+        "reward_title": referral.reward_title,
+        "reward_description": referral.reward_description,
+        "reward_delivery_timing": referral.reward_delivery_timing,
+        "wheel_result": wheel_result,
     }
 
 
@@ -895,20 +984,9 @@ def org_referrals_summary(request: Request, db: Session = Depends(get_db)):
     pending_reward_referrals = []
     recent_referrals = []
     for item in referrals[:10]:
-        application = item.application
-        row = {
-            "id": item.id,
-            "application_id": item.application_id,
-            "status": item.status,
-            "created_at": item.created_at.isoformat() if item.created_at else None,
-            "approved_at": item.approved_at.isoformat() if item.approved_at else None,
-            "rewarded_at": item.rewarded_at.isoformat() if item.rewarded_at else None,
-            "organization_name": (application.organization_name if application else None) or "-",
-            "reward_title": item.reward_title,
-            "reward_delivery_timing": item.reward_delivery_timing,
-        }
+        row = _serialize_org_admin_referral(item)
         recent_referrals.append(row)
-        if item.status == ReferralStatus.APPROVED.value:
+        if bool(row["wheel_enabled"]):
             pending_reward_referrals.append(row)
 
     latest_reward = next(
@@ -920,7 +998,13 @@ def org_referrals_summary(request: Request, db: Session = Depends(get_db)):
                 "reward_title": item.reward_title,
                 "reward_description": item.reward_description,
                 "reward_delivery_timing": item.reward_delivery_timing,
-                "rewarded_at": item.rewarded_at.isoformat() if item.rewarded_at else None,
+                "rewarded_at": (
+                    (item.wheel_spun_at or item.rewarded_at).isoformat()
+                    if (item.wheel_spun_at or item.rewarded_at)
+                    else None
+                ),
+                "wheel_spun_by_org_admin_id": item.wheel_spun_by_org_admin_id,
+                "wheel_result": _serialize_org_admin_referral(item)["wheel_result"],
             }
             for item in referrals
             if item.status == ReferralStatus.REWARDED.value
@@ -949,6 +1033,64 @@ def org_referrals_summary(request: Request, db: Session = Depends(get_db)):
             }
             for option in REFERRAL_REWARD_OPTIONS
         ],
+    }
+
+
+@router.get("/referrals/invites")
+def list_org_referral_invites(
+    request: Request,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    q: Optional[str] = Query(default=None),
+    status: Optional[str] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    query = (
+        db.query(Referral)
+        .join(
+            AffiliationApplication,
+            AffiliationApplication.id == Referral.application_id,
+        )
+        .filter(Referral.referrer_org_id == admin.org_id)
+    )
+
+    normalized_q = (q or "").strip()
+    if normalized_q:
+        pattern = f"%{normalized_q}%"
+        query = query.filter(
+            or_(
+                AffiliationApplication.organization_name.ilike(pattern),
+                AffiliationApplication.organization_legal_name.ilike(pattern),
+                AffiliationApplication.applicant_email.ilike(pattern),
+            )
+        )
+
+    normalized_status = (status or "").strip().lower()
+    referrals = query.order_by(Referral.created_at.desc(), Referral.id.desc()).all()
+    serialized = [_serialize_org_admin_referral(item) for item in referrals]
+    if normalized_status:
+        serialized = [
+            item
+            for item in serialized
+            if str(item.get("invite_status") or "").strip().lower() == normalized_status
+        ]
+
+    total = len(serialized)
+    total_pages = max(1, (total + page_size - 1) // page_size) if total else 1
+    start = (page - 1) * page_size
+    end = start + page_size
+    items = serialized[start:end]
+
+    return {
+        "items": items,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages,
     }
 
 
@@ -1098,6 +1240,8 @@ def create_referral_invite(
         "status": application.status,
         "invite_url": invite_url,
         "referral_id": referral.id,
+        "invite_status": "invited",
+        "wheel_enabled": False,
     }
 
 
@@ -1123,6 +1267,15 @@ def spin_referral_reward(
         raise HTTPException(status_code=404, detail="Referral non trovato")
 
     if referral.status == ReferralStatus.REWARDED.value:
+        existing = _serialize_org_admin_referral(referral)
+        wheel_result = existing.get("wheel_result")
+        if not isinstance(wheel_result, dict):
+            wheel_result = {
+                "code": referral.reward_code,
+                "title": referral.reward_title,
+                "description": referral.reward_description,
+                "delivery_timing": referral.reward_delivery_timing,
+            }
         return {
             "ok": True,
             "referral_id": referral.id,
@@ -1134,11 +1287,14 @@ def spin_referral_reward(
                 "delivery_timing": referral.reward_delivery_timing,
                 "rewarded_at": referral.rewarded_at.isoformat() if referral.rewarded_at else None,
             },
+            "wheel_result": wheel_result,
+            "wheel_spun_at": existing.get("wheel_spun_at"),
+            "wheel_spun_by_org_admin_id": referral.wheel_spun_by_org_admin_id,
             "message": "Premio gia assegnato per questo referral.",
             "super_admin_note": "Premio gia registrato nel sistema.",
         }
 
-    if referral.status != ReferralStatus.APPROVED.value:
+    if not _is_referral_wheel_enabled(referral):
         raise HTTPException(
             status_code=409,
             detail="La ruota e disponibile solo quando il referral e approvato dal super admin.",
@@ -1152,6 +1308,9 @@ def spin_referral_reward(
     referral.reward_title = reward["title"]
     referral.reward_description = reward["description"]
     referral.reward_delivery_timing = reward["delivery_timing"]
+    referral.wheel_result = reward
+    referral.wheel_spun_at = now
+    referral.wheel_spun_by_org_admin_id = admin.id
     referral.super_admin_notified_at = now
 
     super_admin_note = (
@@ -1170,6 +1329,8 @@ def spin_referral_reward(
                 "reward_code": reward["code"],
                 "reward_title": reward["title"],
                 "reward_delivery_timing": reward["delivery_timing"],
+                "wheel_spun_at": now.isoformat(),
+                "wheel_spun_by_org_admin_id": admin.id,
                 "super_admin_note": super_admin_note,
             },
         )
@@ -1206,6 +1367,9 @@ def spin_referral_reward(
             "delivery_timing": reward["delivery_timing"],
             "rewarded_at": now.isoformat(),
         },
+        "wheel_result": reward,
+        "wheel_spun_at": now.isoformat(),
+        "wheel_spun_by_org_admin_id": admin.id,
         "message": "Premio assegnato. Il risultato e stato comunicato al super admin.",
         "super_admin_note": super_admin_note,
     }

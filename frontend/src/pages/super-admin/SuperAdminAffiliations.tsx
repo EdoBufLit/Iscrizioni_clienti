@@ -423,6 +423,21 @@ const SuperAdminAffiliations = () => {
                         : ""}
                     </p>
                   ) : null}
+                  {detail.referral.wheel_spun_at ? (
+                    <p className="mt-1">
+                      Ruota girata il:{" "}
+                      <span className="font-medium">{formatDate(detail.referral.wheel_spun_at)}</span>
+                      {detail.referral.wheel_spun_by_org_admin_id
+                        ? ` (org admin #${detail.referral.wheel_spun_by_org_admin_id})`
+                        : ""}
+                    </p>
+                  ) : null}
+                  {detail.referral.wheel_result?.description ? (
+                    <p className="mt-1">
+                      Dettaglio esito:{" "}
+                      <span className="font-medium">{detail.referral.wheel_result.description}</span>
+                    </p>
+                  ) : null}
                 </div>
               )}
 

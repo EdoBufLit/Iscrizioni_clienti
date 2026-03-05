@@ -13,6 +13,7 @@ import {
 } from "../lib/api";
 import { applySeo } from "../lib/seo";
 import { useStatePlatformCapabilities } from "../hooks/useStatePlatformCapabilities";
+import FullscreenVideoOverlay from "../components/affiliation/FullscreenVideoOverlay";
 
 type PersonForm = {
   role: string;
@@ -82,7 +83,6 @@ const TRUST_BADGES = [
   "Attivazione dopo approvazione",
 ] as const;
 
-const BASE_WELCOME_VIDEO_URL = "/videos/welcome_base.mp4";
 const stepCardClass = "surface relative overflow-hidden p-6 md:p-7";
 const fieldClass =
   "w-full rounded-xl border border-neutral-200 bg-white/90 px-3.5 py-2.5 text-sm text-neutral-800 shadow-sm transition focus:border-brand/40 focus:outline-none focus:ring-2 focus:ring-brand/15";
@@ -201,14 +201,13 @@ const Affiliazione = () => {
   const [saveInfo, setSaveInfo] = useState("Bozza non salvata");
   const [submitResult, setSubmitResult] = useState<AffiliationSubmitResponse | null>(null);
   const [showVideoOverlay, setShowVideoOverlay] = useState(false);
-  const [baseVideoEnded, setBaseVideoEnded] = useState(false);
-  const [, setBaseVideoFailed] = useState(false);
   const [notice, setNotice] = useState("");
   const { capabilities, loading: capabilitiesLoading } = useStatePlatformCapabilities();
   const [, setDirtyCounter] = useState(0);
   const [resumeLinkCopied, setResumeLinkCopied] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const stripeFallbackAppliedRef = useRef(false);
+  const autoOpenedVideoRef = useRef(false);
   const navigate = useNavigate();
   const affiliazioneEnabled = capabilities?.affiliazioneEnabled === true;
 
@@ -546,8 +545,6 @@ const Affiliazione = () => {
       setDraft(response.application);
       setShowIntroScreen(false);
       setCurrentStep(6);
-      setBaseVideoEnded(false);
-      setBaseVideoFailed(false);
       setShowVideoOverlay(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore invio richiesta");
@@ -568,8 +565,6 @@ const Affiliazione = () => {
   };
 
   const onOpenInstantWelcomeVideo = () => {
-    setBaseVideoEnded(false);
-    setBaseVideoFailed(false);
     setShowVideoOverlay(true);
   };
 
@@ -578,23 +573,10 @@ const Affiliazione = () => {
     try {
       setError("");
       await refreshDraft(token, false);
-      setBaseVideoEnded(false);
-      setBaseVideoFailed(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore aggiornamento stato video");
     }
   };
-
-  useEffect(() => {
-    if (!showVideoOverlay) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setShowVideoOverlay(false);
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [showVideoOverlay]);
 
   const onStartWizard = async () => {
     if (token) {
@@ -628,18 +610,9 @@ const Affiliazione = () => {
     }
   };
 
-  if (capabilitiesLoading || loading) {
-    return (
-      <section className="py-16">
-        <div className="container-shell">
-          <div className="surface-strong p-8 text-sm text-neutral-500">Caricamento wizard...</div>
-        </div>
-      </section>
-    );
-  }
-
   const currentVideoJob = submitResult?.latest_video_job || draft?.latest_video_job || null;
   const currentVideoStatus = currentVideoJob?.status || null;
+  const personalizedVideoUrl = currentVideoJob?.output_url || null;
   const videoStatusLabel = !videoEnabled
     ? "Video disattivato"
     : currentVideoStatus === "failed"
@@ -653,6 +626,16 @@ const Affiliazione = () => {
   const isDevEnv = import.meta.env.DEV;
   const progressActiveStep = Math.min(5, Math.max(1, currentStep));
   const progressPercent = ((progressActiveStep - 1) / (WIZARD_PROGRESS_STEPS.length - 1)) * 100;
+  const stepErrors = validation.stepErrors[currentStep] || [];
+  const hasCurrentStepErrors = stepErrors.length > 0;
+  const isVideoPreparing = videoEnabled && !personalizedVideoUrl && currentVideoStatus !== "failed";
+  const saveInfoTone = saving
+    ? "border-sky-200 bg-sky-50 text-sky-700"
+    : saveInfo.toLowerCase().includes("errore")
+      ? "border-red-200 bg-red-50 text-red-700"
+      : saveInfo.toLowerCase().includes("salvat")
+        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+        : "border-neutral-200 bg-white/80 text-neutral-600";
   const overlayAssociationName = (
     submitResult?.application.organization_name ||
     draft?.organization_name ||
@@ -662,12 +645,63 @@ const Affiliazione = () => {
     .trim()
     .toUpperCase();
 
+  useEffect(() => {
+    if (!token || !hasRealSubmission || !videoEnabled) return;
+    if (currentVideoStatus === "done" || currentVideoStatus === "failed") return;
+
+    const pollId = window.setInterval(() => {
+      void refreshDraft(token, false).catch(() => {});
+    }, 8000);
+    return () => window.clearInterval(pollId);
+  }, [currentVideoStatus, hasRealSubmission, refreshDraft, token, videoEnabled]);
+
+  useEffect(() => {
+    if (!hasRealSubmission || !videoEnabled) {
+      autoOpenedVideoRef.current = false;
+      return;
+    }
+    if (
+      !showVideoOverlay &&
+      personalizedVideoUrl &&
+      currentVideoStatus === "done" &&
+      !autoOpenedVideoRef.current
+    ) {
+      autoOpenedVideoRef.current = true;
+      setShowVideoOverlay(true);
+    }
+  }, [currentVideoStatus, hasRealSubmission, personalizedVideoUrl, showVideoOverlay, videoEnabled]);
+
+  const onGoPrevStep = () => {
+    setError("");
+    setCurrentStep((value) => Math.max(1, value - 1));
+  };
+
+  const onGoNextStep = () => {
+    if (hasCurrentStepErrors) {
+      setSubmitAttempted(true);
+      setError("Completa i campi obbligatori dello step prima di continuare.");
+      return;
+    }
+    setError("");
+    setCurrentStep((value) => Math.min(5, value + 1));
+  };
+
+  if (capabilitiesLoading || loading) {
+    return (
+      <section className="py-16">
+        <div className="container-shell">
+          <div className="surface-strong p-8 text-sm text-neutral-500">Caricamento wizard...</div>
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <section className="py-10 md:py-14">
+    <section className="py-8 md:py-12">
       <div className="container-shell">
-        <div className="mx-auto max-w-5xl space-y-6">
-          <div className="surface-strong p-6 md:p-7">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="mx-auto max-w-4xl space-y-5">
+          <div className="surface-strong p-5 md:p-7">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
               <p className="section-title">Wizard Pubblico</p>
               <h1 className="section-heading">Affilia la tua Associazione</h1>
@@ -675,13 +709,13 @@ const Affiliazione = () => {
                 Salva la bozza quando vuoi, poi completa i 5 passaggi e invia.
               </p>
             </div>
-            <div className="rounded-lg border border-neutral-200 bg-white/80 px-4 py-3 text-xs text-neutral-600">
+            <div className={`rounded-xl border px-4 py-3 text-sm ${saveInfoTone}`}>
               <p className="font-semibold text-neutral-800">Stato bozza</p>
-              <p className="mt-1">{saving ? "Salvataggio in corso..." : saveInfo}</p>
+              <p className="mt-1 leading-5">{saving ? "Salvataggio in corso..." : saveInfo}</p>
               {canManualSave ? (
                 <button
                   type="button"
-                  className="btn-ghost mt-3 w-full px-3 py-1.5 text-xs"
+                  className="btn-ghost mt-3 w-full px-3 py-2 text-xs"
                   disabled={saving}
                   onClick={() => {
                     void persistDraft();
@@ -691,7 +725,7 @@ const Affiliazione = () => {
                 </button>
               ) : null}
               {isDevEnv && resumeUrl ? (
-                <details className="mt-3">
+                <details className="mt-3 text-xs">
                   <summary className="cursor-pointer text-[11px] font-semibold text-neutral-700">
                     Opzioni avanzate (solo sviluppo)
                   </summary>
@@ -735,13 +769,13 @@ const Affiliazione = () => {
 
           {!showIntroScreen && !hasRealSubmission && (
             <div className="mt-6 space-y-3">
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-200">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-neutral-200">
                 <div
                   className="h-full rounded-full bg-brand transition-[width] duration-300"
                   style={{ width: `${progressPercent}%` }}
                 />
               </div>
-              <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 md:mx-0 md:grid md:grid-cols-5 md:overflow-visible md:px-0 md:pb-0">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
                 {WIZARD_PROGRESS_STEPS.map((item) => {
                   const isActive = item.step === progressActiveStep;
                   const isCompleted = item.step < progressActiveStep;
@@ -753,7 +787,7 @@ const Affiliazione = () => {
                         setShowIntroScreen(false);
                         setCurrentStep(item.step);
                       }}
-                      className={`min-w-[126px] shrink-0 rounded-xl border px-3 py-2.5 text-left text-[11px] leading-tight transition md:min-w-0 ${
+                      className={`rounded-xl border px-3 py-2.5 text-left text-xs leading-tight transition ${
                         isActive
                           ? "border-brand bg-brand/10 text-brand shadow-sm"
                           : isCompleted
@@ -761,8 +795,11 @@ const Affiliazione = () => {
                             : "border-neutral-200 bg-white text-neutral-500 hover:border-brand/40 hover:bg-brand/[0.03]"
                       }`}
                     >
-                      <div className="font-semibold">
-                        {item.step} {item.label}
+                      <div className="font-semibold text-[11px] uppercase tracking-[0.08em]">
+                        Step {item.step}
+                      </div>
+                      <div className="mt-1 text-sm font-medium">
+                        {item.label}
                       </div>
                     </button>
                   );
@@ -1044,21 +1081,54 @@ const Affiliazione = () => {
               </div>
             )}
             <textarea className={textareaClass} rows={4} placeholder="Note per il super admin" value={form.notes} onChange={(e) => onFieldChange("notes", e.target.value)} />
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                className="btn-primary"
-                disabled={submitting || validation.issues.length > 0}
-                onClick={onSubmit}
-              >
-                {submitting ? "Invio in corso..." : "Invia richiesta"}
-              </button>
-            </div>
             {submitAttempted && validation.issues.length > 0 ? (
               <p className="text-xs text-red-600">
                 Invio bloccato: correggi i campi indicati e riprova.
               </p>
             ) : null}
+            </div>
+          )}
+
+          {!showIntroScreen && !hasRealSubmission && (
+            <div className="surface mt-1 p-4 md:p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm text-neutral-600">
+                  Step {progressActiveStep} di {WIZARD_PROGRESS_STEPS.length}
+                  {hasCurrentStepErrors ? (
+                    <span className="ml-2 text-red-600">
+                      ({stepErrors.length} campi da completare)
+                    </span>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="btn-ghost px-4 py-2 text-sm"
+                    onClick={onGoPrevStep}
+                    disabled={progressActiveStep <= 1}
+                  >
+                    Indietro
+                  </button>
+                  {progressActiveStep < 5 ? (
+                    <button
+                      type="button"
+                      className="btn-primary px-4 py-2 text-sm"
+                      onClick={onGoNextStep}
+                    >
+                      Avanti
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn-primary px-4 py-2 text-sm"
+                      disabled={submitting || validation.issues.length > 0}
+                      onClick={onSubmit}
+                    >
+                      {submitting ? "Invio in corso..." : "Invia richiesta"}
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
@@ -1095,84 +1165,30 @@ const Affiliazione = () => {
         </div>
       </div>
 
-      {showVideoOverlay && (
-        <div
-          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/85 p-4"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) {
-              setShowVideoOverlay(false);
-            }
-          }}
-        >
-          <div className="relative w-full max-w-5xl rounded-xl border border-white/20 bg-black p-4">
-            <button
-              type="button"
-              className="absolute right-3 top-3 rounded-md border border-white/20 px-2 py-1 text-xs text-white"
-              onClick={() => setShowVideoOverlay(false)}
-            >
-              Chiudi
-            </button>
-            {videoEnabled && !baseVideoEnded ? (
-              <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-white/10 bg-black">
-                <video
-                  src={BASE_WELCOME_VIDEO_URL}
-                  autoPlay
-                  playsInline
-                  className="h-full w-full object-cover"
-                  onEnded={() => setBaseVideoEnded(true)}
-                  onError={() => {
-                    setBaseVideoFailed(true);
-                    setBaseVideoEnded(true);
-                  }}
-                />
-                <div className="affiliazione-hud-name-overlay">
-                  <p className="affiliazione-hud-name-kicker">ASSOCIATION</p>
-                  <p className="affiliazione-hud-name-value">{overlayAssociationName}</p>
-                </div>
-              </div>
-            ) : (
-              <div className="flex aspect-video w-full items-center justify-center rounded-lg border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-6">
-                <div className="max-w-xl rounded-xl border border-cyan-300/30 bg-cyan-300/5 p-6 text-center text-white">
-                  <p className="text-xs uppercase tracking-[0.28em] text-cyan-300">ASSONAM</p>
-                  <h3 className="mt-3 text-3xl font-semibold">Richiesta ricevuta</h3>
-                  <p className="mt-3 text-sm text-neutral-200">
-                    La tua affiliazione e ora in revisione.
-                  </p>
-                  {!videoEnabled ? (
-                    <p className="mt-2 text-xs text-neutral-300">Video disattivato.</p>
-                  ) : null}
-                  {currentVideoStatus === "failed" ? (
-                    <p className="mt-2 text-xs text-amber-300">
-                      {currentVideoJob?.error_text || "Errore durante la generazione del video."}
-                    </p>
-                  ) : null}
-                  {videoEnabled && currentVideoStatus === "failed" ? (
-                    <button
-                      type="button"
-                      className="btn-ghost mt-4 inline-flex"
-                      onClick={() => {
-                        void onRetryVideoStatus();
-                      }}
-                    >
-                      Riprova
-                    </button>
-                  ) : null}
-                  <Link
-                    to="/"
-                    className="btn-primary mt-6 inline-flex"
-                    onClick={() => setShowVideoOverlay(false)}
-                  >
-                    Torna alla homepage
-                  </Link>
-                </div>
-              </div>
-            )}
-            <div className="mt-3 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs text-neutral-200">
-              {videoStatusLabel}
-            </div>
-          </div>
-        </div>
-      )}
+      <FullscreenVideoOverlay
+        open={showVideoOverlay}
+        onClose={() => setShowVideoOverlay(false)}
+        associationName={overlayAssociationName}
+        videoUrl={personalizedVideoUrl}
+        preparing={isVideoPreparing}
+        errorText={currentVideoStatus === "failed" ? currentVideoJob?.error_text : null}
+        statusLabel={
+          !videoEnabled
+            ? "Video disattivato in questa installazione."
+            : currentVideoStatus === "failed"
+              ? "Errore generazione video"
+              : isVideoPreparing
+                ? "Sto preparando il video..."
+                : videoStatusLabel
+        }
+        onRetry={
+          currentVideoStatus === "failed"
+            ? () => {
+                void onRetryVideoStatus();
+              }
+            : undefined
+        }
+      />
     </section>
   );
 };

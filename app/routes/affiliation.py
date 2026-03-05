@@ -445,19 +445,37 @@ def _serialize_referral(item: Referral | None) -> dict[str, Any] | None:
     if item is None:
         return None
     referrer = item.referrer_organization
+    wheel_spun_at = item.wheel_spun_at or item.rewarded_at
+    wheel_result = item.wheel_result
+    if wheel_result is None and item.reward_title:
+        wheel_result = {
+            "code": item.reward_code,
+            "title": item.reward_title,
+            "description": item.reward_description,
+            "delivery_timing": item.reward_delivery_timing,
+        }
+    application_status = (item.application.status or "").strip().lower() if item.application else ""
+    wheel_enabled = (
+        application_status == AffiliationApplicationStatus.APPROVED.value
+        and (item.status or "").strip().lower() == ReferralStatus.APPROVED.value
+    )
     return {
         "id": item.id,
         "referrer_org_id": item.referrer_org_id,
         "referrer_org_slug": referrer.slug if referrer else None,
         "referrer_org_name": referrer.name if referrer else None,
         "status": item.status,
+        "wheel_enabled": wheel_enabled,
         "created_at": _safe_iso(item.created_at),
         "approved_at": _safe_iso(item.approved_at),
         "rewarded_at": _safe_iso(item.rewarded_at),
+        "wheel_spun_at": _safe_iso(wheel_spun_at),
+        "wheel_spun_by_org_admin_id": item.wheel_spun_by_org_admin_id,
         "reward_code": item.reward_code,
         "reward_title": item.reward_title,
         "reward_description": item.reward_description,
         "reward_delivery_timing": item.reward_delivery_timing,
+        "wheel_result": wheel_result,
     }
 
 

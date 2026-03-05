@@ -205,12 +205,26 @@ def test_referral_lifecycle_to_rewarded(client, db):
     assert len(summary_payload["pending_reward_referrals"]) >= 1
 
     pending_referral_id = int(summary_payload["pending_reward_referrals"][0]["id"])
+    assert summary_payload["pending_reward_referrals"][0]["wheel_enabled"] is True
+    assert summary_payload["pending_reward_referrals"][0]["invite_status"] == "approved"
     spin_response = client.post(f"/api/org-admin/referrals/{pending_referral_id}/spin")
     assert spin_response.status_code == 200, spin_response.text
     spin_payload = spin_response.json()
     assert spin_payload["status"] == ReferralStatus.REWARDED.value
     assert spin_payload["reward"]["title"]
+    assert spin_payload["wheel_result"]["title"]
+    assert spin_payload["wheel_spun_at"] is not None
+    assert spin_payload["wheel_spun_by_org_admin_id"] == referrer_admin.id
     assert "super admin" in spin_payload["message"].lower()
+
+    invites_response = client.get("/api/org-admin/referrals/invites")
+    assert invites_response.status_code == 200, invites_response.text
+    invites_payload = invites_response.json()
+    matching = [item for item in invites_payload["items"] if item["id"] == pending_referral_id]
+    assert matching
+    assert matching[0]["wheel_enabled"] is False
+    assert matching[0]["wheel_result"]["title"] is not None
+    assert matching[0]["wheel_spun_by_org_admin_id"] == referrer_admin.id
 
     refreshed_summary_response = client.get("/api/org-admin/referrals/summary")
     assert refreshed_summary_response.status_code == 200, refreshed_summary_response.text
@@ -226,6 +240,20 @@ def test_referral_lifecycle_to_rewarded(client, db):
     assert referral_db.status == ReferralStatus.REWARDED.value
     assert referral_db.reward_title is not None
     assert referral_db.reward_delivery_timing is not None
+    assert referral_db.wheel_result is not None
+    assert referral_db.wheel_spun_at is not None
+    assert referral_db.wheel_spun_by_org_admin_id == referrer_admin.id
+
+    client.post("/api/org-admin/auth/logout")
+    _login_super_admin(client)
+    detail_after_spin = client.get(f"/api/super-admin/affiliations/{application_id}")
+    assert detail_after_spin.status_code == 200, detail_after_spin.text
+    detail_payload = detail_after_spin.json()
+    referral_payload = detail_payload.get("referral")
+    assert isinstance(referral_payload, dict)
+    assert referral_payload["wheel_result"]["title"] is not None
+    assert referral_payload["wheel_spun_at"] is not None
+    assert referral_payload["wheel_spun_by_org_admin_id"] == referrer_admin.id
 
 
 def test_org_admin_can_create_referral_invite(client, db):
@@ -267,6 +295,8 @@ def test_org_admin_can_create_referral_invite(client, db):
     assert invite_payload["status"] == "draft"
     assert "token=" in invite_payload["invite_url"]
     assert invite_payload["referral_id"] is not None
+    assert invite_payload["invite_status"] == "invited"
+    assert invite_payload["wheel_enabled"] is False
 
     application = (
         db.query(AffiliationApplication)
@@ -285,3 +315,14 @@ def test_org_admin_can_create_referral_invite(client, db):
     assert referral is not None
     assert referral.referrer_org_id == referrer_org.id
     assert referral.status == ReferralStatus.PENDING.value
+
+    spin_before_approval = client.post(f"/api/org-admin/referrals/{referral.id}/spin")
+    assert spin_before_approval.status_code == 409, spin_before_approval.text
+
+    invites_response = client.get("/api/org-admin/referrals/invites")
+    assert invites_response.status_code == 200, invites_response.text
+    invites_payload = invites_response.json()
+    match = [item for item in invites_payload["items"] if item["id"] == referral.id]
+    assert match
+    assert match[0]["invite_status"] == "invited"
+    assert match[0]["wheel_enabled"] is False

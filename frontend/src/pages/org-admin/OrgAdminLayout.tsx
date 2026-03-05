@@ -22,6 +22,7 @@ export const useOrgAdmin = () => useContext(Ctx);
 
 const NAV_ITEMS = [
   { to: "/org-admin", label: "Panoramica", end: true },
+  { to: "/org-admin/inviti", label: "Inviti", end: false },
   { to: "/org-admin/soci", label: "Soci", end: false },
   { to: "/org-admin/tessere", label: "Tessere", end: false },
   { to: "/org-admin/associazione", label: "Associazione", end: false },

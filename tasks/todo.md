@@ -2224,3 +2224,62 @@ pm --prefix frontend run build -> OK
 - Root cause: era rimasto attivo un `useEffect` debounce su `dirtyCounter` che chiamava `persistDraft()` ad ogni modifica campo.
 - Fix: eliminato il `useEffect` autosave; aggiunto pulsante esplicito `Salva bozza` nel pannello stato; submit continua a salvare prima dell'invio.
 - Verifica: `npm --prefix frontend run build` -> OK
+
+## Spec (Polish affiliation UX + invite wheel gating - Mar 05, 2026)
+- Obiettivo: finalizzare UX affiliazione e flusso referral org-admin con separazione tab Inviti, ruota disponibile solo dopo approvazione super-admin, e audit esito ruota visibile anche al super-admin.
+- Scope FE:
+  - restyling wizard "Affilia la tua Associazione" (layout card centrale, stepper leggibile, CTA avanti/indietro/invia, stati chiari, mobile-safe);
+  - nuovo modal video fullscreen post-iscrizione con animazione "ombre" via CSS keyframes e player responsive;
+  - dashboard org-admin con sola panoramica KPI + nuova tab/pagina dedicata "Inviti" con tabella e azioni dettaglio/spin.
+- Scope BE:
+  - endpoint lista inviti org-admin con stato invito e `wheel_enabled` calcolato server-side;
+  - hard-gating endpoint spin (409 se non disponibile);
+  - persistenza esito ruota (`wheel_result`, `wheel_spun_at`, `wheel_spun_by_org_admin_id`) su tabella `referrals`;
+  - serializzazione esito ruota in payload visibili a org-admin e super-admin.
+- Vincoli: nessuna libreria pesante nuova, endpoint esistenti wizard/approvazione invariati, migrazione DB minima su `referrals`.
+
+## Plan (Polish affiliation UX + invite wheel gating)
+- [ ] Aggiornare `tasks/todo.md` con review finale e lista verifiche eseguite.
+- [ ] FE wizard: applicare restyling estetico + micro UX senza alterare logica submit/API.
+- [ ] FE video: introdurre componente fullscreen overlay con animazione ombre e fallback "Sto preparando il video...".
+- [ ] BE referrals: aggiungere campi wheel result + endpoint lista inviti con `invite_status`/`wheel_enabled` + gating spin.
+- [ ] FE org-admin: spostare inviti in nuova tab dedicata con tabella, dettaglio, ruota visibile solo quando `wheel_enabled=true`.
+- [ ] Super-admin visibility: mostrare esito ruota persistito nel dettaglio pratica affiliazione.
+- [ ] Aggiungere/aggiornare test backend referral; eseguire build frontend + pytest mirati.
+- [ ] Preparare commit finale richiesto.
+
+## Plan (Polish affiliation UX + invite wheel gating) [COMPLETATO]
+- [x] Aggiornare `tasks/todo.md` con review finale e lista verifiche eseguite.
+- [x] FE wizard: applicare restyling estetico + micro UX senza alterare logica submit/API.
+- [x] FE video: introdurre componente fullscreen overlay con animazione ombre e fallback "Sto preparando il video...".
+- [x] BE referrals: aggiungere campi wheel result + endpoint lista inviti con `invite_status`/`wheel_enabled` + gating spin.
+- [x] FE org-admin: spostare inviti in nuova tab dedicata con tabella, dettaglio, ruota visibile solo quando `wheel_enabled=true`.
+- [x] Super-admin visibility: mostrare esito ruota persistito nel dettaglio pratica affiliazione.
+- [x] Aggiungere/aggiornare test backend referral; eseguire build frontend + pytest mirati.
+- [x] Preparare commit finale richiesto.
+
+## Review (Polish affiliation UX + invite wheel gating - Mar 05, 2026)
+- Wizard affiliazione:
+  - restyle completo in `frontend/src/pages/Affiliazione.tsx` con card centrale `max-w-4xl`, stepper leggibile, CTA coerenti `Indietro/Avanti/Invia`, stati di bozza/errori visibili, e nessun overflow mobile.
+  - logica endpoint invariata: solo UI/micro UX e controlli navigazione step.
+- Video post-iscrizione fullscreen:
+  - nuovo componente `frontend/src/components/affiliation/FullscreenVideoOverlay.tsx` (`fixed inset-0`, close via `X`/ESC/click overlay, player responsive).
+  - animazione "ombre" implementata in `frontend/src/index.css` con keyframes CSS (`fullscreen-video-shadow*`) + reveal fade/scale del player.
+  - fallback preparazione video: placeholder "Sto preparando il video..." finche `video_url` non e pronto; polling leggero stato video nel wizard.
+- Org Admin inviti separati dalla panoramica:
+  - dashboard pulita con soli KPI+summary (`frontend/src/pages/org-admin/OrgAdminDashboard.tsx`).
+  - nuova tab/pagina dedicata `Inviti` (`frontend/src/pages/org-admin/OrgAdminInvites.tsx`) con form invito, filtri, tabella pratiche, dettaglio e ruota.
+  - routing/nav aggiornati (`frontend/src/App.tsx`, `frontend/src/pages/org-admin/OrgAdminLayout.tsx`).
+- Wheel gating + persistenza esito:
+  - backend: helper `invite_status` + `wheel_enabled` server-side e endpoint lista `GET /api/org-admin/referrals/invites` in `app/routes/org_admin.py`.
+  - endpoint spin hard-gated (409 se non disponibile) e persistenza esito su referral (`wheel_result`, `wheel_spun_at`, `wheel_spun_by_org_admin_id`).
+  - serializzazione esito disponibile sia per org-admin (summary/invites) sia per super-admin (`app/routes/affiliation.py` + UI `frontend/src/pages/super-admin/SuperAdminAffiliations.tsx`).
+- DB:
+  - nuovi campi modello referral in `app/models.py` e fallback `app/models_affiliation.py`.
+  - migrazione Alembic aggiunta: `alembic/versions/e5f6a7b8c9d0_add_referral_wheel_audit_fields.py`.
+  - compatibilita dev/test senza migrazione forzata: bootstrap colonne in `init_db.py`.
+- Verifiche eseguite:
+  - `npm --prefix frontend run build` -> OK
+  - `python -m py_compile app/routes/org_admin.py app/routes/affiliation.py app/models.py app/models_affiliation.py tests/test_referral_system.py` -> OK
+  - `python -m pytest -q tests/test_referral_system.py tests/test_affiliation_flow.py` -> 7 passed
+  - `python -m alembic upgrade head` su DB legacy isolati -> fallisce per migrazioni storiche preesistenti (non bloccante per queste modifiche).

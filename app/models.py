@@ -790,6 +790,14 @@ class Referral(Base):
     reward_title = Column(String, nullable=True)
     reward_description = Column(Text, nullable=True)
     reward_delivery_timing = Column(String, nullable=True)
+    wheel_result = Column(GENERIC_JSON_TYPE, nullable=True)
+    wheel_spun_at = Column(DateTime, nullable=True)
+    wheel_spun_by_org_admin_id = Column(
+        Integer,
+        ForeignKey("admin_users.id"),
+        nullable=True,
+        index=True,
+    )
     super_admin_notified_at = Column(DateTime, nullable=True)
 
     referrer_organization = relationship(

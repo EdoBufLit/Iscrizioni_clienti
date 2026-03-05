@@ -726,12 +726,25 @@ export type OrgAdminReferralListItem = {
   id: number;
   application_id: number;
   status: "pending" | "approved" | "rewarded";
+  invite_status: "invited" | "completed_by_association" | "under_review" | "approved" | "rejected";
+  wheel_enabled: boolean;
   created_at: string | null;
   approved_at: string | null;
   rewarded_at: string | null;
+  wheel_spun_at: string | null;
+  wheel_spun_by_org_admin_id: number | null;
   organization_name: string;
+  applicant_email: string | null;
+  reward_code: string | null;
   reward_title: string | null;
+  reward_description: string | null;
   reward_delivery_timing: string | null;
+  wheel_result: {
+    code: string | null;
+    title: string | null;
+    description: string | null;
+    delivery_timing: string | null;
+  } | null;
 };
 
 export type OrgAdminReferralReward = {
@@ -753,12 +766,22 @@ export type OrgAdminReferralSummary = {
   reward_options: Array<{ code: string; title: string; delivery_timing: string }>;
 };
 
+export type OrgAdminReferralInvitesResponse = {
+  items: OrgAdminReferralListItem[];
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+};
+
 export type OrgAdminReferralInviteResponse = {
   ok: boolean;
   application_id: number;
   status: string;
   invite_url: string;
   referral_id: number | null;
+  invite_status?: "invited" | "completed_by_association" | "under_review" | "approved" | "rejected";
+  wheel_enabled?: boolean;
 };
 
 export async function fetchOrgAdminReferralSummary(): Promise<OrgAdminReferralSummary> {
@@ -775,6 +798,14 @@ export async function spinOrgAdminReferralReward(
   referral_id: number;
   status: "approved" | "rewarded";
   reward: OrgAdminReferralReward;
+  wheel_result: {
+    code: string | null;
+    title: string | null;
+    description: string | null;
+    delivery_timing: string | null;
+  } | null;
+  wheel_spun_at: string | null;
+  wheel_spun_by_org_admin_id: number | null;
   message: string;
   super_admin_note: string;
 }> {
@@ -783,6 +814,21 @@ export async function spinOrgAdminReferralReward(
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore durante la ruota premi."));
+  return res.json();
+}
+
+export async function fetchOrgAdminReferralInvites(
+  params?: { page?: number; pageSize?: number; q?: string; status?: string },
+): Promise<OrgAdminReferralInvitesResponse> {
+  const sp = new URLSearchParams();
+  sp.set("page", String(params?.page ?? 1));
+  sp.set("page_size", String(params?.pageSize ?? 20));
+  if (params?.q) sp.set("q", params.q);
+  if (params?.status) sp.set("status", params.status);
+  const query = sp.toString();
+  const res = await fetch(`/api/org-admin/referrals/invites${query ? `?${query}` : ""}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento inviti."));
   return res.json();
 }
 
@@ -1100,13 +1146,22 @@ export type AffiliationReferral = {
   referrer_org_slug: string | null;
   referrer_org_name: string | null;
   status: "pending" | "approved" | "rewarded";
+  wheel_enabled: boolean;
   created_at: string | null;
   approved_at: string | null;
   rewarded_at: string | null;
+  wheel_spun_at: string | null;
+  wheel_spun_by_org_admin_id: number | null;
   reward_code: string | null;
   reward_title: string | null;
   reward_description: string | null;
   reward_delivery_timing: string | null;
+  wheel_result: {
+    code: string | null;
+    title: string | null;
+    description: string | null;
+    delivery_timing: string | null;
+  } | null;
 };
 
 export type AffiliationDraft = {
