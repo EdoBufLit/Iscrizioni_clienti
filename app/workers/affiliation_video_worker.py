@@ -34,7 +34,7 @@ def _log_startup(args: argparse.Namespace, worker_enabled: bool) -> None:
         (
             "affiliation_video_worker_boot "
             "git_sha=%s build_time=%s poll_seconds=%s limit=%s "
-            "affiliazione_enabled=%s worker_enabled=%s "
+            "affiliazione_enabled=%s video_enabled=%s worker_enabled=%s "
             "env_database_url=%s env_elevenlabs_api_key=%s "
             "env_elevenlabs_voice_id=%s env_elevenlabs_model=%s ffmpeg_in_path=%s"
         ),
@@ -43,6 +43,7 @@ def _log_startup(args: argparse.Namespace, worker_enabled: bool) -> None:
         args.poll_seconds,
         args.limit,
         bool(settings.AFFILIAZIONE_ENABLED),
+        bool(settings.AFFILIATION_VIDEO_ENABLED),
         worker_enabled,
         _has_env("DATABASE_URL"),
         _has_env("ELEVENLABS_API_KEY"),
@@ -63,6 +64,15 @@ def _remove_ready_marker() -> None:
         READY_MARKER_PATH.unlink(missing_ok=True)
     except Exception:
         logger.exception("Unable to remove worker ready marker.")
+
+
+def _idle_disabled(reason: str, poll_seconds: int, once: bool) -> int:
+    logger.error("affiliation_video_worker_disabled %s", reason)
+    if once:
+        return 0
+    sleep_seconds = max(10, poll_seconds)
+    while True:
+        time.sleep(sleep_seconds)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -106,9 +116,36 @@ def main() -> int:
         )
         return 0
 
+    if not settings.AFFILIATION_VIDEO_ENABLED:
+        return _idle_disabled(
+            "AFFILIATION_VIDEO_ENABLED=false",
+            args.poll_seconds,
+            args.once,
+        )
+
     if not _has_env("DATABASE_URL"):
-        raise RuntimeError(
-            "DATABASE_URL is required when AFFILIATION_VIDEO_WORKER_ENABLED=true."
+        return _idle_disabled(
+            "DATABASE_URL missing while video worker is enabled",
+            args.poll_seconds,
+            args.once,
+        )
+
+    if not shutil.which("ffmpeg"):
+        return _idle_disabled(
+            "ffmpeg not available in PATH",
+            args.poll_seconds,
+            args.once,
+        )
+
+    renderer_dir = Path(settings.AFFILIATION_VIDEO_RENDERER_DIR)
+    if not renderer_dir.exists():
+        return _idle_disabled(
+            (
+                "AFFILIATION_VIDEO_RENDERER_DIR not found "
+                f"({settings.AFFILIATION_VIDEO_RENDERER_DIR})"
+            ),
+            args.poll_seconds,
+            args.once,
         )
 
     with SessionLocal() as db:

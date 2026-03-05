@@ -147,6 +147,10 @@ class Settings:
     AFFILIATION_VIDEO_AUTO_RENDER: bool = os.getenv(
         "AFFILIATION_VIDEO_AUTO_RENDER", "false"
     ).lower() in ("true", "1", "yes")
+    AFFILIATION_VIDEO_ENABLED: bool = _env_bool(
+        "AFFILIATION_VIDEO_ENABLED",
+        default=True,
+    )
 
     # OpenAI
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
@@ -176,16 +180,3 @@ logger = logging.getLogger(__name__)
 
 if settings.SMTP_HOST and not settings.FRONTEND_URL:
     logger.error("FRONTEND_URL is not set! Magic links will fallback to BASE_URL/app but might be incorrect.")
-
-if settings.AFFILIAZIONE_ENABLED and not settings.STRIPE_ENABLED:
-    missing = _missing_stripe_env_vars(
-        secret_key=settings.STRIPE_SECRET_KEY,
-        webhook_secret=settings.STRIPE_WEBHOOK_SECRET,
-        price_id=settings.STRIPE_PRICE_ID,
-        publishable_key=settings.STRIPE_PUBLISHABLE_KEY,
-        require_publishable_key=settings.STRIPE_REQUIRE_PUBLISHABLE_KEY,
-    )
-    logger.warning(
-        "Stripe disabled: missing env vars (%s). Bonifico/contanti restano disponibili.",
-        ", ".join(missing) if missing else "n/a",
-    )

@@ -7,6 +7,8 @@ import {
 const DEFAULT_CAPABILITIES: PlatformCapabilities = {
   affiliazioneEnabled: false,
   stripeEnabled: false,
+  affiliationVideoEnabled: false,
+  videoWorkerEnabled: false,
 };
 
 let cachedCapabilities: PlatformCapabilities | null = null;
@@ -15,6 +17,8 @@ let inflightCapabilitiesRequest: Promise<PlatformCapabilities> | null = null;
 const normalizeCapabilities = (payload: PlatformCapabilities): PlatformCapabilities => ({
   affiliazioneEnabled: payload.affiliazioneEnabled === true,
   stripeEnabled: payload.stripeEnabled === true,
+  affiliationVideoEnabled: payload.affiliationVideoEnabled === true,
+  videoWorkerEnabled: payload.videoWorkerEnabled === true,
 });
 
 const loadCapabilities = async (): Promise<PlatformCapabilities> => {
@@ -72,4 +76,3 @@ export function useStatePlatformCapabilities() {
 
   return { capabilities, loading, refresh };
 }
-

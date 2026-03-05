@@ -83,6 +83,7 @@ jobs:
             ADMIN_PHONE_E164=${{ secrets.ADMIN_PHONE_E164 }}
             TWILIO_SMS_FROM=${{ secrets.TWILIO_SMS_FROM }}
             AFFILIATION_VIDEO_WORKER_ENABLED=${{ secrets.AFFILIATION_VIDEO_WORKER_ENABLED }}
+            AFFILIATION_VIDEO_ENABLED=${{ secrets.AFFILIATION_VIDEO_ENABLED }}
             EOF
             printf 'GIT_SHA=%s\n' '${{ github.sha }}' >> .env
             printf 'BUILD_TIME=%s\n' "$BUILD_TIME" >> .env
@@ -96,6 +97,9 @@ jobs:
             if ! grep -q '^AFFILIATION_VIDEO_WORKER_ENABLED=' .env; then
               printf 'AFFILIATION_VIDEO_WORKER_ENABLED=false\n' >> .env
             fi
+            if ! grep -q '^AFFILIATION_VIDEO_ENABLED=' .env; then
+              printf 'AFFILIATION_VIDEO_ENABLED=true\n' >> .env
+            fi
             chmod 600 .env
 
             AFFILIATION_VIDEO_WORKER_ENABLED='${{ secrets.AFFILIATION_VIDEO_WORKER_ENABLED }}'
@@ -104,6 +108,12 @@ jobs:
             fi
             AFFILIATION_VIDEO_WORKER_ENABLED="$(echo "$AFFILIATION_VIDEO_WORKER_ENABLED" | tr '[:upper:]' '[:lower:]')"
             echo "AFFILIATION_VIDEO_WORKER_ENABLED=$AFFILIATION_VIDEO_WORKER_ENABLED"
+            AFFILIATION_VIDEO_ENABLED='${{ secrets.AFFILIATION_VIDEO_ENABLED }}'
+            if [ -z "${AFFILIATION_VIDEO_ENABLED:-}" ]; then
+              AFFILIATION_VIDEO_ENABLED="true"
+            fi
+            AFFILIATION_VIDEO_ENABLED="$(echo "$AFFILIATION_VIDEO_ENABLED" | tr '[:upper:]' '[:lower:]')"
+            echo "AFFILIATION_VIDEO_ENABLED=$AFFILIATION_VIDEO_ENABLED"
             COMPOSE_PROFILE_ARGS=""
             if [ "$AFFILIATION_VIDEO_WORKER_ENABLED" = "true" ]; then
               COMPOSE_PROFILE_ARGS="--profile video-worker"

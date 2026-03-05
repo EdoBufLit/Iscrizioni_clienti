@@ -48,7 +48,15 @@ def enqueue_affiliation_video_job(
     application_id: int,
     mode: str,
     payload: dict[str, Any] | None = None,
-) -> VideoJob:
+) -> VideoJob | None:
+    if not settings.AFFILIATION_VIDEO_ENABLED:
+        logger.info(
+            "affiliation_video_enqueue_skipped video_disabled application_id=%s mode=%s",
+            application_id,
+            mode,
+        )
+        return None
+
     job = VideoJob(
         application_id=application_id,
         mode=_normalize_mode(mode),
@@ -274,6 +282,9 @@ def _claim_jobs_for_processing(db: Session, batch_limit: int) -> list[VideoJob]:
 
 
 def process_video_jobs_once(limit: int | None = None) -> dict[str, int]:
+    if not settings.AFFILIATION_VIDEO_ENABLED:
+        return {"claimed": 0, "done": 0, "failed": 0}
+
     batch_limit = max(1, int(limit or 1))
     stats = {"claimed": 0, "done": 0, "failed": 0}
 

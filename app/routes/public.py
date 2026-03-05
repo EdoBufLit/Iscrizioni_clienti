@@ -210,9 +210,12 @@ def api_platform_stats(db: Session = Depends(get_db)):
 
 @router.get("/api/capabilities")
 def api_capabilities():
+    raw_worker = os.getenv("AFFILIATION_VIDEO_WORKER_ENABLED", "")
     return {
         "affiliazioneEnabled": bool(settings.AFFILIAZIONE_ENABLED),
         "stripeEnabled": bool(settings.STRIPE_ENABLED),
+        "affiliationVideoEnabled": bool(settings.AFFILIATION_VIDEO_ENABLED),
+        "videoWorkerEnabled": raw_worker.strip().lower() in {"1", "true", "yes", "on"},
     }
 
 

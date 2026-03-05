@@ -71,6 +71,8 @@ export type PlatformStats = {
 export type PlatformCapabilities = {
   affiliazioneEnabled: boolean;
   stripeEnabled: boolean;
+  affiliationVideoEnabled?: boolean;
+  videoWorkerEnabled?: boolean;
 };
 
 export async function fetchPlatformStats(): Promise<PlatformStats> {

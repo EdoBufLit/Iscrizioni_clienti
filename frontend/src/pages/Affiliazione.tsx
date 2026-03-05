@@ -152,7 +152,7 @@ const Affiliazione = () => {
   const [submitResult, setSubmitResult] = useState<AffiliationSubmitResponse | null>(null);
   const [showVideoOverlay, setShowVideoOverlay] = useState(false);
   const [baseVideoEnded, setBaseVideoEnded] = useState(false);
-  const [baseVideoFailed, setBaseVideoFailed] = useState(false);
+  const [, setBaseVideoFailed] = useState(false);
   const [notice, setNotice] = useState("");
   const { capabilities, loading: capabilitiesLoading } = useStatePlatformCapabilities();
   const [dirtyCounter, setDirtyCounter] = useState(0);
@@ -321,6 +321,7 @@ const Affiliazione = () => {
   const stripeEnabled =
     capabilities?.stripeEnabled === true &&
     (draft?.payment_config?.stripe_enabled ?? true);
+  const videoEnabled = capabilities?.affiliationVideoEnabled === true;
 
   useEffect(() => {
     if (!form || !token) return;
@@ -383,7 +384,7 @@ const Affiliazione = () => {
     if (!applicantEmail) {
       addError(1, "Inserisci l'email del referente.");
     } else if (!isValidEmail(applicantEmail)) {
-      addError(1, "L'email del referente non è valida.");
+      addError(1, "L'email del referente non e valida.");
     }
     if (!applicantPhone) addError(1, "Inserisci il telefono del referente.");
 
@@ -397,7 +398,7 @@ const Affiliazione = () => {
       if (!email) {
         addError(2, `Compila l'email del ruolo ${role.label}.`);
       } else if (!isValidEmail(email)) {
-        addError(2, `L'email del ruolo ${role.label} non è valida.`);
+        addError(2, `L'email del ruolo ${role.label} non e valida.`);
       }
     });
 
@@ -542,6 +543,18 @@ const Affiliazione = () => {
     setShowVideoOverlay(true);
   };
 
+  const onRetryVideoStatus = async () => {
+    if (!token) return;
+    try {
+      setError("");
+      await refreshDraft(token, false);
+      setBaseVideoEnded(false);
+      setBaseVideoFailed(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore aggiornamento stato video");
+    }
+  };
+
   useEffect(() => {
     if (!showVideoOverlay) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -564,6 +577,14 @@ const Affiliazione = () => {
   }
 
   const currentVideoJob = submitResult?.latest_video_job || draft?.latest_video_job || null;
+  const currentVideoStatus = currentVideoJob?.status || null;
+  const videoStatusLabel = !videoEnabled
+    ? "Video disattivato"
+    : currentVideoStatus === "failed"
+      ? "Errore generazione video"
+      : currentVideoStatus === "done"
+        ? "Video personalizzato pronto"
+        : "Sto generando il video...";
   const normalizedDraftStatus = String(draft?.status || "").trim().toLowerCase();
   const hasRealSubmission = Boolean(submitResult) || SUBMITTED_STATUSES.has(normalizedDraftStatus);
   const isDevEnv = import.meta.env.DEV;
@@ -680,7 +701,7 @@ const Affiliazione = () => {
             <div>
               <h2 className="text-2xl font-semibold text-neutral-900">Affilia la tua Associazione</h2>
               <p className="mt-2 text-sm text-neutral-600">
-                Richiede circa 10 minuti. Ti serviranno solo alcuni documenti dell’associazione.
+                Richiede circa 10 minuti. Ti serviranno solo alcuni documenti dell'associazione.
               </p>
             </div>
 
@@ -692,7 +713,7 @@ const Affiliazione = () => {
                 {INTRO_CHECKLIST_ITEMS.map((item) => (
                   <li key={item} className="flex items-start gap-2">
                     <span className="mt-1 inline-flex h-4 w-4 items-center justify-center rounded-full border border-emerald-300 bg-emerald-50 text-[10px] text-emerald-700">
-                      ✓
+                      *
                     </span>
                     <span>{item}</span>
                   </li>
@@ -701,7 +722,7 @@ const Affiliazione = () => {
             </div>
 
             <p className="text-sm text-neutral-600">
-              Potrai salvare la richiesta e continuare più tardi.
+              Potrai salvare la richiesta e continuare piu tardi.
             </p>
 
             <div className="flex flex-wrap gap-2">
@@ -864,7 +885,7 @@ const Affiliazione = () => {
                 />
                 <div>
                   <p className="text-sm font-semibold text-neutral-900">
-                    {stripeEnabled ? "Carta (Stripe)" : "Carta (Stripe) — presto disponibile"}
+                    {stripeEnabled ? "Carta (Stripe)" : "Carta (Stripe) - presto disponibile"}
                   </p>
                   <p className="text-xs text-neutral-600">
                     {stripeEnabled
@@ -1013,7 +1034,7 @@ const Affiliazione = () => {
             >
               Chiudi
             </button>
-            {!baseVideoEnded ? (
+            {videoEnabled && !baseVideoEnded ? (
               <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-white/10 bg-black">
                 <video
                   src={BASE_WELCOME_VIDEO_URL}
@@ -1037,12 +1058,26 @@ const Affiliazione = () => {
                   <p className="text-xs uppercase tracking-[0.28em] text-cyan-300">ASSONAM</p>
                   <h3 className="mt-3 text-3xl font-semibold">Richiesta ricevuta</h3>
                   <p className="mt-3 text-sm text-neutral-200">
-                    La tua affiliazione è ora in revisione.
+                    La tua affiliazione e ora in revisione.
                   </p>
-                  {baseVideoFailed ? (
+                  {!videoEnabled ? (
+                    <p className="mt-2 text-xs text-neutral-300">Video disattivato.</p>
+                  ) : null}
+                  {currentVideoStatus === "failed" ? (
                     <p className="mt-2 text-xs text-amber-300">
-                      Il video base è temporaneamente non disponibile.
+                      {currentVideoJob?.error_text || "Errore durante la generazione del video."}
                     </p>
+                  ) : null}
+                  {videoEnabled && currentVideoStatus === "failed" ? (
+                    <button
+                      type="button"
+                      className="btn-ghost mt-4 inline-flex"
+                      onClick={() => {
+                        void onRetryVideoStatus();
+                      }}
+                    >
+                      Riprova
+                    </button>
                   ) : null}
                   <Link
                     to="/"
@@ -1055,7 +1090,7 @@ const Affiliazione = () => {
               </div>
             )}
             <div className="mt-3 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs text-neutral-200">
-              Render personalizzato in background: {currentVideoJob?.status || "queued"}
+              {videoStatusLabel}
             </div>
           </div>
         </div>
@@ -1065,3 +1100,4 @@ const Affiliazione = () => {
 };
 
 export default Affiliazione;
+

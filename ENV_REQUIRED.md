@@ -82,13 +82,17 @@ Stripe is optional. The affiliation flow still works with bank transfer and cash
 | `STRIPE_PUBLISHABLE_KEY` | No | _(empty)_ | Publishable key (needed only if your frontend directly uses Stripe.js). |
 | `STRIPE_REQUIRE_PUBLISHABLE_KEY` | No | `false` | If `true`, backend marks Stripe configured only when `STRIPE_PUBLISHABLE_KEY` is present. |
 | `STRIPE_AFFILIATION_PRICE_CENTS` | No | `9000` | Informational affiliation amount shown in UI (bonifico/contanti summary). |
+| `AFFILIATION_VIDEO_ENABLED` | No | `true` | Enables affiliation welcome-video pipeline (enqueue + worker processing + UI states). When `false`, UI shows "Video disattivato". |
 | `AFFILIATION_VIDEO_WORKER_ENABLED` | No | `false` | Enables the optional Remotion affiliation video worker profile at deploy time (`video-worker`). |
+| `AFFILIATION_VIDEO_RENDERER_DIR` | No | `/app/video-renderer/services/welcome-video` | Path to Remotion renderer sources/build inside the container. |
+| `AFFILIATION_VIDEO_OUTPUT_DIR` | No | `/app/data/videos/welcome` | Directory for generated personalized affiliation videos. |
 
 Runtime behavior:
 
 - `STRIPE_ENABLED` is computed automatically from env presence (no startup crash on missing values).
 - If Stripe is disabled, checkout endpoint returns `503` with guidance to use bonifico/contanti.
 - Stripe webhook endpoint stays reachable and returns `200` when Stripe is disabled (no retry storm).
+- Video worker does not require Stripe env vars. Required baseline for worker execution: `DATABASE_URL` + `AFFILIATION_VIDEO_ENABLED=true` + `AFFILIATION_VIDEO_WORKER_ENABLED=true`.
 - The affiliation video worker is optional: with `AFFILIATION_VIDEO_WORKER_ENABLED=false` deploy does not start/build the `video-worker` profile by default.
 
 Webhook smoke test for Twilio WhatsApp:

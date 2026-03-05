@@ -64,8 +64,12 @@ Stripe is optional for affiliation payments.
 
 The Remotion affiliation video worker is optional and controlled by deploy flag:
 
+- `AFFILIATION_VIDEO_ENABLED=true` (default): video pipeline enabled (queue + render + UI status).
+- `AFFILIATION_VIDEO_ENABLED=false`: UI shows "Video disattivato" and backend skips video queueing.
 - `AFFILIATION_VIDEO_WORKER_ENABLED=false` (default): deploy runs without the `video-worker` profile.
 - `AFFILIATION_VIDEO_WORKER_ENABLED=true`: deploy enables docker compose profile `video-worker`.
+
+The video worker is decoupled from Stripe: missing `STRIPE_*` env vars does not disable rendering.
 
 Manual run example:
 
