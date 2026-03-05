@@ -6,6 +6,7 @@ import {
   fetchAffiliationDraft,
   patchAffiliationDraft,
   replaceAffiliationPeople,
+  retryAffiliationWelcomeVideo,
   submitAffiliationDraft,
   uploadAffiliationDocument,
   type AffiliationDraft,
@@ -173,6 +174,67 @@ const docStatusMeta = (status: string | undefined) => {
   return { tone: "text-neutral-500", label: "non caricato" };
 };
 
+const buildDraftPatchPayload = (form: FormState) => ({
+  organization_name: form.organization_name || null,
+  organization_legal_name: form.organization_legal_name || null,
+  organization_slug_candidate: form.organization_slug_candidate || null,
+  tax_code: form.tax_code || null,
+  vat_number: form.vat_number || null,
+  address_line1: form.address_line1 || null,
+  address_line2: form.address_line2 || null,
+  city: form.city || null,
+  province: form.province || null,
+  postal_code: form.postal_code || null,
+  country: form.country || null,
+  applicant_full_name: form.applicant_full_name || null,
+  applicant_email: form.applicant_email || null,
+  applicant_phone: form.applicant_phone || null,
+  notes: form.notes || null,
+  payment_method: form.payment_method || null,
+  manual_preferred_date: form.manual_preferred_date || null,
+  manual_preferred_time: form.manual_preferred_time || null,
+  manual_contact: form.manual_contact || null,
+});
+
+const normalizeIdempotencyPart = (value: string | null | undefined) => {
+  const normalized = (value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized || "";
+};
+
+const buildCreateDraftIdempotencyKey = (form: FormState) => {
+  const applicantEmail = normalizeIdempotencyPart(form.applicant_email);
+  const organizationName = normalizeIdempotencyPart(
+    form.organization_name || form.organization_legal_name,
+  );
+  const taxCode = normalizeIdempotencyPart(form.tax_code);
+  const vatNumber = normalizeIdempotencyPart(form.vat_number);
+  if (!applicantEmail || (!organizationName && !taxCode && !vatNumber)) {
+    return null;
+  }
+  return [
+    "affiliation",
+    "create",
+    applicantEmail,
+    organizationName || "-",
+    taxCode || "-",
+    vatNumber || "-",
+  ]
+    .join(":")
+    .slice(0, 200);
+};
+
+const buildTokenActionIdempotencyKey = (action: string, publicToken: string) => {
+  const normalizedToken = normalizeIdempotencyPart(publicToken);
+  if (!normalizedToken) {
+    return null;
+  }
+  return `affiliation:${action}:${normalizedToken}`;
+};
+
 const Affiliazione = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const tokenFromQuery = searchParams.get("token")?.trim() || "";
@@ -213,51 +275,98 @@ const Affiliazione = () => {
     }
   }, [affiliazioneEnabled, capabilitiesLoading, navigate]);
 
-  const applyDraftState = useCallback((nextDraft: AffiliationDraft) => {
-    setDraft(nextDraft);
-    setForm(toFormState(nextDraft));
-    setPeople(toPeople(nextDraft));
-  }, []);
+  const updateResumeLocation = useCallback(
+    (publicToken: string) => {
+      if (!publicToken) return;
+      const nextParams = new URLSearchParams();
+      nextParams.set("token", publicToken);
+      if (referralFromQuery) {
+        nextParams.set("ref", referralFromQuery);
+      }
+      if (nextParams.toString() !== searchParams.toString()) {
+        setSearchParams(nextParams, { replace: true });
+      }
+    },
+    [referralFromQuery, searchParams, setSearchParams],
+  );
 
-  const refreshDraft = useCallback(
-    async (publicToken: string, syncForm: boolean) => {
-      const nextDraft = await fetchAffiliationDraft(publicToken);
+  const applyDraftState = useCallback(
+    (nextDraft: AffiliationDraft, syncForm: boolean) => {
       setDraft(nextDraft);
+      setToken(nextDraft.public_token);
+      updateResumeLocation(nextDraft.public_token);
       if (syncForm) {
         setForm(toFormState(nextDraft));
         setPeople(toPeople(nextDraft));
       }
-      return nextDraft;
+
+      const normalizedStatus = String(nextDraft.status || "").trim().toLowerCase();
+      if (SUBMITTED_STATUSES.has(normalizedStatus)) {
+        setShowIntroScreen(false);
+        setCurrentStep(6);
+      }
     },
-    [],
+    [updateResumeLocation],
   );
 
-  const syncDraftData = useCallback(async () => {
-    if (!token) return false;
-    try {
-      await patchAffiliationDraft(token, {
-        organization_name: form.organization_name || null,
-        organization_legal_name: form.organization_legal_name || null,
-        organization_slug_candidate: form.organization_slug_candidate || null,
-        tax_code: form.tax_code || null,
-        vat_number: form.vat_number || null,
-        address_line1: form.address_line1 || null,
-        address_line2: form.address_line2 || null,
-        city: form.city || null,
-        province: form.province || null,
-        postal_code: form.postal_code || null,
-        country: form.country || null,
-        applicant_full_name: form.applicant_full_name || null,
-        applicant_email: form.applicant_email || null,
-        applicant_phone: form.applicant_phone || null,
-        notes: form.notes || null,
-        payment_method: form.payment_method || null,
-        manual_preferred_date: form.manual_preferred_date || null,
-        manual_preferred_time: form.manual_preferred_time || null,
-        manual_contact: form.manual_contact || null,
-      });
-      await replaceAffiliationPeople(
-        token,
+  const refreshDraft = useCallback(
+    async (publicToken: string, syncForm: boolean) => {
+      const nextDraft = await fetchAffiliationDraft(publicToken);
+      applyDraftState(nextDraft, syncForm);
+      return nextDraft;
+    },
+    [applyDraftState],
+  );
+
+  const ensureServerDraft = useCallback(
+    async (options?: { syncForm?: boolean }) => {
+      if (token) {
+        if (draft) {
+          return draft;
+        }
+        return refreshDraft(token, options?.syncForm ?? true);
+      }
+
+      const idempotencyKey = buildCreateDraftIdempotencyKey(form);
+      if (!idempotencyKey) {
+        throw new Error(
+          "Compila email del referente e dati identificativi dell'associazione prima di continuare.",
+        );
+      }
+
+      const created = await createAffiliationDraft(
+        {
+          applicant_email: form.applicant_email || undefined,
+          organization_name: form.organization_name || undefined,
+          organization_legal_name: form.organization_legal_name || undefined,
+          tax_code: form.tax_code || undefined,
+          vat_number: form.vat_number || undefined,
+          referral_slug: referralFromQuery || undefined,
+        },
+        { idempotencyKey },
+      );
+      applyDraftState(created, options?.syncForm ?? true);
+      return created;
+    },
+    [applyDraftState, draft, form, referralFromQuery, refreshDraft, token],
+  );
+
+  const saveApplicationDetails = useCallback(
+    async (publicToken: string) => {
+      const nextDraft = await patchAffiliationDraft(
+        publicToken,
+        buildDraftPatchPayload(form),
+      );
+      applyDraftState(nextDraft, false);
+      return nextDraft;
+    },
+    [applyDraftState, form],
+  );
+
+  const saveApplicationPeople = useCallback(
+    async (publicToken: string) => {
+      const nextDraft = await replaceAffiliationPeople(
+        publicToken,
         people.map((item) => ({
           role: item.role,
           full_name: item.full_name || null,
@@ -266,13 +375,26 @@ const Affiliazione = () => {
           fiscal_code: item.fiscal_code || null,
         })),
       );
-      await refreshDraft(token, false);
-      return true;
+      applyDraftState(nextDraft, false);
+      return nextDraft;
+    },
+    [applyDraftState, people],
+  );
+
+  const syncDraftData = useCallback(async () => {
+    try {
+      const ensuredDraft = await ensureServerDraft({ syncForm: true });
+      const normalizedStatus = String(ensuredDraft.status || "").trim().toLowerCase();
+      if (SUBMITTED_STATUSES.has(normalizedStatus)) {
+        return ensuredDraft;
+      }
+      await saveApplicationDetails(ensuredDraft.public_token);
+      return saveApplicationPeople(ensuredDraft.public_token);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore sincronizzazione dati");
-      return false;
+      return null;
     }
-  }, [form, people, refreshDraft, token]);
+  }, [ensureServerDraft, saveApplicationDetails, saveApplicationPeople]);
 
   useEffect(() => {
     if (capabilitiesLoading) return;
@@ -282,9 +404,9 @@ const Affiliazione = () => {
       try {
         setLoading(true);
         if (tokenFromQuery) {
-          setToken(tokenFromQuery);
           const existingDraft = await fetchAffiliationDraft(tokenFromQuery);
-          applyDraftState(existingDraft);
+          setSubmitResult(null);
+          applyDraftState(existingDraft, true);
           const normalizedStatus = String(existingDraft.status || "").trim().toLowerCase();
           if (SUBMITTED_STATUSES.has(normalizedStatus)) {
             setShowIntroScreen(false);
@@ -296,6 +418,7 @@ const Affiliazione = () => {
         } else {
           setToken("");
           setDraft(null);
+          setSubmitResult(null);
           setForm(buildEmptyForm());
           setPeople(buildDefaultPeople());
           setShowIntroScreen(true);
@@ -433,42 +556,53 @@ const Affiliazione = () => {
     );
   };
 
-  const onUploadDocument = async (docType: string, file: File) => {
-    if (!token) return;
-    try {
-      setUploadingType(docType);
-      setError("");
-      await uploadAffiliationDocument(token, docType, file);
-      await refreshDraft(token, false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Errore upload documento");
-    } finally {
-      setUploadingType(null);
-    }
-  };
+  const onUploadDocument = useCallback(
+    async (docType: string, file: File) => {
+      try {
+        setUploadingType(docType);
+        setError("");
+        const currentDraft = await ensureServerDraft({ syncForm: true });
+        await uploadAffiliationDocument(currentDraft.public_token, docType, file);
+        await refreshDraft(currentDraft.public_token, false);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Errore upload documento");
+      } finally {
+        setUploadingType(null);
+      }
+    },
+    [ensureServerDraft, refreshDraft],
+  );
 
-  const onOpenStripeCheckout = async () => {
-    if (!token || !form) return;
+  const onOpenStripeCheckout = useCallback(async () => {
     if (!stripeEnabled) {
       setError("Stripe non configurato. Usa Bonifico o Contanti.");
       return;
     }
     try {
       setError("");
+      const currentDraft = await ensureServerDraft({ syncForm: true });
+      if (SUBMITTED_STATUSES.has(String(currentDraft.status || "").trim().toLowerCase())) {
+        return;
+      }
       if (form.payment_method !== "stripe") {
         onFieldChange("payment_method", "stripe");
-        await patchAffiliationDraft(token, { payment_method: "stripe" });
+        const nextDraft = await patchAffiliationDraft(currentDraft.public_token, {
+          payment_method: "stripe",
+        });
+        applyDraftState(nextDraft, false);
       }
-      const payload = await createAffiliationStripeCheckout(token);
+      const payload = await createAffiliationStripeCheckout(currentDraft.public_token, {
+        idempotencyKey:
+          buildTokenActionIdempotencyKey("stripe", currentDraft.public_token) || undefined,
+      });
       window.open(payload.checkout_url, "_blank", "noopener,noreferrer");
-      await refreshDraft(token, false);
+      await refreshDraft(currentDraft.public_token, false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore apertura checkout Stripe");
     }
-  };
+  }, [applyDraftState, ensureServerDraft, form.payment_method, refreshDraft, stripeEnabled]);
 
-  const onSubmit = async () => {
-    if (!token) return;
+  const onSubmit = useCallback(async () => {
     if (validation.issues.length > 0) {
       setError("Completa i campi obbligatori prima di inviare la richiesta.");
       if (validation.firstInvalidStep) {
@@ -481,13 +615,21 @@ const Affiliazione = () => {
     try {
       setSubmitting(true);
       setError("");
-      const saved = await syncDraftData();
-      if (!saved) {
+      const syncedDraft = await syncDraftData();
+      if (!syncedDraft) {
         return;
       }
-      const response = await submitAffiliationDraft(token);
+      if (SUBMITTED_STATUSES.has(String(syncedDraft.status || "").trim().toLowerCase())) {
+        setShowIntroScreen(false);
+        setCurrentStep(6);
+        return;
+      }
+      const response = await submitAffiliationDraft(syncedDraft.public_token, {
+        idempotencyKey:
+          buildTokenActionIdempotencyKey("submit", syncedDraft.public_token) || undefined,
+      });
       setSubmitResult(response);
-      setDraft(response.application);
+      applyDraftState(response.application, false);
       setShowIntroScreen(false);
       setCurrentStep(6);
       setShowVideoOverlay(true);
@@ -496,72 +638,61 @@ const Affiliazione = () => {
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [applyDraftState, syncDraftData, validation.firstInvalidStep, validation.issues.length]);
 
   const onOpenInstantWelcomeVideo = () => {
     setShowVideoOverlay(true);
   };
 
-  const onRetryVideoStatus = async () => {
+  const onRetryVideoStatus = useCallback(async () => {
     if (!token) return;
     try {
       setError("");
+      const payload = await retryAffiliationWelcomeVideo(token, {
+        idempotencyKey: buildTokenActionIdempotencyKey("video-retry", token) || undefined,
+      });
+      applyDraftState(payload.application, false);
       await refreshDraft(token, false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore aggiornamento stato video");
     }
-  };
+  }, [applyDraftState, refreshDraft, token]);
 
-  const onStartWizard = async () => {
+  const onStartWizard = () => {
+    setError("");
     if (token) {
       setShowIntroScreen(false);
       setCurrentStep(1);
       return;
     }
-    try {
-      setError("");
-      setSaving(true);
-      const created = await createAffiliationDraft(
-        referralFromQuery ? { referral_slug: referralFromQuery } : undefined,
-      );
-      setToken(created.public_token);
-      applyDraftState(created);
-
-      const nextParams = new URLSearchParams();
-      nextParams.set("token", created.public_token);
-      if (referralFromQuery) {
-        nextParams.set("ref", referralFromQuery);
-      }
-      setSearchParams(nextParams, { replace: true });
-      setShowIntroScreen(false);
-      setCurrentStep(1);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Errore avvio procedura");
-    } finally {
-      setSaving(false);
-    }
+    setShowIntroScreen(false);
+    setCurrentStep(1);
   };
 
-  const currentVideoJob = submitResult?.latest_video_job || draft?.latest_video_job || null;
-  const currentVideoStatus = currentVideoJob?.status || null;
-  const personalizedVideoUrl = currentVideoJob?.output_url || null;
+  const currentApplication = draft ?? submitResult?.application ?? null;
+  const currentVideoJob =
+    currentApplication?.latest_video_job || submitResult?.latest_video_job || null;
+  const welcomeVideoReady = currentApplication?.welcome_video_ready === true;
+  const welcomeVideoError = currentApplication?.welcome_video_error || null;
+  const personalizedVideoUrl =
+    currentApplication?.welcome_video_url || currentVideoJob?.output_url || null;
   const videoStatusLabel = !videoEnabled
     ? "Video disattivato"
-    : currentVideoStatus === "failed"
-      ? "Errore generazione video"
-      : currentVideoStatus === "done"
-        ? "Video personalizzato pronto"
+    : welcomeVideoReady
+      ? "Video personalizzato pronto"
+      : welcomeVideoError
+        ? "Video non ancora disponibile"
         : "Sto generando il video...";
-  const normalizedDraftStatus = String(draft?.status || "").trim().toLowerCase();
+  const normalizedDraftStatus = String(currentApplication?.status || "").trim().toLowerCase();
   const hasRealSubmission = Boolean(submitResult) || SUBMITTED_STATUSES.has(normalizedDraftStatus);
   const progressActiveStep = Math.min(5, Math.max(1, currentStep));
   const progressPercent = ((progressActiveStep - 1) / (WIZARD_PROGRESS_STEPS.length - 1)) * 100;
   const stepErrors = validation.stepErrors[currentStep] || [];
   const hasCurrentStepErrors = stepErrors.length > 0;
-  const isVideoPreparing = videoEnabled && !personalizedVideoUrl && currentVideoStatus !== "failed";
+  const isVideoPreparing =
+    videoEnabled && hasRealSubmission && !welcomeVideoReady && !welcomeVideoError;
   const overlayAssociationName = (
-    submitResult?.application.organization_name ||
-    draft?.organization_name ||
+    currentApplication?.organization_name ||
     form.organization_name ||
     "ASSOCIATION"
   )
@@ -569,14 +700,13 @@ const Affiliazione = () => {
     .toUpperCase();
 
   useEffect(() => {
-    if (!token || !hasRealSubmission || !videoEnabled) return;
-    if (currentVideoStatus === "done" || currentVideoStatus === "failed") return;
+    if (!token || !hasRealSubmission || !videoEnabled || welcomeVideoReady) return;
 
     const pollId = window.setInterval(() => {
       void refreshDraft(token, false).catch(() => {});
     }, 8000);
     return () => window.clearInterval(pollId);
-  }, [currentVideoStatus, hasRealSubmission, refreshDraft, token, videoEnabled]);
+  }, [hasRealSubmission, refreshDraft, token, videoEnabled, welcomeVideoReady]);
 
   useEffect(() => {
     if (!hasRealSubmission || !videoEnabled) {
@@ -586,26 +716,47 @@ const Affiliazione = () => {
     if (
       !showVideoOverlay &&
       personalizedVideoUrl &&
-      currentVideoStatus === "done" &&
+      welcomeVideoReady &&
       !autoOpenedVideoRef.current
     ) {
       autoOpenedVideoRef.current = true;
       setShowVideoOverlay(true);
     }
-  }, [currentVideoStatus, hasRealSubmission, personalizedVideoUrl, showVideoOverlay, videoEnabled]);
+  }, [hasRealSubmission, personalizedVideoUrl, showVideoOverlay, videoEnabled, welcomeVideoReady]);
 
   const onGoPrevStep = () => {
     setError("");
     setCurrentStep((value) => Math.max(1, value - 1));
   };
 
-  const onGoNextStep = () => {
+  const onGoNextStep = async () => {
     if (hasCurrentStepErrors) {
       setError("Completa i campi obbligatori dello step prima di continuare.");
       return;
     }
-    setError("");
-    setCurrentStep((value) => Math.min(5, value + 1));
+    try {
+      setSaving(true);
+      setError("");
+
+      if (currentStep === 1 || currentStep === 2 || currentStep === 4) {
+        const currentDraft = await ensureServerDraft({ syncForm: true });
+        if (SUBMITTED_STATUSES.has(String(currentDraft.status || "").trim().toLowerCase())) {
+          return;
+        }
+        if (currentStep === 1 || currentStep === 4) {
+          await saveApplicationDetails(currentDraft.public_token);
+        }
+        if (currentStep === 2) {
+          await saveApplicationPeople(currentDraft.public_token);
+        }
+      }
+
+      setCurrentStep((value) => Math.min(5, value + 1));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore salvataggio step");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (capabilitiesLoading || loading) {
@@ -1148,7 +1299,7 @@ const Affiliazione = () => {
                   type="button"
                   className="px-6 h-12 rounded-xl text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                   onClick={onGoPrevStep}
-                  disabled={progressActiveStep <= 1}
+                  disabled={progressActiveStep <= 1 || saving}
                 >
                   Indietro
                 </button>
@@ -1156,10 +1307,11 @@ const Affiliazione = () => {
                 {progressActiveStep < 5 ? (
                   <button
                     type="button"
-                    className="inline-flex items-center justify-center px-10 h-12 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold shadow-lg shadow-slate-900/20 hover:shadow-xl transition-all hover:-translate-y-0.5 active:scale-95"
-                    onClick={onGoNextStep}
+                    className="inline-flex items-center justify-center px-10 h-12 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold shadow-lg shadow-slate-900/20 hover:shadow-xl transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                    onClick={() => void onGoNextStep()}
+                    disabled={saving}
                   >
-                    Avanti
+                    {saving ? "Salvataggio..." : "Avanti"}
                   </button>
                 ) : (
                   <button
@@ -1189,18 +1341,20 @@ const Affiliazione = () => {
         associationName={overlayAssociationName}
         videoUrl={personalizedVideoUrl}
         preparing={isVideoPreparing}
-        errorText={currentVideoStatus === "failed" ? currentVideoJob?.error_text : null}
+        errorText={welcomeVideoError}
         statusLabel={
           !videoEnabled
             ? "Video disattivato in questa installazione."
-            : currentVideoStatus === "failed"
-              ? "Errore generazione video"
+            : welcomeVideoReady
+              ? "Video personalizzato pronto."
               : isVideoPreparing
                 ? "Sto preparando il video..."
-                : videoStatusLabel
+                : welcomeVideoError
+                  ? "Video non ancora disponibile."
+                  : videoStatusLabel
         }
         onRetry={
-          currentVideoStatus === "failed"
+          welcomeVideoError
             ? () => {
                 void onRetryVideoStatus();
               }

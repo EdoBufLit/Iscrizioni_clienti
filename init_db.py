@@ -22,6 +22,7 @@ from app.models import (
     Organization,
     AdminUser,
     AdminRole,
+    AffiliationApplication,
     CardBatch,
     EmailOutbox,
     WhatsAppSession,
@@ -29,6 +30,7 @@ from app.models import (
 )
 from app.security import get_password_hash
 from app.config import settings
+from app.services.affiliation_identity import sync_affiliation_identity_fields
 from app.services.member_cleanup import (
     cleanup_deleted_member_traces,
     purge_deleted_members_permanently,
@@ -127,6 +129,7 @@ def init_db():
 
     # Legacy column migrations - DEPRECATED, kept for backwards compatibility
     with engine.begin() as conn:
+        table_names = set(inspect(conn).get_table_names())
         _add_column_if_missing(
             conn, "card_movements", "admin_id", "INTEGER REFERENCES admin_users(id)"
         )
@@ -171,6 +174,16 @@ def init_db():
         _add_column_if_missing(conn, "referrals", "wheel_result", "TEXT")
         _add_column_if_missing(conn, "referrals", "wheel_spun_at", "DATETIME")
         _add_column_if_missing(conn, "referrals", "wheel_spun_by_org_admin_id", "INTEGER")
+        if "affiliation_applications" in table_names:
+            _add_column_if_missing(
+                conn, "affiliation_applications", "normalized_applicant_email", "TEXT"
+            )
+            _add_column_if_missing(
+                conn, "affiliation_applications", "normalized_org_name", "TEXT"
+            )
+            _add_column_if_missing(
+                conn, "affiliation_applications", "idempotency_key", "TEXT"
+            )
         conn.execute(
             text(
                 """
@@ -287,6 +300,33 @@ def init_db():
                 """
             )
         )
+        if "affiliation_applications" in table_names:
+            conn.execute(
+                text(
+                    """
+                    CREATE INDEX IF NOT EXISTS ix_affiliation_applications_normalized_applicant_email
+                        ON affiliation_applications (normalized_applicant_email)
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    CREATE INDEX IF NOT EXISTS ix_affiliation_applications_normalized_org_name
+                        ON affiliation_applications (normalized_org_name)
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_affiliation_applications_active_idempotency_key
+                        ON affiliation_applications (idempotency_key)
+                     WHERE idempotency_key IS NOT NULL
+                       AND status IN ('draft', 'changes_requested', 'under_review')
+                    """
+                )
+            )
         # Keep oasi-2 naming aligned with current customer-facing branding.
         conn.execute(
             text(
@@ -333,6 +373,45 @@ def init_db():
     db = SessionLocal()
 
     try:
+        affiliation_identity_updates = 0
+        active_seen_idempotency_keys: set[str] = set()
+        applications = (
+            db.query(AffiliationApplication)
+            .order_by(
+                AffiliationApplication.updated_at.desc(),
+                AffiliationApplication.created_at.desc(),
+                AffiliationApplication.id.desc(),
+            )
+            .all()
+        )
+        for application in applications:
+            before = (
+                application.normalized_applicant_email,
+                application.normalized_org_name,
+                application.idempotency_key,
+            )
+            sync_affiliation_identity_fields(application)
+            if (
+                application.idempotency_key
+                and application.status in {"draft", "changes_requested", "under_review"}
+            ):
+                if application.idempotency_key in active_seen_idempotency_keys:
+                    application.idempotency_key = None
+                else:
+                    active_seen_idempotency_keys.add(application.idempotency_key)
+            after = (
+                application.normalized_applicant_email,
+                application.normalized_org_name,
+                application.idempotency_key,
+            )
+            if before != after:
+                affiliation_identity_updates += 1
+        if affiliation_identity_updates:
+            db.commit()
+            logger.info(
+                "Backfilled %s affiliation identity rows.",
+                affiliation_identity_updates,
+            )
         cleaned_deleted_members = cleanup_deleted_member_traces(db)
         if cleaned_deleted_members:
             db.commit()

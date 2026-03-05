@@ -14,10 +14,11 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import requests
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy import func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import audit
@@ -46,8 +47,15 @@ from app.models_affiliation import (
 )
 from app.services.affiliation_video import (
     enqueue_affiliation_video_job,
+    public_welcome_video_url,
     process_video_jobs_once,
+    resolve_welcome_video_state,
     serialize_video_job,
+)
+from app.services.affiliation_identity import (
+    build_affiliation_idempotency_key,
+    normalize_affiliation_email,
+    sync_affiliation_identity_fields,
 )
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.utils import generate_token, hash_token, save_upload_file
@@ -79,6 +87,22 @@ MANUAL_PAYMENT_METHODS = {
     AffiliationPaymentMethod.CASH.value,
 }
 
+REUSABLE_AFFILIATION_STATUSES = {
+    AffiliationApplicationStatus.DRAFT.value,
+    AffiliationApplicationStatus.CHANGES_REQUESTED.value,
+    AffiliationApplicationStatus.UNDER_REVIEW.value,
+    AffiliationApplicationStatus.APPROVED.value,
+    AffiliationApplicationStatus.REJECTED.value,
+}
+
+ACTIVE_IDEMPOTENT_AFFILIATION_STATUSES = {
+    AffiliationApplicationStatus.DRAFT.value,
+    AffiliationApplicationStatus.CHANGES_REQUESTED.value,
+    AffiliationApplicationStatus.UNDER_REVIEW.value,
+}
+
+AFFILIATION_RESUME_LOOKBACK_DAYS = 30
+
 PAYMENT_OK_STATUSES = {
     AffiliationPaymentStatus.PAID.value,
     AffiliationPaymentStatus.VERIFIED.value,
@@ -89,6 +113,10 @@ class CreateAffiliationDraftBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     applicant_email: EmailStr | None = None
+    organization_name: str | None = None
+    organization_legal_name: str | None = None
+    tax_code: str | None = None
+    vat_number: str | None = None
     referral_slug: str | None = None
 
 
@@ -197,6 +225,161 @@ def _resolve_frontend_base(request: Request) -> str:
     if configured:
         return configured
     return str(request.base_url).rstrip("/")
+
+
+def _normalize_optional_email(value: str | None) -> str | None:
+    return normalize_affiliation_email(value)
+
+
+def _sync_application_identity(application: AffiliationApplication) -> None:
+    sync_affiliation_identity_fields(application)
+
+
+def _find_application_by_identity(
+    db: Session,
+    *,
+    applicant_email: str | None,
+    organization_name: str | None,
+    organization_legal_name: str | None = None,
+    tax_code: str | None = None,
+    vat_number: str | None = None,
+    fallback_idempotency_key: str | None = None,
+    exclude_application_id: int | None = None,
+) -> AffiliationApplication | None:
+    identity_key = build_affiliation_idempotency_key(
+        applicant_email=applicant_email,
+        organization_name=organization_name,
+        organization_legal_name=organization_legal_name,
+        tax_code=tax_code,
+        vat_number=vat_number,
+        fallback_idempotency_key=fallback_idempotency_key,
+    )
+    if not identity_key:
+        return None
+
+    query = db.query(AffiliationApplication).filter(
+        AffiliationApplication.idempotency_key == identity_key,
+        AffiliationApplication.status.in_(tuple(REUSABLE_AFFILIATION_STATUSES)),
+        AffiliationApplication.created_at
+        >= datetime.utcnow() - timedelta(days=AFFILIATION_RESUME_LOOKBACK_DAYS),
+    )
+    if exclude_application_id is not None:
+        query = query.filter(AffiliationApplication.id != exclude_application_id)
+
+    return query.order_by(
+        AffiliationApplication.updated_at.desc(),
+        AffiliationApplication.created_at.desc(),
+        AffiliationApplication.id.desc(),
+    ).first()
+
+
+def _attach_referral_if_missing(
+    db: Session,
+    *,
+    application: AffiliationApplication,
+    referrer_org: Organization | None,
+    normalized_referral_slug: str | None,
+) -> None:
+    if application.referral is not None:
+        return
+    if referrer_org is not None:
+        db.add(
+            Referral(
+                referrer_org_id=referrer_org.id,
+                application_id=application.id,
+                status=ReferralStatus.PENDING.value,
+            )
+        )
+        db.flush()
+        _record_affiliation_event(
+            db,
+            application_id=application.id,
+            event_type="referral_attached",
+            actor_type="public",
+            payload={
+                "referrer_org_id": referrer_org.id,
+                "referrer_org_slug": referrer_org.slug,
+                "referrer_org_name": referrer_org.name,
+            },
+        )
+        return
+
+    if normalized_referral_slug:
+        _record_affiliation_event(
+            db,
+            application_id=application.id,
+            event_type="referral_ignored",
+            actor_type="public",
+            payload={"ref_slug": normalized_referral_slug},
+        )
+
+
+def _find_latest_video_job(application: AffiliationApplication) -> Any | None:
+    if not application.video_jobs:
+        return None
+    return sorted(
+        application.video_jobs,
+        key=lambda job: (job.requested_at or datetime.min, job.id or 0),
+        reverse=True,
+    )[0]
+
+
+def _resolve_video_mode_for_application(application: AffiliationApplication) -> str:
+    if (application.status or "").strip().lower() == AffiliationApplicationStatus.APPROVED.value:
+        return AffiliationVideoMode.APPROVED.value
+
+    try:
+        payment_method = _normalize_payment_method(application.payment_method)
+    except HTTPException:
+        payment_method = None
+    payment_status = (application.payment_status or "").strip().lower()
+    if (
+        payment_method in MANUAL_PAYMENT_METHODS
+        and payment_status not in PAYMENT_OK_STATUSES
+    ):
+        return AffiliationVideoMode.PAYMENT_PENDING.value
+
+    return AffiliationVideoMode.REVIEW.value
+
+
+def _build_affiliation_submit_response(
+    application: AffiliationApplication,
+    *,
+    message: str | None = None,
+) -> dict[str, Any]:
+    latest_video_job = _find_latest_video_job(application)
+
+    if message is None:
+        if application.status == AffiliationApplicationStatus.APPROVED.value:
+            message = "Affiliazione approvata"
+        elif application.status == AffiliationApplicationStatus.REJECTED.value:
+            message = "Richiesta respinta"
+        elif application.payment_method in MANUAL_PAYMENT_METHODS:
+            message = "Ti contatteremo per conferma"
+        elif application.payment_status == AffiliationPaymentStatus.PAID.value:
+            message = "Pagamento ricevuto, documenti in revisione"
+        else:
+            message = "Pagamento in attesa, documenti in revisione"
+
+    return {
+        "ok": True,
+        "status": application.status,
+        "payment_status": application.payment_status,
+        "message": message,
+        "next_steps": [
+            "Richiesta inviata",
+            message,
+            "Riceverai email alla conferma",
+        ],
+        "latest_video_job": serialize_video_job(latest_video_job),
+        "application": _serialize_affiliation(
+            application,
+            include_people=True,
+            include_documents=True,
+            include_events=False,
+            admin_view=False,
+        ),
+    }
 
 
 def _submit_validation_issues(application: AffiliationApplication) -> list[dict[str, Any]]:
@@ -489,13 +672,11 @@ def _serialize_affiliation(
 ) -> dict[str, Any]:
     latest_docs_map = _latest_documents_by_type(list(application.documents or []))
     latest_docs = list(latest_docs_map.values())
-    latest_video_job = None
-    if application.video_jobs:
-        latest_video_job = sorted(
-            application.video_jobs,
-            key=lambda job: (job.requested_at or datetime.min, job.id or 0),
-            reverse=True,
-        )[0]
+    latest_video_job = _find_latest_video_job(application)
+    welcome_video_state = resolve_welcome_video_state(
+        application_id=application.id,
+        latest_job=latest_video_job,
+    )
 
     payload: dict[str, Any] = {
         "id": application.id,
@@ -541,6 +722,9 @@ def _serialize_affiliation(
         },
         "can_approve": _can_approve(application),
         "latest_video_job": serialize_video_job(latest_video_job),
+        "welcome_video_url": welcome_video_state["welcome_video_url"],
+        "welcome_video_ready": welcome_video_state["welcome_video_ready"],
+        "welcome_video_error": welcome_video_state["welcome_video_error"],
         "referral": _serialize_referral(application.referral),
     }
 
@@ -773,6 +957,7 @@ def _create_stripe_checkout_session(
     *,
     application: AffiliationApplication,
     request: Request,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     _require_stripe_enabled_for_public()
     stripe_secret_key = (settings.STRIPE_SECRET_KEY or "").strip()
@@ -797,9 +982,13 @@ def _create_stripe_checkout_session(
         "metadata[public_token]": application.public_token,
     }
 
+    headers = {"Authorization": f"Bearer {stripe_secret_key}"}
+    if (idempotency_key or "").strip():
+        headers["Idempotency-Key"] = idempotency_key.strip()
+
     response = requests.post(
         "https://api.stripe.com/v1/checkout/sessions",
-        headers={"Authorization": f"Bearer {stripe_secret_key}"},
+        headers=headers,
         data=body,
         timeout=20,
     )
@@ -849,6 +1038,7 @@ def _apply_patch_to_application(
         setattr(application, key, normalized_value)
         changed[key] = normalized_value
 
+    _sync_application_identity(application)
     return changed
 
 
@@ -856,9 +1046,14 @@ def _apply_patch_to_application(
 def create_affiliation_draft(
     request: Request,
     body: CreateAffiliationDraftBody,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ):
-    applicant_email = (_normalize_text(body.applicant_email) or "").lower() or None
+    applicant_email = _normalize_optional_email(body.applicant_email)
+    organization_name = _normalize_text(body.organization_name)
+    organization_legal_name = _normalize_text(body.organization_legal_name)
+    tax_code = _normalize_text(body.tax_code)
+    vat_number = _normalize_text(body.vat_number)
     referral_slug = (
         (_normalize_text(body.referral_slug) or _normalize_text(request.query_params.get("ref")))
         or None
@@ -875,6 +1070,36 @@ def create_affiliation_draft(
             )
             .first()
         )
+
+    reusable_application = _find_application_by_identity(
+        db,
+        applicant_email=applicant_email,
+        organization_name=organization_name,
+        organization_legal_name=organization_legal_name,
+        tax_code=tax_code,
+        vat_number=vat_number,
+        fallback_idempotency_key=idempotency_key,
+    )
+    if reusable_application is not None:
+        _attach_referral_if_missing(
+            db,
+            application=reusable_application,
+            referrer_org=referrer_org,
+            normalized_referral_slug=normalized_referral_slug,
+        )
+        db.commit()
+        db.refresh(reusable_application)
+        payload = _serialize_affiliation(
+            reusable_application,
+            include_people=True,
+            include_documents=True,
+            include_events=False,
+            admin_view=False,
+        )
+        payload["resume_url_absolute"] = (
+            f"{_resolve_frontend_base(request)}/affiliazione?token={reusable_application.public_token}"
+        )
+        return payload
 
     for _ in range(5):
         public_token = secrets.token_urlsafe(24)
@@ -895,47 +1120,57 @@ def create_affiliation_draft(
         payment_status=AffiliationPaymentStatus.UNPAID.value,
         payment_amount_cents=int(settings.STRIPE_AFFILIATION_PRICE_CENTS),
         applicant_email=applicant_email,
+        organization_name=organization_name,
+        organization_legal_name=organization_legal_name,
+        tax_code=tax_code,
+        vat_number=vat_number,
     )
+    application.idempotency_key = (idempotency_key or "").strip() or None
+    _sync_application_identity(application)
     db.add(application)
     db.flush()
 
-    if referrer_org is not None:
-        db.add(
-            Referral(
-                referrer_org_id=referrer_org.id,
-                application_id=application.id,
-                status=ReferralStatus.PENDING.value,
-            )
-        )
-        db.flush()
-        _record_affiliation_event(
-            db,
-            application_id=application.id,
-            event_type="referral_attached",
-            actor_type="public",
-            payload={
-                "referrer_org_id": referrer_org.id,
-                "referrer_org_slug": referrer_org.slug,
-                "referrer_org_name": referrer_org.name,
-            },
-        )
-    elif normalized_referral_slug:
-        _record_affiliation_event(
-            db,
-            application_id=application.id,
-            event_type="referral_ignored",
-            actor_type="public",
-            payload={"ref_slug": normalized_referral_slug},
-        )
+    _attach_referral_if_missing(
+        db,
+        application=application,
+        referrer_org=referrer_org,
+        normalized_referral_slug=normalized_referral_slug,
+    )
 
     _record_affiliation_event(
         db,
         application_id=application.id,
         event_type="draft_created",
         actor_type="public",
-        payload={"ip": get_client_ip(request)},
-    )
-    db.commit()
+            payload={"ip": get_client_ip(request)},
+        )
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        reusable_application = _find_application_by_identity(
+            db,
+            applicant_email=applicant_email,
+            organization_name=organization_name,
+            organization_legal_name=organization_legal_name,
+            tax_code=tax_code,
+            vat_number=vat_number,
+            fallback_idempotency_key=idempotency_key,
+        )
+        if reusable_application is None:
+            raise
+        payload = _serialize_affiliation(
+            reusable_application,
+            include_people=True,
+            include_documents=True,
+            include_events=False,
+            admin_view=False,
+        )
+        payload["resume_url_absolute"] = (
+            f"{_resolve_frontend_base(request)}/affiliazione?token={reusable_application.public_token}"
+        )
+        return payload
+
     db.refresh(application)
 
     payload = _serialize_affiliation(
@@ -991,7 +1226,29 @@ def patch_affiliation_draft(
             payload={"fields": sorted(changed_fields.keys()), "ip": get_client_ip(request)},
         )
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing_application = _find_application_by_identity(
+            db,
+            applicant_email=application.applicant_email,
+            organization_name=application.organization_name,
+            organization_legal_name=application.organization_legal_name,
+            tax_code=application.tax_code,
+            vat_number=application.vat_number,
+            exclude_application_id=application.id,
+        )
+        if existing_application is not None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": "Esiste gia una pratica in corso per questi dati.",
+                    "resume_url": f"/affiliazione?token={existing_application.public_token}",
+                    "public_token": existing_application.public_token,
+                },
+            )
+        raise
     db.refresh(application)
     return _serialize_affiliation(
         application,
@@ -1036,27 +1293,39 @@ def replace_affiliation_people(
             AffiliationPersonInput(
                 role=role,
                 full_name=_normalize_text(item.full_name),
-                email=item.email,
+                email=_normalize_optional_email(item.email),
                 phone=_normalize_text(item.phone),
                 fiscal_code=_normalize_text(item.fiscal_code),
             )
         )
 
-    for existing in list(application.people or []):
-        db.delete(existing)
-    db.flush()
+    existing_by_role = {
+        (existing.role or "").strip().lower(): existing for existing in list(application.people or [])
+    }
 
     for item in normalized_items:
-        db.add(
-            AffiliationPerson(
-                application_id=application.id,
-                role=item.role,
-                full_name=item.full_name,
-                email=item.email,
-                phone=item.phone,
-                fiscal_code=item.fiscal_code,
+        existing = existing_by_role.pop(item.role, None)
+        if existing is None:
+            db.add(
+                AffiliationPerson(
+                    application_id=application.id,
+                    role=item.role,
+                    full_name=item.full_name,
+                    email=item.email,
+                    phone=item.phone,
+                    fiscal_code=item.fiscal_code,
+                )
             )
-        )
+            continue
+        existing.full_name = item.full_name
+        existing.email = item.email
+        existing.phone = item.phone
+        existing.fiscal_code = item.fiscal_code
+
+    for orphan_role, existing in existing_by_role.items():
+        if orphan_role in REQUIRED_PEOPLE_ROLES:
+            continue
+        db.delete(existing)
 
     _record_affiliation_event(
         db,
@@ -1113,6 +1382,26 @@ async def upload_affiliation_document(
     latest_same_type = _latest_documents_by_type(list(application.documents or [])).get(
         normalized_doc_type
     )
+    if (
+        latest_same_type is not None
+        and latest_same_type.sha256 == sha256
+        and latest_same_type.size_bytes == size_bytes
+    ):
+        duplicate_full_path = os.path.join(settings.UPLOAD_DIR, rel_path)
+        try:
+            if os.path.exists(duplicate_full_path):
+                os.remove(duplicate_full_path)
+        except OSError:
+            logger.warning(
+                "affiliation_document_duplicate_cleanup_failed application_id=%s rel_path=%s",
+                application.id,
+                rel_path,
+            )
+        return {
+            "ok": True,
+            "document": _serialize_document_public(application, latest_same_type),
+            "docs_status": application.docs_status,
+        }
 
     document = AffiliationDocument(
         application_id=application.id,
@@ -1177,6 +1466,7 @@ def download_affiliation_document_public(
 def create_affiliation_checkout(
     request: Request,
     public_token: str,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ):
     application = _find_application_by_token(db, public_token)
@@ -1196,6 +1486,7 @@ def create_affiliation_checkout(
     session_payload = _create_stripe_checkout_session(
         application=application,
         request=request,
+        idempotency_key=idempotency_key,
     )
     application.payment_status = AffiliationPaymentStatus.CHECKOUT_PENDING.value
     application.stripe_checkout_session_id = session_payload.get("id")
@@ -1224,6 +1515,7 @@ def create_affiliation_checkout(
 def submit_affiliation_draft(
     request: Request,
     public_token: str,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ):
     application = _find_application_by_token(db, public_token)
@@ -1232,6 +1524,8 @@ def submit_affiliation_draft(
         AffiliationApplicationStatus.DRAFT.value,
         AffiliationApplicationStatus.CHANGES_REQUESTED.value,
     }:
+        if application.submitted_at is not None:
+            return _build_affiliation_submit_response(application)
         raise HTTPException(
             status_code=409,
             detail="La richiesta non puo essere inviata nello stato corrente.",
@@ -1267,6 +1561,9 @@ def submit_affiliation_draft(
     application.docs_status = AffiliationDocsStatus.PENDING.value
     application.status = AffiliationApplicationStatus.UNDER_REVIEW.value
     application.submitted_at = datetime.utcnow()
+    if (idempotency_key or "").strip():
+        application.idempotency_key = idempotency_key.strip()
+    _sync_application_identity(application)
 
     video_mode = AffiliationVideoMode.REVIEW.value
     if normalized_payment_method in MANUAL_PAYMENT_METHODS:
@@ -1288,7 +1585,7 @@ def submit_affiliation_draft(
         },
     )
 
-    video_job = enqueue_affiliation_video_job(
+    enqueue_affiliation_video_job(
         db,
         application_id=application.id,
         mode=video_mode,
@@ -1300,24 +1597,85 @@ def submit_affiliation_draft(
 
     db.commit()
     db.refresh(application)
+    return _build_affiliation_submit_response(
+        application,
+        message=(
+            "Ti contatteremo per conferma"
+            if application.payment_method in MANUAL_PAYMENT_METHODS
+            else (
+                "Pagamento ricevuto, documenti in revisione"
+                if application.payment_status == AffiliationPaymentStatus.PAID.value
+                else "Pagamento in attesa, documenti in revisione"
+            )
+        ),
+    )
 
-    if application.payment_method in MANUAL_PAYMENT_METHODS:
-        status_message = "Ti contatteremo per conferma"
-    elif application.payment_status == AffiliationPaymentStatus.PAID.value:
-        status_message = "Pagamento ricevuto, documenti in revisione"
-    else:
-        status_message = "Pagamento in attesa, documenti in revisione"
+
+@router.post("/api/affiliazione/draft/{public_token}/video/retry")
+def retry_affiliation_welcome_video(
+    request: Request,
+    public_token: str,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+):
+    application = _find_application_by_token(db, public_token)
+    if not settings.AFFILIATION_VIDEO_ENABLED:
+        raise HTTPException(
+            status_code=409,
+            detail="Generazione video non disponibile in questa installazione.",
+        )
+
+    latest_video_job = _find_latest_video_job(application)
+    welcome_video_state = resolve_welcome_video_state(
+        application_id=application.id,
+        latest_job=latest_video_job,
+    )
+    if welcome_video_state["welcome_video_ready"]:
+        return {
+            "ok": True,
+            "status": "ready",
+            "welcome_video_url": public_welcome_video_url(application.id),
+            "latest_video_job": serialize_video_job(latest_video_job),
+            "application": _serialize_affiliation(
+                application,
+                include_people=True,
+                include_documents=True,
+                include_events=False,
+                admin_view=False,
+            ),
+        }
+
+    video_job = enqueue_affiliation_video_job(
+        db,
+        application_id=application.id,
+        mode=_resolve_video_mode_for_application(application),
+        payload={
+            "trigger": "public_retry",
+            "idempotency_key": (idempotency_key or "").strip() or None,
+            "request_ip": get_client_ip(request),
+        },
+    )
+
+    _record_affiliation_event(
+        db,
+        application_id=application.id,
+        event_type="video_retry_requested",
+        actor_type="public",
+        payload={
+            "job_id": video_job.id if video_job else None,
+            "ip": get_client_ip(request),
+            "user_agent": request.headers.get("user-agent"),
+        },
+    )
+    db.commit()
+    db.refresh(application)
 
     return {
         "ok": True,
-        "status": application.status,
-        "payment_status": application.payment_status,
-        "message": status_message,
-        "next_steps": [
-            "Richiesta inviata",
-            status_message,
-            "Riceverai email alla conferma",
-        ],
+        "status": "queued" if video_job and video_job.status != "done" else "ready",
+        "welcome_video_url": public_welcome_video_url(application.id)
+        if video_job and video_job.status == "done"
+        else None,
         "latest_video_job": serialize_video_job(video_job),
         "application": _serialize_affiliation(
             application,

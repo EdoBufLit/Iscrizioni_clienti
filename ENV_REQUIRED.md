@@ -13,7 +13,8 @@ All environment variables used by the application. Variables marked **required**
 | `INGEST_RATE_LIMIT_WINDOW_SECONDS` | No | `300` | Duration (seconds) of the public ingest rate-limit window. |
 | `DATABASE_URL` | No | `sqlite:///./data/app.db` (local) or `sqlite:////app/data/app.db` (Docker) | SQLAlchemy database URL. Switch to PostgreSQL with `postgresql+psycopg2://assonam:${POSTGRES_PASSWORD}@db:5432/assonam`. |
 | `POSTGRES_PASSWORD` | No | _(empty)_ | Password for the bundled Docker Compose PostgreSQL service (`db`). Required only when using PostgreSQL. |
-| `UPLOAD_DIR` | No | `<project_root>/data/uploads` | Directory for storing uploaded member documents. |
+| `APP_DATA_DIR` | No | `<project_root>/data` (local) or `/app/data` (container) | Base directory for persistent application data. Used to resolve uploads and generated welcome videos. |
+| `UPLOAD_DIR` | No | `<APP_DATA_DIR>/uploads` | Directory for storing uploaded member documents. |
 | `SPA_DIR` | No | `frontend/dist` | Path to the built frontend SPA directory. |
 | `AFFILIAZIONE_ENABLED` | No | `false` | Enables public affiliation endpoints (`/api/affiliazione/*`). If `false`, public affiliation routes return `404`. |
 
@@ -85,7 +86,7 @@ Stripe is optional. The affiliation flow still works with bank transfer and cash
 | `AFFILIATION_VIDEO_ENABLED` | No | `true` | Enables affiliation welcome-video pipeline (enqueue + worker processing + UI states). When `false`, UI shows "Video disattivato". |
 | `AFFILIATION_VIDEO_WORKER_ENABLED` | No | `false` | Enables the optional Remotion affiliation video worker profile at deploy time (`video-worker`). |
 | `AFFILIATION_VIDEO_RENDERER_DIR` | No | `/app/video-renderer/services/welcome-video` | Path to Remotion renderer sources/build inside the container. |
-| `AFFILIATION_VIDEO_OUTPUT_DIR` | No | `/app/data/videos/welcome` | Directory for generated personalized affiliation videos. |
+| `AFFILIATION_VIDEO_OUTPUT_DIR` | No | `<APP_DATA_DIR>/videos/welcome` | Directory for generated personalized affiliation videos. Public URL remains `/videos/welcome/{application_id}.mp4`. |
 
 Runtime behavior:
 
@@ -94,6 +95,7 @@ Runtime behavior:
 - Stripe webhook endpoint stays reachable and returns `200` when Stripe is disabled (no retry storm).
 - Video worker does not require Stripe env vars. Required baseline for worker execution: `DATABASE_URL` + `AFFILIATION_VIDEO_ENABLED=true` + `AFFILIATION_VIDEO_WORKER_ENABLED=true`.
 - The affiliation video worker is optional: with `AFFILIATION_VIDEO_WORKER_ENABLED=false` deploy does not start/build the `video-worker` profile by default.
+- `GET /api/affiliazione/draft/{token}` exposes `welcome_video_ready`, `welcome_video_url`, and `welcome_video_error`. If the MP4 already exists on disk, these fields take precedence over stale DB job status.
 
 Webhook smoke test for Twilio WhatsApp:
 

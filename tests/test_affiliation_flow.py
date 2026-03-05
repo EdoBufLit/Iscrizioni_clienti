@@ -1,9 +1,12 @@
 import uuid
+from pathlib import Path
 
 import pytest
 
+from app.config import settings
 from app.db import SessionLocal
 from app.models import AdminRole, AdminUser, Organization
+from app.models_affiliation import AffiliationVideoMode, VideoJob, VideoJobStatus
 
 
 @pytest.fixture
@@ -241,3 +244,137 @@ def test_affiliation_approve_requires_docs_and_payment_verification(client, db):
     )
     assert org_admin is not None
     assert (org_admin.email or "").lower() == email.lower()
+
+
+def test_affiliation_draft_reports_video_ready_when_latest_job_failed_but_file_exists(
+    client,
+    db,
+    tmp_path,
+    monkeypatch,
+):
+    email = f"draft-video-ready-{uuid.uuid4().hex[:10]}@example.com"
+    draft = _create_draft(client, email=email)
+    token = draft["public_token"]
+    application_id = int(draft["id"])
+
+    video_dir = tmp_path / "welcome"
+    video_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(settings, "AFFILIATION_VIDEO_OUTPUT_DIR", str(video_dir), raising=False)
+
+    db.add(
+        VideoJob(
+            application_id=application_id,
+            mode=AffiliationVideoMode.REVIEW.value,
+            status=VideoJobStatus.FAILED.value,
+            error_text="Old renderer failure",
+        )
+    )
+    db.commit()
+
+    expected_file = Path(settings.AFFILIATION_VIDEO_OUTPUT_DIR) / f"{application_id}.mp4"
+    expected_file.write_bytes(b"fake-mp4")
+
+    response = client.get(f"/api/affiliazione/draft/{token}")
+    assert response.status_code == 200, response.text
+    payload = response.json()
+
+    assert payload["latest_video_job"]["status"] == "failed"
+    assert payload["welcome_video_ready"] is True
+    assert payload["welcome_video_url"] == f"/videos/welcome/{application_id}.mp4"
+    assert payload["welcome_video_error"] is None
+
+
+def test_affiliation_draft_reports_video_not_ready_when_file_missing(
+    client,
+    db,
+    tmp_path,
+    monkeypatch,
+):
+    email = f"draft-video-missing-{uuid.uuid4().hex[:10]}@example.com"
+    draft = _create_draft(client, email=email)
+    token = draft["public_token"]
+    application_id = int(draft["id"])
+
+    video_dir = tmp_path / "welcome-missing"
+    video_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(settings, "AFFILIATION_VIDEO_OUTPUT_DIR", str(video_dir), raising=False)
+
+    db.add(
+        VideoJob(
+            application_id=application_id,
+            mode=AffiliationVideoMode.REVIEW.value,
+            status=VideoJobStatus.DONE.value,
+            output_rel_path=f"welcome/{application_id}.mp4",
+        )
+    )
+    db.commit()
+
+    response = client.get(f"/api/affiliazione/draft/{token}")
+    assert response.status_code == 200, response.text
+    payload = response.json()
+
+    assert payload["welcome_video_ready"] is False
+    assert payload["welcome_video_url"] == f"/videos/welcome/{application_id}.mp4"
+    assert payload["welcome_video_error"] is None
+
+
+def test_affiliation_create_reuses_recent_application_by_identity(client):
+    email = f"draft-reuse-{uuid.uuid4().hex[:10]}@example.com"
+    organization_name = f"Associazione Riuso {uuid.uuid4().hex[:8]}"
+
+    first_response = client.post(
+        "/api/affiliazione/draft",
+        json={
+            "applicant_email": email,
+            "organization_name": organization_name,
+        },
+    )
+    assert first_response.status_code == 200, first_response.text
+    first_payload = first_response.json()
+
+    second_response = client.post(
+        "/api/affiliazione/draft",
+        json={
+            "applicant_email": email.upper(),
+            "organization_name": f"  {organization_name}  ",
+        },
+    )
+    assert second_response.status_code == 200, second_response.text
+    second_payload = second_response.json()
+
+    assert second_payload["id"] == first_payload["id"]
+    assert second_payload["public_token"] == first_payload["public_token"]
+
+
+def test_affiliation_submit_is_idempotent_on_retry(client, db):
+    email = f"draft-submit-idempotent-{uuid.uuid4().hex[:10]}@example.com"
+    draft = _create_draft(client, email=email)
+    token = draft["public_token"]
+    application_id = int(draft["id"])
+
+    _patch_required_fields(
+        client,
+        token,
+        email=email,
+        payment_method="cash",
+    )
+    _replace_required_people(client, token)
+    _upload_required_docs(client, token)
+
+    first_submit = client.post(f"/api/affiliazione/draft/{token}/submit")
+    assert first_submit.status_code == 200, first_submit.text
+
+    second_submit = client.post(f"/api/affiliazione/draft/{token}/submit")
+    assert second_submit.status_code == 200, second_submit.text
+    second_payload = second_submit.json()
+
+    assert second_payload["application"]["id"] == application_id
+    assert second_payload["status"] == "under_review"
+
+    video_jobs = (
+        db.query(VideoJob)
+        .filter(VideoJob.application_id == application_id)
+        .order_by(VideoJob.id.asc())
+        .all()
+    )
+    assert len(video_jobs) == 1

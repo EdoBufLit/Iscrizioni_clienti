@@ -1208,6 +1208,9 @@ export type AffiliationDraft = {
   };
   can_approve: boolean;
   latest_video_job: AffiliationVideoJob | null;
+  welcome_video_url: string | null;
+  welcome_video_ready: boolean;
+  welcome_video_error: string | null;
   referral: AffiliationReferral | null;
   people: AffiliationDraftPerson[];
   documents: AffiliationDraftDocument[];
@@ -1223,12 +1226,36 @@ export type AffiliationSubmitResponse = {
   application: AffiliationDraft;
 };
 
+type AffiliationRequestOptions = {
+  idempotencyKey?: string;
+};
+
+function buildAffiliationHeaders(
+  options?: AffiliationRequestOptions,
+  extra?: HeadersInit,
+): HeadersInit {
+  const headers = new Headers(extra);
+  const idempotencyKey = options?.idempotencyKey?.trim();
+  if (idempotencyKey) {
+    headers.set("Idempotency-Key", idempotencyKey);
+  }
+  return headers;
+}
+
 export async function createAffiliationDraft(
-  payload?: { applicant_email?: string; referral_slug?: string },
+  payload?: {
+    applicant_email?: string;
+    organization_name?: string;
+    organization_legal_name?: string;
+    tax_code?: string;
+    vat_number?: string;
+    referral_slug?: string;
+  },
+  options?: AffiliationRequestOptions,
 ): Promise<AffiliationDraft & { resume_url_absolute?: string }> {
   const res = await fetch("/api/affiliazione/draft", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: buildAffiliationHeaders(options, { "Content-Type": "application/json" }),
     body: JSON.stringify(payload ?? {}),
   });
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Impossibile creare la bozza."));
@@ -1314,9 +1341,11 @@ export async function uploadAffiliationDocument(
 
 export async function createAffiliationStripeCheckout(
   token: string,
+  options?: AffiliationRequestOptions,
 ): Promise<{ ok: boolean; checkout_url: string; session_id: string; payment_status: string }> {
   const res = await fetch(`/api/affiliazione/draft/${encodeURIComponent(token)}/stripe/checkout`, {
     method: "POST",
+    headers: buildAffiliationHeaders(options),
   });
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione checkout Stripe."));
   return res.json();
@@ -1324,11 +1353,33 @@ export async function createAffiliationStripeCheckout(
 
 export async function submitAffiliationDraft(
   token: string,
+  options?: AffiliationRequestOptions,
 ): Promise<AffiliationSubmitResponse> {
   const res = await fetch(`/api/affiliazione/draft/${encodeURIComponent(token)}/submit`, {
     method: "POST",
+    headers: buildAffiliationHeaders(options),
   });
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore invio richiesta affiliazione."));
+  return res.json();
+}
+
+export async function retryAffiliationWelcomeVideo(
+  token: string,
+  options?: AffiliationRequestOptions,
+): Promise<{
+  ok: boolean;
+  status: "queued" | "ready";
+  welcome_video_url: string | null;
+  latest_video_job: AffiliationVideoJob | null;
+  application: AffiliationDraft;
+}> {
+  const res = await fetch(`/api/affiliazione/draft/${encodeURIComponent(token)}/video/retry`, {
+    method: "POST",
+    headers: buildAffiliationHeaders(options),
+  });
+  if (!res.ok) {
+    throw new Error(await parseApiErrorDetail(res, "Errore riavvio generazione video."));
+  }
   return res.json();
 }
 
@@ -1491,24 +1542,34 @@ async function parseApiErrorDetail(
   fallback: string,
 ): Promise<string> {
   const payload = await res.json().catch(() => null);
+  const requestId =
+    (typeof payload?.request_id === "string" && payload.request_id.trim()
+      ? payload.request_id.trim()
+      : null) ||
+    (res.headers.get("X-Request-Id") || "").trim() ||
+    null;
+  const withReference = (message: string) =>
+    requestId && !message.includes("(ref:")
+      ? `${message} (ref: ${requestId})`
+      : message;
   const detail = payload?.detail;
   if (typeof detail === "string" && detail.trim()) {
-    return detail;
+    return withReference(detail);
   }
   if (detail && typeof detail === "object") {
     const message = (detail as { message?: unknown }).message;
     if (typeof message === "string" && message.trim()) {
-      return message;
+      return withReference(message);
     }
     const issues = (detail as { issues?: unknown }).issues;
     if (Array.isArray(issues) && issues.length > 0) {
       const first = issues[0] as { message?: unknown };
       if (typeof first?.message === "string" && first.message.trim()) {
-        return first.message;
+        return withReference(first.message);
       }
     }
   }
-  return fallback;
+  return withReference(fallback);
 }
 
 export async function fetchSuperAdminIntegrationKeys(

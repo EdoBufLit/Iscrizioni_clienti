@@ -2378,3 +2378,32 @@ pm --prefix frontend run build -> OK
   - `npm run build` -> OK;
   - `node dist/renderHud.cjs --orgId corp-logo --orgName "Org Test" --mode review --template personalized --logoUrl "https://assonam.it/logo-transparent.png" --output out/welcome_test_remote_logo.mp4` -> OK, MP4 generato (`1243173` bytes), `logoStrategy=remote-inline`;
   - `node dist/renderHud.cjs --orgId silent-audio --orgName "Org Silent" --mode review --template personalized --audio-local-path ".\\missing-audio-dir" --output out/welcome_test_silent.mp4` -> OK, MP4 generato (`1243219` bytes), `audioStrategy=silent-fallback`.
+
+## Spec (Wizard affiliation idempotency + welcome-video reconciliation - Mar 05, 2026)
+- Obiettivo: rendere robusto e idempotente il flusso di affiliazione pubblico e il welcome-video senza perdere dati e senza reset distruttivi DB.
+- Scope:
+  - GET draft deve esporre `welcome_video_ready`, `welcome_video_url`, `welcome_video_error` e considerare il file reale come source of truth.
+  - Worker video deve marcare `done` solo quando l'MP4 esiste davvero, ma riconciliare a `done` anche se il renderer esce non-zero e il file esiste.
+  - Wizard deve riusare la stessa pratica in base a identita stabile, evitare duplicati di application/people e supportare retry safe.
+  - Frontend deve basarsi sui nuovi campi welcome video e usare sempre resume token/url backend.
+- Vincoli: solo fix puntuali, migrazioni additive, update mirati; nessun DROP/DELETE massivo o reset DB.
+
+## Plan (Wizard affiliation idempotency + welcome-video reconciliation)
+- [ ] Audit completo di route/modelli/worker/UI e append review finale in questo file.
+- [ ] Backend draft response: aggiungere campi `welcome_video_*` e riconciliazione file > DB.
+- [ ] Worker video: render idempotente, verifica file post-node, no false failed quando il file esiste.
+- [ ] Wizard backend: riuso pratica esistente, chiave identita stabile, retry safe submit/video e people upsert.
+- [ ] Migrazione additiva per colonne/index idempotenza + bootstrap safe in `init_db.py`.
+- [ ] Frontend wizard/API: persistenza server-side per step, video player su `welcome_video_ready`, retry generazione.
+- [ ] Verifiche: pytest mirati, build frontend, smoke test GET draft con file MP4 presente.
+
+## Review (Wizard affiliation idempotency + welcome-video reconciliation - Mar 06, 2026)
+- Backend draft response ora espone `welcome_video_ready`, `welcome_video_url`, `welcome_video_error` e usa il file MP4 su disco come source of truth rispetto a job DB stale.
+- Worker video reso idempotente: verifica file post-render, salva `done` solo con output reale, ma riconcilia a `done` anche quando Node esce non-zero e l'MP4 esiste.
+- Wizard backend reso retry-safe: riuso application per identita stabile, `idempotency_key` persistita, create/submit/stripe/video-retry idempotenti, people upsert per ruolo.
+- Frontend wizard aggiornato: nessun token generato lato client, resume sempre da backend, persistenza server-side sugli step, player basato su `welcome_video_ready` e retry video dedicato.
+- Documentazione aggiornata: `APP_DATA_DIR`, default video path e nuovo contratto draft.
+- Verifiche eseguite:
+  - `python -m pytest -q tests/test_affiliation_flow.py tests/test_affiliation_video_service.py` -> `10 passed`
+  - `npm --prefix frontend run build` -> OK
+  - smoke `GET /api/affiliazione/draft/{token}` con file presente -> `welcome_video_ready=true`, `welcome_video_url=/videos/welcome/1.mp4`

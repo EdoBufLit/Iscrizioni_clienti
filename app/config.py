@@ -56,7 +56,8 @@ class Settings:
     PROJECT_VERSION: str = "1.0.0"
 
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", os.path.join(BASE_DIR, "data", "uploads"))
+    APP_DATA_DIR: str = os.getenv("APP_DATA_DIR", os.path.join(BASE_DIR, "data"))
+    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", os.path.join(APP_DATA_DIR, "uploads"))
 
     # In production, this should be secret and loaded from env
     SECRET_KEY: str = os.getenv("SECRET_KEY", "supersecretkey")
@@ -142,7 +143,7 @@ class Settings:
     )
     AFFILIATION_VIDEO_OUTPUT_DIR: str = os.getenv(
         "AFFILIATION_VIDEO_OUTPUT_DIR",
-        os.path.join(BASE_DIR, "data", "videos", "welcome"),
+        os.path.join(APP_DATA_DIR, "videos", "welcome"),
     )
     AFFILIATION_VIDEO_AUTO_RENDER: bool = os.getenv(
         "AFFILIATION_VIDEO_AUTO_RENDER", "false"

@@ -185,8 +185,13 @@ app.add_middleware(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
-    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-ASSONAM-API-KEY", "X-Client-Version"],
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Content-Type",
+        "Idempotency-Key",
+        "X-ASSONAM-API-KEY",
+        "X-Client-Version",
+    ],
     allow_credentials=True,
 )
 
@@ -216,6 +221,11 @@ app.mount(
     "/generated-videos",
     StaticFiles(directory=_generated_videos_path, check_dir=False),
     name="generated-videos",
+)
+app.mount(
+    "/videos",
+    StaticFiles(directory=_generated_videos_path, check_dir=False),
+    name="videos",
 )
 
 

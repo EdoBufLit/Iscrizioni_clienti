@@ -136,8 +136,11 @@ else:
 
         applicant_full_name = Column(String, nullable=True)
         applicant_email = Column(String, nullable=True, index=True)
+        normalized_applicant_email = Column(String, nullable=True, index=True)
         applicant_phone = Column(String, nullable=True)
         notes = Column(Text, nullable=True)
+        normalized_org_name = Column(String, nullable=True, index=True)
+        idempotency_key = Column(String(64), nullable=True)
 
         manual_preferred_date = Column(String, nullable=True)
         manual_preferred_time = Column(String, nullable=True)

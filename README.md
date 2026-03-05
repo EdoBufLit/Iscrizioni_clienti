@@ -37,7 +37,8 @@ A minimal web application for association member signup, document upload, and me
    | `FRONTEND_URL` | Public URL of SPA (for member magic-link) | _(empty)_ |
    | `INGEST_RATE_LIMIT_MAX_REQUESTS` | Max requests per IP+org for public ingest window | `20` |
    | `INGEST_RATE_LIMIT_WINDOW_SECONDS` | Public ingest rate-limit window in seconds | `300` |
-   | `UPLOAD_DIR` | Directory for uploaded files | `data/uploads` |
+   | `APP_DATA_DIR` | Base persistent data directory | `data` |
+   | `UPLOAD_DIR` | Directory for uploaded files | `<APP_DATA_DIR>/uploads` |
    | `LOGIN_TOKEN_EXPIRE_MINUTES` | Login link validity | `15` |
    | `JOIN_TOKEN_EXPIRE_MINUTES` | Signup continue link validity | `120` |
    | `SKIP_CREATE_ALL` | Disable auto schema creation | `0` (dev) / `1` (prod) |
@@ -68,6 +69,8 @@ The Remotion affiliation video worker is optional and controlled by deploy flag:
 - `AFFILIATION_VIDEO_ENABLED=false`: UI shows "Video disattivato" and backend skips video queueing.
 - `AFFILIATION_VIDEO_WORKER_ENABLED=false` (default): deploy runs without the `video-worker` profile.
 - `AFFILIATION_VIDEO_WORKER_ENABLED=true`: deploy enables docker compose profile `video-worker`.
+- `AFFILIATION_VIDEO_OUTPUT_DIR` defaults to `<APP_DATA_DIR>/videos/welcome`; generated files are served publicly as `/videos/welcome/{application_id}.mp4`.
+- `GET /api/affiliazione/draft/{token}` now returns `welcome_video_ready`, `welcome_video_url`, and `welcome_video_error`. If the MP4 exists on disk, those fields override stale `latest_video_job.status`.
 
 The video worker is decoupled from Stripe: missing `STRIPE_*` env vars does not disable rendering.
 
