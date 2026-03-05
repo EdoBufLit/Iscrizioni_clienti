@@ -1995,3 +1995,28 @@ pm --prefix frontend run build -> OK
 - Verifiche eseguite:
 - `Test-Path Dockerfile.affiliation-video-worker` -> `True`;
 - `docker compose -f docker-compose.yml config` -> `OK`.
+
+## Spec (Deploy worker start reliability when enabled - Mar 05, 2026)
+- Obiettivo: garantire che il deploy Hetzner avvii davvero `affiliation-video-worker` quando `AFFILIATION_VIDEO_WORKER_ENABLED=true`, evitando successi silenziosi.
+- Requisiti: env flag scritto in `.env`, debug line esplicita, branch deploy con/without profile, sanity check post-deploy con fail chiaro.
+- Vincolo: mantenere service name `affiliation-video-worker` coerente con `docker-compose.yml`.
+
+## Plan (Deploy worker start reliability)
+- [x] Aggiornare workflow per normalizzare e stampare `AFFILIATION_VIDEO_WORKER_ENABLED` dopo la generazione `.env`.
+- [x] Rendere esplicita la logica deploy: `--profile video-worker` solo quando flag `true`.
+- [x] Aggiungere sanity check post-deploy su `docker compose ... ps affiliation-video-worker` con fail chiaro se assente/non running.
+- [x] Verificare coerenza nome servizio tra workflow e compose.
+
+## Review (Deploy worker start reliability - Mar 05, 2026)
+- Workflow aggiornato in `.github/workflows/deploy-hetzner.yml`:
+- debug line aggiunta: `echo "AFFILIATION_VIDEO_WORKER_ENABLED=$AFFILIATION_VIDEO_WORKER_ENABLED"`.
+- deploy branch esplicito:
+- `true` -> `docker compose $COMPOSE_FILES --profile video-worker up -d --build`
+- `false` -> `docker compose $COMPOSE_FILES up -d --build`
+- sanity check post-deploy (solo se enabled):
+- verifica presenza riga `affiliation-video-worker` in `docker compose ... ps affiliation-video-worker`
+- verifica stato `up|running|healthy`, altrimenti `exit 1` con messaggio `::error::`.
+- Coerenza servizio verificata: `docker-compose.yml` contiene `affiliation-video-worker`.
+- Verifiche eseguite:
+- `git diff -- .github/workflows/deploy-hetzner.yml` -> conferma modifiche.
+- `rg -n "affiliation-video-worker|AFFILIATION_VIDEO_WORKER_ENABLED|--profile video-worker" .github/workflows/deploy-hetzner.yml docker-compose.yml` -> coerenza path/nomi.

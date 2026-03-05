@@ -87,13 +87,14 @@ jobs:
             fi
             chmod 600 .env
 
-            VIDEO_WORKER_ENABLED='${{ secrets.AFFILIATION_VIDEO_WORKER_ENABLED }}'
-            if [ -z "${VIDEO_WORKER_ENABLED:-}" ]; then
-              VIDEO_WORKER_ENABLED="false"
+            AFFILIATION_VIDEO_WORKER_ENABLED='${{ secrets.AFFILIATION_VIDEO_WORKER_ENABLED }}'
+            if [ -z "${AFFILIATION_VIDEO_WORKER_ENABLED:-}" ]; then
+              AFFILIATION_VIDEO_WORKER_ENABLED="false"
             fi
-            echo "[deploy] AFFILIATION_VIDEO_WORKER_ENABLED=${VIDEO_WORKER_ENABLED}"
+            AFFILIATION_VIDEO_WORKER_ENABLED="$(echo "$AFFILIATION_VIDEO_WORKER_ENABLED" | tr '[:upper:]' '[:lower:]')"
+            echo "AFFILIATION_VIDEO_WORKER_ENABLED=$AFFILIATION_VIDEO_WORKER_ENABLED"
             COMPOSE_PROFILE_ARGS=""
-            if [ "$VIDEO_WORKER_ENABLED" = "true" ]; then
+            if [ "$AFFILIATION_VIDEO_WORKER_ENABLED" = "true" ]; then
               COMPOSE_PROFILE_ARGS="--profile video-worker"
             fi
 
@@ -207,8 +208,30 @@ jobs:
               docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS run --rm --build web alembic upgrade head
             fi
 
-            echo "[deploy] Running docker compose $COMPOSE_PROFILE_ARGS up -d --build"
-            docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS up -d --build
+            if [ "$AFFILIATION_VIDEO_WORKER_ENABLED" = "true" ]; then
+              echo "[deploy] Running docker compose --profile video-worker up -d --build"
+              docker compose $COMPOSE_FILES --profile video-worker up -d --build
+            else
+              echo "[deploy] Running docker compose up -d --build"
+              docker compose $COMPOSE_FILES up -d --build
+            fi
+
+            if [ "$AFFILIATION_VIDEO_WORKER_ENABLED" = "true" ]; then
+              echo "[deploy] Sanity check: verifying affiliation-video-worker is running"
+              WORKER_LINE="$(docker compose $COMPOSE_FILES --profile video-worker ps affiliation-video-worker | grep affiliation-video-worker || true)"
+              if [ -z "$WORKER_LINE" ]; then
+                echo "::error::affiliation-video-worker service not found in docker compose output"
+                docker compose $COMPOSE_FILES --profile video-worker ps || true
+                exit 1
+              fi
+              if ! echo "$WORKER_LINE" | grep -Eiq 'up|running|healthy'; then
+                echo "::error::affiliation-video-worker is not up/running"
+                echo "$WORKER_LINE"
+                docker compose $COMPOSE_FILES --profile video-worker ps || true
+                exit 1
+              fi
+              echo "$WORKER_LINE"
+            fi
             echo "[deploy] Pruning images"
             docker image prune -f || true
 
