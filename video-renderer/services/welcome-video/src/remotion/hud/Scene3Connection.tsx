@@ -1,4 +1,4 @@
-import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import React from "react";
 import { TypewriterText } from "../TypewriterText";
 
@@ -6,11 +6,16 @@ export const Scene3Connection: React.FC = () => {
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
 
+  const centerX = width / 2;
+  const centerY = height / 2;
+
   const lines = [
-    { startX: width * 0.1, startY: height * 0.5, endX: width * 0.9, endY: height * 0.5, delay: 0 },
-    { startX: width * 0.5, startY: height * 0.1, endX: width * 0.5, endY: height * 0.9, delay: 5 },
-    { startX: width * 0.2, startY: height * 0.2, endX: width * 0.8, endY: height * 0.8, delay: 10 },
-    { startX: width * 0.8, startY: height * 0.2, endX: width * 0.2, endY: height * 0.8, delay: 15 },
+    { startX: centerX, startY: centerY, endX: width * 0.9, endY: height * 0.2, delay: 0 },
+    { startX: centerX, startY: centerY, endX: width * 0.1, endY: height * 0.8, delay: 5 },
+    { startX: centerX, startY: centerY, endX: width * 0.2, endY: height * 0.2, delay: 10 },
+    { startX: centerX, startY: centerY, endX: width * 0.8, endY: height * 0.8, delay: 15 },
+    { startX: centerX, startY: centerY, endX: width * 0.9, endY: height * 0.6, delay: 8 },
+    { startX: centerX, startY: centerY, endX: width * 0.1, endY: height * 0.4, delay: 12 },
   ];
 
   return (
@@ -19,33 +24,56 @@ export const Scene3Connection: React.FC = () => {
       {lines.map((line, i) => {
         const lineFrame = Math.max(0, frame - line.delay);
         const progress = interpolate(lineFrame, [0, 20], [0, 1], { extrapolateRight: "clamp" });
-        const curX = interpolate(progress, [0, 1], [line.startX, line.endX]);
-        const curY = interpolate(progress, [0, 1], [line.startY, line.endY]);
 
         const length = Math.sqrt(Math.pow(line.endX - line.startX, 2) + Math.pow(line.endY - line.startY, 2));
         const angle = Math.atan2(line.endY - line.startY, line.endX - line.startX);
 
+        // Moving light dot on line
+        const dotProgress = interpolate(lineFrame, [10, 40], [0, 1], { extrapolateRight: "clamp" });
+        const dotOpacity = interpolate(lineFrame, [10, 20, 35, 40], [0, 1, 1, 0], { extrapolateRight: "clamp" });
+        const dotX = interpolate(dotProgress, [0, 1], [line.startX, line.endX]);
+        const dotY = interpolate(dotProgress, [0, 1], [line.startY, line.endY]);
+
         return (
-          <div
-            key={i}
-            style={{
-              position: "absolute",
-              top: line.startY,
-              left: line.startX,
-              width: length * progress,
-              height: 2,
-              backgroundColor: "rgba(0, 175, 255, 0.4)",
-              transformOrigin: "left center",
-              transform: `rotate(${angle}rad)`,
-              boxShadow: "0 0 10px rgba(0, 175, 255, 0.5)",
-            }}
-          />
+          <React.Fragment key={i}>
+            <div
+              style={{
+                position: "absolute",
+                top: line.startY,
+                left: line.startX,
+                width: length * progress,
+                height: 2,
+                backgroundColor: "rgba(0, 175, 255, 0.5)",
+                transformOrigin: "left center",
+                transform: `rotate(${angle}rad)`,
+                boxShadow: "0 0 15px rgba(0, 175, 255, 0.6)",
+              }}
+            />
+            {/* Moving light dot */}
+            {dotProgress > 0 && dotProgress < 1 && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: dotY - 3,
+                  left: dotX - 3,
+                  width: 6,
+                  height: 6,
+                  backgroundColor: "#FFF",
+                  borderRadius: "50%",
+                  opacity: dotOpacity,
+                  boxShadow: "0 0 15px 5px rgba(255, 255, 255, 0.8)",
+                }}
+              />
+            )}
+          </React.Fragment>
         );
       })}
 
       {/* Nodes (circles) */}
       {lines.map((line, i) => {
         const nodeOpacity = interpolate(frame, [line.delay + 10, line.delay + 20], [0, 1], { extrapolateRight: "clamp" });
+        const nodePulse = 1 + Math.sin((frame - line.delay) / 4) * 0.15;
+        
         return (
           <div
             key={`node-${i}`}
@@ -58,7 +86,8 @@ export const Scene3Connection: React.FC = () => {
               borderRadius: "50%",
               backgroundColor: "#6FF9FF",
               opacity: nodeOpacity,
-              boxShadow: "0 0 15px 5px rgba(111, 249, 255, 0.6)",
+              transform: `scale(${nodePulse})`,
+              boxShadow: "0 0 20px 5px rgba(111, 249, 255, 0.8)",
             }}
           />
         );
@@ -69,10 +98,10 @@ export const Scene3Connection: React.FC = () => {
         style={{
           position: "relative",
           zIndex: 10,
-          backgroundColor: "rgba(0, 0, 0, 0.8)",
+          backgroundColor: "rgba(2, 4, 10, 0.85)",
           padding: "20px 40px",
-          border: "1px solid #00AFFF",
-          boxShadow: "0 0 30px rgba(0, 175, 255, 0.3)",
+          border: "2px solid rgba(0, 175, 255, 0.8)",
+          boxShadow: "0 0 40px rgba(0, 175, 255, 0.5)",
           opacity: interpolate(frame, [15, 25], [0, 1], { extrapolateRight: "clamp" }),
         }}
       >
@@ -82,7 +111,7 @@ export const Scene3Connection: React.FC = () => {
             fontSize: 32,
             letterSpacing: 4,
             margin: 0,
-            textShadow: "0 0 10px #6FF9FF",
+            textShadow: "0 0 15px #6FF9FF",
             fontWeight: 500,
           }}
         >

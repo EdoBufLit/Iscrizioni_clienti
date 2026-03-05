@@ -17,8 +17,11 @@ export const AssonamHUDWelcome: React.FC<{
 }> = ({ orgName = "TEST ORG", logoUrl = "", audioPath = "welcome_hud_audio.wav" }) => {
   const frame = useCurrentFrame();
 
+  // Global slow zoom
+  const globalScale = interpolate(frame, [0, 300], [1.0, 1.03]);
+
   return (
-    <AbsoluteFill style={{ backgroundColor: "#000", fontFamily }}>
+    <AbsoluteFill style={{ backgroundColor: "#000", fontFamily, transform: `scale(${globalScale})` }}>
       <HudBackground />
       <Audio src={staticFile(audioPath)} />
 
@@ -28,22 +31,22 @@ export const AssonamHUDWelcome: React.FC<{
       </Sequence>
 
       {/* SCENE 2 - ASSOCIATION ANALYSIS */}
-      <Sequence from={45} durationInFrames={45}>
+      <Sequence from={45} durationInFrames={60}>
         <Scene2Analysis orgName={orgName} />
       </Sequence>
 
       {/* SCENE 3 - NETWORK CONNECTION */}
-      <Sequence from={90} durationInFrames={45}>
+      <Sequence from={105} durationInFrames={60}>
         <Scene3Connection />
       </Sequence>
 
       {/* SCENE 4 - REGISTRATION COMPLETE */}
-      <Sequence from={135} durationInFrames={30}>
+      <Sequence from={165} durationInFrames={45}>
         <Scene4Registration />
       </Sequence>
 
       {/* SCENE 5 - LOGO REVEAL & SCENE 6 - FINAL MESSAGE */}
-      <Sequence from={165}>
+      <Sequence from={210}>
         <Scene5Logo orgName={orgName} logoUrl={logoUrl} />
       </Sequence>
     </AbsoluteFill>

@@ -7,13 +7,17 @@ export const Scene2Analysis: React.FC<{ orgName: string }> = ({ orgName }) => {
   const { fps } = useVideoConfig();
 
   // Panel enter
-  const panelScaleX = spring({ fps, frame: frame, config: { damping: 15 } });
-  const panelScaleY = spring({ fps, frame: frame - 10, config: { damping: 15 } });
+  const panelScaleIn = spring({ fps, frame: frame, config: { damping: 15 } });
+  const panelScaleFinal = interpolate(panelScaleIn, [0, 1], [0.96, 1.0]);
 
   const textOpacity = interpolate(frame, [5, 15], [0, 1], { extrapolateRight: "clamp" });
-  const verifiedOpacity = interpolate(frame, [25, 30], [0, 1], { extrapolateRight: "clamp" });
+  const verifiedOpacity = interpolate(frame, [35, 40], [0, 1], { extrapolateRight: "clamp" });
 
-  const showVerified = frame > 25;
+  const showVerified = frame > 35;
+  const verifiedPulse = showVerified ? 1 + Math.sin((frame - 35) / 3) * 0.05 : 1;
+
+  // Scanning light line over the panel
+  const scanLineX = interpolate(frame, [0, 60], [-800, 800]);
 
   return (
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center" }}>
@@ -21,17 +25,32 @@ export const Scene2Analysis: React.FC<{ orgName: string }> = ({ orgName }) => {
         style={{
           width: 800,
           padding: 40,
-          border: "1px solid rgba(0, 175, 255, 0.4)",
+          border: "1px solid rgba(0, 175, 255, 0.6)",
           backgroundColor: "rgba(2, 4, 10, 0.8)",
-          boxShadow: "0 0 30px rgba(0, 175, 255, 0.2), inset 0 0 20px rgba(0, 175, 255, 0.1)",
-          transform: `scaleX(${panelScaleX}) scaleY(${panelScaleY})`,
+          boxShadow: "0 0 40px rgba(0, 175, 255, 0.3), inset 0 0 30px rgba(0, 175, 255, 0.2)",
+          transform: `scale(${panelScaleFinal})`,
           transformOrigin: "center center",
           display: "flex",
           flexDirection: "column",
           gap: 20,
           position: "relative",
+          overflow: "hidden",
         }}
       >
+        {/* Scanning horizontal light line moving across panel */}
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: scanLineX,
+            width: 50,
+            background: "linear-gradient(to right, transparent, rgba(111, 249, 255, 0.3), transparent)",
+            transform: "skewX(-20deg)",
+            pointerEvents: "none",
+          }}
+        />
+
         {/* Panel corner accents */}
         <div style={{ position: "absolute", top: 0, left: 0, width: 20, height: 2, background: "#6FF9FF" }} />
         <div style={{ position: "absolute", top: 0, left: 0, width: 2, height: 20, background: "#6FF9FF" }} />
@@ -56,7 +75,7 @@ export const Scene2Analysis: React.FC<{ orgName: string }> = ({ orgName }) => {
             fontWeight: 400,
           }}
         >
-          <TypewriterText text="ANALYZING TARGET:" startFrame={5} charsPerFrame={1} />
+          <TypewriterText text="ANALYZING TARGET" startFrame={5} charsPerFrame={1} />
         </h3>
         <h2
           style={{
@@ -82,6 +101,8 @@ export const Scene2Analysis: React.FC<{ orgName: string }> = ({ orgName }) => {
               display: "inline-block",
               alignSelf: "flex-start",
               opacity: verifiedOpacity,
+              transform: `scale(${verifiedPulse})`,
+              boxShadow: "0 0 20px rgba(111, 249, 255, 0.4)",
             }}
           >
             <h3
@@ -94,7 +115,7 @@ export const Scene2Analysis: React.FC<{ orgName: string }> = ({ orgName }) => {
                 fontWeight: 500,
               }}
             >
-              <TypewriterText text="STATUS: VERIFIED" startFrame={25} charsPerFrame={1.5} />
+              STATUS: VERIFIED
             </h3>
           </div>
         )}
