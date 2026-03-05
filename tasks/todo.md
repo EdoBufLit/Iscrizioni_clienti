@@ -2213,3 +2213,14 @@ pm --prefix frontend run build -> OK
   - `python -m py_compile app/routes/affiliation.py` -> OK
   - `python -m pytest -q tests/test_affiliation_flow.py tests/test_referral_system.py` -> 7 passed
   - `npm --prefix frontend run build` -> OK
+
+## Todo (Mar 05, 2026 - Disable realtime autosave)
+- [x] Rimuovere autosave realtime della bozza wizard
+- [x] Introdurre salvataggio bozza solo manuale
+- [x] Aggiornare copy stato bozza per evitare ambiguita
+- [x] Verifica build frontend
+
+## Review (Disable realtime autosave - Mar 05, 2026)
+- Root cause: era rimasto attivo un `useEffect` debounce su `dirtyCounter` che chiamava `persistDraft()` ad ogni modifica campo.
+- Fix: eliminato il `useEffect` autosave; aggiunto pulsante esplicito `Salva bozza` nel pannello stato; submit continua a salvare prima dell'invio.
+- Verifica: `npm --prefix frontend run build` -> OK

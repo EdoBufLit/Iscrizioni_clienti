@@ -205,10 +205,9 @@ const Affiliazione = () => {
   const [, setBaseVideoFailed] = useState(false);
   const [notice, setNotice] = useState("");
   const { capabilities, loading: capabilitiesLoading } = useStatePlatformCapabilities();
-  const [dirtyCounter, setDirtyCounter] = useState(0);
+  const [, setDirtyCounter] = useState(0);
   const [resumeLinkCopied, setResumeLinkCopied] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
-  const autosaveReadyRef = useRef(false);
   const stripeFallbackAppliedRef = useRef(false);
   const navigate = useNavigate();
   const affiliazioneEnabled = capabilities?.affiliazioneEnabled === true;
@@ -290,6 +289,7 @@ const Affiliazione = () => {
         );
         await refreshDraft(token, false);
         setSaveInfo("Bozza salvata");
+        setDirtyCounter(0);
         return true;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Errore salvataggio bozza");
@@ -323,7 +323,6 @@ const Affiliazione = () => {
             setShowIntroScreen(true);
             setCurrentStep(1);
           }
-          autosaveReadyRef.current = true;
           setSaveInfo("Bozza pronta");
         } else {
           setToken("");
@@ -332,7 +331,6 @@ const Affiliazione = () => {
           setPeople(buildDefaultPeople());
           setShowIntroScreen(true);
           setCurrentStep(1);
-          autosaveReadyRef.current = false;
           setSaveInfo("Bozza non creata");
         }
       } catch (err) {
@@ -348,18 +346,6 @@ const Affiliazione = () => {
     capabilitiesLoading,
     tokenFromQuery,
   ]);
-
-  useEffect(() => {
-    if (!token || !form || !autosaveReadyRef.current) return;
-    if (saving || submitting) return;
-    if (dirtyCounter === 0) return;
-
-    const timeout = window.setTimeout(async () => {
-      await persistDraft();
-    }, 800);
-
-    return () => window.clearTimeout(timeout);
-  }, [dirtyCounter, form, persistDraft, saving, submitting, token]);
 
   const stripeEnabled =
     capabilities?.stripeEnabled === true &&
@@ -481,6 +467,7 @@ const Affiliazione = () => {
 
   const markDirty = useCallback(() => {
     setDirtyCounter((value) => value + 1);
+    setSaveInfo("Modifiche non salvate");
   }, []);
 
   const onFieldChange = <K extends keyof FormState>(key: K, value: FormState[K]) => {
@@ -624,7 +611,6 @@ const Affiliazione = () => {
       );
       setToken(created.public_token);
       applyDraftState(created);
-      autosaveReadyRef.current = true;
       setSaveInfo("Bozza pronta");
 
       const nextParams = new URLSearchParams();
@@ -663,6 +649,7 @@ const Affiliazione = () => {
         : "Sto generando il video...";
   const normalizedDraftStatus = String(draft?.status || "").trim().toLowerCase();
   const hasRealSubmission = Boolean(submitResult) || SUBMITTED_STATUSES.has(normalizedDraftStatus);
+  const canManualSave = Boolean(token) && !hasRealSubmission;
   const isDevEnv = import.meta.env.DEV;
   const progressActiveStep = Math.min(5, Math.max(1, currentStep));
   const progressPercent = ((progressActiveStep - 1) / (WIZARD_PROGRESS_STEPS.length - 1)) * 100;
@@ -685,12 +672,24 @@ const Affiliazione = () => {
               <p className="section-title">Wizard Pubblico</p>
               <h1 className="section-heading">Affilia la tua Associazione</h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-600 md:text-base">
-                Bozza salvata automaticamente. Riprendi con il link dedicato e completa in 5 passaggi.
+                Salva la bozza quando vuoi, poi completa i 5 passaggi e invia.
               </p>
             </div>
             <div className="rounded-lg border border-neutral-200 bg-white/80 px-4 py-3 text-xs text-neutral-600">
               <p className="font-semibold text-neutral-800">Stato bozza</p>
               <p className="mt-1">{saving ? "Salvataggio in corso..." : saveInfo}</p>
+              {canManualSave ? (
+                <button
+                  type="button"
+                  className="btn-ghost mt-3 w-full px-3 py-1.5 text-xs"
+                  disabled={saving}
+                  onClick={() => {
+                    void persistDraft();
+                  }}
+                >
+                  {saving ? "Salvataggio..." : "Salva bozza"}
+                </button>
+              ) : null}
               {isDevEnv && resumeUrl ? (
                 <details className="mt-3">
                   <summary className="cursor-pointer text-[11px] font-semibold text-neutral-700">
