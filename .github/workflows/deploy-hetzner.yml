@@ -86,6 +86,13 @@ jobs:
             EOF
             printf 'GIT_SHA=%s\n' '${{ github.sha }}' >> .env
             printf 'BUILD_TIME=%s\n' "$BUILD_TIME" >> .env
+            AFFILIAZIONE_ENABLED='${{ secrets.AFFILIAZIONE_ENABLED }}'
+            if [ -z "${AFFILIAZIONE_ENABLED:-}" ]; then
+              AFFILIAZIONE_ENABLED="false"
+            fi
+            AFFILIAZIONE_ENABLED="$(echo "$AFFILIAZIONE_ENABLED" | tr '[:upper:]' '[:lower:]')"
+            printf 'AFFILIAZIONE_ENABLED=%s\n' "$AFFILIAZIONE_ENABLED" >> .env
+            echo "AFFILIAZIONE_ENABLED=$AFFILIAZIONE_ENABLED"
             if ! grep -q '^AFFILIATION_VIDEO_WORKER_ENABLED=' .env; then
               printf 'AFFILIATION_VIDEO_WORKER_ENABLED=false\n' >> .env
             fi
