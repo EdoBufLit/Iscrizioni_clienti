@@ -6,8 +6,12 @@ import PublicFaqAccordion, {
 } from "../components/public/PublicFaqAccordion";
 import { trackUiEvent } from "../lib/tracking";
 import { applySeo } from "../lib/seo";
-import { fetchPlatformStats, type PlatformStats } from "../lib/api";
-import { AFFILIAZIONE_ENABLED } from "../lib/features";
+import {
+  fetchPlatformCapabilities,
+  fetchPlatformStats,
+  type PlatformCapabilities,
+  type PlatformStats,
+} from "../lib/api";
 
 const PublicHeroThree = lazy(() => import("../components/public/PublicHeroThree.client"));
 
@@ -126,10 +130,19 @@ const isLowPowerDevice = () => {
   return smallViewport || cpuVeryLow || memoryVeryLow;
 };
 
+const ENTRY_ICON_CLASS = "h-5 w-5 shrink-0 md:h-6 md:w-6";
+
 const EntryIcon = ({ id }: { id: HeroEntry["id"] }) => {
   if (id === "association") {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+      <svg
+        className={ENTRY_ICON_CLASS}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        aria-hidden="true"
+      >
         <path d="M3.5 20.5h17M5.5 20.5V7.2l6.5-3.7 6.5 3.7v13.3" />
         <path d="M9 10.3h2.2m-2.2 3h2.2m3.6-3H17m-2.2 3H17M10.2 20.5v-3.4h3.6v3.4" />
       </svg>
@@ -138,7 +151,14 @@ const EntryIcon = ({ id }: { id: HeroEntry["id"] }) => {
 
   if (id === "member") {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+      <svg
+        className={ENTRY_ICON_CLASS}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        aria-hidden="true"
+      >
         <path d="M12 12.4a3.8 3.8 0 1 0 0-7.6 3.8 3.8 0 0 0 0 7.6Z" />
         <path d="M4.6 20.2a7.4 7.4 0 0 1 14.8 0" />
       </svg>
@@ -146,7 +166,14 @@ const EntryIcon = ({ id }: { id: HeroEntry["id"] }) => {
   }
 
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+    <svg
+      className={ENTRY_ICON_CLASS}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      aria-hidden="true"
+    >
       <path d="M6.2 10.1V7.7A5.8 5.8 0 0 1 12 2a5.8 5.8 0 0 1 5.8 5.7V10" />
       <rect x="4" y="10" width="16" height="11" rx="2.2" />
       <path d="M12 14.3v2.8" />
@@ -163,10 +190,12 @@ const Home = () => {
   const [platformStatsLoaded, setPlatformStatsLoaded] = useState(false);
   const [animatedStats, setAnimatedStats] = useState<PlatformStats>(EMPTY_PLATFORM_STATS);
   const [shouldAnimateStats, setShouldAnimateStats] = useState(false);
+  const [capabilities, setCapabilities] = useState<PlatformCapabilities | null>(null);
   const heroRef = useRef<HTMLElement>(null);
   const socialProofRef = useRef<HTMLElement>(null);
   const membershipDemoCardRef = useRef<HTMLDivElement>(null);
   const hasAnimatedStatsRef = useRef(false);
+  const affiliazioneEnabled = capabilities?.affiliazioneEnabled === true;
 
   useEffect(() => {
     applySeo({
@@ -219,7 +248,7 @@ const Home = () => {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!AFFILIAZIONE_ENABLED) {
+    if (!affiliazioneEnabled) {
       setShowStickyAffilia(false);
       return;
     }
@@ -231,7 +260,7 @@ const Home = () => {
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+  }, [affiliazioneEnabled]);
 
   useEffect(() => {
     if (typeof document === "undefined" || !isDemoModalOpen) return;
@@ -263,6 +292,32 @@ const Home = () => {
     };
 
     void loadPlatformStats();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadCapabilities = async () => {
+      try {
+        const payload = await fetchPlatformCapabilities();
+        if (cancelled) return;
+        setCapabilities({
+          affiliazioneEnabled: payload.affiliazioneEnabled === true,
+          stripeEnabled: payload.stripeEnabled === true,
+        });
+      } catch {
+        if (cancelled) return;
+        setCapabilities({
+          affiliazioneEnabled: false,
+          stripeEnabled: false,
+        });
+      }
+    };
+
+    void loadCapabilities();
     return () => {
       cancelled = true;
     };
@@ -386,6 +441,29 @@ const Home = () => {
     return () => context.revert();
   }, [useWebGLScene]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const frame = window.requestAnimationFrame(() => {
+      const heroEl = heroRef.current;
+      if (!heroEl) return;
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const heroSvgs = heroEl.querySelectorAll("svg");
+      heroSvgs.forEach((svg, index) => {
+        const rect = svg.getBoundingClientRect();
+        const isSafeSize = rect.width <= viewportWidth && rect.height <= viewportHeight;
+        console.assert(isSafeSize, "[home-sanity] oversized svg", {
+          index,
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+          viewportWidth,
+          viewportHeight,
+        });
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [useWebGLScene, affiliazioneEnabled]);
+
   const handleAffiliaHeroClick = (source: string) => {
     trackUiEvent("click_affiliazione_cta_hero", { source });
   };
@@ -417,14 +495,14 @@ const Home = () => {
   const platformStatCards = [
     { key: "organizations", label: "Associazioni Affiliate", value: animatedStats.organizations },
     { key: "members", label: "Soci Registrati", value: animatedStats.members },
-    { key: "cities", label: "Città Attive", value: animatedStats.cities },
+    { key: "cities", label: "CittÃ  Attive", value: animatedStats.cities },
   ] as const;
   const heroEntries = useMemo(
     () =>
-      AFFILIAZIONE_ENABLED
+      affiliazioneEnabled
         ? HERO_ENTRIES
         : HERO_ENTRIES.filter((entry: HeroEntry) => entry.id !== "association"),
-    [],
+    [affiliazioneEnabled],
   );
 
   return (
@@ -466,6 +544,20 @@ const Home = () => {
             <p className="public-hero-subtitle" data-hero-subtitle>
               Tessere, iscrizioni, gestione soci e affiliazione - tutto in un unico sistema.
             </p>
+            {affiliazioneEnabled ? (
+              <div className="mt-4 md:hidden" data-hero-meta>
+                <Link
+                  className="btn-primary min-h-12 w-full justify-center"
+                  to="/affiliazione"
+                  onClick={() => handleAffiliaHeroClick("hero_mobile_primary")}
+                >
+                  Affilia la tua Associazione
+                </Link>
+                <p className="mt-1 text-left text-xs font-semibold tracking-tight text-slate-100/90">
+                  Richiede circa 10 minuti
+                </p>
+              </div>
+            ) : null}
 
             <div className="hero-entry-grid" role="list" aria-label="Scegli il percorso corretto">
               {heroEntries.map((entry) => (
@@ -499,7 +591,7 @@ const Home = () => {
               ))}
             </div>
 
-            {AFFILIAZIONE_ENABLED ? (
+            {affiliazioneEnabled ? (
               <>
                 <div className="hero-entry-timeline" data-hero-meta>
                   <span>1 Compila</span>
@@ -526,7 +618,7 @@ const Home = () => {
       >
         <div className="container-shell">
           <div className="surface-strong landing-panel">
-            <h2 className="section-heading">Già scelto da associazioni in tutta Italia</h2>
+            <h2 className="section-heading">GiÃ  scelto da associazioni in tutta Italia</h2>
             <div className="platform-proof-grid mt-7">
               {platformStatCards.map((card) => (
                 <article key={card.key} className="platform-proof-card">
@@ -606,7 +698,7 @@ const Home = () => {
             </div>
 
             <div className="landing-inline-cta">
-              {AFFILIAZIONE_ENABLED ? (
+              {affiliazioneEnabled ? (
                 <>
                   <Link
                     className="btn-primary"
@@ -644,7 +736,7 @@ const Home = () => {
         </div>
       </section>
 
-      {AFFILIAZIONE_ENABLED ? (
+      {affiliazioneEnabled ? (
         <div className={`affiliazione-sticky-cta${showStickyAffilia ? " is-visible" : ""}`}>
           <Link
             className="btn-primary affiliazione-sticky-button"
@@ -676,20 +768,20 @@ const Home = () => {
               Chiudi
             </button>
             <h3 id="membership-demo-modal-title" className="membership-demo-modal-title">
-              Questa è una demo.
+              Questa Ã¨ una demo.
             </h3>
             <p className="membership-demo-modal-text">
               Le associazioni affiliate ad ASSONAM possono emettere tessere digitali per tutti i
               soci.
             </p>
             <div className="membership-demo-modal-actions">
-              {AFFILIAZIONE_ENABLED ? (
+              {affiliazioneEnabled ? (
                 <Link className="btn-primary" to="/affiliazione" onClick={() => setIsDemoModalOpen(false)}>
                   Affilia la tua Associazione
                 </Link>
               ) : null}
               <Link className="btn-ghost" to="/affiliazione-info" onClick={() => setIsDemoModalOpen(false)}>
-                Scopri di più
+                Scopri di piÃ¹
               </Link>
             </div>
           </div>
