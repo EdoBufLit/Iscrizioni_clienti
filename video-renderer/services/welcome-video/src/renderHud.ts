@@ -144,7 +144,7 @@ const main = async (): Promise<void> => {
       status: "done",
       path: finalOutputPath,
       sfx: sfxNames,
-      durationSec: 10
+      durationSec: 12
     }) + "\n"
   );
 };

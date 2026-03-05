@@ -18,7 +18,7 @@ export const AssonamHUDWelcome: React.FC<{
   const frame = useCurrentFrame();
 
   // Global slow zoom
-  const globalScale = interpolate(frame, [0, 300], [1.0, 1.03]);
+  const globalScale = interpolate(frame, [0, 360], [1.0, 1.03]);
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#000", fontFamily, transform: `scale(${globalScale})` }}>

@@ -100,7 +100,7 @@ export const hudMixAudio = async ({
 
   await Promise.all(sources.map((source) => assertFileExists(source)));
 
-  // Timeline (10s total duration):
+  // Timeline (12s total duration):
   // ambience under entire video (0.0s)
   // typing at Scene 1 Boot (0.0s)
   // whoosh at Scene 2 transition: 1.5s (1500ms) - Frame 45
@@ -113,7 +113,7 @@ export const hudMixAudio = async ({
 
   const filterComplex = [
     // Create a silence track to ensure base length and format
-    "anullsrc=r=48000:cl=stereo,atrim=0:10[silence]",
+    "anullsrc=r=48000:cl=stereo,atrim=0:12[silence]",
     "[0:a]volume=1.0,adelay=7000|7000[a0]",          // welcome
     "[1:a]volume=0.15,adelay=0|0[a1]",               // ambience
     "[2:a]volume=0.4,adelay=2666|2666[a2]",          // beep
@@ -138,7 +138,7 @@ export const hudMixAudio = async ({
     "-map", "[mix]",
     "-ar", "48000",
     "-ac", "2",
-    "-t", "10",
+    "-t", "12",
     outputPath,
   ];
 
