@@ -29,3 +29,33 @@ You can pass specific arguments to the render script:
 ```bash
 node dist/render.js --orgId myOrg123 --orgName "My Org Name" --logoUrl "https://example.com/logo.png"
 ```
+
+## Audio Source Modes (HUD renderer)
+
+- `AUDIO_SOURCE=local` (default): use local pre-generated audio.
+- `AUDIO_SOURCE=elevenlabs`: generate voice audio via ElevenLabs, requires:
+  - `ELEVENLABS_API_KEY`
+  - `ELEVENLABS_VOICE_IDS`
+- `AUDIO_LOCAL_PATH` (default `.../public`): folder (or file path) used in local mode.
+
+Supported local candidates:
+- `welcome_hud_audio.wav`
+- `welcome_hud_audio.mp3`
+- `welcome_audio.wav`
+- `welcome_audio.mp3`
+
+If local audio is missing, renderer creates a silent fallback track and continues (no crash).
+
+## Manual Worker Test (Docker)
+
+```bash
+docker compose exec affiliation-video-worker sh -lc \
+  'AUDIO_SOURCE=local node /app/video-renderer/services/welcome-video/dist/renderHud.cjs --orgId 25 --orgName "ASSOCIATION 25" --mode review --template personalized --output /app/data/videos/welcome/25.mp4'
+```
+
+Verify output exists and size is greater than 200KB:
+
+```bash
+docker compose exec affiliation-video-worker sh -lc \
+  'test -f /app/data/videos/welcome/25.mp4 && stat -c%s /app/data/videos/welcome/25.mp4'
+```

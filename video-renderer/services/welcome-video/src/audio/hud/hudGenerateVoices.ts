@@ -13,6 +13,16 @@ export type HudGeneratedVoices = {
 
 export const hudGenerateVoices = async (orgId: string): Promise<HudGeneratedVoices> => {
   const env = getEnv();
+  if (!env.elevenLabsApiKey) {
+    throw new Error(
+      "Missing required environment variable: ELEVENLABS_API_KEY (required when AUDIO_SOURCE=elevenlabs).",
+    );
+  }
+  if (env.elevenLabsVoiceIds.length === 0) {
+    throw new Error(
+      "Missing required environment variable: ELEVENLABS_VOICE_IDS (required when AUDIO_SOURCE=elevenlabs).",
+    );
+  }
   const outputDir = path.resolve(process.cwd(), ".tmp", orgId, "voices_hud");
   await fs.mkdir(outputDir, { recursive: true });
 
