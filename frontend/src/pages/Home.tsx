@@ -451,107 +451,82 @@ const Home = () => {
     ? HERO_ENTRIES
     : HERO_ENTRIES.filter((entry) => entry.id !== "association");
 
+
   return (
-    <div>
-      <section className="public-hero" id="top" ref={heroRef}>
-        <div className="public-hero-scene" aria-hidden="true">
-          <div
-            className="public-hero-fallback"
-            style={{
-              backgroundImage: `linear-gradient(142deg, rgba(255,247,218,0.23) 0%, rgba(233,241,255,0.16) 47%, rgba(219,229,255,0.24) 100%), url(${import.meta.env.BASE_URL}piazza-bologna2.webp)`,
-            }}
-          />
-          <div className="public-hero-gradient-drift" />
-          <div className="public-hero-soft-grid" />
+    <div className="bg-slate-50/50 font-sans text-slate-900">
+      {/* HERO SECTION - LIGHT PREMIUM */}
+      <section className="relative overflow-hidden pt-20 pb-24 md:pt-32 md:pb-32" id="top" ref={heroRef}>
+        {/* Background Canvas / Elements */}
+        <div className="absolute inset-0 z-0 pointer-events-none bg-slate-50">
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
+          <div className="absolute left-0 right-0 top-0 -z-10 m-auto h-[310px] w-[310px] rounded-full bg-brand opacity-20 blur-[100px]"></div>
           {!useWebGLScene ? (
-            <div className="public-hero-object-fallback-wrap hidden md:flex" data-hero-logo>
-              <img
-                src={`${import.meta.env.BASE_URL}assonam-logo.svg`}
-                alt=""
-                className="public-hero-object-fallback"
-              />
+            <div className="absolute inset-0 flex items-center justify-center opacity-5 mix-blend-multiply" data-hero-logo>
+              <img src={`${import.meta.env.BASE_URL}assonam-logo.svg`} alt="" className="w-2/3 max-w-2xl" />
             </div>
-          ) : null}
-          {useWebGLScene ? (
-            <Suspense fallback={null}>
-              <PublicHeroThree lowPower={lowPowerDevice} />
-            </Suspense>
-          ) : null}
+          ) : (
+            <div className="absolute inset-0 opacity-40 mix-blend-multiply">
+               <Suspense fallback={null}>
+                <PublicHeroThree lowPower={lowPowerDevice} />
+               </Suspense>
+            </div>
+          )}
         </div>
 
-        <div className="public-hero-overlay bg-gradient-to-b from-neutral-900/60 via-neutral-900/80 to-neutral-900/95" aria-hidden="true" />
-
-        <div className="container-shell public-hero-content">
-          <div className="public-hero-copy affiliazione-hero-copy">
-            <p className="text-sm font-semibold tracking-widest text-white/80 mb-4" data-hero-eyebrow>
-              ASSONAM - ACCESSO RAPIDO
+        <div className="container-shell relative z-10">
+          <div className="max-w-4xl mx-auto text-center">
+            <p className="inline-flex items-center justify-center px-3 py-1 mb-6 text-xs font-bold uppercase tracking-widest text-brand bg-brand/10 rounded-full" data-hero-eyebrow>
+              ASSONAM - Accesso Rapido
             </p>
-            <h1 data-hero-line className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-white leading-tight drop-shadow-md">
-              La piattaforma digitale per Associazioni e Soci
+            <h1 data-hero-line className="text-4xl md:text-6xl lg:text-7xl font-extrabold text-slate-900 tracking-tight leading-[1.1]">
+              La piattaforma digitale per <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand to-brand-light">Associazioni e Soci</span>
             </h1>
-            <p className="mt-6 text-lg md:text-xl text-white/90 max-w-2xl mx-auto drop-shadow-sm font-medium" data-hero-subtitle>
-              Tessere, iscrizioni, gestione soci e affiliazione - tutto in un unico sistema semplice e sicuro.
+            <p className="mt-6 text-lg md:text-xl text-slate-600 max-w-2xl mx-auto font-medium leading-relaxed" data-hero-subtitle>
+              Tessere, iscrizioni, gestione soci e affiliazione. Tutto in un unico ecosistema semplice, istituzionale e sicuro.
             </p>
 
-            <div className="mt-10 space-y-2" data-hero-meta>
-              <div className="flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
-                {showAffiliazioneCta ? (
-                  <Link
-                    className="btn-primary inline-flex min-h-[48px] justify-center px-6 text-center"
-                    to="/affiliazione"
-                    onClick={() => handleAffiliaHeroClick("hero_desktop_primary")}
-                  >
-                    Affilia la tua Associazione
-                  </Link>
-                ) : null}
+            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4" data-hero-meta>
+              {affiliazioneEnabled ? (
                 <Link
-                  className="btn-ghost inline-flex min-h-[48px] justify-center border-white/40 px-6 text-center text-white hover:bg-white/10"
-                  to="/associazioni"
+                  className="inline-flex items-center justify-center h-14 px-8 rounded-xl bg-slate-900 text-white font-bold tracking-wide shadow-lg shadow-slate-900/20 hover:-translate-y-0.5 hover:shadow-xl transition-all text-base w-full sm:w-auto"
+                  to="/affiliazione"
+                  onClick={() => handleAffiliaHeroClick("hero_desktop_primary")}
                 >
-                  Diventa Socio
+                  Affilia la tua Associazione
                 </Link>
-                <Link
-                  className="btn-ghost inline-flex min-h-[48px] justify-center border-white/40 px-6 text-center text-white hover:bg-white/10"
-                  to="/area-riservata"
-                >
-                  Area Riservata
-                </Link>
-              </div>
-              {showAffiliazioneCta ? (
-                <p className="text-center text-xs font-medium text-white/75">
-                  Richiede circa 10 minuti
-                </p>
               ) : null}
+              <Link className="inline-flex items-center justify-center h-14 px-8 rounded-xl bg-white border-2 border-slate-200 text-slate-700 font-bold hover:bg-slate-50 hover:border-slate-300 transition-all text-base w-full sm:w-auto" to="/associazioni">
+                Diventa Socio
+              </Link>
+            </div>
+            <div className="mt-4" data-hero-meta>
+               <Link className="text-sm font-semibold text-slate-500 hover:text-brand underline underline-offset-4" to="/area-riservata">
+                Sei già registrato? Accedi all'Area Riservata
+              </Link>
             </div>
 
-            <div
-              className={`mt-16 grid grid-cols-1 gap-6 ${heroEntries.length === 2 ? "md:grid-cols-2" : "md:grid-cols-3"}`}
-              role="list"
-              aria-label="Scegli il percorso corretto"
-            >
+            <div className="mt-20 grid grid-cols-1 md:grid-cols-3 gap-6 text-left" role="list" aria-label="Scegli il percorso corretto">
               {heroEntries.map((entry) => (
                 <Link
                   to={entry.to}
                   key={entry.id}
                   role="listitem"
-                  className="rounded-xl border border-white/20 bg-white/5 backdrop-blur-md p-5 flex flex-col text-left transition hover:bg-white/10 hover:border-white/40 group"
+                  className="group relative bg-white rounded-2xl p-6 border border-slate-200 shadow-xl shadow-slate-200/40 hover:shadow-2xl hover:-translate-y-1 hover:border-brand/30 transition-all flex flex-col"
                   onClick={
                     entry.id === "association"
-                      ? showAffiliazioneCta
-                        ? () => handleAffiliaHeroClick("hero_card")
-                        : undefined
+                      ? () => handleAffiliaHeroClick("hero_card")
                       : undefined
                   }
                   data-hero-card
                 >
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="text-white/90 bg-white/10 p-2 rounded-lg group-hover:bg-white/20 transition">
+                  <div className="flex items-center gap-4 mb-4">
+                    <span className="flex items-center justify-center w-12 h-12 rounded-xl bg-slate-50 text-brand group-hover:bg-brand group-hover:text-white transition-colors border border-slate-100">
                       <EntryIcon id={entry.id} />
                     </span>
-                    <h2 className="text-base font-bold text-white">{entry.title}</h2>
+                    <h2 className="text-lg font-bold text-slate-900">{entry.title}</h2>
                   </div>
-                  <p className="text-sm text-white/80 mt-1 flex-grow">{entry.microcopy}</p>
-                  <span className="mt-4 text-xs font-semibold uppercase tracking-wider text-white/70 flex items-center gap-1 group-hover:text-white transition">
+                  <p className="text-sm text-slate-500 font-medium flex-grow leading-relaxed">{entry.microcopy}</p>
+                  <span className="mt-6 text-xs font-bold uppercase tracking-wider text-brand flex items-center gap-1 group-hover:gap-2 transition-all">
                     {entry.cta} <span aria-hidden="true">&rarr;</span>
                   </span>
                 </Link>
@@ -561,26 +536,27 @@ const Home = () => {
         </div>
       </section>
 
+      {/* STATS SECTION */}
       <section
-        className="py-20"
+        className="py-20 bg-white border-y border-slate-100"
         data-reveal="fade-up"
         id="platform-social-proof"
         ref={socialProofRef}
       >
         <div className="container-shell">
-          <div className="surface-strong landing-panel flex flex-col items-center text-center">
-            <p className="text-sm font-semibold uppercase tracking-widest text-brand mb-3">La Nostra Rete</p>
-            <h2 className="text-3xl md:text-4xl font-bold text-neutral-900 mb-4">Già scelto da associazioni in tutta Italia</h2>
-            <p className="text-lg text-neutral-600 max-w-2xl mb-10">
-              Unisciti a una rete in continua crescita. Migliaia di soci usano ogni giorno le tessere digitali ASSONAM per accedere ai propri vantaggi.
+          <div className="flex flex-col items-center text-center">
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">La Nostra Rete</p>
+            <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">Migliaia di utenti in tutta Italia</h2>
+            <p className="text-lg text-slate-500 max-w-2xl mb-12 font-medium">
+              Unisciti a una rete in continua crescita. Semplifica la gestione e offri ai tuoi soci un'esperienza digitale all'avanguardia.
             </p>
-            <div className="w-full grid grid-cols-2 md:grid-cols-3 gap-6 mt-2">
+            <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-8">
               {platformStatCards.map((card) => (
-                <article key={card.key} className="platform-proof-card bg-white rounded-2xl p-6 shadow-sm border border-neutral-100 flex flex-col items-center text-center">
-                  <p className="text-xs md:text-sm font-bold tracking-wider text-neutral-500 uppercase mb-2">{card.label}</p>
-                  <p className="text-4xl md:text-5xl font-extrabold text-brand tracking-tight">
+                <article key={card.key} className="flex flex-col items-center">
+                  <p className="text-5xl md:text-6xl font-extrabold text-brand tracking-tighter drop-shadow-sm mb-2">
                     {(platformStatsLoaded ? card.value : 0).toLocaleString("it-IT")}+
                   </p>
+                  <p className="text-sm font-bold tracking-widest text-slate-500 uppercase">{card.label}</p>
                 </article>
               ))}
             </div>
@@ -588,144 +564,157 @@ const Home = () => {
         </div>
       </section>
 
-      <section className="py-20" data-reveal="fade-up" id="membership-demo">
+      {/* DIGITAL CARD SECTION */}
+      <section className="py-24 bg-slate-50/50" data-reveal="fade-up" id="membership-demo">
         <div className="container-shell">
-          <div className="surface-strong landing-panel membership-demo-panel">
-            <p className="section-title">Demo Tessera</p>
-            <h2 className="section-heading">Scopri come funziona una tessera digitale</h2>
-            <p className="section-subtitle">
-              Le associazioni affiliate gestiscono i soci con tessere digitali integrate con Apple
-              Wallet e Google Wallet.
-            </p>
-
-            <div className="membership-demo-layout mt-8 grid md:grid-cols-2 gap-12 items-center">
-              <div>
-                <ul className="space-y-6">
-                  <li className="flex gap-4">
-                    <span className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-brand/10 text-brand font-bold text-sm">1</span>
-                    <div>
-                      <h3 className="font-bold text-lg text-neutral-900">Integrazione Wallet</h3>
-                      <p className="text-neutral-600 mt-1">Aggiungi la tessera ad Apple Wallet e Google Wallet con un solo tap.</p>
-                    </div>
-                  </li>
-                  <li className="flex gap-4">
-                    <span className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-brand/10 text-brand font-bold text-sm">2</span>
-                    <div>
-                      <h3 className="font-bold text-lg text-neutral-900">Verifica QR Sicura</h3>
-                      <p className="text-neutral-600 mt-1">Ogni tessera include un QR code dinamico per la verifica istantanea.</p>
-                    </div>
-                  </li>
-                  <li className="flex gap-4">
-                    <span className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-brand/10 text-brand font-bold text-sm">3</span>
-                    <div>
-                      <h3 className="font-bold text-lg text-neutral-900">Dati sempre aggiornati</h3>
-                      <p className="text-neutral-600 mt-1">Stato socio e validità sono sincronizzati in tempo reale.</p>
-                    </div>
-                  </li>
-                </ul>
-                <div className="mt-8 flex gap-4">
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    onClick={() => setIsDemoModalOpen(true)}
-                  >
-                    Vedi una demo
-                  </button>
-                  <Link className="btn-ghost" to="/associazioni">
-                    Diventa Socio
-                  </Link>
-                </div>
-              </div>
-
-              <div className="membership-demo-card-wrap flex justify-center">
-                <div className="w-full max-w-[28rem] drop-shadow-2xl">
-                  <MemberCardPreview
-                    cardData={{
-                      firstName: "Mario",
-                      lastName: "Rossi",
-                      fullName: "Mario Rossi",
-                      organizationName: "Golden Age Fitness",
-                      cardNumber: "GA-00123",
-                      cardStatus: "active",
-                      cardYear: new Date().getFullYear().toString(),
-                      verificationUrl: "https://assonam.it/verify/GA-00123",
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="py-20" data-reveal="fade-up" id="affiliazione-passaggi">
-        <div className="container-shell">
-          <div className="surface-strong landing-panel">
-            <p className="section-title">Percorso Associazione</p>
-            <h2 className="section-heading">Affiliazione in 3 passaggi</h2>
-            <p className="section-subtitle">
-              Procedura guidata e lineare: completi il modulo, alleghi i documenti e invii in pochi
-              minuti.
-            </p>
-
-            <div className="affiliazione-steps-grid mt-8" data-reveal="stagger">
-              {AFFILIATION_STEPS.map((step, index) => (
-                <article key={step.title} className="surface affiliazione-step-card" data-reveal-item>
-                  <span className="affiliazione-step-index">{index + 1}</span>
-                  <h3 className="affiliazione-step-title">{step.title}</h3>
-                  <p className="affiliazione-step-description">{step.description}</p>
-                </article>
-              ))}
-            </div>
-
-            <div className="landing-inline-cta">
-              {showAffiliazioneCta ? (
-                <Link
-                  className="btn-primary"
-                  to="/affiliazione"
-                  onClick={() => handleAffiliaHeroClick("below_fold_section")}
+          <div className="grid lg:grid-cols-2 gap-16 items-center">
+            
+            {/* Left Copy */}
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-brand mb-3">Innovazione</p>
+              <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-6 leading-tight">
+                La tua tessera digitale,<br/>sempre in tasca.
+              </h2>
+              <p className="text-lg text-slate-600 mb-10 leading-relaxed">
+                Le associazioni affiliate emettono tessere digitali istantanee, pronte per essere salvate nei wallet nativi degli smartphone.
+              </p>
+              
+              <ul className="space-y-8">
+                <li className="flex gap-5">
+                  <span className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-xl bg-white shadow-sm border border-slate-100 text-brand font-bold text-sm">1</span>
+                  <div>
+                    <h3 className="font-bold text-lg text-slate-900">Integrazione Nativa</h3>
+                    <p className="text-slate-500 mt-1.5 leading-relaxed">Aggiungi la tessera ad Apple Wallet e Google Wallet con un solo tap. Nessuna app di terze parti richiesta.</p>
+                  </div>
+                </li>
+                <li className="flex gap-5">
+                  <span className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-xl bg-white shadow-sm border border-slate-100 text-brand font-bold text-sm">2</span>
+                  <div>
+                    <h3 className="font-bold text-lg text-slate-900">Verifica QR Sicura</h3>
+                    <p className="text-slate-500 mt-1.5 leading-relaxed">Ogni tessera include un QR code univoco per la verifica istantanea dello stato del socio.</p>
+                  </div>
+                </li>
+                <li className="flex gap-5">
+                  <span className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-xl bg-white shadow-sm border border-slate-100 text-brand font-bold text-sm">3</span>
+                  <div>
+                    <h3 className="font-bold text-lg text-slate-900">Sincronizzazione Cloud</h3>
+                    <p className="text-slate-500 mt-1.5 leading-relaxed">Rinnovi e decadenze si aggiornano in tempo reale direttamente sul telefono del socio.</p>
+                  </div>
+                </li>
+              </ul>
+              
+              <div className="mt-10 flex flex-wrap gap-4">
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center h-12 px-8 rounded-xl bg-brand hover:bg-brand-light text-white font-bold shadow-md shadow-brand/20 transition-all"
+                  onClick={() => setIsDemoModalOpen(true)}
                 >
-                  Inizia Affiliazione
+                  Vedi una demo
+                </button>
+                <Link className="inline-flex items-center justify-center h-12 px-8 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold transition-all" to="/associazioni">
+                  Diventa Socio
                 </Link>
-              ) : null}
-              <Link className="btn-ghost" to="/affiliazione-info">
-                Vedi dettagli affiliazione
+              </div>
+            </div>
+
+            {/* Right Card */}
+            <div className="relative flex justify-center lg:justify-end">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3/4 h-3/4 bg-brand/10 rounded-full blur-3xl pointer-events-none"></div>
+              <div className="w-full max-w-[28rem] drop-shadow-2xl hover:-translate-y-2 transition-transform duration-500 relative z-10">
+                <MemberCardPreview
+                  cardData={{
+                    firstName: "Mario",
+                    lastName: "Rossi",
+                    fullName: "Mario Rossi",
+                    organizationName: "Golden Age Fitness",
+                    cardNumber: "GA-00123",
+                    cardStatus: "active",
+                    cardYear: new Date().getFullYear().toString(),
+                    verificationUrl: "https://assonam.it/verify/GA-00123",
+                  }}
+                />
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* HOW IT WORKS WIZARD */}
+      <section className="py-24 bg-white" data-reveal="fade-up" id="affiliazione-passaggi">
+        <div className="container-shell text-center">
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Onboarding Semplificato</p>
+          <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-6">Affiliazione in 3 passaggi</h2>
+          <p className="text-lg text-slate-500 max-w-2xl mx-auto mb-16 font-medium">
+            Abbiamo eliminato la burocrazia cartacea. Completi il modulo online, alleghi i PDF e invii in pochi minuti.
+          </p>
+
+          <div className="grid md:grid-cols-3 gap-8" data-reveal="stagger">
+            {AFFILIATION_STEPS.map((step, index) => (
+              <article key={step.title} className="bg-slate-50 rounded-3xl p-8 border border-slate-100 text-left relative overflow-hidden group" data-reveal-item>
+                <div className="absolute top-0 right-0 p-6 text-8xl font-black text-slate-200/50 -mt-10 -mr-6 group-hover:scale-110 transition-transform pointer-events-none select-none">
+                  {index + 1}
+                </div>
+                <div className="relative z-10">
+                  <span className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-white shadow-sm border border-slate-200 text-brand font-bold text-xl mb-6">
+                    {index + 1}
+                  </span>
+                  <h3 className="text-xl font-bold text-slate-900 mb-3">{step.title}</h3>
+                  <p className="text-slate-500 leading-relaxed font-medium">{step.description}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="mt-16 flex flex-col sm:flex-row items-center justify-center gap-4">
+            {affiliazioneEnabled ? (
+              <Link
+                className="inline-flex items-center justify-center h-14 px-8 rounded-xl bg-slate-900 text-white font-bold shadow-lg shadow-slate-900/20 hover:-translate-y-0.5 hover:shadow-xl transition-all"
+                to="/affiliazione"
+                onClick={() => handleAffiliaHeroClick("below_fold_section")}
+              >
+                Inizia Affiliazione Ora
               </Link>
-            </div>
+            ) : (
+              <Link className="inline-flex items-center justify-center h-14 px-8 rounded-xl bg-slate-900 text-white font-bold shadow-lg" to="/contatti">
+                Contatta ASSONAM
+              </Link>
+            )}
+            <Link className="inline-flex items-center justify-center h-14 px-8 rounded-xl bg-white border border-slate-200 text-slate-700 font-bold hover:bg-slate-50 transition-all" to="/affiliazione-info">
+              Scopri i dettagli tecnici
+            </Link>
           </div>
         </div>
       </section>
 
-      <section className="py-20" data-reveal="fade-up">
-        <div className="container-shell">
-          <div className="surface-strong landing-panel">
-            <p className="section-title">FAQ Affiliazione</p>
-            <h2 className="section-heading">Domande frequenti</h2>
-            <p className="section-subtitle">
-              Le risposte principali prima di iniziare la procedura di affiliazione.
-            </p>
-            <div className="mt-8">
-              <PublicFaqAccordion items={FAQ_ITEMS} />
-            </div>
+      {/* FAQ SECTION */}
+      <section className="py-24 bg-slate-50/50 border-t border-slate-100" data-reveal="fade-up">
+        <div className="container-shell max-w-4xl">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-extrabold text-slate-900 mb-4">Domande Frequenti</h2>
+            <p className="text-slate-500 text-lg">Tutto quello che devi sapere prima di iniziare.</p>
+          </div>
+          <div className="bg-white rounded-3xl p-6 md:p-10 shadow-xl shadow-slate-200/30 border border-slate-100">
+            <PublicFaqAccordion items={FAQ_ITEMS} />
           </div>
         </div>
       </section>
 
-      {showAffiliazioneCta ? (
-        <div className={`affiliazione-sticky-cta${showStickyAffilia ? " is-visible" : ""}`}>
-          <Link
-            className="btn-primary affiliazione-sticky-button"
-            to="/affiliazione"
-            onClick={handleAffiliaStickyClick}
-          >
-            Affilia la tua Associazione
-          </Link>
-        </div>
-      ) : null}
+      {/* STICKY CTA */}
+      <div className={`fixed bottom-6 left-0 right-0 z-50 flex justify-center transition-all duration-300 pointer-events-none ${showStickyAffilia ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
+        <Link
+          className="pointer-events-auto inline-flex items-center justify-center h-14 px-10 rounded-full bg-slate-900 text-white text-lg font-bold shadow-2xl shadow-slate-900/30 hover:scale-105 transition-all"
+          to="/affiliazione"
+          onClick={handleAffiliaStickyClick}
+        >
+          Affilia la tua Associazione
+        </Link>
+      </div>
 
+      {/* MODAL DEMO */}
       {isDemoModalOpen && (
         <div
-          className="membership-demo-modal-backdrop"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
           aria-labelledby="membership-demo-modal-title"
@@ -733,30 +722,33 @@ const Home = () => {
             if (event.target === event.currentTarget) setIsDemoModalOpen(false);
           }}
         >
-          <div className="modal-panel membership-demo-modal">
-            <button
-              type="button"
-              className="membership-demo-modal-close"
-              onClick={() => setIsDemoModalOpen(false)}
-              aria-label="Chiudi finestra demo"
-            >
-              Chiudi
-            </button>
-            <h3 id="membership-demo-modal-title" className="membership-demo-modal-title">
-              Questa è una demo.
-            </h3>
-            <p className="membership-demo-modal-text">
-              Le associazioni affiliate ad ASSONAM possono emettere tessere digitali per tutti i
-              soci.
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-6">
+              <h3 id="membership-demo-modal-title" className="text-2xl font-extrabold text-slate-900">
+                Modalità Demo
+              </h3>
+              <button
+                type="button"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
+                onClick={() => setIsDemoModalOpen(false)}
+                aria-label="Chiudi"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            
+            <p className="text-slate-600 mb-8 leading-relaxed">
+              Questa è solo un'anteprima visiva. Le associazioni affiliate ad ASSONAM possono emettere istantaneamente tessere digitali reali per tutti i loro soci tramite l'Area Riservata.
             </p>
-            <div className="membership-demo-modal-actions">
-              {showAffiliazioneCta ? (
-                <Link className="btn-primary" to="/affiliazione" onClick={() => setIsDemoModalOpen(false)}>
-                  Affilia la tua Associazione
+            
+            <div className="flex flex-col gap-3">
+              {affiliazioneEnabled ? (
+                <Link className="inline-flex justify-center items-center h-12 rounded-xl bg-brand text-white font-bold w-full hover:bg-brand-light transition-colors" to="/affiliazione" onClick={() => setIsDemoModalOpen(false)}>
+                  Affilia l'Associazione
                 </Link>
               ) : null}
-              <Link className="btn-ghost" to="/affiliazione-info" onClick={() => setIsDemoModalOpen(false)}>
-                Scopri di più
+              <Link className="inline-flex justify-center items-center h-12 rounded-xl bg-white border border-slate-200 text-slate-700 font-bold w-full hover:bg-slate-50 transition-colors" to="/affiliazione-info" onClick={() => setIsDemoModalOpen(false)}>
+                Scopri di più sul sistema
               </Link>
             </div>
           </div>
@@ -764,7 +756,7 @@ const Home = () => {
       )}
     </div>
   );
+
 };
 
 export default Home;
-
