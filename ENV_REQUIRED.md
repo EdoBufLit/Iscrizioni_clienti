@@ -17,6 +17,8 @@ All environment variables used by the application. Variables marked **required**
 | `SPA_DIR` | No | `frontend/dist` | Path to the built frontend SPA directory. |
 | `AFFILIAZIONE_ENABLED` | No | `false` | Enables public affiliation endpoints (`/api/affiliazione/*`). If `false`, public affiliation routes return `404`. |
 
+Note: frontend does not use a build-time affiliation flag. Public UI visibility is driven at runtime by `/api/capabilities` (backed by `AFFILIAZIONE_ENABLED`).
+
 ## Super Admin Credentials
 
 The super admin account is bootstrapped from environment variables (no database record).

@@ -4,7 +4,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import Layout from "./components/Layout";
 import Home from "./pages/Home";
 import Associazioni from "./pages/Associazioni";
-import { AFFILIAZIONE_ENABLED } from "./lib/features";
+import { useStatePlatformCapabilities } from "./hooks/useStatePlatformCapabilities";
 
 const LoStudio = lazy(() => import("./pages/LoStudio"));
 const Servizi = lazy(() => import("./pages/Servizi"));
@@ -56,6 +56,9 @@ const Loading = () => (
 );
 
 const App = () => {
+  const { capabilities, loading: capabilitiesLoading } = useStatePlatformCapabilities();
+  const affiliazioneEnabled = capabilities?.affiliazioneEnabled === true;
+
   return (
     <ErrorBoundary>
     <Suspense fallback={<Loading />}>
@@ -67,7 +70,9 @@ const App = () => {
           <Route
             path="affiliazione"
             element={
-              AFFILIAZIONE_ENABLED ? (
+              capabilitiesLoading ? (
+                <Loading />
+              ) : affiliazioneEnabled ? (
                 <Affiliazione />
               ) : (
                 <Navigate to="/" replace />
@@ -77,7 +82,9 @@ const App = () => {
           <Route
             path="invito/:slug"
             element={
-              AFFILIAZIONE_ENABLED ? (
+              capabilitiesLoading ? (
+                <Loading />
+              ) : affiliazioneEnabled ? (
                 <InvitoAffiliazioneRedirect />
               ) : (
                 <Navigate to="/" replace />

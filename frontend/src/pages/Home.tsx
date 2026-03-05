@@ -7,11 +7,10 @@ import PublicFaqAccordion, {
 import { trackUiEvent } from "../lib/tracking";
 import { applySeo } from "../lib/seo";
 import {
-  fetchPlatformCapabilities,
   fetchPlatformStats,
-  type PlatformCapabilities,
   type PlatformStats,
 } from "../lib/api";
+import { useStatePlatformCapabilities } from "../hooks/useStatePlatformCapabilities";
 
 const PublicHeroThree = lazy(() => import("../components/public/PublicHeroThree.client"));
 
@@ -190,7 +189,7 @@ const Home = () => {
   const [platformStatsLoaded, setPlatformStatsLoaded] = useState(false);
   const [animatedStats, setAnimatedStats] = useState<PlatformStats>(EMPTY_PLATFORM_STATS);
   const [shouldAnimateStats, setShouldAnimateStats] = useState(false);
-  const [capabilities, setCapabilities] = useState<PlatformCapabilities | null>(null);
+  const { capabilities } = useStatePlatformCapabilities();
   const heroRef = useRef<HTMLElement>(null);
   const socialProofRef = useRef<HTMLElement>(null);
   const membershipDemoCardRef = useRef<HTMLDivElement>(null);
@@ -292,32 +291,6 @@ const Home = () => {
     };
 
     void loadPlatformStats();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadCapabilities = async () => {
-      try {
-        const payload = await fetchPlatformCapabilities();
-        if (cancelled) return;
-        setCapabilities({
-          affiliazioneEnabled: payload.affiliazioneEnabled === true,
-          stripeEnabled: payload.stripeEnabled === true,
-        });
-      } catch {
-        if (cancelled) return;
-        setCapabilities({
-          affiliazioneEnabled: false,
-          stripeEnabled: false,
-        });
-      }
-    };
-
-    void loadCapabilities();
     return () => {
       cancelled = true;
     };

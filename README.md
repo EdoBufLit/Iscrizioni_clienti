@@ -46,6 +46,7 @@ A minimal web application for association member signup, document upload, and me
 
 - `AFFILIAZIONE_ENABLED=false` (default): public affiliation routes are hidden (`404`) while super-admin review endpoints remain available.
 - `AFFILIAZIONE_ENABLED=true`: enables public affiliation flow.
+- Frontend affiliation UI is runtime-gated by `GET /api/capabilities` and does not use `VITE_AFFILIAZIONE_ENABLED`.
 
 ### Stripe Is Optional
 

@@ -3,18 +3,16 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   createAffiliationDraft,
   createAffiliationStripeCheckout,
-  fetchPlatformCapabilities,
   fetchAffiliationDraft,
   patchAffiliationDraft,
   replaceAffiliationPeople,
   submitAffiliationDraft,
   uploadAffiliationDocument,
   type AffiliationDraft,
-  type PlatformCapabilities,
   type AffiliationSubmitResponse,
 } from "../lib/api";
 import { applySeo } from "../lib/seo";
-import { AFFILIAZIONE_ENABLED } from "../lib/features";
+import { useStatePlatformCapabilities } from "../hooks/useStatePlatformCapabilities";
 
 type PersonForm = {
   role: string;
@@ -146,15 +144,13 @@ const Affiliazione = () => {
   const [baseVideoEnded, setBaseVideoEnded] = useState(false);
   const [baseVideoFailed, setBaseVideoFailed] = useState(false);
   const [notice, setNotice] = useState("");
-  const [capabilities, setCapabilities] = useState<PlatformCapabilities>({
-    affiliazioneEnabled: AFFILIAZIONE_ENABLED,
-    stripeEnabled: false,
-  });
+  const { capabilities, loading: capabilitiesLoading } = useStatePlatformCapabilities();
   const [dirtyCounter, setDirtyCounter] = useState(0);
   const [resumeLinkCopied, setResumeLinkCopied] = useState(false);
   const autosaveReadyRef = useRef(false);
   const stripeFallbackAppliedRef = useRef(false);
   const navigate = useNavigate();
+  const affiliazioneEnabled = capabilities?.affiliazioneEnabled === true;
 
   useEffect(() => {
     applySeo({
@@ -166,26 +162,11 @@ const Affiliazione = () => {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-
-    const loadCapabilities = async () => {
-      try {
-        const payload = await fetchPlatformCapabilities();
-        if (cancelled) return;
-        setCapabilities(payload);
-        if (!payload.affiliazioneEnabled) {
-          navigate("/", { replace: true });
-        }
-      } catch {
-        if (cancelled) return;
-      }
-    };
-
-    void loadCapabilities();
-    return () => {
-      cancelled = true;
-    };
-  }, [navigate]);
+    if (capabilitiesLoading) return;
+    if (!affiliazioneEnabled) {
+      navigate("/", { replace: true });
+    }
+  }, [affiliazioneEnabled, capabilitiesLoading, navigate]);
 
   const applyDraftState = useCallback((nextDraft: AffiliationDraft) => {
     setDraft(nextDraft);
@@ -263,6 +244,9 @@ const Affiliazione = () => {
   );
 
   useEffect(() => {
+    if (capabilitiesLoading) return;
+    if (!affiliazioneEnabled) return;
+
     const boot = async () => {
       try {
         setLoading(true);
@@ -292,15 +276,14 @@ const Affiliazione = () => {
       }
     };
     void boot();
-  }, [applyDraftState, referralFromQuery, setSearchParams, tokenFromQuery]);
-
-  useEffect(() => {
-    if (!draft?.payment_config) return;
-    setCapabilities((current) => ({
-      ...current,
-      stripeEnabled: Boolean(draft.payment_config.stripe_enabled),
-    }));
-  }, [draft?.payment_config]);
+  }, [
+    affiliazioneEnabled,
+    applyDraftState,
+    capabilitiesLoading,
+    referralFromQuery,
+    setSearchParams,
+    tokenFromQuery,
+  ]);
 
   useEffect(() => {
     if (!token || !form || !autosaveReadyRef.current) return;
@@ -314,7 +297,9 @@ const Affiliazione = () => {
     return () => window.clearTimeout(timeout);
   }, [dirtyCounter, form, persistDraft, saving, submitting, token]);
 
-  const stripeEnabled = Boolean(capabilities.stripeEnabled);
+  const stripeEnabled =
+    capabilities?.stripeEnabled === true &&
+    (draft?.payment_config?.stripe_enabled ?? true);
 
   useEffect(() => {
     if (!form || !token) return;
@@ -456,7 +441,7 @@ const Affiliazione = () => {
     setShowVideoOverlay(true);
   };
 
-  if (loading || !form) {
+  if (capabilitiesLoading || loading || !form) {
     return (
       <section className="py-16">
         <div className="container-shell">

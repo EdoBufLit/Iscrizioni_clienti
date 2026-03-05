@@ -7,7 +7,7 @@ import { pageVariants } from "./motion/motionPresets";
 import { usePublicMotion } from "./public/usePublicMotion";
 import { PUBLIC_MOTION } from "./public/motionTokens";
 import { trackUiEvent } from "../lib/tracking";
-import { fetchPlatformCapabilities, type PlatformCapabilities } from "../lib/api";
+import { useStatePlatformCapabilities } from "../hooks/useStatePlatformCapabilities";
 
 const NAV_ITEMS = [
   { label: "Home", to: "/" },
@@ -40,7 +40,6 @@ const prefersReducedMotion = () =>
 
 const Layout = () => {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [capabilities, setCapabilities] = useState<PlatformCapabilities | null>(null);
   const close = () => setMenuOpen(false);
   const location = useLocation();
 
@@ -58,6 +57,7 @@ const Layout = () => {
       location.pathname.startsWith("/admin"),
     [location.pathname]
   );
+  const { capabilities } = useStatePlatformCapabilities();
   const affiliazioneEnabled = capabilities?.affiliazioneEnabled === true;
 
   usePublicMotion({ enabled: !isDashboardRoute, key: location.pathname });
@@ -70,33 +70,6 @@ const Layout = () => {
   useEffect(() => {
     setMenuOpen(false);
   }, [location.pathname]);
-
-  useEffect(() => {
-    if (isDashboardRoute) return;
-    let cancelled = false;
-
-    const loadCapabilities = async () => {
-      try {
-        const payload = await fetchPlatformCapabilities();
-        if (cancelled) return;
-        setCapabilities({
-          affiliazioneEnabled: payload.affiliazioneEnabled === true,
-          stripeEnabled: payload.stripeEnabled === true,
-        });
-      } catch {
-        if (cancelled) return;
-        setCapabilities({
-          affiliazioneEnabled: false,
-          stripeEnabled: false,
-        });
-      }
-    };
-
-    void loadCapabilities();
-    return () => {
-      cancelled = true;
-    };
-  }, [isDashboardRoute]);
 
   useEffect(() => {
     if (isDashboardRoute) return;
