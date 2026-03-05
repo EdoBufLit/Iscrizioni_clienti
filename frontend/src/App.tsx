@@ -1,12 +1,15 @@
 import { lazy, Suspense } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Layout from "./components/Layout";
 import Home from "./pages/Home";
 import Associazioni from "./pages/Associazioni";
+import { AFFILIAZIONE_ENABLED } from "./lib/features";
 
 const LoStudio = lazy(() => import("./pages/LoStudio"));
 const Servizi = lazy(() => import("./pages/Servizi"));
+const Affiliazione = lazy(() => import("./pages/Affiliazione"));
+const AffiliazioneInfo = lazy(() => import("./pages/AffiliazioneInfo"));
 const AffiliazioneDettaglio = lazy(() => import("./pages/AffiliazioneDettaglio"));
 const Iscrizione = lazy(() => import("./pages/Iscrizione"));
 const Contatti = lazy(() => import("./pages/Contatti"));
@@ -15,6 +18,7 @@ const Login = lazy(() => import("./pages/Login"));
 const MagicLinkVerify = lazy(() => import("./pages/MagicLinkVerify"));
 const WalletGoogleAdd = lazy(() => import("./pages/WalletGoogleAdd"));
 const ReservedAreaRedirect = lazy(() => import("./pages/ReservedAreaRedirect"));
+const InvitoAffiliazioneRedirect = lazy(() => import("./pages/InvitoAffiliazioneRedirect"));
 const PienissimoThankYouPage = lazy(() => import("./pages/PienissimoThankYouPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -32,6 +36,7 @@ const SuperAdminLayout = lazy(() => import("./pages/super-admin/SuperAdminLayout
 const SuperAdminOrgAdmins = lazy(() => import("./pages/super-admin/SuperAdminOrgAdmins"));
 const SuperAdminOrganizations = lazy(() => import("./pages/super-admin/SuperAdminOrganizations"));
 const SuperAdminMemberDetail = lazy(() => import("./pages/super-admin/SuperAdminMemberDetail"));
+const SuperAdminAffiliations = lazy(() => import("./pages/super-admin/SuperAdminAffiliations"));
 
 const OrgAdminLogin = lazy(() => import("./pages/org-admin/OrgAdminLogin"));
 const OrgAdminCallback = lazy(() => import("./pages/org-admin/OrgAdminCallback"));
@@ -59,6 +64,27 @@ const App = () => {
           <Route index element={<Home />} />
           <Route path="lo-studio" element={<LoStudio />} />
           <Route path="servizi" element={<Servizi />} />
+          <Route
+            path="affiliazione"
+            element={
+              AFFILIAZIONE_ENABLED ? (
+                <Affiliazione />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="invito/:slug"
+            element={
+              AFFILIAZIONE_ENABLED ? (
+                <InvitoAffiliazioneRedirect />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route path="affiliazione-info" element={<AffiliazioneInfo />} />
           <Route path="associazioni" element={<Associazioni />} />
           <Route path="associazioni/:slug" element={<AffiliazioneDettaglio />} />
           <Route path="associazioni/:slug/iscrizione" element={<Iscrizione />} />
@@ -82,6 +108,7 @@ const App = () => {
           <Route path="super-admin/login" element={<SuperAdminLogin />} />
           <Route path="super-admin" element={<SuperAdminLayout />}>
             <Route path="associazioni" element={<SuperAdminOrganizations />} />
+            <Route path="affiliazioni" element={<SuperAdminAffiliations />} />
             <Route path="org-admins" element={<SuperAdminOrgAdmins />} />
             <Route path="soci" element={<SuperAdminMemberDetail />} />
           </Route>

@@ -15,6 +15,7 @@ All environment variables used by the application. Variables marked **required**
 | `POSTGRES_PASSWORD` | No | _(empty)_ | Password for the bundled Docker Compose PostgreSQL service (`db`). Required only when using PostgreSQL. |
 | `UPLOAD_DIR` | No | `<project_root>/data/uploads` | Directory for storing uploaded member documents. |
 | `SPA_DIR` | No | `frontend/dist` | Path to the built frontend SPA directory. |
+| `AFFILIAZIONE_ENABLED` | No | `false` | Enables public affiliation endpoints (`/api/affiliazione/*`). If `false`, public affiliation routes return `404`. |
 
 ## Super Admin Credentials
 
@@ -66,6 +67,25 @@ Optional fallback for generic bot replies outside the tessere ordering flow.
 |---|---|---|---|
 | `OPENAI_API_KEY` | No | _(empty)_ | Enables OpenAI fallback in `POST /api/whatsapp/bot`. If missing, the bot uses a static fallback reply. |
 | `OPENAI_MODEL` | No | `gpt-4o-mini` | Chat Completions model used by the WhatsApp bot fallback. |
+
+## Affiliazione / Stripe (optional)
+
+Stripe is optional. The affiliation flow still works with bank transfer and cash when Stripe is not configured.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `STRIPE_SECRET_KEY` | No | _(empty)_ | Stripe secret key. Required only if you want card checkout enabled. |
+| `STRIPE_WEBHOOK_SECRET` | No | _(empty)_ | Stripe webhook signing secret. Required only if card checkout is enabled. |
+| `STRIPE_PRICE_ID` | No | _(empty)_ | Stripe Price ID used by Checkout. Required only if card checkout is enabled. |
+| `STRIPE_PUBLISHABLE_KEY` | No | _(empty)_ | Publishable key (needed only if your frontend directly uses Stripe.js). |
+| `STRIPE_REQUIRE_PUBLISHABLE_KEY` | No | `false` | If `true`, backend marks Stripe configured only when `STRIPE_PUBLISHABLE_KEY` is present. |
+| `STRIPE_AFFILIATION_PRICE_CENTS` | No | `9000` | Informational affiliation amount shown in UI (bonifico/contanti summary). |
+
+Runtime behavior:
+
+- `STRIPE_ENABLED` is computed automatically from env presence (no startup crash on missing values).
+- If Stripe is disabled, checkout endpoint returns `503` with guidance to use bonifico/contanti.
+- Stripe webhook endpoint stays reachable and returns `200` when Stripe is disabled (no retry storm).
 
 Webhook smoke test for Twilio WhatsApp:
 

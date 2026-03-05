@@ -25,6 +25,7 @@ from app.middleware import (
 )
 from app.routes import (
     admin,
+    affiliation,
     ingest_pienissimo,
     integrations,
     join,
@@ -57,6 +58,7 @@ _cors_origins = sorted(
 async def lifespan(app: FastAPI):
     # Ensure upload directory exists
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    os.makedirs(settings.AFFILIATION_VIDEO_OUTPUT_DIR, exist_ok=True)
     try:
         init_db()
 
@@ -79,6 +81,10 @@ async def lifespan(app: FastAPI):
         # If it's the critical schema drift, we want to crash hard
         if "SQLite schema drift detected" in str(e):
             raise e
+
+    if settings.AFFILIAZIONE_ENABLED and not settings.STRIPE_ENABLED:
+        logger.warning("Stripe disabled: missing env vars")
+
     yield
 
 
@@ -206,6 +212,13 @@ app.mount(
     "/uploads", StaticFiles(directory=_uploads_path, check_dir=False), name="uploads"
 )
 
+_generated_videos_path = Path(settings.AFFILIATION_VIDEO_OUTPUT_DIR).parent
+app.mount(
+    "/generated-videos",
+    StaticFiles(directory=_generated_videos_path, check_dir=False),
+    name="generated-videos",
+)
+
 # ── Routers ───────────────────────────────────────────────────────
 
 app.include_router(join.router)
@@ -214,6 +227,12 @@ app.include_router(admin.router)
 app.include_router(org_admin.router)
 app.include_router(super_admin.router)
 app.include_router(super_admin.associations_router)
+app.include_router(
+    affiliation.router,
+    dependencies=[Depends(affiliation.ensure_public_affiliation_enabled)],
+)
+app.include_router(affiliation.super_admin_router)
+app.include_router(affiliation.associations_router)
 app.include_router(public.router)
 app.include_router(onboarding.router)
 app.include_router(integrations.router)

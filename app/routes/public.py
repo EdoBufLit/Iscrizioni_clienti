@@ -4,8 +4,10 @@ import base64
 import logging
 import os
 from datetime import datetime
+from time import monotonic
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse, FileResponse, Response, HTMLResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import Member, Organization
@@ -29,6 +31,8 @@ from app.services.municipalities import search_municipalities
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+_PLATFORM_STATS_CACHE_TTL_SECONDS = 60.0
+_platform_stats_cache: dict[str, object] = {"expires_at": 0.0, "payload": None}
 
 
 # ── Legacy HTML redirects ─────────────────────────────────────────
@@ -160,6 +164,56 @@ def api_list_organizations(q: str = None, db: Session = Depends(get_db)):
 
     orgs = query.all()
     return [_org_to_dict_summary(o) for o in orgs]
+
+
+@router.get("/api/stats/platform")
+def api_platform_stats(db: Session = Depends(get_db)):
+    now = monotonic()
+    cached_payload = _platform_stats_cache.get("payload")
+    cached_expires_at = float(_platform_stats_cache.get("expires_at") or 0.0)
+    if isinstance(cached_payload, dict) and now < cached_expires_at:
+        return cached_payload
+
+    organizations = int(
+        db.query(func.count(Organization.id))
+        .filter(
+            Organization.deleted_at.is_(None),
+            Organization.is_active.is_(True),
+        )
+        .scalar()
+        or 0
+    )
+    members = int(
+        db.query(func.count(Member.id)).filter(Member.deleted_at.is_(None)).scalar() or 0
+    )
+    cities = int(
+        db.query(func.count(func.distinct(func.lower(func.trim(Organization.city)))))
+        .filter(
+            Organization.deleted_at.is_(None),
+            Organization.is_active.is_(True),
+            Organization.city.is_not(None),
+            func.trim(Organization.city) != "",
+        )
+        .scalar()
+        or 0
+    )
+
+    payload = {
+        "organizations": organizations,
+        "members": members,
+        "cities": cities,
+    }
+    _platform_stats_cache["payload"] = payload
+    _platform_stats_cache["expires_at"] = now + _PLATFORM_STATS_CACHE_TTL_SECONDS
+    return payload
+
+
+@router.get("/api/capabilities")
+def api_capabilities():
+    return {
+        "affiliazioneEnabled": bool(settings.AFFILIAZIONE_ENABLED),
+        "stripeEnabled": bool(settings.STRIPE_ENABLED),
+    }
 
 
 @router.get("/api/municipalities")

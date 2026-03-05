@@ -42,6 +42,23 @@ A minimal web application for association member signup, document upload, and me
    | `JOIN_TOKEN_EXPIRE_MINUTES` | Signup continue link validity | `120` |
    | `SKIP_CREATE_ALL` | Disable auto schema creation | `0` (dev) / `1` (prod) |
 
+### Affiliazione Feature Flags (safe deploy)
+
+- `AFFILIAZIONE_ENABLED=false` (default): public affiliation routes are hidden (`404`) while super-admin review endpoints remain available.
+- `AFFILIAZIONE_ENABLED=true`: enables public affiliation flow.
+
+### Stripe Is Optional
+
+Stripe is optional for affiliation payments.
+
+- If Stripe env vars are missing, the app still starts normally.
+- Bonifico and contanti remain fully available.
+- Card checkout is enabled only when all required env vars exist:
+  - `STRIPE_SECRET_KEY`
+  - `STRIPE_WEBHOOK_SECRET`
+  - `STRIPE_PRICE_ID`
+- Webhook route remains reachable and returns `200` when Stripe is disabled.
+
 4. **Run Application**
    ```bash
    uvicorn app.main:app --host 0.0.0.0 --port 8000

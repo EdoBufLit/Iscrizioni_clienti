@@ -31,6 +31,14 @@ x-app-env: &app-env
   OPENAI_API_KEY: ${OPENAI_API_KEY}
   OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
   LOW_CARDS_ALERT_JOB_INTERVAL_SECONDS: ${LOW_CARDS_ALERT_JOB_INTERVAL_SECONDS:-300}
+  AFFILIAZIONE_ENABLED: ${AFFILIAZIONE_ENABLED:-false}
+  STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+  STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+  STRIPE_PRICE_ID: ${STRIPE_PRICE_ID:-}
+  STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+  STRIPE_REQUIRE_PUBLISHABLE_KEY: ${STRIPE_REQUIRE_PUBLISHABLE_KEY:-false}
+  AFFILIATION_VIDEO_RENDERER_DIR: ${AFFILIATION_VIDEO_RENDERER_DIR:-/app/video-renderer/services/welcome-video}
+  AFFILIATION_VIDEO_OUTPUT_DIR: ${AFFILIATION_VIDEO_OUTPUT_DIR:-/app/data/videos/welcome}
 
 services:
   db:
@@ -84,6 +92,17 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+    restart: always
+
+  affiliation-video-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.affiliation-video-worker
+    depends_on:
+      - db
+    volumes:
+      - ./data:/app/data
+    environment: *app-env
     restart: always
 
 volumes:

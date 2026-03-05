@@ -62,6 +62,29 @@ export async function fetchOrganizations(
   return res.json();
 }
 
+export type PlatformStats = {
+  organizations: number;
+  members: number;
+  cities: number;
+};
+
+export type PlatformCapabilities = {
+  affiliazioneEnabled: boolean;
+  stripeEnabled: boolean;
+};
+
+export async function fetchPlatformStats(): Promise<PlatformStats> {
+  const res = await fetch("/api/stats/platform");
+  if (!res.ok) throw new Error("Failed to fetch platform stats");
+  return res.json();
+}
+
+export async function fetchPlatformCapabilities(): Promise<PlatformCapabilities> {
+  const res = await fetch("/api/capabilities");
+  if (!res.ok) throw new Error("Failed to fetch platform capabilities");
+  return res.json();
+}
+
 export type OrganizationDetail = {
   id: number;
   name: string;
@@ -691,6 +714,68 @@ export async function fetchOrgAdminMetrics(): Promise<OrgAdminMetrics> {
   return res.json();
 }
 
+export type OrgAdminReferralStats = {
+  sent: number;
+  approved: number;
+  rewarded: number;
+};
+
+export type OrgAdminReferralListItem = {
+  id: number;
+  application_id: number;
+  status: "pending" | "approved" | "rewarded";
+  created_at: string | null;
+  approved_at: string | null;
+  rewarded_at: string | null;
+  organization_name: string;
+  reward_title: string | null;
+  reward_delivery_timing: string | null;
+};
+
+export type OrgAdminReferralReward = {
+  code: string | null;
+  title: string | null;
+  description: string | null;
+  delivery_timing: string | null;
+  rewarded_at: string | null;
+};
+
+export type OrgAdminReferralSummary = {
+  referral_slug: string;
+  referral_link: string;
+  invite_route: string;
+  stats: OrgAdminReferralStats;
+  pending_reward_referrals: OrgAdminReferralListItem[];
+  recent_referrals: OrgAdminReferralListItem[];
+  latest_reward: OrgAdminReferralReward | null;
+  reward_options: Array<{ code: string; title: string; delivery_timing: string }>;
+};
+
+export async function fetchOrgAdminReferralSummary(): Promise<OrgAdminReferralSummary> {
+  const res = await fetch("/api/org-admin/referrals/summary");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento referral."));
+  return res.json();
+}
+
+export async function spinOrgAdminReferralReward(
+  referralId: number,
+): Promise<{
+  ok: boolean;
+  referral_id: number;
+  status: "approved" | "rewarded";
+  reward: OrgAdminReferralReward;
+  message: string;
+  super_admin_note: string;
+}> {
+  const res = await fetch(`/api/org-admin/referrals/${referralId}/spin`, {
+    method: "POST",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore durante la ruota premi."));
+  return res.json();
+}
+
 export type OrgAdminMember = {
   id: number;
   name: string;
@@ -941,6 +1026,349 @@ export async function fetchSuperAdminOrganizations(
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (res.status === 403) throw new Error("Accesso negato");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento associazioni"));
+  return res.json();
+}
+
+export type AffiliationDraftPerson = {
+  id: number;
+  role: string;
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  fiscal_code: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type AffiliationDraftDocument = {
+  id: number;
+  doc_type: string;
+  filename: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
+  status: string;
+  review_notes: string | null;
+  rejection_note: string | null;
+  uploaded_at: string | null;
+  reviewed_at: string | null;
+  download_url: string;
+};
+
+export type AffiliationVideoJob = {
+  id: number;
+  application_id: number;
+  mode: "review" | "payment_pending" | "approved";
+  status: "queued" | "processing" | "done" | "failed";
+  provider: string;
+  output_url: string | null;
+  error_text: string | null;
+  requested_at: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+};
+
+export type AffiliationReferral = {
+  id: number;
+  referrer_org_id: number;
+  referrer_org_slug: string | null;
+  referrer_org_name: string | null;
+  status: "pending" | "approved" | "rewarded";
+  created_at: string | null;
+  approved_at: string | null;
+  rewarded_at: string | null;
+  reward_code: string | null;
+  reward_title: string | null;
+  reward_description: string | null;
+  reward_delivery_timing: string | null;
+};
+
+export type AffiliationDraft = {
+  id: number;
+  public_token: string;
+  status: string;
+  docs_status: string;
+  payment_method: string | null;
+  payment_status: string;
+  payment_amount_cents: number;
+  organization_name: string | null;
+  organization_legal_name: string | null;
+  organization_slug_candidate: string | null;
+  tax_code: string | null;
+  vat_number: string | null;
+  address_line1: string | null;
+  address_line2: string | null;
+  city: string | null;
+  province: string | null;
+  postal_code: string | null;
+  country: string | null;
+  applicant_full_name: string | null;
+  applicant_email: string | null;
+  applicant_phone: string | null;
+  notes: string | null;
+  manual_preferred_date: string | null;
+  manual_preferred_time: string | null;
+  manual_contact: string | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  review_notes: string | null;
+  approved_at: string | null;
+  rejected_at: string | null;
+  approved_org_id: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+  required_document_types: string[];
+  resume_url: string;
+  payment_config: {
+    stripe_enabled: boolean;
+    bank_iban: string;
+    bank_causale_prefix: string;
+    cash_location: string;
+  };
+  can_approve: boolean;
+  latest_video_job: AffiliationVideoJob | null;
+  referral: AffiliationReferral | null;
+  people: AffiliationDraftPerson[];
+  documents: AffiliationDraftDocument[];
+};
+
+export type AffiliationSubmitResponse = {
+  ok: boolean;
+  status: string;
+  payment_status: string;
+  message: string;
+  next_steps: string[];
+  latest_video_job: AffiliationVideoJob | null;
+  application: AffiliationDraft;
+};
+
+export async function createAffiliationDraft(
+  payload?: { applicant_email?: string; referral_slug?: string },
+): Promise<AffiliationDraft & { resume_url_absolute?: string }> {
+  const res = await fetch("/api/affiliazione/draft", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload ?? {}),
+  });
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Impossibile creare la bozza."));
+  return res.json();
+}
+
+export async function fetchAffiliationDraft(
+  token: string,
+): Promise<AffiliationDraft> {
+  const res = await fetch(`/api/affiliazione/draft/${encodeURIComponent(token)}`);
+  if (res.status === 404) throw new Error("Bozza affiliazione non trovata");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento bozza."));
+  return res.json();
+}
+
+export async function patchAffiliationDraft(
+  token: string,
+  payload: Partial<{
+    organization_name: string | null;
+    organization_legal_name: string | null;
+    organization_slug_candidate: string | null;
+    tax_code: string | null;
+    vat_number: string | null;
+    address_line1: string | null;
+    address_line2: string | null;
+    city: string | null;
+    province: string | null;
+    postal_code: string | null;
+    country: string | null;
+    applicant_full_name: string | null;
+    applicant_email: string | null;
+    applicant_phone: string | null;
+    notes: string | null;
+    payment_method: "stripe" | "bank_transfer" | "cash" | null;
+    manual_preferred_date: string | null;
+    manual_preferred_time: string | null;
+    manual_contact: string | null;
+  }>,
+): Promise<AffiliationDraft> {
+  const res = await fetch(`/api/affiliazione/draft/${encodeURIComponent(token)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore salvataggio bozza."));
+  return res.json();
+}
+
+export async function replaceAffiliationPeople(
+  token: string,
+  items: Array<{
+    role: string;
+    full_name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    fiscal_code?: string | null;
+  }>,
+): Promise<AffiliationDraft> {
+  const res = await fetch(`/api/affiliazione/draft/${encodeURIComponent(token)}/people`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+  });
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore salvataggio cariche."));
+  return res.json();
+}
+
+export async function uploadAffiliationDocument(
+  token: string,
+  docType: string,
+  file: File,
+): Promise<{ ok: boolean; document: AffiliationDraftDocument; docs_status: string }> {
+  const body = new FormData();
+  body.append("doc_type", docType);
+  body.append("file", file);
+  const res = await fetch(`/api/affiliazione/draft/${encodeURIComponent(token)}/documents`, {
+    method: "POST",
+    body,
+  });
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore upload documento."));
+  return res.json();
+}
+
+export async function createAffiliationStripeCheckout(
+  token: string,
+): Promise<{ ok: boolean; checkout_url: string; session_id: string; payment_status: string }> {
+  const res = await fetch(`/api/affiliazione/draft/${encodeURIComponent(token)}/stripe/checkout`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione checkout Stripe."));
+  return res.json();
+}
+
+export async function submitAffiliationDraft(
+  token: string,
+): Promise<AffiliationSubmitResponse> {
+  const res = await fetch(`/api/affiliazione/draft/${encodeURIComponent(token)}/submit`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore invio richiesta affiliazione."));
+  return res.json();
+}
+
+export type SuperAdminAffiliationListItem = {
+  id: number;
+  public_token: string;
+  organization_name: string | null;
+  applicant_email: string | null;
+  status: string;
+  docs_status: string;
+  payment_method: string | null;
+  payment_status: string;
+  submitted_at: string | null;
+  created_at: string | null;
+  can_approve: boolean;
+};
+
+export type SuperAdminAffiliationsResponse = {
+  items: SuperAdminAffiliationListItem[];
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+};
+
+export async function fetchSuperAdminAffiliations(
+  params?: { page?: number; pageSize?: number; q?: string; status?: string },
+): Promise<SuperAdminAffiliationsResponse> {
+  const sp = new URLSearchParams();
+  sp.set("page", String(params?.page ?? 1));
+  sp.set("page_size", String(params?.pageSize ?? 20));
+  if (params?.q) sp.set("q", params.q);
+  if (params?.status) sp.set("status", params.status);
+  const query = sp.toString();
+  const res = await fetch(`/api/super-admin/affiliations${query ? `?${query}` : ""}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 403) throw new Error("Accesso negato");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento affiliazioni."));
+  return res.json();
+}
+
+export async function fetchSuperAdminAffiliationDetail(
+  applicationId: number,
+): Promise<AffiliationDraft & { events: Array<Record<string, unknown>>; video_jobs: AffiliationVideoJob[] }> {
+  const res = await fetch(`/api/super-admin/affiliations/${applicationId}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Affiliazione non trovata");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore dettaglio affiliazione."));
+  return res.json();
+}
+
+export async function reviewSuperAdminAffiliationDocument(
+  applicationId: number,
+  documentId: number,
+  payload: { status: "approved" | "rejected"; notes?: string | null },
+): Promise<{ ok: boolean; docs_status: string; application_status: string; document: AffiliationDraftDocument }> {
+  const res = await fetch(
+    `/api/super-admin/affiliations/${applicationId}/documents/${documentId}/review`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore review documento."));
+  return res.json();
+}
+
+export async function verifySuperAdminAffiliationPayment(
+  applicationId: number,
+  payload: { verified: boolean; notes?: string | null },
+): Promise<{ ok: boolean; payment_status: string; can_approve: boolean }> {
+  const res = await fetch(`/api/super-admin/affiliations/${applicationId}/payment/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore verifica pagamento."));
+  return res.json();
+}
+
+export async function requestChangesSuperAdminAffiliation(
+  applicationId: number,
+  notes: string,
+): Promise<{ ok: boolean; status: string; docs_status: string }> {
+  const res = await fetch(`/api/super-admin/affiliations/${applicationId}/request-changes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ notes }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore richiesta modifiche."));
+  return res.json();
+}
+
+export async function approveSuperAdminAffiliation(
+  applicationId: number,
+  notes?: string,
+): Promise<{ ok: boolean; status: string; approved_org_id: number; org_admin_id: number | null; organization_slug: string | null }> {
+  const res = await fetch(`/api/super-admin/affiliations/${applicationId}/approve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ notes }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore approvazione affiliazione."));
+  return res.json();
+}
+
+export async function rejectSuperAdminAffiliation(
+  applicationId: number,
+  notes: string,
+): Promise<{ ok: boolean; status: string }> {
+  const res = await fetch(`/api/super-admin/affiliations/${applicationId}/reject`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ notes }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore rifiuto affiliazione."));
   return res.json();
 }
 

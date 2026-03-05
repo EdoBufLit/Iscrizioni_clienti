@@ -6,6 +6,8 @@ import MotionProvider from "./motion/MotionProvider";
 import { pageVariants } from "./motion/motionPresets";
 import { usePublicMotion } from "./public/usePublicMotion";
 import { PUBLIC_MOTION } from "./public/motionTokens";
+import { trackUiEvent } from "../lib/tracking";
+import { AFFILIAZIONE_ENABLED } from "../lib/features";
 
 const NAV_ITEMS = [
   { label: "Home", to: "/" },
@@ -298,14 +300,38 @@ const Layout = () => {
                       {item.label}
                     </NavLink>
                   ))}
-                  <NavLink
-                    className="btn-primary public-access-btn"
-                    to="/area-riservata"
-                    onMouseEnter={prefetchDashboard}
-                    onFocus={prefetchDashboard}
-                  >
-                    Area riservata
-                  </NavLink>
+                  <div className="public-nav-cta-group">
+                    {AFFILIAZIONE_ENABLED ? (
+                      <>
+                        <span className="public-affilia-nav-badge" aria-label="Per Associazioni">
+                          Per Associazioni
+                        </span>
+                        <NavLink
+                          className="btn-primary public-affilia-nav-btn"
+                          to="/affiliazione"
+                          onClick={() =>
+                            trackUiEvent("click_affiliazione_cta_nav", { placement: "desktop_nav" })
+                          }
+                        >
+                          <span>Affilia la tua Associazione</span>
+                          <span className="public-affilia-nav-arrow" aria-hidden="true">
+                            →
+                          </span>
+                        </NavLink>
+                      </>
+                    ) : null}
+                    <NavLink className="btn-ghost public-socio-nav-btn" to="/associazioni">
+                      Diventa Socio
+                    </NavLink>
+                    <NavLink
+                      className="btn-ghost public-access-btn"
+                      to="/area-riservata"
+                      onMouseEnter={prefetchDashboard}
+                      onFocus={prefetchDashboard}
+                    >
+                      Area Riservata
+                    </NavLink>
+                  </div>
                 </nav>
 
                 <button
@@ -327,6 +353,32 @@ const Layout = () => {
               >
                 <nav className="container-shell py-4" aria-label="Navigazione principale mobile">
                   <div className="public-mobile-links">
+                    {AFFILIAZIONE_ENABLED ? (
+                      <NavLink
+                        className="btn-primary public-mobile-affilia-btn w-full justify-center text-center"
+                        to="/affiliazione"
+                        onClick={() => {
+                          trackUiEvent("click_affiliazione_cta_nav", {
+                            placement: "mobile_menu",
+                          });
+                          close();
+                        }}
+                      >
+                        Affilia la tua Associazione
+                      </NavLink>
+                    ) : null}
+                    <NavLink className="btn-ghost text-center" to="/associazioni" onClick={close}>
+                      Diventa Socio
+                    </NavLink>
+                    <NavLink
+                      className="btn-ghost text-center"
+                      to="/area-riservata"
+                      onClick={close}
+                      onMouseEnter={prefetchDashboard}
+                      onFocus={prefetchDashboard}
+                    >
+                      Area Riservata
+                    </NavLink>
                     {NAV_ITEMS.map((item) => (
                       <NavLink
                         key={item.label}
@@ -338,15 +390,6 @@ const Layout = () => {
                         {item.label}
                       </NavLink>
                     ))}
-                    <NavLink
-                      className="btn-primary mt-2 text-center"
-                      to="/area-riservata"
-                      onClick={close}
-                      onMouseEnter={prefetchDashboard}
-                      onFocus={prefetchDashboard}
-                    >
-                      Area riservata
-                    </NavLink>
                   </div>
                 </nav>
               </div>
@@ -422,3 +465,4 @@ const Layout = () => {
 };
 
 export default Layout;
+

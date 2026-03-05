@@ -1,4 +1,55 @@
+import logging
 import os
+
+
+def _env_bool(name: str, *, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("true", "1", "yes", "on")
+
+
+def _env_optional(name: str) -> str | None:
+    raw = os.getenv(name)
+    if raw is None:
+        return None
+    normalized = raw.strip()
+    return normalized or None
+
+
+def is_stripe_configured(
+    *,
+    secret_key: str | None,
+    webhook_secret: str | None,
+    price_id: str | None,
+    publishable_key: str | None = None,
+    require_publishable_key: bool = False,
+) -> bool:
+    if not secret_key or not webhook_secret or not price_id:
+        return False
+    if require_publishable_key and not publishable_key:
+        return False
+    return True
+
+
+def _missing_stripe_env_vars(
+    *,
+    secret_key: str | None,
+    webhook_secret: str | None,
+    price_id: str | None,
+    publishable_key: str | None,
+    require_publishable_key: bool,
+) -> list[str]:
+    missing: list[str] = []
+    if not secret_key:
+        missing.append("STRIPE_SECRET_KEY")
+    if not webhook_secret:
+        missing.append("STRIPE_WEBHOOK_SECRET")
+    if not price_id:
+        missing.append("STRIPE_PRICE_ID")
+    if require_publishable_key and not publishable_key:
+        missing.append("STRIPE_PUBLISHABLE_KEY")
+    return missing
 
 class Settings:
     PROJECT_NAME: str = "Association Self-Serve"
@@ -61,6 +112,42 @@ class Settings:
         os.getenv("LOW_CARDS_ALERT_JOB_INTERVAL_SECONDS", "300")
     )
 
+    # Public affiliation wizard
+    AFFILIAZIONE_ENABLED: bool = _env_bool("AFFILIAZIONE_ENABLED", default=False)
+    STRIPE_SECRET_KEY: str | None = _env_optional("STRIPE_SECRET_KEY")
+    STRIPE_WEBHOOK_SECRET: str | None = _env_optional("STRIPE_WEBHOOK_SECRET")
+    STRIPE_PRICE_ID: str | None = _env_optional("STRIPE_PRICE_ID")
+    STRIPE_PUBLISHABLE_KEY: str | None = _env_optional("STRIPE_PUBLISHABLE_KEY")
+    STRIPE_REQUIRE_PUBLISHABLE_KEY: bool = _env_bool(
+        "STRIPE_REQUIRE_PUBLISHABLE_KEY", default=False
+    )
+    STRIPE_AFFILIATION_PRICE_CENTS: int = int(
+        os.getenv("STRIPE_AFFILIATION_PRICE_CENTS", "9000")
+    )
+    AFFILIATION_BANK_IBAN: str = os.getenv("AFFILIATION_BANK_IBAN", "")
+    AFFILIATION_BANK_CAUSALE_PREFIX: str = os.getenv(
+        "AFFILIATION_BANK_CAUSALE_PREFIX", "AFFILIAZIONE ASSONAM"
+    )
+    AFFILIATION_CASH_LOCATION: str = os.getenv(
+        "AFFILIATION_CASH_LOCATION", "Sede ASSONAM"
+    )
+    AFFILIATION_VIDEO_RENDERER_DIR: str = os.getenv(
+        "AFFILIATION_VIDEO_RENDERER_DIR",
+        os.path.join(
+            BASE_DIR,
+            "video-renderer",
+            "services",
+            "welcome-video",
+        ),
+    )
+    AFFILIATION_VIDEO_OUTPUT_DIR: str = os.getenv(
+        "AFFILIATION_VIDEO_OUTPUT_DIR",
+        os.path.join(BASE_DIR, "data", "videos", "welcome"),
+    )
+    AFFILIATION_VIDEO_AUTO_RENDER: bool = os.getenv(
+        "AFFILIATION_VIDEO_AUTO_RENDER", "false"
+    ).lower() in ("true", "1", "yes")
+
     # OpenAI
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
@@ -73,10 +160,32 @@ class Settings:
         os.getenv("EMAIL_OUTBOX_STALE_AFTER_SECONDS", "300")
     )
 
+    @property
+    def STRIPE_ENABLED(self) -> bool:
+        return is_stripe_configured(
+            secret_key=self.STRIPE_SECRET_KEY,
+            webhook_secret=self.STRIPE_WEBHOOK_SECRET,
+            price_id=self.STRIPE_PRICE_ID,
+            publishable_key=self.STRIPE_PUBLISHABLE_KEY,
+            require_publishable_key=self.STRIPE_REQUIRE_PUBLISHABLE_KEY,
+        )
+
 settings = Settings()
 
-import logging
 logger = logging.getLogger(__name__)
 
 if settings.SMTP_HOST and not settings.FRONTEND_URL:
     logger.error("FRONTEND_URL is not set! Magic links will fallback to BASE_URL/app but might be incorrect.")
+
+if settings.AFFILIAZIONE_ENABLED and not settings.STRIPE_ENABLED:
+    missing = _missing_stripe_env_vars(
+        secret_key=settings.STRIPE_SECRET_KEY,
+        webhook_secret=settings.STRIPE_WEBHOOK_SECRET,
+        price_id=settings.STRIPE_PRICE_ID,
+        publishable_key=settings.STRIPE_PUBLISHABLE_KEY,
+        require_publishable_key=settings.STRIPE_REQUIRE_PUBLISHABLE_KEY,
+    )
+    logger.warning(
+        "Stripe disabled: missing env vars (%s). Bonifico/contanti restano disponibili.",
+        ", ".join(missing) if missing else "n/a",
+    )

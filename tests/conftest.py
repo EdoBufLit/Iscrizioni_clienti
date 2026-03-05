@@ -11,6 +11,14 @@ os.environ["DATABASE_URL"] = "sqlite:///test_qa.db"
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-qa")
 os.environ.setdefault("BASE_URL", "http://localhost:8000")
 os.environ.setdefault("UPLOAD_DIR", "data/uploads")
+os.environ.setdefault("AFFILIAZIONE_ENABLED", "true")
+for stripe_env in [
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "STRIPE_PRICE_ID",
+    "STRIPE_PUBLISHABLE_KEY",
+]:
+    os.environ.pop(stripe_env, None)
 
 import pytest
 from fastapi.testclient import TestClient

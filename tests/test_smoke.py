@@ -6,6 +6,10 @@ every frontend-facing endpoint exists, returns the expected status
 codes, and that auth guards block unauthenticated access.
 """
 
+from pathlib import Path
+
+from app.config import settings
+
 
 # ── Health & Version ─────────────────────────────────────────────
 
@@ -63,6 +67,41 @@ def test_list_organizations_search(client):
     assert r.status_code == 200
     data = r.json()
     assert isinstance(data, list)
+
+
+def test_platform_stats(client):
+    r = client.get("/api/stats/platform")
+    assert r.status_code == 200
+    data = r.json()
+    assert isinstance(data, dict)
+    assert "organizations" in data
+    assert "members" in data
+    assert "cities" in data
+    assert isinstance(data["organizations"], int)
+    assert isinstance(data["members"], int)
+    assert isinstance(data["cities"], int)
+    assert data["organizations"] >= 0
+    assert data["members"] >= 0
+    assert data["cities"] >= 0
+
+
+def test_platform_capabilities(client):
+    r = client.get("/api/capabilities")
+    assert r.status_code == 200
+    data = r.json()
+    assert isinstance(data, dict)
+    assert data.get("affiliazioneEnabled") is True
+    assert data.get("stripeEnabled") is False
+
+
+def test_stripe_disabled_without_env():
+    # Tests run with Stripe env vars removed in tests/conftest.py.
+    assert settings.STRIPE_ENABLED is False
+
+
+def test_affiliazione_payment_ui_contains_stripe_disabled_label():
+    content = Path("frontend/src/pages/Affiliazione.tsx").read_text(encoding="utf-8")
+    assert "Carta (Stripe) — presto disponibile" in content
 
 
 def test_organization_detail(client):
