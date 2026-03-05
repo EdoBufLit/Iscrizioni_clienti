@@ -20,6 +20,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Sanity check worker Dockerfile path
+        run: |
+          set -euo pipefail
+          if [ ! -f "Dockerfile.affiliation-video-worker" ]; then
+            echo "::error::Missing Dockerfile.affiliation-video-worker referenced by docker-compose.yml"
+            exit 1
+          fi
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -67,10 +78,24 @@ jobs:
             TWILIO_WHATSAPP_FROM=${{ secrets.TWILIO_WHATSAPP_FROM }}
             ADMIN_PHONE_E164=${{ secrets.ADMIN_PHONE_E164 }}
             TWILIO_SMS_FROM=${{ secrets.TWILIO_SMS_FROM }}
+            AFFILIATION_VIDEO_WORKER_ENABLED=${{ secrets.AFFILIATION_VIDEO_WORKER_ENABLED }}
             EOF
             printf 'GIT_SHA=%s\n' '${{ github.sha }}' >> .env
             printf 'BUILD_TIME=%s\n' "$BUILD_TIME" >> .env
+            if ! grep -q '^AFFILIATION_VIDEO_WORKER_ENABLED=' .env; then
+              printf 'AFFILIATION_VIDEO_WORKER_ENABLED=false\n' >> .env
+            fi
             chmod 600 .env
+
+            VIDEO_WORKER_ENABLED='${{ secrets.AFFILIATION_VIDEO_WORKER_ENABLED }}'
+            if [ -z "${VIDEO_WORKER_ENABLED:-}" ]; then
+              VIDEO_WORKER_ENABLED="false"
+            fi
+            echo "[deploy] AFFILIATION_VIDEO_WORKER_ENABLED=${VIDEO_WORKER_ENABLED}"
+            COMPOSE_PROFILE_ARGS=""
+            if [ "$VIDEO_WORKER_ENABLED" = "true" ]; then
+              COMPOSE_PROFILE_ARGS="--profile video-worker"
+            fi
 
             COMPOSE_FILES="-f docker-compose.yml"
             if [ -f "docker-compose.prod.yml" ] && [ -f "secrets/google-wallet-sa.json" ]; then
@@ -89,12 +114,12 @@ jobs:
                 exit 1
               fi
 
-              docker compose $COMPOSE_FILES up -d db
+              docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS up -d db
 
               echo "[migrate] Waiting for Postgres readiness (up to 60s)"
               PG_READY=0
               for i in $(seq 1 60); do
-                if docker compose $COMPOSE_FILES exec -T db pg_isready -U assonam -d assonam; then
+                if docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS exec -T db pg_isready -U assonam -d assonam; then
                   PG_READY=1
                   echo "[migrate] Postgres is ready"
                   break
@@ -125,10 +150,10 @@ jobs:
 
               echo "[migrate] Repairing common SQLite->Postgres schema issues (booleans + id sequences/defaults)"
               psql_exec() {
-                docker compose $COMPOSE_FILES exec -T db psql -U assonam -d assonam -v ON_ERROR_STOP=1 -c "$1"
+                docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS exec -T db psql -U assonam -d assonam -v ON_ERROR_STOP=1 -c "$1"
               }
               psql_query() {
-                docker compose $COMPOSE_FILES exec -T db psql -U assonam -d assonam -At -v ON_ERROR_STOP=1 -c "$1"
+                docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS exec -T db psql -U assonam -d assonam -At -v ON_ERROR_STOP=1 -c "$1"
               }
               repair_bool_col() {
                 table_name="$1"
@@ -179,11 +204,11 @@ jobs:
               fi
 
               echo "[migrate] Running Alembic migrations on Postgres before app restart"
-              docker compose $COMPOSE_FILES run --rm --build web alembic upgrade head
+              docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS run --rm --build web alembic upgrade head
             fi
 
-            echo "[deploy] Running docker compose up -d --build"
-            docker compose $COMPOSE_FILES up -d --build
+            echo "[deploy] Running docker compose $COMPOSE_PROFILE_ARGS up -d --build"
+            docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS up -d --build
             echo "[deploy] Pruning images"
             docker image prune -f || true
 

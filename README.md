@@ -59,6 +59,19 @@ Stripe is optional for affiliation payments.
   - `STRIPE_PRICE_ID`
 - Webhook route remains reachable and returns `200` when Stripe is disabled.
 
+### Optional affiliation video worker
+
+The Remotion affiliation video worker is optional and controlled by deploy flag:
+
+- `AFFILIATION_VIDEO_WORKER_ENABLED=false` (default): deploy runs without the `video-worker` profile.
+- `AFFILIATION_VIDEO_WORKER_ENABLED=true`: deploy enables docker compose profile `video-worker`.
+
+Manual run example:
+
+```bash
+docker compose --profile video-worker up -d --build affiliation-video-worker
+```
+
 4. **Run Application**
    ```bash
    uvicorn app.main:app --host 0.0.0.0 --port 8000

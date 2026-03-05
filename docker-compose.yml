@@ -37,6 +37,7 @@ x-app-env: &app-env
   STRIPE_PRICE_ID: ${STRIPE_PRICE_ID:-}
   STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
   STRIPE_REQUIRE_PUBLISHABLE_KEY: ${STRIPE_REQUIRE_PUBLISHABLE_KEY:-false}
+  AFFILIATION_VIDEO_WORKER_ENABLED: ${AFFILIATION_VIDEO_WORKER_ENABLED:-false}
   AFFILIATION_VIDEO_RENDERER_DIR: ${AFFILIATION_VIDEO_RENDERER_DIR:-/app/video-renderer/services/welcome-video}
   AFFILIATION_VIDEO_OUTPUT_DIR: ${AFFILIATION_VIDEO_OUTPUT_DIR:-/app/data/videos/welcome}
 
@@ -95,6 +96,7 @@ services:
     restart: always
 
   affiliation-video-worker:
+    profiles: ["video-worker"]
     build:
       context: .
       dockerfile: Dockerfile.affiliation-video-worker

@@ -1960,3 +1960,38 @@ pm --prefix frontend run build -> OK
 - `python -m pytest tests/test_affiliation_flow.py tests/test_smoke.py -q` -> **35 passed**.
 - `python -m pytest tests/test_referral_system.py -q` -> **1 passed**.
 - `npm --prefix frontend run build` -> **OK**.
+
+## Spec (Fix deploy failure missing Dockerfile.affiliation-video-worker - Mar 05, 2026)
+- Obiettivo: evitare failure deploy Hetzner per Dockerfile worker mancante e rendere il worker video opzionale/non bloccante.
+- Vincolo: path Dockerfile referenziato in compose deve esistere in repo checkout del server.
+- Strategia: usare compose profile `video-worker` (default off) + flag env `AFFILIATION_VIDEO_WORKER_ENABLED` per abilitazione esplicita.
+- Workflow CI/CD: aggiungere sanity check `test -f Dockerfile.affiliation-video-worker` per fallire presto con errore chiaro.
+- Documentazione: aggiornare README/ENV con nuova flag e modalità di attivazione worker.
+
+## Plan (Fix deploy failure missing Dockerfile.affiliation-video-worker)
+- [x] Verificare presenza Dockerfile worker e path attuale in `docker-compose.yml`.
+- [x] Rendere opzionale il servizio `affiliation-video-worker` con profile compose `video-worker`.
+- [x] Aggiungere flag env `AFFILIATION_VIDEO_WORKER_ENABLED` (default false) in compose e deploy workflow.
+- [x] Aggiornare workflow Hetzner per sanity check Dockerfile e attivazione profile solo quando flag true.
+- [x] Aggiornare README/ENV_REQUIRED con comportamento opzionale worker.
+- [x] Eseguire sanity checks (`Test-Path`, `docker compose config`) e aggiornare review.
+
+## Review (Fix deploy failure missing Dockerfile.affiliation-video-worker - Mar 05, 2026)
+- Completato.
+
+## Review Update (Fix deploy failure missing Dockerfile.affiliation-video-worker - Mar 05, 2026)
+- Dockerfile worker individuato in root: `Dockerfile.affiliation-video-worker` (Node 20 + ffmpeg + `npm ci` + build renderer).
+- Compose aggiornato (`docker-compose.yml`):
+- aggiunta env `AFFILIATION_VIDEO_WORKER_ENABLED` in `x-app-env` con default `false`;
+- `affiliation-video-worker` marcato con `profiles: ["video-worker"]` per evitare build/run di default.
+- Workflow deploy Hetzner aggiornato (`.github/workflows/deploy-hetzner.yml`):
+- step `actions/checkout` + sanity check `test -f Dockerfile.affiliation-video-worker`;
+- `.env` runtime include `AFFILIATION_VIDEO_WORKER_ENABLED`;
+- profile `video-worker` abilitato solo se secret/flag è `true`.
+- Deploy safety: con flag false il comando standard `docker compose up -d --build` non include il worker profile, quindi il deploy non viene bloccato dal worker opzionale.
+- Documentazione aggiornata:
+- `ENV_REQUIRED.md` con variabile `AFFILIATION_VIDEO_WORKER_ENABLED`;
+- `README.md` con istruzioni attivazione profile `video-worker`.
+- Verifiche eseguite:
+- `Test-Path Dockerfile.affiliation-video-worker` -> `True`;
+- `docker compose -f docker-compose.yml config` -> `OK`.

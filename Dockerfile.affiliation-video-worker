@@ -1,0 +1,18 @@
+FROM node:20-bookworm-slim
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 python3-pip ffmpeg ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt ./
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+COPY video-renderer/services/welcome-video/package.json video-renderer/services/welcome-video/package-lock.json /app/video-renderer/services/welcome-video/
+RUN npm --prefix /app/video-renderer/services/welcome-video ci
+
+COPY . .
+RUN npm --prefix /app/video-renderer/services/welcome-video run build
+
+CMD ["python3", "-m", "app.workers.affiliation_video_worker", "--poll-seconds", "15", "--limit", "1"]

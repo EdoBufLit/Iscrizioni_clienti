@@ -80,12 +80,14 @@ Stripe is optional. The affiliation flow still works with bank transfer and cash
 | `STRIPE_PUBLISHABLE_KEY` | No | _(empty)_ | Publishable key (needed only if your frontend directly uses Stripe.js). |
 | `STRIPE_REQUIRE_PUBLISHABLE_KEY` | No | `false` | If `true`, backend marks Stripe configured only when `STRIPE_PUBLISHABLE_KEY` is present. |
 | `STRIPE_AFFILIATION_PRICE_CENTS` | No | `9000` | Informational affiliation amount shown in UI (bonifico/contanti summary). |
+| `AFFILIATION_VIDEO_WORKER_ENABLED` | No | `false` | Enables the optional Remotion affiliation video worker profile at deploy time (`video-worker`). |
 
 Runtime behavior:
 
 - `STRIPE_ENABLED` is computed automatically from env presence (no startup crash on missing values).
 - If Stripe is disabled, checkout endpoint returns `503` with guidance to use bonifico/contanti.
 - Stripe webhook endpoint stays reachable and returns `200` when Stripe is disabled (no retry storm).
+- The affiliation video worker is optional: with `AFFILIATION_VIDEO_WORKER_ENABLED=false` deploy does not start/build the `video-worker` profile by default.
 
 Webhook smoke test for Twilio WhatsApp:
 
