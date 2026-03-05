@@ -27,6 +27,10 @@ from app.middleware import get_client_ip
 from app.models import (
     AdminRole,
     AdminUser,
+    Organization,
+    OrgAdminToken,
+)
+from app.models_affiliation import (
     AffiliationApplication,
     AffiliationApplicationStatus,
     AffiliationDocument,
@@ -39,8 +43,6 @@ from app.models import (
     AffiliationVideoMode,
     Referral,
     ReferralStatus,
-    Organization,
-    OrgAdminToken,
 )
 from app.services.affiliation_video import (
     enqueue_affiliation_video_job,

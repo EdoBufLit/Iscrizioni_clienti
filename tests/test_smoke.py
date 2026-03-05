@@ -66,6 +66,31 @@ def test_app_main_imports_with_affiliazione_disabled():
     )
 
 
+def test_app_main_imports_with_affiliazione_enabled_router_present():
+    env = os.environ.copy()
+    env["AFFILIAZIONE_ENABLED"] = "true"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import app.main; "
+                "paths={route.path for route in app.main.app.routes}; "
+                "assert any(path.startswith('/api/affiliazione') for path in paths), paths; "
+                "print('affiliazione_router_ok')"
+            ),
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert result.returncode == 0, (
+        f"import+router check failed with code {result.returncode}\n"
+        f"stdout:\n{result.stdout}\n"
+        f"stderr:\n{result.stderr}"
+    )
+
+
 # ── Public: Organizations ────────────────────────────────────────
 
 
