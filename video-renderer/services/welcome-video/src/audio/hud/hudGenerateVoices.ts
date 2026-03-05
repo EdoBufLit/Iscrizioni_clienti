@@ -4,7 +4,7 @@ import path from "node:path";
 import { getEnv } from "../../env";
 import { synthesizeSpeech } from "../../elevenlabs";
 
-const HUD_WELCOME_LINE = "Registrazione completata. Benvenuta in ASSONAM.";
+const HUD_WELCOME_LINE = "Registrazione completata. Benvenuta in Àssonam.";
 
 export type HudGeneratedVoices = {
   outputDir: string;

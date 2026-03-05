@@ -5,14 +5,14 @@ import { getEnv } from "../env";
 import { synthesizeSpeech } from "../elevenlabs";
 
 const VOICE_LINES = [
-  "ASSONAM è",
+  "Àssonam è",
   "comunità",
   "digitale",
   "futuro",
   "semplice",
 ] as const;
 
-const WELCOME_LINE = "Benvenuto in ASSONAM";
+const WELCOME_LINE = "Benvenuto in Àssonam";
 
 export type GeneratedVoices = {
   outputDir: string;
