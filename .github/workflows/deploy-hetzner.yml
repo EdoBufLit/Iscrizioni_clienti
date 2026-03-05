@@ -41,6 +41,10 @@ jobs:
             set -euo pipefail
 
             cd "${{ secrets.APP_PATH }}"
+            if [ ! -f "docker-compose.yml" ]; then
+              echo "::error::docker-compose.yml not found in APP_PATH=${{ secrets.APP_PATH }}"
+              exit 1
+            fi
             git fetch --all
 
             BRANCH="${{ github.ref_name }}"
@@ -217,20 +221,44 @@ jobs:
             fi
 
             if [ "$AFFILIATION_VIDEO_WORKER_ENABLED" = "true" ]; then
-              echo "[deploy] Sanity check: verifying affiliation-video-worker is running"
-              WORKER_LINE="$(docker compose $COMPOSE_FILES --profile video-worker ps affiliation-video-worker | grep affiliation-video-worker || true)"
-              if [ -z "$WORKER_LINE" ]; then
-                echo "::error::affiliation-video-worker service not found in docker compose output"
+              echo "[deploy] Sanity check: waiting up to 90s for affiliation-video-worker health"
+              WORKER_CID=""
+              for i in $(seq 1 10); do
+                WORKER_CID="$(docker compose $COMPOSE_FILES --profile video-worker ps -q affiliation-video-worker || true)"
+                if [ -n "$WORKER_CID" ]; then
+                  break
+                fi
+                sleep 1
+              done
+
+              if [ -z "$WORKER_CID" ]; then
+                echo "::error::affiliation-video-worker container id not found after deploy"
                 docker compose $COMPOSE_FILES --profile video-worker ps || true
+                docker compose $COMPOSE_FILES --profile video-worker logs --tail=200 affiliation-video-worker || true
+                docker compose $COMPOSE_FILES logs --tail=200 web || true
                 exit 1
               fi
-              if ! echo "$WORKER_LINE" | grep -Eiq 'up|running|healthy'; then
-                echo "::error::affiliation-video-worker is not up/running"
-                echo "$WORKER_LINE"
+
+              WORKER_STATUS="starting"
+              for i in $(seq 1 90); do
+                WORKER_STATUS="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$WORKER_CID" 2>/dev/null || true)"
+                if [ "$WORKER_STATUS" = "healthy" ]; then
+                  break
+                fi
+                if [ "$WORKER_STATUS" = "unhealthy" ] || [ "$WORKER_STATUS" = "exited" ] || [ "$WORKER_STATUS" = "dead" ]; then
+                  break
+                fi
+                sleep 1
+              done
+
+              if [ "$WORKER_STATUS" != "healthy" ]; then
+                echo "::error::affiliation-video-worker not healthy after 90s (status=$WORKER_STATUS)"
                 docker compose $COMPOSE_FILES --profile video-worker ps || true
+                docker compose $COMPOSE_FILES --profile video-worker logs --tail=200 affiliation-video-worker || true
+                docker compose $COMPOSE_FILES logs --tail=200 web || true
                 exit 1
               fi
-              echo "$WORKER_LINE"
+              echo "[deploy] affiliation-video-worker healthy (cid=$WORKER_CID)"
             fi
             echo "[deploy] Pruning images"
             docker image prune -f || true
