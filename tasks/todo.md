@@ -2020,3 +2020,30 @@ pm --prefix frontend run build -> OK
 - Verifiche eseguite:
 - `git diff -- .github/workflows/deploy-hetzner.yml` -> conferma modifiche.
 - `rg -n "affiliation-video-worker|AFFILIATION_VIDEO_WORKER_ENABLED|--profile video-worker" .github/workflows/deploy-hetzner.yml docker-compose.yml` -> coerenza path/nomi.
+
+## Spec (Fix frontend TS2307 missing modules - Mar 05, 2026)
+- Obiettivo: risolvere errori build TypeScript TS2307 per moduli frontend mancanti (AffiliazioneInfo, Invito redirect, SuperAdminAffiliations, tracking utility).
+- Verifica richiesta: controllare esistenza file, allineamento import in `App.tsx`, `Layout.tsx`, `Home.tsx`, e build frontend completa.
+- Vincolo addizionale: fare sanity check backend import per evitare problemi analoghi di modulo mancante in deploy.
+
+## Plan (Fix frontend TS2307 missing modules)
+- [x] Verificare presenza dei 4 file richiesti nel filesystem frontend.
+- [x] Verificare che gli import in App/Layout/Home puntino ai path corretti.
+- [x] Assicurare implementazioni presenti e compatibili con gli import usati (`trackUiEvent`).
+- [x] Eseguire `npm --prefix frontend run build` e confermare successo.
+- [x] Eseguire sanity check backend import (`import app.main`) per prevenzione regressioni simili.
+- [ ] Tracciare in Git i file frontend mancanti per evitare TS2307 in CI/deploy.
+- [ ] Commit con messaggio richiesto.
+
+## Review (Fix frontend TS2307 missing modules - Mar 05, 2026)
+- File verificati: presenti in workspace
+  - `frontend/src/pages/AffiliazioneInfo.tsx`
+  - `frontend/src/pages/InvitoAffiliazioneRedirect.tsx`
+  - `frontend/src/pages/super-admin/SuperAdminAffiliations.tsx`
+  - `frontend/src/lib/tracking.ts`
+- Import verificati in `frontend/src/App.tsx`, `frontend/src/components/Layout.tsx`, `frontend/src/pages/Home.tsx` -> coerenti.
+- Build frontend:
+  - `npm --prefix frontend run build` -> **OK**.
+- Sanity backend import:
+  - `python -c "import app.main; import app.routes.affiliation; import app.routes.public; print('backend_import_ok')"` -> **OK**.
+- Root cause TS2307: file presenti localmente ma non tracciati in Git (quindi assenti in CI/build remoto).
