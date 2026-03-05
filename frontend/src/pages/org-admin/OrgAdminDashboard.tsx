@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
+  createOrgAdminReferralInvite,
   fetchOrgAdminMetrics,
+  fetchOrgAdminReferralSummary,
+  spinOrgAdminReferralReward,
   AuthError,
   type OrgAdminMetrics,
+  type OrgAdminReferralReward,
+  type OrgAdminReferralSummary,
 } from "../../lib/api";
 import { useOrgAdmin } from "./OrgAdminLayout";
 import Skeleton from "../../components/ui/Skeleton";
@@ -52,37 +57,217 @@ const CARD_META: {
   },
 ];
 
+const formatDateTime = (value: string | null | undefined) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("it-IT", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
 const OrgAdminDashboard = () => {
   const { admin, loading: adminLoading } = useOrgAdmin();
   const [metrics, setMetrics] = useState<OrgAdminMetrics | null>(null);
+  const [referralSummary, setReferralSummary] = useState<OrgAdminReferralSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [metricsError, setMetricsError] = useState(false);
+  const [referralError, setReferralError] = useState("");
+  const [wheelRotation, setWheelRotation] = useState(0);
+  const [spinLoading, setSpinLoading] = useState(false);
+  const [spinError, setSpinError] = useState("");
+  const [lastReward, setLastReward] = useState<OrgAdminReferralReward | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState("");
+  const [inviteOrgName, setInviteOrgName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteNotes, setInviteNotes] = useState("");
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteError, setInviteError] = useState("");
+  const [inviteSuccess, setInviteSuccess] = useState("");
+  const [videoGuideOpen, setVideoGuideOpen] = useState(false);
+  const [videoGuideFailed, setVideoGuideFailed] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
     if (adminLoading) return;
     if (!admin) return;
 
-    fetchOrgAdminMetrics()
-      .then(setMetrics)
+    Promise.allSettled([fetchOrgAdminMetrics(), fetchOrgAdminReferralSummary()])
+      .then(([metricsResult, referralResult]) => {
+        if (metricsResult.status === "fulfilled") {
+          setMetrics(metricsResult.value);
+          setMetricsError(false);
+        } else {
+          const err = metricsResult.reason;
+          if (err instanceof AuthError) {
+            navigate("/org-admin/login", { replace: true });
+            return;
+          }
+          setMetricsError(true);
+        }
+
+        if (referralResult.status === "fulfilled") {
+          setReferralSummary(referralResult.value);
+          setLastReward(referralResult.value.latest_reward);
+          setReferralError("");
+        } else {
+          const err = referralResult.reason;
+          if (err instanceof AuthError) {
+            navigate("/org-admin/login", { replace: true });
+            return;
+          }
+          setReferralError(err instanceof Error ? err.message : "Errore caricamento referral.");
+        }
+      })
       .catch((err) => {
         if (err instanceof AuthError) {
           navigate("/org-admin/login", { replace: true });
         } else {
           setMetricsError(true);
+          setReferralError(err instanceof Error ? err.message : "Errore caricamento referral.");
         }
       })
       .finally(() => setLoading(false));
   }, [admin, adminLoading, navigate]);
 
+  useEffect(() => {
+    if (!videoGuideOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setVideoGuideOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [videoGuideOpen]);
+
   const isLoading = adminLoading || loading;
+
+  const pendingRewardReferral = referralSummary?.pending_reward_referrals?.[0] ?? null;
+
+  const onCopyReferralLink = useCallback(async () => {
+    const link = referralSummary?.referral_link;
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopyFeedback("Link copiato");
+      window.setTimeout(() => setCopyFeedback(""), 1500);
+    } catch {
+      setCopyFeedback("Copia non disponibile");
+      window.setTimeout(() => setCopyFeedback(""), 1500);
+    }
+  }, [referralSummary?.referral_link]);
+
+  const onShareReferralLink = useCallback(async () => {
+    const link = referralSummary?.referral_link;
+    if (!link) return;
+    const shareText = `Invita un'altra associazione su ASSONAM: ${link}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "Invito affiliazione ASSONAM",
+          text: shareText,
+          url: link,
+        });
+        return;
+      }
+      await navigator.clipboard.writeText(shareText);
+      setCopyFeedback("Testo invito copiato");
+      window.setTimeout(() => setCopyFeedback(""), 1500);
+    } catch {
+      setCopyFeedback("Condivisione non disponibile");
+      window.setTimeout(() => setCopyFeedback(""), 1500);
+    }
+  }, [referralSummary?.referral_link]);
+
+  const onSpinWheel = useCallback(async () => {
+    if (!pendingRewardReferral || spinLoading) return;
+    setSpinLoading(true);
+    setSpinError("");
+    const extraTurn = 1080 + Math.floor(Math.random() * 360);
+    setWheelRotation((prev) => prev + extraTurn);
+
+    const startedAt = Date.now();
+    try {
+      const response = await spinOrgAdminReferralReward(pendingRewardReferral.id);
+      const elapsed = Date.now() - startedAt;
+      const wait = Math.max(0, 1800 - elapsed);
+      if (wait > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, wait));
+      }
+      setLastReward(response.reward);
+      const refreshed = await fetchOrgAdminReferralSummary();
+      setReferralSummary(refreshed);
+      setReferralError("");
+    } catch (err) {
+      setSpinError(err instanceof Error ? err.message : "Errore durante la ruota premi.");
+    } finally {
+      setSpinLoading(false);
+    }
+  }, [pendingRewardReferral, spinLoading]);
+
+  const onCreateInvite = useCallback(async () => {
+    const normalizedName = inviteOrgName.trim();
+    const normalizedEmail = inviteEmail.trim().toLowerCase();
+    if (!normalizedName || !normalizedEmail) {
+      setInviteError("Inserisci nome associazione ed email referente.");
+      return;
+    }
+
+    try {
+      setInviteLoading(true);
+      setInviteError("");
+      setInviteSuccess("");
+      const response = await createOrgAdminReferralInvite({
+        organization_name: normalizedName,
+        applicant_email: normalizedEmail,
+        notes: inviteNotes.trim() || undefined,
+      });
+      setInviteSuccess(
+        `Invito creato con successo. Link inviato a ${normalizedEmail}. Pratica #${response.application_id}.`,
+      );
+      setInviteOrgName("");
+      setInviteEmail("");
+      setInviteNotes("");
+      const refreshed = await fetchOrgAdminReferralSummary();
+      setReferralSummary(refreshed);
+      setLastReward(refreshed.latest_reward);
+      setReferralError("");
+    } catch (err) {
+      if (err instanceof AuthError) {
+        navigate("/org-admin/login", { replace: true });
+        return;
+      }
+      setInviteError(err instanceof Error ? err.message : "Errore creazione invito.");
+    } finally {
+      setInviteLoading(false);
+    }
+  }, [inviteEmail, inviteNotes, inviteOrgName, navigate]);
 
   return (
     <div className="container-shell py-10" data-tour="admin-dashboard-home">
-      <h2 className="text-xl font-semibold text-neutral-900">Panoramica</h2>
-      <p className="mt-1 text-sm text-neutral-500">
-        Stato operativo dell'associazione e riepilogo delle attività.
-      </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-neutral-900">Panoramica</h2>
+          <p className="mt-1 text-sm text-neutral-500">
+            Stato operativo dell'associazione e riepilogo delle attività.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn-ghost px-4 py-2 text-sm"
+          onClick={() => {
+            setVideoGuideFailed(false);
+            setVideoGuideOpen(true);
+          }}
+        >
+          Video guida affiliazione
+        </button>
+      </div>
 
       {isLoading ? (
         <div className="mt-8 grid gap-6 md:grid-cols-3 xl:grid-cols-5">
@@ -190,6 +375,210 @@ const OrgAdminDashboard = () => {
         </div>
       )}
 
+      {!isLoading && !metricsError && (
+        <div className="surface mt-8 p-7">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-neutral-900">Invita un&apos;altra Associazione</h3>
+              <p className="mt-1 text-sm text-neutral-500">
+                Condividi il tuo link referral e ottieni premi dopo approvazione super admin.
+              </p>
+            </div>
+            {copyFeedback && (
+              <span className="inline-flex rounded-full border border-brand/20 bg-brand/[0.07] px-3 py-1 text-xs font-medium text-brand">
+                {copyFeedback}
+              </span>
+            )}
+          </div>
+
+          {referralError ? (
+            <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {referralError}
+            </div>
+          ) : (
+            <>
+              <div className="mt-5 rounded-lg border border-neutral-200 bg-white px-4 py-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">
+                  Crea invito diretto
+                </p>
+                <p className="mt-1 text-sm text-neutral-600">
+                  Invia un invito a una nuova associazione: verrà generata una pratica in bozza con referral collegato.
+                </p>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <input
+                    className="rounded-md border border-neutral-200 px-3 py-2 text-sm"
+                    value={inviteOrgName}
+                    onChange={(event) => setInviteOrgName(event.target.value)}
+                    placeholder="Nome associazione invitata"
+                  />
+                  <input
+                    className="rounded-md border border-neutral-200 px-3 py-2 text-sm"
+                    value={inviteEmail}
+                    onChange={(event) => setInviteEmail(event.target.value)}
+                    placeholder="Email referente"
+                    type="email"
+                  />
+                  <textarea
+                    className="rounded-md border border-neutral-200 px-3 py-2 text-sm md:col-span-2"
+                    rows={3}
+                    value={inviteNotes}
+                    onChange={(event) => setInviteNotes(event.target.value)}
+                    placeholder="Note (opzionale)"
+                  />
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    className="btn-primary px-4 py-2 text-sm"
+                    disabled={inviteLoading}
+                    onClick={onCreateInvite}
+                  >
+                    {inviteLoading ? "Invio in corso..." : "Invia invito"}
+                  </button>
+                  {inviteError ? (
+                    <p className="text-sm text-red-600">{inviteError}</p>
+                  ) : null}
+                  {inviteSuccess ? (
+                    <p className="text-sm text-emerald-700">{inviteSuccess}</p>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-lg border border-neutral-200 bg-white px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">
+                  Referral link
+                </p>
+                <p className="mt-2 break-all text-sm text-neutral-800">
+                  {referralSummary?.referral_link || "-"}
+                </p>
+                <p className="mt-1 break-all text-xs text-neutral-500">
+                  Short link: {referralSummary?.invite_route || "-"}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" className="btn-ghost px-3 py-1.5 text-xs" onClick={onCopyReferralLink}>
+                    Copia link
+                  </button>
+                  <button type="button" className="btn-ghost px-3 py-1.5 text-xs" onClick={onShareReferralLink}>
+                    Share link
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border border-neutral-200 bg-white px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.14em] text-neutral-500">Inviti inviati</p>
+                  <p className="mt-2 text-2xl font-semibold text-neutral-900 tabular-nums">
+                    {referralSummary?.stats.sent ?? 0}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-neutral-200 bg-white px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.14em] text-neutral-500">Associazioni affiliate</p>
+                  <p className="mt-2 text-2xl font-semibold text-neutral-900 tabular-nums">
+                    {referralSummary?.stats.approved ?? 0}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-neutral-200 bg-white px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.14em] text-neutral-500">Bonus ottenuti</p>
+                  <p className="mt-2 text-2xl font-semibold text-neutral-900 tabular-nums">
+                    {referralSummary?.stats.rewarded ?? 0}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 grid gap-5 lg:grid-cols-[240px_1fr] lg:items-center">
+                <div className="referral-wheel-wrap">
+                  <div
+                    className={`referral-wheel${spinLoading ? " is-spinning" : ""}`}
+                    style={{ transform: `rotate(${wheelRotation}deg)` }}
+                    aria-hidden="true"
+                  >
+                    <div className="referral-wheel-center">Bonus</div>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <p className="text-sm font-semibold text-neutral-800">Ruota premi referral</p>
+                  <p className="text-sm text-neutral-600">
+                    {pendingRewardReferral
+                      ? `Referral pronto: ${pendingRewardReferral.organization_name} (approvato il ${formatDateTime(
+                          pendingRewardReferral.approved_at,
+                        )})`
+                      : "Nessun referral approvato disponibile per la ruota al momento."}
+                  </p>
+                  <button
+                    type="button"
+                    className="btn-primary px-4 py-2 text-sm"
+                    disabled={!pendingRewardReferral || spinLoading}
+                    onClick={onSpinWheel}
+                  >
+                    {spinLoading ? "Estrazione in corso..." : "Gira la ruota"}
+                  </button>
+                  {spinError && (
+                    <p className="text-sm text-red-600">{spinError}</p>
+                  )}
+                  {lastReward?.title && (
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">
+                        Premio assegnato
+                      </p>
+                      <p className="mt-2 text-sm font-semibold text-emerald-800">{lastReward.title}</p>
+                      {lastReward.description && (
+                        <p className="mt-1 text-sm text-emerald-700">{lastReward.description}</p>
+                      )}
+                      {lastReward.delivery_timing && (
+                        <p className="mt-1 text-xs text-emerald-700">
+                          Quando viene erogato: {lastReward.delivery_timing}
+                        </p>
+                      )}
+                      <p className="mt-2 text-xs text-emerald-800">
+                        Il risultato viene comunicato automaticamente al Super Admin.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-6 rounded-lg border border-neutral-200 bg-white px-4 py-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">
+                  Storico inviti
+                </p>
+                {(referralSummary?.recent_referrals || []).length === 0 ? (
+                  <p className="mt-2 text-sm text-neutral-600">Nessun invito registrato.</p>
+                ) : (
+                  <div className="mt-3 overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead>
+                        <tr className="text-xs uppercase tracking-[0.12em] text-neutral-500">
+                          <th className="py-2 pr-3">Data</th>
+                          <th className="py-2 pr-3">Associazione</th>
+                          <th className="py-2 pr-3">Stato</th>
+                          <th className="py-2">Pratica</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(referralSummary?.recent_referrals || []).map((item) => (
+                          <tr key={item.id} className="border-t border-neutral-100 text-neutral-700">
+                            <td className="py-2 pr-3 whitespace-nowrap">{formatDateTime(item.created_at)}</td>
+                            <td className="py-2 pr-3">{item.organization_name || "-"}</td>
+                            <td className="py-2 pr-3">
+                              <span className="inline-flex rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-xs font-medium text-neutral-700">
+                                {item.status}
+                              </span>
+                            </td>
+                            <td className="py-2">
+                              <span className="text-xs text-neutral-500">#{item.application_id}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {!isLoading &&
         !metricsError &&
         metrics?.cards_remaining === 0 &&
@@ -223,6 +612,46 @@ const OrgAdminDashboard = () => {
 
       {!isLoading && !metricsError && admin && (
         <OnboardingChecklist orgId={admin.org_id} />
+      )}
+
+      {videoGuideOpen && (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Video guida affiliazione"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              setVideoGuideOpen(false);
+            }
+          }}
+        >
+          <div className="relative w-full max-w-6xl">
+            <button
+              type="button"
+              className="absolute right-2 top-2 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-black/55 text-white"
+              aria-label="Chiudi video guida"
+              onClick={() => setVideoGuideOpen(false)}
+            >
+              X
+            </button>
+            <div className="aspect-video w-full overflow-hidden rounded-xl border border-white/20 bg-black shadow-2xl">
+              <video
+                src="/videos/welcome_base.mp4"
+                controls
+                autoPlay
+                playsInline
+                className="h-full w-full object-contain"
+                onError={() => setVideoGuideFailed(true)}
+              />
+            </div>
+            {videoGuideFailed ? (
+              <p className="mt-3 text-center text-sm text-white/80">
+                Video guida temporaneamente non disponibile.
+              </p>
+            ) : null}
+          </div>
+        </div>
       )}
     </div>
   );

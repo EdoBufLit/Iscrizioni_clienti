@@ -48,6 +48,36 @@ def _patch_required_fields(client, token: str, *, email: str, payment_method: st
             "applicant_email": email,
             "applicant_phone": "+3906000000",
             "payment_method": payment_method,
+            "manual_contact": "Segreteria ASSONAM",
+        },
+    )
+    assert response.status_code == 200, response.text
+
+
+def _replace_required_people(client, token: str):
+    response = client.put(
+        f"/api/affiliazione/draft/{token}/people",
+        json={
+            "items": [
+                {
+                    "role": "presidente",
+                    "full_name": "Mario Rossi",
+                    "email": "presidente@example.com",
+                    "phone": "+3906111111",
+                },
+                {
+                    "role": "segretario",
+                    "full_name": "Giulia Bianchi",
+                    "email": "segretario@example.com",
+                    "phone": "+3906222222",
+                },
+                {
+                    "role": "tesoriere",
+                    "full_name": "Luca Verdi",
+                    "email": "tesoriere@example.com",
+                    "phone": "+3906333333",
+                },
+            ]
         },
     )
     assert response.status_code == 200, response.text
@@ -80,10 +110,13 @@ def test_affiliation_submit_requires_documents(client):
         email=email,
         payment_method="cash",
     )
+    _replace_required_people(client, token)
 
     response = client.post(f"/api/affiliazione/draft/{token}/submit")
-    assert response.status_code == 400, response.text
-    assert "Documenti mancanti" in response.json().get("detail", "")
+    assert response.status_code == 422, response.text
+    detail = response.json().get("detail") or {}
+    issues = detail.get("issues") if isinstance(detail, dict) else []
+    assert any(str(item.get("field", "")).startswith("documents.") for item in issues)
 
 
 def test_affiliation_stripe_checkout_disabled_returns_503(client):
@@ -127,6 +160,7 @@ def test_affiliation_approve_requires_docs_and_payment_verification(client, db):
         email=email,
         payment_method="cash",
     )
+    _replace_required_people(client, token)
     _upload_required_docs(client, token)
 
     submit_response = client.post(f"/api/affiliazione/draft/{token}/submit")

@@ -2,6 +2,8 @@ import csv
 import io
 
 import os
+import random
+import secrets
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, Body
 from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy import func, or_, case, and_, select
@@ -29,6 +31,15 @@ from app.models import (
     Token,
     TokenType,
     SignupSource,
+    Referral,
+    ReferralStatus,
+    AffiliationEvent,
+)
+from app.models_affiliation import (
+    AffiliationApplication,
+    AffiliationApplicationStatus,
+    AffiliationDocsStatus,
+    AffiliationPaymentStatus,
 )
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.card_allocation import allocate_next_card, release_card_number
@@ -92,11 +103,87 @@ _ALLOWED_MEMBER_PAYMENT_METHODS = {
     PaymentMethod.BONIFICO.value,
 }
 
+REFERRAL_REWARD_OPTIONS = [
+    {
+        "code": "discount_10_next_year",
+        "title": "10% di sconto sulla prossima affiliazione annuale",
+        "description": "Sconto economico applicato al rinnovo dell'anno successivo.",
+        "delivery_timing": "Applicazione automatica sulla prossima fattura annuale.",
+        "weight": 34,
+    },
+    {
+        "code": "cards_50_bonus",
+        "title": "50 tessere digitali gratuite",
+        "description": "Credito extra per emettere 50 tessere aggiuntive ai soci.",
+        "delivery_timing": "Accredito operativo entro 10 giorni lavorativi.",
+        "weight": 28,
+    },
+    {
+        "code": "cards_100_bonus",
+        "title": "100 tessere digitali gratuite",
+        "description": "Pacchetto premium di 100 tessere digitali aggiuntive.",
+        "delivery_timing": "Accredito operativo entro 15 giorni lavorativi.",
+        "weight": 14,
+    },
+    {
+        "code": "onboarding_premium",
+        "title": "Onboarding premium segreteria (60 minuti)",
+        "description": "Sessione dedicata con team ASSONAM su processi e best practice.",
+        "delivery_timing": "Pianificazione call entro 30 giorni dalla conferma.",
+        "weight": 14,
+    },
+    {
+        "code": "communication_bundle",
+        "title": "Pacchetto comunicazione soci",
+        "description": "Template email/social per promuovere iscrizioni e rinnovi.",
+        "delivery_timing": "Invio materiali entro 7 giorni lavorativi.",
+        "weight": 10,
+    },
+]
+
 
 def _normalize_tag_culture(value: Optional[str]) -> Optional[str]:
     if value is None:
         return None
     return value.replace("T.A.G.", "TAG")
+
+
+def _resolve_frontend_base(request: Request) -> str:
+    configured = (settings.FRONTEND_URL or "").strip().rstrip("/")
+    if configured:
+        return configured
+    return str(request.base_url).rstrip("/")
+
+
+def _draw_referral_reward() -> dict[str, str]:
+    total_weight = sum(int(item.get("weight", 0)) for item in REFERRAL_REWARD_OPTIONS)
+    if total_weight <= 0:
+        return {
+            "code": "discount_10_next_year",
+            "title": "10% di sconto sulla prossima affiliazione annuale",
+            "description": "Sconto economico applicato al rinnovo dell'anno successivo.",
+            "delivery_timing": "Applicazione automatica sulla prossima fattura annuale.",
+        }
+
+    draw = random.randint(1, total_weight)
+    cumulative = 0
+    for option in REFERRAL_REWARD_OPTIONS:
+        cumulative += int(option.get("weight", 0))
+        if draw <= cumulative:
+            return {
+                "code": str(option["code"]),
+                "title": str(option["title"]),
+                "description": str(option["description"]),
+                "delivery_timing": str(option["delivery_timing"]),
+            }
+
+    last = REFERRAL_REWARD_OPTIONS[-1]
+    return {
+        "code": str(last["code"]),
+        "title": str(last["title"]),
+        "description": str(last["description"]),
+        "delivery_timing": str(last["delivery_timing"]),
+    }
 
 
 def _compute_org_card_stock(
@@ -770,6 +857,357 @@ def org_metrics(request: Request, db: Session = Depends(get_db)):
         "pending_requests_count": pending_requests_count,
         "documents_pending_review": documents_pending_review,
         "documents_rejected": documents_rejected,
+    }
+
+
+@router.get("/referrals/summary")
+def org_referrals_summary(request: Request, db: Session = Depends(get_db)):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    organization = (
+        db.query(Organization)
+        .filter(
+            Organization.id == admin.org_id,
+            Organization.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if organization is None:
+        raise HTTPException(status_code=404, detail="Organizzazione non trovata")
+
+    referrals = (
+        db.query(Referral)
+        .filter(Referral.referrer_org_id == organization.id)
+        .order_by(Referral.created_at.desc(), Referral.id.desc())
+        .all()
+    )
+
+    invite_count = len(referrals)
+    approved_count = sum(
+        1
+        for item in referrals
+        if item.status in {ReferralStatus.APPROVED.value, ReferralStatus.REWARDED.value}
+    )
+    rewarded_count = sum(1 for item in referrals if item.status == ReferralStatus.REWARDED.value)
+
+    pending_reward_referrals = []
+    recent_referrals = []
+    for item in referrals[:10]:
+        application = item.application
+        row = {
+            "id": item.id,
+            "application_id": item.application_id,
+            "status": item.status,
+            "created_at": item.created_at.isoformat() if item.created_at else None,
+            "approved_at": item.approved_at.isoformat() if item.approved_at else None,
+            "rewarded_at": item.rewarded_at.isoformat() if item.rewarded_at else None,
+            "organization_name": (application.organization_name if application else None) or "-",
+            "reward_title": item.reward_title,
+            "reward_delivery_timing": item.reward_delivery_timing,
+        }
+        recent_referrals.append(row)
+        if item.status == ReferralStatus.APPROVED.value:
+            pending_reward_referrals.append(row)
+
+    latest_reward = next(
+        (
+            {
+                "id": item.id,
+                "application_id": item.application_id,
+                "reward_code": item.reward_code,
+                "reward_title": item.reward_title,
+                "reward_description": item.reward_description,
+                "reward_delivery_timing": item.reward_delivery_timing,
+                "rewarded_at": item.rewarded_at.isoformat() if item.rewarded_at else None,
+            }
+            for item in referrals
+            if item.status == ReferralStatus.REWARDED.value
+        ),
+        None,
+    )
+
+    frontend_base = _resolve_frontend_base(request)
+    return {
+        "referral_slug": organization.slug,
+        "referral_link": f"{frontend_base}/affiliazione?ref={organization.slug}",
+        "invite_route": f"{frontend_base}/invito/{organization.slug}",
+        "stats": {
+            "sent": invite_count,
+            "approved": approved_count,
+            "rewarded": rewarded_count,
+        },
+        "pending_reward_referrals": pending_reward_referrals,
+        "recent_referrals": recent_referrals,
+        "latest_reward": latest_reward,
+        "reward_options": [
+            {
+                "code": option["code"],
+                "title": option["title"],
+                "delivery_timing": option["delivery_timing"],
+            }
+            for option in REFERRAL_REWARD_OPTIONS
+        ],
+    }
+
+
+class OrgAdminReferralInviteBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    applicant_email: EmailStr
+    organization_name: str = Field(min_length=2, max_length=160)
+    notes: Optional[str] = None
+
+
+@router.post("/referrals/invite")
+def create_referral_invite(
+    request: Request,
+    body: OrgAdminReferralInviteBody,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    organization = (
+        db.query(Organization)
+        .filter(
+            Organization.id == admin.org_id,
+            Organization.deleted_at.is_(None),
+            Organization.is_active.is_(True),
+        )
+        .first()
+    )
+    if organization is None:
+        raise HTTPException(status_code=404, detail="Organizzazione non trovata")
+
+    applicant_email = body.applicant_email.strip().lower()
+    organization_name = body.organization_name.strip()
+    notes = body.notes.strip() if body.notes else None
+
+    if organization.slug and organization.slug.lower() == organization_name.lower():
+        raise HTTPException(
+            status_code=400,
+            detail="Nome associazione non valido per invito.",
+        )
+
+    for _ in range(5):
+        public_token = secrets.token_urlsafe(24)
+        exists = (
+            db.query(AffiliationApplication.id)
+            .filter(AffiliationApplication.public_token == public_token)
+            .first()
+        )
+        if exists is None:
+            break
+    else:
+        raise HTTPException(status_code=500, detail="Impossibile generare token pratica")
+
+    application = AffiliationApplication(
+        public_token=public_token,
+        status=AffiliationApplicationStatus.DRAFT.value,
+        docs_status=AffiliationDocsStatus.PENDING.value,
+        payment_status=AffiliationPaymentStatus.UNPAID.value,
+        payment_amount_cents=int(settings.STRIPE_AFFILIATION_PRICE_CENTS),
+        organization_name=organization_name,
+        applicant_email=applicant_email,
+        notes=notes,
+    )
+    db.add(application)
+    db.flush()
+
+    referral = Referral(
+        referrer_org_id=organization.id,
+        application_id=application.id,
+        status=ReferralStatus.PENDING.value,
+    )
+    db.add(referral)
+    db.flush()
+
+    db.add(
+        AffiliationEvent(
+            application_id=application.id,
+            event_type="draft_created",
+            actor_type="org_admin",
+            actor_admin_id=admin.id,
+            payload_json={"source": "org_admin_referral_invite", "ip": get_client_ip(request)},
+        )
+    )
+    db.add(
+        AffiliationEvent(
+            application_id=application.id,
+            event_type="referral_attached",
+            actor_type="org_admin",
+            actor_admin_id=admin.id,
+            payload_json={
+                "referrer_org_id": organization.id,
+                "referrer_org_slug": organization.slug,
+                "referrer_org_name": organization.name,
+            },
+        )
+    )
+
+    frontend_base = _resolve_frontend_base(request)
+    invite_url = (
+        f"{frontend_base}/affiliazione?token={public_token}&ref={organization.slug}"
+    )
+
+    enqueue_email(
+        db,
+        email_type="org_admin_referral_invite",
+        to_email=applicant_email,
+        subject=f"Invito ad affiliare {organization_name} su ASSONAM",
+        payload=build_email_payload(
+            text_body=(
+                f"Hai ricevuto un invito ad affiliare '{organization_name}' su ASSONAM.\n"
+                f"Apri questo link per completare la richiesta: {invite_url}\n\n"
+                "La richiesta viene verificata dal Super Admin prima dell'attivazione."
+            ),
+            meta={
+                "application_id": application.id,
+                "referral_id": referral.id,
+                "inviter_org_id": organization.id,
+                "inviter_org_slug": organization.slug,
+            },
+        ),
+        priority=2,
+    )
+
+    audit.log_operation(
+        db,
+        action="referral.invite_created",
+        entity_type="referral",
+        entity_id=referral.id,
+        actor_admin_id=admin.id,
+        actor_role=AdminRole.ORG_ADMIN.value,
+        metadata={
+            "application_id": application.id,
+            "invited_email": applicant_email,
+            "invited_organization_name": organization_name,
+        },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+
+    db.commit()
+
+    return {
+        "ok": True,
+        "application_id": application.id,
+        "status": application.status,
+        "invite_url": invite_url,
+        "referral_id": referral.id,
+    }
+
+
+@router.post("/referrals/{referral_id}/spin")
+def spin_referral_reward(
+    request: Request,
+    referral_id: int,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    referral = (
+        db.query(Referral)
+        .filter(
+            Referral.id == referral_id,
+            Referral.referrer_org_id == admin.org_id,
+        )
+        .first()
+    )
+    if referral is None:
+        raise HTTPException(status_code=404, detail="Referral non trovato")
+
+    if referral.status == ReferralStatus.REWARDED.value:
+        return {
+            "ok": True,
+            "referral_id": referral.id,
+            "status": referral.status,
+            "reward": {
+                "code": referral.reward_code,
+                "title": referral.reward_title,
+                "description": referral.reward_description,
+                "delivery_timing": referral.reward_delivery_timing,
+                "rewarded_at": referral.rewarded_at.isoformat() if referral.rewarded_at else None,
+            },
+            "message": "Premio gia assegnato per questo referral.",
+            "super_admin_note": "Premio gia registrato nel sistema.",
+        }
+
+    if referral.status != ReferralStatus.APPROVED.value:
+        raise HTTPException(
+            status_code=409,
+            detail="La ruota e disponibile solo quando il referral e approvato dal super admin.",
+        )
+
+    reward = _draw_referral_reward()
+    now = datetime.utcnow()
+    referral.status = ReferralStatus.REWARDED.value
+    referral.rewarded_at = now
+    referral.reward_code = reward["code"]
+    referral.reward_title = reward["title"]
+    referral.reward_description = reward["description"]
+    referral.reward_delivery_timing = reward["delivery_timing"]
+    referral.super_admin_notified_at = now
+
+    super_admin_note = (
+        f"Referral #{referral.id} premiato con '{reward['title']}'. "
+        f"Erogazione prevista: {reward['delivery_timing']}"
+    )
+
+    db.add(
+        AffiliationEvent(
+            application_id=referral.application_id,
+            event_type="referral_rewarded",
+            actor_type="org_admin",
+            actor_admin_id=admin.id,
+            payload_json={
+                "referral_id": referral.id,
+                "reward_code": reward["code"],
+                "reward_title": reward["title"],
+                "reward_delivery_timing": reward["delivery_timing"],
+                "super_admin_note": super_admin_note,
+            },
+        )
+    )
+
+    audit.log_operation(
+        db,
+        action="referral.rewarded",
+        entity_type="referral",
+        entity_id=referral.id,
+        actor_admin_id=admin.id,
+        actor_role=AdminRole.ORG_ADMIN.value,
+        metadata={
+            "application_id": referral.application_id,
+            "reward_code": reward["code"],
+            "reward_title": reward["title"],
+            "reward_delivery_timing": reward["delivery_timing"],
+            "super_admin_note": super_admin_note,
+        },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+
+    db.commit()
+
+    return {
+        "ok": True,
+        "referral_id": referral.id,
+        "status": referral.status,
+        "reward": {
+            "code": reward["code"],
+            "title": reward["title"],
+            "description": reward["description"],
+            "delivery_timing": reward["delivery_timing"],
+            "rewarded_at": now.isoformat(),
+        },
+        "message": "Premio assegnato. Il risultato e stato comunicato al super admin.",
+        "super_admin_note": super_admin_note,
     }
 
 

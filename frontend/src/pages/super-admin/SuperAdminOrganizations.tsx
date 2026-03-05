@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useOutletContext } from "react-router-dom";
+import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import {
   AuthError,
   deleteOrganization,
@@ -422,6 +422,7 @@ const SuperAdminOrganizations = () => {
                 <th className={thClass}>Slug</th>
                 <th className={thClass}>Citta</th>
                 <th className={thClass}>Stato</th>
+                <th className={thClass}>Stato affiliazione</th>
                 <th className={thClass}>Tessere</th>
                 <th className={thClass}>Azioni</th>
               </tr>
@@ -429,7 +430,7 @@ const SuperAdminOrganizations = () => {
             <tbody>
               {orgs.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-12 text-center text-sm text-neutral-500">
+                  <td colSpan={7} className="px-5 py-12 text-center text-sm text-neutral-500">
                     {q
                       ? "Nessuna associazione trovata per la ricerca corrente."
                       : "Nessuna associazione trovata."}
@@ -461,6 +462,37 @@ const SuperAdminOrganizations = () => {
                         >
                           {org.is_active ? "Attiva" : "Disattivata"}
                         </span>
+                      )}
+                    </td>
+                    <td className={tdClass}>
+                      {org.affiliation_status ? (
+                        <div className="flex flex-col gap-1">
+                          <span
+                            className={`inline-flex w-fit items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+                              org.affiliation_status === "approved"
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                : org.affiliation_status === "under_review"
+                                  ? "border-amber-200 bg-amber-50 text-amber-700"
+                                  : org.affiliation_status === "changes_requested"
+                                    ? "border-orange-200 bg-orange-50 text-orange-700"
+                                    : org.affiliation_status === "rejected"
+                                      ? "border-red-200 bg-red-50 text-red-700"
+                                      : "border-neutral-200 bg-neutral-50 text-neutral-600"
+                            }`}
+                          >
+                            {org.affiliation_status}
+                          </span>
+                          {org.affiliation_application_id ? (
+                            <Link
+                              to={`/super-admin/affiliazioni?applicationId=${org.affiliation_application_id}`}
+                              className="text-xs font-medium text-brand hover:text-brand-dark"
+                            >
+                              Apri pratica
+                            </Link>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <span className="text-neutral-400">-</span>
                       )}
                     </td>
                     <td className={`${tdClass} tabular-nums`}>

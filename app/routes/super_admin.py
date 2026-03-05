@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 from datetime import datetime, timedelta
 from typing import Literal, Optional
 import secrets
@@ -8,7 +8,7 @@ import re
 import math
 
 from sqlalchemy import and_, func, or_, text
-from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 
 from app.db import get_db
 from app.models import (
@@ -36,6 +36,7 @@ from app.services.statute_upload import (
     enforce_statute_request_size_from_headers,
     save_statute_pdf,
 )
+from app.models_affiliation import AffiliationApplication
 
 import logging
 
@@ -138,6 +139,8 @@ def _serialize_organization_row(
     *,
     card_min: Optional[int],
     card_max: Optional[int],
+    affiliation_application_id: Optional[int] = None,
+    affiliation_status: Optional[str] = None,
 ):
     return {
         "id": org.id,
@@ -162,6 +165,8 @@ def _serialize_organization_row(
         "auto_approve_signup": bool(org.auto_approve_signup),
         "card_min": card_min,
         "card_max": card_max,
+        "affiliation_application_id": affiliation_application_id,
+        "affiliation_status": affiliation_status,
     }
 
 
@@ -192,26 +197,84 @@ def _list_organizations_payload(
     total = db.query(func.count(Organization.id)).filter(*filters).scalar() or 0
     total_pages = max(1, math.ceil(total / page_size)) if page_size else 1
 
-    results = (
+    latest_affiliation_subquery = (
         db.query(
-            Organization,
-            card_ranges_subquery.c.card_min,
-            card_ranges_subquery.c.card_max,
+            AffiliationApplication.approved_org_id.label("org_id"),
+            func.max(AffiliationApplication.id).label("latest_affiliation_id"),
         )
-        .outerjoin(
-            card_ranges_subquery, card_ranges_subquery.c.org_id == Organization.id
-        )
-        .filter(*filters)
-        .order_by(*_organization_sort_order(sort))
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-        .all()
+        .filter(AffiliationApplication.approved_org_id.isnot(None))
+        .group_by(AffiliationApplication.approved_org_id)
+        .subquery()
     )
+    latest_affiliation_alias = aliased(AffiliationApplication)
 
-    items = [
-        _serialize_organization_row(org, card_min=card_min, card_max=card_max)
-        for org, card_min, card_max in results
-    ]
+    try:
+        results = (
+            db.query(
+                Organization,
+                card_ranges_subquery.c.card_min,
+                card_ranges_subquery.c.card_max,
+                latest_affiliation_alias.id.label("affiliation_application_id"),
+                latest_affiliation_alias.status.label("affiliation_status"),
+            )
+            .outerjoin(
+                card_ranges_subquery, card_ranges_subquery.c.org_id == Organization.id
+            )
+            .outerjoin(
+                latest_affiliation_subquery,
+                latest_affiliation_subquery.c.org_id == Organization.id,
+            )
+            .outerjoin(
+                latest_affiliation_alias,
+                latest_affiliation_alias.id
+                == latest_affiliation_subquery.c.latest_affiliation_id,
+            )
+            .filter(*filters)
+            .order_by(*_organization_sort_order(sort))
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+            .all()
+        )
+        items = [
+            _serialize_organization_row(
+                org,
+                card_min=card_min,
+                card_max=card_max,
+                affiliation_application_id=affiliation_application_id,
+                affiliation_status=affiliation_status,
+            )
+            for (
+                org,
+                card_min,
+                card_max,
+                affiliation_application_id,
+                affiliation_status,
+            ) in results
+        ]
+    except (OperationalError, ProgrammingError):
+        results = (
+            db.query(
+                Organization,
+                card_ranges_subquery.c.card_min,
+                card_ranges_subquery.c.card_max,
+            )
+            .outerjoin(
+                card_ranges_subquery, card_ranges_subquery.c.org_id == Organization.id
+            )
+            .filter(*filters)
+            .order_by(*_organization_sort_order(sort))
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+            .all()
+        )
+        items = [
+            _serialize_organization_row(
+                org,
+                card_min=card_min,
+                card_max=card_max,
+            )
+            for org, card_min, card_max in results
+        ]
 
     return {
         "items": items,

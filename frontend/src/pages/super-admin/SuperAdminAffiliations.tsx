@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useOutletContext } from "react-router-dom";
+import { useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
 import {
   AuthError,
   approveSuperAdminAffiliation,
@@ -79,6 +79,7 @@ const docStatusLabel = (status: string) => {
 
 const SuperAdminAffiliations = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { profile } = useOutletContext<{ profile: SuperAdminProfile | null }>();
 
   const [items, setItems] = useState<SuperAdminAffiliationListItem[]>([]);
@@ -92,6 +93,7 @@ const SuperAdminAffiliations = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const initialOpenId = Number(searchParams.get("applicationId") || "");
 
   const selectedItem = useMemo(
     () => items.find((item) => item.id === selectedId) ?? null,
@@ -111,7 +113,13 @@ const SuperAdminAffiliations = () => {
       setTotalPages(response.total_pages || 1);
       setError("");
 
-      if (response.items.length > 0 && !response.items.some((item) => item.id === selectedId)) {
+      if (
+        Number.isInteger(initialOpenId) &&
+        initialOpenId > 0 &&
+        response.items.some((item) => item.id === initialOpenId)
+      ) {
+        setSelectedId(initialOpenId);
+      } else if (response.items.length > 0 && !response.items.some((item) => item.id === selectedId)) {
         setSelectedId(response.items[0].id);
       }
       if (response.items.length === 0) {
@@ -127,7 +135,7 @@ const SuperAdminAffiliations = () => {
     } finally {
       setLoading(false);
     }
-  }, [navigate, page, query, selectedId, statusFilter]);
+  }, [initialOpenId, navigate, page, query, selectedId, statusFilter]);
 
   const loadDetail = useCallback(
     async (id: number) => {

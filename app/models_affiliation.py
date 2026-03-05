@@ -331,7 +331,6 @@ else:
 
         application = relationship("AffiliationApplication", back_populates="video_jobs")
 
-
 __all__ = [
     "AffiliationApplication",
     "AffiliationApplicationStatus",

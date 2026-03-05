@@ -11,6 +11,7 @@ import {
   type PlatformStats,
 } from "../lib/api";
 import MemberCardPreview from "../components/cards/MemberCardPreview";
+import { useStatePlatformCapabilities } from "../hooks/useStatePlatformCapabilities";
 
 const PublicHeroThree = lazy(() => import("../components/public/PublicHeroThree.client"));
 
@@ -123,13 +124,15 @@ const isLowPowerDevice = () => {
   return smallViewport || cpuVeryLow || memoryVeryLow;
 };
 
-const ENTRY_ICON_CLASS = "h-5 w-5 shrink-0 md:h-6 md:w-6";
+const ENTRY_ICON_CLASS = "h-5 w-5 max-h-6 max-w-6 shrink-0 md:h-6 md:w-6";
 
 const EntryIcon = ({ id }: { id: HeroEntry["id"] }) => {
   if (id === "association") {
     return (
       <svg
         className={ENTRY_ICON_CLASS}
+        width="24"
+        height="24"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -146,6 +149,8 @@ const EntryIcon = ({ id }: { id: HeroEntry["id"] }) => {
     return (
       <svg
         className={ENTRY_ICON_CLASS}
+        width="24"
+        height="24"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -161,6 +166,8 @@ const EntryIcon = ({ id }: { id: HeroEntry["id"] }) => {
   return (
     <svg
       className={ENTRY_ICON_CLASS}
+      width="24"
+      height="24"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -175,6 +182,7 @@ const EntryIcon = ({ id }: { id: HeroEntry["id"] }) => {
 };
 
 const Home = () => {
+  const { capabilities, loading: capabilitiesLoading } = useStatePlatformCapabilities();
   const [useWebGLScene, setUseWebGLScene] = useState(false);
   const [lowPowerDevice, setLowPowerDevice] = useState(false);
   const [showStickyAffilia, setShowStickyAffilia] = useState(false);
@@ -186,6 +194,8 @@ const Home = () => {
   const heroRef = useRef<HTMLElement>(null);
   const socialProofRef = useRef<HTMLElement>(null);
   const hasAnimatedStatsRef = useRef(false);
+  const affiliazioneEnabled = capabilities?.affiliazioneEnabled === true;
+  const showAffiliazioneCta = !capabilitiesLoading && affiliazioneEnabled;
 
   useEffect(() => {
     applySeo({
@@ -437,7 +447,9 @@ const Home = () => {
     { key: "members", label: "Soci Registrati", value: animatedStats.members },
     { key: "cities", label: "Città Attive", value: animatedStats.cities },
   ] as const;
-  const heroEntries = HERO_ENTRIES;
+  const heroEntries = showAffiliazioneCta
+    ? HERO_ENTRIES
+    : HERO_ENTRIES.filter((entry) => entry.id !== "association");
 
   return (
     <div>
@@ -482,13 +494,18 @@ const Home = () => {
             </p>
 
             <div className="mt-10 flex flex-col md:flex-row items-center justify-center gap-4" data-hero-meta>
-              <Link
-                className="btn-primary min-h-[48px] px-6"
-                to="/affiliazione"
-                onClick={() => handleAffiliaHeroClick("hero_desktop_primary")}
-              >
-                Affilia la tua Associazione
-              </Link>
+              {showAffiliazioneCta ? (
+                <div className="flex flex-col items-center">
+                  <Link
+                    className="btn-primary min-h-[48px] px-6"
+                    to="/affiliazione"
+                    onClick={() => handleAffiliaHeroClick("hero_desktop_primary")}
+                  >
+                    Affilia la tua Associazione
+                  </Link>
+                  <p className="mt-2 text-xs font-medium text-white/75">Richiede circa 10 minuti</p>
+                </div>
+              ) : null}
               <Link className="btn-ghost min-h-[48px] px-6 text-white border-white/40 hover:bg-white/10" to="/associazioni">
                 Diventa Socio
               </Link>
@@ -497,7 +514,11 @@ const Home = () => {
               </Link>
             </div>
 
-            <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6" role="list" aria-label="Scegli il percorso corretto">
+            <div
+              className={`mt-16 grid grid-cols-1 gap-6 ${heroEntries.length === 2 ? "md:grid-cols-2" : "md:grid-cols-3"}`}
+              role="list"
+              aria-label="Scegli il percorso corretto"
+            >
               {heroEntries.map((entry) => (
                 <Link
                   to={entry.to}
@@ -506,7 +527,9 @@ const Home = () => {
                   className="rounded-xl border border-white/20 bg-white/5 backdrop-blur-md p-5 flex flex-col text-left transition hover:bg-white/10 hover:border-white/40 group"
                   onClick={
                     entry.id === "association"
-                      ? () => handleAffiliaHeroClick("hero_card")
+                      ? showAffiliazioneCta
+                        ? () => handleAffiliaHeroClick("hero_card")
+                        : undefined
                       : undefined
                   }
                   data-hero-card
@@ -646,13 +669,15 @@ const Home = () => {
             </div>
 
             <div className="landing-inline-cta">
-              <Link
-                className="btn-primary"
-                to="/affiliazione"
-                onClick={() => handleAffiliaHeroClick("below_fold_section")}
-              >
-                Inizia Affiliazione
-              </Link>
+              {showAffiliazioneCta ? (
+                <Link
+                  className="btn-primary"
+                  to="/affiliazione"
+                  onClick={() => handleAffiliaHeroClick("below_fold_section")}
+                >
+                  Inizia Affiliazione
+                </Link>
+              ) : null}
               <Link className="btn-ghost" to="/affiliazione-info">
                 Vedi dettagli affiliazione
               </Link>
@@ -676,15 +701,17 @@ const Home = () => {
         </div>
       </section>
 
-      <div className={`affiliazione-sticky-cta${showStickyAffilia ? " is-visible" : ""}`}>
-        <Link
-          className="btn-primary affiliazione-sticky-button"
-          to="/affiliazione"
-          onClick={handleAffiliaStickyClick}
-        >
-          Affilia la tua Associazione
-        </Link>
-      </div>
+      {showAffiliazioneCta ? (
+        <div className={`affiliazione-sticky-cta${showStickyAffilia ? " is-visible" : ""}`}>
+          <Link
+            className="btn-primary affiliazione-sticky-button"
+            to="/affiliazione"
+            onClick={handleAffiliaStickyClick}
+          >
+            Affilia la tua Associazione
+          </Link>
+        </div>
+      ) : null}
 
       {isDemoModalOpen && (
         <div
@@ -713,9 +740,11 @@ const Home = () => {
               soci.
             </p>
             <div className="membership-demo-modal-actions">
-              <Link className="btn-primary" to="/affiliazione" onClick={() => setIsDemoModalOpen(false)}>
-                Affilia la tua Associazione
-              </Link>
+              {showAffiliazioneCta ? (
+                <Link className="btn-primary" to="/affiliazione" onClick={() => setIsDemoModalOpen(false)}>
+                  Affilia la tua Associazione
+                </Link>
+              ) : null}
               <Link className="btn-ghost" to="/affiliazione-info" onClick={() => setIsDemoModalOpen(false)}>
                 Scopri di più
               </Link>

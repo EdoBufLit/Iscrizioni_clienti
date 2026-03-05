@@ -7,6 +7,7 @@ import { pageVariants } from "./motion/motionPresets";
 import { usePublicMotion } from "./public/usePublicMotion";
 import { PUBLIC_MOTION } from "./public/motionTokens";
 import { trackUiEvent } from "../lib/tracking";
+import { useStatePlatformCapabilities } from "../hooks/useStatePlatformCapabilities";
 
 const NAV_ITEMS = [
   { label: "Home", to: "/" },
@@ -23,7 +24,7 @@ const dashboardLinkClass = ({ isActive }: { isActive: boolean }) =>
   isActive ? dashboardLinkActive : dashboardLinkIdle;
 
 const publicLinkClass = ({ isActive }: { isActive: boolean }) =>
-  `public-nav-pill${isActive ? " is-active" : ""}`;
+  `public-nav-pill shrink-0 whitespace-nowrap${isActive ? " is-active" : ""}`;
 
 let dashboardPrefetched = false;
 const prefetchDashboard = () => {
@@ -41,6 +42,9 @@ const Layout = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const close = () => setMenuOpen(false);
   const location = useLocation();
+  const { capabilities, loading: capabilitiesLoading } = useStatePlatformCapabilities();
+  const affiliazioneEnabled = capabilities?.affiliazioneEnabled === true;
+  const showAffiliazioneCta = !capabilitiesLoading && affiliazioneEnabled;
 
   const publicHeaderRef = useRef<HTMLElement>(null);
   const logoRef = useRef<HTMLImageElement>(null);
@@ -288,32 +292,47 @@ const Layout = () => {
                   </span>
                 </NavLink>
 
-                <nav className="hidden lg:flex items-center gap-1" aria-label="Navigazione principale">
-                  {NAV_ITEMS.map((item) => (
-                    <NavLink
-                      key={item.label}
-                      className={publicLinkClass}
-                      to={item.to}
-                      end={item.to === "/"}
-                    >
-                      {item.label}
-                    </NavLink>
-                  ))}
-                  <div className="flex items-center gap-2 ml-4">
-                    <NavLink
-                      className="btn-primary py-2 px-4 text-sm whitespace-nowrap"
-                      to="/affiliazione"
-                      onClick={() =>
-                        trackUiEvent("click_affiliazione_cta_nav", { placement: "desktop_nav" })
-                      }
-                    >
-                      Affilia la tua Associazione
-                    </NavLink>
-                    <NavLink className="btn-ghost py-2 px-4 text-sm whitespace-nowrap" to="/associazioni">
+                <div className="hidden flex-1 items-center justify-end lg:flex lg:gap-4">
+                  <nav
+                    className="flex min-w-0 flex-1 items-center justify-center gap-1.5 xl:gap-2"
+                    aria-label="Navigazione principale"
+                  >
+                    {NAV_ITEMS.map((item) => (
+                      <NavLink
+                        key={item.label}
+                        className={publicLinkClass}
+                        to={item.to}
+                        end={item.to === "/"}
+                      >
+                        {item.label}
+                      </NavLink>
+                    ))}
+                  </nav>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {showAffiliazioneCta ? (
+                      <>
+                        <span className="public-affilia-nav-badge">Per Associazioni</span>
+                        <NavLink
+                          className="btn-primary public-affilia-nav-btn"
+                          to="/affiliazione"
+                          onClick={() =>
+                            trackUiEvent("click_affiliazione_cta_nav", {
+                              placement: "desktop_nav",
+                            })
+                          }
+                        >
+                          Affilia la tua Associazione
+                          <span className="public-affilia-nav-arrow" aria-hidden="true">
+                            &rarr;
+                          </span>
+                        </NavLink>
+                      </>
+                    ) : null}
+                    <NavLink className="btn-ghost public-socio-nav-btn px-4 text-sm" to="/associazioni">
                       Diventa Socio
                     </NavLink>
                     <NavLink
-                      className="btn-ghost py-2 px-4 text-sm whitespace-nowrap"
+                      className="btn-ghost px-4 text-sm whitespace-nowrap"
                       to="/area-riservata"
                       onMouseEnter={prefetchDashboard}
                       onFocus={prefetchDashboard}
@@ -321,7 +340,7 @@ const Layout = () => {
                       Area Riservata
                     </NavLink>
                   </div>
-                </nav>
+                </div>
 
                 <button
                   className="public-menu-toggle lg:hidden"
@@ -342,18 +361,20 @@ const Layout = () => {
               >
                 <nav className="container-shell py-4" aria-label="Navigazione principale mobile">
                   <div className="public-mobile-links">
-                    <NavLink
-                      className="btn-primary public-mobile-affilia-btn w-full justify-center text-center"
-                      to="/affiliazione"
-                      onClick={() => {
-                        trackUiEvent("click_affiliazione_cta_nav", {
-                          placement: "mobile_menu",
-                        });
-                        close();
-                      }}
-                    >
-                      Affilia la tua Associazione
-                    </NavLink>
+                    {showAffiliazioneCta ? (
+                      <NavLink
+                        className="btn-primary public-mobile-affilia-btn w-full justify-center text-center"
+                        to="/affiliazione"
+                        onClick={() => {
+                          trackUiEvent("click_affiliazione_cta_nav", {
+                            placement: "mobile_menu",
+                          });
+                          close();
+                        }}
+                      >
+                        Affilia la tua Associazione
+                      </NavLink>
+                    ) : null}
                     <NavLink className="btn-ghost text-center" to="/associazioni" onClick={close}>
                       Diventa Socio
                     </NavLink>

@@ -123,6 +123,16 @@ const toPeople = (draft: AffiliationDraft): PersonForm[] => {
   });
 };
 
+const SUBMITTED_STATUSES = new Set(["under_review", "approved", "rejected"]);
+
+type WizardValidation = {
+  issues: string[];
+  stepErrors: Record<number, string[]>;
+  firstInvalidStep: number | null;
+};
+
+const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+
 const Affiliazione = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const tokenFromQuery = searchParams.get("token")?.trim() || "";
@@ -147,6 +157,7 @@ const Affiliazione = () => {
   const { capabilities, loading: capabilitiesLoading } = useStatePlatformCapabilities();
   const [dirtyCounter, setDirtyCounter] = useState(0);
   const [resumeLinkCopied, setResumeLinkCopied] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const autosaveReadyRef = useRef(false);
   const stripeFallbackAppliedRef = useRef(false);
   const navigate = useNavigate();
@@ -254,12 +265,22 @@ const Affiliazione = () => {
           setToken(tokenFromQuery);
           const existingDraft = await fetchAffiliationDraft(tokenFromQuery);
           applyDraftState(existingDraft);
+          const normalizedStatus = String(existingDraft.status || "").trim().toLowerCase();
+          if (SUBMITTED_STATUSES.has(normalizedStatus)) {
+            setShowIntroScreen(false);
+            setCurrentStep(6);
+          } else {
+            setShowIntroScreen(true);
+            setCurrentStep(1);
+          }
         } else {
           const created = await createAffiliationDraft(
             referralFromQuery ? { referral_slug: referralFromQuery } : undefined,
           );
           setToken(created.public_token);
           applyDraftState(created);
+          setShowIntroScreen(true);
+          setCurrentStep(1);
           const nextParams = new URLSearchParams();
           nextParams.set("token", created.public_token);
           if (referralFromQuery) {
@@ -337,6 +358,73 @@ const Affiliazione = () => {
     return map;
   }, [draft]);
 
+  const validation = useMemo<WizardValidation>(() => {
+    const stepErrors: Record<number, string[]> = {
+      1: [],
+      2: [],
+      3: [],
+      4: [],
+      5: [],
+    };
+
+    const addError = (step: number, message: string) => {
+      if (!stepErrors[step]) stepErrors[step] = [];
+      stepErrors[step].push(message);
+    };
+
+    const orgName = form?.organization_name?.trim() || "";
+    const applicantName = form?.applicant_full_name?.trim() || "";
+    const applicantEmail = form?.applicant_email?.trim() || "";
+    const applicantPhone = form?.applicant_phone?.trim() || "";
+    const paymentMethod = form?.payment_method || "";
+
+    if (!orgName) addError(1, "Inserisci il nome dell'associazione.");
+    if (!applicantName) addError(1, "Inserisci il nome del referente.");
+    if (!applicantEmail) {
+      addError(1, "Inserisci l'email del referente.");
+    } else if (!isValidEmail(applicantEmail)) {
+      addError(1, "L'email del referente non è valida.");
+    }
+    if (!applicantPhone) addError(1, "Inserisci il telefono del referente.");
+
+    ROLE_ITEMS.forEach((role) => {
+      const person = people.find((item) => item.role === role.role);
+      const fullName = person?.full_name?.trim() || "";
+      const email = person?.email?.trim() || "";
+      if (!fullName) {
+        addError(2, `Compila il nominativo del ruolo ${role.label}.`);
+      }
+      if (!email) {
+        addError(2, `Compila l'email del ruolo ${role.label}.`);
+      } else if (!isValidEmail(email)) {
+        addError(2, `L'email del ruolo ${role.label} non è valida.`);
+      }
+    });
+
+    DOC_ITEMS.forEach((doc) => {
+      if (!docsByType.get(doc.type)) {
+        addError(3, `Carica il documento obbligatorio: ${doc.label}.`);
+      }
+    });
+
+    if (!paymentMethod) {
+      addError(4, "Seleziona un metodo di pagamento.");
+    }
+    if (
+      (paymentMethod === "bank_transfer" || paymentMethod === "cash") &&
+      !(form?.manual_contact || "").trim()
+    ) {
+      addError(4, "Inserisci un contatto operativo per il pagamento manuale.");
+    }
+
+    const issues = [1, 2, 3, 4]
+      .flatMap((step) => stepErrors[step] || []);
+    const firstInvalidStep =
+      ([1, 2, 3, 4].find((step) => (stepErrors[step] || []).length > 0) as number | undefined) ??
+      null;
+    return { issues, stepErrors, firstInvalidStep };
+  }, [docsByType, form, people]);
+
   const resumeUrl = useMemo(() => {
     if (typeof window === "undefined") return "";
     const draftResume = (draft?.resume_url || "").trim();
@@ -352,11 +440,13 @@ const Affiliazione = () => {
   }, []);
 
   const onFieldChange = <K extends keyof FormState>(key: K, value: FormState[K]) => {
+    setSubmitAttempted(false);
     setForm((current) => (current ? { ...current, [key]: value } : current));
     markDirty();
   };
 
   const onPersonChange = (index: number, key: keyof PersonForm, value: string) => {
+    setSubmitAttempted(false);
     setPeople((current) =>
       current.map((item, itemIndex) =>
         itemIndex === index ? { ...item, [key]: value } : item,
@@ -367,6 +457,7 @@ const Affiliazione = () => {
 
   const onUploadDocument = async (docType: string, file: File) => {
     if (!token) return;
+    setSubmitAttempted(false);
     try {
       setUploadingType(docType);
       setError("");
@@ -402,6 +493,16 @@ const Affiliazione = () => {
 
   const onSubmit = async () => {
     if (!token) return;
+    setSubmitAttempted(true);
+    if (validation.issues.length > 0) {
+      setError("Completa i campi obbligatori prima di inviare la richiesta.");
+      if (validation.firstInvalidStep) {
+        setShowIntroScreen(false);
+        setCurrentStep(validation.firstInvalidStep);
+      }
+      return;
+    }
+
     try {
       setSubmitting(true);
       setError("");
@@ -441,6 +542,17 @@ const Affiliazione = () => {
     setShowVideoOverlay(true);
   };
 
+  useEffect(() => {
+    if (!showVideoOverlay) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowVideoOverlay(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showVideoOverlay]);
+
   if (capabilitiesLoading || loading || !form) {
     return (
       <section className="py-16">
@@ -452,6 +564,9 @@ const Affiliazione = () => {
   }
 
   const currentVideoJob = submitResult?.latest_video_job || draft?.latest_video_job || null;
+  const normalizedDraftStatus = String(draft?.status || "").trim().toLowerCase();
+  const hasRealSubmission = Boolean(submitResult) || SUBMITTED_STATUSES.has(normalizedDraftStatus);
+  const isDevEnv = import.meta.env.DEV;
   const progressActiveStep = Math.min(5, Math.max(1, currentStep));
   const progressPercent = ((progressActiveStep - 1) / (WIZARD_PROGRESS_STEPS.length - 1)) * 100;
   const overlayAssociationName = (
@@ -476,18 +591,23 @@ const Affiliazione = () => {
               </p>
             </div>
             <div className="rounded-lg border border-neutral-200 bg-white/80 px-4 py-3 text-xs text-neutral-600">
-              <p className="font-semibold text-neutral-800">Token pratica</p>
-              <p className="mt-1 break-all">{token}</p>
-              <p className="mt-2 font-semibold text-neutral-800">Link ripresa</p>
-              <p className="mt-1 break-all">{resumeUrl || "-"}</p>
-              <button
-                type="button"
-                className="mt-2 rounded-md border border-neutral-300 px-2.5 py-1 text-[11px] font-medium text-neutral-700 hover:border-brand/40"
-                onClick={onCopyResumeLink}
-              >
-                {resumeLinkCopied ? "Link copiato" : "Copia link"}
-              </button>
-              <p className="mt-2">{saving ? "Salvataggio..." : saveInfo}</p>
+              <p className="font-semibold text-neutral-800">Stato bozza</p>
+              <p className="mt-1">{saving ? "Salvataggio in corso..." : saveInfo}</p>
+              {isDevEnv && resumeUrl ? (
+                <details className="mt-3">
+                  <summary className="cursor-pointer text-[11px] font-semibold text-neutral-700">
+                    Opzioni avanzate (solo sviluppo)
+                  </summary>
+                  <p className="mt-2 break-all">{resumeUrl}</p>
+                  <button
+                    type="button"
+                    className="mt-2 rounded-md border border-neutral-300 px-2.5 py-1 text-[11px] font-medium text-neutral-700 hover:border-brand/40"
+                    onClick={onCopyResumeLink}
+                  >
+                    {resumeLinkCopied ? "Link copiato" : "Copia link di ripresa"}
+                  </button>
+                </details>
+              ) : null}
             </div>
           </div>
 
@@ -516,7 +636,7 @@ const Affiliazione = () => {
             </div>
           )}
 
-          {!showIntroScreen && (
+          {!showIntroScreen && !hasRealSubmission && (
             <div className="mt-6 space-y-3">
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-200">
                 <div
@@ -610,7 +730,7 @@ const Affiliazione = () => {
           </div>
         )}
 
-        {!showIntroScreen && currentStep === 1 && (
+        {!showIntroScreen && !hasRealSubmission && currentStep === 1 && (
           <div className="surface p-6 space-y-6">
             <div>
               <h2 className="text-lg font-semibold text-neutral-900">Checklist iniziale</h2>
@@ -645,7 +765,7 @@ const Affiliazione = () => {
           </div>
         )}
 
-        {!showIntroScreen && currentStep === 2 && (
+        {!showIntroScreen && !hasRealSubmission && currentStep === 2 && (
           <div className="surface p-6 space-y-4">
             <h2 className="text-lg font-semibold text-neutral-900">Cariche e referenti</h2>
             <p className="text-sm text-neutral-600">Inserisci i responsabili principali dell'associazione.</p>
@@ -667,7 +787,7 @@ const Affiliazione = () => {
           </div>
         )}
 
-        {!showIntroScreen && currentStep === 3 && (
+        {!showIntroScreen && !hasRealSubmission && currentStep === 3 && (
           <div className="surface p-6 space-y-4">
             <h2 className="text-lg font-semibold text-neutral-900">Documenti e cariche</h2>
             <p className="text-sm text-neutral-600">Carica PDF validi. Ogni documento viene verificato dal super admin.</p>
@@ -709,7 +829,7 @@ const Affiliazione = () => {
           </div>
         )}
 
-        {!showIntroScreen && currentStep === 4 && (
+        {!showIntroScreen && !hasRealSubmission && currentStep === 4 && (
           <div className="surface p-6 space-y-5">
             <h2 className="text-lg font-semibold text-neutral-900">Pagamento</h2>
             <p className="text-sm text-neutral-600">
@@ -798,7 +918,7 @@ const Affiliazione = () => {
           </div>
         )}
 
-        {!showIntroScreen && currentStep === 5 && (
+        {!showIntroScreen && !hasRealSubmission && currentStep === 5 && (
           <div className="surface p-6 space-y-5">
             <h2 className="text-lg font-semibold text-neutral-900">Riepilogo e invio</h2>
             <p className="text-sm text-neutral-600">
@@ -811,19 +931,40 @@ const Affiliazione = () => {
               <div>Metodo pagamento: {form.payment_method || "-"}</div>
               <div>Documenti caricati: {(draft?.documents || []).length}</div>
             </div>
+            {validation.issues.length > 0 ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <p className="font-semibold">Completa questi punti prima dell'invio:</p>
+                <ul className="mt-2 space-y-1">
+                  {validation.issues.map((issue) => (
+                    <li key={issue}>- {issue}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                Dati completi. Puoi inviare la richiesta.
+              </div>
+            )}
             <textarea className="w-full rounded-md border border-neutral-200 px-3 py-2 text-sm" rows={4} placeholder="Note per il super admin" value={form.notes} onChange={(e) => onFieldChange("notes", e.target.value)} />
             <div className="flex flex-wrap gap-3">
-              <button type="button" className="btn-primary" disabled={submitting} onClick={onSubmit}>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={submitting || validation.issues.length > 0}
+                onClick={onSubmit}
+              >
                 {submitting ? "Invio in corso..." : "Invia richiesta"}
               </button>
-              <button type="button" className="btn-ghost" onClick={() => setCurrentStep(6)}>
-                Vai allo stato pratica
-              </button>
             </div>
+            {submitAttempted && validation.issues.length > 0 ? (
+              <p className="text-xs text-red-600">
+                Invio bloccato: correggi i campi indicati e riprova.
+              </p>
+            ) : null}
           </div>
         )}
 
-        {!showIntroScreen && currentStep === 6 && (
+        {hasRealSubmission && (
           <div className="surface p-6 space-y-4">
             <h2 className="text-lg font-semibold text-neutral-900">Richiesta inviata</h2>
             <p className="text-sm text-neutral-600">
@@ -856,7 +997,14 @@ const Affiliazione = () => {
       </div>
 
       {showVideoOverlay && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/85 p-4">
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/85 p-4"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              setShowVideoOverlay(false);
+            }
+          }}
+        >
           <div className="relative w-full max-w-5xl rounded-xl border border-white/20 bg-black p-4">
             <button
               type="button"
@@ -893,7 +1041,7 @@ const Affiliazione = () => {
                   </p>
                   {baseVideoFailed ? (
                     <p className="mt-2 text-xs text-amber-300">
-                      Il video base non è disponibile in questo ambiente.
+                      Il video base è temporaneamente non disponibile.
                     </p>
                   ) : null}
                   <Link

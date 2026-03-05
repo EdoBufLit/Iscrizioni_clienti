@@ -751,6 +751,14 @@ export type OrgAdminReferralSummary = {
   reward_options: Array<{ code: string; title: string; delivery_timing: string }>;
 };
 
+export type OrgAdminReferralInviteResponse = {
+  ok: boolean;
+  application_id: number;
+  status: string;
+  invite_url: string;
+  referral_id: number | null;
+};
+
 export async function fetchOrgAdminReferralSummary(): Promise<OrgAdminReferralSummary> {
   const res = await fetch("/api/org-admin/referrals/summary");
   if (res.status === 401) throw new AuthError("Not authenticated");
@@ -773,6 +781,21 @@ export async function spinOrgAdminReferralReward(
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore durante la ruota premi."));
+  return res.json();
+}
+
+export async function createOrgAdminReferralInvite(payload: {
+  applicant_email: string;
+  organization_name: string;
+  notes?: string;
+}): Promise<OrgAdminReferralInviteResponse> {
+  const res = await fetch("/api/org-admin/referrals/invite", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione invito."));
   return res.json();
 }
 
@@ -986,6 +1009,8 @@ export type SuperAdminOrganization = {
   auto_approve_signup?: boolean;
   card_min: number | null;
   card_max: number | null;
+  affiliation_application_id?: number | null;
+  affiliation_status?: string | null;
 };
 
 export type SuperAdminOrganizationsResponse = {
@@ -1399,7 +1424,23 @@ async function parseApiErrorDetail(
 ): Promise<string> {
   const payload = await res.json().catch(() => null);
   const detail = payload?.detail;
-  return typeof detail === "string" && detail.trim() ? detail : fallback;
+  if (typeof detail === "string" && detail.trim()) {
+    return detail;
+  }
+  if (detail && typeof detail === "object") {
+    const message = (detail as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+    const issues = (detail as { issues?: unknown }).issues;
+    if (Array.isArray(issues) && issues.length > 0) {
+      const first = issues[0] as { message?: unknown };
+      if (typeof first?.message === "string" && first.message.trim()) {
+        return first.message;
+      }
+    }
+  }
+  return fallback;
 }
 
 export async function fetchSuperAdminIntegrationKeys(

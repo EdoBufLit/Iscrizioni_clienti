@@ -70,6 +70,7 @@ REQUIRED_DOCUMENT_TYPES = [
     "documento_presidente",
     "codice_fiscale_presidente",
 ]
+REQUIRED_PEOPLE_ROLES = ["presidente", "segretario", "tesoriere"]
 
 MANUAL_PAYMENT_METHODS = {
     AffiliationPaymentMethod.BANK_TRANSFER.value,
@@ -196,19 +197,103 @@ def _resolve_frontend_base(request: Request) -> str:
     return str(request.base_url).rstrip("/")
 
 
-def _required_field_check(application: AffiliationApplication) -> list[str]:
-    missing: list[str] = []
+def _submit_validation_issues(application: AffiliationApplication) -> list[dict[str, Any]]:
+    issues: list[dict[str, Any]] = []
+
+    def add_issue(*, field: str, step: int, message: str) -> None:
+        issues.append({"field": field, "step": step, "message": message})
+
     if not _normalize_text(application.organization_name):
-        missing.append("organization_name")
-    if not _normalize_text(application.applicant_email):
-        missing.append("applicant_email")
+        add_issue(
+            field="organization_name",
+            step=1,
+            message="Inserisci il nome dell'associazione.",
+        )
     if not _normalize_text(application.applicant_full_name):
-        missing.append("applicant_full_name")
+        add_issue(
+            field="applicant_full_name",
+            step=1,
+            message="Inserisci il nome del referente.",
+        )
+    if not _normalize_text(application.applicant_email):
+        add_issue(
+            field="applicant_email",
+            step=1,
+            message="Inserisci l'email del referente.",
+        )
     if not _normalize_text(application.applicant_phone):
-        missing.append("applicant_phone")
-    if not _normalize_text(application.payment_method):
-        missing.append("payment_method")
-    return missing
+        add_issue(
+            field="applicant_phone",
+            step=1,
+            message="Inserisci il telefono del referente.",
+        )
+
+    people_by_role = {
+        (item.role or "").strip().lower(): item
+        for item in (application.people or [])
+    }
+    for role in REQUIRED_PEOPLE_ROLES:
+        person = people_by_role.get(role)
+        if person is None or not _normalize_text(person.full_name):
+            add_issue(
+                field=f"people.{role}.full_name",
+                step=2,
+                message=f"Compila il nominativo del ruolo {role}.",
+            )
+        if person is None or not _normalize_text(person.email):
+            add_issue(
+                field=f"people.{role}.email",
+                step=2,
+                message=f"Compila l'email del ruolo {role}.",
+            )
+
+    latest_docs = _latest_documents_by_type(list(application.documents or []))
+    for doc_type in REQUIRED_DOCUMENT_TYPES:
+        if latest_docs.get(doc_type) is not None:
+            continue
+        add_issue(
+            field=f"documents.{doc_type}",
+            step=3,
+            message=f"Documento obbligatorio mancante: {doc_type}.",
+        )
+
+    payment_method_invalid = False
+    try:
+        normalized_payment_method = _normalize_payment_method(application.payment_method)
+    except HTTPException:
+        payment_method_invalid = True
+        normalized_payment_method = None
+        add_issue(
+            field="payment_method",
+            step=4,
+            message="Metodo di pagamento non valido. Seleziona Bonifico o Contanti.",
+        )
+    if normalized_payment_method is None and not payment_method_invalid:
+        add_issue(
+            field="payment_method",
+            step=4,
+            message="Seleziona un metodo di pagamento.",
+        )
+    else:
+        if (
+            normalized_payment_method == AffiliationPaymentMethod.STRIPE.value
+            and not settings.STRIPE_ENABLED
+        ):
+            add_issue(
+                field="payment_method",
+                step=4,
+                message="Pagamento con carta non disponibile. Seleziona Bonifico o Contanti.",
+            )
+        if normalized_payment_method in MANUAL_PAYMENT_METHODS and not _normalize_text(
+            application.manual_contact
+        ):
+            add_issue(
+                field="manual_contact",
+                step=4,
+                message="Inserisci un contatto operativo per il pagamento manuale.",
+            )
+
+    return issues
 
 
 def _latest_documents_by_type(
@@ -1132,31 +1217,30 @@ def submit_affiliation_draft(
             detail="La richiesta non puo essere inviata nello stato corrente.",
         )
 
-    missing_fields = _required_field_check(application)
-    if missing_fields:
+    validation_issues = _submit_validation_issues(application)
+    if validation_issues:
         raise HTTPException(
-            status_code=400,
-            detail=f"Campi mancanti: {', '.join(missing_fields)}",
-        )
-
-    latest_docs = _latest_documents_by_type(list(application.documents or []))
-    missing_docs = [doc_type for doc_type in REQUIRED_DOCUMENT_TYPES if doc_type not in latest_docs]
-    if missing_docs:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Documenti mancanti: {', '.join(missing_docs)}",
+            status_code=422,
+            detail={
+                "message": "Completa i campi obbligatori prima di inviare la richiesta.",
+                "issues": validation_issues,
+            },
         )
 
     normalized_payment_method = _normalize_payment_method(application.payment_method)
     if normalized_payment_method is None:
-        raise HTTPException(status_code=400, detail="Metodo di pagamento obbligatorio")
-    if (
-        normalized_payment_method == AffiliationPaymentMethod.STRIPE.value
-        and not settings.STRIPE_ENABLED
-    ):
         raise HTTPException(
-            status_code=400,
-            detail="Pagamento con carta non disponibile. Seleziona Bonifico o Contanti.",
+            status_code=422,
+            detail={
+                "message": "Completa i campi obbligatori prima di inviare la richiesta.",
+                "issues": [
+                    {
+                        "field": "payment_method",
+                        "step": 4,
+                        "message": "Seleziona un metodo di pagamento.",
+                    }
+                ],
+            },
         )
 
     application.payment_method = normalized_payment_method
