@@ -301,7 +301,7 @@ const main = async (): Promise<void> => {
     `[renderHud] remotion entryPoint=${entryPoint} exists=${entryPointExists}`,
   );
   if (!entryPointExists) {
-    throw new Error(`Remotion entrypoint not found: ${entryPoint}`);
+    throw new Error(`Missing Remotion entryPoint: ${entryPoint}`);
   }
   const serveUrl = await bundle({
     entryPoint,
