@@ -203,6 +203,120 @@ const createSilentAudioTrack = async (
   ]);
 };
 
+const DEFAULT_PUBLIC_LOGO_ASSET = "logo-transparent.png";
+const LEGACY_PUBLIC_LOGO_ASSET = "logo.png";
+
+type LogoResolution = {
+  logoUrl: string;
+  logoAssetPath: string | null;
+  logoStrategy: "inline-passthrough" | "remote-inline" | "static-fallback" | "no-logo";
+};
+
+const isDataUrl = (value: string): boolean => /^data:/i.test(value);
+
+const isRemoteHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value);
+
+const resolveLogoAssetPath = async (): Promise<string | null> => {
+  const publicDir = path.resolve(process.cwd(), "public");
+  const candidates = [DEFAULT_PUBLIC_LOGO_ASSET, LEGACY_PUBLIC_LOGO_ASSET];
+
+  for (const assetPath of candidates) {
+    if (await fileExists(path.join(publicDir, assetPath))) {
+      return assetPath;
+    }
+  }
+
+  return null;
+};
+
+const inferImageContentType = (logoUrl: string): string => {
+  const extension = path.extname(new URL(logoUrl).pathname).toLowerCase();
+  if (extension === ".jpg" || extension === ".jpeg") {
+    return "image/jpeg";
+  }
+  if (extension === ".webp") {
+    return "image/webp";
+  }
+  if (extension === ".svg") {
+    return "image/svg+xml";
+  }
+  return "image/png";
+};
+
+const fetchLogoAsDataUrl = async (logoUrl: string): Promise<string> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const response = await fetch(logoUrl, {
+      signal: controller.signal,
+      headers: {
+        Accept: "image/*",
+        "User-Agent": "assonam-welcome-video-renderer/1.0",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length === 0) {
+      throw new Error("Empty response body");
+    }
+
+    const contentTypeHeader = response.headers.get("content-type")?.split(";")[0]?.trim();
+    const contentType =
+      contentTypeHeader && /^image\//i.test(contentTypeHeader)
+        ? contentTypeHeader
+        : inferImageContentType(logoUrl);
+
+    return `data:${contentType};base64,${buffer.toString("base64")}`;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
+
+const resolveLogoInput = async (rawLogoUrl: string): Promise<LogoResolution> => {
+  const normalized = rawLogoUrl.trim();
+  const logoAssetPath = await resolveLogoAssetPath();
+
+  if (!normalized) {
+    return {
+      logoUrl: "",
+      logoAssetPath,
+      logoStrategy: logoAssetPath ? "static-fallback" : "no-logo",
+    };
+  }
+
+  if (isDataUrl(normalized) || !isRemoteHttpUrl(normalized)) {
+    return {
+      logoUrl: normalized,
+      logoAssetPath,
+      logoStrategy: "inline-passthrough",
+    };
+  }
+
+  try {
+    return {
+      logoUrl: await fetchLogoAsDataUrl(normalized),
+      logoAssetPath,
+      logoStrategy: "remote-inline",
+    };
+  } catch (error) {
+    console.warn(
+      `[renderHud] Remote logo fetch failed (${normalized}). Falling back to local public asset: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return {
+      logoUrl: "",
+      logoAssetPath,
+      logoStrategy: logoAssetPath ? "static-fallback" : "no-logo",
+    };
+  }
+};
+
 const main = async (): Promise<void> => {
   const argv = minimist(process.argv.slice(2));
   const env = getEnv();
@@ -213,7 +327,7 @@ const main = async (): Promise<void> => {
   }
 
   const orgName = argv.orgName?.toString() || "";
-  const logoUrl = argv.logoUrl?.toString() || "";
+  const requestedLogoUrl = argv.logoUrl?.toString() || "";
   const mode = normalizeMode(argv.mode);
   const template = normalizeTemplate(argv.template);
   const seed = argv.seed?.toString() || orgId;
@@ -234,6 +348,8 @@ const main = async (): Promise<void> => {
   await fs.mkdir(tmpDir, { recursive: true });
 
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
+
+  const resolvedLogo = await resolveLogoInput(requestedLogoUrl);
 
   const sharedAudioPath = path.resolve(process.cwd(), "public", "welcome_hud_audio.wav");
   let audioStrategy = "shared";
@@ -317,7 +433,8 @@ const main = async (): Promise<void> => {
 
   const inputProps = {
     orgName,
-    logoUrl,
+    logoUrl: resolvedLogo.logoUrl,
+    logoAssetPath: resolvedLogo.logoAssetPath ?? undefined,
     mode,
     template,
     audioEnabled: sharedAudioAvailable,
@@ -382,6 +499,7 @@ const main = async (): Promise<void> => {
       template,
       audioSource,
       audioStrategy,
+      logoStrategy: resolvedLogo.logoStrategy,
       durationSec: 12,
       outputSpec: {
         width: 1280,

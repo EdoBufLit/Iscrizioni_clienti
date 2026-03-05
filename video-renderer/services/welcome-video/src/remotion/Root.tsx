@@ -29,6 +29,7 @@ const RemotionRoot: React.FC = () => {
         defaultProps={{
           orgName: "TEST ORG",
           logoUrl: "",
+          logoAssetPath: "logo-transparent.png",
           mode: "review",
           template: "personalized",
           audioEnabled: true,
@@ -44,6 +45,7 @@ const RemotionRoot: React.FC = () => {
         defaultProps={{
           orgName: "",
           logoUrl: "",
+          logoAssetPath: "logo-transparent.png",
           mode: "review",
           template: "base",
           audioEnabled: true,

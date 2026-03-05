@@ -30,6 +30,8 @@ You can pass specific arguments to the render script:
 node dist/render.js --orgId myOrg123 --orgName "My Org Name" --logoUrl "https://example.com/logo.png"
 ```
 
+For `renderHud`, remote `logoUrl` values are fetched server-side and converted to data URLs before Remotion renders them. If the fetch fails, the renderer falls back to `public/logo-transparent.png`.
+
 ## Audio Source Modes (HUD renderer)
 
 - `AUDIO_SOURCE=local` (default): use local pre-generated audio.

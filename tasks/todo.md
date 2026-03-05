@@ -2346,3 +2346,35 @@ pm --prefix frontend run build -> OK
   - `AUDIO_SOURCE=local node dist/renderHud.cjs --orgId 25 --orgName "Org Test" --mode review --template personalized --output out/welcome_test_25.mp4`
   - Esito: `status=done`, MP4 generato.
   - Output verificato: `out/welcome_test_25.mp4` size `1238266` bytes.
+
+## Spec (Fix Remotion external logo assets in production - Mar 05, 2026)
+- Obiettivo: evitare failure render HUD in produzione quando `logoUrl` punta a un asset esterno bloccato da CORP/CORS e garantire asset locali tracciati per logo/audio.
+- Requisiti:
+  - asset necessari presenti in `video-renderer/services/welcome-video/public/`;
+  - se `logoUrl` e remoto, il renderer deve provare fetch + conversione in data URL base64;
+  - se il fetch fallisce, usare fallback logo locale con `staticFile()`;
+  - audio HUD sempre safe: `staticFile()` quando presente, fallback silenzioso senza crash;
+  - rigenerare `dist`, validare con `node dist/renderHud.cjs`, preparare commit.
+
+## Plan (Fix Remotion external logo assets in production) [COMPLETATO]
+- [x] Tracciare logo locale stabile in `video-renderer/services/welcome-video/public/` e confermare l'audio HUD versionato.
+- [x] Aggiornare `renderHud` per risolvere `logoUrl` remoto in data URL base64 con fallback logo locale.
+- [x] Aggiornare il componente Remotion HUD per preferire `staticFile()` sui logo locali quando non arriva un asset inline.
+- [x] Rigenerare `dist` e rieseguire smoke test `node dist/renderHud.cjs` con output MP4.
+- [x] Documentare review finale e creare commit Git limitato ai file del fix.
+
+## Review (Fix Remotion external logo assets in production - Mar 05, 2026)
+- Asset locali:
+  - aggiunto `video-renderer/services/welcome-video/public/logo-transparent.png` (fallback locale del logo ASSONAM);
+  - confermato `video-renderer/services/welcome-video/public/welcome_hud_audio.wav` presente e usato via `staticFile()`.
+- Renderer HUD:
+  - `src/renderHud.ts` ora intercetta `logoUrl` HTTP(S), scarica l'immagine lato Node e la converte in data URL base64 (`logoStrategy=remote-inline`);
+  - se il fetch fallisce, passa a fallback locale `logo-transparent.png` senza dipendere da asset cross-origin;
+  - output JSON esteso con `logoStrategy` per debug operativo.
+- Componente Remotion HUD:
+  - `src/remotion/hud/AssonamHUDWelcome.tsx` e `Scene5Logo.tsx` supportano `logoAssetPath` e usano `staticFile()` per il fallback locale;
+  - `maskImage` ora quota correttamente i data URL base64 per evitare rotture CSS durante il render.
+- Verifiche eseguite (`video-renderer/services/welcome-video`):
+  - `npm run build` -> OK;
+  - `node dist/renderHud.cjs --orgId corp-logo --orgName "Org Test" --mode review --template personalized --logoUrl "https://assonam.it/logo-transparent.png" --output out/welcome_test_remote_logo.mp4` -> OK, MP4 generato (`1243173` bytes), `logoStrategy=remote-inline`;
+  - `node dist/renderHud.cjs --orgId silent-audio --orgName "Org Silent" --mode review --template personalized --audio-local-path ".\\missing-audio-dir" --output out/welcome_test_silent.mp4` -> OK, MP4 generato (`1243219` bytes), `audioStrategy=silent-fallback`.

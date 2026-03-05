@@ -13,12 +13,14 @@ const { fontFamily } = loadFont();
 export const AssonamHUDWelcome: React.FC<{
   orgName?: string;
   logoUrl?: string;
+  logoAssetPath?: string;
   mode?: Scene5Mode;
   template?: Scene5Template;
   audioEnabled?: boolean;
 }> = ({
   orgName = "TEST ORG",
   logoUrl = "",
+  logoAssetPath = "logo-transparent.png",
   mode = "review",
   template = "personalized",
   audioEnabled = true,
@@ -56,7 +58,13 @@ export const AssonamHUDWelcome: React.FC<{
 
       {/* SCENE 5 - LOGO REVEAL & SCENE 6 - FINAL MESSAGE */}
       <Sequence from={210}>
-        <Scene5Logo orgName={orgName} logoUrl={logoUrl} mode={mode} template={template} />
+        <Scene5Logo
+          orgName={orgName}
+          logoUrl={logoUrl}
+          logoAssetPath={logoAssetPath}
+          mode={mode}
+          template={template}
+        />
       </Sequence>
     </AbsoluteFill>
   );
