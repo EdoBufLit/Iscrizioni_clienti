@@ -88,6 +88,37 @@ const fieldClass =
   "w-full rounded-xl border border-neutral-200 bg-white/90 px-3.5 py-2.5 text-sm text-neutral-800 shadow-sm transition focus:border-brand/40 focus:outline-none focus:ring-2 focus:ring-brand/15";
 const textareaClass = `${fieldClass} min-h-[7rem]`;
 
+const buildEmptyForm = (): FormState => ({
+  organization_name: "",
+  organization_legal_name: "",
+  organization_slug_candidate: "",
+  tax_code: "",
+  vat_number: "",
+  address_line1: "",
+  address_line2: "",
+  city: "",
+  province: "",
+  postal_code: "",
+  country: "Italy",
+  applicant_full_name: "",
+  applicant_email: "",
+  applicant_phone: "",
+  notes: "",
+  payment_method: "",
+  manual_preferred_date: "",
+  manual_preferred_time: "",
+  manual_contact: "",
+});
+
+const buildDefaultPeople = (): PersonForm[] =>
+  ROLE_ITEMS.map((role) => ({
+    role: role.role,
+    full_name: "",
+    email: "",
+    phone: "",
+    fiscal_code: "",
+  }));
+
 const toFormState = (draft: AffiliationDraft): FormState => ({
   organization_name: draft.organization_name ?? "",
   organization_legal_name: draft.organization_legal_name ?? "",
@@ -158,8 +189,8 @@ const Affiliazione = () => {
   const referralFromQuery = searchParams.get("ref")?.trim().toLowerCase() || "";
   const [token, setToken] = useState<string>("");
   const [draft, setDraft] = useState<AffiliationDraft | null>(null);
-  const [form, setForm] = useState<FormState | null>(null);
-  const [people, setPeople] = useState<PersonForm[]>([]);
+  const [form, setForm] = useState<FormState>(() => buildEmptyForm());
+  const [people, setPeople] = useState<PersonForm[]>(() => buildDefaultPeople());
   const [currentStep, setCurrentStep] = useState(1);
   const [showIntroScreen, setShowIntroScreen] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -219,7 +250,7 @@ const Affiliazione = () => {
 
   const persistDraft = useCallback(
     async (options?: { silent?: boolean }) => {
-      if (!token || !form) return false;
+      if (!token) return false;
       const silent = Boolean(options?.silent);
       try {
         if (!silent) {
@@ -292,23 +323,18 @@ const Affiliazione = () => {
             setShowIntroScreen(true);
             setCurrentStep(1);
           }
+          autosaveReadyRef.current = true;
+          setSaveInfo("Bozza pronta");
         } else {
-          const created = await createAffiliationDraft(
-            referralFromQuery ? { referral_slug: referralFromQuery } : undefined,
-          );
-          setToken(created.public_token);
-          applyDraftState(created);
+          setToken("");
+          setDraft(null);
+          setForm(buildEmptyForm());
+          setPeople(buildDefaultPeople());
           setShowIntroScreen(true);
           setCurrentStep(1);
-          const nextParams = new URLSearchParams();
-          nextParams.set("token", created.public_token);
-          if (referralFromQuery) {
-            nextParams.set("ref", referralFromQuery);
-          }
-          setSearchParams(nextParams, { replace: true });
+          autosaveReadyRef.current = false;
+          setSaveInfo("Bozza non creata");
         }
-        autosaveReadyRef.current = true;
-        setSaveInfo("Bozza pronta");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Errore avvio wizard");
       } finally {
@@ -320,8 +346,6 @@ const Affiliazione = () => {
     affiliazioneEnabled,
     applyDraftState,
     capabilitiesLoading,
-    referralFromQuery,
-    setSearchParams,
     tokenFromQuery,
   ]);
 
@@ -343,7 +367,7 @@ const Affiliazione = () => {
   const videoEnabled = capabilities?.affiliationVideoEnabled === true;
 
   useEffect(() => {
-    if (!form || !token) return;
+    if (!token) return;
     if (stripeEnabled) return;
 
     if (!form.payment_method) {
@@ -585,7 +609,40 @@ const Affiliazione = () => {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [showVideoOverlay]);
 
-  if (capabilitiesLoading || loading || !form) {
+  const onStartWizard = async () => {
+    if (token) {
+      setShowIntroScreen(false);
+      setCurrentStep(1);
+      return;
+    }
+    try {
+      setError("");
+      setSaving(true);
+      setSaveInfo("Creazione bozza in corso...");
+      const created = await createAffiliationDraft(
+        referralFromQuery ? { referral_slug: referralFromQuery } : undefined,
+      );
+      setToken(created.public_token);
+      applyDraftState(created);
+      autosaveReadyRef.current = true;
+      setSaveInfo("Bozza pronta");
+
+      const nextParams = new URLSearchParams();
+      nextParams.set("token", created.public_token);
+      if (referralFromQuery) {
+        nextParams.set("ref", referralFromQuery);
+      }
+      setSearchParams(nextParams, { replace: true });
+      setShowIntroScreen(false);
+      setCurrentStep(1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore creazione bozza");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (capabilitiesLoading || loading) {
     return (
       <section className="py-16">
         <div className="container-shell">
@@ -760,12 +817,12 @@ const Affiliazione = () => {
               <button
                 type="button"
                 className="btn-primary w-full sm:w-auto"
+                disabled={saving}
                 onClick={() => {
-                  setShowIntroScreen(false);
-                  setCurrentStep(1);
+                  void onStartWizard();
                 }}
               >
-                Inizia Affiliazione
+                {saving ? "Preparazione..." : "Inizia Affiliazione"}
               </button>
             </div>
             </div>

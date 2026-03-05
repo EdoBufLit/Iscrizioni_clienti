@@ -1855,6 +1855,50 @@ def reject_affiliation_application(
     }
 
 
+@super_admin_router.delete("/affiliations/{application_id}")
+def delete_affiliation_draft(
+    request: Request,
+    application_id: int,
+    db: Session = Depends(get_db),
+):
+    admin = _ensure_super_admin(request, db)
+    application = (
+        db.query(AffiliationApplication)
+        .filter(AffiliationApplication.id == application_id)
+        .first()
+    )
+    if application is None:
+        raise HTTPException(status_code=404, detail="Affiliazione non trovata")
+
+    if application.status != AffiliationApplicationStatus.DRAFT.value:
+        raise HTTPException(
+            status_code=409,
+            detail="Eliminazione consentita solo per pratiche in bozza.",
+        )
+
+    if application.submitted_at is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="La pratica risulta gia inviata e non puo essere eliminata.",
+        )
+
+    db.delete(application)
+
+    audit.log_operation(
+        db,
+        action="affiliation.draft_deleted",
+        entity_type="affiliation_application",
+        entity_id=application_id,
+        actor_admin_id=admin.id,
+        actor_role=AdminRole.SUPER_ADMIN.value,
+        metadata={},
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    return {"ok": True, "deleted_id": application_id}
+
+
 @super_admin_router.post("/affiliations/video-jobs/run")
 def run_affiliation_video_jobs(
     request: Request,

@@ -81,3 +81,5 @@
 - Se una route opzionale usa modelli non garantiti, isolare i modelli in un modulo fallback dedicato e importarlo dalla route/service per evitare ImportError in produzione.
 - [2026-03-05] Quando introduco CTA premium in navbar pubblica, verificare sempre breakpoint intermedi (1024/1280) con pay-off brand + badge: evitare badge separati che rubano spazio e usare fallback hamburger fino a layout realmente stabile.
 - [2026-03-05] Se aggiorno checklist wizard (intro), allineare SEMPRE anche i `REQUIRED_DOCUMENT_TYPES` backend e i test helper di upload documenti per evitare submit incoerenti.
+- [2026-03-05] Evitare side effects di persistenza all'ingresso pagina (es. creazione draft automatica): in funnel multi-step la creazione risorsa deve avvenire su azione esplicita utente per non sporcare dati e dashboard admin.
+- [2026-03-05] In pannelli admin, mostrare azioni solo se semanticamente valide nello stato corrente (`can_approve`/stato) per prevenire UX fuorviante.

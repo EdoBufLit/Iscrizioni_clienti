@@ -493,25 +493,35 @@ const Home = () => {
               Tessere, iscrizioni, gestione soci e affiliazione - tutto in un unico sistema semplice e sicuro.
             </p>
 
-            <div className="mt-10 flex flex-col md:flex-row items-center justify-center gap-4" data-hero-meta>
-              {showAffiliazioneCta ? (
-                <div className="flex flex-col items-center">
+            <div className="mt-10 space-y-2" data-hero-meta>
+              <div className="flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
+                {showAffiliazioneCta ? (
                   <Link
-                    className="btn-primary min-h-[48px] px-6"
+                    className="btn-primary inline-flex min-h-[48px] justify-center px-6 text-center"
                     to="/affiliazione"
                     onClick={() => handleAffiliaHeroClick("hero_desktop_primary")}
                   >
                     Affilia la tua Associazione
                   </Link>
-                  <p className="mt-2 text-xs font-medium text-white/75">Richiede circa 10 minuti</p>
-                </div>
+                ) : null}
+                <Link
+                  className="btn-ghost inline-flex min-h-[48px] justify-center border-white/40 px-6 text-center text-white hover:bg-white/10"
+                  to="/associazioni"
+                >
+                  Diventa Socio
+                </Link>
+                <Link
+                  className="btn-ghost inline-flex min-h-[48px] justify-center border-white/40 px-6 text-center text-white hover:bg-white/10"
+                  to="/area-riservata"
+                >
+                  Area Riservata
+                </Link>
+              </div>
+              {showAffiliazioneCta ? (
+                <p className="text-center text-xs font-medium text-white/75">
+                  Richiede circa 10 minuti
+                </p>
               ) : null}
-              <Link className="btn-ghost min-h-[48px] px-6 text-white border-white/40 hover:bg-white/10" to="/associazioni">
-                Diventa Socio
-              </Link>
-              <Link className="text-sm font-semibold text-white/80 hover:text-white underline underline-offset-4 mt-2 md:mt-0 md:ml-2" to="/area-riservata">
-                Accedi all'Area Riservata
-              </Link>
             </div>
 
             <div

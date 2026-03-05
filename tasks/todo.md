@@ -2191,3 +2191,25 @@ pm --prefix frontend run build -> OK
   - `python -m py_compile app/routes/affiliation.py` -> OK
   - `python -m pytest -q tests/test_affiliation_flow.py tests/test_referral_system.py` -> 6 passed
   - `python -m pytest -q tests/test_smoke.py -k capabilities` -> 1 passed
+
+## Todo (Mar 05, 2026 - Hero CTA + Draft hygiene)
+- [x] Sistemare allineamento bottoni hero landing (CTA dritte e uniformi)
+- [x] Rimuovere creazione automatica bozza vuota nel wizard affiliazione
+- [x] Aggiungere eliminazione bozza da Super Admin (solo stato draft)
+- [x] Nascondere azioni incoerenti su bozza (niente Approva/Rifiuta su draft)
+- [x] Verifica finale: build frontend + test backend affiliazione
+
+## Review (Hero CTA + Draft hygiene - Mar 05, 2026)
+- Root cause:
+  - hero: CTA con altezze/struttura diverse (una dentro colonna con microcopy) => aspetto storto.
+  - wizard: bozza creata automaticamente all'apertura `/affiliazione` anche senza interazioni utente.
+  - super admin: UI mostrava sempre azioni decisionali, anche su draft vuote.
+- Fix:
+  - hero: riga CTA uniforme (stessa altezza/stile), microcopy separata sotto la riga.
+  - wizard: senza `token` non crea bozza; bozza creata solo al click `Inizia Affiliazione`.
+  - super admin: endpoint `DELETE /api/super-admin/affiliations/{id}` (solo `draft` non inviate) + pulsante `Elimina bozza` in UI.
+  - super admin UI: `Approva` visibile solo quando `can_approve=true`; su draft spariscono Approva/Rifiuta.
+- Verifiche:
+  - `python -m py_compile app/routes/affiliation.py` -> OK
+  - `python -m pytest -q tests/test_affiliation_flow.py tests/test_referral_system.py` -> 7 passed
+  - `npm --prefix frontend run build` -> OK

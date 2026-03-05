@@ -150,6 +150,23 @@ def test_affiliation_stripe_payment_selection_rejected_when_disabled(client):
     )
 
 
+def test_super_admin_can_delete_draft_affiliation(client):
+    email = f"draft-delete-{uuid.uuid4().hex[:10]}@example.com"
+    draft = _create_draft(client, email=email)
+    application_id = int(draft["id"])
+
+    _login_super_admin(client)
+
+    delete_response = client.delete(f"/api/super-admin/affiliations/{application_id}")
+    assert delete_response.status_code == 200, delete_response.text
+    payload = delete_response.json()
+    assert payload.get("ok") is True
+    assert int(payload.get("deleted_id")) == application_id
+
+    detail_response = client.get(f"/api/super-admin/affiliations/{application_id}")
+    assert detail_response.status_code == 404, detail_response.text
+
+
 def test_affiliation_approve_requires_docs_and_payment_verification(client, db):
     email = f"draft-approve-{uuid.uuid4().hex[:10]}@example.com"
     draft = _create_draft(client, email=email)

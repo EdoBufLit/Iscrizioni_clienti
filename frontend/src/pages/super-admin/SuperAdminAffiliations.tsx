@@ -3,6 +3,7 @@ import { useNavigate, useOutletContext, useSearchParams } from "react-router-dom
 import {
   AuthError,
   approveSuperAdminAffiliation,
+  deleteSuperAdminAffiliationDraft,
   fetchSuperAdminAffiliationDetail,
   fetchSuperAdminAffiliations,
   rejectSuperAdminAffiliation,
@@ -250,6 +251,20 @@ const SuperAdminAffiliations = () => {
     });
   };
 
+  const onDeleteDraft = async () => {
+    if (!detail) return;
+    const confirmed = window.confirm(
+      "Eliminare questa bozza? L'operazione e irreversibile.",
+    );
+    if (!confirmed) return;
+    await withAction(async () => {
+      await deleteSuperAdminAffiliationDraft(detail.id);
+      setDetail(null);
+      setSelectedId(null);
+      await loadList();
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -447,7 +462,16 @@ const SuperAdminAffiliations = () => {
               </div>
 
               <div className="flex flex-wrap gap-2 border-t border-neutral-200 pt-4">
-                {detail.payment_method !== "stripe" && (
+                {detail.status === "draft" ? (
+                  <button
+                    className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700"
+                    disabled={actionLoading}
+                    onClick={onDeleteDraft}
+                  >
+                    Elimina bozza
+                  </button>
+                ) : null}
+                {detail.status !== "draft" && detail.payment_method !== "stripe" && (
                   <button
                     className="rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700"
                     disabled={actionLoading}
@@ -456,27 +480,37 @@ const SuperAdminAffiliations = () => {
                     Verifica pagamento manuale
                   </button>
                 )}
-                <button
-                  className="rounded-md border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-700"
-                  disabled={actionLoading}
-                  onClick={onRequestChanges}
-                >
-                  Richiedi modifiche
-                </button>
-                <button
-                  className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700"
-                  disabled={actionLoading}
-                  onClick={onApprove}
-                >
-                  Approva
-                </button>
-                <button
-                  className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700"
-                  disabled={actionLoading}
-                  onClick={onReject}
-                >
-                  Rifiuta
-                </button>
+                {detail.status !== "draft" &&
+                detail.status !== "approved" &&
+                detail.status !== "rejected" ? (
+                  <button
+                    className="rounded-md border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-700"
+                    disabled={actionLoading}
+                    onClick={onRequestChanges}
+                  >
+                    Richiedi modifiche
+                  </button>
+                ) : null}
+                {detail.can_approve ? (
+                  <button
+                    className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700"
+                    disabled={actionLoading}
+                    onClick={onApprove}
+                  >
+                    Approva
+                  </button>
+                ) : null}
+                {detail.status !== "draft" &&
+                detail.status !== "approved" &&
+                detail.status !== "rejected" ? (
+                  <button
+                    className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700"
+                    disabled={actionLoading}
+                    onClick={onReject}
+                  >
+                    Rifiuta
+                  </button>
+                ) : null}
               </div>
             </div>
           )}

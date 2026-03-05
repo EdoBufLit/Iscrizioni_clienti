@@ -1399,6 +1399,17 @@ export async function rejectSuperAdminAffiliation(
   return res.json();
 }
 
+export async function deleteSuperAdminAffiliationDraft(
+  applicationId: number,
+): Promise<{ ok: boolean; deleted_id: number }> {
+  const res = await fetch(`/api/super-admin/affiliations/${applicationId}`, {
+    method: "DELETE",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore eliminazione bozza."));
+  return res.json();
+}
+
 export type SuperAdminIntegrationKey = {
   id: number;
   name: string;
