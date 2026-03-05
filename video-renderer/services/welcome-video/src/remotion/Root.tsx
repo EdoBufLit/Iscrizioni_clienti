@@ -1,6 +1,7 @@
 import { Composition, registerRoot } from "remotion";
 
 import { AssonamWelcomeV2 } from "./v2/AssonamWelcomeV2";
+import { AssonamHUDWelcome } from "./hud/AssonamHUDWelcome";
 import { FontLoader } from "./FontLoader";
 
 const RemotionRoot: React.FC = () => {
@@ -15,6 +16,18 @@ const RemotionRoot: React.FC = () => {
         durationInFrames={330}
         defaultProps={{
           orgName: "",
+          logoUrl: "",
+        }}
+      />
+      <Composition
+        id="AssonamHUDWelcome"
+        component={AssonamHUDWelcome}
+        fps={30}
+        width={1920}
+        height={1080}
+        durationInFrames={300}
+        defaultProps={{
+          orgName: "TEST ORG",
           logoUrl: "",
         }}
       />
