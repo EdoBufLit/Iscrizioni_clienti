@@ -46,6 +46,8 @@ jobs:
               echo "::error::docker-compose.yml not found in APP_PATH=${{ secrets.APP_PATH }}"
               exit 1
             fi
+            export COMPOSE_PROJECT_NAME="app"
+            echo "[deploy] COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}"
             git fetch --all
 
             BRANCH="${{ github.ref_name }}"
@@ -229,6 +231,16 @@ jobs:
               echo "[migrate] Running Alembic migrations on Postgres before app restart"
               docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS run --rm --build web alembic upgrade head
             fi
+
+            echo "[deploy] Cleaning stale service containers to avoid name conflicts"
+            docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS rm -f -s web email-worker low-cards-worker affiliation-video-worker || true
+            for stale_pattern in "_app-web-1" "_app-email-worker-1" "_app-low-cards-worker-1" "_app-affiliation-video-worker-1"; do
+              STALE_IDS="$(docker ps -aq --filter "name=${stale_pattern}" || true)"
+              if [ -n "${STALE_IDS}" ]; then
+                echo "[deploy] Removing stale containers (${stale_pattern}): ${STALE_IDS}"
+                docker rm -f ${STALE_IDS} || true
+              fi
+            done
 
             if [ "$AFFILIATION_VIDEO_WORKER_ENABLED" = "true" ]; then
               echo "[deploy] Running docker compose --profile video-worker up -d --build"

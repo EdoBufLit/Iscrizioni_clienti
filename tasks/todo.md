@@ -2310,3 +2310,21 @@ pm --prefix frontend run build -> OK
   - `docker compose --profile video-worker build affiliation-video-worker`
   - Esito: fallita per daemon Docker non disponibile in questo ambiente (`npipe ... dockerDesktopLinuxEngine ... file specified`).
 - Azione successiva richiesta su host con Docker attivo: rebuild + smoke test render MP4.
+
+## Spec (Fix deploy container name conflict on Hetzner - Mar 05, 2026)
+- Obiettivo: evitare failure deploy `Error response from daemon: Conflict. The container name ... is already in use` durante `docker compose up -d --build`.
+- Root cause attesa: container stale con prefissi hash (es. `_app-web-1`) o project name non stabile in ambiente remoto.
+
+## Plan (Fix deploy container name conflict on Hetzner)
+- [x] Forzare `COMPOSE_PROJECT_NAME` stabile nel workflow deploy SSH.
+- [x] Aggiungere cleanup pre-deploy di container service stale per evitare collisioni nome.
+- [x] Mantenere invariata la logica di healthcheck worker post-up.
+- [ ] Verifica in GitHub Actions su prossimo run deploy.
+
+## Review (Fix deploy container name conflict on Hetzner - Mar 05, 2026)
+- File aggiornato: `.github/workflows/deploy-hetzner.yml`.
+- Aggiunto `export COMPOSE_PROJECT_NAME="app"` all'inizio dello script remoto.
+- Aggiunto cleanup pre-`up`:
+  - `docker compose ... rm -f -s web email-worker low-cards-worker affiliation-video-worker || true`
+  - rimozione container stale per pattern nome (`_app-web-1`, `_app-email-worker-1`, `_app-low-cards-worker-1`, `_app-affiliation-video-worker-1`).
+- Effetto atteso: niente più collisioni `container name ... already in use` in fase Recreate/Up.
