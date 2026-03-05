@@ -77,10 +77,6 @@ const INTRO_CHECKLIST_ITEMS = [
   "Documento Segretario/Tesoriere",
 ] as const;
 
-const stepCardClass = "surface relative overflow-hidden p-6 md:p-7";
-const fieldClass =
-  "w-full rounded-xl border border-neutral-200 bg-white/90 px-3.5 py-2.5 text-sm text-neutral-800 shadow-sm transition focus:border-brand/40 focus:outline-none focus:ring-2 focus:ring-brand/15";
-const textareaClass = `${fieldClass} min-h-[7rem]`;
 
 const buildEmptyForm = (): FormState => ({
   organization_name: "",
@@ -196,7 +192,6 @@ const Affiliazione = () => {
   const [showVideoOverlay, setShowVideoOverlay] = useState(false);
   const [notice, setNotice] = useState("");
   const { capabilities, loading: capabilitiesLoading } = useStatePlatformCapabilities();
-  const [submitAttempted, setSubmitAttempted] = useState(false);
   const stripeFallbackAppliedRef = useRef(false);
   const autoOpenedVideoRef = useRef(false);
   const navigate = useNavigate();
@@ -427,12 +422,10 @@ const Affiliazione = () => {
   }, [docsByType, form, people]);
 
   const onFieldChange = <K extends keyof FormState>(key: K, value: FormState[K]) => {
-    setSubmitAttempted(false);
     setForm((current) => (current ? { ...current, [key]: value } : current));
   };
 
   const onPersonChange = (index: number, key: keyof PersonForm, value: string) => {
-    setSubmitAttempted(false);
     setPeople((current) =>
       current.map((item, itemIndex) =>
         itemIndex === index ? { ...item, [key]: value } : item,
@@ -442,7 +435,6 @@ const Affiliazione = () => {
 
   const onUploadDocument = async (docType: string, file: File) => {
     if (!token) return;
-    setSubmitAttempted(false);
     try {
       setUploadingType(docType);
       setError("");
@@ -477,7 +469,6 @@ const Affiliazione = () => {
 
   const onSubmit = async () => {
     if (!token) return;
-    setSubmitAttempted(true);
     if (validation.issues.length > 0) {
       setError("Completa i campi obbligatori prima di inviare la richiesta.");
       if (validation.firstInvalidStep) {
@@ -610,7 +601,6 @@ const Affiliazione = () => {
 
   const onGoNextStep = () => {
     if (hasCurrentStepErrors) {
-      setSubmitAttempted(true);
       setError("Completa i campi obbligatori dello step prima di continuare.");
       return;
     }
@@ -620,431 +610,576 @@ const Affiliazione = () => {
 
   if (capabilitiesLoading || loading) {
     return (
-      <section className="py-16">
-        <div className="container-shell">
-          <div className="surface-strong p-8 text-sm text-neutral-500">Caricamento wizard...</div>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="bg-white rounded-2xl shadow-xl p-8 text-sm text-slate-500 text-center animate-pulse flex flex-col items-center gap-4">
+           <svg className="animate-spin w-8 h-8 text-brand" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+           Caricamento procedura...
         </div>
-      </section>
+      </div>
     );
   }
 
   return (
-    <section className="py-8 md:py-12">
-      <div className="container-shell">
-        <div className="w-full space-y-5">
-          <div className="surface-strong p-5 md:p-7">
-          <div className="mx-auto max-w-3xl text-center">
-              <h1 className="section-heading">Affilia la tua Associazione</h1>
-              <p className="mt-2 text-sm leading-6 text-neutral-600 md:text-base">
-                Compila i 5 passaggi richiesti, allega i documenti e invia la domanda ad ASSONAM.
-              </p>
-            </div>
+    <div className="min-h-[100dvh] bg-slate-50/50 py-8 md:py-12 font-sans text-slate-900 pb-32">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+        
+        {/* Header minimal */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900">
+            Affilia la tua Associazione
+          </h1>
+          <p className="mt-3 text-sm md:text-base text-slate-500 max-w-xl mx-auto">
+            Completa la procedura guidata per richiedere l'affiliazione ad ASSONAM.
+          </p>
+        </div>
+
+        {draft?.status === "changes_requested" && (
+          <div className="mb-6 rounded-xl border border-orange-200 bg-orange-50 px-5 py-4 text-sm text-orange-800 shadow-sm">
+            <strong className="block mb-1 font-bold">Modifiche richieste da ASSONAM</strong>
+            Aggiorna dati e documenti, poi invia nuovamente.
+            {draft.review_notes ? <div className="mt-2 bg-white/50 p-3 rounded-lg border border-orange-100 italic">{draft.review_notes}</div> : null}
           </div>
+        )}
 
-          {draft?.status === "changes_requested" && (
-            <div className="mt-5 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700">
-              Modifiche richieste da ASSONAM. Aggiorna dati e documenti, poi invia nuovamente.
-              {draft.review_notes ? <div className="mt-1 font-medium">{draft.review_notes}</div> : null}
-            </div>
-          )}
+        {draft?.referral?.referrer_org_name && (
+          <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 px-5 py-4 text-sm text-blue-800 shadow-sm flex items-center gap-3">
+            <span className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">👋</span>
+            <div>Invito ricevuto da <strong className="font-bold">{draft.referral.referrer_org_name}</strong></div>
+          </div>
+        )}
 
-          {draft?.referral?.referrer_org_name && (
-            <div className="mt-5 rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-800">
-              Invito da <span className="font-semibold">{draft.referral.referrer_org_name}</span>
-            </div>
-          )}
+        {notice && (
+          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800 shadow-sm">
+            {notice}
+          </div>
+        )}
 
-          {notice && (
-            <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              {notice}
-            </div>
-          )}
+        {error && (
+          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800 shadow-sm flex items-start gap-3">
+            <svg className="w-5 h-5 text-red-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+            <div>{error}</div>
+          </div>
+        )}
 
-          {error && (
-            <div className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
-            </div>
-          )}
-
-          {!showIntroScreen && !hasRealSubmission && (
-            <div className="mt-6 space-y-3">
-              <div className="h-2 w-full overflow-hidden rounded-full bg-neutral-200">
-                <div
-                  className="h-full rounded-full bg-brand transition-[width] duration-300"
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
-                {WIZARD_PROGRESS_STEPS.map((item) => {
-                  const isActive = item.step === progressActiveStep;
-                  const isCompleted = item.step < progressActiveStep;
-                  return (
-                    <button
-                      key={item.step}
-                      type="button"
-                      onClick={() => {
-                        setShowIntroScreen(false);
-                        setCurrentStep(item.step);
-                      }}
-                      className={`rounded-xl border px-3 py-2.5 text-left text-xs leading-tight transition ${
-                        isActive
-                          ? "border-brand bg-brand/10 text-brand shadow-sm"
-                          : isCompleted
-                            ? "border-brand/30 bg-brand/[0.05] text-brand/90"
-                            : "border-neutral-200 bg-white text-neutral-500 hover:border-brand/40 hover:bg-brand/[0.03]"
+        {/* Stepper top */}
+        {!showIntroScreen && !hasRealSubmission && (
+          <div className="mb-10 mt-4">
+            <div className="flex items-center justify-between relative z-0">
+              {/* Line behind */}
+              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-slate-200 rounded-full -z-10"></div>
+              <div 
+                className="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-brand transition-all duration-500 ease-out rounded-full -z-10"
+                style={{ width: `${progressPercent}%` }}
+              ></div>
+              
+              {WIZARD_PROGRESS_STEPS.map((item) => {
+                const isActive = item.step === progressActiveStep;
+                const isCompleted = item.step < progressActiveStep;
+                return (
+                  <button
+                    key={item.step}
+                    type="button"
+                    onClick={() => {
+                      setShowIntroScreen(false);
+                      setCurrentStep(item.step);
+                    }}
+                    className={`group relative flex flex-col items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 rounded-lg p-1 transition-transform hover:scale-105`}
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shadow-sm transition-colors border-2
+                      ${isActive 
+                        ? "bg-white border-brand text-brand ring-4 ring-brand/10" 
+                        : isCompleted 
+                          ? "bg-brand border-brand text-white" 
+                          : "bg-white border-slate-200 text-slate-400 group-hover:border-slate-300"
                       }`}
                     >
-                      <div className="font-semibold text-[11px] uppercase tracking-[0.08em]">
-                        Step {item.step}
+                      {isCompleted ? (
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                      ) : (
+                        item.step
+                      )}
+                    </div>
+                    <span className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest absolute -bottom-7 w-max text-center
+                      ${isActive ? "text-brand" : isCompleted ? "text-slate-700" : "text-slate-400 hidden sm:block"}
+                    `}>
+                      {item.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Main Card */}
+        <div className="bg-white rounded-[2rem] shadow-2xl shadow-slate-200/50 border border-slate-100 overflow-hidden transition-all relative">
+          
+          {showIntroScreen && (
+            <div className="p-6 sm:p-12 space-y-8 relative overflow-hidden">
+              <div className="absolute top-0 right-0 -mt-16 -mr-16 w-64 h-64 bg-brand/5 rounded-full blur-3xl pointer-events-none"></div>
+              
+              <div className="text-center relative z-10">
+                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-brand/10 to-brand/5 text-brand mb-6 shadow-inner border border-brand/10">
+                  <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                </div>
+                <h2 className="text-3xl font-extrabold text-slate-900">Inizia la tua richiesta</h2>
+                <p className="mt-3 text-base text-slate-500 max-w-md mx-auto leading-relaxed">
+                  La procedura richiede circa 10 minuti. Assicurati di avere a disposizione i documenti in formato PDF.
+                </p>
+              </div>
+
+              <div className="bg-slate-50 rounded-2xl p-6 sm:p-8 border border-slate-100 relative z-10">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-5">Checklist necessaria</h3>
+                <ul className="grid sm:grid-cols-2 gap-4">
+                  {INTRO_CHECKLIST_ITEMS.map((item) => (
+                    <li key={item} className="flex items-start gap-3 text-sm text-slate-700 font-medium">
+                      <svg className="w-5 h-5 text-brand shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                      <span className="leading-snug">{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="pt-4 text-center relative z-10">
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center w-full sm:w-auto min-w-[240px] h-14 px-8 rounded-xl bg-gradient-to-r from-brand to-brand-light text-white text-lg font-bold tracking-wide shadow-xl shadow-brand/20 hover:-translate-y-1 hover:shadow-2xl hover:shadow-brand/30 transition-all focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none"
+                  disabled={saving}
+                  onClick={() => void onStartWizard()}
+                >
+                  {saving ? (
+                    <span className="flex items-center gap-2">
+                      <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                      Preparazione...
+                    </span>
+                  ) : "Inizia Ora"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!showIntroScreen && !hasRealSubmission && currentStep === 1 && (
+            <div className="p-6 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="border-b border-slate-100 pb-5">
+                <h2 className="text-2xl font-extrabold text-slate-900">Dati dell'Associazione</h2>
+                <p className="mt-1 text-sm text-slate-500">Inserisci i riferimenti principali e i dati del referente della richiesta.</p>
+              </div>
+
+              <div className="grid gap-6 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Nome associazione <span className="text-red-500">*</span></label>
+                  <input className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-medium focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all placeholder:font-normal" placeholder="Associazione XYZ" value={form.organization_name} onChange={(e) => onFieldChange("organization_name", e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Ragione sociale</label>
+                  <input className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-medium focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all placeholder:font-normal" placeholder="Opzionale" value={form.organization_legal_name} onChange={(e) => onFieldChange("organization_legal_name", e.target.value)} />
+                </div>
+                
+                <div className="space-y-1.5 sm:col-span-2">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Indirizzo Sede Legale</label>
+                  <input className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-medium focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all placeholder:font-normal" placeholder="Via Roma 1" value={form.address_line1} onChange={(e) => onFieldChange("address_line1", e.target.value)} />
+                </div>
+                
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Città</label>
+                  <input className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-medium focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all placeholder:font-normal" placeholder="Roma" value={form.city} onChange={(e) => onFieldChange("city", e.target.value)} />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">CAP</label>
+                    <input className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-medium focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all placeholder:font-normal" placeholder="00100" value={form.postal_code} onChange={(e) => onFieldChange("postal_code", e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Provincia</label>
+                    <input className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-medium focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all placeholder:font-normal" placeholder="RM" value={form.province} onChange={(e) => onFieldChange("province", e.target.value)} />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Codice Fiscale Associazione</label>
+                  <input className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-bold focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all uppercase placeholder:font-normal placeholder:normal-case" placeholder="11 cifre" value={form.tax_code} onChange={(e) => onFieldChange("tax_code", e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Partita IVA (se presente)</label>
+                  <input className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-bold focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all placeholder:font-normal" placeholder="11 cifre" value={form.vat_number} onChange={(e) => onFieldChange("vat_number", e.target.value)} />
+                </div>
+
+                <div className="sm:col-span-2 pt-8 border-t border-slate-100">
+                  <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
+                    <svg className="w-5 h-5 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                    Dati Referente Pratica
+                  </h3>
+                </div>
+                
+                <div className="space-y-1.5 sm:col-span-2">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Nome e Cognome <span className="text-red-500">*</span></label>
+                  <input className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-medium focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all placeholder:font-normal" placeholder="Mario Rossi" value={form.applicant_full_name} onChange={(e) => onFieldChange("applicant_full_name", e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Telefono <span className="text-red-500">*</span></label>
+                  <input type="tel" className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-medium focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all placeholder:font-normal" placeholder="+39" value={form.applicant_phone} onChange={(e) => onFieldChange("applicant_phone", e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Email <span className="text-red-500">*</span></label>
+                  <input type="email" className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-medium focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all placeholder:font-normal" placeholder="mario@esempio.it" value={form.applicant_email} onChange={(e) => onFieldChange("applicant_email", e.target.value)} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!showIntroScreen && !hasRealSubmission && currentStep === 2 && (
+            <div className="p-6 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="border-b border-slate-100 pb-5">
+                <h2 className="text-2xl font-extrabold text-slate-900">Cariche e Referenti</h2>
+                <p className="mt-1 text-sm text-slate-500">Inserisci i responsabili del direttivo dell'associazione.</p>
+              </div>
+
+              <div className="space-y-8">
+                {people.map((person, index) => (
+                  <div key={person.role} className="rounded-2xl border border-slate-200 bg-slate-50/30 p-6 sm:p-8 hover:border-brand/30 hover:shadow-md transition-all group">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-2 h-8 bg-brand rounded-full group-hover:scale-y-110 transition-transform"></div>
+                      <h3 className="font-extrabold text-slate-800 uppercase tracking-widest text-sm">
+                        {ROLE_ITEMS.find((item) => item.role === person.role)?.label || person.role}
+                      </h3>
+                    </div>
+                    <div className="grid gap-5 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Nome Completo</label>
+                        <input className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-white text-sm font-medium focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all" placeholder="Nome" value={person.full_name} onChange={(e) => onPersonChange(index, "full_name", e.target.value)} />
                       </div>
-                      <div className="mt-1 text-sm font-medium">
-                        {item.label}
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Email</label>
+                        <input type="email" className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-white text-sm font-medium focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all" placeholder="Email" value={person.email} onChange={(e) => onPersonChange(index, "email", e.target.value)} />
                       </div>
-                    </button>
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Telefono</label>
+                        <input type="tel" className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-white text-sm font-medium focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all" placeholder="+39" value={person.phone} onChange={(e) => onPersonChange(index, "phone", e.target.value)} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Codice Fiscale</label>
+                        <input className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-white text-sm font-bold focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all uppercase placeholder:font-normal placeholder:normal-case" placeholder="16 caratteri" value={person.fiscal_code} onChange={(e) => onPersonChange(index, "fiscal_code", e.target.value)} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!showIntroScreen && !hasRealSubmission && currentStep === 3 && (
+            <div className="p-6 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="border-b border-slate-100 pb-5">
+                <h2 className="text-2xl font-extrabold text-slate-900">Upload Documenti</h2>
+                <p className="mt-1 text-sm text-slate-500">Carica i file in formato PDF. La segreteria convaliderà i documenti manualmente.</p>
+              </div>
+
+              <div className="grid gap-5 sm:grid-cols-2">
+                {DOC_ITEMS.map((doc) => {
+                  const docData = docsByType.get(doc.type);
+                  const isUploaded = !!docData;
+                  const status = docStatusMeta(docData?.status);
+                  
+                  return (
+                    <div key={doc.type} className={`relative flex flex-col justify-between rounded-2xl border-2 p-5 transition-all ${isUploaded ? 'border-brand/40 bg-brand/[0.02] shadow-sm' : 'border-dashed border-slate-300 bg-slate-50/80 hover:bg-slate-50 hover:border-slate-400'}`}>
+                      <div className="mb-6">
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="font-bold text-sm text-slate-900 leading-tight">{doc.label}</h3>
+                          {isUploaded && (
+                            <span className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-brand text-white shadow-sm">
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            </span>
+                          )}
+                        </div>
+                        {isUploaded && (
+                          <div className="mt-2 flex items-center gap-3">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                              status.label === 'approvato' ? 'bg-emerald-100 text-emerald-800' : 
+                              status.label === 'rifiutato' ? 'bg-red-100 text-red-800' : 
+                              'bg-amber-100 text-amber-800'
+                            }`}>
+                              {status.label}
+                            </span>
+                            {docData.download_url && (
+                              <a href={docData.download_url} target="_blank" rel="noreferrer" className="text-xs font-semibold text-brand hover:underline flex items-center gap-1">
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                Vedi file
+                              </a>
+                            )}
+                          </div>
+                        )}
+                        {docData?.rejection_note && (
+                          <p className="mt-3 text-xs font-medium text-red-700 bg-red-50 p-2.5 rounded-lg border border-red-200">
+                            Nota di rifiuto: {docData.rejection_note}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="mt-auto">
+                        <label className={`cursor-pointer w-full flex items-center justify-center h-12 px-4 rounded-xl text-sm font-bold transition-all ${
+                          uploadingType === doc.type 
+                            ? 'bg-slate-200 text-slate-500 cursor-wait' 
+                            : isUploaded 
+                              ? 'bg-white border-2 border-slate-200 text-slate-600 hover:border-brand hover:text-brand' 
+                              : 'bg-slate-900 text-white shadow-md hover:-translate-y-0.5 hover:shadow-lg'
+                        }`}>
+                          {uploadingType === doc.type ? (
+                            <span className="flex items-center gap-2">
+                              <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                              Caricamento...
+                            </span>
+                          ) : isUploaded ? (
+                            'Sostituisci File'
+                          ) : (
+                            <span className="flex items-center gap-2">
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                              Carica PDF
+                            </span>
+                          )}
+                          <input
+                            type="file"
+                            accept=".pdf"
+                            className="hidden"
+                            disabled={uploadingType === doc.type}
+                            onChange={(event) => {
+                              const file = event.target.files?.[0];
+                              if (file) void onUploadDocument(doc.type, file);
+                            }}
+                          />
+                        </label>
+                      </div>
+                    </div>
                   );
                 })}
               </div>
             </div>
           )}
 
-          {showIntroScreen && (
-            <div className={`${stepCardClass} space-y-6`}>
-            <div>
-              <h2 className="text-2xl font-semibold text-neutral-900">Affilia la tua Associazione</h2>
-              <p className="mt-2 text-sm text-neutral-600">
-                Richiede circa 10 minuti. Ti serviranno solo alcuni documenti dell'associazione.
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-neutral-200 bg-white p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">
-                Checklist documenti
-              </p>
-              <ul className="mt-3 space-y-2 text-sm text-neutral-700">
-                {INTRO_CHECKLIST_ITEMS.map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <span className="mt-1 inline-flex h-4 w-4 items-center justify-center rounded-full border border-emerald-300 bg-emerald-50 text-[10px] text-emerald-700">
-                      OK
-                    </span>
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div>
-              <button
-                type="button"
-                className="btn-primary w-full sm:w-auto"
-                disabled={saving}
-                onClick={() => {
-                  void onStartWizard();
-                }}
-              >
-                {saving ? "Preparazione..." : "Inizia Affiliazione"}
-              </button>
-            </div>
-            </div>
-          )}
-
-          {!showIntroScreen && !hasRealSubmission && currentStep === 1 && (
-            <div className={`${stepCardClass} space-y-6`}>
-            <div>
-              <h2 className="text-lg font-semibold text-neutral-900">Checklist iniziale</h2>
-              <p className="mt-1 text-sm text-neutral-600">
-                Prima di compilare, prepara questi documenti obbligatori.
-              </p>
-              <ul className="mt-3 grid gap-2 text-sm text-neutral-700 md:grid-cols-2">
-                {DOC_ITEMS.map((item) => (
-                  <li key={item.type} className="rounded-xl border border-neutral-200 bg-white/85 px-3.5 py-2.5 shadow-sm">
-                    {item.label}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <input className={fieldClass} placeholder="Nome associazione *" value={form.organization_name} onChange={(e) => onFieldChange("organization_name", e.target.value)} />
-              <input className={fieldClass} placeholder="Ragione sociale" value={form.organization_legal_name} onChange={(e) => onFieldChange("organization_legal_name", e.target.value)} />
-              <input className={fieldClass} placeholder="Slug suggerito (opzionale)" value={form.organization_slug_candidate} onChange={(e) => onFieldChange("organization_slug_candidate", e.target.value)} />
-              <input className={fieldClass} placeholder="Codice fiscale associazione" value={form.tax_code} onChange={(e) => onFieldChange("tax_code", e.target.value)} />
-              <input className={fieldClass} placeholder="Partita IVA" value={form.vat_number} onChange={(e) => onFieldChange("vat_number", e.target.value)} />
-              <input className={fieldClass} placeholder="Telefono referente *" value={form.applicant_phone} onChange={(e) => onFieldChange("applicant_phone", e.target.value)} />
-              <input className={`${fieldClass} md:col-span-2`} placeholder="Indirizzo sede legale" value={form.address_line1} onChange={(e) => onFieldChange("address_line1", e.target.value)} />
-              <input className={`${fieldClass} md:col-span-2`} placeholder="Indirizzo aggiuntivo" value={form.address_line2} onChange={(e) => onFieldChange("address_line2", e.target.value)} />
-              <input className={fieldClass} placeholder="Citta" value={form.city} onChange={(e) => onFieldChange("city", e.target.value)} />
-              <input className={fieldClass} placeholder="Provincia" value={form.province} onChange={(e) => onFieldChange("province", e.target.value)} />
-              <input className={fieldClass} placeholder="CAP" value={form.postal_code} onChange={(e) => onFieldChange("postal_code", e.target.value)} />
-              <input className={fieldClass} placeholder="Paese" value={form.country} onChange={(e) => onFieldChange("country", e.target.value)} />
-              <input className={fieldClass} placeholder="Nome referente *" value={form.applicant_full_name} onChange={(e) => onFieldChange("applicant_full_name", e.target.value)} />
-              <input className={fieldClass} placeholder="Email referente *" value={form.applicant_email} onChange={(e) => onFieldChange("applicant_email", e.target.value)} />
-            </div>
-            </div>
-          )}
-
-          {!showIntroScreen && !hasRealSubmission && currentStep === 2 && (
-            <div className={`${stepCardClass} space-y-4`}>
-            <h2 className="text-lg font-semibold text-neutral-900">Cariche e referenti</h2>
-            <p className="text-sm text-neutral-600">Inserisci i responsabili principali dell'associazione.</p>
-            <div className="space-y-4">
-              {people.map((person, index) => (
-                <div key={person.role} className="rounded-xl border border-neutral-200 bg-white/90 p-4 shadow-sm">
-                  <p className="text-sm font-semibold text-neutral-800">
-                    {ROLE_ITEMS.find((item) => item.role === person.role)?.label || person.role}
-                  </p>
-                  <div className="mt-3 grid gap-3 md:grid-cols-2">
-                    <input className={fieldClass} placeholder="Nome e cognome" value={person.full_name} onChange={(e) => onPersonChange(index, "full_name", e.target.value)} />
-                    <input className={fieldClass} placeholder="Email" value={person.email} onChange={(e) => onPersonChange(index, "email", e.target.value)} />
-                    <input className={fieldClass} placeholder="Telefono" value={person.phone} onChange={(e) => onPersonChange(index, "phone", e.target.value)} />
-                    <input className={fieldClass} placeholder="Codice fiscale" value={person.fiscal_code} onChange={(e) => onPersonChange(index, "fiscal_code", e.target.value)} />
-                  </div>
-                </div>
-              ))}
-            </div>
-            </div>
-          )}
-
-          {!showIntroScreen && !hasRealSubmission && currentStep === 3 && (
-            <div className={`${stepCardClass} space-y-4`}>
-            <h2 className="text-lg font-semibold text-neutral-900">Documenti e cariche</h2>
-            <p className="text-sm text-neutral-600">Carica PDF validi. Ogni documento viene verificato dal super admin.</p>
-            <div className="grid gap-3 md:grid-cols-2">
-              {DOC_ITEMS.map((doc) => {
-                const docData = docsByType.get(doc.type);
-                const status = docStatusMeta(docData?.status);
-                return (
-                  <div key={doc.type} className="rounded-xl border border-neutral-200 bg-white/90 p-4 shadow-sm">
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-neutral-900">{doc.label}</p>
-                        <p className={`text-xs ${status.tone}`}>
-                          Stato: {status.label}
-                          {docData?.rejection_note ? ` - ${docData.rejection_note}` : ""}
-                        </p>
-                      </div>
-                      {docData?.download_url ? (
-                        <a className="text-xs font-medium text-brand hover:underline" href={docData.download_url} target="_blank" rel="noreferrer">
-                          Scarica ultimo file
-                        </a>
-                      ) : null}
-                    </div>
-                    <div className="mt-3">
-                      <input
-                        type="file"
-                        accept=".pdf"
-                        disabled={uploadingType === doc.type}
-                        onChange={(event) => {
-                          const file = event.target.files?.[0];
-                          if (file) void onUploadDocument(doc.type, file);
-                        }}
-                        className="block w-full rounded-xl border border-neutral-200 px-3 py-2 text-xs text-neutral-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand/10 file:px-2.5 file:py-1.5 file:font-medium file:text-brand hover:file:bg-brand/15"
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            </div>
-          )}
-
           {!showIntroScreen && !hasRealSubmission && currentStep === 4 && (
-            <div className={`${stepCardClass} space-y-5`}>
-            <h2 className="text-lg font-semibold text-neutral-900">Pagamento</h2>
-            <p className="text-sm text-neutral-600">
-              Seleziona il metodo di pagamento. L'attivazione avviene sempre dopo verifica documentale.
-            </p>
-            <div className="rounded-md border border-brand/30 bg-brand/5 px-3 py-2 text-xs text-neutral-700">
-              Quota affiliazione:{" "}
-              <span className="font-semibold text-neutral-900">
-                {((draft?.payment_amount_cents ?? 0) / 100).toLocaleString("it-IT", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}{" "}
-                EUR
-              </span>
-            </div>
-            {!stripeEnabled ? (
-              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                Puoi completare l'invio e pagare con bonifico o contanti. Attivazione dopo verifica.
+            <div className="p-6 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="border-b border-slate-100 pb-5">
+                <h2 className="text-2xl font-extrabold text-slate-900">Pagamento</h2>
+                <p className="mt-1 text-sm text-slate-500">Scegli come saldare la quota associativa.</p>
               </div>
-            ) : null}
-            <div className="grid gap-3">
-              <label
-                className={`flex items-start gap-3 rounded-md border border-neutral-200 bg-white p-3 ${
-                  stripeEnabled ? "" : "opacity-70"
-                }`}
-              >
-                <input
-                  type="radio"
-                  checked={form.payment_method === "stripe"}
-                  disabled={!stripeEnabled}
-                  onChange={() => onFieldChange("payment_method", "stripe")}
-                />
-                <div>
-                  <p className="text-sm font-semibold text-neutral-900">
-                    {stripeEnabled ? "Carta (Stripe)" : "Carta (Stripe) - presto disponibile"}
-                  </p>
-                  <p className="text-xs text-neutral-600">
-                    {stripeEnabled
-                      ? "Pagamento online immediato con carta."
-                      : "Modalita carta temporaneamente disattivata in questa installazione."}
+
+              <div className="bg-slate-900 rounded-2xl p-8 text-white flex items-center justify-between shadow-lg relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -mr-10 -mt-10"></div>
+                <div className="relative z-10">
+                  <p className="text-brand-light text-xs font-bold uppercase tracking-widest mb-1">Quota Affiliazione Annuale</p>
+                  <p className="text-4xl sm:text-5xl font-extrabold tracking-tight">
+                    {((draft?.payment_amount_cents ?? 0) / 100).toLocaleString("it-IT", { minimumFractionDigits: 2 })} <span className="text-xl text-slate-400 font-medium">EUR</span>
                   </p>
                 </div>
-              </label>
-              <label className="flex items-start gap-3 rounded-md border border-neutral-200 bg-white p-3">
-                <input type="radio" checked={form.payment_method === "bank_transfer"} onChange={() => onFieldChange("payment_method", "bank_transfer")} />
-                <div>
-                  <p className="text-sm font-semibold text-neutral-900">Bonifico</p>
-                  <p className="text-xs text-neutral-600">Verifica manuale del pagamento da parte del super admin.</p>
+                <div className="hidden sm:flex w-16 h-16 rounded-full bg-white/10 items-center justify-center relative z-10">
+                  <svg className="w-8 h-8 text-brand-light" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
                 </div>
-              </label>
-              <label className="flex items-start gap-3 rounded-md border border-neutral-200 bg-white p-3">
-                <input type="radio" checked={form.payment_method === "cash"} onChange={() => onFieldChange("payment_method", "cash")} />
-                <div>
-                  <p className="text-sm font-semibold text-neutral-900">Contanti</p>
-                  <p className="text-xs text-neutral-600">Definisci appuntamento per il versamento.</p>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="font-bold text-slate-900 text-sm uppercase tracking-wider">Metodo di pagamento</h3>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <label className={`relative flex flex-col p-6 rounded-2xl border-2 cursor-pointer transition-all ${
+                    form.payment_method === "stripe" ? 'border-brand bg-brand/5 ring-4 ring-brand/10' : 'border-slate-200 bg-white hover:border-slate-300'
+                  } ${!stripeEnabled ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="font-extrabold text-slate-900 text-lg">Carta di Credito</span>
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${form.payment_method === "stripe" ? 'border-brand' : 'border-slate-300'}`}>
+                        {form.payment_method === "stripe" && <div className="w-3 h-3 bg-brand rounded-full"></div>}
+                      </div>
+                    </div>
+                    <p className="text-sm text-slate-500 font-medium flex-grow leading-relaxed">Pagamento sicuro e immediato tramite Stripe. Attivazione automatica.</p>
+                    <input type="radio" className="hidden" checked={form.payment_method === "stripe"} disabled={!stripeEnabled} onChange={() => onFieldChange("payment_method", "stripe")} />
+                  </label>
+
+                  <label className={`relative flex flex-col p-6 rounded-2xl border-2 cursor-pointer transition-all ${
+                    form.payment_method === "bank_transfer" ? 'border-brand bg-brand/5 ring-4 ring-brand/10' : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="font-extrabold text-slate-900 text-lg">Bonifico Bancario</span>
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${form.payment_method === "bank_transfer" ? 'border-brand' : 'border-slate-300'}`}>
+                        {form.payment_method === "bank_transfer" && <div className="w-3 h-3 bg-brand rounded-full"></div>}
+                      </div>
+                    </div>
+                    <p className="text-sm text-slate-500 font-medium flex-grow leading-relaxed">Attivazione manuale post verifica contabile da parte di ASSONAM.</p>
+                    <input type="radio" className="hidden" checked={form.payment_method === "bank_transfer"} onChange={() => onFieldChange("payment_method", "bank_transfer")} />
+                  </label>
                 </div>
-              </label>
-            </div>
-
-            {form.payment_method === "stripe" && stripeEnabled && (
-              <div className="rounded-md border border-neutral-200 bg-white p-4">
-                <p className="text-sm text-neutral-700">Apri la sessione checkout Stripe in una nuova scheda.</p>
-                <button type="button" className="btn-primary mt-3" onClick={onOpenStripeCheckout}>
-                  Apri checkout Stripe
-                </button>
               </div>
-            )}
 
-            {(form.payment_method === "bank_transfer" || form.payment_method === "cash") && (
-              <div className="grid gap-3 rounded-xl border border-neutral-200 bg-white p-4 md:grid-cols-2">
-                {form.payment_method === "bank_transfer" ? (
-                  <div className="md:col-span-2 text-xs text-neutral-600">
-                    <p>IBAN: <span className="font-semibold text-neutral-800">{draft?.payment_config.bank_iban || "-"}</span></p>
-                    <p className="mt-1">Causale: <span className="font-semibold text-neutral-800">{draft?.payment_config.bank_causale_prefix || "AFFILIAZIONE ASSONAM"} - {token}</span></p>
+              {form.payment_method === "stripe" && stripeEnabled && (
+                <div className="bg-[#635BFF]/5 border border-[#635BFF]/20 rounded-2xl p-6 sm:p-8 text-center animate-in fade-in">
+                  <p className="text-sm font-semibold text-[#635BFF] mb-5">Verrai reindirizzato al portale sicuro di Stripe per completare il pagamento in 1 minuto.</p>
+                  <button type="button" className="inline-flex items-center justify-center h-14 px-10 rounded-xl bg-[#635BFF] hover:bg-[#5851E5] text-white text-lg font-bold tracking-wide shadow-lg shadow-[#635BFF]/30 transition-all hover:-translate-y-0.5 focus:ring-4 focus:ring-[#635BFF]/30" onClick={onOpenStripeCheckout}>
+                    <svg className="w-6 h-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8V7a4 4 0 00-8 0v4h8z" /></svg>
+                    Paga con Stripe
+                  </button>
+                </div>
+              )}
+
+              {form.payment_method === "bank_transfer" && (
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 sm:p-8 animate-in fade-in space-y-6">
+                  <div className="text-center sm:text-left">
+                    <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Coordinate Bancarie ASSONAM</p>
+                    <div className="font-mono text-base sm:text-xl font-bold bg-white border border-slate-200 rounded-xl p-4 mb-4 select-all break-all text-brand tracking-wider shadow-sm text-center">
+                      {draft?.payment_config.bank_iban || "-"}
+                    </div>
+                    <p className="text-sm text-slate-600 font-medium">Causale obbligatoria: <strong className="text-slate-900 bg-amber-100/50 border border-amber-200 px-2 py-1 rounded select-all">{draft?.payment_config.bank_causale_prefix || "AFFILIAZIONE"} - {token}</strong></p>
                   </div>
-                ) : (
-                  <div className="md:col-span-2 text-xs text-neutral-600">
-                    Sede contanti: <span className="font-semibold text-neutral-800">{draft?.payment_config.cash_location || "Sede ASSONAM"}</span>
+                  
+                  <div className="grid gap-5 sm:grid-cols-2 pt-6 border-t border-slate-200">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Data Prevista Versamento</label>
+                      <input type="date" className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-white text-sm font-medium focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all" value={form.manual_preferred_date} onChange={(e) => onFieldChange("manual_preferred_date", e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Nome Referente Bonifico</label>
+                      <input type="text" placeholder="Nome di chi effettua il bonifico" className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-white text-sm font-medium focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all" value={form.manual_contact} onChange={(e) => onFieldChange("manual_contact", e.target.value)} />
+                    </div>
                   </div>
-                )}
-                <input type="date" className={fieldClass} placeholder="Data preferita" value={form.manual_preferred_date} onChange={(e) => onFieldChange("manual_preferred_date", e.target.value)} />
-                <input type="time" className={fieldClass} placeholder="Orario preferito" value={form.manual_preferred_time} onChange={(e) => onFieldChange("manual_preferred_time", e.target.value)} />
-                <input className={`${fieldClass} md:col-span-2`} placeholder="Contatto operativo" value={form.manual_contact} onChange={(e) => onFieldChange("manual_contact", e.target.value)} />
-              </div>
-            )}
+                </div>
+              )}
             </div>
           )}
 
           {!showIntroScreen && !hasRealSubmission && currentStep === 5 && (
-            <div className={`${stepCardClass} space-y-5`}>
-            <h2 className="text-lg font-semibold text-neutral-900">Riepilogo e invio</h2>
-            <p className="text-sm text-neutral-600">
-              Verifica i dati principali. Dopo l'invio lo stato passa a <strong>under_review</strong>.
-            </p>
-            <div className="grid gap-2 text-sm text-neutral-700">
-              <div>Associazione: {form.organization_name || "-"}</div>
-              <div>Referente: {form.applicant_full_name || "-"}</div>
-              <div>Email: {form.applicant_email || "-"}</div>
-              <div>Metodo pagamento: {form.payment_method || "-"}</div>
-              <div>Documenti caricati: {(draft?.documents || []).length}</div>
-            </div>
-            {validation.issues.length > 0 ? (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                <p className="font-semibold">Completa questi punti prima dell'invio:</p>
-                <ul className="mt-2 space-y-1">
-                  {validation.issues.map((issue) => (
-                    <li key={issue}>- {issue}</li>
-                  ))}
-                </ul>
+            <div className="p-6 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="border-b border-slate-100 pb-5">
+                <h2 className="text-2xl font-extrabold text-slate-900">Riepilogo Finale</h2>
+                <p className="mt-1 text-sm text-slate-500">Un ultimo controllo prima di inviare definitivamente la richiesta.</p>
               </div>
-            ) : (
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                Dati completi. Puoi inviare la richiesta.
-              </div>
-            )}
-            <textarea className={textareaClass} rows={4} placeholder="Note per il super admin" value={form.notes} onChange={(e) => onFieldChange("notes", e.target.value)} />
-            {submitAttempted && validation.issues.length > 0 ? (
-              <p className="text-xs text-red-600">
-                Invio bloccato: correggi i campi indicati e riprova.
-              </p>
-            ) : null}
-            </div>
-          )}
 
-          {!showIntroScreen && !hasRealSubmission && (
-            <div className="surface mt-1 p-4 md:p-5">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-sm text-neutral-600">
-                  Step {progressActiveStep} di {WIZARD_PROGRESS_STEPS.length}
-                  {hasCurrentStepErrors ? (
-                    <span className="ml-2 text-red-600">
-                      ({stepErrors.length} campi da completare)
-                    </span>
-                  ) : null}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="btn-ghost px-4 py-2 text-sm"
-                    onClick={onGoPrevStep}
-                    disabled={progressActiveStep <= 1}
-                  >
-                    Indietro
-                  </button>
-                  {progressActiveStep < 5 ? (
-                    <button
-                      type="button"
-                      className="btn-primary px-4 py-2 text-sm"
-                      onClick={onGoNextStep}
-                    >
-                      Avanti
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="btn-primary px-4 py-2 text-sm"
-                      disabled={submitting || validation.issues.length > 0}
-                      onClick={onSubmit}
-                    >
-                      {submitting ? "Invio in corso..." : "Invia richiesta"}
-                    </button>
-                  )}
-                </div>
+              <div className="bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden">
+                <dl className="divide-y divide-slate-100 text-sm md:text-base">
+                  <div className="flex flex-col sm:flex-row sm:justify-between p-5 gap-2">
+                    <dt className="text-slate-500 font-semibold">Associazione</dt>
+                    <dd className="font-bold text-slate-900 sm:text-right">{form.organization_name || "-"}</dd>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:justify-between p-5 gap-2">
+                    <dt className="text-slate-500 font-semibold">Referente</dt>
+                    <dd className="font-bold text-slate-900 sm:text-right">{form.applicant_full_name || "-"}</dd>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:justify-between p-5 gap-2 items-start sm:items-center">
+                    <dt className="text-slate-500 font-semibold">Metodo Pagamento</dt>
+                    <dd className="font-bold text-slate-900 sm:text-right uppercase text-xs tracking-wider bg-slate-200 px-3 py-1.5 rounded-lg">
+                      {form.payment_method === 'stripe' ? 'Carta di Credito' : form.payment_method === 'bank_transfer' ? 'Bonifico' : form.payment_method || "-"}
+                    </dd>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:justify-between p-5 gap-2 items-start sm:items-center">
+                    <dt className="text-slate-500 font-semibold">Documenti Caricati</dt>
+                    <dd className="font-bold text-slate-900 sm:text-right">
+                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-brand/10 text-brand text-sm">{docsByType.size}</span>
+                      <span className="text-slate-500 text-sm ml-2 font-medium">/ 6 Obbligatori</span>
+                    </dd>
+                  </div>
+                </dl>
               </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Note Aggiuntive (Opzionale)</label>
+                <textarea className="w-full min-h-[120px] p-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-medium focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all resize-y" placeholder="Comunicazioni per la segreteria..." value={form.notes} onChange={(e) => onFieldChange("notes", e.target.value)} />
+              </div>
+
+              {validation.issues.length > 0 ? (
+                <div className="rounded-2xl border-2 border-red-200 bg-red-50 p-6 shadow-sm">
+                  <div className="flex items-center gap-3 text-red-800 font-extrabold text-lg mb-4">
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                    Attenzione: Dati Incompleti
+                  </div>
+                  <ul className="space-y-2 text-sm text-red-700 font-medium">
+                    {validation.issues.map((issue) => (
+                      <li key={issue} className="flex items-start gap-2">
+                        <span className="text-red-500 font-bold">•</span> {issue}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/50 p-6 flex flex-col sm:flex-row items-center sm:items-start gap-5 text-center sm:text-left">
+                  <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                    <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-emerald-900 text-lg">Tutto Pronto!</h4>
+                    <p className="text-sm font-medium text-emerald-700 mt-1">I dati inseriti sono corretti. Clicca il pulsante "Invia Richiesta" in basso per completare la procedura.</p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {hasRealSubmission && (
-            <div className={`${stepCardClass} space-y-4`}>
-            <h2 className="text-lg font-semibold text-neutral-900">Richiesta inviata</h2>
-            <p className="text-sm text-neutral-600">
-              Stato attuale: <strong>{submitResult?.status || draft?.status || "in compilazione"}</strong>
-            </p>
-            {submitResult?.message ? (
-              <p className="rounded-md border border-brand/20 bg-brand/5 px-3 py-2 text-sm text-neutral-700">
-                {submitResult.message}
+            <div className="p-8 sm:p-16 text-center space-y-8 animate-in zoom-in-95 duration-500">
+              <div className="mx-auto w-28 h-28 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center mb-8 border-4 border-emerald-100 shadow-xl shadow-emerald-100/50">
+                <svg className="w-14 h-14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+              </div>
+              <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight">Richiesta Inviata!</h2>
+              <p className="text-lg text-slate-500 max-w-lg mx-auto font-medium">
+                Abbiamo preso in carico la tua domanda di affiliazione. Riceverai presto aggiornamenti dalla segreteria.
               </p>
-            ) : null}
-            <ul className="space-y-1 text-sm text-neutral-700">
-              {(submitResult?.next_steps || [
-                "Richiesta inviata",
-                "Ti contatteremo per conferma",
-                "Riceverai email alla conferma",
-              ]).map((item) => (
-                <li key={item}>- {item}</li>
-              ))}
-            </ul>
-            <div className="flex flex-wrap gap-3">
-              <button type="button" className="btn-primary" onClick={onOpenInstantWelcomeVideo}>
-                Apri video stato
-              </button>
-              <Link to="/affiliazione-info" className="btn-ghost">
-                Vai a guida affiliazione
-              </Link>
-            </div>
+              
+              <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 inline-block text-center sm:text-left w-full max-w-sm mx-auto mt-6">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 text-center">Stato Pratica</p>
+                <div className="flex items-center justify-center gap-3">
+                  <span className="relative flex h-4 w-4">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-4 w-4 bg-amber-500"></span>
+                  </span>
+                  <strong className="text-slate-800 font-extrabold uppercase tracking-wider text-lg">{submitResult?.status || draft?.status || "In Revisione"}</strong>
+                </div>
+              </div>
+
+              <div className="pt-10 flex flex-col sm:flex-row justify-center gap-4">
+                <button type="button" className="inline-flex items-center justify-center h-14 px-8 rounded-xl bg-brand text-white font-bold tracking-wide shadow-lg shadow-brand/30 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-brand/40 transition-all text-lg" onClick={onOpenInstantWelcomeVideo}>
+                  <svg className="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" /></svg>
+                  Guarda Video
+                </button>
+                <Link to="/" className="inline-flex items-center justify-center h-14 px-8 rounded-xl bg-white border-2 border-slate-200 text-slate-700 font-bold hover:bg-slate-50 transition-all text-lg">
+                  Torna alla Home
+                </Link>
+              </div>
             </div>
           )}
+
+          {/* Sticky Footer */}
+          {!showIntroScreen && !hasRealSubmission && (
+            <div className="fixed bottom-0 left-0 w-full bg-white/95 backdrop-blur-xl border-t border-slate-200 p-4 sm:p-5 z-40 md:sticky md:bottom-auto md:w-auto md:bg-slate-50/50 md:backdrop-blur-none md:border-t md:border-slate-100 md:p-6 shadow-[0_-20px_40px_rgba(0,0,0,0.08)] md:shadow-none">
+              <div className="max-w-3xl mx-auto flex items-center justify-between gap-4">
+                <button
+                  type="button"
+                  className="px-6 h-12 rounded-xl text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                  onClick={onGoPrevStep}
+                  disabled={progressActiveStep <= 1}
+                >
+                  Indietro
+                </button>
+                
+                {progressActiveStep < 5 ? (
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center px-10 h-12 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold shadow-lg shadow-slate-900/20 hover:shadow-xl transition-all hover:-translate-y-0.5 active:scale-95"
+                    onClick={onGoNextStep}
+                  >
+                    Avanti
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center px-10 h-12 rounded-xl bg-brand hover:bg-brand-light text-white text-sm font-bold shadow-lg shadow-brand/30 hover:shadow-xl transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed disabled:transform-none"
+                    disabled={submitting || validation.issues.length > 0}
+                    onClick={() => void onSubmit()}
+                  >
+                    {submitting ? (
+                       <span className="flex items-center gap-2">
+                       <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                       Invio in corso...
+                     </span>
+                    ) : "Invia Richiesta"}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
 
@@ -1072,9 +1207,9 @@ const Affiliazione = () => {
             : undefined
         }
       />
-    </section>
+    </div>
   );
+
 };
 
 export default Affiliazione;
-
