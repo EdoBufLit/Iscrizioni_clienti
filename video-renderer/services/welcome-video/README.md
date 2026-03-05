@@ -36,7 +36,7 @@ node dist/render.js --orgId myOrg123 --orgName "My Org Name" --logoUrl "https://
 - `AUDIO_SOURCE=elevenlabs`: generate voice audio via ElevenLabs, requires:
   - `ELEVENLABS_API_KEY`
   - `ELEVENLABS_VOICE_IDS`
-- `AUDIO_LOCAL_PATH` (default `.../public`): folder (or file path) used in local mode.
+- `AUDIO_LOCAL_PATH` (default `.../assets/audio`): folder (or file path) used in local mode.
 
 Supported local candidates:
 - `welcome_hud_audio.wav`

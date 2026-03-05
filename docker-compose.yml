@@ -54,7 +54,7 @@ x-video-worker-env: &video-worker-env
   AFFILIATION_VIDEO_RENDERER_DIR: ${AFFILIATION_VIDEO_RENDERER_DIR:-/app/video-renderer/services/welcome-video}
   AFFILIATION_VIDEO_OUTPUT_DIR: ${AFFILIATION_VIDEO_OUTPUT_DIR:-/app/data/videos/welcome}
   AUDIO_SOURCE: ${AUDIO_SOURCE:-local}
-  AUDIO_LOCAL_PATH: ${AUDIO_LOCAL_PATH:-/app/video-renderer/services/welcome-video/public}
+  AUDIO_LOCAL_PATH: ${AUDIO_LOCAL_PATH:-/app/video-renderer/services/welcome-video/assets/audio}
   ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
   ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID:-}
   ELEVENLABS_VOICE_IDS: ${ELEVENLABS_VOICE_IDS:-}

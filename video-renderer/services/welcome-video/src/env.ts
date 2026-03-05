@@ -67,7 +67,7 @@ export const getEnv = (): AppEnv => {
     elevenLabsModelId: process.env.ELEVENLABS_MODEL_ID?.trim() || "eleven_v3",
     audioSource: parseAudioSource(process.env.AUDIO_SOURCE),
     audioLocalPath: path.resolve(
-      process.env.AUDIO_LOCAL_PATH || path.join(process.cwd(), "public"),
+      process.env.AUDIO_LOCAL_PATH || path.join(process.cwd(), "assets", "audio"),
     ),
     outputPath: path.resolve(process.env.WELCOME_VIDEO_OUTPUT_PATH || "/tmp/assonam_welcome.mp4"),
     storageRootDir: path.resolve(process.env.WELCOME_VIDEO_STORAGE_DIR || "/tmp/storage"),
