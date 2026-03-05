@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import minimist from "minimist";
@@ -294,7 +295,14 @@ const main = async (): Promise<void> => {
   }
 
   // Render Video
-  const entryPoint = path.resolve(process.cwd(), "src", "remotion", "Root.tsx");
+  const entryPoint = path.resolve(__dirname, "../src/remotion/Root.tsx");
+  const entryPointExists = existsSync(entryPoint);
+  console.info(
+    `[renderHud] remotion entryPoint=${entryPoint} exists=${entryPointExists}`,
+  );
+  if (!entryPointExists) {
+    throw new Error(`Remotion entrypoint not found: ${entryPoint}`);
+  }
   const serveUrl = await bundle({
     entryPoint,
     webpackOverride: (config) => config,
