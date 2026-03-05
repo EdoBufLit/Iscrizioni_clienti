@@ -2073,3 +2073,30 @@ pm --prefix frontend run build -> OK
 - Build Docker locale tentata:
   - `docker build -f Dockerfile.affiliation-video-worker .`
   - non eseguibile in questo ambiente: Docker daemon non disponibile (`npipe ... dockerDesktopLinuxEngine ... file specified`).
+
+## Spec (Hotfix startup crash optional affiliation import - Mar 05, 2026)
+- Obiettivo: eliminare crash import-time (`ImportError: AffiliationApplication`) che manda giu il servizio prima del gating feature flag.
+- Strategia hotfix: rendere l'import del modulo affiliazione lazy/condizionale in `app.main`, con fallback safe se import fallisce.
+- Vincolo: app deve avviarsi quando `AFFILIAZIONE_ENABLED=false`, anche se modelli/routes affiliazione sono incompleti.
+- Verifica: smoke test dedicato che importa `app.main` in processo separato con flag disabilitata.
+
+## Plan (Hotfix startup crash optional affiliation import)
+- [x] Rimuovere import top-level di `affiliation` da `app/main.py`.
+- [x] Introdurre registrazione router affiliazione lazy (`_include_affiliation_routers`) con controllo flag e fallback safe su import error.
+- [x] Mantenere inalterata la registrazione router core non opzionali.
+- [x] Aggiungere smoke test su import `app.main` con `AFFILIAZIONE_ENABLED=false`.
+- [x] Eseguire verifica locale con import diretto + pytest mirato.
+
+## Review (Hotfix startup crash optional affiliation import - Mar 05, 2026)
+- `app/main.py` aggiornato:
+  - rimosso `affiliation` dall'import top-level dei router;
+  - aggiunta funzione `_include_affiliation_routers()`:
+    - se `AFFILIAZIONE_ENABLED=false` -> skip import/register con log info;
+    - se `true` -> prova import runtime di `app.routes.affiliation`;
+    - se import fallisce -> log exception e skip registration (service resta up);
+  - registrazione router affiliazione sostituita con chiamata `_include_affiliation_routers()`.
+- `tests/test_smoke.py` aggiornato:
+  - nuovo test `test_app_main_imports_with_affiliazione_disabled` che avvia subprocess Python con env `AFFILIAZIONE_ENABLED=false` e verifica import `app.main` senza crash.
+- Verifiche eseguite:
+  - `python -c` (subprocess inline) con `AFFILIAZIONE_ENABLED=false` -> **OK** (`app_main_import_ok`).
+  - `python -m pytest tests/test_smoke.py::test_app_main_imports_with_affiliazione_disabled -q` -> **1 passed**.

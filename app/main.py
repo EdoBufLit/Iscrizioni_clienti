@@ -25,7 +25,6 @@ from app.middleware import (
 )
 from app.routes import (
     admin,
-    affiliation,
     ingest_pienissimo,
     integrations,
     join,
@@ -219,6 +218,28 @@ app.mount(
     name="generated-videos",
 )
 
+
+def _include_affiliation_routers() -> None:
+    if not settings.AFFILIAZIONE_ENABLED:
+        logger.info("Affiliation routes disabled (AFFILIAZIONE_ENABLED=false).")
+        return
+
+    try:
+        from app.routes import affiliation
+    except Exception:
+        logger.exception(
+            "Affiliation routes enabled but failed to import; "
+            "skipping registration to keep service available."
+        )
+        return
+
+    app.include_router(
+        affiliation.router,
+        dependencies=[Depends(affiliation.ensure_public_affiliation_enabled)],
+    )
+    app.include_router(affiliation.super_admin_router)
+    app.include_router(affiliation.associations_router)
+
 # ── Routers ───────────────────────────────────────────────────────
 
 app.include_router(join.router)
@@ -227,12 +248,7 @@ app.include_router(admin.router)
 app.include_router(org_admin.router)
 app.include_router(super_admin.router)
 app.include_router(super_admin.associations_router)
-app.include_router(
-    affiliation.router,
-    dependencies=[Depends(affiliation.ensure_public_affiliation_enabled)],
-)
-app.include_router(affiliation.super_admin_router)
-app.include_router(affiliation.associations_router)
+_include_affiliation_routers()
 app.include_router(public.router)
 app.include_router(onboarding.router)
 app.include_router(integrations.router)

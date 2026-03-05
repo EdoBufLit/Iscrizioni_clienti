@@ -6,7 +6,10 @@ every frontend-facing endpoint exists, returns the expected status
 codes, and that auth guards block unauthenticated access.
 """
 
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 from app.config import settings
 
@@ -45,6 +48,22 @@ def test_root_redirects_to_app(client):
     r = client.get("/", follow_redirects=False)
     # The root endpoint now renders home.html (200 OK) or 404 if SPA not built
     assert r.status_code in (200, 404)
+
+
+def test_app_main_imports_with_affiliazione_disabled():
+    env = os.environ.copy()
+    env["AFFILIAZIONE_ENABLED"] = "false"
+    result = subprocess.run(
+        [sys.executable, "-c", "import app.main; print('app_main_import_ok')"],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert result.returncode == 0, (
+        f"import failed with code {result.returncode}\n"
+        f"stdout:\n{result.stdout}\n"
+        f"stderr:\n{result.stderr}"
+    )
 
 
 # ── Public: Organizations ────────────────────────────────────────
