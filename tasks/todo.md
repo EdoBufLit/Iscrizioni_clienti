@@ -2047,3 +2047,29 @@ pm --prefix frontend run build -> OK
 - Sanity backend import:
   - `python -c "import app.main; import app.routes.affiliation; import app.routes.public; print('backend_import_ok')"` -> **OK**.
 - Root cause TS2307: file presenti localmente ma non tracciati in Git (quindi assenti in CI/build remoto).
+
+## Spec (Fix PEP 668 in Dockerfile.affiliation-video-worker - Mar 05, 2026)
+- Obiettivo: evitare errore `externally-managed-environment (PEP 668)` durante install Python deps nel worker image.
+- Requisiti: usare venv `/opt/venv`, includere `python3-venv`, usare `pip` del venv, PATH aggiornato, sanity check `python -c`.
+- Vincolo: non rompere pipeline Node/Remotion esistente.
+
+## Plan (Fix PEP 668 worker Dockerfile)
+- [x] Aggiornare pacchetti apt includendo `python3-venv`.
+- [x] Creare virtualenv `/opt/venv` e aggiornare `PATH`.
+- [x] Sostituire install Python deps con `pip` nel venv e aggiungere sanity check Python.
+- [x] Tentare build Docker locale per validazione.
+
+## Review (Fix PEP 668 worker Dockerfile - Mar 05, 2026)
+- File aggiornato: `Dockerfile.affiliation-video-worker`.
+- Modifiche applicate:
+  - apt ora installa: `python3 python3-venv python3-pip ffmpeg ca-certificates`.
+  - aggiunti:
+    - `RUN python3 -m venv /opt/venv`
+    - `ENV PATH="/opt/venv/bin:$PATH"`
+  - install requirements ora via venv:
+    - `RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt`
+  - sanity check aggiunto:
+    - `RUN python -c "import sys; print(sys.version)"`
+- Build Docker locale tentata:
+  - `docker build -f Dockerfile.affiliation-video-worker .`
+  - non eseguibile in questo ambiente: Docker daemon non disponibile (`npipe ... dockerDesktopLinuxEngine ... file specified`).
