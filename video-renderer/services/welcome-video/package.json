@@ -3,23 +3,26 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json --noEmit",
-    "render": "tsx src/render.ts",
     "preview": "remotion preview src/remotion/Root.tsx",
-    "render:local": "node dist/render.js --orgId test --orgName \"ASSONAM\""
+    "build": "tsup src/render.ts --format cjs --out-dir dist --target node20",
+    "render:local": "npm run build && node dist/render.cjs --orgId test --orgName \"ASSONAM\""
   },
   "dependencies": {
     "@remotion/bundler": "^4.0.366",
     "@remotion/media": "^4.0.366",
     "@remotion/renderer": "^4.0.366",
-    "dotenv": "^16.4.7",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "remotion": "^4.0.366"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@remotion/cli": "^4.0.432",
+    "@types/minimist": "^1.2.5",
     "@types/node": "^22.13.10",
     "@types/react": "^18.3.18",
+    "dotenv": "^17.3.1",
+    "minimist": "^1.2.8",
+    "remotion": "^4.0.432",
+    "tsup": "^8.5.1",
     "tsx": "^4.19.3",
     "typescript": "^5.8.2"
   }

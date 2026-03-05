@@ -6,10 +6,10 @@ import { synthesizeSpeech } from "../elevenlabs";
 
 const VOICE_LINES = [
   "ASSONAM è",
-  "ASSONAM è comunità",
-  "ASSONAM è futuro",
-  "ASSONAM è digitale",
-  "ASSONAM è semplice",
+  "comunità",
+  "digitale",
+  "futuro",
+  "semplice",
 ] as const;
 
 const WELCOME_LINE = "Benvenuto in ASSONAM";
@@ -20,9 +20,9 @@ export type GeneratedVoices = {
   welcomeFile: string;
 };
 
-export const generateVoices = async (): Promise<GeneratedVoices> => {
+export const generateVoices = async (orgId: string): Promise<GeneratedVoices> => {
   const env = getEnv();
-  const outputDir = path.resolve(process.cwd(), "tmp", "voices");
+  const outputDir = path.resolve(process.cwd(), ".tmp", orgId, "voices");
   await fs.mkdir(outputDir, { recursive: true });
 
   const voiceFiles: string[] = [];
@@ -31,15 +31,12 @@ export const generateVoices = async (): Promise<GeneratedVoices> => {
     const text = VOICE_LINES[index];
     const voiceId = env.elevenLabsVoiceIds[index % env.elevenLabsVoiceIds.length];
     const audioBuffer = await synthesizeSpeech({ voiceId, text });
-    const outputPath = path.join(outputDir, `voice_${index + 1}.mp3`);
+    const outputPath = path.join(outputDir, `v${index + 1}.mp3`);
     await fs.writeFile(outputPath, audioBuffer);
     voiceFiles.push(outputPath);
   }
 
-  const welcomeVoiceId =
-    env.elevenLabsVoiceIds.length > VOICE_LINES.length
-      ? env.elevenLabsVoiceIds[VOICE_LINES.length]
-      : env.elevenLabsVoiceIds[0];
+  const welcomeVoiceId = env.elevenLabsVoiceIds[0];
 
   const welcomeAudio = await synthesizeSpeech({
     voiceId: welcomeVoiceId,
