@@ -1,5 +1,6 @@
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import React from "react";
+import { TypewriterText } from "../TypewriterText";
 
 export const Scene4Registration: React.FC = () => {
   const frame = useCurrentFrame();
@@ -49,9 +50,11 @@ export const Scene4Registration: React.FC = () => {
             opacity: textOpacity,
           }}
         >
-          REGISTRATION
+          <TypewriterText text="REGISTRATION" startFrame={5} charsPerFrame={2} />
           <br />
-          <span style={{ color: "#6FF9FF" }}>COMPLETE</span>
+          <span style={{ color: "#6FF9FF" }}>
+            <TypewriterText text="COMPLETE" startFrame={15} charsPerFrame={2} />
+          </span>
         </h1>
       </div>
     </AbsoluteFill>

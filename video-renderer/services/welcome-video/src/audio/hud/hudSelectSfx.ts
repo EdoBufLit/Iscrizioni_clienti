@@ -30,13 +30,14 @@ export type HudSfxSelection = {
   beep: { path: string; name: string };
   whoosh: { path: string; name: string };
   impact: { path: string; name: string };
+  typing: { path: string; name: string };
 };
 
 export const hudSelectSfx = async (assetsDir: string, seed: string): Promise<HudSfxSelection> => {
   const seedFunc = xmur3(seed);
   const rand = mulberry32(seedFunc());
 
-  const categories = ["ambience", "beep", "whoosh", "impact"] as const;
+  const categories = ["ambience", "beep", "whoosh", "impact", "typing"] as const;
   const selections: Partial<HudSfxSelection> = {};
 
   for (const category of categories) {

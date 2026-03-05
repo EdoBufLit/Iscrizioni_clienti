@@ -1,5 +1,6 @@
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import React from "react";
+import { TypewriterText } from "../TypewriterText";
 
 export const Scene2Analysis: React.FC<{ orgName: string }> = ({ orgName }) => {
   const frame = useCurrentFrame();
@@ -55,7 +56,7 @@ export const Scene2Analysis: React.FC<{ orgName: string }> = ({ orgName }) => {
             fontWeight: 400,
           }}
         >
-          ANALYZING TARGET:
+          <TypewriterText text="ANALYZING TARGET:" startFrame={5} charsPerFrame={1} />
         </h3>
         <h2
           style={{
@@ -68,7 +69,7 @@ export const Scene2Analysis: React.FC<{ orgName: string }> = ({ orgName }) => {
             textShadow: "0 0 10px rgba(255,255,255,0.5)",
           }}
         >
-          {orgName}
+          <TypewriterText text={orgName} startFrame={10} charsPerFrame={1.5} />
         </h2>
 
         {showVerified && (
@@ -93,7 +94,7 @@ export const Scene2Analysis: React.FC<{ orgName: string }> = ({ orgName }) => {
                 fontWeight: 500,
               }}
             >
-              STATUS: VERIFIED
+              <TypewriterText text="STATUS: VERIFIED" startFrame={25} charsPerFrame={1.5} />
             </h3>
           </div>
         )}

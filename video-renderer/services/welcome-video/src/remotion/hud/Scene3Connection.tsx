@@ -1,5 +1,6 @@
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import React from "react";
+import { TypewriterText } from "../TypewriterText";
 
 export const Scene3Connection: React.FC = () => {
   const frame = useCurrentFrame();
@@ -85,7 +86,7 @@ export const Scene3Connection: React.FC = () => {
             fontWeight: 500,
           }}
         >
-          CONNECTING TO NETWORK...
+          <TypewriterText text="CONNECTING TO NETWORK..." startFrame={15} charsPerFrame={1} />
         </h2>
       </div>
     </AbsoluteFill>

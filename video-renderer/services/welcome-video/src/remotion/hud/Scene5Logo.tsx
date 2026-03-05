@@ -1,5 +1,6 @@
-import { AbsoluteFill, Img, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Img, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import React from "react";
+import { TypewriterText } from "../TypewriterText";
 
 export const Scene5Logo: React.FC<{ orgName: string; logoUrl?: string }> = ({ orgName, logoUrl }) => {
   const frame = useCurrentFrame();
@@ -12,6 +13,7 @@ export const Scene5Logo: React.FC<{ orgName: string; logoUrl?: string }> = ({ or
   const adminAccessOpacity = interpolate(frame, [60, 75], [0, 1], { extrapolateRight: "clamp" });
 
   const flickerAdmin = frame % 15 < 3 ? 0.4 : 1;
+  const imageSource = logoUrl || staticFile("logo.png");
 
   return (
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", flexDirection: "column", gap: 30 }}>
@@ -42,13 +44,7 @@ export const Scene5Logo: React.FC<{ orgName: string; logoUrl?: string }> = ({ or
           }}
         />
 
-        {logoUrl ? (
-          <Img src={logoUrl} style={{ width: 350, objectFit: "contain", filter: "drop-shadow(0 0 10px #00AFFF)" }} />
-        ) : (
-          <h1 style={{ fontSize: 100, color: "#FFF", textShadow: "0 0 20px #00AFFF", margin: 0, fontWeight: 700 }}>
-            ASSONAM
-          </h1>
-        )}
+        <Img src={imageSource} style={{ width: 350, objectFit: "contain", filter: "drop-shadow(0 0 10px #00AFFF)" }} />
       </div>
 
       <div
@@ -62,7 +58,7 @@ export const Scene5Logo: React.FC<{ orgName: string; logoUrl?: string }> = ({ or
           textAlign: "center",
         }}
       >
-        ASSOCIATION: <span style={{ color: "#6FF9FF", fontWeight: 500 }}>{orgName}</span>
+        <TypewriterText text={`ASSOCIATION: ${orgName}`} startFrame={30} charsPerFrame={1} />
       </div>
 
       <div
@@ -79,7 +75,7 @@ export const Scene5Logo: React.FC<{ orgName: string; logoUrl?: string }> = ({ or
           backgroundColor: "rgba(0, 255, 0, 0.1)",
         }}
       >
-        ADMIN ACCESS ENABLED
+        <TypewriterText text="ADMIN ACCESS ENABLED" startFrame={60} charsPerFrame={0.8} />
       </div>
     </AbsoluteFill>
   );

@@ -1,5 +1,6 @@
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import React from "react";
+import { TypewriterText } from "../TypewriterText";
 
 export const Scene1Boot: React.FC = () => {
   const frame = useCurrentFrame();
@@ -21,10 +22,10 @@ export const Scene1Boot: React.FC = () => {
         }}
       >
         <h2 style={{ fontSize: 32, letterSpacing: 8, margin: 0, fontWeight: 300 }}>
-          ASSO.N.A.M NETWORK
+          <TypewriterText text="ASSO.N.A.M NETWORK" startFrame={0} charsPerFrame={0.8} />
         </h2>
         <h3 style={{ fontSize: 24, letterSpacing: 4, margin: 0, color: "#00AFFF", fontWeight: 300 }}>
-          SYSTEM INITIALIZING... {Math.min(100, Math.floor(frame * 1.66))}%
+          SYSTEM INITIALIZING... {Math.min(100, Math.floor(frame * 2.22))}%
         </h3>
       </div>
     </AbsoluteFill>

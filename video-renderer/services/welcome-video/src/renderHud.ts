@@ -136,6 +136,7 @@ const main = async (): Promise<void> => {
     beep: sfx.beep.name,
     whoosh: sfx.whoosh.name,
     impact: sfx.impact.name,
+    typing: sfx.typing.name,
   };
 
   process.stdout.write(
