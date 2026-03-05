@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { gsap } from "gsap";
 import PublicFaqAccordion, {
@@ -10,7 +10,7 @@ import {
   fetchPlatformStats,
   type PlatformStats,
 } from "../lib/api";
-import { useStatePlatformCapabilities } from "../hooks/useStatePlatformCapabilities";
+import MemberCardPreview from "../components/cards/MemberCardPreview";
 
 const PublicHeroThree = lazy(() => import("../components/public/PublicHeroThree.client"));
 
@@ -53,12 +53,6 @@ const EMPTY_PLATFORM_STATS: PlatformStats = {
   members: 0,
   cities: 0,
 };
-
-const MEMBERSHIP_DEMO = {
-  association: "Golden Age Fitness",
-  member: "Mario Rossi",
-  id: "GA-00123",
-} as const;
 
 const AFFILIATION_STEPS = [
   {
@@ -189,12 +183,9 @@ const Home = () => {
   const [platformStatsLoaded, setPlatformStatsLoaded] = useState(false);
   const [animatedStats, setAnimatedStats] = useState<PlatformStats>(EMPTY_PLATFORM_STATS);
   const [shouldAnimateStats, setShouldAnimateStats] = useState(false);
-  const { capabilities } = useStatePlatformCapabilities();
   const heroRef = useRef<HTMLElement>(null);
   const socialProofRef = useRef<HTMLElement>(null);
-  const membershipDemoCardRef = useRef<HTMLDivElement>(null);
   const hasAnimatedStatsRef = useRef(false);
-  const affiliazioneEnabled = capabilities?.affiliazioneEnabled === true;
 
   useEffect(() => {
     applySeo({
@@ -247,10 +238,6 @@ const Home = () => {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!affiliazioneEnabled) {
-      setShowStickyAffilia(false);
-      return;
-    }
 
     const onScroll = () => {
       setShowStickyAffilia(window.scrollY > 300);
@@ -259,7 +246,7 @@ const Home = () => {
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, [affiliazioneEnabled]);
+  }, []);
 
   useEffect(() => {
     if (typeof document === "undefined" || !isDemoModalOpen) return;
@@ -435,7 +422,7 @@ const Home = () => {
       });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [useWebGLScene, affiliazioneEnabled]);
+  }, [useWebGLScene]);
 
   const handleAffiliaHeroClick = (source: string) => {
     trackUiEvent("click_affiliazione_cta_hero", { source });
@@ -445,38 +432,12 @@ const Home = () => {
     trackUiEvent("click_affiliazione_cta_sticky", { source: "sticky_home" });
   };
 
-  const handleMembershipDemoTilt = (event: React.MouseEvent<HTMLDivElement>) => {
-    const card = membershipDemoCardRef.current;
-    if (!card || typeof window === "undefined") return;
-    if (window.matchMedia("(pointer: coarse)").matches) return;
-    const rect = card.getBoundingClientRect();
-    const pointerX = (event.clientX - rect.left) / rect.width;
-    const pointerY = (event.clientY - rect.top) / rect.height;
-    const rotateY = (pointerX - 0.5) * 10;
-    const rotateX = (0.5 - pointerY) * 10;
-    card.style.setProperty("--demo-rotate-x", `${rotateX.toFixed(2)}deg`);
-    card.style.setProperty("--demo-rotate-y", `${rotateY.toFixed(2)}deg`);
-  };
-
-  const resetMembershipDemoTilt = () => {
-    const card = membershipDemoCardRef.current;
-    if (!card) return;
-    card.style.setProperty("--demo-rotate-x", "0deg");
-    card.style.setProperty("--demo-rotate-y", "0deg");
-  };
-
   const platformStatCards = [
     { key: "organizations", label: "Associazioni Affiliate", value: animatedStats.organizations },
     { key: "members", label: "Soci Registrati", value: animatedStats.members },
     { key: "cities", label: "Città Attive", value: animatedStats.cities },
   ] as const;
-  const heroEntries = useMemo(
-    () =>
-      affiliazioneEnabled
-        ? HERO_ENTRIES
-        : HERO_ENTRIES.filter((entry: HeroEntry) => entry.id !== "association"),
-    [affiliazioneEnabled],
-  );
+  const heroEntries = HERO_ENTRIES;
 
   return (
     <div>
@@ -506,98 +467,86 @@ const Home = () => {
           ) : null}
         </div>
 
-        <div className="public-hero-overlay" aria-hidden="true" />
+        <div className="public-hero-overlay bg-gradient-to-b from-neutral-900/60 via-neutral-900/80 to-neutral-900/95" aria-hidden="true" />
 
         <div className="container-shell public-hero-content">
           <div className="public-hero-copy affiliazione-hero-copy">
-            <p className="section-title" data-hero-eyebrow>
+            <p className="text-sm font-semibold tracking-widest text-white/80 mb-4" data-hero-eyebrow>
               ASSONAM - ACCESSO RAPIDO
             </p>
-            <h1 data-hero-line>La piattaforma digitale per Associazioni e Soci</h1>
-            <p className="public-hero-subtitle" data-hero-subtitle>
-              Tessere, iscrizioni, gestione soci e affiliazione - tutto in un unico sistema.
+            <h1 data-hero-line className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-white leading-tight drop-shadow-md">
+              La piattaforma digitale per Associazioni e Soci
+            </h1>
+            <p className="mt-6 text-lg md:text-xl text-white/90 max-w-2xl mx-auto drop-shadow-sm font-medium" data-hero-subtitle>
+              Tessere, iscrizioni, gestione soci e affiliazione - tutto in un unico sistema semplice e sicuro.
             </p>
-            {affiliazioneEnabled ? (
-              <div className="mt-4 md:hidden" data-hero-meta>
-                <Link
-                  className="btn-primary min-h-12 w-full justify-center"
-                  to="/affiliazione"
-                  onClick={() => handleAffiliaHeroClick("hero_mobile_primary")}
-                >
-                  Affilia la tua Associazione
-                </Link>
-                <p className="mt-1 text-left text-xs font-semibold tracking-tight text-slate-100/90">
-                  Richiede circa 10 minuti
-                </p>
-              </div>
-            ) : null}
 
-            <div className="hero-entry-grid" role="list" aria-label="Scegli il percorso corretto">
-              {heroEntries.map((entry) => (
-                <article
-                  key={entry.id}
-                  role="listitem"
-                  className={`hero-entry-card${entry.recommended ? " is-primary" : ""}`}
-                  data-hero-card
-                >
-                  {entry.recommended ? <span className="hero-entry-tag">Consigliato</span> : null}
-                  <span className="hero-entry-icon">
-                    <EntryIcon id={entry.id} />
-                  </span>
-                  <h2 className="hero-entry-title">{entry.title}</h2>
-                  <p className="hero-entry-microcopy">{entry.microcopy}</p>
-                  <Link
-                    className={`${entry.recommended ? "btn-primary" : "btn-ghost"} hero-entry-button`}
-                    to={entry.to}
-                    onClick={
-                      entry.id === "association"
-                        ? () => handleAffiliaHeroClick("hero_card")
-                        : undefined
-                    }
-                  >
-                    {entry.cta}
-                  </Link>
-                  {entry.id === "association" ? (
-                    <p className="hero-entry-under-cta">Richiede circa 10 minuti</p>
-                  ) : null}
-                </article>
-              ))}
+            <div className="mt-10 flex flex-col md:flex-row items-center justify-center gap-4" data-hero-meta>
+              <Link
+                className="btn-primary min-h-[48px] px-6"
+                to="/affiliazione"
+                onClick={() => handleAffiliaHeroClick("hero_desktop_primary")}
+              >
+                Affilia la tua Associazione
+              </Link>
+              <Link className="btn-ghost min-h-[48px] px-6 text-white border-white/40 hover:bg-white/10" to="/associazioni">
+                Diventa Socio
+              </Link>
+              <Link className="text-sm font-semibold text-white/80 hover:text-white underline underline-offset-4 mt-2 md:mt-0 md:ml-2" to="/area-riservata">
+                Accedi all'Area Riservata
+              </Link>
             </div>
 
-            {affiliazioneEnabled ? (
-              <>
-                <div className="hero-entry-timeline" data-hero-meta>
-                  <span>1 Compila</span>
-                  <span>2 Carica documenti</span>
-                  <span>3 Paga e invia</span>
-                </div>
-
-                <div className="hero-trust-badges" data-hero-meta>
-                  <span>Verifica documenti</span>
-                  <span>Pagamenti sicuri</span>
-                  <span>Attivazione dopo conferma</span>
-                </div>
-              </>
-            ) : null}
+            <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6" role="list" aria-label="Scegli il percorso corretto">
+              {heroEntries.map((entry) => (
+                <Link
+                  to={entry.to}
+                  key={entry.id}
+                  role="listitem"
+                  className="rounded-xl border border-white/20 bg-white/5 backdrop-blur-md p-5 flex flex-col text-left transition hover:bg-white/10 hover:border-white/40 group"
+                  onClick={
+                    entry.id === "association"
+                      ? () => handleAffiliaHeroClick("hero_card")
+                      : undefined
+                  }
+                  data-hero-card
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-white/90 bg-white/10 p-2 rounded-lg group-hover:bg-white/20 transition">
+                      <EntryIcon id={entry.id} />
+                    </span>
+                    <h2 className="text-base font-bold text-white">{entry.title}</h2>
+                  </div>
+                  <p className="text-sm text-white/80 mt-1 flex-grow">{entry.microcopy}</p>
+                  <span className="mt-4 text-xs font-semibold uppercase tracking-wider text-white/70 flex items-center gap-1 group-hover:text-white transition">
+                    {entry.cta} <span aria-hidden="true">&rarr;</span>
+                  </span>
+                </Link>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
       <section
-        className="py-14"
+        className="py-20"
         data-reveal="fade-up"
         id="platform-social-proof"
         ref={socialProofRef}
       >
         <div className="container-shell">
-          <div className="surface-strong landing-panel">
-            <h2 className="section-heading">Già scelto da associazioni in tutta Italia</h2>
-            <div className="platform-proof-grid mt-7">
+          <div className="surface-strong landing-panel flex flex-col items-center text-center">
+            <p className="text-sm font-semibold uppercase tracking-widest text-brand mb-3">La Nostra Rete</p>
+            <h2 className="text-3xl md:text-4xl font-bold text-neutral-900 mb-4">Già scelto da associazioni in tutta Italia</h2>
+            <p className="text-lg text-neutral-600 max-w-2xl mb-10">
+              Unisciti a una rete in continua crescita. Migliaia di soci usano ogni giorno le tessere digitali ASSONAM per accedere ai propri vantaggi.
+            </p>
+            <div className="w-full grid grid-cols-2 md:grid-cols-3 gap-6 mt-2">
               {platformStatCards.map((card) => (
-                <article key={card.key} className="platform-proof-card">
-                  <p className="platform-proof-label">{card.label}</p>
-                  <p className="platform-proof-value">
-                    {(platformStatsLoaded ? card.value : 0).toLocaleString("it-IT")}
+                <article key={card.key} className="platform-proof-card bg-white rounded-2xl p-6 shadow-sm border border-neutral-100 flex flex-col items-center text-center">
+                  <p className="text-xs md:text-sm font-bold tracking-wider text-neutral-500 uppercase mb-2">{card.label}</p>
+                  <p className="text-4xl md:text-5xl font-extrabold text-brand tracking-tight">
+                    {(platformStatsLoaded ? card.value : 0).toLocaleString("it-IT")}+
                   </p>
                 </article>
               ))}
@@ -616,34 +565,60 @@ const Home = () => {
               Wallet e Google Wallet.
             </p>
 
-            <div className="membership-demo-layout mt-8">
-              <div className="membership-demo-card-wrap">
-                <article
-                  ref={membershipDemoCardRef}
-                  className="membership-demo-card"
-                  onMouseMove={handleMembershipDemoTilt}
-                  onMouseLeave={resetMembershipDemoTilt}
-                >
-                  <p className="membership-demo-kicker">ASSONAM DIGITAL CARD</p>
-                  <div className="membership-demo-grid">
-                    <p className="membership-demo-label">Association</p>
-                    <p className="membership-demo-value">{MEMBERSHIP_DEMO.association}</p>
-                    <p className="membership-demo-label">Member</p>
-                    <p className="membership-demo-value">{MEMBERSHIP_DEMO.member}</p>
-                    <p className="membership-demo-label">ID</p>
-                    <p className="membership-demo-value">{MEMBERSHIP_DEMO.id}</p>
-                  </div>
-                  <div className="membership-demo-qr-wrap">
-                    <div className="membership-demo-qr" aria-hidden="true" />
-                  </div>
+            <div className="membership-demo-layout mt-8 grid md:grid-cols-2 gap-12 items-center">
+              <div>
+                <ul className="space-y-6">
+                  <li className="flex gap-4">
+                    <span className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-brand/10 text-brand font-bold text-sm">1</span>
+                    <div>
+                      <h3 className="font-bold text-lg text-neutral-900">Integrazione Wallet</h3>
+                      <p className="text-neutral-600 mt-1">Aggiungi la tessera ad Apple Wallet e Google Wallet con un solo tap.</p>
+                    </div>
+                  </li>
+                  <li className="flex gap-4">
+                    <span className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-brand/10 text-brand font-bold text-sm">2</span>
+                    <div>
+                      <h3 className="font-bold text-lg text-neutral-900">Verifica QR Sicura</h3>
+                      <p className="text-neutral-600 mt-1">Ogni tessera include un QR code dinamico per la verifica istantanea.</p>
+                    </div>
+                  </li>
+                  <li className="flex gap-4">
+                    <span className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-brand/10 text-brand font-bold text-sm">3</span>
+                    <div>
+                      <h3 className="font-bold text-lg text-neutral-900">Dati sempre aggiornati</h3>
+                      <p className="text-neutral-600 mt-1">Stato socio e validità sono sincronizzati in tempo reale.</p>
+                    </div>
+                  </li>
+                </ul>
+                <div className="mt-8 flex gap-4">
                   <button
                     type="button"
-                    className="btn-primary membership-demo-wallet-btn"
+                    className="btn-primary"
                     onClick={() => setIsDemoModalOpen(true)}
                   >
-                    Aggiungi a Wallet
+                    Vedi una demo
                   </button>
-                </article>
+                  <Link className="btn-ghost" to="/associazioni">
+                    Diventa Socio
+                  </Link>
+                </div>
+              </div>
+
+              <div className="membership-demo-card-wrap flex justify-center">
+                <div className="w-full max-w-[28rem] drop-shadow-2xl">
+                  <MemberCardPreview
+                    cardData={{
+                      firstName: "Mario",
+                      lastName: "Rossi",
+                      fullName: "Mario Rossi",
+                      organizationName: "Golden Age Fitness",
+                      cardNumber: "GA-00123",
+                      cardStatus: "active",
+                      cardYear: new Date().getFullYear().toString(),
+                      verificationUrl: "https://assonam.it/verify/GA-00123",
+                    }}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -671,24 +646,16 @@ const Home = () => {
             </div>
 
             <div className="landing-inline-cta">
-              {affiliazioneEnabled ? (
-                <>
-                  <Link
-                    className="btn-primary"
-                    to="/affiliazione"
-                    onClick={() => handleAffiliaHeroClick("below_fold_section")}
-                  >
-                    Inizia Affiliazione
-                  </Link>
-                  <Link className="btn-ghost" to="/affiliazione-info">
-                    Vedi dettagli affiliazione
-                  </Link>
-                </>
-              ) : (
-                <Link className="btn-ghost" to="/contatti">
-                  Contatta ASSONAM
-                </Link>
-              )}
+              <Link
+                className="btn-primary"
+                to="/affiliazione"
+                onClick={() => handleAffiliaHeroClick("below_fold_section")}
+              >
+                Inizia Affiliazione
+              </Link>
+              <Link className="btn-ghost" to="/affiliazione-info">
+                Vedi dettagli affiliazione
+              </Link>
             </div>
           </div>
         </div>
@@ -709,17 +676,15 @@ const Home = () => {
         </div>
       </section>
 
-      {affiliazioneEnabled ? (
-        <div className={`affiliazione-sticky-cta${showStickyAffilia ? " is-visible" : ""}`}>
-          <Link
-            className="btn-primary affiliazione-sticky-button"
-            to="/affiliazione"
-            onClick={handleAffiliaStickyClick}
-          >
-            Affilia la tua Associazione
-          </Link>
-        </div>
-      ) : null}
+      <div className={`affiliazione-sticky-cta${showStickyAffilia ? " is-visible" : ""}`}>
+        <Link
+          className="btn-primary affiliazione-sticky-button"
+          to="/affiliazione"
+          onClick={handleAffiliaStickyClick}
+        >
+          Affilia la tua Associazione
+        </Link>
+      </div>
 
       {isDemoModalOpen && (
         <div
@@ -748,11 +713,9 @@ const Home = () => {
               soci.
             </p>
             <div className="membership-demo-modal-actions">
-              {affiliazioneEnabled ? (
-                <Link className="btn-primary" to="/affiliazione" onClick={() => setIsDemoModalOpen(false)}>
-                  Affilia la tua Associazione
-                </Link>
-              ) : null}
+              <Link className="btn-primary" to="/affiliazione" onClick={() => setIsDemoModalOpen(false)}>
+                Affilia la tua Associazione
+              </Link>
               <Link className="btn-ghost" to="/affiliazione-info" onClick={() => setIsDemoModalOpen(false)}>
                 Scopri di più
               </Link>

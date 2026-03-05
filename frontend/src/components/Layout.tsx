@@ -7,7 +7,6 @@ import { pageVariants } from "./motion/motionPresets";
 import { usePublicMotion } from "./public/usePublicMotion";
 import { PUBLIC_MOTION } from "./public/motionTokens";
 import { trackUiEvent } from "../lib/tracking";
-import { useStatePlatformCapabilities } from "../hooks/useStatePlatformCapabilities";
 
 const NAV_ITEMS = [
   { label: "Home", to: "/" },
@@ -57,8 +56,6 @@ const Layout = () => {
       location.pathname.startsWith("/admin"),
     [location.pathname]
   );
-  const { capabilities } = useStatePlatformCapabilities();
-  const affiliazioneEnabled = capabilities?.affiliazioneEnabled === true;
 
   usePublicMotion({ enabled: !isDashboardRoute, key: location.pathname });
 
@@ -291,7 +288,7 @@ const Layout = () => {
                   </span>
                 </NavLink>
 
-                <nav className="public-desktop-nav" aria-label="Navigazione principale">
+                <nav className="hidden lg:flex items-center gap-1" aria-label="Navigazione principale">
                   {NAV_ITEMS.map((item) => (
                     <NavLink
                       key={item.label}
@@ -302,31 +299,21 @@ const Layout = () => {
                       {item.label}
                     </NavLink>
                   ))}
-                  <div className="public-nav-cta-group">
-                    {affiliazioneEnabled ? (
-                      <>
-                        <span className="public-affilia-nav-badge" aria-label="Per Associazioni">
-                          Per Associazioni
-                        </span>
-                        <NavLink
-                          className="btn-primary public-affilia-nav-btn"
-                          to="/affiliazione"
-                          onClick={() =>
-                            trackUiEvent("click_affiliazione_cta_nav", { placement: "desktop_nav" })
-                          }
-                        >
-                          <span>Affilia la tua Associazione</span>
-                          <span className="public-affilia-nav-arrow" aria-hidden="true">
-                            &rarr;
-                          </span>
-                        </NavLink>
-                      </>
-                    ) : null}
-                    <NavLink className="btn-ghost public-socio-nav-btn" to="/associazioni">
+                  <div className="flex items-center gap-2 ml-4">
+                    <NavLink
+                      className="btn-primary py-2 px-4 text-sm whitespace-nowrap"
+                      to="/affiliazione"
+                      onClick={() =>
+                        trackUiEvent("click_affiliazione_cta_nav", { placement: "desktop_nav" })
+                      }
+                    >
+                      Affilia la tua Associazione
+                    </NavLink>
+                    <NavLink className="btn-ghost py-2 px-4 text-sm whitespace-nowrap" to="/associazioni">
                       Diventa Socio
                     </NavLink>
                     <NavLink
-                      className="btn-ghost public-access-btn"
+                      className="btn-ghost py-2 px-4 text-sm whitespace-nowrap"
                       to="/area-riservata"
                       onMouseEnter={prefetchDashboard}
                       onFocus={prefetchDashboard}
@@ -337,7 +324,7 @@ const Layout = () => {
                 </nav>
 
                 <button
-                  className="public-menu-toggle md:hidden"
+                  className="public-menu-toggle lg:hidden"
                   type="button"
                   aria-expanded={menuOpen}
                   aria-controls="mobile-nav-public"
@@ -350,25 +337,23 @@ const Layout = () => {
               <div
                 ref={mobileMenuRef}
                 id="mobile-nav-public"
-                className="public-mobile-panel md:hidden"
+                className="public-mobile-panel lg:hidden"
                 style={{ display: "none" }}
               >
                 <nav className="container-shell py-4" aria-label="Navigazione principale mobile">
                   <div className="public-mobile-links">
-                    {affiliazioneEnabled ? (
-                      <NavLink
-                        className="btn-primary public-mobile-affilia-btn w-full justify-center text-center"
-                        to="/affiliazione"
-                        onClick={() => {
-                          trackUiEvent("click_affiliazione_cta_nav", {
-                            placement: "mobile_menu",
-                          });
-                          close();
-                        }}
-                      >
-                        Affilia la tua Associazione
-                      </NavLink>
-                    ) : null}
+                    <NavLink
+                      className="btn-primary public-mobile-affilia-btn w-full justify-center text-center"
+                      to="/affiliazione"
+                      onClick={() => {
+                        trackUiEvent("click_affiliazione_cta_nav", {
+                          placement: "mobile_menu",
+                        });
+                        close();
+                      }}
+                    >
+                      Affilia la tua Associazione
+                    </NavLink>
                     <NavLink className="btn-ghost text-center" to="/associazioni" onClick={close}>
                       Diventa Socio
                     </NavLink>
