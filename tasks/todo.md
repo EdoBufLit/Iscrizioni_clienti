@@ -2100,3 +2100,94 @@ pm --prefix frontend run build -> OK
 - Verifiche eseguite:
   - `python -c` (subprocess inline) con `AFFILIAZIONE_ENABLED=false` -> **OK** (`app_main_import_ok`).
   - `python -m pytest tests/test_smoke.py::test_app_main_imports_with_affiliazione_disabled -q` -> **1 passed**.
+
+## Spec (Production hotfix web+worker+deploy robustness - Mar 05, 2026)
+- Obiettivo: risolvere 502 in produzione da import-time crash affiliazione e stabilizzare worker video con controlli deploy robusti.
+- Scope:
+  - Web: import opzionale affiliazione e modelli fallback per evitare `ImportError`.
+  - Worker: startup logs strutturati, validazioni config, marker readiness, loop resiliente.
+  - Deploy: attesa health worker fino a 90s con dump log su failure.
+- Vincolo: nessun workaround silenzioso lato deploy quando flag worker=true.
+
+## Plan (Production hotfix web+worker+deploy)
+- [x] Introdurre modulo modelli affiliazione resiliente (`app/models_affiliation.py`) e aggiornare import in route/service.
+- [x] Stabilizzare worker `app.workers.affiliation_video_worker` con validazioni env + readiness marker.
+- [x] Aggiungere healthcheck worker in `docker-compose.yml`.
+- [x] Rafforzare workflow deploy Hetzner con wait-for-health (90s) e log dump su errore.
+- [x] Estendere smoke test import main con `AFFILIAZIONE_ENABLED=true` e router presente.
+- [x] Eseguire py_compile + pytest smoke mirati + tentativo build compose.
+
+## Review (Production hotfix web+worker+deploy - Mar 05, 2026)
+- Web:
+  - `app/routes/affiliation.py` ora usa modelli affiliazione da `app.models_affiliation` (non da `app.models`), eliminando dipendenza fragile su classi non presenti.
+  - nuovo `app/models_affiliation.py` con fallback:
+    - usa classi da `app.models` quando disponibili;
+    - altrimenti definisce classi SQLAlchemy minime (`AffiliationApplication`, `AffiliationPerson`, `AffiliationDocument`, `AffiliationEvent`, `VideoJob`, `Referral`) + enum richiesti.
+- Worker:
+  - `app/workers/affiliation_video_worker.py` aggiornato con:
+    - logging startup strutturato (flags/env presence/ffmpeg/git sha);
+    - check esplicito `DATABASE_URL` quando `AFFILIATION_VIDEO_WORKER_ENABLED=true`;
+    - import lazy di `process_video_jobs_once` con errore chiaro;
+    - marker readiness `/tmp/worker.ready` dopo init ok;
+    - ciclo resiliente: su errori di ciclo logga e continua poll (no crash su queue vuota).
+  - `app/services/affiliation_video.py` aggiornato per usare `app.models_affiliation`.
+- Compose:
+  - `docker-compose.yml` worker ora ha healthcheck:
+    - `test -f /tmp/worker.ready`
+    - `interval: 10s`, `timeout: 3s`, `retries: 12`.
+- Deploy:
+  - `.github/workflows/deploy-hetzner.yml`:
+    - verifica `docker-compose.yml` presente nella directory target dopo `cd`;
+    - quando worker enabled: attesa health fino a 90s via `docker inspect`;
+    - su failure stampa `compose ps`, `logs affiliation-video-worker` e `logs web` prima di fallire.
+- Test/verifiche eseguite:
+  - `python -m py_compile app/main.py app/routes/affiliation.py app/models_affiliation.py app/services/affiliation_video.py app/workers/affiliation_video_worker.py` -> OK
+  - `python -m pytest tests/test_smoke.py::test_app_main_imports_with_affiliazione_disabled tests/test_smoke.py::test_app_main_imports_with_affiliazione_enabled_router_present -q` -> 2 passed
+  - smoke manual worker:
+    - enabled=false -> exit 0 con log chiaro
+    - enabled=true senza DATABASE_URL -> RuntimeError esplicito
+  - `docker compose build web affiliation-video-worker` -> non eseguibile in questo ambiente (Docker daemon assente).
+
+## Spec (Affiliazione end-to-end coherence hotfix - Mar 05, 2026)
+- Obiettivo: ripristinare coerenza completa del flusso affiliazione (landing/nav responsive, wizard con validazioni reali, super-admin review, associazioni+stato, invite org-admin, video fullscreen, feature flags runtime) senza breaking changes DB/API.
+- Vincoli: nessuna libreria pesante nuova, retrocompatibilita DB, errori espliciti FE/BE, niente token pratica in chiaro in UI.
+
+## Plan (Affiliazione end-to-end coherence hotfix)
+- [ ] Audit e fix responsive Landing/Navbar (desktop 1440, tablet 1024, mobile 390) con CTA stabili e no wrapping/schiacciamenti.
+- [ ] Refactor wizard affiliazione: rimozione token/link box, validazione step-by-step, submit bloccato su required mancanti, stato inviato solo dopo submit reale.
+- [ ] Hardening backend submit affiliazione: 422 dettagliato su campi mancanti, nessun cambio stato in errore, messaggi FE chiari.
+- [ ] Super Admin: tab Affiliazioni completo (list/detail/approve/reject/under_review) e integrazione tab Associazioni con stato pratica + quick link.
+- [ ] Org Admin: ripristino funzionalita Invita Associazione (menu/pagina/form/lista stato) con invio link wizard.
+- [ ] Video guida affiliazione: disponibilita in prod + modal fullscreen (ESC, click outside, X).
+- [ ] Debug feature flags (dev/admin) e allineamento gating runtime senza forced false.
+- [ ] Verifica finale: build frontend, pytest mirati, checklist manuale viewport/stati.
+
+
+---
+## Todo (Mar 05, 2026 - Wizard docs + Navbar cleanup)
+- [ ] Aggiungere documenti obbligatori mancanti (vicepresidente + segretario/tesoriere) su wizard FE e validazione BE
+- [ ] Migliorare UI wizard affiliazione (intro, stepper, upload cards, form spacing/gerarchia)
+- [ ] Sistemare navbar pubblica desktop/mobile (badge CTA, payoff brand, overlap testi)
+- [ ] Verifica finale: build frontend + test backend affiliazione/capabilities
+
+## Review (in corso)
+- Root cause atteso: lista documenti richiesta incompleta in `DOC_ITEMS` FE e `REQUIRED_DOCUMENT_TYPES` BE; header pubblico con CTA troppo larga + badge separato e payoff sempre visibile su viewport intermedie.
+## Todo (Mar 05, 2026 - Wizard docs + Navbar cleanup) [COMPLETATO]
+- [x] Aggiungere documenti obbligatori mancanti (vicepresidente + segretario/tesoriere) su wizard FE e validazione BE
+- [x] Migliorare UI wizard affiliazione (intro, stepper, upload cards, form spacing/gerarchia)
+- [x] Sistemare navbar pubblica desktop/mobile (badge CTA, payoff brand, overlap testi)
+- [x] Verifica finale: build frontend + test backend affiliazione/capabilities
+
+## Review (Wizard docs + Navbar cleanup - Mar 05, 2026)
+- Root cause confermata:
+  - documenti obbligatori incompleti: `DOC_ITEMS` (frontend) e `REQUIRED_DOCUMENT_TYPES` (backend) mancavano vice presidente e segretario/tesoriere;
+  - header pubblico sovraccarico su viewport intermedie: badge CTA separato + payoff brand sempre visibile + breakpoint nav troppo anticipato.
+- Fix applicati:
+  - documenti aggiunti in FE/BE: `documento_vicepresidente`, `documento_segretario_tesoriere`;
+  - wizard UI rifinito: card/stepper/form controls/upload cards piu leggibili e coerenti;
+  - navbar pubblica: rimosso badge separato invasivo, payoff visibile solo su 2XL, nav desktop da `xl`, menu mobile/tablet esteso fino a `< xl`.
+- Verifiche:
+  - `npm --prefix frontend run build` -> OK
+  - `python -m py_compile app/routes/affiliation.py` -> OK
+  - `python -m pytest -q tests/test_affiliation_flow.py tests/test_referral_system.py` -> 6 passed
+  - `python -m pytest -q tests/test_smoke.py -k capabilities` -> 1 passed

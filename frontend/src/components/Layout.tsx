@@ -286,15 +286,15 @@ const Layout = () => {
                   />
                   <span>
                     <span className="public-brand-name">ASSONAM</span>
-                    <p ref={payoffRef} className="public-brand-payoff">
+                    <p ref={payoffRef} className="public-brand-payoff hidden 2xl:block">
                       Associazioni Arti e Mestieri
                     </p>
                   </span>
                 </NavLink>
 
-                <div className="hidden flex-1 items-center justify-end lg:flex lg:gap-4">
+                <div className="hidden flex-1 items-center justify-end xl:flex xl:gap-3">
                   <nav
-                    className="flex min-w-0 flex-1 items-center justify-center gap-1.5 xl:gap-2"
+                    className="flex min-w-0 flex-1 items-center justify-center gap-1.5 2xl:gap-2"
                     aria-label="Navigazione principale"
                   >
                     {NAV_ITEMS.map((item) => (
@@ -310,23 +310,20 @@ const Layout = () => {
                   </nav>
                   <div className="flex shrink-0 items-center gap-2">
                     {showAffiliazioneCta ? (
-                      <>
-                        <span className="public-affilia-nav-badge">Per Associazioni</span>
-                        <NavLink
-                          className="btn-primary public-affilia-nav-btn"
-                          to="/affiliazione"
-                          onClick={() =>
-                            trackUiEvent("click_affiliazione_cta_nav", {
-                              placement: "desktop_nav",
-                            })
-                          }
-                        >
-                          Affilia la tua Associazione
-                          <span className="public-affilia-nav-arrow" aria-hidden="true">
-                            &rarr;
-                          </span>
-                        </NavLink>
-                      </>
+                      <NavLink
+                        className="btn-primary public-affilia-nav-btn"
+                        to="/affiliazione"
+                        onClick={() =>
+                          trackUiEvent("click_affiliazione_cta_nav", {
+                            placement: "desktop_nav",
+                          })
+                        }
+                      >
+                        Affilia la tua Associazione
+                        <span className="public-affilia-nav-arrow" aria-hidden="true">
+                          &rarr;
+                        </span>
+                      </NavLink>
                     ) : null}
                     <NavLink className="btn-ghost public-socio-nav-btn px-4 text-sm" to="/associazioni">
                       Diventa Socio
@@ -343,7 +340,7 @@ const Layout = () => {
                 </div>
 
                 <button
-                  className="public-menu-toggle lg:hidden"
+                  className="public-menu-toggle xl:hidden"
                   type="button"
                   aria-expanded={menuOpen}
                   aria-controls="mobile-nav-public"
@@ -356,7 +353,7 @@ const Layout = () => {
               <div
                 ref={mobileMenuRef}
                 id="mobile-nav-public"
-                className="public-mobile-panel lg:hidden"
+                className="public-mobile-panel xl:hidden"
                 style={{ display: "none" }}
               >
                 <nav className="container-shell py-4" aria-label="Navigazione principale mobile">

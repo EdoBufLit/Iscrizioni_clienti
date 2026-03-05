@@ -705,6 +705,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   letter-spacing: 0.01em;
   font-weight: 750;
   color: #0f2527;
+  white-space: nowrap;
 }
 
 .public-brand-payoff {
@@ -785,10 +786,10 @@ body.dashboard-perf-mode .btn-ghost:hover {
   display: inline-flex;
   align-items: center;
   gap: 0.46rem;
-  min-height: 44px;
-  padding-inline: 1.18rem;
+  min-height: 42px;
+  padding-inline: 1rem;
   border-radius: 0.85rem;
-  font-size: 0.83rem;
+  font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.01em;
   transform: scale(1);
@@ -810,8 +811,8 @@ body.dashboard-perf-mode .btn-ghost:hover {
 }
 
 .public-socio-nav-btn {
-  font-size: 0.83rem;
-  min-height: 44px;
+  font-size: 0.8rem;
+  min-height: 42px;
   border-color: rgba(210, 176, 113, 0.36);
   background: rgba(255, 255, 255, 0.88);
   color: #173f44;
@@ -1792,6 +1793,23 @@ body.dashboard-perf-mode .btn-ghost:hover {
 
   .public-nav-cta-group {
     margin-left: 0;
+  }
+}
+
+@media (min-width: 1280px) and (max-width: 1460px) {
+  .public-nav-pill {
+    padding: 0.44rem 0.72rem;
+    font-size: 0.8rem;
+  }
+
+  .public-affilia-nav-btn {
+    padding-inline: 0.92rem;
+    font-size: 0.77rem;
+  }
+
+  .public-socio-nav-btn {
+    padding-inline: 0.86rem;
+    font-size: 0.77rem;
   }
 }
 

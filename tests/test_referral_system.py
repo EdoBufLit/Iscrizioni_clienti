@@ -104,6 +104,8 @@ def _upload_required_docs(client, token: str):
         "atto_costitutivo",
         "documento_presidente",
         "codice_fiscale_presidente",
+        "documento_vicepresidente",
+        "documento_segretario_tesoriere",
     ]:
         response = client.post(
             f"/api/affiliazione/draft/{token}/documents",

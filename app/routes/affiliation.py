@@ -69,6 +69,8 @@ REQUIRED_DOCUMENT_TYPES = [
     "atto_costitutivo",
     "documento_presidente",
     "codice_fiscale_presidente",
+    "documento_vicepresidente",
+    "documento_segretario_tesoriere",
 ]
 REQUIRED_PEOPLE_ROLES = ["presidente", "segretario", "tesoriere"]
 

@@ -49,6 +49,8 @@ const DOC_ITEMS = [
   { type: "atto_costitutivo", label: "Atto costitutivo" },
   { type: "documento_presidente", label: "Documento presidente" },
   { type: "codice_fiscale_presidente", label: "Codice fiscale presidente" },
+  { type: "documento_vicepresidente", label: "Documento vice presidente" },
+  { type: "documento_segretario_tesoriere", label: "Documento segretario/tesoriere" },
 ] as const;
 
 const ROLE_ITEMS = [
@@ -81,6 +83,10 @@ const TRUST_BADGES = [
 ] as const;
 
 const BASE_WELCOME_VIDEO_URL = "/videos/welcome_base.mp4";
+const stepCardClass = "surface relative overflow-hidden p-6 md:p-7";
+const fieldClass =
+  "w-full rounded-xl border border-neutral-200 bg-white/90 px-3.5 py-2.5 text-sm text-neutral-800 shadow-sm transition focus:border-brand/40 focus:outline-none focus:ring-2 focus:ring-brand/15";
+const textareaClass = `${fieldClass} min-h-[7rem]`;
 
 const toFormState = (draft: AffiliationDraft): FormState => ({
   organization_name: draft.organization_name ?? "",
@@ -132,6 +138,19 @@ type WizardValidation = {
 };
 
 const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+
+const docStatusMeta = (status: string | undefined) => {
+  if (status === "approved") {
+    return { tone: "text-emerald-700", label: "approvato" };
+  }
+  if (status === "rejected") {
+    return { tone: "text-red-700", label: "rifiutato" };
+  }
+  if (status === "pending" || status === "uploaded") {
+    return { tone: "text-amber-700", label: "in revisione" };
+  }
+  return { tone: "text-neutral-500", label: "non caricato" };
+};
 
 const Affiliazione = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -600,14 +619,15 @@ const Affiliazione = () => {
     .toUpperCase();
 
   return (
-    <section className="py-14">
-      <div className="container-shell space-y-6">
-        <div className="surface-strong p-6">
+    <section className="py-10 md:py-14">
+      <div className="container-shell">
+        <div className="mx-auto max-w-5xl space-y-6">
+          <div className="surface-strong p-6 md:p-7">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="section-title">Wizard Pubblico</p>
               <h1 className="section-heading">Affilia la tua Associazione</h1>
-              <p className="section-subtitle">
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-600 md:text-base">
                 Bozza salvata automaticamente. Riprendi con il link dedicato e completa in 5 passaggi.
               </p>
             </div>
@@ -677,12 +697,12 @@ const Affiliazione = () => {
                         setShowIntroScreen(false);
                         setCurrentStep(item.step);
                       }}
-                      className={`min-w-[118px] shrink-0 rounded-md border px-2 py-2 text-left text-[11px] leading-tight transition md:min-w-0 ${
+                      className={`min-w-[126px] shrink-0 rounded-xl border px-3 py-2.5 text-left text-[11px] leading-tight transition md:min-w-0 ${
                         isActive
-                          ? "border-brand bg-brand/10 text-brand"
+                          ? "border-brand bg-brand/10 text-brand shadow-sm"
                           : isCompleted
                             ? "border-brand/30 bg-brand/[0.05] text-brand/90"
-                            : "border-neutral-200 bg-white text-neutral-500 hover:border-brand/40"
+                            : "border-neutral-200 bg-white text-neutral-500 hover:border-brand/40 hover:bg-brand/[0.03]"
                       }`}
                     >
                       <div className="font-semibold">
@@ -694,10 +714,10 @@ const Affiliazione = () => {
               </div>
             </div>
           )}
-        </div>
+          </div>
 
-        {showIntroScreen && (
-          <div className="surface p-6 space-y-6">
+          {showIntroScreen && (
+            <div className={`${stepCardClass} space-y-6`}>
             <div>
               <h2 className="text-2xl font-semibold text-neutral-900">Affilia la tua Associazione</h2>
               <p className="mt-2 text-sm text-neutral-600">
@@ -713,7 +733,7 @@ const Affiliazione = () => {
                 {INTRO_CHECKLIST_ITEMS.map((item) => (
                   <li key={item} className="flex items-start gap-2">
                     <span className="mt-1 inline-flex h-4 w-4 items-center justify-center rounded-full border border-emerald-300 bg-emerald-50 text-[10px] text-emerald-700">
-                      *
+                      OK
                     </span>
                     <span>{item}</span>
                   </li>
@@ -748,11 +768,11 @@ const Affiliazione = () => {
                 Inizia Affiliazione
               </button>
             </div>
-          </div>
-        )}
+            </div>
+          )}
 
-        {!showIntroScreen && !hasRealSubmission && currentStep === 1 && (
-          <div className="surface p-6 space-y-6">
+          {!showIntroScreen && !hasRealSubmission && currentStep === 1 && (
+            <div className={`${stepCardClass} space-y-6`}>
             <div>
               <h2 className="text-lg font-semibold text-neutral-900">Checklist iniziale</h2>
               <p className="mt-1 text-sm text-neutral-600">
@@ -760,7 +780,7 @@ const Affiliazione = () => {
               </p>
               <ul className="mt-3 grid gap-2 text-sm text-neutral-700 md:grid-cols-2">
                 {DOC_ITEMS.map((item) => (
-                  <li key={item.type} className="rounded-md border border-neutral-200 bg-white px-3 py-2">
+                  <li key={item.type} className="rounded-xl border border-neutral-200 bg-white/85 px-3.5 py-2.5 shadow-sm">
                     {item.label}
                   </li>
                 ))}
@@ -768,60 +788,61 @@ const Affiliazione = () => {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <input className="rounded-md border border-neutral-200 px-3 py-2 text-sm" placeholder="Nome associazione *" value={form.organization_name} onChange={(e) => onFieldChange("organization_name", e.target.value)} />
-              <input className="rounded-md border border-neutral-200 px-3 py-2 text-sm" placeholder="Ragione sociale" value={form.organization_legal_name} onChange={(e) => onFieldChange("organization_legal_name", e.target.value)} />
-              <input className="rounded-md border border-neutral-200 px-3 py-2 text-sm" placeholder="Slug suggerito (opzionale)" value={form.organization_slug_candidate} onChange={(e) => onFieldChange("organization_slug_candidate", e.target.value)} />
-              <input className="rounded-md border border-neutral-200 px-3 py-2 text-sm" placeholder="Codice fiscale associazione" value={form.tax_code} onChange={(e) => onFieldChange("tax_code", e.target.value)} />
-              <input className="rounded-md border border-neutral-200 px-3 py-2 text-sm" placeholder="Partita IVA" value={form.vat_number} onChange={(e) => onFieldChange("vat_number", e.target.value)} />
-              <input className="rounded-md border border-neutral-200 px-3 py-2 text-sm" placeholder="Telefono referente *" value={form.applicant_phone} onChange={(e) => onFieldChange("applicant_phone", e.target.value)} />
-              <input className="rounded-md border border-neutral-200 px-3 py-2 text-sm md:col-span-2" placeholder="Indirizzo sede legale" value={form.address_line1} onChange={(e) => onFieldChange("address_line1", e.target.value)} />
-              <input className="rounded-md border border-neutral-200 px-3 py-2 text-sm md:col-span-2" placeholder="Indirizzo aggiuntivo" value={form.address_line2} onChange={(e) => onFieldChange("address_line2", e.target.value)} />
-              <input className="rounded-md border border-neutral-200 px-3 py-2 text-sm" placeholder="Citta" value={form.city} onChange={(e) => onFieldChange("city", e.target.value)} />
-              <input className="rounded-md border border-neutral-200 px-3 py-2 text-sm" placeholder="Provincia" value={form.province} onChange={(e) => onFieldChange("province", e.target.value)} />
-              <input className="rounded-md border border-neutral-200 px-3 py-2 text-sm" placeholder="CAP" value={form.postal_code} onChange={(e) => onFieldChange("postal_code", e.target.value)} />
-              <input className="rounded-md border border-neutral-200 px-3 py-2 text-sm" placeholder="Paese" value={form.country} onChange={(e) => onFieldChange("country", e.target.value)} />
-              <input className="rounded-md border border-neutral-200 px-3 py-2 text-sm" placeholder="Nome referente *" value={form.applicant_full_name} onChange={(e) => onFieldChange("applicant_full_name", e.target.value)} />
-              <input className="rounded-md border border-neutral-200 px-3 py-2 text-sm" placeholder="Email referente *" value={form.applicant_email} onChange={(e) => onFieldChange("applicant_email", e.target.value)} />
+              <input className={fieldClass} placeholder="Nome associazione *" value={form.organization_name} onChange={(e) => onFieldChange("organization_name", e.target.value)} />
+              <input className={fieldClass} placeholder="Ragione sociale" value={form.organization_legal_name} onChange={(e) => onFieldChange("organization_legal_name", e.target.value)} />
+              <input className={fieldClass} placeholder="Slug suggerito (opzionale)" value={form.organization_slug_candidate} onChange={(e) => onFieldChange("organization_slug_candidate", e.target.value)} />
+              <input className={fieldClass} placeholder="Codice fiscale associazione" value={form.tax_code} onChange={(e) => onFieldChange("tax_code", e.target.value)} />
+              <input className={fieldClass} placeholder="Partita IVA" value={form.vat_number} onChange={(e) => onFieldChange("vat_number", e.target.value)} />
+              <input className={fieldClass} placeholder="Telefono referente *" value={form.applicant_phone} onChange={(e) => onFieldChange("applicant_phone", e.target.value)} />
+              <input className={`${fieldClass} md:col-span-2`} placeholder="Indirizzo sede legale" value={form.address_line1} onChange={(e) => onFieldChange("address_line1", e.target.value)} />
+              <input className={`${fieldClass} md:col-span-2`} placeholder="Indirizzo aggiuntivo" value={form.address_line2} onChange={(e) => onFieldChange("address_line2", e.target.value)} />
+              <input className={fieldClass} placeholder="Citta" value={form.city} onChange={(e) => onFieldChange("city", e.target.value)} />
+              <input className={fieldClass} placeholder="Provincia" value={form.province} onChange={(e) => onFieldChange("province", e.target.value)} />
+              <input className={fieldClass} placeholder="CAP" value={form.postal_code} onChange={(e) => onFieldChange("postal_code", e.target.value)} />
+              <input className={fieldClass} placeholder="Paese" value={form.country} onChange={(e) => onFieldChange("country", e.target.value)} />
+              <input className={fieldClass} placeholder="Nome referente *" value={form.applicant_full_name} onChange={(e) => onFieldChange("applicant_full_name", e.target.value)} />
+              <input className={fieldClass} placeholder="Email referente *" value={form.applicant_email} onChange={(e) => onFieldChange("applicant_email", e.target.value)} />
             </div>
-          </div>
-        )}
+            </div>
+          )}
 
-        {!showIntroScreen && !hasRealSubmission && currentStep === 2 && (
-          <div className="surface p-6 space-y-4">
+          {!showIntroScreen && !hasRealSubmission && currentStep === 2 && (
+            <div className={`${stepCardClass} space-y-4`}>
             <h2 className="text-lg font-semibold text-neutral-900">Cariche e referenti</h2>
             <p className="text-sm text-neutral-600">Inserisci i responsabili principali dell'associazione.</p>
             <div className="space-y-4">
               {people.map((person, index) => (
-                <div key={person.role} className="rounded-lg border border-neutral-200 bg-white p-4">
+                <div key={person.role} className="rounded-xl border border-neutral-200 bg-white/90 p-4 shadow-sm">
                   <p className="text-sm font-semibold text-neutral-800">
                     {ROLE_ITEMS.find((item) => item.role === person.role)?.label || person.role}
                   </p>
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
-                    <input className="rounded-md border border-neutral-200 px-3 py-2 text-sm" placeholder="Nome e cognome" value={person.full_name} onChange={(e) => onPersonChange(index, "full_name", e.target.value)} />
-                    <input className="rounded-md border border-neutral-200 px-3 py-2 text-sm" placeholder="Email" value={person.email} onChange={(e) => onPersonChange(index, "email", e.target.value)} />
-                    <input className="rounded-md border border-neutral-200 px-3 py-2 text-sm" placeholder="Telefono" value={person.phone} onChange={(e) => onPersonChange(index, "phone", e.target.value)} />
-                    <input className="rounded-md border border-neutral-200 px-3 py-2 text-sm" placeholder="Codice fiscale" value={person.fiscal_code} onChange={(e) => onPersonChange(index, "fiscal_code", e.target.value)} />
+                    <input className={fieldClass} placeholder="Nome e cognome" value={person.full_name} onChange={(e) => onPersonChange(index, "full_name", e.target.value)} />
+                    <input className={fieldClass} placeholder="Email" value={person.email} onChange={(e) => onPersonChange(index, "email", e.target.value)} />
+                    <input className={fieldClass} placeholder="Telefono" value={person.phone} onChange={(e) => onPersonChange(index, "phone", e.target.value)} />
+                    <input className={fieldClass} placeholder="Codice fiscale" value={person.fiscal_code} onChange={(e) => onPersonChange(index, "fiscal_code", e.target.value)} />
                   </div>
                 </div>
               ))}
             </div>
-          </div>
-        )}
+            </div>
+          )}
 
-        {!showIntroScreen && !hasRealSubmission && currentStep === 3 && (
-          <div className="surface p-6 space-y-4">
+          {!showIntroScreen && !hasRealSubmission && currentStep === 3 && (
+            <div className={`${stepCardClass} space-y-4`}>
             <h2 className="text-lg font-semibold text-neutral-900">Documenti e cariche</h2>
             <p className="text-sm text-neutral-600">Carica PDF validi. Ogni documento viene verificato dal super admin.</p>
-            <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2">
               {DOC_ITEMS.map((doc) => {
                 const docData = docsByType.get(doc.type);
+                const status = docStatusMeta(docData?.status);
                 return (
-                  <div key={doc.type} className="rounded-lg border border-neutral-200 bg-white p-4">
+                  <div key={doc.type} className="rounded-xl border border-neutral-200 bg-white/90 p-4 shadow-sm">
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                       <div>
                         <p className="text-sm font-semibold text-neutral-900">{doc.label}</p>
-                        <p className="text-xs text-neutral-500">
-                          Stato: {docData?.status || "non caricato"}
+                        <p className={`text-xs ${status.tone}`}>
+                          Stato: {status.label}
                           {docData?.rejection_note ? ` - ${docData.rejection_note}` : ""}
                         </p>
                       </div>
@@ -840,18 +861,18 @@ const Affiliazione = () => {
                           const file = event.target.files?.[0];
                           if (file) void onUploadDocument(doc.type, file);
                         }}
-                        className="block w-full rounded-md border border-neutral-200 px-3 py-2 text-xs text-neutral-600"
+                        className="block w-full rounded-xl border border-neutral-200 px-3 py-2 text-xs text-neutral-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand/10 file:px-2.5 file:py-1.5 file:font-medium file:text-brand hover:file:bg-brand/15"
                       />
                     </div>
                   </div>
                 );
               })}
             </div>
-          </div>
-        )}
+            </div>
+          )}
 
-        {!showIntroScreen && !hasRealSubmission && currentStep === 4 && (
-          <div className="surface p-6 space-y-5">
+          {!showIntroScreen && !hasRealSubmission && currentStep === 4 && (
+            <div className={`${stepCardClass} space-y-5`}>
             <h2 className="text-lg font-semibold text-neutral-900">Pagamento</h2>
             <p className="text-sm text-neutral-600">
               Seleziona il metodo di pagamento. L'attivazione avviene sempre dopo verifica documentale.
@@ -920,7 +941,7 @@ const Affiliazione = () => {
             )}
 
             {(form.payment_method === "bank_transfer" || form.payment_method === "cash") && (
-              <div className="grid gap-3 rounded-md border border-neutral-200 bg-white p-4 md:grid-cols-2">
+              <div className="grid gap-3 rounded-xl border border-neutral-200 bg-white p-4 md:grid-cols-2">
                 {form.payment_method === "bank_transfer" ? (
                   <div className="md:col-span-2 text-xs text-neutral-600">
                     <p>IBAN: <span className="font-semibold text-neutral-800">{draft?.payment_config.bank_iban || "-"}</span></p>
@@ -931,16 +952,16 @@ const Affiliazione = () => {
                     Sede contanti: <span className="font-semibold text-neutral-800">{draft?.payment_config.cash_location || "Sede ASSONAM"}</span>
                   </div>
                 )}
-                <input type="date" className="rounded-md border border-neutral-200 px-3 py-2 text-sm" placeholder="Data preferita" value={form.manual_preferred_date} onChange={(e) => onFieldChange("manual_preferred_date", e.target.value)} />
-                <input type="time" className="rounded-md border border-neutral-200 px-3 py-2 text-sm" placeholder="Orario preferito" value={form.manual_preferred_time} onChange={(e) => onFieldChange("manual_preferred_time", e.target.value)} />
-                <input className="rounded-md border border-neutral-200 px-3 py-2 text-sm md:col-span-2" placeholder="Contatto operativo" value={form.manual_contact} onChange={(e) => onFieldChange("manual_contact", e.target.value)} />
+                <input type="date" className={fieldClass} placeholder="Data preferita" value={form.manual_preferred_date} onChange={(e) => onFieldChange("manual_preferred_date", e.target.value)} />
+                <input type="time" className={fieldClass} placeholder="Orario preferito" value={form.manual_preferred_time} onChange={(e) => onFieldChange("manual_preferred_time", e.target.value)} />
+                <input className={`${fieldClass} md:col-span-2`} placeholder="Contatto operativo" value={form.manual_contact} onChange={(e) => onFieldChange("manual_contact", e.target.value)} />
               </div>
             )}
-          </div>
-        )}
+            </div>
+          )}
 
-        {!showIntroScreen && !hasRealSubmission && currentStep === 5 && (
-          <div className="surface p-6 space-y-5">
+          {!showIntroScreen && !hasRealSubmission && currentStep === 5 && (
+            <div className={`${stepCardClass} space-y-5`}>
             <h2 className="text-lg font-semibold text-neutral-900">Riepilogo e invio</h2>
             <p className="text-sm text-neutral-600">
               Verifica i dati principali. Dopo l'invio lo stato passa a <strong>under_review</strong>.
@@ -966,7 +987,7 @@ const Affiliazione = () => {
                 Dati completi. Puoi inviare la richiesta.
               </div>
             )}
-            <textarea className="w-full rounded-md border border-neutral-200 px-3 py-2 text-sm" rows={4} placeholder="Note per il super admin" value={form.notes} onChange={(e) => onFieldChange("notes", e.target.value)} />
+            <textarea className={textareaClass} rows={4} placeholder="Note per il super admin" value={form.notes} onChange={(e) => onFieldChange("notes", e.target.value)} />
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
@@ -982,11 +1003,11 @@ const Affiliazione = () => {
                 Invio bloccato: correggi i campi indicati e riprova.
               </p>
             ) : null}
-          </div>
-        )}
+            </div>
+          )}
 
-        {hasRealSubmission && (
-          <div className="surface p-6 space-y-4">
+          {hasRealSubmission && (
+            <div className={`${stepCardClass} space-y-4`}>
             <h2 className="text-lg font-semibold text-neutral-900">Richiesta inviata</h2>
             <p className="text-sm text-neutral-600">
               Stato attuale: <strong>{submitResult?.status || draft?.status || "draft"}</strong>
@@ -1013,8 +1034,9 @@ const Affiliazione = () => {
                 Vai a guida affiliazione
               </Link>
             </div>
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </div>
 
       {showVideoOverlay && (
