@@ -77,12 +77,6 @@ const INTRO_CHECKLIST_ITEMS = [
   "Documento Segretario/Tesoriere",
 ] as const;
 
-const TRUST_BADGES = [
-  "Pagamento sicuro",
-  "Verifica documenti",
-  "Attivazione dopo approvazione",
-] as const;
-
 const stepCardClass = "surface relative overflow-hidden p-6 md:p-7";
 const fieldClass =
   "w-full rounded-xl border border-neutral-200 bg-white/90 px-3.5 py-2.5 text-sm text-neutral-800 shadow-sm transition focus:border-brand/40 focus:outline-none focus:ring-2 focus:ring-brand/15";
@@ -198,13 +192,10 @@ const Affiliazione = () => {
   const [submitting, setSubmitting] = useState(false);
   const [uploadingType, setUploadingType] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [saveInfo, setSaveInfo] = useState("Bozza non salvata");
   const [submitResult, setSubmitResult] = useState<AffiliationSubmitResponse | null>(null);
   const [showVideoOverlay, setShowVideoOverlay] = useState(false);
   const [notice, setNotice] = useState("");
   const { capabilities, loading: capabilitiesLoading } = useStatePlatformCapabilities();
-  const [, setDirtyCounter] = useState(0);
-  const [resumeLinkCopied, setResumeLinkCopied] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const stripeFallbackAppliedRef = useRef(false);
   const autoOpenedVideoRef = useRef(false);
@@ -234,8 +225,8 @@ const Affiliazione = () => {
   }, []);
 
   const refreshDraft = useCallback(
-    async (draftToken: string, syncForm: boolean) => {
-      const nextDraft = await fetchAffiliationDraft(draftToken);
+    async (publicToken: string, syncForm: boolean) => {
+      const nextDraft = await fetchAffiliationDraft(publicToken);
       setDraft(nextDraft);
       if (syncForm) {
         setForm(toFormState(nextDraft));
@@ -246,62 +237,47 @@ const Affiliazione = () => {
     [],
   );
 
-  const persistDraft = useCallback(
-    async (options?: { silent?: boolean }) => {
-      if (!token) return false;
-      const silent = Boolean(options?.silent);
-      try {
-        if (!silent) {
-          setSaving(true);
-          setSaveInfo("Salvataggio bozza in corso...");
-        }
-        await patchAffiliationDraft(token, {
-          organization_name: form.organization_name || null,
-          organization_legal_name: form.organization_legal_name || null,
-          organization_slug_candidate: form.organization_slug_candidate || null,
-          tax_code: form.tax_code || null,
-          vat_number: form.vat_number || null,
-          address_line1: form.address_line1 || null,
-          address_line2: form.address_line2 || null,
-          city: form.city || null,
-          province: form.province || null,
-          postal_code: form.postal_code || null,
-          country: form.country || null,
-          applicant_full_name: form.applicant_full_name || null,
-          applicant_email: form.applicant_email || null,
-          applicant_phone: form.applicant_phone || null,
-          notes: form.notes || null,
-          payment_method: form.payment_method || null,
-          manual_preferred_date: form.manual_preferred_date || null,
-          manual_preferred_time: form.manual_preferred_time || null,
-          manual_contact: form.manual_contact || null,
-        });
-        await replaceAffiliationPeople(
-          token,
-          people.map((item) => ({
-            role: item.role,
-            full_name: item.full_name || null,
-            email: item.email || null,
-            phone: item.phone || null,
-            fiscal_code: item.fiscal_code || null,
-          })),
-        );
-        await refreshDraft(token, false);
-        setSaveInfo("Bozza salvata");
-        setDirtyCounter(0);
-        return true;
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Errore salvataggio bozza");
-        setSaveInfo("Errore salvataggio bozza");
-        return false;
-      } finally {
-        if (!silent) {
-          setSaving(false);
-        }
-      }
-    },
-    [form, people, refreshDraft, token],
-  );
+  const syncDraftData = useCallback(async () => {
+    if (!token) return false;
+    try {
+      await patchAffiliationDraft(token, {
+        organization_name: form.organization_name || null,
+        organization_legal_name: form.organization_legal_name || null,
+        organization_slug_candidate: form.organization_slug_candidate || null,
+        tax_code: form.tax_code || null,
+        vat_number: form.vat_number || null,
+        address_line1: form.address_line1 || null,
+        address_line2: form.address_line2 || null,
+        city: form.city || null,
+        province: form.province || null,
+        postal_code: form.postal_code || null,
+        country: form.country || null,
+        applicant_full_name: form.applicant_full_name || null,
+        applicant_email: form.applicant_email || null,
+        applicant_phone: form.applicant_phone || null,
+        notes: form.notes || null,
+        payment_method: form.payment_method || null,
+        manual_preferred_date: form.manual_preferred_date || null,
+        manual_preferred_time: form.manual_preferred_time || null,
+        manual_contact: form.manual_contact || null,
+      });
+      await replaceAffiliationPeople(
+        token,
+        people.map((item) => ({
+          role: item.role,
+          full_name: item.full_name || null,
+          email: item.email || null,
+          phone: item.phone || null,
+          fiscal_code: item.fiscal_code || null,
+        })),
+      );
+      await refreshDraft(token, false);
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore sincronizzazione dati");
+      return false;
+    }
+  }, [form, people, refreshDraft, token]);
 
   useEffect(() => {
     if (capabilitiesLoading) return;
@@ -322,7 +298,6 @@ const Affiliazione = () => {
             setShowIntroScreen(true);
             setCurrentStep(1);
           }
-          setSaveInfo("Bozza pronta");
         } else {
           setToken("");
           setDraft(null);
@@ -330,7 +305,6 @@ const Affiliazione = () => {
           setPeople(buildDefaultPeople());
           setShowIntroScreen(true);
           setCurrentStep(1);
-          setSaveInfo("Bozza non creata");
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Errore avvio wizard");
@@ -359,7 +333,6 @@ const Affiliazione = () => {
       setForm((current) =>
         current ? { ...current, payment_method: "bank_transfer" } : current,
       );
-      setDirtyCounter((value) => value + 1);
       return;
     }
 
@@ -374,7 +347,6 @@ const Affiliazione = () => {
       setForm((current) =>
         current ? { ...current, payment_method: "bank_transfer" } : current,
       );
-      setDirtyCounter((value) => value + 1);
       void patchAffiliationDraft(token, { payment_method: "bank_transfer" })
         .then(() => refreshDraft(token, false))
         .catch(() => {});
@@ -454,25 +426,9 @@ const Affiliazione = () => {
     return { issues, stepErrors, firstInvalidStep };
   }, [docsByType, form, people]);
 
-  const resumeUrl = useMemo(() => {
-    if (typeof window === "undefined") return "";
-    const draftResume = (draft?.resume_url || "").trim();
-    if (draftResume) {
-      return new URL(draftResume, window.location.origin).toString();
-    }
-    if (!token) return "";
-    return `${window.location.origin}/affiliazione?token=${encodeURIComponent(token)}`;
-  }, [draft?.resume_url, token]);
-
-  const markDirty = useCallback(() => {
-    setDirtyCounter((value) => value + 1);
-    setSaveInfo("Modifiche non salvate");
-  }, []);
-
   const onFieldChange = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setSubmitAttempted(false);
     setForm((current) => (current ? { ...current, [key]: value } : current));
-    markDirty();
   };
 
   const onPersonChange = (index: number, key: keyof PersonForm, value: string) => {
@@ -482,7 +438,6 @@ const Affiliazione = () => {
         itemIndex === index ? { ...item, [key]: value } : item,
       ),
     );
-    markDirty();
   };
 
   const onUploadDocument = async (docType: string, file: File) => {
@@ -493,7 +448,6 @@ const Affiliazione = () => {
       setError("");
       await uploadAffiliationDocument(token, docType, file);
       await refreshDraft(token, false);
-      setSaveInfo("Documento caricato");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore upload documento");
     } finally {
@@ -536,7 +490,7 @@ const Affiliazione = () => {
     try {
       setSubmitting(true);
       setError("");
-      const saved = await persistDraft({ silent: true });
+      const saved = await syncDraftData();
       if (!saved) {
         return;
       }
@@ -550,17 +504,6 @@ const Affiliazione = () => {
       setError(err instanceof Error ? err.message : "Errore invio richiesta");
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const onCopyResumeLink = async () => {
-    if (!resumeUrl) return;
-    try {
-      await navigator.clipboard.writeText(resumeUrl);
-      setResumeLinkCopied(true);
-      window.setTimeout(() => setResumeLinkCopied(false), 1500);
-    } catch {
-      setError("Impossibile copiare il link. Copialo manualmente.");
     }
   };
 
@@ -587,13 +530,11 @@ const Affiliazione = () => {
     try {
       setError("");
       setSaving(true);
-      setSaveInfo("Creazione bozza in corso...");
       const created = await createAffiliationDraft(
         referralFromQuery ? { referral_slug: referralFromQuery } : undefined,
       );
       setToken(created.public_token);
       applyDraftState(created);
-      setSaveInfo("Bozza pronta");
 
       const nextParams = new URLSearchParams();
       nextParams.set("token", created.public_token);
@@ -604,7 +545,7 @@ const Affiliazione = () => {
       setShowIntroScreen(false);
       setCurrentStep(1);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Errore creazione bozza");
+      setError(err instanceof Error ? err.message : "Errore avvio procedura");
     } finally {
       setSaving(false);
     }
@@ -622,20 +563,11 @@ const Affiliazione = () => {
         : "Sto generando il video...";
   const normalizedDraftStatus = String(draft?.status || "").trim().toLowerCase();
   const hasRealSubmission = Boolean(submitResult) || SUBMITTED_STATUSES.has(normalizedDraftStatus);
-  const canManualSave = Boolean(token) && !hasRealSubmission;
-  const isDevEnv = import.meta.env.DEV;
   const progressActiveStep = Math.min(5, Math.max(1, currentStep));
   const progressPercent = ((progressActiveStep - 1) / (WIZARD_PROGRESS_STEPS.length - 1)) * 100;
   const stepErrors = validation.stepErrors[currentStep] || [];
   const hasCurrentStepErrors = stepErrors.length > 0;
   const isVideoPreparing = videoEnabled && !personalizedVideoUrl && currentVideoStatus !== "failed";
-  const saveInfoTone = saving
-    ? "border-sky-200 bg-sky-50 text-sky-700"
-    : saveInfo.toLowerCase().includes("errore")
-      ? "border-red-200 bg-red-50 text-red-700"
-      : saveInfo.toLowerCase().includes("salvat")
-        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-        : "border-neutral-200 bg-white/80 text-neutral-600";
   const overlayAssociationName = (
     submitResult?.application.organization_name ||
     draft?.organization_name ||
@@ -699,46 +631,13 @@ const Affiliazione = () => {
   return (
     <section className="py-8 md:py-12">
       <div className="container-shell">
-        <div className="mx-auto max-w-4xl space-y-5">
+        <div className="w-full space-y-5">
           <div className="surface-strong p-5 md:p-7">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div>
-              <p className="section-title">Wizard Pubblico</p>
+          <div className="mx-auto max-w-3xl text-center">
               <h1 className="section-heading">Affilia la tua Associazione</h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-600 md:text-base">
-                Salva la bozza quando vuoi, poi completa i 5 passaggi e invia.
+              <p className="mt-2 text-sm leading-6 text-neutral-600 md:text-base">
+                Compila i 5 passaggi richiesti, allega i documenti e invia la domanda ad ASSONAM.
               </p>
-            </div>
-            <div className={`rounded-xl border px-4 py-3 text-sm ${saveInfoTone}`}>
-              <p className="font-semibold text-neutral-800">Stato bozza</p>
-              <p className="mt-1 leading-5">{saving ? "Salvataggio in corso..." : saveInfo}</p>
-              {canManualSave ? (
-                <button
-                  type="button"
-                  className="btn-ghost mt-3 w-full px-3 py-2 text-xs"
-                  disabled={saving}
-                  onClick={() => {
-                    void persistDraft();
-                  }}
-                >
-                  {saving ? "Salvataggio..." : "Salva bozza"}
-                </button>
-              ) : null}
-              {isDevEnv && resumeUrl ? (
-                <details className="mt-3 text-xs">
-                  <summary className="cursor-pointer text-[11px] font-semibold text-neutral-700">
-                    Opzioni avanzate (solo sviluppo)
-                  </summary>
-                  <p className="mt-2 break-all">{resumeUrl}</p>
-                  <button
-                    type="button"
-                    className="mt-2 rounded-md border border-neutral-300 px-2.5 py-1 text-[11px] font-medium text-neutral-700 hover:border-brand/40"
-                    onClick={onCopyResumeLink}
-                  >
-                    {resumeLinkCopied ? "Link copiato" : "Copia link di ripresa"}
-                  </button>
-                </details>
-              ) : null}
             </div>
           </div>
 
@@ -807,7 +706,6 @@ const Affiliazione = () => {
               </div>
             </div>
           )}
-          </div>
 
           {showIntroScreen && (
             <div className={`${stepCardClass} space-y-6`}>
@@ -832,21 +730,6 @@ const Affiliazione = () => {
                   </li>
                 ))}
               </ul>
-            </div>
-
-            <p className="text-sm text-neutral-600">
-              Potrai salvare la richiesta e continuare piu tardi.
-            </p>
-
-            <div className="flex flex-wrap gap-2">
-              {TRUST_BADGES.map((badge) => (
-                <span
-                  key={badge}
-                  className="rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-700"
-                >
-                  {badge}
-                </span>
-              ))}
             </div>
 
             <div>
@@ -1136,7 +1019,7 @@ const Affiliazione = () => {
             <div className={`${stepCardClass} space-y-4`}>
             <h2 className="text-lg font-semibold text-neutral-900">Richiesta inviata</h2>
             <p className="text-sm text-neutral-600">
-              Stato attuale: <strong>{submitResult?.status || draft?.status || "draft"}</strong>
+              Stato attuale: <strong>{submitResult?.status || draft?.status || "in compilazione"}</strong>
             </p>
             {submitResult?.message ? (
               <p className="rounded-md border border-brand/20 bg-brand/5 px-3 py-2 text-sm text-neutral-700">
