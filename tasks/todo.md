@@ -2622,3 +2622,7 @@ pm --prefix frontend run build -> OK
 ## Review Addendum (Dashboard outer wrapper width v3 - Mar 06, 2026)
 - Il requisito e stato reso esplicito: box esterno circa `20%` piu largo a desktop.
 - Sostituiti i tweak incrementali in `rem` con widening percentuale diretto del contenitore (`120%` con compensazione simmetrica), lasciando invariati tessera e contenuto interno.
+
+## Review Addendum (Dashboard shell width correction - Mar 06, 2026)
+- Il widening sul solo wrapper figlio non era percepibile perché il vero vincolo era il `main` del dashboard.
+- Corretto il punto giusto: il shell del dashboard member ora e piu largo (`max-w-[90rem]`) e la sezione tessera torna a larghezza normale, cosi il box risulta davvero piu ampio a schermo senza hack di overflow.
