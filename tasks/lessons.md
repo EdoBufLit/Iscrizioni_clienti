@@ -91,3 +91,4 @@
 - Se la card e gia approvata come dimensione, i fix successivi devono agire solo sulla colonna testo: aumentare spazio utile con `minmax()`/`max-width` e stabilizzare le CTA senza alterare la card.
 - Se a desktop una card laterale viene tagliata pur con composizione interna corretta, controllare prima la larghezza del wrapper esterno rispetto al `container-shell`: spesso serve piu spazio al contenitore, non altri ritocchi interni.
 - Se il primo aumento del wrapper non basta a evitare clipping su screenshot reale, misurare il fabbisogno totale rispetto a sidebar+content width: spesso servono margini desktop piu decisi, non micro-adjust da 1rem.
+- Se il cliente quantifica il fix layout (es. "20% più largo"), implementare quel rapporto in modo esplicito nel CSS/classi e non continuare con tentativi incrementali in `rem`.

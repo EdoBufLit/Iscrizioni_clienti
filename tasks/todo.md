@@ -2618,3 +2618,7 @@ pm --prefix frontend run build -> OK
 ## Review Addendum (Dashboard outer wrapper width v2 - Mar 06, 2026)
 - Il primo allargamento del wrapper era ancora insufficiente rispetto alla combinazione `sidebar + gap + content width` del dashboard.
 - Aumentato ulteriormente solo il respiro orizzontale del contenitore esterno ai breakpoint desktop (`xl`/`2xl`), lasciando immutati tessera, testo e composizione interna.
+
+## Review Addendum (Dashboard outer wrapper width v3 - Mar 06, 2026)
+- Il requisito e stato reso esplicito: box esterno circa `20%` piu largo a desktop.
+- Sostituiti i tweak incrementali in `rem` con widening percentuale diretto del contenitore (`120%` con compensazione simmetrica), lasciando invariati tessera e contenuto interno.

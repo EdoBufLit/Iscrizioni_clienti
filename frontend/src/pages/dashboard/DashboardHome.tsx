@@ -264,7 +264,7 @@ const DashboardHome = () => {
             ))}
           </div>
 
-          <section className="surface-strong relative overflow-hidden p-6 sm:p-8 md:p-10 xl:-mx-16 2xl:-mx-20">
+          <section className="surface-strong relative overflow-hidden p-6 sm:p-8 md:p-10 xl:-mx-[10%] xl:w-[120%] xl:max-w-none">
             <div className="relative z-10 grid gap-10 xl:grid-cols-[minmax(34rem,1fr)_minmax(30rem,34rem)] 2xl:grid-cols-[minmax(38rem,1fr)_minmax(34rem,38rem)] xl:items-center xl:gap-12">
               <div className="min-w-0 max-w-2xl xl:max-w-[42rem] xl:pr-4">
                 <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-accent">
