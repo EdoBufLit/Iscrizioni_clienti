@@ -194,7 +194,7 @@ const DashboardLayout = () => {
       </header>
 
       {/* Main content */}
-      <main className="mx-auto w-full max-w-[90rem] px-6 py-8">
+      <main className="mx-auto w-full max-w-[100rem] px-6 py-8">
         <div className="md:flex md:gap-12">
           {/* Sidebar — desktop */}
           <aside className="hidden w-60 shrink-0 md:block">

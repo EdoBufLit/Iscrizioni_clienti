@@ -2626,3 +2626,7 @@ pm --prefix frontend run build -> OK
 ## Review Addendum (Dashboard shell width correction - Mar 06, 2026)
 - Il widening sul solo wrapper figlio non era percepibile perché il vero vincolo era il `main` del dashboard.
 - Corretto il punto giusto: il shell del dashboard member ora e piu largo (`max-w-[90rem]`) e la sezione tessera torna a larghezza normale, cosi il box risulta davvero piu ampio a schermo senza hack di overflow.
+
+## Review Addendum (Dashboard shell width correction v2 - Mar 06, 2026)
+- Il valore `90rem` restava ancora insufficiente rispetto allo spazio richiesto dalla sezione tessera.
+- Il shell del dashboard member e stato ampliato ulteriormente a `max-w-[100rem]`, mantenendo invariati contenuto interno e card.

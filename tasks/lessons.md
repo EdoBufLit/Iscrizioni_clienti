@@ -93,3 +93,4 @@
 - Se il primo aumento del wrapper non basta a evitare clipping su screenshot reale, misurare il fabbisogno totale rispetto a sidebar+content width: spesso servono margini desktop piu decisi, non micro-adjust da 1rem.
 - Se il cliente quantifica il fix layout (es. "20% più largo"), implementare quel rapporto in modo esplicito nel CSS/classi e non continuare con tentativi incrementali in `rem`.
 - Se un child continua a sembrare "uguale a prima", verificare il parent che ne limita la larghezza visibile: allargare un box figlio dentro un shell troppo stretto non produce effetto percepibile.
+- Quando la larghezza disponibile dipende da `sidebar + gap + content`, stimare il budget complessivo prima di scegliere il nuovo `max-width`: aumenti troppo prudenti del shell portano a iterazioni inutili.
