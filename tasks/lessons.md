@@ -88,3 +88,4 @@
 - Nei deploy Docker Compose su host condivisi, fissare sempre COMPOSE_PROJECT_NAME e fare cleanup pre-up dei container stale per evitare conflitti di naming (... already in use) durante recreate.
 - Se Remotion deve caricare audio statico, il file va sempre versionato in public/ e il componente deve poter renderizzare anche senza traccia audio (guardia audioEnabled) per evitare crash 404 in render headless.
 - Quando il cliente chiede di ingrandire un elemento hero/card, verificare che cresca il componente reale e non solo il wrapper di sezione: prima controllare `w-full`, `max-width`, `flex/grid basis` e la resa bilanciata tra le colonne.
+- Se la card e gia approvata come dimensione, i fix successivi devono agire solo sulla colonna testo: aumentare spazio utile con `minmax()`/`max-width` e stabilizzare le CTA senza alterare la card.

@@ -265,22 +265,22 @@ const DashboardHome = () => {
           </div>
 
           <section className="surface-strong p-6 sm:p-8 md:p-10 relative overflow-hidden">
-            <div className="relative z-10 grid gap-10 xl:grid-cols-[minmax(0,1fr)_minmax(30rem,34rem)] 2xl:grid-cols-[minmax(0,1fr)_minmax(34rem,38rem)] xl:items-center xl:gap-12">
-              <div className="min-w-0 max-w-2xl xl:max-w-2xl">
+            <div className="relative z-10 grid gap-10 xl:grid-cols-[minmax(34rem,1fr)_minmax(30rem,34rem)] 2xl:grid-cols-[minmax(38rem,1fr)_minmax(34rem,38rem)] xl:items-center xl:gap-12">
+              <div className="min-w-0 max-w-2xl xl:max-w-[42rem] xl:pr-4">
                 <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-accent">
                   Documento digitale
                 </p>
                 <h2 className="mt-3 text-3xl font-bold tracking-tight text-neutral-900" style={{ fontFamily: "\"Source Serif 4\", serif" }}>
                   La tua tessera socio
                 </h2>
-                <p className="mt-4 text-base font-medium leading-relaxed text-neutral-600 opacity-90">
+                <p className="mt-4 max-w-[36rem] text-base font-medium leading-relaxed text-neutral-600 opacity-90">
                   Questa è la tua tessera digitale ASSO.N.A.M. Clicca sulla card per ruotarla e accedere ai dettagli sul retro o verificare il QR code.
                 </p>
 
-                <div className="mt-8 flex flex-wrap items-center gap-4">
+                <div className="mt-8 flex flex-wrap items-center gap-4 sm:flex-nowrap">
                   <button
                     type="button"
-                    className="btn-primary"
+                    className="btn-primary inline-flex items-center justify-center whitespace-nowrap px-6 py-3"
                     onClick={() => {
                       void handleAddToGoogleWallet();
                     }}

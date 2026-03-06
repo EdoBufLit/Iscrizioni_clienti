@@ -2604,3 +2604,8 @@ pm --prefix frontend run build -> OK
 - Corretto il fix precedente sulla sezione `La tua tessera`: il problema non era solo nella colonna destra ma nel fatto che `MemberCardPreview` non occupava realmente tutta la larghezza disponibile del suo slot.
 - La sezione ora usa una griglia desktop bilanciata con colonna testo ampia e colonna tessera dedicata; la tessera cresce tramite `max-width` del componente reale, non tramite allargamento artificiale del wrapper esterno.
 - `MemberCardPreview` ora forza `w-full` sul root, cosi fronte e retro scalano davvero insieme fino alla larghezza assegnata.
+
+## Review Addendum (Dashboard text rebalance - Mar 06, 2026)
+- Lasciata invariata la dimensione della tessera nella colonna destra.
+- Riequilibrata la composizione desktop dando piu spazio minimo alla colonna testo tramite `minmax(...)`, senza allargare casualmente la sezione.
+- Titolo e paragrafo ora hanno una larghezza naturale, e la CTA Google Wallet e stabilizzata in orizzontale con `inline-flex` e `whitespace-nowrap`.
