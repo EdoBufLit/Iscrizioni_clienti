@@ -25,7 +25,7 @@ export const Scene1Boot: React.FC = () => {
           right: 0,
           height: 2,
           backgroundColor: "#6FF9FF",
-          boxShadow: "0 0 10px #6FF9FF",
+          boxShadow: "0 0 6px rgba(111, 249, 255, 0.7)",
           opacity: 0.5,
           zIndex: 10,
         }}

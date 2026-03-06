@@ -27,7 +27,7 @@ export const Scene2Analysis: React.FC<{ orgName: string }> = ({ orgName }) => {
           padding: 40,
           border: "1px solid rgba(0, 175, 255, 0.6)",
           backgroundColor: "rgba(2, 4, 10, 0.8)",
-          boxShadow: "0 0 40px rgba(0, 175, 255, 0.3), inset 0 0 30px rgba(0, 175, 255, 0.2)",
+          boxShadow: "0 0 18px rgba(0, 175, 255, 0.2), inset 0 0 14px rgba(0, 175, 255, 0.12)",
           transform: `scale(${panelScaleFinal})`,
           transformOrigin: "center center",
           display: "flex",
@@ -102,7 +102,7 @@ export const Scene2Analysis: React.FC<{ orgName: string }> = ({ orgName }) => {
               alignSelf: "flex-start",
               opacity: verifiedOpacity,
               transform: `scale(${verifiedPulse})`,
-              boxShadow: "0 0 20px rgba(111, 249, 255, 0.4)",
+              boxShadow: "0 0 12px rgba(111, 249, 255, 0.25)",
             }}
           >
             <h3

@@ -28,8 +28,8 @@ export const AssonamHUDWelcome: React.FC<{
   const frame = useCurrentFrame();
   const scene2OrgName = template === "base" ? "ASSOCIATION" : orgName;
 
-  // Global slow zoom
-  const globalScale = interpolate(frame, [0, 360], [1.0, 1.03]);
+  // Keep a subtle camera drift without forcing a stronger full-frame rescale.
+  const globalScale = interpolate(frame, [0, 360], [1.0, 1.015]);
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#000", fontFamily, transform: `scale(${globalScale})` }}>

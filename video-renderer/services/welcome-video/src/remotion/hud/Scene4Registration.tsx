@@ -40,7 +40,7 @@ export const Scene4Registration: React.FC = () => {
           padding: "40px 80px",
           border: "4px solid #6FF9FF",
           backgroundColor: "rgba(111, 249, 255, 0.15)",
-          boxShadow: "0 0 80px rgba(111, 249, 255, 0.8), inset 0 0 50px rgba(111, 249, 255, 0.4)",
+          boxShadow: "0 0 26px rgba(111, 249, 255, 0.42), inset 0 0 18px rgba(111, 249, 255, 0.18)",
           position: "relative",
           overflow: "hidden",
           zIndex: 1,
@@ -55,8 +55,7 @@ export const Scene4Registration: React.FC = () => {
             right: 0,
             bottom: 0,
             backgroundColor: "#fff",
-            opacity: flashOpacity * 0.8,
-            mixBlendMode: "screen",
+            opacity: flashOpacity * 0.3,
           }}
         />
 
