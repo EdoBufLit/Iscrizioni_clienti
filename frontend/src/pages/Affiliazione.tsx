@@ -69,6 +69,10 @@ const WIZARD_PROGRESS_STEPS = [
   { step: 5, label: "Invio" },
 ] as const;
 
+const FIRST_WIZARD_STEP = 1;
+const LAST_WIZARD_STEP = 5;
+const SUBMITTED_WIZARD_STEP = 6;
+
 const INTRO_CHECKLIST_ITEMS = [
   "Statuto dell'associazione (PDF)",
   "Atto costitutivo (PDF)",
@@ -235,9 +239,21 @@ const buildTokenActionIdempotencyKey = (action: string, publicToken: string) => 
   return `affiliation:${action}:${normalizedToken}`;
 };
 
+const normalizeWizardStep = (value: number) =>
+  Math.max(FIRST_WIZARD_STEP, Math.min(LAST_WIZARD_STEP, value));
+
+const readResumeStep = (rawValue: string | null): number | null => {
+  const parsedValue = Number.parseInt(String(rawValue ?? "").trim(), 10);
+  if (!Number.isFinite(parsedValue)) {
+    return null;
+  }
+  return normalizeWizardStep(parsedValue);
+};
+
 const Affiliazione = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const tokenFromQuery = searchParams.get("token")?.trim() || "";
+  const stepFromQuery = readResumeStep(searchParams.get("step"));
   const referralFromQuery = searchParams.get("ref")?.trim().toLowerCase() || "";
   const [token, setToken] = useState<string>("");
   const [draft, setDraft] = useState<AffiliationDraft | null>(null);
@@ -256,8 +272,29 @@ const Affiliazione = () => {
   const { capabilities, loading: capabilitiesLoading } = useStatePlatformCapabilities();
   const stripeFallbackAppliedRef = useRef(false);
   const autoOpenedVideoRef = useRef(false);
+  const currentStepRef = useRef(currentStep);
+  const showIntroScreenRef = useRef(showIntroScreen);
+  const tokenRef = useRef(token);
+  const draftRef = useRef<AffiliationDraft | null>(draft);
+  const bootRequestIdRef = useRef(0);
   const navigate = useNavigate();
   const affiliazioneEnabled = capabilities?.affiliazioneEnabled === true;
+
+  useEffect(() => {
+    currentStepRef.current = currentStep;
+  }, [currentStep]);
+
+  useEffect(() => {
+    showIntroScreenRef.current = showIntroScreen;
+  }, [showIntroScreen]);
+
+  useEffect(() => {
+    tokenRef.current = token;
+  }, [token]);
+
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
 
   useEffect(() => {
     applySeo({
@@ -276,12 +313,17 @@ const Affiliazione = () => {
   }, [affiliazioneEnabled, capabilitiesLoading, navigate]);
 
   const updateResumeLocation = useCallback(
-    (publicToken: string) => {
+    (publicToken: string, stepOverride?: number | null) => {
       if (!publicToken) return;
       const nextParams = new URLSearchParams();
       nextParams.set("token", publicToken);
       if (referralFromQuery) {
         nextParams.set("ref", referralFromQuery);
+      }
+      const normalizedStep =
+        typeof stepOverride === "number" ? normalizeWizardStep(stepOverride) : null;
+      if (normalizedStep && normalizedStep > FIRST_WIZARD_STEP) {
+        nextParams.set("step", String(normalizedStep));
       }
       if (nextParams.toString() !== searchParams.toString()) {
         setSearchParams(nextParams, { replace: true });
@@ -294,7 +336,11 @@ const Affiliazione = () => {
     (nextDraft: AffiliationDraft, syncForm: boolean) => {
       setDraft(nextDraft);
       setToken(nextDraft.public_token);
-      updateResumeLocation(nextDraft.public_token);
+      const resumeStep =
+        !showIntroScreenRef.current && currentStepRef.current < SUBMITTED_WIZARD_STEP
+          ? currentStepRef.current
+          : null;
+      updateResumeLocation(nextDraft.public_token, resumeStep);
       if (syncForm) {
         setForm(toFormState(nextDraft));
         setPeople(toPeople(nextDraft));
@@ -303,7 +349,7 @@ const Affiliazione = () => {
       const normalizedStatus = String(nextDraft.status || "").trim().toLowerCase();
       if (SUBMITTED_STATUSES.has(normalizedStatus)) {
         setShowIntroScreen(false);
-        setCurrentStep(6);
+        setCurrentStep(SUBMITTED_WIZARD_STEP);
       }
     },
     [updateResumeLocation],
@@ -401,19 +447,33 @@ const Affiliazione = () => {
     if (!affiliazioneEnabled) return;
 
     const boot = async () => {
+      const requestId = ++bootRequestIdRef.current;
       try {
         setLoading(true);
         if (tokenFromQuery) {
           const existingDraft = await fetchAffiliationDraft(tokenFromQuery);
+          if (bootRequestIdRef.current !== requestId) {
+            return;
+          }
           setSubmitResult(null);
           applyDraftState(existingDraft, true);
           const normalizedStatus = String(existingDraft.status || "").trim().toLowerCase();
           if (SUBMITTED_STATUSES.has(normalizedStatus)) {
             setShowIntroScreen(false);
-            setCurrentStep(6);
+            setCurrentStep(SUBMITTED_WIZARD_STEP);
           } else {
-            setShowIntroScreen(true);
-            setCurrentStep(1);
+            const preservedStep = normalizeWizardStep(
+              Math.max(
+                stepFromQuery ?? FIRST_WIZARD_STEP,
+                currentStepRef.current,
+              ),
+            );
+            const shouldKeepWizardOpen =
+              preservedStep > FIRST_WIZARD_STEP ||
+              !showIntroScreenRef.current ||
+              (tokenRef.current === tokenFromQuery && draftRef.current !== null);
+            setShowIntroScreen(!shouldKeepWizardOpen);
+            setCurrentStep(shouldKeepWizardOpen ? preservedStep : FIRST_WIZARD_STEP);
           }
         } else {
           setToken("");
@@ -422,7 +482,7 @@ const Affiliazione = () => {
           setForm(buildEmptyForm());
           setPeople(buildDefaultPeople());
           setShowIntroScreen(true);
-          setCurrentStep(1);
+          setCurrentStep(FIRST_WIZARD_STEP);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Errore avvio wizard");
@@ -437,6 +497,15 @@ const Affiliazione = () => {
     capabilitiesLoading,
     tokenFromQuery,
   ]);
+
+  useEffect(() => {
+    if (!token) return;
+    if (currentStep >= SUBMITTED_WIZARD_STEP || showIntroScreen) {
+      updateResumeLocation(token, null);
+      return;
+    }
+    updateResumeLocation(token, currentStep);
+  }, [currentStep, showIntroScreen, token, updateResumeLocation]);
 
   const stripeEnabled =
     capabilities?.stripeEnabled === true &&
@@ -621,7 +690,7 @@ const Affiliazione = () => {
       }
       if (SUBMITTED_STATUSES.has(String(syncedDraft.status || "").trim().toLowerCase())) {
         setShowIntroScreen(false);
-        setCurrentStep(6);
+        setCurrentStep(SUBMITTED_WIZARD_STEP);
         return;
       }
       const response = await submitAffiliationDraft(syncedDraft.public_token, {
@@ -631,7 +700,7 @@ const Affiliazione = () => {
       setSubmitResult(response);
       applyDraftState(response.application, false);
       setShowIntroScreen(false);
-      setCurrentStep(6);
+      setCurrentStep(SUBMITTED_WIZARD_STEP);
       setShowVideoOverlay(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore invio richiesta");
@@ -662,11 +731,11 @@ const Affiliazione = () => {
     setError("");
     if (token) {
       setShowIntroScreen(false);
-      setCurrentStep(1);
+      setCurrentStep(stepFromQuery ?? FIRST_WIZARD_STEP);
       return;
     }
     setShowIntroScreen(false);
-    setCurrentStep(1);
+    setCurrentStep(FIRST_WIZARD_STEP);
   };
 
   const currentApplication = draft ?? submitResult?.application ?? null;
@@ -726,7 +795,7 @@ const Affiliazione = () => {
 
   const onGoPrevStep = () => {
     setError("");
-    setCurrentStep((value) => Math.max(1, value - 1));
+    setCurrentStep((value) => Math.max(FIRST_WIZARD_STEP, value - 1));
   };
 
   const onGoNextStep = async () => {
@@ -751,7 +820,7 @@ const Affiliazione = () => {
         }
       }
 
-      setCurrentStep((value) => Math.min(5, value + 1));
+      setCurrentStep((value) => Math.min(LAST_WIZARD_STEP, value + 1));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore salvataggio step");
     } finally {
