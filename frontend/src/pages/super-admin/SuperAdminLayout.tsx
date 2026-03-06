@@ -56,42 +56,47 @@ const SuperAdminLayout = () => {
   }
 
   return (
-    <div className="min-h-screen text-neutral-900">
+    <div className="min-h-screen bg-[#f8f9fa]/50">
       {/* Header band */}
-      <div className="header-band sticky top-0 z-30">
-        <div className="container-shell py-6">
-          <div className="flex items-start gap-5">
+      <header className="header-band sticky top-0 z-30">
+        <div className="container-shell py-5">
+          <div className="flex items-center gap-6">
             <div className="hidden shrink-0 sm:block">
-              <img
-                src={`${import.meta.env.BASE_URL}logo-transparent.png`}
-                alt="ASSO.N.A.M."
-                className="h-12 rounded"
-              />
+              <Link to="/" className="block transition-transform hover:scale-95">
+                <img
+                  src={`${import.meta.env.BASE_URL}logo-transparent.png`}
+                  alt="ASSO.N.A.M."
+                  className="h-10 w-auto rounded object-contain"
+                />
+              </Link>
             </div>
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <h1 className="text-lg font-semibold text-neutral-900">
-                  Super Amministrazione
-                </h1>
-                <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700">
-                  Super Admin
-                </span>
+              <div className="flex flex-col">
+                <div className="flex items-center gap-3">
+                  <h1 className="truncate text-lg font-bold tracking-tight text-neutral-900 uppercase tracking-widest">
+                    Governance Piattaforma
+                  </h1>
+                  <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-700 shadow-sm">
+                    Super Admin
+                  </span>
+                </div>
+                {profile && (
+                  <p className="truncate text-xs font-medium text-neutral-500 uppercase tracking-wide opacity-80 mt-0.5">
+                    {profile.email}
+                  </p>
+                )}
               </div>
-              {profile && (
-                <p className="mt-1 text-sm text-neutral-500">
-                  {profile.email}
-                </p>
-              )}
             </div>
-            <div className="flex shrink-0 items-center gap-3">
+            <div className="flex shrink-0 items-center gap-4">
               <Link
-                className="hidden text-sm font-medium text-neutral-500 transition hover:text-neutral-700 sm:block"
+                className="link-muted hidden font-semibold sm:block"
                 to="/"
               >
-                Torna al sito
+                Sito pubblico
               </Link>
+              <div className="h-4 w-px bg-neutral-200 hidden sm:block" />
               <button
-                className="btn-ghost px-3 py-1.5 text-sm"
+                className="btn-ghost px-4 py-2 text-xs font-bold uppercase tracking-wider"
                 type="button"
                 onClick={handleLogout}
               >
@@ -99,34 +104,40 @@ const SuperAdminLayout = () => {
               </button>
             </div>
           </div>
+        </div>
 
-          {/* Navigation Tabs */}
-          <div className="mt-8 flex flex-wrap gap-3 pb-5">
+        {/* Navigation Tabs */}
+        <div className="container-shell mt-1">
+          <nav className="flex flex-wrap gap-2 pb-4 overflow-x-auto no-scrollbar">
             {navLinks.map((link) => {
-              const isActive = location.pathname === link.path;
+              const isActive = location.pathname.startsWith(link.path);
               return (
                 <Link
                   key={link.path}
                   to={link.path}
-                  className={`${isActive ? "nav-pill nav-pill-active" : "nav-pill nav-pill-idle"}`}
+                  className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold tracking-tight transition-all duration-200 ${
+                    isActive 
+                      ? "bg-neutral-900 text-white shadow-md shadow-black/20 translate-y-[-1px]" 
+                      : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+                  }`}
                 >
                   {link.label}
                 </Link>
               );
             })}
-          </div>
+          </nav>
         </div>
-      </div>
+      </header>
 
-      <div className="container-shell py-10">
+      <main className="container-shell py-10 animate-in fade-in duration-500">
         <Outlet context={{ profile }} />
-      </div>
+      </main>
 
       {/* Version footer */}
       {ver && (
-        <footer className="container-shell pb-6 pt-2 text-[11px] text-neutral-400">
-          v{ver.version}
-          {ver.git_sha ? ` (${ver.git_sha.slice(0, 7)})` : ""}
+        <footer className="container-shell pb-8 pt-4 text-[10px] font-bold uppercase tracking-widest text-neutral-300">
+          Core Engine v{ver.version}
+          {ver.git_sha ? ` [${ver.git_sha.slice(0, 7)}]` : ""}
         </footer>
       )}
     </div>

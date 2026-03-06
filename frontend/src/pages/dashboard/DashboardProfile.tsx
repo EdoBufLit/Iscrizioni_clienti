@@ -16,55 +16,58 @@ const DashboardProfile = () => {
   const { user, loading } = useOutletContext<DashboardContext>();
 
   return (
-    <div>
-      <h1 className="text-xl font-semibold text-neutral-900">Profilo</h1>
-      <p className="mt-1 text-sm text-neutral-500">
-        Dati personali associati all'iscrizione. Per modifiche, contattare lo
-        studio.
-      </p>
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Il Tuo Profilo</h1>
+        <p className="mt-1 text-sm font-medium text-neutral-500">
+          Visualizza i tuoi dati anagrafici e gestisci la sicurezza dell'account.
+        </p>
+      </div>
 
-      <div className="surface mt-8 overflow-hidden">
+      <div className="surface overflow-hidden border-neutral-200/60 shadow-premium-lg">
         {/* Card header */}
-        <div className="border-b border-neutral-100 bg-neutral-25 px-7 py-4">
-          <div className="flex items-center gap-2.5">
-            <svg
-              className="h-4 w-4 text-neutral-400"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-            </svg>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-400">
-              Dati personali
+        <div className="border-b border-neutral-100 bg-neutral-50/50 px-7 py-5">
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-lg bg-brand/5 text-brand flex items-center justify-center border border-brand/10">
+              <svg
+                className="h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+              </svg>
+            </div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-neutral-400">
+              Dati Anagrafici
             </p>
           </div>
         </div>
 
         {/* Card body */}
-        <div className="p-7">
+        <div className="p-8">
           {loading ? (
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="grid gap-8 md:grid-cols-2">
               {[0, 1, 2, 3, 4].map((i) => (
                 <div key={i}>
-                  <Skeleton className="h-3 w-16" />
-                  <Skeleton className="mt-2 h-4 w-40" />
+                  <Skeleton className="h-3 w-20 rounded" />
+                  <Skeleton className="mt-2.5 h-5 w-48 rounded" />
                 </div>
               ))}
             </div>
           ) : user ? (
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
               {PERSONAL_FIELDS.map((field) => {
                 const value = user[field.key];
                 return (
-                  <div key={field.key}>
-                    <p className="text-xs font-medium uppercase tracking-[0.2em] text-neutral-400">
+                  <div key={field.key} className="group">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 group-hover:text-neutral-500 transition-colors">
                       {field.label}
                     </p>
-                    <p className="mt-1.5 text-sm text-neutral-900">
+                    <p className="mt-1.5 text-base font-bold text-neutral-900">
                       {value ?? "—"}
                     </p>
                   </div>
@@ -72,50 +75,54 @@ const DashboardProfile = () => {
               })}
             </div>
           ) : (
-            <p className="text-sm text-neutral-600">
-              Impossibile caricare i dati del profilo.
-            </p>
+            <div className="py-4 text-center">
+              <p className="text-sm font-bold text-red-500 uppercase tracking-widest">
+                Errore sincronizzazione dati
+              </p>
+            </div>
           )}
         </div>
 
         {/* Association section */}
         {!loading && user && (
           <>
-            <div className="border-t border-neutral-100 bg-neutral-25 px-7 py-4">
-              <div className="flex items-center gap-2.5">
-                <svg
-                  className="h-4 w-4 text-neutral-400"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
-                </svg>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-400">
-                  Associazione
+            <div className="border-t border-neutral-100 bg-neutral-50/50 px-7 py-5">
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center border border-accent/20">
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+                  </svg>
+                </div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-neutral-400">
+                  Sede Associativa
                 </p>
               </div>
             </div>
-            <div className="p-7">
-              <div className="grid gap-6 md:grid-cols-2">
+            <div className="p-8">
+              <div className="grid gap-8 md:grid-cols-2">
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-[0.2em] text-neutral-400">
-                    Associazione
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">
+                    Denominazione Sede
                   </p>
-                  <p className="mt-1.5 text-sm text-neutral-900">
+                  <p className="mt-1.5 text-base font-bold text-neutral-900 group-hover:text-brand transition-colors">
                     {user.organization?.name ?? "—"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-[0.2em] text-neutral-400">
-                    Data iscrizione
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">
+                    Data Iscrizione Ufficiale
                   </p>
-                  <p className="mt-1.5 text-sm text-neutral-900">
+                  <p className="mt-1.5 text-base font-bold text-neutral-900 tabular-nums">
                     {user.joined_at
-                      ? new Date(user.joined_at).toLocaleDateString("it-IT")
+                      ? new Date(user.joined_at).toLocaleDateString("it-IT", { day: 'numeric', month: 'long', year: 'numeric' })
                       : "—"}
                   </p>
                 </div>
@@ -159,49 +166,57 @@ const ChangePasswordSection = () => {
   };
 
   return (
-    <div className="surface mt-8 overflow-hidden">
-      <div className="border-b border-neutral-100 bg-neutral-25 px-7 py-4">
-        <div className="flex items-center gap-2.5">
-          <svg
-            className="h-4 w-4 text-neutral-400"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={1.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
-          </svg>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-400">
-            Sicurezza
+    <div className="surface overflow-hidden border-neutral-200/60 shadow-premium-lg">
+      <div className="border-b border-neutral-100 bg-neutral-50/50 px-7 py-5">
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 rounded-lg bg-neutral-100 text-neutral-500 flex items-center justify-center border border-neutral-200">
+            <svg
+              className="h-4 w-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+            </svg>
+          </div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-neutral-400">
+            Sicurezza Account
           </p>
         </div>
       </div>
-      <div className="p-7">
-        <p className="text-sm text-neutral-600">
-          Imposta o modifica la tua password per accedere senza magic link.
+      <div className="p-8">
+        <p className="text-sm font-medium text-neutral-500 max-w-md leading-relaxed">
+          Aggiorna regolarmente la tua password per garantire la massima protezione del tuo profilo digitale.
         </p>
 
         {success && (
-          <div className="mt-4 rounded-md border border-emerald-200/60 bg-emerald-50 px-4 py-3">
-            <p className="text-sm text-emerald-700">{success}</p>
+          <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 flex items-center gap-3 animate-in slide-in-from-top-2">
+            <svg className="h-5 w-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+            <p className="text-sm font-bold text-emerald-900">{success}</p>
           </div>
         )}
         {error && (
-          <div className="mt-4 rounded-md border border-red-200/60 bg-red-50 px-4 py-3">
-            <p className="text-sm text-red-700">{error}</p>
+          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 flex items-center gap-3 animate-in slide-in-from-top-2">
+            <svg className="h-5 w-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+            </svg>
+            <p className="text-sm font-bold text-red-900">{error}</p>
           </div>
         )}
 
-        <form className="mt-5 grid gap-4 sm:grid-cols-2 sm:items-end" onSubmit={handleSubmit}>
-          <div>
-            <label htmlFor="new-pw" className="block text-xs font-medium text-neutral-600">
+        <form className="mt-8 grid gap-6 sm:grid-cols-2" onSubmit={handleSubmit}>
+          <div className="space-y-2">
+            <label htmlFor="new-pw" className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 ml-1">
               Nuova password
             </label>
             <input
               id="new-pw"
-              className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+              className="premium-select w-full !px-4 !py-3 !font-bold tracking-tight !bg-white focus:!ring-brand/5"
               type="password"
               autoComplete="new-password"
               placeholder="Minimo 8 caratteri"
@@ -209,30 +224,31 @@ const ChangePasswordSection = () => {
               onChange={(e) => setNewPw(e.target.value)}
             />
           </div>
-          <div>
-            <label htmlFor="confirm-pw" className="block text-xs font-medium text-neutral-600">
+          <div className="space-y-2">
+            <label htmlFor="confirm-pw" className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 ml-1">
               Conferma password
             </label>
             <input
               id="confirm-pw"
-              className={`mt-1 w-full rounded-md border bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:ring-2 ${
+              className={`premium-select w-full !px-4 !py-3 !font-bold tracking-tight focus:!ring-brand/5 ${
                 confirmPw && confirmPw !== newPw
-                  ? "border-red-300 focus:border-red-400 focus:ring-red-200/40"
-                  : "border-neutral-200 focus:border-brand focus:ring-brand/20"
+                  ? "!border-red-300 !bg-red-50/30 focus:!border-red-400"
+                  : "!border-neutral-200 !bg-white"
               }`}
               type="password"
               autoComplete="new-password"
+              placeholder="Ripeti la password"
               value={confirmPw}
               onChange={(e) => setConfirmPw(e.target.value)}
             />
           </div>
-          <div className="sm:col-span-2">
+          <div className="sm:col-span-2 pt-2">
             <button
-              className="inline-flex items-center justify-center rounded-md bg-brand px-5 py-2 text-sm font-semibold text-white shadow-subtle transition hover:-translate-y-px hover:bg-brand-dark hover:shadow-card active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-subtle"
+              className="btn-primary w-full sm:w-auto min-w-[200px] !py-3 !text-xs font-bold uppercase tracking-widest shadow-xl disabled:opacity-30 disabled:translate-y-0"
               type="submit"
               disabled={!canSubmit}
             >
-              {submitting ? "Salvataggio…" : "Salva password"}
+              {submitting ? "Salvataggio in corso..." : "Aggiorna Password"}
             </button>
           </div>
         </form>

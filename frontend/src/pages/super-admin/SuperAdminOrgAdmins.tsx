@@ -14,10 +14,6 @@ import {
 import Skeleton from "../../components/ui/Skeleton";
 import CreateOrgAdminForm from "./components/CreateOrgAdminForm";
 
-const thClass =
-  "px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.15em] text-neutral-400";
-const tdClass = "px-5 py-3.5 text-sm text-neutral-700";
-
 const SuperAdminOrgAdmins = () => {
   const navigate = useNavigate();
   const { profile } = useOutletContext<{ profile: SuperAdminProfile | null }>();
@@ -124,125 +120,150 @@ const SuperAdminOrgAdmins = () => {
 
   if (loading || !profile) {
     return (
-      <div>
-        <Skeleton className="h-6 w-64" />
-        <Skeleton className="mt-3 h-4 w-96" />
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-4 w-96" />
         <div className="mt-10">
-          <Skeleton className="h-48 w-full rounded-lg" />
+          <Skeleton className="h-64 w-full rounded-2xl" />
         </div>
       </div>
     );
   }
 
   return (
-    <div>
-      <div className="mb-8 min-h-[76px]">
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <div className="min-h-[76px]">
         {error && (
-          <div className="rounded-lg border border-red-200/60 bg-red-50 px-7 py-5">
-            <p className="text-sm text-red-700">{error}</p>
+          <div className="rounded-xl border border-red-200/50 bg-red-50/50 p-5 flex items-center gap-3 animate-in slide-in-from-top-2">
+            <svg className="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+            </svg>
+            <p className="text-sm font-bold text-red-900">{error}</p>
           </div>
         )}
       </div>
 
-      <h2 className="text-xl font-semibold text-neutral-900">
-        Amministratori associazioni
-      </h2>
-      <p className="mt-1 text-sm text-neutral-500">
-        Gestisci gli account org admin per ogni associazione.
-      </p>
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-neutral-900">Account Amministratori</h2>
+          <p className="mt-1 text-sm font-medium text-neutral-500">
+            Gestione accessi e permessi per i gestori delle sedi locali affiliate.
+          </p>
+        </div>
+      </div>
 
       <CreateOrgAdminForm orgs={orgs} onCreate={handleCreate} />
 
-      <div className="mt-8 surface px-5 py-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <select
-            className="rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20 sm:w-64"
-            value={selectedOrg}
-            onChange={(e) => setSelectedOrg(e.target.value ? Number(e.target.value) : "")}
-          >
-            <option value="">Tutte le associazioni</option>
-            {orgs.map((org) => (
-              <option key={org.id} value={org.id}>
-                {org.name}
-              </option>
-            ))}
-          </select>
+      <div className="surface p-2 sm:p-3">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex-1 max-w-md">
+            <select
+              className="premium-select w-full !bg-white/50 focus:!bg-white"
+              value={selectedOrg}
+              onChange={(e) => setSelectedOrg(e.target.value ? Number(e.target.value) : "")}
+            >
+              <option value="">Tutte le associazioni affiliate</option>
+              {orgs.map((org) => (
+                <option key={org.id} value={org.id}>
+                  {org.name}
+                </option>
+              ))}
+            </select>
+          </div>
           {!adminsLoading && (
-            <p className="text-xs text-neutral-400 sm:ml-auto">
-              {admins.length === 1 ? "1 amministratore" : `${admins.length} amministratori`}
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 px-3">
+              {admins.length === 1 ? "1 amministratore attivo" : `${admins.length} amministratori registrati`}
             </p>
           )}
         </div>
       </div>
 
-      <div className="surface mt-4 overflow-hidden" data-component="superadmin-orgadmins-table">
+      <div className="surface overflow-hidden border-neutral-200/60 shadow-premium-lg" data-component="superadmin-orgadmins-table">
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="border-b border-white/60 bg-white/40">
-              <tr>
-                <th className={thClass}>Email</th>
-                <th className={thClass}>Associazione</th>
-                <th className={thClass}>Stato</th>
-                <th className={thClass}>Creato il</th>
-                <th className={thClass} />
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-neutral-100 bg-neutral-50/50">
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Identità / Email</th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Sede Associata</th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Stato Accesso</th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Data Setup</th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 text-right">Comandi</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-neutral-50">
               {adminsLoading ? (
                 Array.from({ length: 3 }).map((_, i) => (
                   <tr key={i}>
-                    <td className={tdClass}><Skeleton className="h-3.5 w-44" /></td>
-                    <td className={tdClass}><Skeleton className="h-3.5 w-36" /></td>
-                    <td className={tdClass}><Skeleton className="h-5 w-16 rounded-full" /></td>
-                    <td className={tdClass}><Skeleton className="h-3.5 w-20" /></td>
-                    <td className={tdClass}><Skeleton className="h-7 w-20 rounded-md" /></td>
+                    <td className="px-5 py-4"><Skeleton className="h-4 w-44 rounded" /></td>
+                    <td className="px-5 py-4"><Skeleton className="h-4 w-36 rounded" /></td>
+                    <td className="px-5 py-4"><Skeleton className="h-5 w-16 rounded-full" /></td>
+                    <td className="px-5 py-4"><Skeleton className="h-4 w-20 rounded" /></td>
+                    <td className="px-5 py-4"><div className="flex justify-end"><Skeleton className="h-8 w-32 rounded-lg" /></div></td>
                   </tr>
                 ))
               ) : admins.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-5 py-12 text-center text-sm text-neutral-500">
-                    Nessun amministratore trovato.
+                  <td colSpan={5} className="px-5 py-16 text-center">
+                    <p className="text-sm font-bold text-neutral-300 uppercase tracking-widest">Nessun amministratore configurato</p>
                   </td>
                 </tr>
               ) : (
-                admins.map((a, i) => (
-                  <tr key={a.id} className={`transition hover:bg-brand/[0.02] ${i % 2 === 1 ? "bg-white/30" : ""}`}>
-                    <td className={`${tdClass} font-medium text-neutral-900`}>{a.email}</td>
-                    <td className={tdClass}>{a.org_name ?? "-"}</td>
-                    <td className={tdClass}>
+                admins.map((a) => (
+                  <tr key={a.id} className="group transition-colors hover:bg-neutral-50/50">
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-full bg-brand/5 text-brand flex items-center justify-center font-bold text-[10px] border border-brand/10">
+                          {a.email.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-neutral-900 group-hover:text-brand transition-colors">{a.email}</p>
+                          <p className="text-[10px] text-neutral-400 mt-0.5 uppercase tracking-tighter">ID Account: #{a.id}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <p className="text-sm font-semibold text-neutral-600 truncate max-w-[200px]" title={a.org_name ?? "-"}>
+                        {a.org_name ?? "-"}
+                      </p>
+                    </td>
+                    <td className="px-5 py-4">
                       <span
-                        className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter ring-1 ring-inset ${
                           a.is_active
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                            : "border-neutral-200 bg-neutral-50 text-neutral-600"
+                            ? "bg-emerald-50 text-emerald-700 ring-emerald-200/50"
+                            : "bg-neutral-50 text-neutral-400 ring-neutral-200"
                         }`}
                       >
-                        {a.is_active ? "Attivo" : "Disattivato"}
+                        {a.is_active ? "Attivo" : "Disabilitato"}
                       </span>
                     </td>
-                    <td className={`${tdClass} tabular-nums`}>
-                      {a.created_at ? new Date(a.created_at).toLocaleDateString("it-IT") : "-"}
+                    <td className="px-5 py-4">
+                      <p className="text-[11px] font-bold text-neutral-500 tabular-nums">
+                        {a.created_at ? new Date(a.created_at).toLocaleDateString("it-IT") : "-"}
+                      </p>
                     </td>
-                    <td className={`${tdClass} text-right`}>
-                      <button
-                        className={`rounded-md border px-3 py-1 text-xs font-medium transition ${
-                          a.is_active
-                            ? "border-red-200 text-red-600 hover:bg-red-50"
-                            : "border-emerald-200 text-emerald-600 hover:bg-emerald-50"
-                        } disabled:opacity-50`}
-                        type="button"
-                        disabled={toggling === a.id}
-                        onClick={() => handleToggle(a)}
-                      >
-                        {a.is_active ? "Disattiva" : "Attiva"}
-                      </button>
-                      <button
-                        className="ml-2 rounded-md border border-neutral-200 px-3 py-1 text-xs font-medium text-neutral-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"
-                        type="button"
-                        onClick={() => handleDeleteClick(a)}
-                      >
-                        Elimina
-                      </button>
+                    <td className="px-5 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+                        <button
+                          className={`btn-ghost !px-3 !py-1.5 !text-[10px] font-bold uppercase tracking-widest ${
+                            a.is_active
+                              ? "!text-amber-600 !border-amber-100 hover:!bg-amber-50"
+                              : "!text-emerald-600 !border-emerald-100 hover:!bg-emerald-50"
+                          } disabled:opacity-50`}
+                          type="button"
+                          disabled={toggling === a.id}
+                          onClick={() => handleToggle(a)}
+                        >
+                          {a.is_active ? "Sospendi" : "Attiva"}
+                        </button>
+                        <button
+                          className="btn-ghost !px-3 !py-1.5 !text-[10px] font-bold uppercase tracking-widest !text-red-600 !border-red-100 hover:!bg-red-50"
+                          type="button"
+                          onClick={() => handleDeleteClick(a)}
+                        >
+                          Elimina
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -253,35 +274,42 @@ const SuperAdminOrgAdmins = () => {
       </div>
 
       {deleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md surface-strong p-6 shadow-xl">
-            <h3 className="text-lg font-semibold text-neutral-900">
-              Eliminare questo admin?
-            </h3>
-            <p className="mt-2 text-sm text-neutral-600">
-              L'operazione rimuove l'admin <span className="font-medium">{deleteConfirm.email}</span> dall'accesso.
-              Puoi ripristinarlo in seguito.
-            </p>
-            {deleteError && (
-              <div className="mt-4 rounded-md border border-red-200/60 bg-red-50 px-4 py-3">
-                <p className="text-sm text-red-700">{deleteError}</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/80 p-4 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="modal-panel max-w-md p-8 animate-in zoom-in-95 duration-300">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="h-12 w-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center">
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5L12 14.5L5 7.5" />
+                </svg>
               </div>
+              <div>
+                <h3 className="text-xl font-bold text-neutral-900 tracking-tight">Rimuovi Amministratore</h3>
+                <p className="mt-2 text-sm font-medium text-neutral-500 leading-relaxed">
+                  Stai revocando l'accesso a <strong>{deleteConfirm.email}</strong>.<br/>L'azione è reversibile tramite ri-creazione dell'account.
+                </p>
+              </div>
+            </div>
+
+            {deleteError && (
+              <p className="mt-4 text-center text-xs font-bold text-red-600 bg-red-50 py-2 rounded-lg">{deleteError}</p>
             )}
-            <div className="mt-6 flex justify-end gap-3">
+
+            <div className="mt-8 flex gap-3">
               <button
                 type="button"
-                className="rounded-md border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900"
+                className="flex-1 btn-ghost !py-3 !text-xs font-bold uppercase tracking-widest"
                 onClick={handleDeleteCancel}
+                disabled={Boolean(deleting)}
               >
                 Annulla
               </button>
               <button
                 type="button"
-                className="inline-flex items-center justify-center rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-subtle transition hover:bg-red-700 disabled:opacity-50"
+                className="flex-1 bg-red-600 text-white text-[10px] font-bold uppercase tracking-widest py-3 rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95 disabled:opacity-50"
                 onClick={handleDeleteConfirm}
                 disabled={deleting === deleteConfirm.id}
               >
-                {deleting === deleteConfirm.id ? "Eliminazione..." : "Elimina"}
+                {deleting === deleteConfirm.id ? "Esecuzione..." : "Conferma Rimozione"}
               </button>
             </div>
           </div>

@@ -15,6 +15,7 @@ import {
   type SuperAdminProfile,
   verifySuperAdminAffiliationPayment,
 } from "../../lib/api";
+import Skeleton from "../../components/ui/Skeleton";
 
 const STATUS_OPTIONS = [
   { value: "", label: "Tutti" },
@@ -262,26 +263,34 @@ const SuperAdminAffiliations = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-neutral-900">Affiliazioni</h2>
-          <p className="mt-1 text-sm text-neutral-500">
-            Revisione documenti, verifica pagamenti e approvazione pratiche.
+          <h2 className="text-2xl font-bold tracking-tight text-neutral-900">Gestione Affiliazioni</h2>
+          <p className="mt-1 text-sm font-medium text-neutral-500">
+            Revisione documentale e validazione flussi di affiliazione associazioni.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            className="rounded-md border border-neutral-200 px-3 py-2 text-sm"
-            value={query}
-            onChange={(event) => {
-              setPage(1);
-              setQuery(event.target.value);
-            }}
-            placeholder="Cerca per nome o email"
-          />
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative group">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+              </svg>
+            </span>
+            <input
+              className="premium-select pl-10 min-w-[240px] !bg-white/50 focus:!bg-white"
+              value={query}
+              onChange={(event) => {
+                setPage(1);
+                setQuery(event.target.value);
+              }}
+              placeholder="Cerca per nome o email..."
+            />
+          </div>
           <select
-            className="rounded-md border border-neutral-200 px-3 py-2 text-sm"
+            className="premium-select min-w-[160px]"
             value={statusFilter}
             onChange={(event) => {
               setPage(1);
@@ -290,240 +299,343 @@ const SuperAdminAffiliations = () => {
           >
             {STATUS_OPTIONS.map((option) => (
               <option key={option.value || "all"} value={option.value}>
-                {option.label}
+                Stato: {option.label}
               </option>
             ))}
           </select>
-          <button className="btn-ghost px-3 py-2 text-sm" onClick={() => loadList()}>
-            Aggiorna
+          <button className="btn-ghost !px-4 !py-2 !text-xs font-bold uppercase tracking-widest" onClick={() => loadList()}>
+            Refresh
           </button>
         </div>
       </div>
 
       {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
+        <div className="rounded-xl border border-red-200/50 bg-red-50/50 p-5 flex items-center gap-3 animate-in slide-in-from-top-2">
+          <svg className="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <p className="text-sm font-bold text-red-900">{error}</p>
         </div>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[1.2fr_1fr]">
-        <div className="surface overflow-hidden">
+      <div className="grid gap-8 lg:grid-cols-[1.1fr_1fr] items-start">
+        <div className="surface overflow-hidden border-neutral-200/60 shadow-premium-lg">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-white/60 bg-white/40">
-                <tr>
-                  <th className="px-4 py-3 text-xs uppercase tracking-wide text-neutral-500">Associazione</th>
-                  <th className="px-4 py-3 text-xs uppercase tracking-wide text-neutral-500">Richiedente</th>
-                  <th className="px-4 py-3 text-xs uppercase tracking-wide text-neutral-500">Stato</th>
-                  <th className="px-4 py-3 text-xs uppercase tracking-wide text-neutral-500">Pagamento</th>
-                  <th className="px-4 py-3 text-xs uppercase tracking-wide text-neutral-500">Inviata</th>
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-neutral-100 bg-neutral-50/50">
+                  <th className="px-4 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Associazione</th>
+                  <th className="px-4 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Stato Pratica</th>
+                  <th className="px-4 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Pagamento</th>
+                  <th className="px-4 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 text-right">Data</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-neutral-50">
                 {loading ? (
                   <tr>
-                    <td className="px-4 py-6 text-neutral-500" colSpan={5}>
-                      Caricamento pratiche...
+                    <td className="px-4 py-16 text-center" colSpan={4}>
+                      <div className="inline-flex items-center gap-2 text-xs font-bold text-neutral-400 uppercase tracking-widest animate-pulse">
+                        <span className="h-2 w-2 rounded-full bg-brand" />
+                        Sincronizzazione database...
+                      </div>
                     </td>
                   </tr>
                 ) : items.length === 0 ? (
                   <tr>
-                    <td className="px-4 py-6 text-neutral-500" colSpan={5}>
-                      Nessuna affiliazione trovata.
+                    <td className="px-4 py-16 text-center" colSpan={4}>
+                      <p className="text-xs font-bold text-neutral-300 uppercase tracking-widest">Nessun record trovato</p>
                     </td>
                   </tr>
                 ) : (
                   items.map((item) => (
                     <tr
                       key={item.id}
-                      className={`cursor-pointer border-b border-white/40 transition hover:bg-brand/[0.04] ${
-                        selectedId === item.id ? "bg-brand/[0.08]" : ""
+                      className={`group cursor-pointer transition-all duration-200 hover:bg-brand/[0.02] ${
+                        selectedId === item.id ? "bg-brand/[0.05]" : ""
                       }`}
                       onClick={() => setSelectedId(item.id)}
                     >
-                      <td className="px-4 py-3 font-medium text-neutral-900">{item.organization_name || "-"}</td>
-                      <td className="px-4 py-3 text-neutral-700">{item.applicant_email || "-"}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs ${statusBadgeClass(item.status)}`}>
-                          {item.status}
+                      <td className="px-4 py-4">
+                        <p className={`text-sm font-bold transition-colors ${selectedId === item.id ? 'text-brand' : 'text-neutral-900 group-hover:text-brand'}`}>
+                          {item.organization_name || "N/D"}
+                        </p>
+                        <p className="text-[10px] text-neutral-400 mt-0.5 uppercase tracking-tighter truncate max-w-[180px]">
+                          {item.applicant_email}
+                        </p>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter ring-1 ring-inset ${statusBadgeClass(item.status)}`}>
+                          {item.status.replace('_', ' ')}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs ${paymentBadgeClass(item.payment_status)}`}>
-                          {item.payment_status}
+                      <td className="px-4 py-4">
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter ring-1 ring-inset ${paymentBadgeClass(item.payment_status)}`}>
+                          {item.payment_status.replace('_', ' ')}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-neutral-600">{formatDate(item.submitted_at || item.created_at)}</td>
+                      <td className="px-4 py-4 text-right">
+                        <p className="text-[11px] font-bold text-neutral-500 tabular-nums">
+                          {formatDate(item.submitted_at || item.created_at).split(',')[0]}
+                        </p>
+                        <p className="text-[9px] text-neutral-400 uppercase tracking-tighter">
+                          {formatDate(item.submitted_at || item.created_at).split(',')[1] || ''}
+                        </p>
+                      </td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
           </div>
-          <div className="flex items-center justify-between border-t border-white/60 px-4 py-3 text-sm text-neutral-600">
-            <button
-              className="btn-ghost px-3 py-1.5 text-sm"
-              disabled={page <= 1}
-              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-            >
-              Precedente
-            </button>
-            <span>
-              Pagina {page} di {totalPages}
-            </span>
-            <button
-              className="btn-ghost px-3 py-1.5 text-sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-            >
-              Successiva
-            </button>
+          <div className="flex items-center justify-between border-t border-neutral-100 bg-neutral-50/30 px-4 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">
+              Pagina {page} / {totalPages}
+            </p>
+            <div className="flex gap-1">
+              <button
+                className="btn-ghost !px-3 !py-1 !text-[10px] font-bold uppercase tracking-widest disabled:opacity-30"
+                disabled={page <= 1}
+                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              >
+                ← Precedente
+              </button>
+              <button
+                className="btn-ghost !px-3 !py-1 !text-[10px] font-bold uppercase tracking-widest disabled:opacity-30"
+                disabled={page >= totalPages}
+                onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+              >
+                Successiva →
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="surface p-5">
+        <div className={`surface transition-all duration-500 ${!selectedId || !selectedItem ? 'bg-neutral-50/50' : 'bg-white shadow-premium-lg'}`}>
           {!selectedId || !selectedItem ? (
-            <p className="text-sm text-neutral-500">Seleziona una pratica per vedere il dettaglio.</p>
+            <div className="p-12 text-center flex flex-col items-center space-y-4">
+              <div className="h-16 w-16 rounded-full bg-neutral-100 text-neutral-300 flex items-center justify-center">
+                <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <p className="text-sm font-bold text-neutral-400 uppercase tracking-widest">Seleziona una pratica</p>
+            </div>
           ) : detailLoading || !detail ? (
-            <p className="text-sm text-neutral-500">Caricamento dettaglio...</p>
+            <div className="p-12 space-y-6">
+              <Skeleton className="h-8 w-2/3" />
+              <div className="space-y-3">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-5/6" />
+                <Skeleton className="h-4 w-4/6" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Skeleton className="h-24 rounded-xl" />
+                <Skeleton className="h-24 rounded-xl" />
+              </div>
+            </div>
           ) : (
-            <div className="space-y-5">
-              <div>
-                <h3 className="text-lg font-semibold text-neutral-900">{detail.organization_name || "Affiliazione"}</h3>
-                <p className="mt-1 text-sm text-neutral-500">
-                  Riferimento pagamento: {detail.payment_config.reference_code || "-"}
-                </p>
-              </div>
-
-              <div className="grid gap-2 text-sm text-neutral-700">
-                <div>Richiedente: {detail.applicant_full_name || "-"}</div>
-                <div>Email: {detail.applicant_email || "-"}</div>
-                <div>Telefono: {detail.applicant_phone || "-"}</div>
-                <div>Stato: {detail.status}</div>
-                <div>Doc status: {detail.docs_status}</div>
-                <div>Pagamento: {detail.payment_status}</div>
-                <div>Metodo: {detail.payment_method || "-"}</div>
-              </div>
-
-              {detail.referral && (
-                <div className="rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm text-cyan-900">
-                  <p className="font-semibold">Referral associazione</p>
-                  <p className="mt-1">
-                    Invitata da: <span className="font-medium">{detail.referral.referrer_org_name || "-"}</span>
-                    {detail.referral.referrer_org_slug ? ` (${detail.referral.referrer_org_slug})` : ""}
-                  </p>
-                  <p className="mt-1">Stato referral: {detail.referral.status}</p>
-                  {detail.referral.reward_title ? (
-                    <p className="mt-1">
-                      Premio assegnato: <span className="font-medium">{detail.referral.reward_title}</span>
-                      {detail.referral.reward_delivery_timing
-                        ? ` - Erogazione: ${detail.referral.reward_delivery_timing}`
-                        : ""}
-                    </p>
-                  ) : null}
-                  {detail.referral.wheel_spun_at ? (
-                    <p className="mt-1">
-                      Ruota girata il:{" "}
-                      <span className="font-medium">{formatDate(detail.referral.wheel_spun_at)}</span>
-                      {detail.referral.wheel_spun_by_org_admin_id
-                        ? ` (org admin #${detail.referral.wheel_spun_by_org_admin_id})`
-                        : ""}
-                    </p>
-                  ) : null}
-                  {detail.referral.wheel_result?.description ? (
-                    <p className="mt-1">
-                      Dettaglio esito:{" "}
-                      <span className="font-medium">{detail.referral.wheel_result.description}</span>
-                    </p>
-                  ) : null}
+            <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+              <div className="p-6 border-b border-neutral-100 flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="h-2 w-2 rounded-full bg-brand animate-pulse" />
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Affiliazione #{detail.id}</p>
+                  </div>
+                  <h3 className="text-xl font-bold text-neutral-900 tracking-tight leading-tight">{detail.organization_name || "Associazione"}</h3>
+                  <p className="mt-1 text-xs font-mono font-bold text-neutral-400 uppercase">Ref: {detail.payment_config.reference_code || "N/D"}</p>
                 </div>
-              )}
+                <div className="text-right">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-1">Stato</p>
+                  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-tighter ring-1 ring-inset ${statusBadgeClass(detail.status)}`}>
+                    {detail.status.replace('_', ' ')}
+                  </span>
+                </div>
+              </div>
 
-              <div>
-                <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">Documenti</h4>
-                <div className="mt-2 space-y-2">
-                  {(detail.documents || []).map((doc) => (
-                    <div key={doc.id} className="rounded-md border border-neutral-200 bg-white px-3 py-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-medium text-neutral-900">{doc.doc_type}</p>
-                          <p className="text-xs text-neutral-500">{docStatusLabel(doc.status)}</p>
-                        </div>
-                        <a className="text-xs font-medium text-brand hover:underline" href={doc.download_url} target="_blank" rel="noreferrer">
-                          Scarica
-                        </a>
+              <div className="p-6 space-y-8">
+                {/* Details Grid */}
+                <div className="grid gap-6 sm:grid-cols-2">
+                  <div className="space-y-4">
+                    <h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Anagrafica Richiedente</h4>
+                    <div className="space-y-2.5">
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-neutral-400 w-5">👤</span>
+                        <span className="font-bold text-neutral-700">{detail.applicant_full_name || "-"}</span>
                       </div>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <button
-                          className="rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700"
-                          disabled={actionLoading}
-                          onClick={() => onApproveDocument(doc)}
-                        >
-                          Approva
-                        </button>
-                        <button
-                          className="rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700"
-                          disabled={actionLoading}
-                          onClick={() => onRejectDocument(doc)}
-                        >
-                          Rifiuta
-                        </button>
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-neutral-400 w-5">✉️</span>
+                        <span className="font-medium text-brand truncate">{detail.applicant_email || "-"}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-neutral-400 w-5">📞</span>
+                        <span className="font-medium text-neutral-600">{detail.applicant_phone || "-"}</span>
                       </div>
                     </div>
-                  ))}
+                  </div>
+                  <div className="space-y-4">
+                    <h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Dati Amministrativi</h4>
+                    <div className="space-y-2.5">
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-neutral-400 w-5">📄</span>
+                        <span className="font-bold text-neutral-700 uppercase tracking-tighter">Docs: {detail.docs_status}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-neutral-400 w-5">💳</span>
+                        <span className={`font-bold uppercase tracking-tighter ${detail.payment_status === 'paid' ? 'text-emerald-600' : 'text-amber-600'}`}>{detail.payment_status}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-neutral-400 w-5">🏛️</span>
+                        <span className="font-medium text-neutral-600">Metodo: {detail.payment_method || "-"}</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex flex-wrap gap-2 border-t border-neutral-200 pt-4">
-                {detail.status === "draft" ? (
-                  <button
-                    className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700"
-                    disabled={actionLoading}
-                    onClick={onDeleteDraft}
-                  >
-                    Elimina bozza
-                  </button>
-                ) : null}
-                {detail.status !== "draft" && detail.payment_method !== "stripe" && (
-                  <button
-                    className="rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700"
-                    disabled={actionLoading}
-                    onClick={onVerifyPayment}
-                  >
-                    Verifica pagamento manuale
-                  </button>
+                {/* Referral Info */}
+                {detail.referral && (
+                  <div className="rounded-2xl border border-cyan-100 bg-cyan-50/30 p-5 relative overflow-hidden group">
+                    <div className="relative z-10">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-lg">🔗</span>
+                        <h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-700">Programma Referral</h4>
+                      </div>
+                      <div className="grid gap-3">
+                        <p className="text-sm text-cyan-900 leading-relaxed">
+                          Invitata da: <strong className="font-bold">{detail.referral.referrer_org_name || "-"}</strong>
+                          <span className="ml-1.5 text-xs text-cyan-600/70 font-mono">[{detail.referral.referrer_org_slug}]</span>
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <span className="inline-flex items-center rounded-lg bg-cyan-100 px-2 py-1 text-[10px] font-bold uppercase text-cyan-700">
+                            Stato: {detail.referral.status}
+                          </span>
+                          {detail.referral.reward_title && (
+                            <span className="inline-flex items-center rounded-lg bg-emerald-100 px-2 py-1 text-[10px] font-bold uppercase text-emerald-700">
+                              Premio: {detail.referral.reward_title}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="absolute -right-8 -bottom-8 h-24 w-24 rounded-full bg-cyan-100/20 blur-2xl group-hover:bg-cyan-100/40 transition-colors duration-500" />
+                  </div>
                 )}
-                {detail.status !== "draft" &&
-                detail.status !== "approved" &&
-                detail.status !== "rejected" ? (
-                  <button
-                    className="rounded-md border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-700"
-                    disabled={actionLoading}
-                    onClick={onRequestChanges}
-                  >
-                    Richiedi modifiche
-                  </button>
-                ) : null}
-                {detail.can_approve ? (
-                  <button
-                    className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700"
-                    disabled={actionLoading}
-                    onClick={onApprove}
-                  >
-                    Approva
-                  </button>
-                ) : null}
-                {detail.status !== "draft" &&
-                detail.status !== "approved" &&
-                detail.status !== "rejected" ? (
-                  <button
-                    className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700"
-                    disabled={actionLoading}
-                    onClick={onReject}
-                  >
-                    Rifiuta
-                  </button>
-                ) : null}
+
+                {/* Documents Section */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Verifica Documentale</h4>
+                    <span className="text-[10px] font-bold text-neutral-300 uppercase tracking-widest">{(detail.documents || []).length} file caricati</span>
+                  </div>
+                  <div className="grid gap-3">
+                    {(detail.documents || []).map((doc) => (
+                      <div key={doc.id} className="group rounded-xl border border-neutral-100 bg-neutral-50/30 p-4 transition-all hover:bg-white hover:shadow-md hover:border-brand/20">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-3">
+                            <div className={`h-10 w-10 rounded-lg flex items-center justify-center shadow-sm transition-colors ${doc.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : doc.status === 'rejected' ? 'bg-red-50 text-red-600' : 'bg-white text-neutral-400 group-hover:bg-brand/5 group-hover:text-brand'}`}>
+                              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                              </svg>
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-neutral-900 group-hover:text-brand transition-colors">{doc.doc_type}</p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className={`text-[10px] font-bold uppercase tracking-widest ${doc.status === 'approved' ? 'text-emerald-600' : doc.status === 'rejected' ? 'text-red-600' : 'text-neutral-400'}`}>
+                                  {docStatusLabel(doc.status)}
+                                </span>
+                                {(doc.review_notes || doc.rejection_note) && <span className="text-[10px] text-neutral-300">•</span>}
+                                {(doc.review_notes || doc.rejection_note) && <span className="text-[10px] text-neutral-400 italic truncate max-w-[120px]">{doc.review_notes || doc.rejection_note}</span>}
+                              </div>
+                            </div>
+                          </div>
+                          <a 
+                            className="btn-ghost !px-3 !py-1.5 !text-[10px] font-bold uppercase tracking-widest shadow-sm hover:!bg-brand hover:!text-white transition-all" 
+                            href={doc.download_url} 
+                            target="_blank" 
+                            rel="noreferrer"
+                          >
+                            View
+                          </a>
+                        </div>
+                        
+                        {doc.status !== 'approved' && (
+                          <div className="mt-4 flex gap-2 pt-4 border-t border-neutral-100/50">
+                            <button
+                              className="flex-1 bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase tracking-widest py-2 rounded-lg hover:bg-emerald-500 hover:text-white transition-all disabled:opacity-30"
+                              disabled={actionLoading}
+                              onClick={() => onApproveDocument(doc)}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              className="flex-1 bg-red-50 text-red-700 text-[10px] font-bold uppercase tracking-widest py-2 rounded-lg hover:bg-red-500 hover:text-white transition-all disabled:opacity-30"
+                              disabled={actionLoading}
+                              onClick={() => onRejectDocument(doc)}
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Main Actions */}
+                <div className="pt-6 border-t border-neutral-100">
+                  <h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mb-4 text-center">Workflow Governance</h4>
+                  <div className="flex flex-wrap gap-3">
+                    {detail.status === "draft" && (
+                      <button
+                        className="flex-1 bg-red-50 text-red-700 text-[10px] font-bold uppercase tracking-widest py-3 rounded-xl border border-red-100 hover:bg-red-600 hover:text-white transition-all disabled:opacity-50"
+                        disabled={actionLoading}
+                        onClick={onDeleteDraft}
+                      >
+                        Elimina Bozza
+                      </button>
+                    )}
+                    {detail.status !== "draft" && detail.payment_method !== "stripe" && detail.payment_status !== "paid" && (
+                      <button
+                        className="w-full bg-amber-50 text-amber-700 text-[10px] font-bold uppercase tracking-widest py-3 rounded-xl border border-amber-100 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50"
+                        disabled={actionLoading}
+                        onClick={onVerifyPayment}
+                      >
+                        Valida Pagamento Manuale
+                      </button>
+                    )}
+                    <div className="grid grid-cols-2 gap-3 w-full mt-2">
+                      {detail.status !== "draft" && detail.status !== "approved" && detail.status !== "rejected" && (
+                        <button
+                          className="bg-neutral-900 text-white text-[10px] font-bold uppercase tracking-widest py-3 rounded-xl shadow-lg shadow-black/10 hover:bg-neutral-800 transition-all disabled:opacity-50"
+                          disabled={actionLoading}
+                          onClick={onRequestChanges}
+                        >
+                          Modifiche
+                        </button>
+                      )}
+                      {detail.can_approve && (
+                        <button
+                          className="bg-brand text-white text-[10px] font-bold uppercase tracking-widest py-3 rounded-xl shadow-lg shadow-brand/20 hover:bg-brand-light transition-all disabled:opacity-50"
+                          disabled={actionLoading}
+                          onClick={onApprove}
+                        >
+                          Approva Pratica
+                        </button>
+                      )}
+                      {detail.status !== "draft" && detail.status !== "approved" && detail.status !== "rejected" && !detail.can_approve && (
+                        <button
+                          className="bg-red-600 text-white text-[10px] font-bold uppercase tracking-widest py-3 rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all disabled:opacity-50"
+                          disabled={actionLoading}
+                          onClick={onReject}
+                        >
+                          Rigetta
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {actionLoading && (
+                    <p className="mt-4 text-center text-[10px] font-bold text-brand uppercase tracking-widest animate-pulse">Esecuzione comando governance in corso...</p>
+                  )}
+                </div>
               </div>
             </div>
           )}

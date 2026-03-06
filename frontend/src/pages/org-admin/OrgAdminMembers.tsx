@@ -167,16 +167,16 @@ const OrgAdminMembers = () => {
   );
 
   return (
-    <div className="container-shell py-10">
-      <div className="flex items-start justify-between gap-4">
+    <div className="container-shell py-10 space-y-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-neutral-900">Soci</h2>
-          <p className="mt-1 text-sm text-neutral-500">
-            Elenco soci. Vista predefinita: solo soci attivi.
+          <h2 className="text-2xl font-bold tracking-tight text-neutral-900">Anagrafica Soci</h2>
+          <p className="mt-1 text-sm font-medium text-neutral-500">
+            Gestisci i soci dell'associazione e monitora il loro stato.
           </p>
         </div>
         {!adminLoading && admin && (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={() => {
@@ -187,79 +187,87 @@ const OrgAdminMembers = () => {
               className="btn-primary"
               data-tour="admin-add-member"
             >
+              <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
               Aggiungi socio
             </button>
             <a
               href="/api/org-admin/members.csv"
-              className="inline-flex shrink-0 items-center gap-2 rounded-md border border-neutral-200 bg-white px-3.5 py-2 text-sm font-medium text-neutral-700 shadow-subtle transition hover:border-neutral-300 hover:text-neutral-900"
+              className="btn-ghost !px-4 !py-2 text-xs font-bold uppercase tracking-widest flex items-center gap-2"
             >
               <svg
-                className="h-4 w-4 text-neutral-400"
+                className="h-4 w-4"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth={1.5}
+                strokeWidth={2}
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
                 <path d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
               </svg>
-              Scarica CSV
+              Export CSV
             </a>
           </div>
         )}
       </div>
 
-      <div className="mt-6 min-h-[58px]">
-        {successMessage && (
-          <div className="rounded-lg border border-emerald-200/70 bg-emerald-50 px-5 py-4 text-sm text-emerald-700">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p>{successMessage}</p>
-              {createdMemberId && (
-                <button
-                  type="button"
-                  className="text-sm font-medium text-emerald-700 hover:text-emerald-900"
-                  onClick={() => navigate(`/org-admin/soci/${createdMemberId}`)}
-                >
-                  Apri scheda
-                </button>
-              )}
+      {successMessage && (
+        <div className="rounded-xl border border-emerald-200/50 bg-emerald-50/50 p-5 flex items-center justify-between gap-4 animate-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
             </div>
+            <p className="text-sm font-bold text-emerald-900">{successMessage}</p>
           </div>
-        )}
-      </div>
+          {createdMemberId && (
+            <button
+              type="button"
+              className="text-xs font-bold uppercase tracking-widest text-emerald-700 hover:text-emerald-900 transition-colors"
+              onClick={() => navigate(`/org-admin/soci/${createdMemberId}`)}
+            >
+              Vedi profilo →
+            </button>
+          )}
+        </div>
+      )}
 
-      <div className="surface px-5 py-4">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <DebouncedSearchInput
-            resetKey={searchResetKey}
-            onDebouncedChange={(value) => {
-              setDebouncedSearch(value);
-              setPage(1);
-            }}
-          />
+      <div className="surface p-2 sm:p-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="flex-1 min-w-0">
+            <DebouncedSearchInput
+              resetKey={searchResetKey}
+              onDebouncedChange={(value) => {
+                setDebouncedSearch(value);
+                setPage(1);
+              }}
+            />
+          </div>
           <div className="flex flex-wrap gap-2">
-            <select className="rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20" value={status} onChange={(e) => onFilterChange(setStatus, e.target.value)}>
+            <select className="premium-select" value={status} onChange={(e) => onFilterChange(setStatus, e.target.value)}>
               {STATUS_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
-            <select className="rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20" value={access} onChange={(e) => onFilterChange(setAccess, e.target.value)}>
+            <select className="premium-select" value={access} onChange={(e) => onFilterChange(setAccess, e.target.value)}>
               {ACCESS_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
-            <select className="rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20" value={source} onChange={(e) => onFilterChange(setSource, e.target.value)}>
+            <select className="premium-select" value={source} onChange={(e) => onFilterChange(setSource, e.target.value)}>
               {SOURCE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
-            <select className="rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20" value={docs} onChange={(e) => onFilterChange(setDocs, e.target.value)}>
+            <select className="premium-select" value={docs} onChange={(e) => onFilterChange(setDocs, e.target.value)}>
               {DOCS_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
-            <select className="rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20" value={order} onChange={(e) => onFilterChange(setOrder, e.target.value)}>
+            <select className="premium-select" value={order} onChange={(e) => onFilterChange(setOrder, e.target.value)}>
               {ORDER_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
@@ -268,16 +276,23 @@ const OrgAdminMembers = () => {
               type="button"
               onClick={resetFilters}
               disabled={!hasFilters}
-              className="rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn-ghost !px-4 !py-2 !text-xs font-bold uppercase tracking-widest disabled:opacity-30"
             >
-              Reset filtri
+              Reset
             </button>
           </div>
-          {!isLoading && !error && (
-            <p className="text-xs text-neutral-400">
-              {total === 0 ? "0 soci" : `${startIndex}-${endIndex} di ${total}`}
-            </p>
-          )}
+        </div>
+        <div className="mt-2 px-3 pb-1 flex items-center justify-between border-t border-neutral-100/50 pt-3">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
+            {total === 0 ? "Nessun risultato" : `${startIndex}-${endIndex} di ${total} soci`}
+          </p>
+          <div className="flex gap-1.5">
+            {hasFilters && (
+              <span className="inline-flex items-center rounded-full bg-brand/5 px-2 py-0.5 text-[10px] font-bold text-brand uppercase tracking-tighter ring-1 ring-inset ring-brand/10">
+                Filtri attivi
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

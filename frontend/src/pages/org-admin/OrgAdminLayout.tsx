@@ -57,55 +57,58 @@ const OrgAdminLayout = () => {
 
   return (
     <Ctx.Provider value={{ admin, loading }}>
-      <div>
+      <div className="min-h-screen bg-[#f8f9fa]/50">
         {/* Header band */}
-        <div className="header-band">
-          <div className="container-shell py-8">
-            <div className="flex items-start gap-5">
+        <header className="header-band sticky top-0 z-30">
+          <div className="container-shell py-5">
+            <div className="flex items-center gap-6">
               <div className="hidden shrink-0 sm:block">
-                <img
-                src={`${import.meta.env.BASE_URL}logo-transparent.png`}
-                alt="ASSO.N.A.M."
-                className="h-12 rounded"
-              />
+                <Link to="/" className="block transition-transform hover:scale-95">
+                  <img
+                    src={`${import.meta.env.BASE_URL}logo-transparent.png`}
+                    alt="ASSO.N.A.M."
+                    className="h-10 w-auto rounded object-contain"
+                  />
+                </Link>
               </div>
               <div className="min-w-0 flex-1">
                 {loading ? (
-                  <>
+                  <div className="space-y-2">
                     <Skeleton className="h-5 w-48" />
-                    <Skeleton className="mt-2 h-3.5 w-64" />
-                  </>
+                    <Skeleton className="h-4 w-64" />
+                  </div>
                 ) : admin ? (
-                  <>
-                    <div className="flex flex-wrap items-center gap-2.5">
-                      <h1 className="text-lg font-semibold text-neutral-900">
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-3">
+                      <h1 className="truncate text-lg font-bold tracking-tight text-neutral-900">
                         {admin.organization?.name ?? "Gestione associazione"}
                       </h1>
-                      <span className="inline-flex items-center rounded-full border border-brand/20 bg-brand/5 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand">
-                        Org Admin
+                      <span className="inline-flex items-center rounded-full border border-brand/20 bg-brand/5 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-brand">
+                        Gestore locale
                       </span>
                     </div>
-                    <p className="mt-1 text-sm text-neutral-500">
+                    <p className="truncate text-xs font-medium text-neutral-500 uppercase tracking-wide opacity-80 mt-0.5">
                       {admin.email}
                     </p>
-                  </>
+                  </div>
                 ) : (
-                  <h1 className="text-lg font-semibold text-neutral-900">
+                  <h1 className="text-lg font-bold tracking-tight text-neutral-900 uppercase tracking-widest">
                     Gestione associazione
                   </h1>
                 )}
               </div>
-              <div className="flex shrink-0 items-center gap-3">
-                {!loading && admin && <ReviewGuideButton />}
+              <div className="flex shrink-0 items-center gap-4">
+                {!loading && admin && <ReviewGuideButton className="hidden md:flex" />}
                 <Link
-                  className="hidden text-sm font-medium text-neutral-500 transition hover:text-neutral-700 sm:block"
+                  className="link-muted hidden font-semibold sm:block"
                   to="/"
                 >
-                  Torna al sito
+                  Sito pubblico
                 </Link>
+                <div className="h-4 w-px bg-neutral-200 hidden sm:block" />
                 {!loading && admin && (
                   <button
-                    className="btn-ghost px-3 py-1.5 text-sm"
+                    className="btn-ghost px-4 py-2 text-xs font-bold uppercase tracking-wider"
                     type="button"
                     onClick={handleLogout}
                   >
@@ -118,15 +121,19 @@ const OrgAdminLayout = () => {
 
           {/* Nav tabs */}
           {!loading && admin && (
-            <div className="container-shell">
-              <nav className="flex flex-wrap gap-3 pb-5">
+            <div className="container-shell mt-1">
+              <nav className="flex flex-wrap gap-2 pb-4 overflow-x-auto no-scrollbar">
                 {NAV_ITEMS.map((item) => (
                   <NavLink
                     key={item.to}
                     to={item.to}
                     end={item.end}
                     className={({ isActive }) =>
-                      `${isActive ? "nav-pill nav-pill-active" : "nav-pill nav-pill-idle"}`
+                      `inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold tracking-tight transition-all duration-200 ${
+                        isActive 
+                          ? "bg-brand text-white shadow-md shadow-brand/20 translate-y-[-1px]" 
+                          : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+                      }`
                     }
                   >
                     {item.label}
@@ -135,16 +142,18 @@ const OrgAdminLayout = () => {
               </nav>
             </div>
           )}
-        </div>
+        </header>
 
         {/* Content */}
-        <Outlet />
+        <main className="animate-in fade-in duration-500">
+          <Outlet />
+        </main>
 
         {/* Version footer */}
         {ver && (
-          <footer className="container-shell pb-6 pt-12 text-[11px] text-neutral-400">
-            v{ver.version}
-            {ver.git_sha ? ` (${ver.git_sha.slice(0, 7)})` : ""}
+          <footer className="container-shell pb-8 pt-12 text-[10px] font-bold uppercase tracking-widest text-neutral-300">
+            Piattaforma ASSO.N.A.M. v{ver.version}
+            {ver.git_sha ? ` [${ver.git_sha.slice(0, 7)}]` : ""}
           </footer>
         )}
 

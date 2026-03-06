@@ -158,176 +158,186 @@ const DashboardHome = () => {
   };
 
   return (
-    <div data-tour="member-dashboard-home">
-      <h1 className="text-xl font-semibold text-neutral-900">Riepilogo</h1>
-      <p className="mt-1 text-sm text-neutral-500">
-        Panoramica dello stato iscrizione e della tessera socio.
-      </p>
+    <div data-tour="member-dashboard-home" className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Riepilogo</h1>
+        <p className="mt-1 text-sm font-medium text-neutral-500">
+          Benvenuto nella tua area riservata ASSO.N.A.M.
+        </p>
+      </div>
 
       {loading ? (
         <>
-          <div className="mt-8 grid gap-6 md:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-3">
             {[0, 1, 2].map((i) => (
               <div key={i} className="surface p-7">
-                <Skeleton className="h-8 w-8 rounded-lg" />
-                <Skeleton className="mt-4 h-3 w-24" />
-                <Skeleton className="mt-3 h-5 w-32" />
-                <Skeleton className="mt-2 h-3 w-full" />
+                <Skeleton className="h-9 w-9 rounded-lg" />
+                <Skeleton className="mt-5 h-3 w-24" />
+                <Skeleton className="mt-4 h-6 w-32" />
+                <Skeleton className="mt-3 h-4 w-full" />
               </div>
             ))}
           </div>
 
-          <section className="mt-12 rounded-2xl border border-[#d8c698]/55 bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(252,248,238,0.98))] p-6 shadow-[0_14px_26px_rgba(15,61,58,0.10)] md:p-8">
+          <section className="surface-strong p-8">
             <Skeleton className="h-4 w-32" />
-            <Skeleton className="mt-3 h-6 w-56" />
-            <Skeleton className="mt-2 h-4 w-full max-w-[28rem]" />
-            <div className="mx-auto mt-8 max-w-3xl">
-              <Skeleton className="h-[20rem] w-full rounded-[28px]" />
+            <Skeleton className="mt-4 h-8 w-64" />
+            <Skeleton className="mt-3 h-4 w-full max-w-[28rem]" />
+            <div className="mx-auto mt-10 max-w-2xl">
+              <Skeleton className="h-64 w-full rounded-[28px]" />
             </div>
           </section>
         </>
       ) : user ? (
         <>
-          <div className="mt-8 grid gap-6 md:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-3">
             {SUMMARY_CARDS.map((card) => (
               <div
                 key={card.key}
-                className="surface p-7"
+                className="surface p-7 flex flex-col justify-between group"
                 data-tour={card.key === "status" ? "member-status" : undefined}
               >
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand/10">
-                  <svg
-                    className="h-[18px] w-[18px] text-brand"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d={card.icon} />
-                  </svg>
-                </div>
+                <div>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand/5 text-brand group-hover:bg-brand group-hover:text-white transition-all duration-300">
+                    <svg
+                      className="h-5 w-5"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d={card.icon} />
+                    </svg>
+                  </div>
 
-                <p className="mt-4 text-xs font-medium uppercase tracking-[0.2em] text-neutral-400">
-                  {card.label}
-                </p>
+                  <p className="mt-5 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 group-hover:text-neutral-500 transition-colors">
+                    {card.label}
+                  </p>
 
-                {card.key === "status" && statusInfo && (
-                  <>
-                    <div className="mt-3 flex items-center gap-2">
-                      <p className="text-base font-semibold text-neutral-900">
-                        {statusInfo.label}
+                  {card.key === "status" && statusInfo && (
+                    <>
+                      <div className="mt-3 flex items-center gap-2.5">
+                        <p className="text-lg font-bold text-neutral-900">
+                          {statusInfo.label}
+                        </p>
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${statusInfo.color}`}
+                        >
+                          {user.status === "active" ? "OK" : "IN CORSO"}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-sm font-medium leading-relaxed text-neutral-500 opacity-80">
+                        {user.status === "active"
+                          ? "Iscrizione confermata e tessera abilitata."
+                          : user.status === "pending_cards"
+                            ? "Iscrizione approvata, tessera in assegnazione."
+                            : "Richiesta in fase di lavorazione."}
                       </p>
-                      <span
-                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none ${statusInfo.color}`}
-                      >
-                        {user.status === "active" ? "OK" : "IN CORSO"}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-sm leading-6 text-neutral-600">
-                      {user.status === "active"
-                        ? "Iscrizione confermata e tessera abilitata."
-                        : user.status === "pending_cards"
-                          ? "Iscrizione approvata, tessera in assegnazione."
-                          : "Richiesta in lavorazione."}
-                    </p>
-                  </>
-                )}
+                    </>
+                  )}
 
-                {card.key === "org" && (
-                  <>
-                    <p className="mt-3 text-base font-semibold text-neutral-900">
-                      {toSummaryValue(user.organization?.name)}
-                    </p>
-                    <p className="mt-2 text-sm leading-6 text-neutral-600">
-                      Organizzazione associata al tuo profilo socio.
-                    </p>
-                  </>
-                )}
+                  {card.key === "org" && (
+                    <>
+                      <p className="mt-3 text-lg font-bold text-neutral-900 truncate" title={user.organization?.name}>
+                        {toSummaryValue(user.organization?.name)}
+                      </p>
+                      <p className="mt-3 text-sm font-medium leading-relaxed text-neutral-500 opacity-80">
+                        La sede locale associata al tuo profilo socio.
+                      </p>
+                    </>
+                  )}
 
-                {card.key === "membership" && (
-                  <>
-                    <p className="mt-3 text-base font-semibold text-neutral-900">
-                      Dal {toDateText(user.joined_at)}
-                    </p>
-                    <p className="mt-2 text-sm leading-6 text-neutral-600">
-                      Email registrata: {toSummaryValue(user.email)}
-                    </p>
-                  </>
-                )}
+                  {card.key === "membership" && (
+                    <>
+                      <p className="mt-3 text-lg font-bold text-neutral-900">
+                        Dal {toDateText(user.joined_at)}
+                      </p>
+                      <p className="mt-3 text-sm font-medium leading-relaxed text-neutral-500 opacity-80 truncate">
+                        Email: {toSummaryValue(user.email)}
+                      </p>
+                    </>
+                  )}
+                </div>
               </div>
             ))}
           </div>
 
-          <section className="mt-12 rounded-2xl border border-[#d8c698]/55 bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(252,248,238,0.98))] p-6 shadow-[0_14px_26px_rgba(15,61,58,0.10)] md:p-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#7e6f4a]">
-              Sezione dedicata
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold text-[#123a38]" style={{ fontFamily: "\"Source Serif 4\", serif" }}>
-              La tua tessera
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-600">
-              Tessera ASSO.N.A.M. separata dalle card KPI: clicca per ruotare fronte/retro e verificare il QR verso endpoint backend.
-            </p>
+          <section className="surface-strong p-8 md:p-10 relative overflow-hidden">
+            <div className="relative z-10 flex flex-col md:flex-row md:items-end md:justify-between gap-8">
+              <div className="max-w-2xl">
+                <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-accent">
+                  Documento digitale
+                </p>
+                <h2 className="mt-3 text-3xl font-bold tracking-tight text-neutral-900" style={{ fontFamily: "\"Source Serif 4\", serif" }}>
+                  La tua tessera socio
+                </h2>
+                <p className="mt-4 text-base font-medium leading-relaxed text-neutral-600 opacity-90">
+                  Questa è la tua tessera digitale ASSO.N.A.M. Clicca sulla card per ruotarla e accedere ai dettagli sul retro o verificare il QR code.
+                </p>
 
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={() => {
-                  void handleAddToGoogleWallet();
-                }}
-                disabled={!canShowGoogleWalletButton || walletLoading}
-                title={
-                  canShowGoogleWalletButton
-                    ? "Aggiungi la tessera a Google Wallet"
-                    : "Disponibile quando la tessera è attiva"
-                }
-              >
-                {walletLoading ? "Generazione link..." : "Aggiungi a Google Wallet"}
-              </button>
-              <span className="text-xs text-neutral-500">
-                Disponibile su Android (Google Wallet)
-              </span>
-            </div>
-            {walletError && (
-              <p className="mt-2 text-sm text-red-600">{walletError}</p>
-            )}
+                <div className="mt-8 flex flex-wrap items-center gap-4">
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => {
+                      void handleAddToGoogleWallet();
+                    }}
+                    disabled={!canShowGoogleWalletButton || walletLoading}
+                  >
+                    <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.21.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+                    </svg>
+                    {walletLoading ? "Generazione..." : "Aggiungi a Google Wallet"}
+                  </button>
+                  <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest">
+                    Google Wallet <span className="mx-1.5 opacity-30">•</span> Android
+                  </p>
+                </div>
+                {walletError && (
+                  <p className="mt-4 text-sm font-semibold text-red-500 flex items-center gap-2">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    {walletError}
+                  </p>
+                )}
+              </div>
 
-            <div className="mx-auto mt-8 max-w-3xl" data-tour="member-card-number">
-              <MemberCardPreview cardData={cardData} />
+              <div className="flex-1 w-full max-w-md mx-auto" data-tour="member-card-number">
+                <MemberCardPreview cardData={cardData} />
+              </div>
             </div>
+
+            {/* Subtle background decoration */}
+            <div className="absolute -right-24 -bottom-24 h-96 w-96 rounded-full bg-brand/5 blur-3xl pointer-events-none" />
           </section>
         </>
       ) : (
-        <>
-          <div className="mt-8 surface p-7">
-            <p className="text-base font-semibold text-neutral-900">Dati profilo non disponibili</p>
-            <p className="mt-2 text-sm text-neutral-600">
-              Impossibile caricare il riepilogo socio in questo momento.
-            </p>
-            {profileError && (
-              <p className="mt-2 text-xs text-neutral-500">{profileError}</p>
-            )}
-            <button
-              type="button"
-              className="btn-ghost mt-4 px-3 py-1.5 text-xs"
-              onClick={() => {
-                void reloadProfile();
-              }}
-            >
-              Riprova
-            </button>
+        <div className="surface p-10 text-center space-y-4">
+          <div className="mx-auto h-12 w-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center">
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
           </div>
-
-          <section className="mt-10 rounded-2xl border border-amber-200/70 bg-amber-50/70 p-6" data-tour="member-card-number">
-            <p className="text-sm font-semibold text-amber-800">Impossibile caricare tessera</p>
-            <p className="mt-1 text-xs text-amber-700">
-              Il widget tessera e separato dal riepilogo e verra mostrato appena il profilo torna disponibile.
-            </p>
-          </section>
-        </>
+          <h2 className="text-lg font-bold text-neutral-900">Dati non disponibili</h2>
+          <p className="text-sm font-medium text-neutral-500 max-w-sm mx-auto leading-relaxed">
+            Impossibile caricare il riepilogo socio in questo momento. Verifica la tua connessione e riprova.
+          </p>
+          {profileError && (
+            <p className="text-xs font-mono text-red-400 bg-red-50 p-2 rounded">{profileError}</p>
+          )}
+          <button
+            type="button"
+            className="btn-ghost mt-6"
+            onClick={() => {
+              void reloadProfile();
+            }}
+          >
+            Riprova il caricamento
+          </button>
+        </div>
       )}
     </div>
   );

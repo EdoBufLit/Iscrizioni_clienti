@@ -69,148 +69,126 @@ body::before {
   /* ── Glass surfaces ────────────────────────── */
 
   .surface {
-    @apply relative overflow-hidden rounded-xl border border-white/70 shadow-premium;
+    @apply relative overflow-hidden rounded-xl border border-neutral-200/50 shadow-premium;
     background: linear-gradient(
         135deg,
-        rgba(255, 255, 255, 0.92) 0%,
-        rgba(255, 255, 255, 0.78) 45%,
-        rgba(250, 245, 235, 0.82) 100%
+        rgba(255, 255, 255, 0.98) 0%,
+        rgba(255, 255, 255, 0.94) 45%,
+        rgba(252, 248, 240, 0.96) 100%
       );
     -webkit-backdrop-filter: blur(12px);
     backdrop-filter: blur(12px);
-    transition: background 200ms ease, border-color 200ms ease,
-      box-shadow 200ms ease, transform 200ms ease;
+    transition: all 240ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .surface::after {
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(
-        120deg,
-        rgba(198, 160, 79, 0.08),
-        transparent 50%,
-        rgba(15, 61, 58, 0.08)
+    background: radial-gradient(
+        circle at top left,
+        rgba(198, 160, 79, 0.04),
+        transparent 45%
       );
-    opacity: 0;
-    transition: opacity 200ms ease;
+    opacity: 0.6;
     pointer-events: none;
   }
 
   .surface:hover {
-    background: linear-gradient(
-        135deg,
-        rgba(255, 255, 255, 0.98) 0%,
-        rgba(255, 255, 255, 0.86) 45%,
-        rgba(252, 248, 240, 0.88) 100%
-      );
-    border-color: rgba(198, 160, 79, 0.35);
-    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.10),
-      0 4px 10px rgba(15, 23, 42, 0.06);
-    transform: translateY(-2px);
-  }
-
-  .surface:hover::after {
-    opacity: 1;
+    @apply border-accent/30 -translate-y-[1px];
+    background: #ffffff;
+    box-shadow: 
+      0 12px 30px -4px rgba(15, 23, 42, 0.08),
+      0 4px 12px -2px rgba(15, 23, 42, 0.03);
   }
 
   .surface-strong {
-    @apply relative overflow-hidden rounded-2xl border border-white/80 shadow-premium;
-    background: linear-gradient(
-        140deg,
-        rgba(255, 255, 255, 0.98) 0%,
-        rgba(255, 255, 255, 0.9) 40%,
-        rgba(249, 244, 236, 0.94) 100%
-      );
-    -webkit-backdrop-filter: blur(14px);
-    backdrop-filter: blur(14px);
-    transition: background 200ms ease, border-color 200ms ease,
-      box-shadow 200ms ease, transform 200ms ease;
+    @apply relative overflow-hidden rounded-2xl border border-neutral-200/60 shadow-premium-lg;
+    background: #ffffff;
+    transition: all 240ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .surface-strong::after {
     content: "";
     position: absolute;
     inset: 0;
-    background: radial-gradient(
-        circle at 10% 10%,
-        rgba(198, 160, 79, 0.10),
-        transparent 55%
+    background: linear-gradient(
+        140deg,
+        rgba(198, 160, 79, 0.03),
+        transparent 50%
       );
-    opacity: 0.65;
     pointer-events: none;
   }
 
   .surface-strong:hover {
-    background: linear-gradient(
-        140deg,
-        rgba(255, 255, 255, 1) 0%,
-        rgba(255, 255, 255, 0.94) 40%,
-        rgba(252, 248, 240, 0.96) 100%
-      );
-    border-color: rgba(198, 160, 79, 0.35);
-    box-shadow: 0 14px 30px rgba(15, 23, 42, 0.12),
-      0 6px 14px rgba(15, 23, 42, 0.08);
+    @apply border-accent/35;
+    box-shadow: 
+      0 20px 40px -8px rgba(15, 23, 42, 0.12),
+      0 8px 16px -4px rgba(15, 23, 42, 0.04);
   }
 
   .modal-panel {
-    @apply w-full rounded-2xl border border-neutral-200 bg-white shadow-xl;
+    @apply w-full rounded-2xl border border-neutral-200/80 bg-white shadow-2xl;
     contain: layout paint;
   }
 
   /* ── Links ─────────────────────────────────── */
 
   .link-muted {
-    @apply text-sm font-medium text-neutral-600 hover:text-neutral-900;
+    @apply text-sm font-medium text-neutral-500 hover:text-brand transition-colors;
   }
 
   /* ── Buttons ───────────────────────────────── */
 
   .btn-primary {
-    @apply relative inline-flex items-center justify-center overflow-hidden rounded-md px-5 py-2 text-sm font-semibold text-white shadow-premium;
-    background: linear-gradient(135deg, #0f3d3a 0%, #1e6f67 55%, #0f3d3a 100%);
-    transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
-      box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1),
-      transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    @apply relative inline-flex items-center justify-center overflow-hidden rounded-lg px-6 py-2.5 text-sm font-semibold text-white transition-all duration-200;
+    background: linear-gradient(135deg, #0f3d3a 0%, #1e6f67 100%);
+    box-shadow: 
+      0 1px 2px 0 rgba(0, 0, 0, 0.05),
+      0 4px 12px -2px rgba(15, 61, 58, 0.25);
   }
 
   .btn-primary:hover {
-    @apply -translate-y-px;
-    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.18),
-      0 0 24px rgba(30, 111, 103, 0.25);
+    @apply -translate-y-px brightness-105 shadow-lg;
+    box-shadow: 
+      0 8px 20px -4px rgba(15, 61, 58, 0.3),
+      0 0 0 1px rgba(255, 255, 255, 0.1) inset;
   }
 
   .btn-primary:focus-visible {
-    @apply outline-none ring-2 ring-accent/50 ring-offset-2;
+    @apply outline-none ring-2 ring-brand/40 ring-offset-2;
   }
 
   .btn-primary:active {
-    @apply translate-y-0;
-    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+    @apply translate-y-0 brightness-95;
   }
 
   .btn-ghost {
-    @apply inline-flex items-center justify-center rounded-md border border-neutral-200 px-5 py-2 text-sm font-semibold text-neutral-700;
-    background: rgba(255, 255, 255, 0.65);
-    transition: border-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
-      color 150ms cubic-bezier(0.4, 0, 0.2, 1),
-      box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1),
-      transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    @apply inline-flex items-center justify-center rounded-lg border border-neutral-200/80 bg-white/80 px-6 py-2.5 text-sm font-semibold text-neutral-700 transition-all duration-200 backdrop-blur-sm;
   }
 
   .btn-ghost:hover {
-    @apply -translate-y-px border-neutral-300 text-neutral-900;
-    box-shadow: 0 6px 14px rgba(15, 23, 42, 0.10),
-      0 0 18px rgba(198, 160, 79, 0.12);
+    @apply -translate-y-px border-neutral-300 bg-white text-neutral-900 shadow-md;
   }
 
   .btn-ghost:focus-visible {
-    @apply outline-none ring-2 ring-accent/40 ring-offset-2;
+    @apply outline-none ring-2 ring-accent/30 ring-offset-2;
   }
 
   .btn-ghost:active {
-    @apply translate-y-0;
-    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+    @apply translate-y-0 bg-neutral-50;
+  }
+
+  .premium-select {
+    @apply rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm font-semibold text-neutral-700 outline-none transition-all duration-200 cursor-pointer;
+  }
+
+  .premium-select:hover {
+    @apply border-neutral-300 bg-neutral-50/50;
+  }
+
+  .premium-select:focus {
+    @apply border-brand ring-2 ring-brand/10 bg-white;
   }
 
   .hero-logo-bg {
@@ -223,27 +201,13 @@ body::before {
   }
 
   .header-band {
-    @apply border-b border-white/60 backdrop-blur-md;
-    background: linear-gradient(
-        120deg,
-        rgba(255, 255, 255, 0.92),
-        rgba(255, 255, 255, 0.75)
-      );
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
-  }
-
-  .nav-pill {
-    @apply inline-flex items-center gap-2 rounded-full border border-transparent px-4 py-2 text-sm font-medium transition;
-  }
-
-  .nav-pill-active {
-    @apply border-accent/40 text-brand;
-    background: rgba(198, 160, 79, 0.12);
-  }
-
-  .nav-pill-idle {
-    @apply text-neutral-600 hover:text-neutral-900;
-    background: rgba(255, 255, 255, 0.5);
+    @apply border-b border-neutral-200/60 sticky top-0 z-30;
+    background: rgba(255, 255, 255, 0.8);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+    box-shadow: 
+      0 1px 2px 0 rgba(0, 0, 0, 0.02),
+      0 4px 12px -1px rgba(0, 0, 0, 0.01);
   }
 
   /* ── Layout helpers ────────────────────────── */

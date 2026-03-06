@@ -1,579 +1,449 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import {
   AuthError,
   deleteOrganization,
   fetchSuperAdminOrganizations,
-  type SuperAdminOrganization,
   type SuperAdminProfile,
+  type SuperAdminOrganization,
 } from "../../lib/api";
-import { useSuperAdminOrganizationsQueryState } from "../../hooks/useSuperAdminOrganizationsQueryState";
 import Skeleton from "../../components/ui/Skeleton";
-import OrganizationManageModal, {
-  type OrganizationModalType,
-} from "./components/OrganizationManageModal";
+import OrganizationManageModal from "./components/OrganizationManageModal";
 import SuperAdminPienissimoIntegrationCard from "./components/SuperAdminPienissimoIntegrationCard";
 
-const thClass =
-  "px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.15em] text-neutral-400";
-const tdClass = "px-5 py-3.5 text-sm text-neutral-700";
-const PAGE_SIZE_OPTIONS = [50, 100];
-const SEARCH_DEBOUNCE_MS = 400;
-const DEFAULT_SORT = "created_at:desc";
-
-const getVisiblePages = (page: number, totalPages: number): Array<number | "ellipsis"> => {
-  if (totalPages <= 1) {
-    return [1];
-  }
-
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1);
-  }
-
-  if (page <= 3) {
-    return [1, 2, 3, 4, "ellipsis", totalPages];
-  }
-
-  if (page >= totalPages - 2) {
-    return [1, "ellipsis", totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
-  }
-
-  return [1, "ellipsis", page - 1, page, page + 1, "ellipsis", totalPages];
-};
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 const SuperAdminOrganizations = () => {
   const navigate = useNavigate();
   const { profile } = useOutletContext<{ profile: SuperAdminProfile | null }>();
   const isSuperAdmin = profile?.role === "super_admin";
-  const {
-    q,
-    page,
-    pageSize,
-    setSearchQuery,
-    setPage,
-    setPageSize,
-  } = useSuperAdminOrganizationsQueryState();
 
   const [orgs, setOrgs] = useState<SuperAdminOrganization[]>([]);
-  const [total, setTotal] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState("");
-  const [searchInput, setSearchInput] = useState(q);
-  const [reloadToken, setReloadToken] = useState(0);
+
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
+  const [searchInput, setSearchInput] = useState("");
+  const [q, setQ] = useState("");
 
   const [showModal, setShowModal] = useState(false);
-  const [modalType, setModalType] = useState<OrganizationModalType>("create");
+  const [modalType, setModalType] = useState<"create" | "range" | "branding" | "view-batches" | "add-batch">("create");
   const [selectedOrg, setSelectedOrg] = useState<SuperAdminOrganization | null>(null);
 
   const [deleteConfirm, setDeleteConfirm] = useState<SuperAdminOrganization | null>(null);
   const [deleteMode, setDeleteMode] = useState<"archive" | "purge">("archive");
   const [purgeSlugInput, setPurgeSlugInput] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [deleteSuccess, setDeleteSuccess] = useState("");
-  const [deleting, setDeleting] = useState(false);
+
   const [integrationOrg, setIntegrationOrg] = useState<SuperAdminOrganization | null>(null);
 
-  const requestIdRef = useRef(0);
-  const hasLoadedOnceRef = useRef(false);
+  const searchTimeout = useRef<any>(null);
 
-  useEffect(() => {
-    setSearchInput(q);
-  }, [q]);
-
-  useEffect(() => {
-    if (searchInput.trim() === q) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setSearchQuery(searchInput);
-    }, SEARCH_DEBOUNCE_MS);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [q, searchInput, setSearchQuery]);
-
-  const refreshOrganizations = useCallback(() => {
-    setReloadToken((current) => current + 1);
-  }, []);
-
-  useEffect(() => {
-    if (!profile) {
-      return;
-    }
-
-    const controller = new AbortController();
-    const requestId = requestIdRef.current + 1;
-    requestIdRef.current = requestId;
-
-    if (!hasLoadedOnceRef.current) {
-      setLoading(true);
-    } else {
+  const loadOrgs = useCallback(async () => {
+    if (!profile) return;
+    try {
       setIsFetching(true);
-    }
-
-    fetchSuperAdminOrganizations({
-      page,
-      pageSize,
-      q: q || undefined,
-      sort: DEFAULT_SORT,
-      signal: controller.signal,
-    })
-      .then((response) => {
-        if (requestId !== requestIdRef.current) {
-          return;
-        }
-
-        if (response.total > 0 && page > response.total_pages) {
-          setPage(response.total_pages);
-          return;
-        }
-
-        if (response.total === 0 && page !== 1) {
-          setPage(1);
-          return;
-        }
-
-        setOrgs(response.items);
-        setTotal(response.total);
-        setTotalPages(response.total_pages);
-        setError("");
-      })
-      .catch((err: unknown) => {
-        if (controller.signal.aborted) {
-          return;
-        }
-
-        if (requestId !== requestIdRef.current) {
-          return;
-        }
-
-        if (err instanceof AuthError) {
-          navigate("/super-admin/login", { replace: true });
-          return;
-        }
-
-        const message =
-          err instanceof Error && err.message.trim()
-            ? err.message
-            : "Errore nel caricamento delle associazioni.";
-        setError(message);
-      })
-      .finally(() => {
-        if (requestId !== requestIdRef.current) {
-          return;
-        }
-
-        hasLoadedOnceRef.current = true;
-        setLoading(false);
-        setIsFetching(false);
+      const data = await fetchSuperAdminOrganizations({
+        page,
+        pageSize,
+        q: q || undefined,
       });
-
-    return () => controller.abort();
-  }, [navigate, page, pageSize, profile, q, reloadToken, setPage]);
-
-  const openModal = useCallback((type: OrganizationModalType, org?: SuperAdminOrganization) => {
-    setModalType(type);
-    setSelectedOrg(org || null);
-    setShowModal(true);
-  }, []);
-
-  const closeModal = useCallback(() => {
-    setShowModal(false);
-  }, []);
-
-  const handleModalSaved = useCallback(() => {
-    setShowModal(false);
-    refreshOrganizations();
-  }, [refreshOrganizations]);
-
-  const handleSwitchToAddBatch = useCallback(() => {
-    if (!selectedOrg) {
-      return;
+      setOrgs(data.items);
+      setTotal(data.total);
+      setTotalPages(data.total_pages);
+      setError("");
+    } catch (err) {
+      if (err instanceof AuthError) {
+        navigate("/super-admin/login", { replace: true });
+      } else {
+        setError("Impossibile caricare le associazioni.");
+      }
+    } finally {
+      setLoading(false);
+      setIsFetching(false);
     }
-    setModalType("add-batch");
-  }, [selectedOrg]);
+  }, [profile, page, pageSize, q, navigate]);
 
-  const handleDelete = useCallback((org: SuperAdminOrganization) => {
-    setDeleteConfirm(org);
-    const shouldDefaultPurge = org.is_active && !org.is_archived && !Boolean(org.deleted_at);
-    setDeleteMode(shouldDefaultPurge ? "purge" : "archive");
-    setPurgeSlugInput("");
-    setDeleteError("");
-  }, []);
+  useEffect(() => {
+    loadOrgs();
+  }, [loadOrgs]);
 
-  const openIntegrationModal = useCallback((org: SuperAdminOrganization) => {
-    setIntegrationOrg(org);
-  }, []);
+  useEffect(() => {
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    searchTimeout.current = setTimeout(() => {
+      setQ(searchInput.trim());
+      setPage(1);
+    }, 400);
+    return () => {
+      if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    };
+  }, [searchInput]);
 
-  const closeIntegrationModal = useCallback(() => {
-    setIntegrationOrg(null);
-  }, []);
+  const applySearchImmediately = () => {
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    setQ(searchInput.trim());
+    setPage(1);
+  };
 
-  const applySearchImmediately = useCallback(() => {
-    setSearchQuery(searchInput);
-  }, [searchInput, setSearchQuery]);
-
-  const clearSearch = useCallback(() => {
+  const clearSearch = () => {
     setSearchInput("");
-    setSearchQuery("");
-  }, [setSearchQuery]);
+    setQ("");
+    setPage(1);
+  };
+
+  const openModal = (type: typeof modalType, org: SuperAdminOrganization | null = null) => {
+    setModalType(type);
+    setSelectedOrg(org);
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setSelectedOrg(null);
+  };
+
+  const handleModalSaved = () => {
+    loadOrgs();
+  };
+
+  const handleSwitchToAddBatch = () => {
+    setModalType("add-batch");
+  };
+
+  const handleDelete = (org: SuperAdminOrganization) => {
+    setDeleteSuccess("");
+    setDeleteError("");
+    setDeleteConfirm(org);
+    setDeleteMode("archive");
+    setPurgeSlugInput("");
+  };
 
   const confirmDelete = async () => {
-    if (!deleteConfirm || deleting) {
-      return;
-    }
-    if (deleteMode === "purge" && purgeSlugInput.trim() !== deleteConfirm.slug) {
-      setDeleteError("Per confermare il purge devi digitare esattamente lo slug dell'associazione.");
+    if (!deleteConfirm) return;
+    if (deleteMode === "purge" && purgeSlugInput !== deleteConfirm.slug) {
+      setDeleteError("Lo slug inserito non corrisponde.");
       return;
     }
 
     setDeleting(true);
     setDeleteError("");
-    setDeleteSuccess("");
-
     try {
-      const result = await deleteOrganization(deleteConfirm.id, {
+      await deleteOrganization(deleteConfirm.id, {
         mode: deleteMode,
         releaseRange: true,
-        force: deleteMode === "purge",
       });
-      const range = result.releasedRange
-        ? `${result.releasedRange.start}-${result.releasedRange.end}`
-        : "nessuno";
       setDeleteSuccess(
-        deleteMode === "archive"
-          ? `Associazione archiviata. Range liberato: ${range}.`
-          : `Associazione eliminata definitivamente. Range liberato: ${range}.`,
+        deleteMode === "purge"
+          ? `Associazione ${deleteConfirm.name} eliminata definitivamente.`
+          : `Associazione ${deleteConfirm.name} archiviata.`
       );
       setDeleteConfirm(null);
-      setPurgeSlugInput("");
-      refreshOrganizations();
+      loadOrgs();
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Errore durante l'eliminazione");
+      setDeleteError(err instanceof Error ? err.message : "Errore nell'operazione.");
     } finally {
       setDeleting(false);
     }
   };
 
-  const totalLabel =
-    total === 1 ? "1 associazione" : `${total.toLocaleString("it-IT")} associazioni`;
-  const startIndex = total === 0 ? 0 : (page - 1) * pageSize + 1;
-  const endIndex = total === 0 ? 0 : Math.min(page * pageSize, total);
-  const visiblePages = getVisiblePages(page, totalPages);
+  const openIntegrationModal = (org: SuperAdminOrganization) => {
+    setIntegrationOrg(org);
+  };
 
-  if (loading && !orgs.length) {
+  const closeIntegrationModal = () => {
+    setIntegrationOrg(null);
+  };
+
+  const visiblePages = useMemo(() => {
+    const pages: (number | "ellipsis")[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (page <= 4) {
+        pages.push(1, 2, 3, 4, 5, "ellipsis", totalPages);
+      } else if (page >= totalPages - 3) {
+        pages.push(1, "ellipsis", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, "ellipsis", page - 1, page, page + 1, "ellipsis", totalPages);
+      }
+    }
+    return pages;
+  }, [page, totalPages]);
+
+  if (loading || !profile) {
     return (
-      <div>
-        <Skeleton className="h-6 w-64" />
-        <Skeleton className="mt-3 h-4 w-96" />
-        <div className="mt-6">
-          <Skeleton className="h-24 w-full rounded-2xl" />
-        </div>
-        <div className="mt-6">
-          <Skeleton className="h-56 w-full rounded-lg" />
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-4 w-96" />
+        <div className="mt-10">
+          <Skeleton className="h-64 w-full rounded-2xl" />
         </div>
       </div>
     );
   }
 
+  const startIndex = (page - 1) * pageSize + 1;
+  const endIndex = Math.min(page * pageSize, total);
+
   return (
-    <div>
-      <div className="mb-8 min-h-[76px]">
+    <div className="space-y-8">
+      <div className="min-h-[76px]">
         {error && (
-          <div className="rounded-lg border border-red-200/60 bg-red-50 px-7 py-5">
-            <p className="text-sm text-red-700">{error}</p>
+          <div className="rounded-xl border border-red-200/50 bg-red-50/50 p-5 flex items-center gap-3 animate-in slide-in-from-top-2 duration-300">
+            <svg className="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+            </svg>
+            <p className="text-sm font-bold text-red-900">{error}</p>
           </div>
         )}
         {!error && deleteSuccess && (
-          <div className="rounded-lg border border-emerald-200/60 bg-emerald-50 px-7 py-5">
-            <p className="text-sm text-emerald-700">{deleteSuccess}</p>
+          <div className="rounded-xl border border-emerald-200/50 bg-emerald-50/50 p-5 flex items-center gap-3 animate-in slide-in-from-top-2 duration-300">
+            <svg className="h-5 w-5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+            <p className="text-sm font-bold text-emerald-900">{deleteSuccess}</p>
           </div>
         )}
       </div>
 
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <h2 className="text-xl font-semibold text-neutral-900">Associazioni</h2>
-          <p className="mt-1 text-sm text-neutral-500">
-            Gestisci le associazioni registrate sulla piattaforma.
+          <h2 className="text-2xl font-bold tracking-tight text-neutral-900">Registro Associazioni</h2>
+          <p className="mt-1 text-sm font-medium text-neutral-500">
+            Governance completa delle entità affiliate e configurazione lotti card.
           </p>
         </div>
         <button
-          className="inline-flex items-center justify-center rounded-md bg-brand px-5 py-2 text-sm font-semibold text-white shadow-subtle transition hover:-translate-y-px hover:bg-brand-dark hover:shadow-card active:translate-y-0"
+          className="btn-primary"
           onClick={() => openModal("create")}
           data-component="superadmin-orgs-open-modal"
         >
+          <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
           Nuova associazione
         </button>
       </div>
 
-      <div className="surface mt-8 px-5 py-5">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-          <div className="w-full max-w-3xl">
-            <label
-              htmlFor="super-admin-org-search"
-              className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500"
-            >
-              Ricerca globale
-            </label>
-            <div className="relative mt-2">
-              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400">
-                <svg
-                  className="h-5 w-5"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={1.8}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="m20 20-3.5-3.5" />
+      <div className="surface p-2 sm:p-3">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center">
+          <div className="flex-1 min-w-0 relative">
+            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 group-focus-within:text-brand transition-colors">
+              <svg
+                className="h-5 w-5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+              </svg>
+            </span>
+            <input
+              id="super-admin-org-search"
+              type="search"
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  applySearchImmediately();
+                }
+              }}
+              placeholder="Cerca per nome, slug o email..."
+              className="w-full rounded-xl border border-neutral-200 bg-white/50 pl-12 pr-12 py-2.5 text-sm font-semibold text-neutral-700 outline-none transition-all focus:border-brand focus:ring-4 focus:ring-brand/5 focus:bg-white"
+            />
+            {searchInput && (
+              <button
+                type="button"
+                onClick={clearSearch}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-900 transition-colors"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 6 6 18M6 6l12 12" />
                 </svg>
-              </span>
-              <input
-                id="super-admin-org-search"
-                type="search"
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    applySearchImmediately();
-                  }
-                }}
-                placeholder="Cerca associazioni..."
-                className="w-full rounded-2xl border border-neutral-200 bg-white px-12 py-3 text-sm text-neutral-700 shadow-subtle outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/10"
-              />
-              {searchInput && (
-                <button
-                  type="button"
-                  onClick={clearSearch}
-                  className="absolute right-3 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-500 transition hover:border-neutral-300 hover:text-neutral-800"
-                  aria-label="Pulisci ricerca"
-                >
-                  <svg
-                    className="h-4 w-4"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M18 6 6 18" />
-                    <path d="m6 6 12 12" />
-                  </svg>
-                </button>
-              )}
-            </div>
-            <p className="mt-2 text-xs text-neutral-400">
-              Cerca su tutte le associazioni per nome, slug ed email. Invio forza la ricerca
-              immediata.
-            </p>
+              </button>
+            )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="rounded-2xl border border-neutral-200 bg-white px-3 py-2 shadow-subtle">
-              <label className="text-[11px] font-semibold uppercase tracking-[0.15em] text-neutral-400">
-                Righe
-              </label>
-              <select
-                className="mt-1 block bg-transparent text-sm font-medium text-neutral-700 outline-none"
-                value={pageSize}
-                onChange={(event) => setPageSize(Number(event.target.value))}
-              >
-                {PAGE_SIZE_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option} per pagina
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="flex items-center gap-3">
+            <select
+              className="premium-select min-w-[160px]"
+              value={pageSize}
+              onChange={(event) => setPageSize(Number(event.target.value))}
+            >
+              {PAGE_SIZE_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option} righe
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
-        <div className="mt-5 flex flex-col gap-2 border-t border-white/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm text-neutral-500">
-            {total === 0 ? "0 associazioni" : `${startIndex}-${endIndex} di ${totalLabel}`}
-          </div>
-          <div className="flex items-center gap-3 text-xs text-neutral-400">
-            {isFetching && <span>Aggiornamento elenco...</span>}
-            <span>
-              Pagina {page} di {totalPages}
+        <div className="mt-2 px-3 pb-1 flex items-center justify-between border-t border-neutral-100/50 pt-3">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
+            {total === 0 ? "Nessun risultato" : `${startIndex}-${endIndex} di ${total.toLocaleString("it-IT")} entità`}
+          </p>
+          <div className="flex items-center gap-2">
+            {isFetching && (
+              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-brand uppercase tracking-widest animate-pulse">
+                <span className="h-1.5 w-1.5 rounded-full bg-brand" />
+                Aggiornamento...
+              </span>
+            )}
+            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
+              Pagina {page} / {totalPages}
             </span>
           </div>
         </div>
       </div>
 
-      <div className="surface mt-8 overflow-hidden" data-component="superadmin-orgs-table">
-        {isFetching && (
-          <div className="border-b border-white/60 bg-brand/[0.04] px-5 py-3 text-xs font-medium uppercase tracking-[0.16em] text-brand">
-            Caricamento risultati...
-          </div>
-        )}
+      <div className="surface overflow-hidden border-neutral-200/60" data-component="superadmin-orgs-table">
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="border-b border-white/60 bg-white/40">
-              <tr>
-                <th className={thClass}>Nome</th>
-                <th className={thClass}>Slug</th>
-                <th className={thClass}>Citta</th>
-                <th className={thClass}>Stato</th>
-                <th className={thClass}>Stato affiliazione</th>
-                <th className={thClass}>Tessere</th>
-                <th className={thClass}>Azioni</th>
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-neutral-100 bg-neutral-50/50">
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Nome</th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Slug</th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Località</th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Piattaforma</th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Affiliazione</th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 text-center">Tessere</th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 text-right">Azioni</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-neutral-50">
               {orgs.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-12 text-center text-sm text-neutral-500">
-                    {q
-                      ? "Nessuna associazione trovata per la ricerca corrente."
-                      : "Nessuna associazione trovata."}
+                  <td colSpan={7} className="px-5 py-16 text-center">
+                    <p className="text-sm font-bold text-neutral-400 uppercase tracking-widest">
+                      {q ? "Nessuna corrispondenza" : "Database vuoto"}
+                    </p>
                   </td>
                 </tr>
               ) : (
-                orgs.map((org, index) => (
+                orgs.map((org) => (
                   <tr
                     key={org.id}
-                    className={`transition hover:bg-brand/[0.02] ${index % 2 === 1 ? "bg-white/30" : ""}`}
+                    className="group transition-colors hover:bg-neutral-50/50"
                   >
-                    <td className={`${tdClass} font-medium text-neutral-900`}>{org.name}</td>
-                    <td className={tdClass}>{org.slug}</td>
-                    <td className={tdClass}>
-                      {org.city} {org.province ? `(${org.province})` : ""}
+                    <td className="px-5 py-4">
+                      <p className="text-sm font-bold text-neutral-900 group-hover:text-brand transition-colors">{org.name}</p>
+                      <p className="text-[10px] text-neutral-400 mt-0.5">ID: {org.id}</p>
                     </td>
-                    <td className={tdClass}>
+                    <td className="px-5 py-4">
+                      <code className="text-[11px] font-mono font-bold text-neutral-500 bg-neutral-100 px-1.5 py-0.5 rounded uppercase">{org.slug}</code>
+                    </td>
+                    <td className="px-5 py-4">
+                      <p className="text-sm font-medium text-neutral-600">
+                        {org.city} <span className="text-neutral-400">{org.province ? `(${org.province})` : ""}</span>
+                      </p>
+                    </td>
+                    <td className="px-5 py-4">
                       {org.is_archived || org.deleted_at ? (
-                        <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                        <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-bold text-neutral-500 uppercase tracking-tighter ring-1 ring-inset ring-neutral-200">
                           Archiviata
                         </span>
                       ) : (
                         <span
-                          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter ring-1 ring-inset ${
                             org.is_active
-                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                              : "border-neutral-200 bg-neutral-50 text-neutral-600"
+                              ? "bg-emerald-50 text-emerald-700 ring-emerald-200/50"
+                              : "bg-neutral-50 text-neutral-400 ring-neutral-200"
                           }`}
                         >
-                          {org.is_active ? "Attiva" : "Disattivata"}
+                          {org.is_active ? "Attiva" : "Sospesa"}
                         </span>
                       )}
                     </td>
-                    <td className={tdClass}>
+                    <td className="px-5 py-4">
                       {org.affiliation_status ? (
-                        <div className="flex flex-col gap-1">
+                        <div className="flex flex-col gap-1.5 items-start">
                           <span
-                            className={`inline-flex w-fit items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-tighter ring-1 ring-inset ${
                               org.affiliation_status === "approved"
-                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                ? "bg-emerald-50 text-emerald-700 ring-emerald-200/50"
                                 : org.affiliation_status === "under_review"
-                                  ? "border-amber-200 bg-amber-50 text-amber-700"
+                                  ? "bg-amber-50 text-amber-700 ring-amber-200/50"
                                   : org.affiliation_status === "changes_requested"
-                                    ? "border-orange-200 bg-orange-50 text-orange-700"
+                                    ? "bg-orange-50 text-orange-700 ring-orange-200/50"
                                     : org.affiliation_status === "rejected"
-                                      ? "border-red-200 bg-red-50 text-red-700"
-                                      : "border-neutral-200 bg-neutral-50 text-neutral-600"
+                                      ? "bg-red-50 text-red-700 ring-red-200/50"
+                                      : "bg-neutral-50 text-neutral-400 ring-neutral-200"
                             }`}
                           >
-                            {org.affiliation_status}
+                            {org.affiliation_status.replace('_', ' ')}
                           </span>
-                          {org.affiliation_application_id ? (
+                          {org.affiliation_application_id && (
                             <Link
                               to={`/super-admin/affiliazioni?applicationId=${org.affiliation_application_id}`}
-                              className="text-xs font-medium text-brand hover:text-brand-dark"
+                              className="text-[10px] font-bold text-brand hover:text-brand-dark transition-colors uppercase tracking-widest flex items-center gap-1"
                             >
                               Apri pratica
+                              <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <path d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                              </svg>
                             </Link>
-                          ) : null}
+                          )}
                         </div>
                       ) : (
-                        <span className="text-neutral-400">-</span>
+                        <span className="text-[10px] font-bold text-neutral-300 uppercase tracking-widest">Nessuna</span>
                       )}
                     </td>
-                    <td className={`${tdClass} tabular-nums`}>
+                    <td className="px-5 py-4 text-center">
                       {org.card_min ? (
-                        <span>
-                          {org.card_min} - {org.card_max}
-                        </span>
+                        <div className="flex flex-col items-center">
+                          <span className="text-sm font-bold text-neutral-900 tabular-nums">
+                            {org.card_min}-{org.card_max}
+                          </span>
+                          <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-tighter">
+                            Range impostato
+                          </span>
+                        </div>
                       ) : (
-                        <span className="text-neutral-400">-</span>
+                        <span className="text-[10px] font-bold text-neutral-300 uppercase tracking-widest">Non config.</span>
                       )}
                     </td>
-                    <td className={tdClass}>
-                      <div className="flex items-center gap-2">
-                        {org.card_min ? (
-                          <>
-                            <button
-                              onClick={() => openModal("view-batches", org)}
-                              className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
-                            >
-                              Lotti
-                            </button>
-                            <span className="text-neutral-300">|</span>
-                            <button
-                              onClick={() => openModal("add-batch", org)}
-                              className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
-                            >
-                              + Lotto
-                            </button>
-                            {isSuperAdmin && (
-                              <>
-                                <span className="text-neutral-300">|</span>
-                                <button
-                                  onClick={() => openIntegrationModal(org)}
-                                  className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
-                                >
-                                  Integrazione
-                                </button>
-                                <span className="text-neutral-300">|</span>
-                                <button
-                                  onClick={() => openModal("branding", org)}
-                                  className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
-                                >
-                                  Branding + Alert
-                                </button>
-                              </>
-                            )}
-                          </>
-                        ) : (
-                          <>
-                            <button
-                              onClick={() => openModal("range", org)}
-                              className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
-                            >
-                              Imposta range
-                            </button>
-                            {isSuperAdmin && (
-                              <>
-                                <span className="text-neutral-300">|</span>
-                                <button
-                                  onClick={() => openIntegrationModal(org)}
-                                  className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
-                                >
-                                  Integrazione
-                                </button>
-                                <span className="text-neutral-300">|</span>
-                                <button
-                                  onClick={() => openModal("branding", org)}
-                                  className="text-brand hover:text-brand-dark font-medium text-xs uppercase tracking-wide"
-                                >
-                                  Branding + Alert
-                                </button>
-                              </>
-                            )}
-                          </>
-                        )}
+                    <td className="px-5 py-4 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => openModal(org.card_min ? "view-batches" : "range", org)}
+                          className="btn-ghost !px-2.5 !py-1 !text-[10px] font-bold uppercase tracking-widest"
+                          title={org.card_min ? "Gestione lotti" : "Imposta range iniziale"}
+                        >
+                          {org.card_min ? "Lotti" : "Range"}
+                        </button>
                         {isSuperAdmin && (
                           <>
-                            <span className="text-neutral-300">|</span>
+                            <button
+                              onClick={() => openModal("branding", org)}
+                              className="btn-ghost !px-2.5 !py-1 !text-[10px] font-bold uppercase tracking-widest"
+                              title="Configurazione branding e notifiche"
+                            >
+                              Setup
+                            </button>
+                            <button
+                              onClick={() => openIntegrationModal(org)}
+                              className="btn-ghost !px-2.5 !py-1 !text-[10px] font-bold uppercase tracking-widest"
+                              title="Integrazione API esterne"
+                            >
+                              API
+                            </button>
                             <button
                               onClick={() => handleDelete(org)}
-                              className="text-red-600 hover:text-red-800 font-medium text-xs uppercase tracking-wide"
+                              className="btn-ghost !px-2.5 !py-1 !text-[10px] font-bold uppercase tracking-widest !text-red-600 !border-red-100 hover:!bg-red-50"
+                              title="Elimina o archivia associazione"
                             >
                               Elimina
                             </button>
@@ -589,130 +459,137 @@ const SuperAdminOrganizations = () => {
         </div>
 
         {totalPages > 1 && (
-          <div className="flex flex-col gap-3 border-t border-white/60 px-5 py-4 text-sm text-neutral-600 md:flex-row md:items-center md:justify-between">
-            <button
-              type="button"
-              className="rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 transition hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
-              onClick={() => setPage(page - 1)}
-              disabled={page <= 1}
-            >
-              Precedente
-            </button>
+          <div className="flex flex-col gap-4 border-t border-neutral-100 bg-neutral-50/30 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 text-center sm:text-left">
+              Pagina {page} di {totalPages}
+            </p>
+            <div className="flex items-center justify-center gap-1.5">
+              <button
+                type="button"
+                className="btn-ghost !px-3 !py-1.5 !text-[10px] font-bold uppercase tracking-widest disabled:opacity-30"
+                onClick={() => setPage(page - 1)}
+                disabled={page <= 1}
+              >
+                ← Precedente
+              </button>
 
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              {visiblePages.map((value, index) =>
-                value === "ellipsis" ? (
-                  <span key={`ellipsis-${index}`} className="px-1 text-neutral-400">
-                    ...
-                  </span>
-                ) : (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setPage(value)}
-                    className={`min-w-[40px] rounded-md border px-3 py-1.5 text-sm font-medium transition ${
-                      value === page
-                        ? "border-brand bg-brand text-white"
-                        : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300"
-                    }`}
-                    aria-current={value === page ? "page" : undefined}
-                  >
-                    {value}
-                  </button>
-                ),
-              )}
+              <div className="flex items-center gap-1">
+                {visiblePages.map((value, index) =>
+                  value === "ellipsis" ? (
+                    <span key={`ellipsis-${index}`} className="px-1 text-neutral-300 font-bold">
+                      ...
+                    </span>
+                  ) : (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setPage(value)}
+                      className={`h-8 min-w-[32px] rounded-lg text-[10px] font-bold transition-all ${
+                        value === page
+                          ? "bg-brand text-white shadow-md shadow-brand/20"
+                          : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+                      }`}
+                    >
+                      {value}
+                    </button>
+                  ),
+                )}
+              </div>
+
+              <button
+                type="button"
+                className="btn-ghost !px-3 !py-1.5 !text-[10px] font-bold uppercase tracking-widest disabled:opacity-30"
+                onClick={() => setPage(page + 1)}
+                disabled={page >= totalPages}
+              >
+                Successiva →
+              </button>
             </div>
-
-            <button
-              type="button"
-              className="rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 transition hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
-              onClick={() => setPage(page + 1)}
-              disabled={page >= totalPages}
-            >
-              Successiva
-            </button>
           </div>
         )}
       </div>
 
       {deleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="modal-panel max-w-md p-6">
-            <div className="flex items-center gap-3 text-red-600">
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <h3 className="text-lg font-semibold">Elimina e libera tessere</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/80 p-4 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="modal-panel max-w-md p-8 animate-in zoom-in-95 duration-300">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="h-12 w-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center">
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-neutral-900 tracking-tight">Rimuovi Associazione</h3>
+                <p className="mt-2 text-sm font-medium text-neutral-500 leading-relaxed">
+                  Stai per intervenire su <strong>{deleteConfirm.name}</strong>.<br/>Seleziona la modalità operativa:
+                </p>
+              </div>
             </div>
 
-            <p className="mt-4 text-sm text-neutral-700">
-              Associazione: <strong>{deleteConfirm.name}</strong>
-            </p>
-
-            <div className="mt-4 space-y-3 rounded-md border border-neutral-200 bg-neutral-50 px-4 py-3">
-              <label className="flex cursor-pointer items-start gap-3">
-                <input
-                  type="radio"
-                  name="delete-mode"
-                  value="archive"
-                  checked={deleteMode === "archive"}
-                  onChange={() => {
-                    setDeleteMode("archive");
-                    setDeleteError("");
-                  }}
-                />
-                <span className="text-sm text-neutral-700">
-                  <strong>Archivia (consigliato) + libera range</strong>
-                  <br />
-                  L'associazione resta storicizzata ma disattivata.
-                </span>
+            <div className="mt-8 space-y-3">
+              <label className={`flex cursor-pointer items-start gap-4 p-4 rounded-xl border-2 transition-all duration-200 ${deleteMode === 'archive' ? 'border-brand bg-brand/5' : 'border-neutral-100 bg-white hover:border-neutral-200'}`}>
+                <div className="mt-1">
+                  <input
+                    type="radio"
+                    className="h-4 w-4 text-brand focus:ring-brand accent-brand"
+                    name="delete-mode"
+                    value="archive"
+                    checked={deleteMode === "archive"}
+                    onChange={() => {
+                      setDeleteMode("archive");
+                      setDeleteError("");
+                    }}
+                  />
+                </div>
+                <div className="flex-1">
+                  <p className={`text-sm font-bold ${deleteMode === 'archive' ? 'text-brand' : 'text-neutral-900'}`}>Archivia + Libera range</p>
+                  <p className="mt-0.5 text-xs font-medium text-neutral-500">Consigliato. Mantiene lo storico dei dati disattivando l'accesso.</p>
+                </div>
               </label>
 
-              <label className="flex cursor-pointer items-start gap-3">
-                <input
-                  type="radio"
-                  name="delete-mode"
-                  value="purge"
-                  checked={deleteMode === "purge"}
-                  onChange={() => {
-                    setDeleteMode("purge");
-                    setDeleteError("");
-                  }}
-                />
-                <span className="text-sm text-neutral-700">
-                  <strong>Elimina definitivamente (purge) + libera range</strong>
-                  <br />
-                  Cancella dati collegati in modo irreversibile.
-                </span>
+              <label className={`flex cursor-pointer items-start gap-4 p-4 rounded-xl border-2 transition-all duration-200 ${deleteMode === 'purge' ? 'border-red-500 bg-red-50/50' : 'border-neutral-100 bg-white hover:border-neutral-200'}`}>
+                <div className="mt-1">
+                  <input
+                    type="radio"
+                    className="h-4 w-4 text-red-600 focus:ring-red-500 accent-red-600"
+                    name="delete-mode"
+                    value="purge"
+                    checked={deleteMode === "purge"}
+                    onChange={() => {
+                      setDeleteMode("purge");
+                      setDeleteError("");
+                    }}
+                  />
+                </div>
+                <div className="flex-1">
+                  <p className={`text-sm font-bold ${deleteMode === 'purge' ? 'text-red-900' : 'text-neutral-900'}`}>Eliminazione totale (Purge)</p>
+                  <p className="mt-0.5 text-xs font-medium text-neutral-500">Azione irreversibile. Cancella ogni riferimento dal database.</p>
+                </div>
               </label>
             </div>
 
             {deleteMode === "purge" && (
-              <div className="mt-4">
-                <p className="text-sm text-neutral-700">
-                  Per confermare il purge digita lo slug:{" "}
-                  <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs">{deleteConfirm.slug}</code>
-                </p>
+              <div className="mt-6 p-4 rounded-xl bg-red-50 border border-red-100 animate-in slide-in-from-bottom-2">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-red-700">Conferma di sicurezza</p>
+                <p className="mt-1 text-xs font-medium text-red-600">Digita lo slug <strong>{deleteConfirm.slug}</strong> per procedere:</p>
                 <input
                   type="text"
-                  className="mt-2 w-full rounded-md border border-neutral-200 px-3 py-2 text-sm"
+                  className="mt-3 w-full rounded-lg border border-red-200 px-3 py-2 text-sm font-bold text-red-900 focus:ring-4 focus:ring-red-500/10 focus:border-red-500 outline-none"
                   value={purgeSlugInput}
                   onChange={(event) => setPurgeSlugInput(event.target.value)}
-                  placeholder="Digita lo slug esatto"
+                  placeholder="Slug associazione..."
                 />
               </div>
             )}
 
             {deleteError && (
-              <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {deleteError}
-              </div>
+              <p className="mt-4 text-center text-xs font-bold text-red-600 bg-red-50 py-2 rounded-lg">{deleteError}</p>
             )}
 
-            <div className="mt-6 flex justify-end gap-3">
+            <div className="mt-8 flex gap-3">
               <button
                 type="button"
-                className="rounded-md border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900"
+                className="flex-1 btn-ghost !py-3 !text-xs font-bold uppercase tracking-widest"
                 onClick={() => {
                   setDeleteConfirm(null);
                   setDeleteError("");
@@ -724,11 +601,11 @@ const SuperAdminOrganizations = () => {
               </button>
               <button
                 type="button"
-                className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
+                className={`flex-1 rounded-xl px-4 py-3 text-xs font-bold uppercase tracking-widest text-white shadow-lg transition-all active:scale-95 disabled:opacity-50 ${deleteMode === 'purge' ? 'bg-red-600 shadow-red-200 hover:bg-red-700' : 'bg-brand shadow-brand/20 hover:bg-brand-light'}`}
                 onClick={confirmDelete}
                 disabled={deleting}
               >
-                {deleting ? "Elaborazione..." : deleteMode === "archive" ? "Archivia e libera" : "Purge e libera"}
+                {deleting ? "In corso..." : "Conferma"}
               </button>
             </div>
           </div>
@@ -745,32 +622,37 @@ const SuperAdminOrganizations = () => {
       />
 
       {isSuperAdmin && integrationOrg && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
-          <div className="modal-panel w-full max-w-3xl p-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-lg font-semibold text-neutral-900">Integrazione Pienissimo</h3>
-                <p className="mt-1 text-sm text-neutral-500">
-                  Gestione chiave API per: {integrationOrg.name}
-                </p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/80 p-4 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="modal-panel w-full max-w-3xl p-8 animate-in zoom-in-95 duration-300 relative overflow-hidden">
+            <div className="relative z-10">
+              <div className="flex items-start justify-between gap-4 border-b border-neutral-100 pb-6 mb-6">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-accent">Integrazione Esterna</p>
+                  <h3 className="mt-1 text-2xl font-bold text-neutral-900 tracking-tight">Backend Pienissimo</h3>
+                  <p className="mt-1 text-sm font-medium text-neutral-500">
+                    Gestione chiave API e sincronizzazione per: <strong>{integrationOrg.name}</strong>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="btn-ghost !px-4 !py-2 !text-xs font-bold uppercase tracking-widest"
+                  onClick={closeIntegrationModal}
+                >
+                  Chiudi ×
+                </button>
               </div>
-              <button
-                type="button"
-                className="rounded-md border border-neutral-200 px-3 py-1.5 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900"
-                onClick={closeIntegrationModal}
-              >
-                Chiudi
-              </button>
-            </div>
 
-            <div className="mt-5">
-              <SuperAdminPienissimoIntegrationCard
-                orgId={integrationOrg.id}
-                orgName={integrationOrg.name}
-                open={Boolean(integrationOrg)}
-                isSuperAdmin={isSuperAdmin}
-              />
+              <div className="mt-5">
+                <SuperAdminPienissimoIntegrationCard
+                  orgId={integrationOrg.id}
+                  orgName={integrationOrg.name}
+                  open={Boolean(integrationOrg)}
+                  isSuperAdmin={isSuperAdmin}
+                />
+              </div>
             </div>
+            {/* Decoration */}
+            <div className="absolute -right-32 -top-32 h-64 w-64 rounded-full bg-brand/5 blur-3xl pointer-events-none" />
           </div>
         </div>
       )}

@@ -133,63 +133,58 @@ const OrgAdminDashboard = () => {
   const isLoading = adminLoading || loading;
 
   return (
-    <div className="container-shell py-10" data-tour="admin-dashboard-home">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="container-shell py-10 space-y-10" data-tour="admin-dashboard-home">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-neutral-900">Panoramica</h2>
-          <p className="mt-1 text-sm text-neutral-500">
-            KPI operativi della tua associazione.
+          <h2 className="text-2xl font-bold tracking-tight text-neutral-900">Panoramica operativa</h2>
+          <p className="mt-1 text-sm font-medium text-neutral-500">
+            Monitora lo stato e le performance della tua associazione.
           </p>
         </div>
         <button
           type="button"
-          className="btn-ghost px-4 py-2 text-sm"
+          className="btn-ghost px-5 py-2.5 text-xs font-bold uppercase tracking-widest"
           onClick={() => {
             setVideoGuideFailed(false);
             setVideoGuideOpen(true);
           }}
         >
-          Video guida affiliazione
+          <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.91 11.672a.375.375 0 010 .656l-5.603 3.113a.375.375 0 01-.557-.328V8.887c0-.286.307-.466.557-.327l5.603 3.112z" />
+          </svg>
+          Guida rapida
         </button>
       </div>
 
       {isLoading ? (
-        <div className="mt-8 grid gap-6 md:grid-cols-3 xl:grid-cols-5">
-          {[0, 1, 2].map((i) => (
+        <div className="grid gap-6 md:grid-cols-3 xl:grid-cols-5">
+          {[0, 1, 2, 3, 4].map((i) => (
             <div key={i} className="surface p-7">
-              <Skeleton className="h-9 w-9 rounded-lg" />
-              <Skeleton className="mt-4 h-3 w-24" />
-              <Skeleton className="mt-3 h-7 w-12" />
-              <Skeleton className="mt-2 h-3 w-32" />
+              <Skeleton className="h-10 w-10 rounded-xl" />
+              <Skeleton className="mt-5 h-3 w-24" />
+              <Skeleton className="mt-4 h-8 w-16" />
+              <Skeleton className="mt-3 h-4 w-full" />
             </div>
           ))}
         </div>
       ) : metricsError ? (
-        <div className="mt-8 rounded-lg border border-red-200/60 bg-red-50 px-7 py-5">
-          <div className="flex gap-4">
-            <svg
-              className="mt-0.5 h-5 w-5 shrink-0 text-red-400"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+        <div className="rounded-xl border border-red-200/50 bg-red-50/50 p-8 text-center space-y-3">
+          <div className="mx-auto h-12 w-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center">
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
-            <div>
-              <p className="text-sm font-medium text-red-700">
-                Impossibile caricare le metriche
-              </p>
-              <p className="mt-1 text-sm leading-6 text-red-600">
-                Si e verificato un errore nel recupero dei dati. Ricarica la pagina.
-              </p>
-            </div>
           </div>
+          <h3 className="text-lg font-bold text-red-900">Errore caricamento metriche</h3>
+          <p className="text-sm font-medium text-red-600/80 max-w-md mx-auto">
+            Non è stato possibile recuperare i dati operativi. Ricarica la pagina o contatta il supporto se il problema persiste.
+          </p>
+          <button onClick={() => window.location.reload()} className="btn-ghost !border-red-200 !text-red-700 hover:!bg-red-100">
+            Ricarica ora
+          </button>
         </div>
       ) : (
-        <div className="mt-8 grid gap-6 md:grid-cols-3 xl:grid-cols-5" data-tour="admin-stats">
+        <div className="grid gap-6 md:grid-cols-3 xl:grid-cols-5" data-tour="admin-stats">
           {CARD_META.map((card) => {
             const value = metrics?.[card.key] ?? null;
             const isCards = card.key === "cards_remaining";
@@ -198,44 +193,47 @@ const OrgAdminDashboard = () => {
             return (
               <div
                 key={card.key}
-                className={`surface p-7 ${exhausted ? "border-red-200 bg-red-50" : ""}`}
+                className={`surface p-7 flex flex-col justify-between group transition-all ${exhausted ? "border-red-200 bg-red-50/50" : ""}`}
               >
-                <div
-                  className={`flex h-9 w-9 items-center justify-center rounded-lg ${
-                    exhausted ? "bg-red-100" : "bg-brand/10"
-                  }`}
-                >
-                  <svg
-                    className={`h-[18px] w-[18px] ${exhausted ? "text-red-500" : "text-brand"}`}
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+                <div>
+                  <div
+                    className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-300 ${
+                      exhausted ? "bg-red-100 text-red-600" : "bg-brand/5 text-brand group-hover:bg-brand group-hover:text-white"
+                    }`}
                   >
-                    <path d={card.icon} />
-                  </svg>
+                    <svg
+                      className="h-5 w-5"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d={card.icon} />
+                    </svg>
+                  </div>
+                  <p className="mt-5 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 group-hover:text-neutral-500 transition-colors">
+                    {card.label}
+                  </p>
+                  <p
+                    className={`mt-3 text-3xl font-bold tracking-tight tabular-nums ${
+                      exhausted ? "text-red-700" : "text-neutral-900"
+                    }`}
+                  >
+                    {card.format(value)}
+                  </p>
+                  <p className="mt-3 text-xs font-medium leading-relaxed text-neutral-500 opacity-80 group-hover:opacity-100 transition-opacity">
+                    {card.description}
+                  </p>
                 </div>
-                <p className="mt-4 text-xs font-medium uppercase tracking-[0.2em] text-neutral-400">
-                  {card.label}
-                </p>
-                <p
-                  className={`mt-3 text-2xl font-semibold tabular-nums ${
-                    exhausted ? "text-red-700" : "text-neutral-900"
-                  }`}
-                >
-                  {card.format(value)}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-neutral-600">
-                  {card.description}
-                </p>
+
                 {isCards && metrics?.cards_total != null && (
-                  <>
-                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-neutral-100">
+                  <div className="mt-6 pt-4 border-t border-neutral-100/50">
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
                       <div
-                        className={`h-full rounded-full transition-all ${
-                          exhausted ? "bg-red-400" : "bg-brand"
+                        className={`h-full rounded-full transition-all duration-1000 ${
+                          exhausted ? "bg-red-500" : "bg-brand"
                         }`}
                         style={{
                           width: `${
@@ -246,10 +244,11 @@ const OrgAdminDashboard = () => {
                         }}
                       />
                     </div>
-                    <p className="mt-2 text-xs tabular-nums text-neutral-500">
-                      {metrics.cards_used ?? 0} usate su {metrics.cards_total} totali
-                    </p>
-                  </>
+                    <div className="mt-3 flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-neutral-400">
+                      <span>Usate: {metrics.cards_used ?? 0}</span>
+                      <span>Totali: {metrics.cards_total}</span>
+                    </div>
+                  </div>
                 )}
               </div>
             );
@@ -258,93 +257,82 @@ const OrgAdminDashboard = () => {
       )}
 
       {!isLoading && !metricsError && (
-        <div className="surface mt-8 p-7">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h3 className="text-base font-semibold text-neutral-900">Riepilogo inviti</h3>
-              <p className="mt-1 text-sm text-neutral-500">
-                Gestisci inviti e ruota premi nella tab dedicata.
-              </p>
+        <section className="surface p-8 relative overflow-hidden">
+          <div className="relative z-10 flex flex-col gap-8 sm:flex-row sm:items-center sm:justify-between">
+            <div className="max-w-xl">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-accent/10 text-accent flex items-center justify-center shadow-sm">
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5L12 14.5L5 7.5" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold tracking-tight text-neutral-900">Riepilogo inviti</h3>
+                  <p className="mt-1 text-sm font-medium text-neutral-500">
+                    Performance del programma referral e premi assegnati.
+                  </p>
+                </div>
+              </div>
             </div>
-            <Link to="/org-admin/inviti" className="btn-primary px-4 py-2 text-sm">
-              Vai a Inviti
+            <Link to="/org-admin/inviti" className="btn-primary group">
+              Gestione Inviti
+              <svg className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+              </svg>
             </Link>
           </div>
 
           {referralError ? (
-            <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="mt-8 rounded-lg border border-red-100 bg-red-50/50 p-4 text-sm font-medium text-red-600 flex items-center gap-3">
+              <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
               {referralError}
             </div>
           ) : (
-            <>
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-lg border border-neutral-200 bg-white px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.14em] text-neutral-500">Inviti inviati</p>
-                  <p className="mt-2 text-2xl font-semibold text-neutral-900 tabular-nums">
-                    {referralSummary?.stats.sent ?? 0}
-                  </p>
+            <div className="mt-10 grid gap-6 sm:grid-cols-3">
+              {[
+                { label: "Inviti inviati", value: referralSummary?.stats.sent, color: "bg-blue-50 text-blue-700" },
+                { label: "Approvati", value: referralSummary?.stats.approved, color: "bg-emerald-50 text-emerald-700" },
+                { label: "Ruote concluse", value: referralSummary?.stats.rewarded, color: "bg-purple-50 text-purple-700" },
+              ].map((item, i) => (
+                <div key={i} className="rounded-2xl border border-neutral-100 bg-neutral-50/30 p-6 flex items-center justify-between group hover:bg-white hover:shadow-sm transition-all duration-300">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 group-hover:text-neutral-500 transition-colors">{item.label}</p>
+                    <p className="mt-2 text-3xl font-bold tracking-tight text-neutral-900 tabular-nums">
+                      {item.value ?? 0}
+                    </p>
+                  </div>
+                  <div className={`h-12 w-12 rounded-full ${item.color.split(' ')[0]} flex items-center justify-center opacity-60 group-hover:opacity-100 transition-opacity`}>
+                    <span className="text-xl">📈</span>
+                  </div>
                 </div>
-                <div className="rounded-lg border border-neutral-200 bg-white px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.14em] text-neutral-500">Approvati</p>
-                  <p className="mt-2 text-2xl font-semibold text-neutral-900 tabular-nums">
-                    {referralSummary?.stats.approved ?? 0}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-neutral-200 bg-white px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.14em] text-neutral-500">Ruote concluse</p>
-                  <p className="mt-2 text-2xl font-semibold text-neutral-900 tabular-nums">
-                    {referralSummary?.stats.rewarded ?? 0}
-                  </p>
-                </div>
-              </div>
-
-              {referralSummary?.latest_reward?.title ? (
-                <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">
-                    Ultimo premio ruota
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-emerald-800">
-                    {referralSummary.latest_reward.title}
-                  </p>
-                  <p className="mt-1 text-xs text-emerald-700">
-                    Assegnato: {formatDateTime(referralSummary.latest_reward.rewarded_at)}
-                  </p>
-                </div>
-              ) : null}
-            </>
+              ))}
+            </div>
           )}
-        </div>
-      )}
 
-      {!isLoading &&
-        !metricsError &&
-        metrics?.cards_remaining === 0 &&
-        metrics.cards_total != null && (
-          <div className="mt-6 rounded-lg border border-red-200/60 bg-red-50 px-7 py-5">
-            <div className="flex gap-4">
-              <svg
-                className="mt-0.5 h-5 w-5 shrink-0 text-red-400"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126Z" />
-                <path d="M12 15.75h.007v.008H12v-.008Z" />
-              </svg>
-              <div>
-                <p className="text-sm font-medium text-red-700">
-                  Limite tessere raggiunto
+          {referralSummary?.latest_reward?.title && (
+            <div className="mt-8 rounded-2xl border border-emerald-200/50 bg-emerald-50/40 p-5 flex items-center gap-4 animate-in fade-in slide-in-from-left-4 duration-500">
+              <div className="h-12 w-12 shrink-0 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-inner">
+                <span className="text-xl">🏆</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700/70">
+                  Ultimo traguardo raggiunto
                 </p>
-                <p className="mt-1 text-sm leading-6 text-red-600">
-                  Contatta ASSONAM per richiedere l'estensione del pacchetto tessere.
+                <p className="mt-1 text-base font-bold text-emerald-900 truncate">
+                  {referralSummary.latest_reward.title}
+                </p>
+                <p className="mt-0.5 text-xs font-medium text-emerald-600/80">
+                  Assegnato il {formatDateTime(referralSummary.latest_reward.rewarded_at)}
                 </p>
               </div>
             </div>
-          </div>
-        )}
+          )}
+          
+          <div className="absolute -left-24 -top-24 h-64 w-64 rounded-full bg-accent/5 blur-3xl pointer-events-none" />
+        </section>
+      )}
 
       {!isLoading && !metricsError && admin && (
         <OnboardingChecklist orgId={admin.org_id} />
@@ -352,26 +340,24 @@ const OrgAdminDashboard = () => {
 
       {videoGuideOpen && (
         <div
-          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-4"
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-neutral-900/95 p-4 backdrop-blur-sm transition-all animate-in fade-in duration-300"
           role="dialog"
           aria-modal="true"
-          aria-label="Video guida affiliazione"
           onClick={(event) => {
             if (event.target === event.currentTarget) {
               setVideoGuideOpen(false);
             }
           }}
         >
-          <div className="relative w-full max-w-6xl">
+          <div className="relative w-full max-w-5xl shadow-2xl scale-in-center animate-in zoom-in-95 duration-300">
             <button
               type="button"
-              className="absolute right-2 top-2 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-black/55 text-white"
-              aria-label="Chiudi video guida"
+              className="absolute -top-12 right-0 p-2 text-white/70 hover:text-white flex items-center gap-2 text-sm font-bold uppercase tracking-widest transition-colors"
               onClick={() => setVideoGuideOpen(false)}
             >
-              X
+              Chiudi <span className="text-xl">×</span>
             </button>
-            <div className="aspect-video w-full overflow-hidden rounded-xl border border-white/20 bg-black shadow-2xl">
+            <div className="aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl">
               <video
                 src="/videos/welcome_base.mp4"
                 controls
@@ -381,11 +367,11 @@ const OrgAdminDashboard = () => {
                 onError={() => setVideoGuideFailed(true)}
               />
             </div>
-            {videoGuideFailed ? (
-              <p className="mt-3 text-center text-sm text-white/80">
-                Video guida temporaneamente non disponibile.
+            {videoGuideFailed && (
+              <p className="mt-4 text-center text-sm font-medium text-red-400">
+                Il contenuto video non è al momento disponibile. Riprova più tardi.
               </p>
-            ) : null}
+            )}
           </div>
         </div>
       )}
@@ -406,25 +392,25 @@ const CHECKLIST_ITEMS: {
 }[] = [
   {
     key: "verify_data",
-    label: "Verifica dati associazione",
-    hint: "Controlla che nome, slug e versioni statuto/privacy siano corretti.",
+    label: "Configurazione associazione",
+    hint: "Verifica che il nome e le impostazioni statuto/privacy siano conformi.",
   },
   {
     key: "first_member",
-    label: "Primo socio o import soci",
-    hint: "Registra almeno un socio oppure prepara un import, se previsto.",
-    link: { to: "/org-admin/soci", label: "Vai ai soci" },
+    label: "Anagrafica soci iniziale",
+    hint: "Registra il primo socio o carica il database esistente via CSV.",
+    link: { to: "/org-admin/soci", label: "Gestione soci" },
   },
   {
     key: "verify_stock",
-    label: "Tessere: verifica stock",
-    hint: "Assicurati di avere tessere disponibili per le nuove iscrizioni.",
-    link: { to: "/org-admin/tessere", label: "Vai alle tessere" },
+    label: "Pacchetto tessere digitali",
+    hint: "Assicurati di avere disponibilità di card per i nuovi iscritti.",
+    link: { to: "/org-admin/tessere", label: "Stock tessere" },
   },
   {
     key: "contacts",
-    label: "Contatti e PEC",
-    hint: "Verifica che i recapiti dell'associazione e la PEC siano aggiornati.",
+    label: "Recapiti istituzionali e PEC",
+    hint: "Verifica email, telefono e PEC per le comunicazioni ufficiali.",
   },
 ];
 
@@ -463,57 +449,70 @@ const OnboardingChecklist = ({ orgId }: { orgId: number }) => {
   const allDone = done === total;
 
   return (
-    <div className="surface mt-8 p-7">
-      <div className="flex items-start justify-between gap-4">
+    <div className="surface p-8 relative overflow-hidden bg-white/40">
+      <div className="relative z-10 flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-neutral-900">
+          <h3 className="text-xl font-bold tracking-tight text-neutral-900">
             Checklist di attivazione
           </h3>
-          <p className="mt-1 text-sm text-neutral-500">
-            Completa questi passaggi per rendere operativa l'associazione.
+          <p className="mt-1 text-sm font-medium text-neutral-500">
+            Segui questi passaggi per rendere operativa la tua piattaforma.
           </p>
         </div>
-        <span
-          className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-            allDone
-              ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-              : "border border-neutral-200 bg-neutral-50 text-neutral-600"
-          }`}
-        >
-          {done}/{total}
-        </span>
+        <div className="flex items-center gap-4">
+          <div className="text-right hidden sm:block">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Progresso</p>
+            <p className="text-sm font-bold text-neutral-900">{Math.round((done/total)*100)}%</p>
+          </div>
+          <span
+            className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-widest shadow-sm ${
+              allDone
+                ? "bg-emerald-500 text-white"
+                : "bg-neutral-100 text-neutral-500"
+            }`}
+          >
+            {done} / {total}
+          </span>
+        </div>
       </div>
 
-      <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-neutral-100">
+      <div className="mt-8 h-2 w-full overflow-hidden rounded-full bg-neutral-100 shadow-inner">
         <div
-          className="h-full rounded-full bg-brand transition-all duration-300"
+          className={`h-full rounded-full transition-all duration-1000 ease-out ${allDone ? 'bg-emerald-500' : 'bg-brand'}`}
           style={{ width: `${(done / total) * 100}%` }}
         />
       </div>
 
-      <ul className="mt-5 divide-y divide-neutral-100">
+      <ul className="mt-8 grid gap-4">
         {CHECKLIST_ITEMS.map((item) => {
           const checked = checks[item.key];
           return (
-            <li key={item.key} className="flex items-start gap-3 py-3.5">
+            <li 
+              key={item.key} 
+              className={`flex items-start gap-5 p-4 rounded-2xl border transition-all duration-300 ${
+                checked 
+                  ? "border-emerald-100 bg-emerald-50/20 opacity-60" 
+                  : "border-neutral-100 bg-white hover:border-brand/30 hover:shadow-md"
+              }`}
+            >
               <button
                 type="button"
                 role="checkbox"
                 aria-checked={checked}
                 onClick={() => toggle(item.key)}
-                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border transition ${
+                className={`mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border-2 transition-all duration-300 ${
                   checked
-                    ? "border-brand bg-brand text-white"
-                    : "border-neutral-300 bg-white hover:border-brand/50"
+                    ? "border-emerald-500 bg-emerald-500 text-white"
+                    : "border-neutral-200 bg-white hover:border-brand"
                 }`}
               >
                 {checked && (
                   <svg
-                    className="h-3 w-3"
+                    className="h-3.5 w-3.5"
                     viewBox="0 0 12 12"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth={2}
+                    strokeWidth={3}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   >
@@ -523,21 +522,24 @@ const OnboardingChecklist = ({ orgId }: { orgId: number }) => {
               </button>
               <div className="min-w-0 flex-1">
                 <p
-                  className={`text-sm font-medium ${
-                    checked ? "text-neutral-400 line-through" : "text-neutral-800"
+                  className={`text-base font-bold tracking-tight transition-colors ${
+                    checked ? "text-emerald-900/40 line-through" : "text-neutral-900"
                   }`}
                 >
                   {item.label}
                 </p>
-                <p className="mt-0.5 text-sm leading-6 text-neutral-500">
+                <p className={`mt-1 text-sm font-medium leading-relaxed transition-colors ${checked ? 'text-neutral-400' : 'text-neutral-500'}`}>
                   {item.hint}
                 </p>
                 {item.link && !checked && (
                   <Link
                     to={item.link.to}
-                    className="mt-1 inline-block text-sm font-medium text-brand hover:text-brand-dark"
+                    className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-brand hover:text-brand-light transition-colors"
                   >
-                    {item.link.label} &rarr;
+                    {item.link.label}
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                    </svg>
                   </Link>
                 )}
               </div>
@@ -547,12 +549,15 @@ const OnboardingChecklist = ({ orgId }: { orgId: number }) => {
       </ul>
 
       {allDone && (
-        <div className="mt-4 rounded-md border border-emerald-200/60 bg-emerald-50 px-4 py-3">
-          <p className="text-sm text-emerald-700">
-            Tutti i passaggi completati. L'associazione e pronta.
+        <div className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-500 p-6 text-center animate-in zoom-in-95 duration-500">
+          <p className="text-base font-bold text-white uppercase tracking-widest">
+            ✨ Complimenti! La piattaforma è ora operativa al 100%
           </p>
         </div>
       )}
+
+      {/* Decorative gradient */}
+      <div className="absolute -right-32 -top-32 h-64 w-64 rounded-full bg-brand/5 blur-3xl pointer-events-none" />
     </div>
   );
 };

@@ -53,14 +53,14 @@ const NAV_ITEMS = [
 ];
 
 const sidebarLinkBase =
-  "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition";
-const sidebarLinkActive = `${sidebarLinkBase} border border-white/70 bg-white/70 text-brand shadow-subtle`;
-const sidebarLinkIdle = `${sidebarLinkBase} text-neutral-600 hover:bg-white/60 hover:text-neutral-900`;
+  "flex items-center gap-3 rounded-lg px-3.5 py-2.5 text-sm font-semibold transition-all duration-200 border border-transparent";
+const sidebarLinkActive = `${sidebarLinkBase} border-neutral-200/60 bg-white/90 text-brand shadow-sm ring-1 ring-black/[0.03]`;
+const sidebarLinkIdle = `${sidebarLinkBase} text-neutral-500 hover:bg-white/50 hover:text-neutral-900`;
 
 const tabBase =
-  "whitespace-nowrap px-3 py-2 text-sm font-medium transition border-b-2";
-const tabActive = `${tabBase} border-accent text-brand`;
-const tabIdle = `${tabBase} border-transparent text-neutral-500 hover:text-neutral-700`;
+  "whitespace-nowrap px-4 py-3 text-sm font-bold transition-all border-b-2";
+const tabActive = `${tabBase} border-brand text-brand`;
+const tabIdle = `${tabBase} border-transparent text-neutral-400 hover:text-neutral-600`;
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
   isActive ? sidebarLinkActive : sidebarLinkIdle;
@@ -109,51 +109,56 @@ const DashboardLayout = () => {
   const statusInfo = user ? STATUS_MAP[user.status] ?? null : null;
 
   return (
-    <div>
+    <div className="min-h-screen bg-[#f8f9fa]/50">
       {/* Header band */}
-      <div className="header-band">
-        <div className="container-shell py-8">
-          <div className="flex items-start gap-5">
+      <header className="header-band sticky top-0 z-30">
+        <div className="container-shell py-4">
+          <div className="flex items-center gap-6">
             <div className="hidden shrink-0 sm:block">
+              <Link to="/" className="block transition-transform hover:scale-95">
                 <img
                   src={`${import.meta.env.BASE_URL}logo-transparent.png`}
                   alt="ASSO.N.A.M."
-                className="h-12 rounded"
-              />
+                  className="h-10 w-auto rounded object-contain"
+                />
+              </Link>
             </div>
             <div className="min-w-0 flex-1">
               {loading ? (
-                <>
-                  <Skeleton className="h-5 w-40" />
-                  <Skeleton className="mt-2 h-3.5 w-56" />
-                </>
+                <div className="space-y-2">
+                  <Skeleton className="h-5 w-48" />
+                  <Skeleton className="h-4 w-64" />
+                </div>
               ) : (
-                <>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <h1 className="text-lg font-semibold text-neutral-900">
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-3">
+                    <h1 className="truncate text-lg font-bold tracking-tight text-neutral-900">
                       {displayName ?? "Area riservata"}
                     </h1>
                     {statusInfo && (
                       <span
-                        className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusInfo.color}`}
+                        className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${statusInfo.color}`}
                       >
                         {statusInfo.label}
                       </span>
                     )}
                   </div>
                   {orgName && (
-                    <p className="mt-1 text-sm text-neutral-500">{orgName}</p>
+                    <p className="truncate text-xs font-medium text-neutral-500 uppercase tracking-wide opacity-80">
+                      {orgName}
+                    </p>
                   )}
-                </>
+                </div>
               )}
             </div>
-            <div className="flex shrink-0 items-center gap-3">
-              <Link className="hidden text-sm font-medium text-neutral-500 transition hover:text-neutral-700 sm:block" to="/">
+            <div className="flex shrink-0 items-center gap-4">
+              <Link className="link-muted hidden font-semibold sm:block" to="/">
                 Torna al sito
               </Link>
+              <div className="h-4 w-px bg-neutral-200 hidden sm:block" />
               {!loading && user && (
                 <button
-                  className="btn-ghost px-3 py-1.5 text-sm"
+                  className="btn-ghost px-4 py-2 text-xs font-bold uppercase tracking-wider"
                   type="button"
                   onClick={async () => {
                     await apiLogout();
@@ -166,18 +171,18 @@ const DashboardLayout = () => {
             </div>
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Main content */}
-      <div className="container-shell py-10">
-        <div className="md:flex md:gap-10">
+      <main className="container-shell py-8">
+        <div className="md:flex md:gap-12">
           {/* Sidebar — desktop */}
-          <aside className="hidden w-56 shrink-0 md:block">
-            <div className="surface p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-400">
-                Navigazione
-              </p>
-              <nav className="mt-3 flex flex-col gap-0.5" aria-label="Dashboard">
+          <aside className="hidden w-60 shrink-0 md:block">
+            <div className="surface sticky top-24 p-5">
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400/80 mb-5">
+                Menu principale
+              </h2>
+              <nav className="flex flex-col gap-1.5" aria-label="Dashboard navigation">
                 {NAV_ITEMS.map((item) => (
                   <NavLink
                     key={item.label}
@@ -185,40 +190,42 @@ const DashboardLayout = () => {
                     to={item.to}
                     end={item.end}
                   >
-                    <svg
-                      className="h-4 w-4 shrink-0"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={1.5}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d={item.icon} />
-                    </svg>
+                    <div className="flex h-5 w-5 items-center justify-center transition-colors">
+                      <svg
+                        className="h-4 w-4"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d={item.icon} />
+                      </svg>
+                    </div>
                     {item.label}
                   </NavLink>
                 ))}
               </nav>
 
-              <div className="mt-8 border-t border-white/70 pt-4">
-                <ReviewGuideButton className="mb-3" />
+              <div className="mt-8 pt-6 border-t border-neutral-100/80">
+                <ReviewGuideButton className="mb-4 w-full" />
                 <Link
-                  className="flex items-center gap-2 text-sm font-medium text-neutral-500 transition hover:text-neutral-700"
+                  className="flex items-center gap-2.5 px-3 py-2 text-sm font-semibold text-neutral-400 transition-colors hover:text-brand"
                   to="/"
                 >
                   <svg
-                    className="h-3.5 w-3.5"
+                    className="h-4 w-4"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth={1.5}
+                    strokeWidth={2}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   >
                     <path d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
                   </svg>
-                  Torna al sito
+                  Home pubblica
                 </Link>
               </div>
             </div>
@@ -226,8 +233,8 @@ const DashboardLayout = () => {
 
           {/* Tabs — mobile */}
           <nav
-            className="flex gap-1 border-b border-neutral-100 md:hidden"
-            aria-label="Dashboard"
+            className="flex gap-1 border-b border-neutral-200/60 md:hidden overflow-x-auto no-scrollbar"
+            aria-label="Dashboard navigation mobile"
           >
             {NAV_ITEMS.map((item) => (
               <NavLink
@@ -241,11 +248,11 @@ const DashboardLayout = () => {
             ))}
           </nav>
 
-          <div className="mt-6 min-w-0 flex-1 md:mt-0">
+          <div className="mt-8 min-w-0 flex-1 md:mt-0">
             <Outlet context={{ user, loading, profileError, reloadProfile: loadProfile } satisfies DashboardContext} />
           </div>
         </div>
-      </div>
+      </main>
 
       {!loading && user && <OnboardingTour role="member" />}
     </div>
