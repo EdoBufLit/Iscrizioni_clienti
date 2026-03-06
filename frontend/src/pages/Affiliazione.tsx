@@ -1187,7 +1187,7 @@ const Affiliazione = () => {
                 <div className="relative z-10">
                   <p className="text-brand-light text-xs font-bold uppercase tracking-widest mb-1">Quota Affiliazione Annuale</p>
                   <p className="text-4xl sm:text-5xl font-extrabold tracking-tight">
-                    {((draft?.payment_amount_cents ?? 0) / 100).toLocaleString("it-IT", { minimumFractionDigits: 2 })} <span className="text-xl text-slate-400 font-medium">EUR</span>
+                    399,00 <span className="text-xl text-slate-400 font-medium">EUR</span>
                   </p>
                 </div>
                 <div className="hidden sm:flex w-16 h-16 rounded-full bg-white/10 items-center justify-center relative z-10">
