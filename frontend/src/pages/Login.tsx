@@ -69,8 +69,11 @@ const Login = () => {
 
   if (sent) {
     return (
-      <section className="py-16" data-reveal="fade-up">
-        <div className="container-shell">
+      <section
+        className="flex min-h-[calc(100dvh-10rem)] items-center pb-10 pt-28 md:min-h-[calc(100dvh-11rem)] md:pb-14 md:pt-32"
+        data-reveal="fade-up"
+      >
+        <div className="container-shell w-full">
           <div className="surface-strong mx-auto max-w-3xl p-8 md:p-10">
             <p className="section-title">Area riservata</p>
             <h1 className="section-heading">Controlla la tua email</h1>
@@ -93,8 +96,11 @@ const Login = () => {
   }
 
   return (
-    <section className="py-16" data-reveal="fade-up">
-      <div className="container-shell">
+    <section
+      className="flex min-h-[calc(100dvh-10rem)] items-center pb-10 pt-28 md:min-h-[calc(100dvh-11rem)] md:pb-14 md:pt-32"
+      data-reveal="fade-up"
+    >
+      <div className="container-shell w-full">
         <div className="surface-strong mx-auto grid max-w-5xl overflow-hidden md:grid-cols-2">
           <div className="p-8 md:p-10">
             <p className="section-title">Area riservata</p>

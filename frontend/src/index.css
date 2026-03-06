@@ -436,6 +436,9 @@ body.dashboard-perf-mode .btn-ghost:hover {
 .public-shell {
   position: relative;
   isolation: isolate;
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
   color: var(--public-ink);
   font-family: "Manrope", "Source Sans 3", system-ui, sans-serif;
 }
@@ -466,6 +469,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
 }
 
 .public-main {
+  flex: 1 0 auto;
   min-height: 65vh;
 }
 

@@ -1,3 +1,18 @@
+﻿- [x] Profilare pipeline renderer video post-affiliazione e individuare i colli di bottiglia reali
+- [x] Aggiungere timing logs dettagliati backend/renderer per queue, bundle, render, encode e finalize
+- [x] Implementare riuso persistente del bundle/composition probe e ridurre overhead per job
+- [x] Ottimizzare asset/effetti HUD e operazioni ripetute nel frame loop senza cambiare output 720p/24fps
+- [x] Eseguire benchmark comparativi + test mirati e documentare l'impatto
+
+## Review (Ottimizzazione renderer video affiliazione - Mar 06, 2026)
+- Bottleneck principali misurati: polling worker fino a 15s, rebundle per job, probe NVENC ripetuto, staging audio locale ripetuto e soprattutto `renderMedia` troppo lento con concurrency default 8 su questo host.
+- Timing dettagliati aggiunti in backend (`job created/claimed/render/finalize/total`) e renderer (`audioPrepare`, `bundle`, `composition`, `render`, `nvencProbe`, `encode`, `finalize`, `total`) con payload JSON `timingsMs`, `bundleCacheHit`, `resolvedConcurrency`, `slowestFrames`.
+- Bundle Remotion ora riusato su cache persistente per fingerprint, senza race tra processi; probe NVENC e audio locale condiviso vengono riusati quando non cambiano.
+- Ottimizzazioni conservative HUD: glow/blur/shadow ridotti, rumore SVG statico, zoom globale alleggerito, eliminato `mixBlendMode` pesante nella scena completion; output invariato a 1280x720 / 24fps.
+- Encoding finale accelerato da `veryfast` a `superfast` (libx264) e preset NVENC a `p4`; render intermedio su `ultrafast`.
+- Benchmark locale renderer: baseline precedente osservata ~15.4s; dopo strumentazione il default Remotion implicito mostrava `render` ~111s con concurrency 8; tuning misurato: concurrency 4 ~57.5s total, concurrency 3 ~37.1s total, concurrency 2 ~16.6s cache-hit / ~17.5s cache-miss.
+- Verifiche: `npm run build` in `video-renderer/services/welcome-video` OK; `python -m pytest -q tests/test_affiliation_video_service.py` OK.
+
 - [x] Investigare crash startup (502/restart loop) post-push
 - [x] Applicare hotfix bootstrap schema per colonne branding org mancanti
 - [x] Verificare avvio app locale dopo hotfix
@@ -51,7 +66,7 @@
 - Test: `python -m pytest tests/test_member_card_verification.py -q` -> 6 passed
 - Build: `npm --prefix frontend run build` -> OK
 ---
-- [x] Individuare perch� il logo ASSONAM non viene renderizzato nella mail tessera inviata da flusso API/thank-you
+- [x] Individuare perché il logo ASSONAM non viene renderizzato nella mail tessera inviata da flusso API/thank-you
 - [x] Correggere URL logo nel template email integrazione usando asset compatibile client mail
 - [x] Aggiungere regressione test su HTML email per evitare ritorno a SVG non compatibile
 - [x] Eseguire test mirati integrazione/ingest e documentare risultato
@@ -59,7 +74,7 @@
 ## Review (Fix logo mail tessera API - Feb 19, 2026)
 - `python -m pytest tests/test_integration_issue_member.py::test_issue_member_captures_html_email_with_verification_url -q` -> 1 passed
 - `python -m pytest tests/test_ingest_pienissimo.py::test_ingest_retry_100x_is_idempotent_and_sends_email_once -q` -> 1 passed
-- Fix applicato in `app/services/integration_issuer.py`: `logo_url` ora usa `frontend_base/logo-transparent.png` (PNG, pi� compatibile in email)
+- Fix applicato in `app/services/integration_issuer.py`: `logo_url` ora usa `frontend_base/logo-transparent.png` (PNG, più compatibile in email)
 
 ---
 - [x] Riprodurre errore 500 creazione integration key da super admin e identificare causa
@@ -124,7 +139,7 @@
 
 ## Review (Integration keys super-admin only - Feb 17, 2026)
 - python -m pytest tests/test_org_admin_integration_keys.py tests/test_integration_issue_member.py -> 8 passed
-- Verifica funzionale: endpoint /api/org-admin/integrations/keys* non pi� registrati; GET/POST/PATCH/DELETE su path rimossi rispondono 404 (fallback API)
+- Verifica funzionale: endpoint /api/org-admin/integrations/keys* non più registrati; GET/POST/PATCH/DELETE su path rimossi rispondono 404 (fallback API)
 - /api/integrations/members/issue invariato su header X-ASSONAM-API-KEY, con update last_used_at/last_used_ip/last_used_user_agent su chiave attiva
 
 ---
@@ -161,9 +176,9 @@
 - `python -m pytest tests/test_org_admin_member_filters.py` OK (warnings about datetime.utcnow deprecation)
 - `npm run build` (frontend) OK (org-admin soci filters)
 - `python -m pytest tests/test_org_admin_member_activity.py` OK (warnings about datetime.utcnow deprecation)
-- `npm run build` (frontend) OK (attivitÃƒÆ’Ã‚Â  socio + reset filtri)
+- `npm run build` (frontend) OK (attivitÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â  socio + reset filtri)
 - `python -m alembic upgrade head` OK (actor_member_id)
-- `npm run build` (frontend) OK (legenda attivitÃƒÂ )
+- `npm run build` (frontend) OK (legenda attivitÃƒÆ’Ã‚Â )
 - `npm run build` (frontend) OK (INP + font + hero contrast)
 ---
 ## INP + Hero Logo (Feb 02, 2026)
@@ -209,7 +224,7 @@
 - [x] Add modal-based rejection flow with required note and inline status updates
 - [x] Render document status badges + actions with error handling
 - [x] Show document chain when replacements exist
-- [x] Add dashboard counters for Ã¢â‚¬Å“da rivedereÃ¢â‚¬Â and Ã¢â‚¬Å“rigettatiÃ¢â‚¬Â
+- [x] Add dashboard counters for ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œda rivedereÃƒÂ¢Ã¢â€šÂ¬Ã‚Â and ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œrigettatiÃƒÂ¢Ã¢â€šÂ¬Ã‚Â
 - [x] Update review section with how to test locally
 ---
 ## Socio Dashboard Documenti (Feb 02, 2026)
@@ -236,7 +251,7 @@
 - [x] Add tests for filters + permissions
 - [x] Update review section with local test steps
 ---
-## Audit Log & AttivitÃƒÆ’Ã‚Â  Socio (Feb 02, 2026)
+## Audit Log & AttivitÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â  Socio (Feb 02, 2026)
 - [x] Add actor_member_id to audit logs and migrate schema
 - [x] Log sensitive actions for member create/update/access/doc review/resubmit/payment
 - [x] Surface recent activity in org-admin member detail (tab)
@@ -372,7 +387,7 @@ const result = await apiPost<Result>("/api/users", { name: "John" });
 - able member_payments already exists`
 - `no such column: deleted_at`
 ### Causa
-Il database era fuori sync con Alembic perchÃƒÂ©:
+Il database era fuori sync con Alembic perchÃƒÆ’Ã‚Â©:
 1. `init_db.py` usa `Base.metadata.create_all()` che crea tabelle bypassando Alembic
 2. Alcune migrazioni aggiungono colonne che potrebbero non esistere nel DB attuale
 3. Il DB locale potrebbe essere stato creato prima che le migrazioni fossero definite
@@ -381,10 +396,10 @@ Rese idempotenti le migrazioni problematiche:
 **`a1b2c3d4e5f6_add_member_payments.py`:**
 - Aggiunto check `_table_exists()` prima di `create_table`
 - Aggiunto check `_index_exists()` prima di `create_index`
-- Se la tabella esiste giÃƒÂ , la migrazione passa senza errori
+- Se la tabella esiste giÃƒÆ’Ã‚Â , la migrazione passa senza errori
 **`d3e4f5g6h7i8_add_performance_indexes.py`:**
 - Aggiunto `_safe_create_index()` che verifica:
-  - L'indice non esiste giÃƒÂ 
+  - L'indice non esiste giÃƒÆ’Ã‚Â 
   - Tutte le colonne referenziate esistono
 - Se le condizioni non sono soddisfatte, skip silenzioso
 ### Come Evitare in Futuro
@@ -562,7 +577,7 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 ## Spec (Dashboard socio - Fix flip tessera no specchio + logo fisso - Feb 07, 2026)
 - Obiettivo: correggere il flip 3D della tessera socio evitando qualsiasi testo specchiato durante/after rotate.
 - Vincoli UX: retro minimal (solo QR grande + dati essenziali), logo ASSONAM sempre fisso/non ruotato come overlay.
-- Accessibilit�: flip via click + Enter/Space, aria-label chiara, no text selection durante animazione.
+- Accessibilitï¿½: flip via click + Enter/Space, aria-label chiara, no text selection durante animazione.
 - Impatto: patch limitata a `MemberCardPreview` e CSS dedicato in `frontend/src/index.css`.
 ## Plan (Dashboard socio - Fix flip tessera)
 - [x] Rifattorizzare markup in struttura flip standard (`wrapper`/`inner`/`front`/`back`) con facce assolute e backface hidden.
@@ -634,7 +649,7 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 ### Frontend: robots.txt
 - `frontend/public/robots.txt`: Allow /, Disallow private routes, Sitemap reference
 ### Backend: sitemap.xml endpoint
-- `app/routes/public.py`: GET /sitemap.xml — static pages + active organizations from DB
+- `app/routes/public.py`: GET /sitemap.xml â€” static pages + active organizations from DB
 ### Frontend: Privacy page
 - `frontend/src/pages/Privacy.tsx`: GDPR-compliant privacy policy
 - Route added in App.tsx: `/privacy`
@@ -704,15 +719,15 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 ## Plan (Hero Particle Logo ASSONAM da SVG)
 - [x] Generare asset SVG dedicato del logo ASSONAM e usarlo come sorgente particellare.
 - [x] Implementare parser SVG (`SVGLoader`) e campionamento path in punti per `THREE.Points`.
-- [x] Riprogettare hero composition (copy a sinistra, logo a destra, overlay leggibilità).
+- [x] Riprogettare hero composition (copy a sinistra, logo a destra, overlay leggibilitÃ ).
 - [x] Limitare movimento a micro breathing/parallax e ridurre costi su mobile/low-power.
 - [x] Eseguire build e produrre screenshot desktop/mobile.
 ## Review (Hero Particle Logo ASSONAM da SVG)
 - [x] Asset sorgente creato: `frontend/public/logo-assonam-particle.svg`.
 - [x] Particle logo implementato in `PublicHeroThree.client.tsx` con `SVGLoader` + `PointsMaterial` (niente mesh casuali).
 - [x] Hero aggiornata con composizione copy-left/logo-right e fallback statico logo su low-power/no WebGL.
-- [x] Rimossa qualsiasi immagine underlay quando WebGL è attivo: in modalità WebGL il logo è solo `THREE.Points`.
-- [x] Sampling SVG reso più pulito con path vettoriali da contorni (no texture/no scanline overlay).
+- [x] Rimossa qualsiasi immagine underlay quando WebGL Ã¨ attivo: in modalitÃ  WebGL il logo Ã¨ solo `THREE.Points`.
+- [x] Sampling SVG reso piÃ¹ pulito con path vettoriali da contorni (no texture/no scanline overlay).
 - [x] Build frontend verificata: `npm.cmd run build` OK.
 - [x] Screenshot generati:
   - asks/screenshots/hero-desktop.png`
@@ -834,15 +849,15 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] F. Doc download: fetch+blob with error handling instead of `<a href>` nav
 - [x] G. Tests: 6 pytest tests all passing (statute-optional, inactive, all-orgs, request-id)
 ### Files Modified
-- `frontend/src/components/ErrorBoundary.tsx` � Full navigation, error logging
-- `frontend/src/lib/api.ts` � `joinOrganization` + `registerMember` error detail
-- `frontend/src/pages/Iscrizione.tsx` � Real error messages, non-blocking registration
-- `frontend/src/pages/org-admin/OrgAdminMemberDetail.tsx` � Fetch-based doc download
-- `app/routes/join.py` � Conditional statute, is_active check, request_id in errors
-- `app/middleware.py` � `RequestIdMiddleware` + `get_request_id`
-- `app/main.py` � Register `RequestIdMiddleware`
+- `frontend/src/components/ErrorBoundary.tsx` — Full navigation, error logging
+- `frontend/src/lib/api.ts` — `joinOrganization` + `registerMember` error detail
+- `frontend/src/pages/Iscrizione.tsx` — Real error messages, non-blocking registration
+- `frontend/src/pages/org-admin/OrgAdminMemberDetail.tsx` — Fetch-based doc download
+- `app/routes/join.py` — Conditional statute, is_active check, request_id in errors
+- `app/middleware.py` — `RequestIdMiddleware` + `get_request_id`
+- `app/main.py` — Register `RequestIdMiddleware`
 ### Files Created
-- ests/test_signup_fixes.py` � 6 tests covering all fixes
+- ests/test_signup_fixes.py` — 6 tests covering all fixes
 ### Deploy Notes
 - No DB migration needed
 - No new env vars
@@ -867,9 +882,9 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 ---
 ## Spec (Integrazione Issuer Tessera API - Feb 17, 2026)
 - Obiettivo: aggiungere endpoint sicuro per emissione socio attivo via gestionale esterno (es. Pienissimo), con idempotenza, assegnazione tessera da lotto, email HTML tessera + magic link accesso area riservata.
-- Vincoli: non alterare il flusso signup standard (resta pending/approvazione), usare API key scoped per associazione, evitare duplicati su retry (`external_customer_id`), mantenere compatibilit� codice esistente.
+- Vincoli: non alterare il flusso signup standard (resta pending/approvazione), usare API key scoped per associazione, evitare duplicati su retry (`external_customer_id`), mantenere compatibilità codice esistente.
 ## Plan (Integrazione Issuer Tessera API)
-- [x] Estendere modelli (`Member` + `IntegrationApiKey`) e retro-compatibilit� init DB.
+- [x] Estendere modelli (`Member` + `IntegrationApiKey`) e retro-compatibilità init DB.
 - [x] Aggiungere migrazione Alembic per nuovi campi, nuova tabella e vincolo univoco idempotenza.
 - [x] Implementare sicurezza integrazione (hash API key + dependency con scope e tracciamento `last_used_*`).
 - [x] Implementare endpoint `POST /api/integrations/members/issue` con idempotenza, attivazione socio e card verification URL.
@@ -886,19 +901,19 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] Email multipart HTML implementata (`send_email_html`) con template tessera, QR `qrserver` e CTA magic-link.
 - [x] Audit DB `integration_issue_member` registrato in `operation_logs`.
 - [x] Test eseguiti: `python -m pytest tests\\test_integration_issue_member.py tests\\test_email_flows.py tests\\test_card_assignment.py` -> **22 passed**.
-- [x] Nota migrazioni legacy: `python -m alembic upgrade head` resta bloccato da una migration storica preesistente (`5f60c30665a2`, table `member_documents` gi� esistente), non da questa implementazione.
+- [x] Nota migrazioni legacy: `python -m alembic upgrade head` resta bloccato da una migration storica preesistente (`5f60c30665a2`, table `member_documents` già esistente), non da questa implementazione.
 ---
 ## Spec (Hotfix Alembic 5f60 Idempotenza - Feb 17, 2026)
-- Obiettivo: rendere idempotente la migration storica `5f60c30665a2` (`member_documents`) per evitare crash su `alembic upgrade head` quando la tabella esiste gi�.
-- Vincoli: usare SQLAlchemy inspector (`sa.inspect(op.get_bind())`), saltare creazione tabella/indici/constraint se gi� presenti.
+- Obiettivo: rendere idempotente la migration storica `5f60c30665a2` (`member_documents`) per evitare crash su `alembic upgrade head` quando la tabella esiste già.
+- Vincoli: usare SQLAlchemy inspector (`sa.inspect(op.get_bind())`), saltare creazione tabella/indici/constraint se già presenti.
 ## Plan (Hotfix Alembic 5f60 Idempotenza)
 - [x] Aggiornare `upgrade()` con check esistenza tabella `member_documents`.
 - [x] Proteggere creazione indice della migration con check `index exists`.
 - [x] Rendere `downgrade()` safe (drop solo se tabella/indice esistono).
-- [x] Verificare `alembic upgrade head` su DB vuoto e su DB con tabella gi� presente.
+- [x] Verificare `alembic upgrade head` su DB vuoto e su DB con tabella già presente.
 ## Review (Hotfix Alembic 5f60 Idempotenza)
 - [x] Modificata migration `alembic/versions/5f60c30665a2_add_member_documents_table.py` con helper `_table_exists` e `_index_exists`.
-- [x] `upgrade()` ora ritorna subito se `member_documents` � gi� presente.
+- [x] `upgrade()` ora ritorna subito se `member_documents` è già presente.
 - [x] `downgrade()` ora evita drop su oggetti mancanti.
 - [x] Validazione eseguita:
   - `DATABASE_URL=sqlite:///tmp_alembic_empty.db python -m alembic upgrade head` -> OK.
@@ -1005,7 +1020,7 @@ pm --prefix frontend run build -> OK
 - [ ] Introdurre utility centrale `is_member_active` / `is_card_active` (+ reason code) e riusarla in auth + card status.
 - [ ] Hardening auth member (`/api/auth/login`, `/member/auth`, `get_current_member`, whoami): negare accesso/token a account non attivo con 403 coerente.
 - [ ] Rifattorizzare `GET /api/cards/verify/{token}` con content negotiation HTML/JSON, pagina mobile-readable e motivo non attiva.
-- [ ] Allineare soft-delete socio e query/liste admin affinch� tessera eliminata non risulti mai attiva.
+- [ ] Allineare soft-delete socio e query/liste admin affinché tessera eliminata non risulti mai attiva.
 - [ ] Aggiornare/aggiungere test regressione (QR verify JSON+HTML, delete->non attiva, login negato, lista attivi esclusa) ed eseguire test mirati.
 ## Review (Fix coerenza socio/tessera/accesso/QR)
 ## Execution Update (Fix coerenza socio/tessera/accesso/QR - Feb 19, 2026)
@@ -1176,13 +1191,13 @@ pm --prefix frontend run build -> OK
 
 ## Review (Cleanup soci eliminati multi-associazione - Feb 19, 2026)
 - `python -m pytest tests/test_deleted_member_cleanup_multiorg.py tests/test_signup_fixes.py tests/test_member_active_state_regression.py -q` -> **10 passed**
-- Esito: i soci soft-deleted legacy vengono bonificati (globale + runtime), la ri-iscrizione per associazione non lascia conflitti residui, e i conflitti legacy non esplodono pi� in 500 nel submit iscrizione.
+- Esito: i soci soft-deleted legacy vengono bonificati (globale + runtime), la ri-iscrizione per associazione non lascia conflitti residui, e i conflitti legacy non esplodono più in 500 nel submit iscrizione.
 
 
 
 
 - [x] Esteso fix con hard purge fisico dei soci `deleted_at` (cleanup FK) in `app/services/member_cleanup.py`, invocato in startup (`init_db.py`) e pre-check join/register.
-- [x] Verifica locale purge on-demand: `purged_deleted_members=0` (DB locale gi� pulito).
+- [x] Verifica locale purge on-demand: `purged_deleted_members=0` (DB locale già pulito).
 - `python -m pytest tests/test_deleted_member_cleanup_multiorg.py tests/test_signup_fixes.py tests/test_member_active_state_regression.py -q` -> **10 passed** (post hard-purge update).
 
 ---
@@ -1279,7 +1294,7 @@ pm --prefix frontend run build -> OK
 
 ---
 ## Spec (Allocazione tessere multi-lotto annuale + concurrency-safe - Feb 21, 2026)
-- Obiettivo: supportare pi� lotti attivi nello stesso anno per associazione e garantire emissione continua senza blocco quando un lotto termina.
+- Obiettivo: supportare più lotti attivi nello stesso anno per associazione e garantire emissione continua senza blocco quando un lotto termina.
 - Vincoli: funzione unica `allocate_next_card(org_id, year)` con lock transazionale, fallback automatico tra lotti disponibili, errore chiaro `card_range_exhausted` (409), integrazione su flussi manuali + ingest Pienissimo.
 
 ## Plan (Allocazione tessere multi-lotto annuale + concurrency-safe)
@@ -1293,7 +1308,7 @@ pm --prefix frontend run build -> OK
 
 ## Review (Allocazione tessere multi-lotto annuale + concurrency-safe - Feb 21, 2026)
 - Nuovo servizio: `app/services/card_allocation.py` con lock transazionale (`pg_advisory_xact_lock` su PostgreSQL, `BEGIN IMMEDIATE` su SQLite), filtro lotti per `org_id/year/released_at`, fallback automatico e logging `batch_exhausted_fallback` + `card_allocated`.
-- Compatibilit�: wrapper legacy `app/services/card.py` ora delega a `allocate_next_card(...)`.
+- Compatibilità: wrapper legacy `app/services/card.py` ora delega a `allocate_next_card(...)`.
 - Emissione aggiornata nei flussi: `app/routes/join.py`, `app/routes/org_admin.py`, `app/routes/admin.py`, `app/services/integration_issuer.py`.
 - Supporto anno lotto: `CardBatch.year` in `app/models.py`, migrazione `alembic/versions/n5o6p7q8r9s0_add_card_batch_year.py`, fallback bootstrap in `init_db.py`.
 - KPI/sommari lotti super-admin: `app/routes/super_admin.py` usa conteggi reali su membri per `assigned/remaining` (non `next_no-start_no`) e supporta `year` nei payload lotto.
@@ -1364,7 +1379,7 @@ pm --prefix frontend run build -> OK
 - `npm --prefix frontend run build` -> **OK**
 - `python -m alembic upgrade head` -> **OK** (migrazione `p6q7r8s9t0u1`)
 - `python -m pytest tests\\test_member_documents_dashboard.py::test_member_can_fetch_and_download_organization_statute tests\\test_signup_fixes.py::test_web_register_sets_signup_source_assonam_form tests\\test_document_workflow.py::test_document_approval_sends_card_email_once_for_active_member tests\\test_ingest_pienissimo.py::test_ingest_retry_100x_is_idempotent_and_sends_email_once tests\\test_integration_issue_member.py::test_issue_member_captures_html_email_with_verification_url -q` -> **5 passed**
-- Nota compatibilit� locale/test DB: aggiunto fallback bootstrap in `init_db.py` per colonna `members.card_delivered_at` e normalizzazione `signup_source` su schema legacy non ancora migrato.
+- Nota compatibilità locale/test DB: aggiunto fallback bootstrap in `init_db.py` per colonna `members.card_delivered_at` e normalizzazione `signup_source` su schema legacy non ancora migrato.
 
 ---
 ## Spec (Google Wallet Android per tessera socio + credenziali sicure - Feb 23, 2026)
@@ -1400,21 +1415,21 @@ pm --prefix frontend run build -> OK
   - `npm --prefix frontend run build` -> **OK**
 - Nota operativa: non ho usato il file JSON reale indicato nel prompt (`C:\\Users\\edoar\\Downloads\\...json`); va spostato in `secrets/` o montato come secret in produzione per evitare leak/commit accidentali.
 - Live test (credenziali reali + issuer `3388000000023089481`): endpoint `POST /api/me/wallet/google/save-link` verificato in locale su DB temporaneo -> **200 OK**, `classId` e `objectId` persistiti, save URL generato.
-- Fix runtime emerso dal live test: Google Wallet rifiutava `logo.sourceUri` con URL locale (`http://localhost:8000/...`) in create object (400). Aggiornato `app/services/google_wallet.py` per omettere il logo quando l'URL non � pubblico/raggiungibile (localhost/127.0.0.1).
+- Fix runtime emerso dal live test: Google Wallet rifiutava `logo.sourceUri` con URL locale (`http://localhost:8000/...`) in create object (400). Aggiornato `app/services/google_wallet.py` per omettere il logo quando l'URL non è pubblico/raggiungibile (localhost/127.0.0.1).
 
 ---
 ## Spec (Email tessera pronta + CTA Wallet handoff + statuto + badge Pienissimo + test - Feb 23, 2026)
 - Obiettivo: completare il flusso end-to-end post-verifica socio con email aggiornata (accesso area riservata + CTA Google Wallet Android + link tessera/statuto), aggiungere pagina frontend `/wallet/google/add`, mantenere/finire statuto area socio e fix badge Pienissimo, con test minimi backend.
 - Vincoli: riuso endpoint `/api/me/wallet/google/save-link` e flussi auth/magic-link esistenti; nessuna nuova auth; nessun secret nei commit; nessuna regressione su dashboard/documenti/admin.
-- Nota: campo origine iscrizione `signup_source` e statuto area socio sono gi� presenti da task precedenti, quindi questo task completa alias/coverage/test e rifiniture UI/email.
+- Nota: campo origine iscrizione `signup_source` e statuto area socio sono già presenti da task precedenti, quindi questo task completa alias/coverage/test e rifiniture UI/email.
 
 ## Plan (Email tessera pronta + CTA Wallet handoff + statuto + badge Pienissimo + test)
-- [ ] Ricognizione finale dei punti gi� implementati vs gap (email template/call-site, route wallet handoff, alias statuto, test coverage).
+- [ ] Ricognizione finale dei punti già implementati vs gap (email template/call-site, route wallet handoff, alias statuto, test coverage).
 - [ ] Backend: arricchire email tessera pronta (CTA wallet handoff, area riservata, vedi tessera, statuto) e allineare copy "email"; riusare trigger idempotente esistente.
 - [ ] Backend: aggiungere alias endpoint sicuro `GET /api/me/documents/statute` (download) e, se necessario, rifinire source admin (`signup_source=admin`).
 - [ ] Frontend: nuova pagina pubblica `/wallet/google/add` con auto-redirect se autenticato, CTA login/magic-link se non autenticato, messaggi UX chiari; registrare route in `App.tsx`.
 - [ ] Test: aggiornare/aggiungere pytest per email content + alias statuto + esposizione `signup_source` in lista org-admin + mantenere save-link mock test; build frontend e pytest mirati.
-- [ ] Commit ordinati + preparazione descrizione PR (se il push/PR remoto non � disponibile, produrre testo PR pronto).
+- [ ] Commit ordinati + preparazione descrizione PR (se il push/PR remoto non è disponibile, produrre testo PR pronto).
 
 ## Review (Email tessera pronta + CTA Wallet handoff + statuto + badge Pienissimo + test - Feb 23, 2026)
 - [ ] Da compilare a fine implementazione.
@@ -1422,8 +1437,8 @@ pm --prefix frontend run build -> OK
 - Email essera pronta`: template `app/email_templates/member_card_email.py` esteso con CTA `Aggiungi a Google Wallet (Android)`, link area riservata, `Vedi la tua tessera`, `Scarica lo statuto`, copy aggiornato con "email" e nota iPhone.
 - Trigger idempotente riusato (`card_delivered_at`) senza nuovi campi DB; call-site aggiornati in `app/services/member_card_delivery.py` e `app/services/integration_issuer.py` per passare URL frontend/handoff.
 - Nuova pagina frontend pubblica `frontend/src/pages/WalletGoogleAdd.tsx` + route `/wallet/google/add` in `frontend/src/App.tsx`: auto-call `POST /api/me/wallet/google/save-link`, redirect a Google Wallet se auth, altrimenti CTA login + invio magic-link via `/api/auth/login` (password vuota).
-- Backend statuto: alias download sicuro `GET /api/me/documents/statute` aggiunto in `app/routes/member.py` (riusa il controllo org del socio gi� esistente).
-- Origine iscrizione admin: `create_org_member` ora imposta `signup_source='admin'` (`SignupSource.ADMIN`) in `app/routes/org_admin.py`; nessuna migration nuova richiesta perch� il campo `signup_source` esiste gi� e la colonna � TEXT.
+- Backend statuto: alias download sicuro `GET /api/me/documents/statute` aggiunto in `app/routes/member.py` (riusa il controllo org del socio già esistente).
+- Origine iscrizione admin: `create_org_member` ora imposta `signup_source='admin'` (`SignupSource.ADMIN`) in `app/routes/org_admin.py`; nessuna migration nuova richiesta perché il campo `signup_source` esiste già e la colonna è TEXT.
 - Test backend aggiornati/aggiunti:
   - contenuto email post-verifica include CTA Wallet + link documenti/statuto + copy "email"
   - email integrazione include CTA Wallet handoff
@@ -1431,7 +1446,7 @@ pm --prefix frontend run build -> OK
   - scoping statuto per sessione/org (A vede A, B vede B)
   - org-admin manual create => `signup_source=admin`
   - lista org-admin espone `signup_source` (admin/pienissimo/web)
-- FE test automatici non aggiunti: nel progetto non � presente setup Vitest/Playwright; verificata build Vite/TS invece.
+- FE test automatici non aggiunti: nel progetto non è presente setup Vitest/Playwright; verificata build Vite/TS invece.
 - Comandi eseguiti:
   - `python -m py_compile app\\email_templates\\member_card_email.py app\\services\\member_card_delivery.py app\\services\\integration_issuer.py app\\routes\\member.py app\\routes\\org_admin.py app\\models.py` -> **OK**
   - `npm --prefix frontend run build` -> **OK**
@@ -1529,7 +1544,7 @@ pm --prefix frontend run build -> OK
 ---
 ## Spec (Safe production migration SQLite -> PostgreSQL with rollback - Feb 25, 2026)
 - Obiettivo: aggiungere supporto PostgreSQL via Docker Compose mantenendo SQLite come fallback immediato tramite `DATABASE_URL`, senza cancellare file dati e senza migrazioni distruttive automatiche.
-- Vincoli: compatibilit� runtime con SQLite e Postgres, documentare backup/pgloader/rollback/verifica, nessun `DROP` automatico, nessuna rimozione supporto SQLite.
+- Vincoli: compatibilità runtime con SQLite e Postgres, documentare backup/pgloader/rollback/verifica, nessun `DROP` automatico, nessuna rimozione supporto SQLite.
 
 ## Plan (Safe production migration SQLite -> PostgreSQL with rollback)
 - [ ] Ricognizione config DB/SQLAlchemy/Alembic e Docker Compose per identificare punti SQLite-specifici che romperebbero Postgres.
@@ -1759,7 +1774,7 @@ pm --prefix frontend run build -> OK
 ## Review Update (Remotion pipeline optimization: instant base video + async personalized render - Mar 05, 2026)
 - Base video pre-renderizzato disponibile in `frontend/public/videos/welcome_base.mp4` (template `base`, testo finale: `REGISTRATION RECEIVED` + `ASSOCIATION CONNECTING TO NETWORK`).
 - Frontend `/affiliazione` ora mostra immediatamente il video base fullscreen dopo submit e sovrappone il nome associazione via overlay HTML stile HUD (`Orbitron`), senza attendere il render personalizzato.
-- Overlay post-video mostra pannello finale con copy richiesto: `Richiesta ricevuta` + `La tua affiliazione � ora in revisione.` e CTA `Torna alla homepage`.
+- Overlay post-video mostra pannello finale con copy richiesto: `Richiesta ricevuta` + `La tua affiliazione è ora in revisione.` e CTA `Torna alla homepage`.
 - Pipeline backend render personalizzato resa non bloccante: su submit si enqueua il job; rimosso trigger sync render dal submit endpoint.
 - Worker render personalizzato ottimizzato: output stabile `data/videos/welcome/{application_id}.mp4`; skip automatico se file gia presente; URL servito via `/generated-videos/welcome/{application_id}.mp4`.
 - RenderHud ottimizzato: transcode finale 1280x720 @ 24fps, CRF 23, preset `veryfast`; se NVENC disponibile usa `h264_nvenc` preset `p5`, con fallback automatico a `libx264`.
@@ -1777,7 +1792,7 @@ pm --prefix frontend run build -> OK
 - Obiettivo: aumentare conversione del wizard `/affiliazione` introducendo schermata iniziale chiara pre-compilazione e progress bar step-by-step semplificata.
 - Requisiti: intro con titolo/sottotitolo, checklist documenti, testo salvataggio bozza, trust badges, CTA `Inizia Affiliazione` che avvia step 1.
 - Requisiti wizard: progress bar top con 5 step (`Associazione`, `Cariche`, `Documenti`, `Pagamento`, `Invio`) con highlight step corrente.
-- Vincoli: mobile first, layout leggibile, nessuna regressione del flusso submit/video gi� implementato.
+- Vincoli: mobile first, layout leggibile, nessuna regressione del flusso submit/video già implementato.
 
 ## Plan (Affiliazione wizard UX conversion intro screen + progress bar)
 - [x] Aggiungere stato intro screen nel page component e CTA `Inizia Affiliazione` che attiva il wizard.
@@ -1878,7 +1893,7 @@ pm --prefix frontend run build -> OK
 - Wizard: se presente `ref`, mostrare `Invito da {organization_name}` e agganciare il referrer alla bozza.
 - Stato referral: `pending` su draft, `approved` su approvazione super-admin, `rewarded` dopo spin wheel.
 - Org Admin dashboard: card con link referral, azioni copy/share e statistiche (`Inviti inviati`, `Associazioni affiliate`, `Bonus ottenuti`).
-- Reward wheel: spin solo su referral `approved`, premio chiaro con timing di erogazione, tracciamento e visibilit� per super admin.
+- Reward wheel: spin solo su referral `approved`, premio chiaro con timing di erogazione, tracciamento e visibilità per super admin.
 - Vincolo: nessuna regressione sui flussi esistenti di wizard/pagamenti/approvazione.
 
 ## Plan (Association referral system + reward wheel)
@@ -1932,7 +1947,7 @@ pm --prefix frontend run build -> OK
 
 ## Review Update (Stripe optional + feature flags + graceful degradation affiliazione - Mar 05, 2026)
 - Backend config (`app/config.py`): introdotti `AFFILIAZIONE_ENABLED`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`, `STRIPE_PUBLISHABLE_KEY`, helper `is_stripe_configured()` e property `STRIPE_ENABLED` (computed, no crash).
-- Startup safety (`app/main.py`): warning esplicito quando Stripe � disabilitato; nessun raise per env mancanti.
+- Startup safety (`app/main.py`): warning esplicito quando Stripe è disabilitato; nessun raise per env mancanti.
 - Feature flag backend affiliazione: public router affiliazione ora gated via dependency `ensure_public_affiliation_enabled` (`404` coerente quando flag off), admin/super-admin invariati.
 - Stripe hardening (`app/routes/affiliation.py`):
 - checkout Stripe ritorna `503` con messaggio `Stripe non configurato. Usa Bonifico o Contanti.` quando disabled;
@@ -1946,8 +1961,8 @@ pm --prefix frontend run build -> OK
 - route `/affiliazione` e `/invito/:slug` redirect a home quando flag off (`App.tsx`).
 - Wizard pagamento (`frontend/src/pages/Affiliazione.tsx`):
 - fetch capabilities (`/api/capabilities`);
-- opzione Stripe disabilitata con copy `Carta (Stripe) � presto disponibile`;
-- default automatico a Bonifico quando Stripe non � disponibile;
+- opzione Stripe disabilitata con copy `Carta (Stripe) — presto disponibile`;
+- default automatico a Bonifico quando Stripe non è disponibile;
 - auto-switch da Stripe a Bonifico su bozze legacy con toast `Pagamento con carta non disponibile al momento. Abbiamo selezionato Bonifico.`;
 - nota informativa: `Puoi completare l'invio e pagare con bonifico o contanti. Attivazione dopo verifica.`.
 - Deploy/docs:
@@ -1966,7 +1981,7 @@ pm --prefix frontend run build -> OK
 - Vincolo: path Dockerfile referenziato in compose deve esistere in repo checkout del server.
 - Strategia: usare compose profile `video-worker` (default off) + flag env `AFFILIATION_VIDEO_WORKER_ENABLED` per abilitazione esplicita.
 - Workflow CI/CD: aggiungere sanity check `test -f Dockerfile.affiliation-video-worker` per fallire presto con errore chiaro.
-- Documentazione: aggiornare README/ENV con nuova flag e modalit� di attivazione worker.
+- Documentazione: aggiornare README/ENV con nuova flag e modalità di attivazione worker.
 
 ## Plan (Fix deploy failure missing Dockerfile.affiliation-video-worker)
 - [x] Verificare presenza Dockerfile worker e path attuale in `docker-compose.yml`.
@@ -1987,7 +2002,7 @@ pm --prefix frontend run build -> OK
 - Workflow deploy Hetzner aggiornato (`.github/workflows/deploy-hetzner.yml`):
 - step `actions/checkout` + sanity check `test -f Dockerfile.affiliation-video-worker`;
 - `.env` runtime include `AFFILIATION_VIDEO_WORKER_ENABLED`;
-- profile `video-worker` abilitato solo se secret/flag � `true`.
+- profile `video-worker` abilitato solo se secret/flag è `true`.
 - Deploy safety: con flag false il comando standard `docker compose up -d --build` non include il worker profile, quindi il deploy non viene bloccato dal worker opzionale.
 - Documentazione aggiornata:
 - `ENV_REQUIRED.md` con variabile `AFFILIATION_VIDEO_WORKER_ENABLED`;
@@ -2327,7 +2342,7 @@ pm --prefix frontend run build -> OK
 - Aggiunto cleanup pre-`up`:
   - `docker compose ... rm -f -s web email-worker low-cards-worker affiliation-video-worker || true`
   - rimozione container stale per pattern nome (`_app-web-1`, `_app-email-worker-1`, `_app-low-cards-worker-1`, `_app-affiliation-video-worker-1`).
-- Effetto atteso: niente pi� collisioni `container name ... already in use` in fase Recreate/Up.
+- Effetto atteso: niente più collisioni `container name ... already in use` in fase Recreate/Up.
 
 ## Spec (Fix Remotion 404 welcome_hud_audio.wav - Mar 05, 2026)
 - Obiettivo: evitare crash render HUD quando Remotion non trova `welcome_hud_audio.wav` su static server (`/public/...` 404).
@@ -2407,3 +2422,180 @@ pm --prefix frontend run build -> OK
   - `python -m pytest -q tests/test_affiliation_flow.py tests/test_affiliation_video_service.py` -> `10 passed`
   - `npm --prefix frontend run build` -> OK
   - smoke `GET /api/affiliazione/draft/{token}` con file presente -> `welcome_video_ready=true`, `welcome_video_url=/videos/welcome/1.mp4`
+
+## Spec (Live website audit - Mar 06, 2026)
+- Obiettivo: eseguire audit live del sito pubblico piu probabile del progetto (`https://assonam.it`) usando `squirrel`, con scansione iniziale rapida e successiva scansione completa.
+- Requisiti:
+  - usare output `llm`;
+  - eseguire prima `surface`, poi `full`;
+  - non applicare fix senza prima presentare i risultati e il batch proposto;
+  - documentare sintesi e prossimi passi in questa sezione.
+
+## Plan (Live website audit - Mar 06, 2026)
+- [x] Inizializzare/verificare configurazione `squirrel` locale per il progetto.
+- [x] Eseguire audit `surface` live su `https://assonam.it` con output `llm`.
+- [x] Eseguire audit `full` live su `https://assonam.it` con output `llm`.
+- [x] Riassumere score, issue principali e batch di fix candidati.
+
+## Review (Live website audit - Mar 06, 2026)
+- Target audit confermato da repo e documentazione: `https://assonam.it`.
+- Configurazione locale creata: `squirrel.toml`.
+- Audit eseguiti:
+  - `surface` -> report `tasks/tmp/assonam-surface-20260306.llm`, audit id `1c7e61b7`
+  - `full` -> report `tasks/tmp/assonam-full-20260306.llm`, audit id `75131c64`
+- Risultato invariato tra surface/full: `score 63`, grade `D`, `5 failed`, `54 warnings`, `69` URL crawled.
+- Diff rispetto all'audit del `2026-02-28` (`af5300d6`): nessuna regression o improvement di score; variazioni limitate a nuovi asset bundle e +2 URL in sitemap.
+- Root cause principale verificata con fetch live HTML (`/` e `/privacy`): il server restituisce shell SPA con solo `<div id="root"></div>` e meta condivisi, quindi crawler/no-JS non vedono H1, contenuto, landmark e link interni delle pagine marketing.
+- Principali aree da correggere prima di un nuovo audit:
+  - public pages crawlable/SSR-prerender per `/`, `/lo-studio`, `/servizi`, `/contatti`, `/privacy`;
+  - title/description canonici per pagina invece di meta condivisi;
+  - landmark a11y (`<main>`, skip link) e internal linking/footer privacy nel markup iniziale;
+  - riduzione bundle JS principale (`/assets/index-DfPg34Rc.js`, 477.4 KB) e catena critica font/CSS;
+  - header security `Strict-Transport-Security` e review CSP per rimuovere `unsafe-inline` dove possibile.
+## Spec (Repository-wide cybersecurity review - Mar 06, 2026)
+- Obiettivo: eseguire un audit di sicurezza end-to-end del repository applicando il lens cybersecurity-analyst.
+- Scope:
+  - backend FastAPI: auth/session, middleware, upload/download, integrazioni, ingest pubblici, webhook, admin boundaries;
+  - configurazione/runtime: env defaults, docker/deploy exposure, static/public mounts;
+  - frontend solo dove impatta la security posture (auth flow, token handling, public exposure).
+- Output atteso:
+  - findings ordinati per severita con file/linee, rischio, impatto e fix prioritizzati;
+  - verifiche eseguite (test/security grep) e gap residui.
+- Vincoli:
+  - audit only, nessuna modifica applicativa salvo richiesta successiva del cliente;
+  - validare i finding con traccia codice o test esistenti prima di chiudere.
+
+## Plan (Repository-wide cybersecurity review - Mar 06, 2026)
+- [ ] Mappare superfici di attacco e confini di trust (public, member, org-admin, super-admin, integrazioni, webhook).
+- [ ] Verificare auth/session/CSRF/rate-limit e cercare bypass o dipendenze da header non trusted.
+- [ ] Verificare exposure di file, upload/download, token pubblici, e path/public mounts.
+- [ ] Verificare secret handling, bootstrap/admin defaults, config runtime e docker/deploy posture.
+- [ ] Eseguire verifiche mirate (test security esistenti e grep su pattern sensibili) per confermare o smentire finding.
+- [ ] Documentare review finale con finding ordinati per severita, open questions e rischi residui.
+
+## Review (Repository-wide cybersecurity review - Mar 06, 2026)
+- Findings confermati:
+  - default `SECRET_KEY` / `SUPER_ADMIN_PASSWORD` + bootstrap automatico super-admin => rischio takeover se env mancanti;
+  - mount pubblico di tutto `UPLOAD_DIR` su `/uploads` => bypass dei controlli auth sui file caricati;
+  - trust diretto di `X-Forwarded-For` in rate-limit/audit => spoofing IP e aggiramento limiti;
+  - webhook WhatsApp/Twilio senza verifica firma => richieste forgiate, spam admin SMS e scritture DB;
+  - legacy `/admin/login` ignora `is_active` / `deleted_at` in code path legacy.
+- Verifiche eseguite:
+  - `python -m pytest -q tests/test_security_hardening_audit.py` -> `5 passed`
+  - probe runtime `/uploads`: file temporaneo in `UPLOAD_DIR` scaricabile via `GET /uploads/security-audit-probe.txt` -> `200 probe-ok`
+  - probe `get_client_ip()` con header spoofato `X-Forwarded-For: 1.2.3.4, 10.0.0.1` -> ritorna `1.2.3.4`
+  - probe config defaults `Settings()` -> `SECRET_KEY=supersecretkey`, `SUPER_ADMIN_PASSWORD=admin`
+- Gap residui:
+  - non ho eseguito un harness dedicato per il legacy `/admin/login` su DB isolato; finding confermato per code inspection del path attivo.
+
+## Spec (Security hardening end-to-end - Mar 06, 2026)
+- Obiettivo: correggere i finding di sicurezza confermati senza rompere i flussi esistenti lato member, org-admin, super-admin, affiliazione, wallet e integrazioni.
+- Scope:
+  - backend: secret/bootstrap hardening, trusted proxy logic, webhook signature validation, chiusura path legacy admin, esposizione pubblica upload solo per asset safe;
+  - frontend: rimozione esposizioni accidentali di token/public token/dati sensibili non necessari in UI;
+  - test/docs: regressioni security e aggiornamento review finale.
+- Vincoli:
+  - mantenere funzionanti download autenticati documenti/statuti e asset wallet/logo pubblici necessari;
+  - non rompere il dev locale con default insicuri, ma bloccare/neutralizzare il comportamento per deployment non-local.
+
+## Plan (Security hardening end-to-end - Mar 06, 2026)
+- [x] Hardening config/runtime: distinguere ambiente locale vs non-locale, bloccare secret/bootstrap insicuri fuori locale.
+- [x] Hardening rete/auth: fidarsi di `X-Forwarded-For` solo tramite proxy trusted; chiudere login legacy `/admin`.
+- [x] Hardening file exposure: rimuovere mount pubblico generico `/uploads` e introdurre serving pubblico limitato ai soli asset wallet/org necessari.
+- [x] Hardening webhook: validare firma Twilio sul bot WhatsApp senza rompere i test.
+- [x] Frontend sweep: rimuovere visualizzazione di token/public token e verificare che non vengano persistiti o mostrati dati riservati inutilmente.
+- [x] Aggiungere/aggiornare test security + build frontend + pytest mirati e documentare review finale.
+
+## Review (Security hardening end-to-end - Mar 06, 2026)
+- Backend hardening completato:
+  - `app/main.py` ora blocca startup non-local con `SECRET_KEY` insicuro e sostituisce il mount generico `/uploads` con un allowlist pubblico;
+  - `app/bootstrap.py` non crea più un super-admin con credenziali di default fuori ambiente locale;
+  - `app/middleware.py` accetta `X-Forwarded-For` solo da peer trusted (loopback/private), riducendo spoofing su rate limit e audit;
+  - `app/routes/admin.py` e `app/routes/super_admin.py` limitano i login a `SUPER_ADMIN` attivi e non cancellati;
+  - `app/routes/whatsapp.py` valida la firma Twilio quando `TWILIO_AUTH_TOKEN` è configurato.
+- Esposizione file/token ridotta senza rompere i flussi esistenti:
+  - nuovo handler `app/public_uploads.py` consente solo asset pubblici già necessari (`/uploads/org/<id>/wallet/*` e `/uploads/affiliation-videos/*`);
+  - `app/routes/affiliation.py` non restituisce più `public_token`/`resume_url` nelle view super-admin e introduce `payment_config.reference_code`;
+  - `frontend/src/pages/Affiliazione.tsx` mostra il riferimento pagamento al posto del token completo;
+  - `frontend/src/pages/super-admin/SuperAdminAffiliations.tsx` non mostra più il token pubblico.
+- Sweep frontend:
+  - nessuna chiave API/Twilio/OpenAI/Google Wallet hardcodata o mostrata nel bundle sorgente `frontend/src`;
+  - restano solo token funzionali nei flussi URL-based necessari (magic link, resume draft, card verification);
+  - resta visibile la raw integration key one-time nel pannello super-admin dedicato, perché fa parte del flusso intenzionale di provisioning privilegiato e non di esposizione accidentale.
+- Verifiche eseguite:
+  - `python -m pytest -q tests/test_security_hardening_audit.py tests/test_affiliation_flow.py` -> `18 passed`
+  - `npm --prefix frontend run build` -> OK
+  - grep frontend su pattern sensibili -> nessuna esposizione accidentale residua rilevata.
+
+## Spec (Post-fix smoke verification - Mar 06, 2026)
+- Obiettivo: verificare che il batch di hardening security non abbia rotto i flussi esplicitamente sensibili per il progetto.
+- Scope:
+  - login con mail / magic link member e org-admin;
+  - flussi tessera (verify/download) e asset wallet;
+  - backend/API che alimenta `/pienissimo/thank-you/{org-slug}` e route SPA dedicata;
+  - bot WhatsApp, inclusa la nuova validazione firma.
+
+## Plan (Post-fix smoke verification - Mar 06, 2026)
+- [x] Mappare test esistenti per i flussi richiesti.
+- [x] Eseguire smoke suite pytest mirata sui path funzionali impattati o adiacenti alle modifiche.
+- [x] Documentare esito, copertura effettiva e limiti residui.
+
+## Review (Post-fix smoke verification - Mar 06, 2026)
+- Smoke suite eseguita:
+  - `python -m pytest -q tests/test_email_flows.py tests/test_member_card_verification.py tests/test_ingest_pienissimo.py tests/test_spa_static_files.py tests/test_whatsapp_bot.py tests/test_org_admin_statute_upload.py::test_org_admin_wallet_assets_upload_accepts_logo_and_hero tests/test_security_hardening_audit.py::test_whatsapp_webhook_rejects_invalid_signature_when_configured`
+  - risultato: `30 passed`
+- Flussi verificati:
+  - login con mail/magic link member e org-admin -> OK (`tests/test_email_flows.py`);
+  - tessere verify/download e route wallet correlate -> OK (`tests/test_member_card_verification.py`);
+  - asset wallet pubblici `/uploads/org/<id>/wallet/*` dopo hardening upload -> OK (`tests/test_org_admin_statute_upload.py::test_org_admin_wallet_assets_upload_accepts_logo_and_hero`);
+  - API ingest/Pienissimo che restituisce `card_verification_token`, `card_download_url` e payload thank-you -> OK (`tests/test_ingest_pienissimo.py`);
+  - route SPA `/pienissimo/thank-you/:orgSlug` -> OK (`tests/test_spa_static_files.py`);
+  - bot WhatsApp e parsing form/json -> OK (`tests/test_whatsapp_bot.py`);
+  - blocco richieste WhatsApp con firma invalida quando Twilio auth token è configurato -> OK (`tests/test_security_hardening_audit.py::test_whatsapp_webhook_rejects_invalid_signature_when_configured`).
+- Limiti residui:
+  - nessun test live contro Twilio reale o browser manuale sulla pagina thank-you; la verifica resta comunque buona lato backend + route SPA + test funzionali esistenti.
+
+## Spec (Affiliation wizard + member signup smoke verification - Mar 06, 2026)
+- Obiettivo: verificare che il batch security non abbia rotto il wizard iscrizione associazioni e il flusso iscrizione soci.
+- Scope:
+  - wizard affiliazione: draft, submit, review/admin visibility, referral flow;
+  - iscrizione soci: join multipart, web register, auto-approve/auto-issue, payment method, fiscal code, optional docs, cleanup multiorg.
+
+## Plan (Affiliation wizard + member signup smoke verification - Mar 06, 2026)
+- [x] Mappare test esistenti sui due flussi.
+- [x] Eseguire suite pytest mirata sui test funzionali di affiliazione e signup.
+- [x] Distinguere eventuali failure funzionali da test brittle di copy/UI statica.
+
+## Review (Affiliation wizard + member signup smoke verification - Mar 06, 2026)
+- Suite completa lanciata:
+  - `python -m pytest -q tests/test_affiliation_flow.py tests/test_referral_system.py tests/test_smoke.py tests/test_signup_fixes.py tests/test_join_auto_issue.py tests/test_payment_method_join.py tests/test_signup_fiscal_code.py tests/test_optional_identity_document.py tests/test_deleted_member_cleanup_multiorg.py`
+  - esito: `71 passed, 1 failed`
+- Failure isolata:
+  - `tests/test_smoke.py::test_affiliazione_payment_ui_contains_stripe_disabled_label`
+  - causa: assertion statica su una copy precisa della UI Stripe nel file `frontend/src/pages/Affiliazione.tsx`, non su comportamento runtime del wizard.
+- Verifica funzionale ripetuta escludendo quel test brittle:
+  - `python -m pytest -q tests/test_affiliation_flow.py tests/test_referral_system.py tests/test_smoke.py tests/test_signup_fixes.py tests/test_join_auto_issue.py tests/test_payment_method_join.py tests/test_signup_fiscal_code.py tests/test_optional_identity_document.py tests/test_deleted_member_cleanup_multiorg.py -k "not affiliazione_payment_ui_contains_stripe_disabled_label"`
+  - risultato: `71 passed, 1 deselected`
+- Copertura verificata:
+  - wizard affiliazione -> OK (`tests/test_affiliation_flow.py`, `tests/test_referral_system.py`);
+  - iscrizione soci web/join/register -> OK (`tests/test_signup_fixes.py`, `tests/test_join_auto_issue.py`, `tests/test_payment_method_join.py`, `tests/test_signup_fiscal_code.py`, `tests/test_optional_identity_document.py`, `tests/test_deleted_member_cleanup_multiorg.py`);
+  - smoke base route/join/auth -> OK (`tests/test_smoke.py`, esclusa solo la check testuale sulla copy Stripe).
+
+## Spec (Dashboard card + login shell + public navbar UX - Mar 06, 2026)
+- Obiettivo: correggere tre regressioni UX senza toccare logica non necessaria.
+- Scope:
+  - aumentare la leggibilita della tessera in area socio mantenendo flip e responsive;
+  - centrare verticalmente la pagina login con footer pubblico stabile in fondo;
+  - mostrare "Dashboard" al posto di "Login" nelle navbar pubbliche quando `whoami` segnala sessione autenticata.
+
+## Plan (Dashboard card + login shell + public navbar UX - Mar 06, 2026)
+- [x] Mappare i componenti reali coinvolti e la source of truth auth frontend.
+- [x] Applicare fix UI mirati a tessera dashboard e layout login pubblico.
+- [x] Aggiornare la navbar pubblica con CTA `Dashboard` role-aware.
+- [x] Eseguire build frontend e documentare esito/regressioni residue.
+
+## Review (Dashboard card + login shell + public navbar UX - Mar 06, 2026)
+- Tessera socio ampliata nel blocco dashboard aumentando la larghezza utile del wrapper card e riequilibrando il rapporto testo/card, senza toccare flip, contenuti o integrazione Google Wallet.
+- Pagina login pubblica riallineata con shell verticale piu robusta: maggiore offset sotto navbar fixed, contenuto centrato nello spazio disponibile e footer pubblico stabile in fondo grazie a `public-shell`/`public-main` elastici.
+- Navbar pubblica resa auth-aware usando `fetchWhoAmI()` come source of truth reale del frontend: se la sessione esiste, il link `Login` diventa `Dashboard` e usa `redirect_to` del backend per puntare al pannello corretto (socio, org-admin, super-admin).
+- Verifica: `npm --prefix frontend run build` -> OK.

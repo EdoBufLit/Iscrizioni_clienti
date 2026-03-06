@@ -8,6 +8,7 @@ import { usePublicMotion } from "./public/usePublicMotion";
 import { PUBLIC_MOTION } from "./public/motionTokens";
 import { trackUiEvent } from "../lib/tracking";
 import { useStatePlatformCapabilities } from "../hooks/useStatePlatformCapabilities";
+import { fetchWhoAmI, type WhoAmIResponse } from "../lib/api";
 
 const NAV_ITEMS = [
   { label: "Home", to: "/" },
@@ -34,6 +35,7 @@ const prefersReducedMotion = () =>
 
 const Layout = () => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [publicAuth, setPublicAuth] = useState<WhoAmIResponse>({ authenticated: false });
   const close = () => setMenuOpen(false);
   const location = useLocation();
   const { capabilities, loading: capabilitiesLoading } = useStatePlatformCapabilities();
@@ -65,6 +67,25 @@ const Layout = () => {
   useEffect(() => {
     setMenuOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (isDashboardRoute) return;
+    let active = true;
+
+    fetchWhoAmI()
+      .then((whoAmI) => {
+        if (!active) return;
+        setPublicAuth(whoAmI);
+      })
+      .catch(() => {
+        if (!active) return;
+        setPublicAuth({ authenticated: false });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isDashboardRoute, location.pathname]);
 
   useEffect(() => {
     if (isDashboardRoute) return;
@@ -168,6 +189,12 @@ const Layout = () => {
     });
   }, [isDashboardRoute, menuOpen]);
 
+  const publicAccessTarget =
+    publicAuth.authenticated && publicAuth.redirect_to
+      ? publicAuth.redirect_to
+      : "/area-riservata";
+  const publicAccessLabel = publicAuth.authenticated ? "Dashboard" : "Login";
+
   return (
     <MotionProvider>
       <div
@@ -235,11 +262,11 @@ const Layout = () => {
                     </NavLink>
                     <NavLink
                       className="text-sm font-bold text-slate-500 hover:text-brand transition-colors ml-2"
-                      to="/area-riservata"
-                      onMouseEnter={prefetchDashboard}
-                      onFocus={prefetchDashboard}
+                      to={publicAccessTarget}
+                      onMouseEnter={!publicAuth.authenticated ? prefetchDashboard : undefined}
+                      onFocus={!publicAuth.authenticated ? prefetchDashboard : undefined}
                     >
-                      Login
+                      {publicAccessLabel}
                     </NavLink>
                   </div>
                 </div>
@@ -299,10 +326,10 @@ const Layout = () => {
                     
                     <NavLink
                       className="text-brand font-bold py-2"
-                      to="/area-riservata"
+                      to={publicAccessTarget}
                       onClick={close}
                     >
-                      Accedi all'Area Riservata &rarr;
+                      {publicAccessLabel} &rarr;
                     </NavLink>
                   </div>
                 </nav>
