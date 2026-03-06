@@ -2599,3 +2599,8 @@ pm --prefix frontend run build -> OK
 - Pagina login pubblica riallineata con shell verticale piu robusta: maggiore offset sotto navbar fixed, contenuto centrato nello spazio disponibile e footer pubblico stabile in fondo grazie a `public-shell`/`public-main` elastici.
 - Navbar pubblica resa auth-aware usando `fetchWhoAmI()` come source of truth reale del frontend: se la sessione esiste, il link `Login` diventa `Dashboard` e usa `redirect_to` del backend per puntare al pannello corretto (socio, org-admin, super-admin).
 - Verifica: `npm --prefix frontend run build` -> OK.
+
+## Review Addendum (Dashboard card correction - Mar 06, 2026)
+- Corretto il fix precedente sulla sezione `La tua tessera`: il problema non era solo nella colonna destra ma nel fatto che `MemberCardPreview` non occupava realmente tutta la larghezza disponibile del suo slot.
+- La sezione ora usa una griglia desktop bilanciata con colonna testo ampia e colonna tessera dedicata; la tessera cresce tramite `max-width` del componente reale, non tramite allargamento artificiale del wrapper esterno.
+- `MemberCardPreview` ora forza `w-full` sul root, cosi fronte e retro scalano davvero insieme fino alla larghezza assegnata.

@@ -114,6 +114,7 @@ const LogoImg = ({ src, alt, className = "", style }: LogoProps) => {
 
 export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPreviewProps) => {
   const [isFlipped, setIsFlipped] = useState(false);
+  const rootClassName = className ? `w-full ${className}` : "w-full";
 
   const displayName = toDisplayName(cardData);
   const clubDisplayName = toSafeText(cardData.clubDisplayName);
@@ -133,7 +134,7 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
   const boxShadow = "0 24px 48px rgba(40,0,10,0.40), 0 8px 16px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.06)";
 
   return (
-    <div className={className}>
+    <div className={rootClassName}>
       <button
         type="button"
         className="member-card-flip group relative block w-full cursor-pointer select-none"
