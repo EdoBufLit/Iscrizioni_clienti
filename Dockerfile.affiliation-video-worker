@@ -55,4 +55,4 @@ RUN npm --prefix /app/video-renderer/services/welcome-video ci
 COPY . .
 RUN npm --prefix /app/video-renderer/services/welcome-video run build
 
-CMD ["python3", "-m", "app.workers.affiliation_video_worker", "--poll-seconds", "15", "--limit", "1"]
+CMD ["python3", "-m", "app.workers.affiliation_video_worker", "--limit", "1"]

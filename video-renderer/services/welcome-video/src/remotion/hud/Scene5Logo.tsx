@@ -1,6 +1,7 @@
-import { AbsoluteFill, Img, interpolate, staticFile, useCurrentFrame } from "remotion";
+import { AbsoluteFill, Img, interpolate, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import React from "react";
 import { TypewriterText } from "../TypewriterText";
+import { toHudTimelineFrame } from "./hudRuntime";
 
 export type Scene5Mode = "review" | "payment_pending" | "approved";
 export type Scene5Template = "personalized" | "base";
@@ -59,22 +60,24 @@ export const Scene5Logo: React.FC<{
   template = "personalized",
 }) => {
   const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const timelineFrame = toHudTimelineFrame(frame, fps);
   const finalState = resolveFinalState(mode, template);
   const showAssociationLine = template !== "base";
 
-  const logoOpacity = interpolate(frame, [0, 20], [0, 1], { extrapolateRight: "clamp" });
+  const logoOpacity = interpolate(timelineFrame, [0, 20], [0, 1], { extrapolateRight: "clamp" });
   
   // Animate logo scale from 0.92 to 1.0 over 25 frames
-  const logoScale = interpolate(frame, [0, 25], [0.92, 1.0], { extrapolateRight: "clamp" });
+  const logoScale = interpolate(timelineFrame, [0, 25], [0.92, 1.0], { extrapolateRight: "clamp" });
 
-  const textOpacity = interpolate(frame, [30, 45], [0, 1], { extrapolateRight: "clamp" });
-  const finalLabelOpacity = interpolate(frame, [60, 75], [0, 1], { extrapolateRight: "clamp" });
+  const textOpacity = interpolate(timelineFrame, [30, 45], [0, 1], { extrapolateRight: "clamp" });
+  const finalLabelOpacity = interpolate(timelineFrame, [60, 75], [0, 1], { extrapolateRight: "clamp" });
 
-  const flickerPulse = frame % 15 < 3 ? 0.72 : 1;
+  const flickerPulse = Math.floor(timelineFrame) % 15 < 3 ? 0.72 : 1;
   const imageSource = logoUrl || (logoAssetPath ? staticFile(logoAssetPath) : "");
 
   // Soft sweep light across the logo
-  const sweepProgress = interpolate(frame, [25, 55], [-1.5, 1.5], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
+  const sweepProgress = interpolate(timelineFrame, [25, 55], [-1.2, 1.2], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
 
   return (
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", flexDirection: "column", gap: 30 }}>
@@ -132,24 +135,26 @@ export const Scene5Logo: React.FC<{
               }}
             />
             
-            {/* Sweep effect mask */}
+            {/* Sweep effect kept simple to avoid per-frame masking on the logo. */}
             <div
               style={{
                 position: "absolute",
-                top: 0, left: 0, right: 0, bottom: 0,
-                maskImage: `url("${imageSource}")`,
-                WebkitMaskImage: `url("${imageSource}")`,
-                WebkitMaskSize: "contain",
-                WebkitMaskRepeat: "no-repeat",
-                WebkitMaskPosition: "center",
+                top: "10%",
+                left: "5%",
+                right: "5%",
+                bottom: "10%",
+                pointerEvents: "none",
               }}
             >
               <div
                 style={{
                   position: "absolute",
-                  top: "-50%", left: "-50%", width: "200%", height: "200%",
-                  background: "linear-gradient(45deg, transparent 40%, rgba(255,255,255,0.6) 50%, transparent 60%)",
-                  transform: `translateX(${sweepProgress * 100}%)`,
+                  top: 0,
+                  left: "-30%",
+                  width: "45%",
+                  height: "100%",
+                  background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.16) 50%, transparent 100%)",
+                  transform: `translateX(${sweepProgress * 100}%) skewX(-18deg)`,
                 }}
               />
             </div>

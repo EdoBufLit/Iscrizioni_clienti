@@ -1,19 +1,21 @@
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import React from "react";
+import { HUD_BASE_FPS, HUD_BASE_WIDTH, toHudTimelineFrame } from "./hudRuntime";
 
 export const Scene4Registration: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+  const timelineFrame = toHudTimelineFrame(frame, fps);
 
   // Fast strong scale in
-  const scaleIn = spring({ fps, frame, config: { damping: 14, stiffness: 120 } });
+  const scaleIn = spring({ fps: HUD_BASE_FPS, frame: timelineFrame, config: { damping: 14, stiffness: 120 } });
   const scale = interpolate(scaleIn, [0, 1], [0.9, 1.0]);
   
   // Quick fade in
-  const opacity = interpolate(frame, [0, 15], [0, 1], { extrapolateRight: "clamp" });
+  const opacity = interpolate(timelineFrame, [0, 15], [0, 1], { extrapolateRight: "clamp" });
 
-  const flashOpacity = interpolate(frame, [0, 5, 15], [0, 1, 0], { extrapolateRight: "clamp" });
-  const horizontalFlashWidth = interpolate(frame, [0, 10], [0, 1920], { extrapolateRight: "clamp" });
+  const flashOpacity = interpolate(timelineFrame, [0, 5, 15], [0, 1, 0], { extrapolateRight: "clamp" });
+  const horizontalFlashWidth = interpolate(timelineFrame, [0, 10], [0, HUD_BASE_WIDTH], { extrapolateRight: "clamp" });
 
   return (
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center" }}>
