@@ -2614,3 +2614,7 @@ pm --prefix frontend run build -> OK
 - Lasciati invariati dimensione tessera, testo e layout interno.
 - Allargato solo il contenitore esterno della sezione sui breakpoint desktop con margini negativi controllati, cosi la sezione dispone dello spazio necessario entro il dashboard shell.
 - Obiettivo: evitare il taglio della tessera sul lato destro senza alterare la composizione interna gia approvata.
+
+## Review Addendum (Dashboard outer wrapper width v2 - Mar 06, 2026)
+- Il primo allargamento del wrapper era ancora insufficiente rispetto alla combinazione `sidebar + gap + content width` del dashboard.
+- Aumentato ulteriormente solo il respiro orizzontale del contenitore esterno ai breakpoint desktop (`xl`/`2xl`), lasciando immutati tessera, testo e composizione interna.
