@@ -1,28 +1,30 @@
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import React from "react";
 import { TypewriterText } from "../TypewriterText";
+import { HUD_BASE_HEIGHT, HUD_BASE_WIDTH, toHudTimelineFrame } from "./hudRuntime";
 
 export const Scene3Connection: React.FC = () => {
   const frame = useCurrentFrame();
-  const { width, height } = useVideoConfig();
+  const { fps } = useVideoConfig();
+  const timelineFrame = toHudTimelineFrame(frame, fps);
 
-  const centerX = width / 2;
-  const centerY = height / 2;
+  const centerX = HUD_BASE_WIDTH / 2;
+  const centerY = HUD_BASE_HEIGHT / 2;
 
   const lines = [
-    { startX: centerX, startY: centerY, endX: width * 0.9, endY: height * 0.2, delay: 0 },
-    { startX: centerX, startY: centerY, endX: width * 0.1, endY: height * 0.8, delay: 5 },
-    { startX: centerX, startY: centerY, endX: width * 0.2, endY: height * 0.2, delay: 10 },
-    { startX: centerX, startY: centerY, endX: width * 0.8, endY: height * 0.8, delay: 15 },
-    { startX: centerX, startY: centerY, endX: width * 0.9, endY: height * 0.6, delay: 8 },
-    { startX: centerX, startY: centerY, endX: width * 0.1, endY: height * 0.4, delay: 12 },
+    { startX: centerX, startY: centerY, endX: HUD_BASE_WIDTH * 0.9, endY: HUD_BASE_HEIGHT * 0.2, delay: 0 },
+    { startX: centerX, startY: centerY, endX: HUD_BASE_WIDTH * 0.1, endY: HUD_BASE_HEIGHT * 0.8, delay: 5 },
+    { startX: centerX, startY: centerY, endX: HUD_BASE_WIDTH * 0.2, endY: HUD_BASE_HEIGHT * 0.2, delay: 10 },
+    { startX: centerX, startY: centerY, endX: HUD_BASE_WIDTH * 0.8, endY: HUD_BASE_HEIGHT * 0.8, delay: 15 },
+    { startX: centerX, startY: centerY, endX: HUD_BASE_WIDTH * 0.9, endY: HUD_BASE_HEIGHT * 0.6, delay: 8 },
+    { startX: centerX, startY: centerY, endX: HUD_BASE_WIDTH * 0.1, endY: HUD_BASE_HEIGHT * 0.4, delay: 12 },
   ];
 
   return (
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center" }}>
       {/* Node lines */}
       {lines.map((line, i) => {
-        const lineFrame = Math.max(0, frame - line.delay);
+        const lineFrame = Math.max(0, timelineFrame - line.delay);
         const progress = interpolate(lineFrame, [0, 20], [0, 1], { extrapolateRight: "clamp" });
 
         const length = Math.sqrt(Math.pow(line.endX - line.startX, 2) + Math.pow(line.endY - line.startY, 2));
@@ -71,8 +73,8 @@ export const Scene3Connection: React.FC = () => {
 
       {/* Nodes (circles) */}
       {lines.map((line, i) => {
-        const nodeOpacity = interpolate(frame, [line.delay + 10, line.delay + 20], [0, 1], { extrapolateRight: "clamp" });
-        const nodePulse = 1 + Math.sin((frame - line.delay) / 4) * 0.15;
+        const nodeOpacity = interpolate(timelineFrame, [line.delay + 10, line.delay + 20], [0, 1], { extrapolateRight: "clamp" });
+        const nodePulse = 1 + Math.sin((timelineFrame - line.delay) / 4) * 0.15;
         
         return (
           <div
@@ -102,7 +104,7 @@ export const Scene3Connection: React.FC = () => {
           padding: "20px 40px",
           border: "2px solid rgba(0, 175, 255, 0.8)",
           boxShadow: "0 0 18px rgba(0, 175, 255, 0.28)",
-          opacity: interpolate(frame, [15, 25], [0, 1], { extrapolateRight: "clamp" }),
+          opacity: interpolate(timelineFrame, [15, 25], [0, 1], { extrapolateRight: "clamp" }),
         }}
       >
         <h2

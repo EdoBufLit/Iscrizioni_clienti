@@ -1,18 +1,20 @@
 import { AbsoluteFill, useCurrentFrame, useVideoConfig } from "remotion";
 import React from "react";
+import { HUD_BASE_HEIGHT, toHudTimelineFrame } from "./hudRuntime";
 
 const NOISE_TEXTURE_BACKGROUND =
   "url('data:image/svg+xml;utf8,%3Csvg viewBox=\"0 0 200 200\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cfilter id=\"noiseFilter\"%3E%3CfeTurbulence type=\"fractalNoise\" baseFrequency=\"0.55\" numOctaves=\"2\" stitchTiles=\"stitch\"/%3E%3C/filter%3E%3Crect width=\"100%25\" height=\"100%25\" filter=\"url(%23noiseFilter)\"/%3E%3C/svg%3E')";
 
 export const HudBackground: React.FC = () => {
   const frame = useCurrentFrame();
-  const { height } = useVideoConfig();
+  const { fps } = useVideoConfig();
+  const timelineFrame = toHudTimelineFrame(frame, fps);
 
   // Scanning line animation
-  const scanLineY = (frame * 6) % height;
-  const edgeGlowLeftOpacity = 0.28 + Math.sin(frame / 5) * 0.08;
-  const edgeGlowRightOpacity = 0.28 + Math.cos(frame / 7) * 0.08;
-  const latencyMs = Math.round(12 + Math.sin(frame / 8) * 4);
+  const scanLineY = (timelineFrame * 6) % HUD_BASE_HEIGHT;
+  const edgeGlowLeftOpacity = 0.28 + Math.sin(timelineFrame / 5) * 0.08;
+  const edgeGlowRightOpacity = 0.28 + Math.cos(timelineFrame / 7) * 0.08;
+  const latencyMs = Math.round(12 + Math.sin(timelineFrame / 8) * 4);
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#02040a", overflow: "hidden" }}>
@@ -40,7 +42,6 @@ export const HudBackground: React.FC = () => {
           height: "200%",
           backgroundImage: NOISE_TEXTURE_BACKGROUND,
           opacity: 0.025,
-          mixBlendMode: "overlay",
           zIndex: 1,
         }}
       />

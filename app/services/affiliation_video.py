@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -25,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 _RENDER_SCRIPT_RELATIVE = Path("dist") / "renderHud.cjs"
+_RENDER_BUILD_META_RELATIVE = Path("dist") / "renderHud.build.json"
 _WELCOME_VIDEO_PUBLIC_ROOT = "/videos/welcome"
 _WELCOME_VIDEO_GENERIC_ERROR = (
     "Il video di benvenuto non e ancora disponibile. Puoi riprovare la generazione."
@@ -166,14 +168,109 @@ def serialize_video_job(job: VideoJob | None) -> dict[str, Any] | None:
     }
 
 
+def _renderer_fingerprint_targets(renderer_dir: Path) -> list[Path]:
+    return [
+        renderer_dir / "package.json",
+        renderer_dir / "package-lock.json",
+        renderer_dir / "src" / "env.ts",
+        renderer_dir / "src" / "renderHud.ts",
+        renderer_dir / "src" / "audio",
+        renderer_dir / "src" / "remotion",
+        renderer_dir / "public",
+    ]
+
+
+def _iter_renderer_source_files(renderer_dir: Path) -> list[Path]:
+    files: list[Path] = []
+    for target in _renderer_fingerprint_targets(renderer_dir):
+        if not target.exists():
+            continue
+        if target.is_file():
+            files.append(target)
+            continue
+        files.extend(
+            path
+            for path in target.rglob("*")
+            if path.is_file()
+        )
+    return sorted(files)
+
+
+def _compute_renderer_source_fingerprint(renderer_dir: Path) -> str:
+    digest = hashlib.sha1()
+    files = _iter_renderer_source_files(renderer_dir)
+    if not files:
+        digest.update(b"missing-renderer-sources")
+        return digest.hexdigest()
+
+    for file_path in files:
+        relative = file_path.relative_to(renderer_dir).as_posix()
+        try:
+            stats = file_path.stat()
+        except OSError:
+            continue
+        digest.update(f"{relative}:{stats.st_size}:{int(stats.st_mtime)}\n".encode("utf-8"))
+    return digest.hexdigest()
+
+
+def _read_renderer_build_meta(meta_path: Path) -> dict[str, Any] | None:
+    try:
+        raw = meta_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _write_renderer_build_meta(
+    meta_path: Path,
+    *,
+    source_fingerprint: str,
+    render_script: Path,
+) -> None:
+    meta_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "source_fingerprint": source_fingerprint,
+        "built_at": datetime.utcnow().isoformat(),
+        "render_script_mtime": int(render_script.stat().st_mtime),
+    }
+    meta_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
 def _ensure_renderer_build(renderer_dir: Path) -> Path:
     render_script = renderer_dir / _RENDER_SCRIPT_RELATIVE
-    if render_script.exists():
+    build_meta_path = renderer_dir / _RENDER_BUILD_META_RELATIVE
+    source_fingerprint = _compute_renderer_source_fingerprint(renderer_dir)
+    build_meta = _read_renderer_build_meta(build_meta_path)
+
+    if (
+        render_script.exists()
+        and build_meta
+        and build_meta.get("source_fingerprint") == source_fingerprint
+    ):
+        logger.info(
+            "affiliation_video_build_cache_hit renderer_dir=%s source_fingerprint=%s",
+            renderer_dir,
+            source_fingerprint,
+        )
         return render_script
 
     npm_binary = "npm.cmd" if os.name == "nt" else "npm"
     build_started_at = datetime.utcnow()
-    logger.info("affiliation_video_build_start renderer_dir=%s", renderer_dir)
+    rebuild_reason = "missing_dist"
+    if render_script.exists() and not build_meta:
+        rebuild_reason = "missing_build_meta"
+    elif render_script.exists():
+        rebuild_reason = "source_fingerprint_changed"
+    logger.info(
+        "affiliation_video_build_start renderer_dir=%s source_fingerprint=%s rebuild_reason=%s",
+        renderer_dir,
+        source_fingerprint,
+        rebuild_reason,
+    )
     subprocess.run(
         [npm_binary, "run", "build"],
         cwd=str(renderer_dir),
@@ -184,11 +281,17 @@ def _ensure_renderer_build(renderer_dir: Path) -> Path:
 
     if not render_script.exists():
         raise RuntimeError("Renderer build completed but dist/renderHud.cjs is missing.")
+    _write_renderer_build_meta(
+        build_meta_path,
+        source_fingerprint=source_fingerprint,
+        render_script=render_script,
+    )
     build_ms = int((datetime.utcnow() - build_started_at).total_seconds() * 1000)
     logger.info(
-        "affiliation_video_build_end renderer_dir=%s build_ms=%s",
+        "affiliation_video_build_end renderer_dir=%s build_ms=%s source_fingerprint=%s",
         renderer_dir,
         build_ms,
+        source_fingerprint,
     )
     return render_script
 
@@ -396,13 +499,20 @@ def _render_job(db: Session, job: VideoJob) -> None:
         if job.requested_at:
             total_ms = int((job.finished_at - job.requested_at).total_seconds() * 1000)
         logger.info(
-            "affiliation_video_render_end job_id=%s application_id=%s mode=%s processing_ms=%s total_ms=%s renderer_timings=%s",
+            "affiliation_video_render_end job_id=%s application_id=%s mode=%s processing_ms=%s total_ms=%s renderer_timings=%s render_concurrency_resolved=%s bundle_cache_hit=%s parallel_encoding=%s slowest_frames=%s total_frames=%s cpu_info=%s bundle_fingerprint=%s",
             job.id,
             job.application_id,
             job.mode,
             processing_ms,
             total_ms,
             payload.get("timingsMs") if isinstance(payload, dict) else None,
+            payload.get("renderConcurrencyResolved") if isinstance(payload, dict) else None,
+            payload.get("bundleCacheHit") if isinstance(payload, dict) else None,
+            payload.get("parallelEncoding") if isinstance(payload, dict) else None,
+            payload.get("slowestFrames") if isinstance(payload, dict) else None,
+            payload.get("totalFrames") if isinstance(payload, dict) else None,
+            payload.get("cpuInfo") if isinstance(payload, dict) else None,
+            payload.get("bundleFingerprint") if isinstance(payload, dict) else None,
         )
         return
 

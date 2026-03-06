@@ -1,18 +1,21 @@
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import React from "react";
 import { TypewriterText } from "../TypewriterText";
+import { HUD_BASE_HEIGHT, toHudTimelineFrame } from "./hudRuntime";
 
 export const Scene1Boot: React.FC = () => {
   const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const timelineFrame = toHudTimelineFrame(frame, fps);
 
-  const textOpacity = interpolate(frame, [0, 10], [0, 1], { extrapolateRight: "clamp" });
-  const flicker = frame % 10 < 2 ? 0.3 : 1;
-  const cursor = frame % 15 < 7 ? "_" : "";
+  const textOpacity = interpolate(timelineFrame, [0, 10], [0, 1], { extrapolateRight: "clamp" });
+  const flicker = Math.floor(timelineFrame) % 10 < 2 ? 0.3 : 1;
+  const cursor = Math.floor(timelineFrame) % 15 < 7 ? "_" : "";
   
-  const loadingPercent = Math.floor(interpolate(frame, [0, 40], [12, 86], { extrapolateRight: "clamp" }));
+  const loadingPercent = Math.floor(interpolate(timelineFrame, [0, 40], [12, 86], { extrapolateRight: "clamp" }));
 
   // Horizontal scan line going down
-  const scanLineY = interpolate(frame, [0, 45], [-20, 1100]);
+  const scanLineY = interpolate(timelineFrame, [0, 45], [-20, HUD_BASE_HEIGHT + 20]);
 
   return (
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center" }}>

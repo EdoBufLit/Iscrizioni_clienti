@@ -21,6 +21,11 @@ const NVENC_CACHE_PATH = path.join(CACHE_ROOT, "nvenc-capabilities.json");
 const INTERMEDIATE_X264_PRESET = "ultrafast";
 const FINAL_X264_PRESET = "superfast";
 const FINAL_NVENC_PRESET = "p4";
+const DEFAULT_RENDER_TARGET = {
+  width: 1280,
+  height: 720,
+  fps: 24,
+};
 
 type RenderTimings = Record<string, number>;
 
@@ -114,6 +119,14 @@ const safeStat = async (filePath: string): Promise<Stats | null> => {
   }
 };
 
+const readTextFile = async (filePath: string): Promise<string | null> => {
+  try {
+    return await fs.readFile(filePath, "utf-8");
+  } catch {
+    return null;
+  }
+};
+
 const readJsonFile = async <T>(filePath: string): Promise<T | null> => {
   try {
     const raw = await fs.readFile(filePath, "utf-8");
@@ -184,7 +197,7 @@ const buildBundleFingerprint = async (entryPoint: string): Promise<string> => {
 const resolveServeUrl = async (
   entryPoint: string,
   timings: RenderTimings,
-): Promise<{ serveUrl: string; bundleCacheHit: boolean }> => {
+): Promise<{ serveUrl: string; bundleCacheHit: boolean; bundleFingerprint: string }> => {
   const fingerprint = await buildBundleFingerprint(entryPoint);
   const bundleCacheDir = path.join(BUNDLE_CACHE_ROOT, fingerprint);
   const startedAt = logStageStart("bundle", `fingerprint=${fingerprint}`);
@@ -193,7 +206,7 @@ const resolveServeUrl = async (
 
   if (cacheReusable) {
     logStageEnd("bundle", startedAt, timings, "cache=hit");
-    return { serveUrl: bundleCacheDir, bundleCacheHit: true };
+    return { serveUrl: bundleCacheDir, bundleCacheHit: true, bundleFingerprint: fingerprint };
   }
 
   await fs.mkdir(BUNDLE_CACHE_ROOT, { recursive: true });
@@ -206,7 +219,7 @@ const resolveServeUrl = async (
       enableCaching: true,
     });
     logStageEnd("bundle", startedAt, timings, "cache=miss");
-    return { serveUrl, bundleCacheHit: false };
+    return { serveUrl, bundleCacheHit: false, bundleFingerprint: fingerprint };
   } catch (error) {
     await fs.rm(bundleCacheDir, { recursive: true, force: true }).catch(() => undefined);
     logStageEnd(
@@ -223,6 +236,82 @@ const getNvencSignature = async (ffmpegBinary: string): Promise<string> => {
   const binaryLabel = path.isAbsolute(ffmpegBinary) ? ffmpegBinary : ffmpegBinary.trim();
   const stats = path.isAbsolute(ffmpegBinary) ? await safeStat(ffmpegBinary) : null;
   return `${binaryLabel}:${stats?.size ?? "na"}:${Math.floor(stats?.mtimeMs ?? 0)}`;
+};
+
+const parseCpuRangeCount = (value: string | null): number | null => {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) {
+    return null;
+  }
+
+  let total = 0;
+  for (const part of normalized.split(",")) {
+    const trimmed = part.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const [startRaw, endRaw] = trimmed.split("-");
+    const start = Number(startRaw);
+    const end = Number(endRaw ?? startRaw);
+    if (!Number.isFinite(start) || !Number.isFinite(end)) {
+      return null;
+    }
+    total += Math.max(0, end - start + 1);
+  }
+
+  return total > 0 ? total : null;
+};
+
+const detectCpuInfo = async (): Promise<{
+  logicalCpuCount: number;
+  quotaCpuCount: number | null;
+  cpusetCpuCount: number | null;
+  effectiveCpuCount: number;
+}> => {
+  const logicalCpuCount = os.cpus().length;
+  const [cpuMax, cpuQuota, cpuPeriod, cpusetEffective, cpusetLegacy] = await Promise.all([
+    readTextFile("/sys/fs/cgroup/cpu.max"),
+    readTextFile("/sys/fs/cgroup/cpu/cpu.cfs_quota_us"),
+    readTextFile("/sys/fs/cgroup/cpu/cpu.cfs_period_us"),
+    readTextFile("/sys/fs/cgroup/cpuset.cpus.effective"),
+    readTextFile("/sys/fs/cgroup/cpuset/cpuset.cpus"),
+  ]);
+
+  let quotaCpuCount: number | null = null;
+  const cpuMaxParts = (cpuMax ?? "").trim().split(/\s+/);
+  if (cpuMaxParts.length === 2 && cpuMaxParts[0] !== "max") {
+    const quota = Number(cpuMaxParts[0]);
+    const period = Number(cpuMaxParts[1]);
+    if (Number.isFinite(quota) && Number.isFinite(period) && quota > 0 && period > 0) {
+      quotaCpuCount = Math.max(1, Math.floor(quota / period));
+    }
+  }
+
+  if (quotaCpuCount === null) {
+    const quota = Number((cpuQuota ?? "").trim());
+    const period = Number((cpuPeriod ?? "").trim());
+    if (Number.isFinite(quota) && Number.isFinite(period) && quota > 0 && period > 0) {
+      quotaCpuCount = Math.max(1, Math.floor(quota / period));
+    }
+  }
+
+  const cpusetCpuCount =
+    parseCpuRangeCount(cpusetEffective) ?? parseCpuRangeCount(cpusetLegacy);
+  const effectiveCpuCount = Math.max(
+    1,
+    Math.min(
+      logicalCpuCount,
+      quotaCpuCount ?? logicalCpuCount,
+      cpusetCpuCount ?? logicalCpuCount,
+    ),
+  );
+
+  return {
+    logicalCpuCount,
+    quotaCpuCount,
+    cpusetCpuCount,
+    effectiveCpuCount,
+  };
 };
 
 const hasNvencEncoder = async (timings: RenderTimings): Promise<boolean> => {
@@ -330,8 +419,9 @@ const resolveAudioSource = (
 
 const resolveRenderConcurrency = (
   argv: Record<string, unknown>,
+  effectiveCpuCount: number,
 ): number | string | null => {
-  const defaultConcurrency = Math.max(1, Math.min(2, os.cpus().length));
+  const defaultConcurrency = Math.max(1, Math.min(2, effectiveCpuCount));
   const argValue = argv.renderConcurrency ?? argv["render-concurrency"];
   const envValue =
     process.env.AFFILIATION_VIDEO_RENDER_CONCURRENCY ??
@@ -579,6 +669,10 @@ const main = async (): Promise<void> => {
   const timings: RenderTimings = {};
   const argv = minimist(process.argv.slice(2));
   const env = getEnv();
+  const cpuInfo = await detectCpuInfo();
+  console.info(
+    `[renderHud] cpuInfo logical=${cpuInfo.logicalCpuCount} effective=${cpuInfo.effectiveCpuCount} quota=${cpuInfo.quotaCpuCount} cpuset=${cpuInfo.cpusetCpuCount}`,
+  );
 
   const orgId = argv.orgId?.toString();
   if (!orgId) {
@@ -596,7 +690,7 @@ const main = async (): Promise<void> => {
   const forceAudioGeneration =
     argv["force-audio-generation"] === true || argv.forceAudioGeneration === true;
   const audioSource = resolveAudioSource(argv, env.audioSource);
-  const renderConcurrency = resolveRenderConcurrency(argv);
+  const renderConcurrency = resolveRenderConcurrency(argv, cpuInfo.effectiveCpuCount);
   const audioLocalPath = resolveAudioLocalPath(argv, env.audioLocalPath);
 
   const outputPath = outputArg
@@ -690,7 +784,7 @@ const main = async (): Promise<void> => {
     throw new Error(`Missing Remotion entryPoint: ${entryPoint}`);
   }
 
-  const { serveUrl, bundleCacheHit } = await resolveServeUrl(entryPoint, timings);
+  const { serveUrl, bundleCacheHit, bundleFingerprint } = await resolveServeUrl(entryPoint, timings);
 
   const inputProps = {
     orgName,
@@ -796,17 +890,20 @@ const main = async (): Promise<void> => {
       logoStrategy: resolvedLogo.logoStrategy,
       durationSec: 12,
       bundleCacheHit,
+      bundleFingerprint,
       nvencDetected: hasNvenc,
       usedNvenc,
       renderConcurrencyRequested: renderConcurrency,
       renderConcurrencyResolved: resolvedConcurrency,
       parallelEncoding,
       slowestFrames,
+      totalFrames: composition.durationInFrames,
+      cpuInfo,
       timingsMs: timings,
       outputSpec: {
-        width: 1280,
-        height: 720,
-        fps: 24,
+        width: DEFAULT_RENDER_TARGET.width,
+        height: DEFAULT_RENDER_TARGET.height,
+        fps: DEFAULT_RENDER_TARGET.fps,
         codec: usedNvenc ? "h264_nvenc" : "h264",
         crf: 23,
         preset: usedNvenc ? FINAL_NVENC_PRESET : FINAL_X264_PRESET,

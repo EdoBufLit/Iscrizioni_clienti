@@ -1,23 +1,25 @@
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import React from "react";
 import { TypewriterText } from "../TypewriterText";
+import { HUD_BASE_FPS, toHudTimelineFrame } from "./hudRuntime";
 
 export const Scene2Analysis: React.FC<{ orgName: string }> = ({ orgName }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+  const timelineFrame = toHudTimelineFrame(frame, fps);
 
   // Panel enter
-  const panelScaleIn = spring({ fps, frame: frame, config: { damping: 15 } });
+  const panelScaleIn = spring({ fps: HUD_BASE_FPS, frame: timelineFrame, config: { damping: 15 } });
   const panelScaleFinal = interpolate(panelScaleIn, [0, 1], [0.96, 1.0]);
 
-  const textOpacity = interpolate(frame, [5, 15], [0, 1], { extrapolateRight: "clamp" });
-  const verifiedOpacity = interpolate(frame, [35, 40], [0, 1], { extrapolateRight: "clamp" });
+  const textOpacity = interpolate(timelineFrame, [5, 15], [0, 1], { extrapolateRight: "clamp" });
+  const verifiedOpacity = interpolate(timelineFrame, [35, 40], [0, 1], { extrapolateRight: "clamp" });
 
-  const showVerified = frame > 35;
-  const verifiedPulse = showVerified ? 1 + Math.sin((frame - 35) / 3) * 0.05 : 1;
+  const showVerified = timelineFrame > 35;
+  const verifiedPulse = showVerified ? 1 + Math.sin((timelineFrame - 35) / 3) * 0.05 : 1;
 
   // Scanning light line over the panel
-  const scanLineX = interpolate(frame, [0, 60], [-800, 800]);
+  const scanLineX = interpolate(timelineFrame, [0, 60], [-800, 800]);
 
   return (
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center" }}>
