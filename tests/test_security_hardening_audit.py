@@ -1,9 +1,12 @@
 from datetime import datetime
+from pathlib import Path
 import uuid
+
+import pytest
 
 from app.config import settings
 from app.db import SessionLocal
-from app.models import IngestRateLimit, Member, MemberStatus, Organization
+from app.models import AdminRole, AdminUser, IngestRateLimit, Member, MemberStatus, Organization
 from app.security import get_password_hash
 from app.services.card_verification import build_card_verification_token
 
@@ -151,3 +154,92 @@ def test_public_organization_detail_hides_inactive_org(client):
         assert response.status_code == 404
     finally:
         db.close()
+
+
+def test_public_uploads_route_blocks_private_files_but_keeps_wallet_assets(client):
+    uploads_dir = Path(settings.UPLOAD_DIR)
+    blocked_file = uploads_dir / "security-audit-probe.txt"
+    public_file = uploads_dir / "org" / "999999" / "wallet" / "security-logo.txt"
+
+    blocked_file.parent.mkdir(parents=True, exist_ok=True)
+    public_file.parent.mkdir(parents=True, exist_ok=True)
+    blocked_file.write_text("blocked", encoding="utf-8")
+    public_file.write_text("public-wallet", encoding="utf-8")
+
+    try:
+        blocked = client.get("/uploads/security-audit-probe.txt")
+        allowed = client.get("/uploads/org/999999/wallet/security-logo.txt")
+
+        assert blocked.status_code == 404, blocked.text
+        assert allowed.status_code == 200, allowed.text
+        assert allowed.text == "public-wallet"
+    finally:
+        blocked_file.unlink(missing_ok=True)
+        public_file.unlink(missing_ok=True)
+
+
+def test_legacy_admin_login_requires_active_super_admin(client):
+    client.cookies.clear()
+    db = SessionLocal()
+    try:
+        suffix = uuid.uuid4().hex[:8]
+        org = Organization(
+            name=f"Legacy Admin Org {suffix}",
+            slug=f"legacy-admin-org-{suffix}",
+            is_active=True,
+        )
+        db.add(org)
+        db.commit()
+        db.refresh(org)
+
+        org_admin = AdminUser(
+            email=f"legacy-org-admin-{suffix}@example.com",
+            password_hash=get_password_hash("TestPass123!"),
+            role=AdminRole.ORG_ADMIN,
+            org_id=org.id,
+            is_active=True,
+        )
+        disabled_super_admin = AdminUser(
+            email=f"legacy-disabled-sa-{suffix}@example.com",
+            password_hash=get_password_hash("TestPass123!"),
+            role=AdminRole.SUPER_ADMIN,
+            org_id=None,
+            is_active=False,
+        )
+        db.add_all([org_admin, disabled_super_admin])
+        db.commit()
+
+        allowed = client.post(
+            "/admin/login",
+            data={"email": "admin@assonam.it", "password": "admin"},
+            follow_redirects=False,
+        )
+        blocked_org_admin = client.post(
+            "/admin/login",
+            data={"email": org_admin.email, "password": "TestPass123!"},
+            follow_redirects=False,
+        )
+        blocked_disabled = client.post(
+            "/admin/login",
+            data={"email": disabled_super_admin.email, "password": "TestPass123!"},
+            follow_redirects=False,
+        )
+
+        assert allowed.status_code == 302, allowed.text
+        assert blocked_org_admin.status_code == 401, blocked_org_admin.text
+        assert blocked_disabled.status_code == 401, blocked_disabled.text
+    finally:
+        client.cookies.clear()
+        db.close()
+
+
+def test_whatsapp_webhook_rejects_invalid_signature_when_configured(client, monkeypatch):
+    pytest.importorskip("twilio.request_validator")
+
+    monkeypatch.setattr(settings, "TWILIO_AUTH_TOKEN", "test-twilio-auth-token")
+    response = client.post(
+        "/api/whatsapp/bot",
+        data={"From": "whatsapp:+3906000000", "Body": "ciao"},
+        headers={"X-Twilio-Signature": "invalid-signature"},
+    )
+    assert response.status_code == 403, response.text

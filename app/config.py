@@ -1,5 +1,6 @@
 import logging
 import os
+from urllib.parse import urlparse
 
 
 def _env_bool(name: str, *, default: bool = False) -> bool:
@@ -15,6 +16,18 @@ def _env_optional(name: str) -> str | None:
         return None
     normalized = raw.strip()
     return normalized or None
+
+
+def _url_hostname(raw_url: str | None) -> str:
+    value = (raw_url or "").strip()
+    if not value:
+        return ""
+    parsed = urlparse(value)
+    return (parsed.hostname or "").strip().lower()
+
+
+def _is_local_hostname(hostname: str) -> bool:
+    return hostname in {"", "localhost", "127.0.0.1", "::1"}
 
 
 def is_stripe_configured(
@@ -173,6 +186,23 @@ class Settings:
             price_id=self.STRIPE_PRICE_ID,
             publishable_key=self.STRIPE_PUBLISHABLE_KEY,
             require_publishable_key=self.STRIPE_REQUIRE_PUBLISHABLE_KEY,
+        )
+
+    @property
+    def IS_LOCAL_ENV(self) -> bool:
+        base_host = _url_hostname(self.BASE_URL)
+        frontend_host = _url_hostname(self.FRONTEND_URL)
+        return _is_local_hostname(base_host) and _is_local_hostname(frontend_host)
+
+    @property
+    def USES_INSECURE_SECRET_KEY(self) -> bool:
+        return (self.SECRET_KEY or "").strip() in {"", "supersecretkey"}
+
+    @property
+    def USES_DEFAULT_SUPER_ADMIN_BOOTSTRAP(self) -> bool:
+        return (
+            (self.SUPER_ADMIN_EMAIL or "").strip().lower() == "admin@assonam.it"
+            and (self.SUPER_ADMIN_PASSWORD or "") == "admin"
         )
 
 settings = Settings()

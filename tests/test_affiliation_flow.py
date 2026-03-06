@@ -170,6 +170,33 @@ def test_super_admin_can_delete_draft_affiliation(client):
     assert detail_response.status_code == 404, detail_response.text
 
 
+def test_super_admin_affiliation_views_redact_public_token(client):
+    email = f"draft-admin-redaction-{uuid.uuid4().hex[:10]}@example.com"
+    draft = _create_draft(client, email=email)
+    application_id = int(draft["id"])
+
+    _login_super_admin(client)
+
+    list_response = client.get(
+        "/api/super-admin/affiliations",
+        params={"q": email, "page_size": 100},
+    )
+    assert list_response.status_code == 200, list_response.text
+    items = list_response.json()["items"]
+    current_item = next(item for item in items if int(item["id"]) == application_id)
+    assert current_item["public_token"] is None
+
+    detail_response = client.get(f"/api/super-admin/affiliations/{application_id}")
+    assert detail_response.status_code == 200, detail_response.text
+    detail_payload = detail_response.json()
+    assert detail_payload["public_token"] is None
+    assert detail_payload["resume_url"] is None
+    assert (
+        detail_payload["payment_config"]["reference_code"]
+        == f"AFF-{application_id:06d}"
+    )
+
+
 def test_affiliation_approve_requires_docs_and_payment_verification(client, db):
     email = f"draft-approve-{uuid.uuid4().hex[:10]}@example.com"
     draft = _create_draft(client, email=email)

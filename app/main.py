@@ -23,6 +23,7 @@ from app.middleware import (
     SessionCsrfMiddleware,
     get_request_id,
 )
+from app.public_uploads import PublicUploadsStaticFiles
 from app.routes import (
     admin,
     ingest_pienissimo,
@@ -59,6 +60,7 @@ async def lifespan(app: FastAPI):
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     os.makedirs(settings.AFFILIATION_VIDEO_OUTPUT_DIR, exist_ok=True)
     try:
+        _validate_runtime_security()
         init_db()
 
         # Verify schema consistency (SQLite only)
@@ -195,6 +197,17 @@ app.add_middleware(
     allow_credentials=True,
 )
 
+
+def _validate_runtime_security() -> None:
+    if settings.IS_LOCAL_ENV:
+        return
+
+    if settings.USES_INSECURE_SECRET_KEY:
+        raise RuntimeError(
+            "Refusing to start outside local env with insecure SECRET_KEY. "
+            "Set a strong SECRET_KEY in the runtime environment."
+        )
+
 # 3. CSRF origin checks for unsafe session-auth requests
 app.add_middleware(SessionCsrfMiddleware)
 
@@ -213,7 +226,9 @@ if _static_path.is_dir():
 
 _uploads_path = Path(settings.UPLOAD_DIR)
 app.mount(
-    "/uploads", StaticFiles(directory=_uploads_path, check_dir=False), name="uploads"
+    "/uploads",
+    PublicUploadsStaticFiles(directory=_uploads_path, check_dir=False),
+    name="uploads",
 )
 
 _generated_videos_path = Path(settings.AFFILIATION_VIDEO_OUTPUT_DIR).parent

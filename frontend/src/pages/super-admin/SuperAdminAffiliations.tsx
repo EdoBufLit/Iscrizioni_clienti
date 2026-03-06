@@ -9,16 +9,12 @@ import {
   rejectSuperAdminAffiliation,
   requestChangesSuperAdminAffiliation,
   reviewSuperAdminAffiliationDocument,
-  type AffiliationDraft,
   type AffiliationDraftDocument,
+  type SuperAdminAffiliationDetail,
   type SuperAdminAffiliationListItem,
   type SuperAdminProfile,
   verifySuperAdminAffiliationPayment,
 } from "../../lib/api";
-
-type AffiliationDetail = AffiliationDraft & {
-  events?: Array<Record<string, unknown>>;
-};
 
 const STATUS_OPTIONS = [
   { value: "", label: "Tutti" },
@@ -85,7 +81,7 @@ const SuperAdminAffiliations = () => {
 
   const [items, setItems] = useState<SuperAdminAffiliationListItem[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [detail, setDetail] = useState<AffiliationDetail | null>(null);
+  const [detail, setDetail] = useState<SuperAdminAffiliationDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -394,7 +390,9 @@ const SuperAdminAffiliations = () => {
             <div className="space-y-5">
               <div>
                 <h3 className="text-lg font-semibold text-neutral-900">{detail.organization_name || "Affiliazione"}</h3>
-                <p className="mt-1 text-sm text-neutral-500">Token: {detail.public_token}</p>
+                <p className="mt-1 text-sm text-neutral-500">
+                  Riferimento pagamento: {detail.payment_config.reference_code || "-"}
+                </p>
               </div>
 
               <div className="grid gap-2 text-sm text-neutral-700">

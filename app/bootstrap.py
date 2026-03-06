@@ -22,6 +22,12 @@ def bootstrap_super_admin(db: Session) -> None:
     if not sa_email or not sa_password:
         return
 
+    if not settings.IS_LOCAL_ENV and settings.USES_DEFAULT_SUPER_ADMIN_BOOTSTRAP:
+        logger.critical(
+            "Skipping super admin bootstrap outside local env because default credentials are still configured."
+        )
+        return
+
     # 1. Check if ANY super admin exists
     # If yes, we assume the system is already bootstrapped/managed.
     existing_sa = db.query(AdminUser).filter(AdminUser.role == AdminRole.SUPER_ADMIN).first()

@@ -1174,7 +1174,7 @@ const Affiliazione = () => {
                     <div className="font-mono text-base sm:text-xl font-bold bg-white border border-slate-200 rounded-xl p-4 mb-4 select-all break-all text-brand tracking-wider shadow-sm text-center">
                       {draft?.payment_config.bank_iban || "-"}
                     </div>
-                    <p className="text-sm text-slate-600 font-medium">Causale obbligatoria: <strong className="text-slate-900 bg-amber-100/50 border border-amber-200 px-2 py-1 rounded select-all">{draft?.payment_config.bank_causale_prefix || "AFFILIAZIONE"} - {token}</strong></p>
+                    <p className="text-sm text-slate-600 font-medium">Causale obbligatoria: <strong className="text-slate-900 bg-amber-100/50 border border-amber-200 px-2 py-1 rounded select-all">{draft?.payment_config.bank_causale_prefix || "AFFILIAZIONE"} - {draft?.payment_config.reference_code || "AFFILIAZIONE"}</strong></p>
                   </div>
                   
                   <div className="grid gap-5 sm:grid-cols-2 pt-6 border-t border-slate-200">
