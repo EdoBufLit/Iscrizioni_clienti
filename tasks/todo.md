@@ -2609,3 +2609,8 @@ pm --prefix frontend run build -> OK
 - Lasciata invariata la dimensione della tessera nella colonna destra.
 - Riequilibrata la composizione desktop dando piu spazio minimo alla colonna testo tramite `minmax(...)`, senza allargare casualmente la sezione.
 - Titolo e paragrafo ora hanno una larghezza naturale, e la CTA Google Wallet e stabilizzata in orizzontale con `inline-flex` e `whitespace-nowrap`.
+
+## Review Addendum (Dashboard outer wrapper width - Mar 06, 2026)
+- Lasciati invariati dimensione tessera, testo e layout interno.
+- Allargato solo il contenitore esterno della sezione sui breakpoint desktop con margini negativi controllati, cosi la sezione dispone dello spazio necessario entro il dashboard shell.
+- Obiettivo: evitare il taglio della tessera sul lato destro senza alterare la composizione interna gia approvata.
