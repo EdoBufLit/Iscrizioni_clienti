@@ -461,7 +461,7 @@ const Home = () => {
           <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
           <div className="absolute left-0 right-0 top-0 -z-10 m-auto h-[310px] w-[310px] rounded-full bg-brand opacity-20 blur-[100px]"></div>
           {!useWebGLScene ? (
-            <div className="absolute inset-0 flex items-center justify-center opacity-5 mix-blend-multiply" data-hero-logo>
+            <div className="absolute inset-0 hidden items-center justify-center opacity-5 mix-blend-multiply md:flex" data-hero-logo>
               <img src={`${import.meta.env.BASE_URL}assonam-logo.svg`} alt="" className="w-2/3 max-w-2xl" />
             </div>
           ) : (
@@ -475,15 +475,32 @@ const Home = () => {
 
         <div className="container-shell relative z-10">
           <div className="max-w-4xl mx-auto text-center">
-            <p className="inline-flex items-center justify-center px-3 py-1 mb-6 text-xs font-bold uppercase tracking-widest text-brand bg-brand/10 rounded-full" data-hero-eyebrow>
-              ASSONAM - Accesso Rapido
-            </p>
-            <h1 data-hero-line className="text-4xl md:text-6xl lg:text-7xl font-extrabold text-slate-900 tracking-tight leading-[1.1]">
-              La piattaforma digitale per <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand to-brand-light">Associazioni e Soci</span>
-            </h1>
-            <p className="mt-6 text-lg md:text-xl text-slate-600 max-w-2xl mx-auto font-medium leading-relaxed" data-hero-subtitle>
-              Tessere, iscrizioni, gestione soci e affiliazione. Tutto in un unico ecosistema semplice, istituzionale e sicuro.
-            </p>
+            <div className="relative">
+              {!useWebGLScene ? (
+                <div
+                  className="pointer-events-none absolute left-1/2 top-[-6.75rem] z-0 flex w-full -translate-x-1/2 justify-center md:hidden"
+                  data-hero-logo
+                  aria-hidden="true"
+                >
+                  <img
+                    src={`${import.meta.env.BASE_URL}assonam-logo.svg`}
+                    alt=""
+                    className="w-[min(82vw,20rem)] opacity-[0.04] blur-[1.2px]"
+                  />
+                </div>
+              ) : null}
+              <div className="relative z-10">
+                <p className="inline-flex items-center justify-center px-3 py-1 mb-6 text-xs font-bold uppercase tracking-widest text-brand bg-brand/10 rounded-full" data-hero-eyebrow>
+                  ASSONAM - Accesso Rapido
+                </p>
+                <h1 data-hero-line className="text-4xl md:text-6xl lg:text-7xl font-extrabold text-slate-900 tracking-tight leading-[1.1]">
+                  La piattaforma digitale per <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand to-brand-light">Associazioni e Soci</span>
+                </h1>
+                <p className="mt-6 text-lg md:text-xl text-slate-600 max-w-2xl mx-auto font-medium leading-relaxed" data-hero-subtitle>
+                  Tessere, iscrizioni, gestione soci e affiliazione. Tutto in un unico ecosistema semplice, istituzionale e sicuro.
+                </p>
+              </div>
+            </div>
 
             <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4" data-hero-meta>
               {affiliazioneEnabled ? (
