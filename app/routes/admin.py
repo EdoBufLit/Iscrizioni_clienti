@@ -23,7 +23,16 @@ def get_current_admin(request: Request, db: Session):
     admin_id = request.session.get("admin_id")
     if not admin_id:
         return None
-    return db.query(AdminUser).filter(AdminUser.id == admin_id).first()
+    return (
+        db.query(AdminUser)
+        .filter(
+            AdminUser.id == admin_id,
+            AdminUser.role == AdminRole.SUPER_ADMIN,
+            AdminUser.is_active.is_(True),
+            AdminUser.deleted_at.is_(None),
+        )
+        .first()
+    )
 
 
 # ── Legacy HTML redirects ─────────────────────────────────────────
@@ -35,7 +44,16 @@ def admin_login_page(request: Request):
 
 @router.post("/login")
 def admin_login_submit(request: Request, email: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
-    admin = db.query(AdminUser).filter(AdminUser.email == email).first()
+    admin = (
+        db.query(AdminUser)
+        .filter(
+            AdminUser.email == email,
+            AdminUser.role == AdminRole.SUPER_ADMIN,
+            AdminUser.is_active.is_(True),
+            AdminUser.deleted_at.is_(None),
+        )
+        .first()
+    )
     if not admin or not verify_password(password, admin.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 

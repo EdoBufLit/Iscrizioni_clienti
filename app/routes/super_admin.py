@@ -69,6 +69,8 @@ def _require_super_admin(request: Request, db: Session) -> AdminUser:
         .filter(
             AdminUser.id == admin_id,
             AdminUser.role == AdminRole.SUPER_ADMIN,
+            AdminUser.is_active.is_(True),
+            AdminUser.deleted_at.is_(None),
         )
         .first()
     )
@@ -360,6 +362,8 @@ def super_admin_login(
         .filter(
             AdminUser.email == body.email,
             AdminUser.role == AdminRole.SUPER_ADMIN,
+            AdminUser.is_active.is_(True),
+            AdminUser.deleted_at.is_(None),
         )
         .first()
     )

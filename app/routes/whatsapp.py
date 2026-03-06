@@ -3,10 +3,11 @@ from __future__ import annotations
 import logging
 import re
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.db import get_db
 from app.services.whatsapp_bot import handle_whatsapp_bot_message
 
@@ -80,6 +81,53 @@ def _truncate_body(value: str | None) -> str:
     return f"{body[:200]}..."
 
 
+def _resolve_webhook_url(request: Request) -> str:
+    url = request.url
+    proto = (request.headers.get("x-forwarded-proto") or url.scheme or "https").split(
+        ",", 1
+    )[0].strip()
+    host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or url.netloc).split(
+        ",", 1
+    )[0].strip()
+    path = url.path or ""
+    query = f"?{url.query}" if url.query else ""
+    return f"{proto}://{host}{path}{query}"
+
+
+async def _validate_twilio_signature(
+    request: Request,
+    payload_data: dict[str, object],
+) -> None:
+    auth_token = (settings.TWILIO_AUTH_TOKEN or "").strip()
+    if not auth_token:
+        return
+
+    signature = (request.headers.get("x-twilio-signature") or "").strip()
+    if not signature:
+        raise HTTPException(status_code=403, detail="Missing Twilio signature")
+
+    try:
+        from twilio.request_validator import RequestValidator
+    except Exception as exc:
+        logger.exception("twilio_signature_validator_unavailable")
+        raise HTTPException(
+            status_code=503,
+            detail="Twilio signature validator unavailable",
+        ) from exc
+
+    content_type = (request.headers.get("content-type") or "").lower()
+    validator = RequestValidator(auth_token)
+    url = _resolve_webhook_url(request)
+    if "application/json" in content_type:
+        params: object = (await request.body()).decode("utf-8", errors="replace")
+    else:
+        params = {str(key): str(value) for key, value in payload_data.items()}
+
+    if not validator.validate(url, params, signature):
+        logger.warning("whatsapp_webhook_invalid_signature url=%s", url)
+        raise HTTPException(status_code=403, detail="Invalid Twilio signature")
+
+
 @router.post("/bot")
 async def whatsapp_bot(
     request: Request,
@@ -87,7 +135,10 @@ async def whatsapp_bot(
 ):
     try:
         payload_data = await _read_webhook_payload(request)
+        await _validate_twilio_signature(request, payload_data)
         payload = WhatsAppWebhook.model_validate(payload_data)
+    except HTTPException:
+        raise
     except (ValidationError, ValueError, TypeError):
         logger.warning(
             "whatsapp_webhook_parse_failed content_type=%s",

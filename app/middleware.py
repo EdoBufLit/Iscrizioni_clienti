@@ -1,5 +1,6 @@
 """Security middleware: response headers, request ID, and rate limiting."""
 
+import ipaddress
 import time
 import uuid
 from collections import defaultdict
@@ -161,8 +162,34 @@ join_limiter = RateLimiter(max_requests=3, window_seconds=60)
 
 
 def get_client_ip(request: Request) -> str:
-    """Best-effort client IP, respecting X-Forwarded-For behind a proxy."""
+    """Best-effort client IP, trusting X-Forwarded-For only from trusted proxies."""
+    peer_host = request.client.host if request.client else ""
     forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    if not forwarded or not peer_host:
+        return peer_host or "unknown"
+
+    try:
+        peer_ip = ipaddress.ip_address(peer_host)
+        peer_is_trusted_proxy = peer_ip.is_loopback or peer_ip.is_private
+    except ValueError:
+        peer_is_trusted_proxy = peer_host.lower() == "localhost"
+
+    if not peer_is_trusted_proxy:
+        return peer_host
+
+    forwarded_chain = [
+        item.strip()
+        for item in forwarded.split(",")
+        if item and item.strip() and item.strip().lower() != "unknown"
+    ]
+    for candidate in reversed(forwarded_chain):
+        try:
+            candidate_ip = ipaddress.ip_address(candidate)
+            if candidate_ip.is_loopback or candidate_ip.is_private:
+                continue
+        except ValueError:
+            if candidate.lower() == "localhost":
+                continue
+        return candidate
+
+    return forwarded_chain[-1] if forwarded_chain else peer_host

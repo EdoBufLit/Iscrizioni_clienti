@@ -662,6 +662,10 @@ def _serialize_referral(item: Referral | None) -> dict[str, Any] | None:
     }
 
 
+def _payment_reference_code(application: AffiliationApplication) -> str:
+    return f"AFF-{application.id:06d}"
+
+
 def _serialize_affiliation(
     application: AffiliationApplication,
     *,
@@ -680,7 +684,7 @@ def _serialize_affiliation(
 
     payload: dict[str, Any] = {
         "id": application.id,
-        "public_token": application.public_token,
+        "public_token": None if admin_view else application.public_token,
         "status": application.status,
         "docs_status": application.docs_status,
         "payment_method": application.payment_method,
@@ -713,12 +717,17 @@ def _serialize_affiliation(
         "created_at": _safe_iso(application.created_at),
         "updated_at": _safe_iso(application.updated_at),
         "required_document_types": REQUIRED_DOCUMENT_TYPES,
-        "resume_url": f"/affiliazione?token={application.public_token}",
+        "resume_url": (
+            None
+            if admin_view
+            else f"/affiliazione?token={application.public_token}"
+        ),
         "payment_config": {
             "stripe_enabled": bool(settings.STRIPE_ENABLED),
             "bank_iban": settings.AFFILIATION_BANK_IBAN,
             "bank_causale_prefix": settings.AFFILIATION_BANK_CAUSALE_PREFIX,
             "cash_location": settings.AFFILIATION_CASH_LOCATION,
+            "reference_code": _payment_reference_code(application),
         },
         "can_approve": _can_approve(application),
         "latest_video_job": serialize_video_job(latest_video_job),
@@ -1801,7 +1810,7 @@ def list_affiliations(
         "items": [
             {
                 "id": item.id,
-                "public_token": item.public_token,
+                "public_token": None,
                 "organization_name": item.organization_name,
                 "applicant_email": item.applicant_email,
                 "status": item.status,

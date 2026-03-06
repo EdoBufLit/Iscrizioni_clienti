@@ -1205,6 +1205,7 @@ export type AffiliationDraft = {
     bank_iban: string;
     bank_causale_prefix: string;
     cash_location: string;
+    reference_code: string | null;
   };
   can_approve: boolean;
   latest_video_job: AffiliationVideoJob | null;
@@ -1385,7 +1386,7 @@ export async function retryAffiliationWelcomeVideo(
 
 export type SuperAdminAffiliationListItem = {
   id: number;
-  public_token: string;
+  public_token: string | null;
   organization_name: string | null;
   applicant_email: string | null;
   status: string;
@@ -1403,6 +1404,16 @@ export type SuperAdminAffiliationsResponse = {
   page_size: number;
   total: number;
   total_pages: number;
+};
+
+export type SuperAdminAffiliationDetail = Omit<
+  AffiliationDraft,
+  "public_token" | "resume_url"
+> & {
+  public_token: string | null;
+  resume_url: string | null;
+  events: Array<Record<string, unknown>>;
+  video_jobs: AffiliationVideoJob[];
 };
 
 export async function fetchSuperAdminAffiliations(
@@ -1423,7 +1434,7 @@ export async function fetchSuperAdminAffiliations(
 
 export async function fetchSuperAdminAffiliationDetail(
   applicationId: number,
-): Promise<AffiliationDraft & { events: Array<Record<string, unknown>>; video_jobs: AffiliationVideoJob[] }> {
+): Promise<SuperAdminAffiliationDetail> {
   const res = await fetch(`/api/super-admin/affiliations/${applicationId}`);
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (res.status === 404) throw new Error("Affiliazione non trovata");
