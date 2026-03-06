@@ -111,64 +111,84 @@ const DashboardLayout = () => {
   return (
     <div className="min-h-screen bg-[#f8f9fa]/50">
       {/* Header band */}
-      <header className="header-band sticky top-0 z-30">
-        <div className="container-shell py-4">
+      <header className="border-b border-slate-200 bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-50 transition-all">
+        <div className="container-shell flex items-center justify-between h-16 md:h-20">
           <div className="flex items-center gap-6">
             <div className="hidden shrink-0 sm:block">
-              <Link to="/" className="block transition-transform hover:scale-95">
+              <Link to="/" className="flex items-center gap-3 transition-transform hover:scale-95 group">
                 <img
-                  src={`${import.meta.env.BASE_URL}logo-transparent.png`}
-                  alt="ASSO.N.A.M."
-                  className="h-10 w-auto rounded object-contain"
+                  src={`${import.meta.env.BASE_URL}assonam-logo.svg`}
+                  alt="ASSONAM"
+                  className="h-8 md:h-10 w-auto"
                 />
+                <span className="font-display font-bold text-xl tracking-tight text-neutral-900 hidden lg:block group-hover:text-brand transition-colors">
+                  ASSONAM
+                </span>
               </Link>
             </div>
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 border-l border-neutral-200/60 pl-6 ml-2 hidden sm:block">
               {loading ? (
-                <div className="space-y-2">
-                  <Skeleton className="h-5 w-48" />
-                  <Skeleton className="h-4 w-64" />
+                <div className="space-y-1.5">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-3 w-48" />
                 </div>
               ) : (
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-3">
-                    <h1 className="truncate text-lg font-bold tracking-tight text-neutral-900">
+                <div className="flex flex-col justify-center h-full">
+                  <div className="flex items-center gap-2.5">
+                    <h1 className="truncate text-base font-bold tracking-tight text-neutral-900 leading-none">
                       {displayName ?? "Area riservata"}
                     </h1>
                     {statusInfo && (
                       <span
-                        className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${statusInfo.color}`}
+                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider leading-none ${statusInfo.color}`}
                       >
                         {statusInfo.label}
                       </span>
                     )}
                   </div>
                   {orgName && (
-                    <p className="truncate text-xs font-medium text-neutral-500 uppercase tracking-wide opacity-80">
+                    <p className="truncate text-[11px] font-medium text-neutral-500 uppercase tracking-wide opacity-80 mt-1 leading-none">
                       {orgName}
                     </p>
                   )}
                 </div>
               )}
             </div>
-            <div className="flex shrink-0 items-center gap-4">
-              <Link className="link-muted hidden font-semibold sm:block" to="/">
-                Torna al sito
-              </Link>
-              <div className="h-4 w-px bg-neutral-200 hidden sm:block" />
-              {!loading && user && (
-                <button
-                  className="btn-ghost px-4 py-2 text-xs font-bold uppercase tracking-wider"
-                  type="button"
-                  onClick={async () => {
-                    await apiLogout();
-                    navigate("/login", { replace: true });
-                  }}
-                >
-                  Esci
-                </button>
-              )}
+            
+            {/* Mobile Header Title */}
+            <div className="sm:hidden min-w-0 flex-1">
+              <div className="flex items-center gap-3">
+                <Link to="/" className="shrink-0 transition-transform hover:scale-95">
+                  <img
+                    src={`${import.meta.env.BASE_URL}assonam-logo.svg`}
+                    alt="ASSONAM"
+                    className="h-8 w-auto"
+                  />
+                </Link>
+                <div className="w-px h-6 bg-neutral-200/60"></div>
+                <h1 className="truncate text-sm font-bold tracking-tight text-neutral-900">
+                  {displayName ?? "Area riservata"}
+                </h1>
+              </div>
             </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-4">
+            <Link className="link-muted hidden text-sm font-bold tracking-tight sm:block" to="/">
+              Sito pubblico
+            </Link>
+            <div className="h-4 w-px bg-neutral-200 hidden sm:block" />
+            {!loading && user && (
+              <button
+                className="btn-ghost !px-4 !py-2 !text-xs font-bold uppercase tracking-wider"
+                type="button"
+                onClick={async () => {
+                  await apiLogout();
+                  navigate("/login", { replace: true });
+                }}
+              >
+                Esci
+              </button>
+            )}
           </div>
         </div>
       </header>

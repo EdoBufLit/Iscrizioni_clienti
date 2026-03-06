@@ -264,9 +264,9 @@ const DashboardHome = () => {
             ))}
           </div>
 
-          <section className="surface-strong p-8 md:p-10 relative overflow-hidden">
-            <div className="relative z-10 flex flex-col md:flex-row md:items-end md:justify-between gap-8">
-              <div className="max-w-2xl">
+          <section className="surface-strong p-6 sm:p-8 md:p-10 relative overflow-hidden">
+            <div className="relative z-10 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-10">
+              <div className="flex-1 min-w-0 max-w-2xl xl:max-w-xl">
                 <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-accent">
                   Documento digitale
                 </p>
@@ -305,7 +305,7 @@ const DashboardHome = () => {
                 )}
               </div>
 
-              <div className="flex-1 w-full max-w-md mx-auto" data-tour="member-card-number">
+              <div className="w-full xl:w-[380px] shrink-0 mx-auto xl:mx-0 flex justify-center" data-tour="member-card-number">
                 <MemberCardPreview cardData={cardData} />
               </div>
             </div>

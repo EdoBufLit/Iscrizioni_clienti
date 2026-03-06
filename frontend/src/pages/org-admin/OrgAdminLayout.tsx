@@ -59,84 +59,108 @@ const OrgAdminLayout = () => {
     <Ctx.Provider value={{ admin, loading }}>
       <div className="min-h-screen bg-[#f8f9fa]/50">
         {/* Header band */}
-        <header className="header-band sticky top-0 z-30">
-          <div className="container-shell py-5">
+        <header className="border-b border-slate-200 bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-50 transition-all">
+          <div className="container-shell flex items-center justify-between h-16 md:h-20">
             <div className="flex items-center gap-6">
               <div className="hidden shrink-0 sm:block">
-                <Link to="/" className="block transition-transform hover:scale-95">
+                <Link to="/" className="flex items-center gap-3 transition-transform hover:scale-95 group">
                   <img
-                    src={`${import.meta.env.BASE_URL}logo-transparent.png`}
-                    alt="ASSO.N.A.M."
-                    className="h-10 w-auto rounded object-contain"
+                    src={`${import.meta.env.BASE_URL}assonam-logo.svg`}
+                    alt="ASSONAM"
+                    className="h-8 md:h-10 w-auto"
                   />
+                  <span className="font-display font-bold text-xl tracking-tight text-neutral-900 hidden lg:block group-hover:text-brand transition-colors">
+                    ASSONAM
+                  </span>
                 </Link>
               </div>
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 border-l border-neutral-200/60 pl-6 ml-2 hidden sm:block">
                 {loading ? (
-                  <div className="space-y-2">
-                    <Skeleton className="h-5 w-48" />
-                    <Skeleton className="h-4 w-64" />
+                  <div className="space-y-1.5">
+                    <Skeleton className="h-4 w-48" />
+                    <Skeleton className="h-3 w-64" />
                   </div>
                 ) : admin ? (
-                  <div className="flex flex-col">
-                    <div className="flex items-center gap-3">
-                      <h1 className="truncate text-lg font-bold tracking-tight text-neutral-900">
+                  <div className="flex flex-col justify-center h-full">
+                    <div className="flex items-center gap-2.5">
+                      <h1 className="truncate text-base font-bold tracking-tight text-neutral-900 leading-none">
                         {admin.organization?.name ?? "Gestione associazione"}
                       </h1>
-                      <span className="inline-flex items-center rounded-full border border-brand/20 bg-brand/5 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-brand">
+                      <span className="inline-flex items-center rounded-full border border-brand/20 bg-brand/5 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-brand leading-none">
                         Gestore locale
                       </span>
                     </div>
-                    <p className="truncate text-xs font-medium text-neutral-500 uppercase tracking-wide opacity-80 mt-0.5">
+                    <p className="truncate text-[11px] font-medium text-neutral-500 uppercase tracking-wide opacity-80 mt-1 leading-none">
                       {admin.email}
                     </p>
                   </div>
                 ) : (
-                  <h1 className="text-lg font-bold tracking-tight text-neutral-900 uppercase tracking-widest">
+                  <h1 className="text-base font-bold tracking-tight text-neutral-900 uppercase tracking-widest leading-none">
                     Gestione associazione
                   </h1>
                 )}
               </div>
-              <div className="flex shrink-0 items-center gap-4">
-                {!loading && admin && <ReviewGuideButton className="hidden md:flex" />}
-                <Link
-                  className="link-muted hidden font-semibold sm:block"
-                  to="/"
-                >
-                  Sito pubblico
-                </Link>
-                <div className="h-4 w-px bg-neutral-200 hidden sm:block" />
-                {!loading && admin && (
-                  <button
-                    className="btn-ghost px-4 py-2 text-xs font-bold uppercase tracking-wider"
-                    type="button"
-                    onClick={handleLogout}
-                  >
-                    Esci
-                  </button>
-                )}
+              
+              {/* Mobile Header Title */}
+              <div className="sm:hidden min-w-0 flex-1">
+                <div className="flex items-center gap-3">
+                  <Link to="/" className="shrink-0 transition-transform hover:scale-95">
+                    <img
+                      src={`${import.meta.env.BASE_URL}assonam-logo.svg`}
+                      alt="ASSONAM"
+                      className="h-8 w-auto"
+                    />
+                  </Link>
+                  <div className="w-px h-6 bg-neutral-200/60"></div>
+                  <h1 className="truncate text-sm font-bold tracking-tight text-neutral-900">
+                    {admin?.organization?.name ?? "Org Admin"}
+                  </h1>
+                </div>
               </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-4">
+              {!loading && admin && <ReviewGuideButton className="hidden md:flex" />}
+              <Link className="link-muted hidden text-sm font-bold tracking-tight sm:block" to="/">
+                Sito pubblico
+              </Link>
+              <div className="h-4 w-px bg-neutral-200 hidden sm:block" />
+              {!loading && admin && (
+                <button
+                  className="btn-ghost !px-4 !py-2 !text-xs font-bold uppercase tracking-wider"
+                  type="button"
+                  onClick={handleLogout}
+                >
+                  Esci
+                </button>
+              )}
             </div>
           </div>
 
           {/* Nav tabs */}
           {!loading && admin && (
-            <div className="container-shell mt-1">
-              <nav className="flex flex-wrap gap-2 pb-4 overflow-x-auto no-scrollbar">
+            <div className="container-shell">
+              <nav className="flex flex-wrap gap-6 pb-0 overflow-x-auto no-scrollbar">
                 {NAV_ITEMS.map((item) => (
                   <NavLink
                     key={item.to}
                     to={item.to}
                     end={item.end}
                     className={({ isActive }) =>
-                      `inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold tracking-tight transition-all duration-200 ${
+                      `relative whitespace-nowrap py-3 text-sm font-bold tracking-tight transition-colors ${
                         isActive 
-                          ? "bg-brand text-white shadow-md shadow-brand/20 translate-y-[-1px]" 
-                          : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+                          ? "text-brand" 
+                          : "text-neutral-500 hover:text-neutral-900"
                       }`
                     }
                   >
-                    {item.label}
+                    {({ isActive }) => (
+                      <>
+                        {item.label}
+                        {isActive && (
+                          <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand rounded-t-full" />
+                        )}
+                      </>
+                    )}
                   </NavLink>
                 ))}
               </nav>

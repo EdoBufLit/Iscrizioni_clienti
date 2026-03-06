@@ -17,12 +17,6 @@ const NAV_ITEMS = [
   { label: "Contatti", to: "/contatti" },
 ];
 
-const dashboardLinkBase = "nav-pill";
-const dashboardLinkActive = `${dashboardLinkBase} nav-pill-active`;
-const dashboardLinkIdle = `${dashboardLinkBase} nav-pill-idle`;
-const dashboardLinkClass = ({ isActive }: { isActive: boolean }) =>
-  isActive ? dashboardLinkActive : dashboardLinkIdle;
-
 const publicLinkClass = ({ isActive }: { isActive: boolean }) =>
   `public-nav-pill shrink-0 whitespace-nowrap${isActive ? " is-active" : ""}`;
 
@@ -182,96 +176,10 @@ const Layout = () => {
         }`}
       >
         {isDashboardRoute ? (
-          <>
-            <div
-              className="h-0.5 bg-gradient-to-r from-accent via-brand to-ember"
-              aria-hidden="true"
-            />
-            <header className="header-band">
-              <div className="container-shell flex items-center justify-between py-4">
-                <NavLink className="flex items-center gap-3" to="/" onClick={close}>
-                  <img
-                    src={`${import.meta.env.BASE_URL}logo-transparent.png`}
-                    alt="ASSO.N.A.M."
-                    className="h-11 rounded"
-                  />
-                  <div>
-                    <p className="text-base font-bold tracking-tight text-neutral-900">
-                      ASSO.N.A.M.
-                    </p>
-                    <p className="text-[11px] leading-tight text-neutral-500">
-                      Associazione Nazionale Arti e Mestieri
-                    </p>
-                  </div>
-                </NavLink>
-
-                <nav
-                  className="hidden items-center gap-1 md:flex"
-                  aria-label="Navigazione principale"
-                >
-                  {NAV_ITEMS.map((item) => (
-                    <NavLink
-                      key={item.label}
-                      className={dashboardLinkClass}
-                      to={item.to}
-                      end={item.to === "/"}
-                    >
-                      {item.label}
-                    </NavLink>
-                  ))}
-                  <NavLink
-                    className="ml-3 btn-ghost px-4 py-1.5 text-sm"
-                    to="/area-riservata"
-                    onMouseEnter={prefetchDashboard}
-                    onFocus={prefetchDashboard}
-                  >
-                    Area riservata
-                  </NavLink>
-                </nav>
-
-                <button
-                  className="inline-flex items-center rounded-md border border-neutral-200 bg-white/60 px-3 py-2 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 md:hidden"
-                  type="button"
-                  aria-expanded={menuOpen}
-                  aria-controls="mobile-nav-dashboard"
-                  onClick={() => setMenuOpen((open) => !open)}
-                >
-                  {menuOpen ? "Chiudi" : "Menu"}
-                </button>
-              </div>
-
-              {menuOpen && (
-                <nav
-                  className="border-t border-white/70 bg-white/80 backdrop-blur-md md:hidden"
-                  id="mobile-nav-dashboard"
-                  aria-label="Navigazione principale"
-                >
-                  <div className="container-shell flex flex-col gap-1 py-4">
-                    {NAV_ITEMS.map((item) => (
-                      <NavLink
-                        key={item.label}
-                        className={dashboardLinkClass}
-                        to={item.to}
-                        end={item.to === "/"}
-                        onClick={close}
-                      >
-                        {item.label}
-                      </NavLink>
-                    ))}
-                    <NavLink
-                      className="mt-2 btn-ghost text-center text-sm"
-                      to="/area-riservata"
-                      onClick={close}
-                      onMouseEnter={prefetchDashboard}
-                      onFocus={prefetchDashboard}
-                    >
-                      Area riservata
-                    </NavLink>
-                  </div>
-                </nav>
-              )}
-            </header>
-          </>
+          <div
+            className="h-0.5 bg-gradient-to-r from-accent via-brand to-ember"
+            aria-hidden="true"
+          />
         ) : (
           <>
             <div className="public-site-glow" aria-hidden="true" />

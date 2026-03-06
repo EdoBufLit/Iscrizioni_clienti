@@ -235,8 +235,8 @@ const OrgAdminMembers = () => {
         </div>
       )}
 
-      <div className="surface p-2 sm:p-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+      <div className="surface p-3 sm:p-4">
+        <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-center">
           <div className="flex-1 min-w-0">
             <DebouncedSearchInput
               resetKey={searchResetKey}
@@ -246,28 +246,28 @@ const OrgAdminMembers = () => {
               }}
             />
           </div>
-          <div className="flex flex-wrap gap-2">
-            <select className="premium-select" value={status} onChange={(e) => onFilterChange(setStatus, e.target.value)}>
+          <div className="flex flex-wrap items-center gap-3">
+            <select className="premium-select min-w-[140px] flex-1 sm:flex-none" value={status} onChange={(e) => onFilterChange(setStatus, e.target.value)}>
               {STATUS_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
-            <select className="premium-select" value={access} onChange={(e) => onFilterChange(setAccess, e.target.value)}>
+            <select className="premium-select min-w-[140px] flex-1 sm:flex-none" value={access} onChange={(e) => onFilterChange(setAccess, e.target.value)}>
               {ACCESS_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
-            <select className="premium-select" value={source} onChange={(e) => onFilterChange(setSource, e.target.value)}>
+            <select className="premium-select min-w-[140px] flex-1 sm:flex-none" value={source} onChange={(e) => onFilterChange(setSource, e.target.value)}>
               {SOURCE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
-            <select className="premium-select" value={docs} onChange={(e) => onFilterChange(setDocs, e.target.value)}>
+            <select className="premium-select min-w-[140px] flex-1 sm:flex-none" value={docs} onChange={(e) => onFilterChange(setDocs, e.target.value)}>
               {DOCS_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
-            <select className="premium-select" value={order} onChange={(e) => onFilterChange(setOrder, e.target.value)}>
+            <select className="premium-select min-w-[140px] flex-1 sm:flex-none" value={order} onChange={(e) => onFilterChange(setOrder, e.target.value)}>
               {ORDER_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
@@ -276,13 +276,13 @@ const OrgAdminMembers = () => {
               type="button"
               onClick={resetFilters}
               disabled={!hasFilters}
-              className="btn-ghost !px-4 !py-2 !text-xs font-bold uppercase tracking-widest disabled:opacity-30"
+              className="btn-ghost !px-4 !py-2 !text-xs font-bold uppercase tracking-widest disabled:opacity-30 flex-1 sm:flex-none"
             >
               Reset
             </button>
           </div>
         </div>
-        <div className="mt-2 px-3 pb-1 flex items-center justify-between border-t border-neutral-100/50 pt-3">
+        <div className="mt-4 px-3 pb-1 flex items-center justify-between border-t border-neutral-100/50 pt-3">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
             {total === 0 ? "Nessun risultato" : `${startIndex}-${endIndex} di ${total} soci`}
           </p>
