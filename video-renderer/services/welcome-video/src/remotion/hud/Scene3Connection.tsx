@@ -46,7 +46,7 @@ export const Scene3Connection: React.FC = () => {
                 backgroundColor: "rgba(0, 175, 255, 0.5)",
                 transformOrigin: "left center",
                 transform: `rotate(${angle}rad)`,
-                boxShadow: "0 0 15px rgba(0, 175, 255, 0.6)",
+                boxShadow: "0 0 8px rgba(0, 175, 255, 0.35)",
               }}
             />
             {/* Moving light dot */}
@@ -61,7 +61,7 @@ export const Scene3Connection: React.FC = () => {
                   backgroundColor: "#FFF",
                   borderRadius: "50%",
                   opacity: dotOpacity,
-                  boxShadow: "0 0 15px 5px rgba(255, 255, 255, 0.8)",
+                  boxShadow: "0 0 8px 2px rgba(255, 255, 255, 0.55)",
                 }}
               />
             )}
@@ -87,7 +87,7 @@ export const Scene3Connection: React.FC = () => {
               backgroundColor: "#6FF9FF",
               opacity: nodeOpacity,
               transform: `scale(${nodePulse})`,
-              boxShadow: "0 0 20px 5px rgba(111, 249, 255, 0.8)",
+              boxShadow: "0 0 10px 2px rgba(111, 249, 255, 0.45)",
             }}
           />
         );
@@ -101,7 +101,7 @@ export const Scene3Connection: React.FC = () => {
           backgroundColor: "rgba(2, 4, 10, 0.85)",
           padding: "20px 40px",
           border: "2px solid rgba(0, 175, 255, 0.8)",
-          boxShadow: "0 0 40px rgba(0, 175, 255, 0.5)",
+          boxShadow: "0 0 18px rgba(0, 175, 255, 0.28)",
           opacity: interpolate(frame, [15, 25], [0, 1], { extrapolateRight: "clamp" }),
         }}
       >

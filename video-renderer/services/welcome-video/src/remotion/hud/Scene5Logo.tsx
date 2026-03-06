@@ -105,7 +105,7 @@ export const Scene5Logo: React.FC<{
           zIndex: 1,
         }}
       >
-        {/* Soft Glow Behind Logo */}
+        {/* Softer glow keeps the reveal but cuts some expensive blur cost. */}
         <div
           style={{
             position: "absolute",
@@ -114,8 +114,8 @@ export const Scene5Logo: React.FC<{
             width: "400px",
             height: "400px",
             transform: "translate(-50%, -50%)",
-            background: "radial-gradient(circle, rgba(0, 175, 255, 0.5) 0%, transparent 60%)",
-            filter: "blur(25px)",
+            background: "radial-gradient(circle, rgba(0, 175, 255, 0.42) 0%, transparent 58%)",
+            filter: "blur(16px)",
             zIndex: -1,
           }}
         />
@@ -123,7 +123,14 @@ export const Scene5Logo: React.FC<{
         {imageSource ? (
           <div style={{ position: "relative", overflow: "hidden" }}>
             {/* Logo increased by ~35% (350 -> 470) */}
-            <Img src={imageSource} style={{ width: 470, objectFit: "contain", filter: "drop-shadow(0 0 15px rgba(0, 175, 255, 0.8))" }} />
+            <Img
+              src={imageSource}
+              style={{
+                width: 470,
+                objectFit: "contain",
+                filter: "drop-shadow(0 0 10px rgba(0, 175, 255, 0.68))",
+              }}
+            />
             
             {/* Sweep effect mask */}
             <div
@@ -157,9 +164,9 @@ export const Scene5Logo: React.FC<{
               textAlign: "center",
               fontSize: 40,
               letterSpacing: 6,
-              textShadow: "0 0 20px rgba(111, 249, 255, 0.8)",
+              textShadow: "0 0 14px rgba(111, 249, 255, 0.7)",
               background: "rgba(8, 24, 36, 0.55)",
-              boxShadow: "0 0 24px rgba(61, 232, 255, 0.28)",
+              boxShadow: "0 0 16px rgba(61, 232, 255, 0.2)",
             }}
           >
             {orgName || "ASSONAM"}
@@ -196,7 +203,7 @@ export const Scene5Logo: React.FC<{
           padding: "10px 20px",
           border: finalState.border,
           backgroundColor: finalState.background,
-          boxShadow: `${finalState.glow}, inset 0 0 10px rgba(255, 255, 255, 0.08)`,
+          boxShadow: `${finalState.glow}, inset 0 0 8px rgba(255, 255, 255, 0.06)`,
           textAlign: "center",
           whiteSpace: "pre-line",
           lineHeight: 1.4,

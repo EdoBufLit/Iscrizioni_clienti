@@ -27,6 +27,16 @@ def _has_env(name: str) -> bool:
     return bool((os.getenv(name) or "").strip())
 
 
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw.strip())
+    except ValueError:
+        return default
+
+
 def _log_startup(args: argparse.Namespace, worker_enabled: bool) -> None:
     voice_id_present = _has_env("ELEVENLABS_VOICE_ID") or _has_env("ELEVENLABS_VOICE_IDS")
     model_present = _has_env("ELEVENLABS_MODEL") or _has_env("ELEVENLABS_MODEL_ID")
@@ -91,7 +101,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--poll-seconds",
         type=int,
-        default=15,
+        default=max(1, _env_int("AFFILIATION_VIDEO_POLL_SECONDS", 5)),
         help="Polling interval while running continuously.",
     )
     return parser.parse_args()

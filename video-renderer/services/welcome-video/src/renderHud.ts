@@ -1,6 +1,9 @@
 import { spawn } from "node:child_process";
+import crypto from "node:crypto";
 import { existsSync } from "node:fs";
+import type { Stats } from "node:fs";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import minimist from "minimist";
 
@@ -11,6 +14,21 @@ import { hudSelectSfx } from "./audio/hud/hudSelectSfx";
 import { hudGenerateVoices } from "./audio/hud/hudGenerateVoices";
 import { hudMixAudio } from "./audio/hud/hudMixAudio";
 import { getEnv } from "./env";
+
+const CACHE_ROOT = path.resolve(process.cwd(), ".cache", "render-hud");
+const BUNDLE_CACHE_ROOT = path.join(CACHE_ROOT, "bundles");
+const NVENC_CACHE_PATH = path.join(CACHE_ROOT, "nvenc-capabilities.json");
+const INTERMEDIATE_X264_PRESET = "ultrafast";
+const FINAL_X264_PRESET = "superfast";
+const FINAL_NVENC_PRESET = "p4";
+
+type RenderTimings = Record<string, number>;
+
+type NvencProbeCache = {
+  ffmpegSignature: string;
+  hasNvenc: boolean;
+  checkedAt: string;
+};
 
 const runProcess = async (binary: string, args: string[]): Promise<{ stdout: string; stderr: string }> => {
   return new Promise((resolve, reject) => {
@@ -35,13 +53,47 @@ const runProcess = async (binary: string, args: string[]): Promise<{ stdout: str
   });
 };
 
-const hasNvencEncoder = async (): Promise<boolean> => {
-  const env = getEnv();
+const logStageStart = (stage: string, extra?: string): number => {
+  const suffix = extra ? ` ${extra}` : "";
+  console.info(`[renderHud] ${stage} start${suffix}`);
+  return Date.now();
+};
+
+const logStageEnd = (
+  stage: string,
+  startedAt: number,
+  timings: RenderTimings,
+  extra?: string,
+): number => {
+  const duration = Date.now() - startedAt;
+  timings[stage] = duration;
+  const suffix = extra ? ` ${extra}` : "";
+  console.info(`[renderHud] ${stage} end durationMs=${duration}${suffix}`);
+  return duration;
+};
+
+const measureStage = async <T>(
+  timings: RenderTimings,
+  stage: string,
+  run: () => Promise<T>,
+  options?: {
+    startExtra?: string;
+    endExtra?: (result: T) => string | undefined;
+  },
+): Promise<T> => {
+  const startedAt = logStageStart(stage, options?.startExtra);
   try {
-    const output = await runProcess(env.ffmpegBinary, ["-encoders"]);
-    return /h264_nvenc/.test(`${output.stdout}\n${output.stderr}`);
-  } catch {
-    return false;
+    const result = await run();
+    logStageEnd(stage, startedAt, timings, options?.endExtra?.(result));
+    return result;
+  } catch (error) {
+    logStageEnd(
+      stage,
+      startedAt,
+      timings,
+      `status=error message=${error instanceof Error ? error.message : String(error)}`,
+    );
+    throw error;
   }
 };
 
@@ -52,6 +104,163 @@ const fileExists = async (filePath: string): Promise<boolean> => {
   } catch {
     return false;
   }
+};
+
+const safeStat = async (filePath: string): Promise<Stats | null> => {
+  try {
+    return await fs.stat(filePath);
+  } catch {
+    return null;
+  }
+};
+
+const readJsonFile = async <T>(filePath: string): Promise<T | null> => {
+  try {
+    const raw = await fs.readFile(filePath, "utf-8");
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+};
+
+const writeJsonFile = async (filePath: string, value: unknown): Promise<void> => {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, JSON.stringify(value, null, 2), "utf-8");
+};
+
+const collectFilesRecursively = async (targetPath: string): Promise<string[]> => {
+  const stats = await safeStat(targetPath);
+  if (!stats) {
+    return [];
+  }
+
+  if (stats.isFile()) {
+    return [targetPath];
+  }
+
+  const entries = await fs.readdir(targetPath, { withFileTypes: true });
+  const nested = await Promise.all(
+    entries
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .map((entry) => collectFilesRecursively(path.join(targetPath, entry.name))),
+  );
+  return nested.flat();
+};
+
+const buildBundleFingerprint = async (entryPoint: string): Promise<string> => {
+  const targets = [
+    entryPoint,
+    path.resolve(process.cwd(), "src", "audio"),
+    path.resolve(process.cwd(), "src", "env.ts"),
+    path.resolve(process.cwd(), "src", "renderHud.ts"),
+    path.resolve(process.cwd(), "src", "remotion"),
+    path.resolve(process.cwd(), "public"),
+    path.resolve(process.cwd(), "package.json"),
+    path.resolve(process.cwd(), "package-lock.json"),
+  ];
+
+  const hash = crypto.createHash("sha1");
+  for (const target of targets) {
+    const files = await collectFilesRecursively(target);
+    if (files.length === 0) {
+      hash.update(`missing:${path.relative(process.cwd(), target)}\n`);
+      continue;
+    }
+
+    for (const filePath of files.sort()) {
+      const stats = await safeStat(filePath);
+      if (!stats || !stats.isFile()) {
+        continue;
+      }
+      hash.update(
+        `${path.relative(process.cwd(), filePath)}:${stats.size}:${Math.floor(stats.mtimeMs)}\n`,
+      );
+    }
+  }
+
+  return hash.digest("hex");
+};
+
+const resolveServeUrl = async (
+  entryPoint: string,
+  timings: RenderTimings,
+): Promise<{ serveUrl: string; bundleCacheHit: boolean }> => {
+  const fingerprint = await buildBundleFingerprint(entryPoint);
+  const bundleCacheDir = path.join(BUNDLE_CACHE_ROOT, fingerprint);
+  const startedAt = logStageStart("bundle", `fingerprint=${fingerprint}`);
+  const bundleIndexPath = path.join(bundleCacheDir, "index.html");
+  const cacheReusable = await fileExists(bundleIndexPath);
+
+  if (cacheReusable) {
+    logStageEnd("bundle", startedAt, timings, "cache=hit");
+    return { serveUrl: bundleCacheDir, bundleCacheHit: true };
+  }
+
+  await fs.mkdir(BUNDLE_CACHE_ROOT, { recursive: true });
+
+  try {
+    const serveUrl = await bundle({
+      entryPoint,
+      webpackOverride: (config) => config,
+      outDir: bundleCacheDir,
+      enableCaching: true,
+    });
+    logStageEnd("bundle", startedAt, timings, "cache=miss");
+    return { serveUrl, bundleCacheHit: false };
+  } catch (error) {
+    await fs.rm(bundleCacheDir, { recursive: true, force: true }).catch(() => undefined);
+    logStageEnd(
+      "bundle",
+      startedAt,
+      timings,
+      `cache=miss status=error message=${error instanceof Error ? error.message : String(error)}`,
+    );
+    throw error;
+  }
+};
+
+const getNvencSignature = async (ffmpegBinary: string): Promise<string> => {
+  const binaryLabel = path.isAbsolute(ffmpegBinary) ? ffmpegBinary : ffmpegBinary.trim();
+  const stats = path.isAbsolute(ffmpegBinary) ? await safeStat(ffmpegBinary) : null;
+  return `${binaryLabel}:${stats?.size ?? "na"}:${Math.floor(stats?.mtimeMs ?? 0)}`;
+};
+
+const hasNvencEncoder = async (timings: RenderTimings): Promise<boolean> => {
+  const env = getEnv();
+  const ffmpegSignature = await getNvencSignature(env.ffmpegBinary);
+  const cached = await readJsonFile<NvencProbeCache>(NVENC_CACHE_PATH);
+
+  if (cached?.ffmpegSignature === ffmpegSignature) {
+    timings.nvencProbe = 0;
+    console.info(`[renderHud] nvencProbe start cache=hit ffmpeg=${env.ffmpegBinary}`);
+    console.info(`[renderHud] nvencProbe end durationMs=0 cache=hit hasNvenc=${cached.hasNvenc}`);
+    return cached.hasNvenc;
+  }
+
+  const hasNvenc = await measureStage(
+    timings,
+    "nvencProbe",
+    async () => {
+      try {
+        const output = await runProcess(env.ffmpegBinary, ["-encoders"]);
+        return /h264_nvenc/.test(`${output.stdout}\n${output.stderr}`);
+      } catch {
+        return false;
+      }
+    },
+    {
+      startExtra: `cache=miss ffmpeg=${env.ffmpegBinary}`,
+      endExtra: (value) => `cache=miss hasNvenc=${value}`,
+    },
+  );
+
+  await writeJsonFile(NVENC_CACHE_PATH, {
+    ffmpegSignature,
+    hasNvenc,
+    checkedAt: new Date().toISOString(),
+  } satisfies NvencProbeCache);
+
+  return hasNvenc;
 };
 
 const normalizeMode = (value: unknown): "review" | "payment_pending" | "approved" => {
@@ -82,9 +291,9 @@ const encodeFinalVideo = async (options: {
   ];
 
   if (options.useNvenc) {
-    args.push("-c:v", "h264_nvenc", "-preset", "p5", "-cq", "23");
+    args.push("-c:v", "h264_nvenc", "-preset", FINAL_NVENC_PRESET, "-cq", "23");
   } else {
-    args.push("-c:v", "libx264", "-preset", "veryfast", "-crf", "23");
+    args.push("-c:v", "libx264", "-preset", FINAL_X264_PRESET, "-crf", "23");
   }
 
   args.push(
@@ -117,6 +326,30 @@ const resolveAudioSource = (
     return fallback;
   }
   return normalizeAudioSource(argValue);
+};
+
+const resolveRenderConcurrency = (
+  argv: Record<string, unknown>,
+): number | string | null => {
+  const defaultConcurrency = Math.max(1, Math.min(2, os.cpus().length));
+  const argValue = argv.renderConcurrency ?? argv["render-concurrency"];
+  const envValue =
+    process.env.AFFILIATION_VIDEO_RENDER_CONCURRENCY ??
+    process.env.WELCOME_VIDEO_RENDER_CONCURRENCY ??
+    null;
+  const rawValue = String(argValue ?? envValue ?? "").trim();
+  if (!rawValue) {
+    return defaultConcurrency;
+  }
+  if (/^\d+%$/.test(rawValue)) {
+    return rawValue;
+  }
+
+  const numericValue = Number(rawValue);
+  if (!Number.isFinite(numericValue) || numericValue < 1) {
+    return null;
+  }
+  return Math.floor(numericValue);
 };
 
 const resolveAudioLocalPath = (argv: Record<string, unknown>, fallback: string): string => {
@@ -153,6 +386,30 @@ const resolveLocalAudioCandidate = async (audioLocalPath: string): Promise<strin
   }
 
   return null;
+};
+
+const shouldStageSharedAudio = async (
+  sourcePath: string,
+  destinationPath: string,
+): Promise<boolean> => {
+  const resolvedSource = path.resolve(sourcePath);
+  const resolvedDestination = path.resolve(destinationPath);
+  if (resolvedSource === resolvedDestination) {
+    return false;
+  }
+
+  const [sourceStats, destinationStats] = await Promise.all([
+    safeStat(resolvedSource),
+    safeStat(resolvedDestination),
+  ]);
+  if (!sourceStats || !sourceStats.isFile()) {
+    return false;
+  }
+  if (!destinationStats || !destinationStats.isFile() || destinationStats.size === 0) {
+    return true;
+  }
+
+  return sourceStats.mtimeMs > destinationStats.mtimeMs;
 };
 
 const stageLocalAudioTrack = async (sourcePath: string, destinationPath: string): Promise<void> => {
@@ -318,9 +575,11 @@ const resolveLogoInput = async (rawLogoUrl: string): Promise<LogoResolution> => 
 };
 
 const main = async (): Promise<void> => {
+  const totalStartedAt = Date.now();
+  const timings: RenderTimings = {};
   const argv = minimist(process.argv.slice(2));
   const env = getEnv();
-  
+
   const orgId = argv.orgId?.toString();
   if (!orgId) {
     throw new Error("Missing --orgId");
@@ -337,16 +596,15 @@ const main = async (): Promise<void> => {
   const forceAudioGeneration =
     argv["force-audio-generation"] === true || argv.forceAudioGeneration === true;
   const audioSource = resolveAudioSource(argv, env.audioSource);
+  const renderConcurrency = resolveRenderConcurrency(argv);
   const audioLocalPath = resolveAudioLocalPath(argv, env.audioLocalPath);
 
   const outputPath = outputArg
     ? path.resolve(outputArg)
     : path.resolve(process.cwd(), "out", `welcome_hud_${orgId}.mp4`);
-  
-  // Create tmp working dir
+
   const tmpDir = path.resolve(process.cwd(), ".tmp", orgId);
   await fs.mkdir(tmpDir, { recursive: true });
-
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
   const resolvedLogo = await resolveLogoInput(requestedLogoUrl);
@@ -354,45 +612,52 @@ const main = async (): Promise<void> => {
   const sharedAudioPath = path.resolve(process.cwd(), "public", "welcome_hud_audio.wav");
   let audioStrategy = "shared";
 
-  if (audioSource === "elevenlabs") {
-    if (!env.elevenLabsApiKey) {
-      throw new Error(
-        "Missing required environment variable: ELEVENLABS_API_KEY (required when AUDIO_SOURCE=elevenlabs).",
-      );
-    }
-    if (env.elevenLabsVoiceIds.length === 0) {
-      throw new Error(
-        "Missing required environment variable: ELEVENLABS_VOICE_IDS (required when AUDIO_SOURCE=elevenlabs).",
-      );
+  await measureStage(timings, "audioPrepare", async () => {
+    if (audioSource === "elevenlabs") {
+      if (!env.elevenLabsApiKey) {
+        throw new Error(
+          "Missing required environment variable: ELEVENLABS_API_KEY (required when AUDIO_SOURCE=elevenlabs).",
+        );
+      }
+      if (env.elevenLabsVoiceIds.length === 0) {
+        throw new Error(
+          "Missing required environment variable: ELEVENLABS_VOICE_IDS (required when AUDIO_SOURCE=elevenlabs).",
+        );
+      }
+
+      const hasSharedAudio = await fileExists(sharedAudioPath);
+      const shouldGenerateAudio =
+        !skipAudioGeneration && (forceAudioGeneration || !hasSharedAudio);
+
+      if (shouldGenerateAudio) {
+        const sfx = await hudSelectSfx(path.resolve(process.cwd(), "assets"), seed);
+        const generatedVoices = await hudGenerateVoices(orgId);
+
+        await hudMixAudio({
+          welcomeFile: generatedVoices.welcomeFile,
+          sfx,
+          orgId,
+        });
+        audioStrategy = "elevenlabs";
+      } else if (!hasSharedAudio) {
+        throw new Error(
+          "Audio HUD mancante: genera almeno una volta welcome_hud_audio.wav o abilita la generazione audio.",
+        );
+      }
+      return;
     }
 
-    const hasSharedAudio = await fileExists(sharedAudioPath);
-    const shouldGenerateAudio =
-      !skipAudioGeneration && (forceAudioGeneration || !hasSharedAudio);
-
-    if (shouldGenerateAudio) {
-      const sfx = await hudSelectSfx(path.resolve(process.cwd(), "assets"), seed);
-      const generatedVoices = await hudGenerateVoices(orgId);
-
-      await hudMixAudio({
-        welcomeFile: generatedVoices.welcomeFile,
-        sfx,
-        orgId,
-      });
-      audioStrategy = "elevenlabs";
-    } else if (!hasSharedAudio) {
-      throw new Error(
-        "Audio HUD mancante: genera almeno una volta welcome_hud_audio.wav o abilita la generazione audio.",
-      );
-    }
-  } else {
     const localAudioCandidate = await resolveLocalAudioCandidate(audioLocalPath);
     const hasSharedAudio = await fileExists(sharedAudioPath);
 
     if (localAudioCandidate) {
       try {
-        await stageLocalAudioTrack(localAudioCandidate, sharedAudioPath);
-        audioStrategy = "local";
+        if (await shouldStageSharedAudio(localAudioCandidate, sharedAudioPath)) {
+          await stageLocalAudioTrack(localAudioCandidate, sharedAudioPath);
+          audioStrategy = "local";
+        } else {
+          audioStrategy = "local-cached";
+        }
       } catch (error) {
         console.warn(
           `Local audio staging failed (${localAudioCandidate}). Falling back to silent track: ${
@@ -408,7 +673,8 @@ const main = async (): Promise<void> => {
     } else {
       audioStrategy = "shared";
     }
-  }
+  });
+
   const sharedAudioAvailable = await fileExists(sharedAudioPath);
   if (!sharedAudioAvailable) {
     console.warn(
@@ -417,19 +683,14 @@ const main = async (): Promise<void> => {
     audioStrategy = "no-audio";
   }
 
-  // Render Video
   const entryPoint = path.resolve(__dirname, "../src/remotion/Root.tsx");
   const entryPointExists = existsSync(entryPoint);
-  console.info(
-    `[renderHud] remotion entryPoint=${entryPoint} exists=${entryPointExists}`,
-  );
+  console.info(`[renderHud] remotion entryPoint=${entryPoint} exists=${entryPointExists}`);
   if (!entryPointExists) {
     throw new Error(`Missing Remotion entryPoint: ${entryPoint}`);
   }
-  const serveUrl = await bundle({
-    entryPoint,
-    webpackOverride: (config) => config,
-  });
+
+  const { serveUrl, bundleCacheHit } = await resolveServeUrl(entryPoint, timings);
 
   const inputProps = {
     orgName,
@@ -439,7 +700,15 @@ const main = async (): Promise<void> => {
     template,
     audioEnabled: sharedAudioAvailable,
   };
-  const compositions = await getCompositions(serveUrl, { inputProps });
+
+  const compositions = await measureStage(
+    timings,
+    "composition",
+    () => getCompositions(serveUrl, { inputProps }),
+    {
+      endExtra: (items) => `count=${items.length} cacheHit=${bundleCacheHit}`,
+    },
+  );
 
   const compositionId = template === "base" ? "AssonamHUDWelcomeBase" : "AssonamHUDWelcome";
   const composition = compositions.find((item) => item.id === compositionId);
@@ -452,44 +721,69 @@ const main = async (): Promise<void> => {
     `welcome_hud_${orgId}_intermediate.mp4`,
   );
 
-  await renderMedia({
-    composition,
-    serveUrl,
-    codec: "h264",
-    outputLocation: intermediateOutputPath,
-    inputProps,
-    overwrite: true,
-    crf: 23,
-    x264Preset: "veryfast",
-    imageFormat: "jpeg",
-  });
+  let resolvedConcurrency: number | null = null;
+  let parallelEncoding = false;
+  let slowestFrames: Array<{ frame: number; time: number }> = [];
+  const renderResult = await measureStage(timings, "render", () =>
+    renderMedia({
+      composition,
+      serveUrl,
+      codec: "h264",
+      outputLocation: intermediateOutputPath,
+      inputProps,
+      overwrite: true,
+      crf: 23,
+      x264Preset: INTERMEDIATE_X264_PRESET,
+      imageFormat: "jpeg",
+      pixelFormat: "yuv420p",
+      concurrency: renderConcurrency,
+      onStart: (data) => {
+        resolvedConcurrency = data.resolvedConcurrency;
+        parallelEncoding = data.parallelEncoding;
+        console.info(
+          `[renderHud] render config frameCount=${data.frameCount} resolvedConcurrency=${data.resolvedConcurrency} parallelEncoding=${data.parallelEncoding}`,
+        );
+      },
+    }),
+  );
+  slowestFrames = renderResult.slowestFrames.slice(0, 5);
 
-  const hasNvenc = await hasNvencEncoder();
+  const hasNvenc = await hasNvencEncoder(timings);
   let usedNvenc = false;
-  if (hasNvenc) {
-    try {
-      await encodeFinalVideo({
-        inputPath: intermediateOutputPath,
-        outputPath,
-        useNvenc: true,
-      });
-      usedNvenc = true;
-    } catch {
-      console.warn("NVENC failed at runtime, falling back to libx264.");
-      await encodeFinalVideo({
-        inputPath: intermediateOutputPath,
-        outputPath,
-        useNvenc: false,
-      });
+  await measureStage(timings, "encode", async () => {
+    if (hasNvenc) {
+      try {
+        await encodeFinalVideo({
+          inputPath: intermediateOutputPath,
+          outputPath,
+          useNvenc: true,
+        });
+        usedNvenc = true;
+        return;
+      } catch {
+        console.warn("NVENC failed at runtime, falling back to libx264.");
+      }
     }
-  } else {
+
     await encodeFinalVideo({
       inputPath: intermediateOutputPath,
       outputPath,
       useNvenc: false,
     });
-  }
-  await fs.unlink(intermediateOutputPath).catch(() => {});
+  });
+
+  await measureStage(timings, "finalize", async () => {
+    await fs.unlink(intermediateOutputPath).catch(() => undefined);
+    const finalStats = await safeStat(outputPath);
+    if (!finalStats || finalStats.size === 0) {
+      throw new Error(`Final video was not written correctly: ${outputPath}`);
+    }
+  });
+
+  timings.total = Date.now() - totalStartedAt;
+  console.info(
+    `[renderHud] total end durationMs=${timings.total} bundleCacheHit=${bundleCacheHit} usedNvenc=${usedNvenc}`,
+  );
 
   process.stdout.write(
     JSON.stringify({
@@ -501,15 +795,23 @@ const main = async (): Promise<void> => {
       audioStrategy,
       logoStrategy: resolvedLogo.logoStrategy,
       durationSec: 12,
+      bundleCacheHit,
+      nvencDetected: hasNvenc,
+      usedNvenc,
+      renderConcurrencyRequested: renderConcurrency,
+      renderConcurrencyResolved: resolvedConcurrency,
+      parallelEncoding,
+      slowestFrames,
+      timingsMs: timings,
       outputSpec: {
         width: 1280,
         height: 720,
         fps: 24,
         codec: usedNvenc ? "h264_nvenc" : "h264",
         crf: 23,
-        preset: usedNvenc ? "p5" : "veryfast",
+        preset: usedNvenc ? FINAL_NVENC_PRESET : FINAL_X264_PRESET,
       },
-    }) + "\n"
+    }) + "\n",
   );
 };
 

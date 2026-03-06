@@ -78,6 +78,14 @@ def enqueue_affiliation_video_job(
             VideoJobStatus.QUEUED.value,
             VideoJobStatus.PROCESSING.value,
         }:
+            logger.info(
+                "affiliation_video_job_reused_existing job_id=%s application_id=%s mode=%s status=%s requested_at=%s",
+                existing_job.id,
+                application_id,
+                normalized_mode,
+                existing_job.status,
+                existing_job.requested_at.isoformat() if existing_job.requested_at else None,
+            )
             return existing_job
 
     if _video_file_is_ready(absolute_path):
@@ -103,6 +111,13 @@ def enqueue_affiliation_video_job(
             reusable_job.error_text = None
             reusable_job.finished_at = datetime.utcnow()
             db.flush()
+            logger.info(
+                "affiliation_video_job_reused_ready job_id=%s application_id=%s mode=%s output_rel_path=%s",
+                reusable_job.id,
+                application_id,
+                normalized_mode,
+                relative_path,
+            )
             return reusable_job
 
     job = VideoJob(
@@ -113,6 +128,13 @@ def enqueue_affiliation_video_job(
     )
     db.add(job)
     db.flush()
+    logger.info(
+        "affiliation_video_job_created job_id=%s application_id=%s mode=%s requested_at=%s",
+        job.id,
+        application_id,
+        normalized_mode,
+        job.requested_at.isoformat() if job.requested_at else None,
+    )
     return job
 
 
@@ -150,7 +172,8 @@ def _ensure_renderer_build(renderer_dir: Path) -> Path:
         return render_script
 
     npm_binary = "npm.cmd" if os.name == "nt" else "npm"
-    logger.info("affiliation_video_build start renderer_dir=%s", renderer_dir)
+    build_started_at = datetime.utcnow()
+    logger.info("affiliation_video_build_start renderer_dir=%s", renderer_dir)
     subprocess.run(
         [npm_binary, "run", "build"],
         cwd=str(renderer_dir),
@@ -161,6 +184,12 @@ def _ensure_renderer_build(renderer_dir: Path) -> Path:
 
     if not render_script.exists():
         raise RuntimeError("Renderer build completed but dist/renderHud.cjs is missing.")
+    build_ms = int((datetime.utcnow() - build_started_at).total_seconds() * 1000)
+    logger.info(
+        "affiliation_video_build_end renderer_dir=%s build_ms=%s",
+        renderer_dir,
+        build_ms,
+    )
     return render_script
 
 
@@ -241,6 +270,20 @@ def _extract_json_line(stdout: str) -> dict[str, Any]:
 
 
 def _render_job(db: Session, job: VideoJob) -> None:
+    started_processing_at = datetime.utcnow()
+    queue_wait_ms: int | None = None
+    if job.requested_at and job.started_at:
+        queue_wait_ms = max(
+            0,
+            int((job.started_at - job.requested_at).total_seconds() * 1000),
+        )
+    logger.info(
+        "affiliation_video_render_start job_id=%s application_id=%s mode=%s queue_wait_ms=%s",
+        job.id,
+        job.application_id,
+        job.mode,
+        queue_wait_ms,
+    )
     application = (
         db.query(AffiliationApplication)
         .filter(AffiliationApplication.id == job.application_id)
@@ -313,11 +356,27 @@ def _render_job(db: Session, job: VideoJob) -> None:
     except Exception:
         payload = None
 
+    finalize_started_at = datetime.utcnow()
+    logger.info(
+        "affiliation_video_finalize_start job_id=%s application_id=%s output=%s renderer_output=%s",
+        job.id,
+        job.application_id,
+        absolute_path,
+        str(payload.get("path")) if payload else None,
+    )
     source_path = Path(str(payload.get("path") or "").strip()) if payload else absolute_path
     if source_path and _video_file_is_ready(source_path):
         if source_path.resolve() != absolute_path.resolve():
             absolute_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source_path, absolute_path)
+    finalize_ms = int((datetime.utcnow() - finalize_started_at).total_seconds() * 1000)
+    logger.info(
+        "affiliation_video_finalize_end job_id=%s application_id=%s finalize_ms=%s output_ready=%s",
+        job.id,
+        job.application_id,
+        finalize_ms,
+        _video_file_is_ready(absolute_path),
+    )
 
     file_ready = _video_file_is_ready(absolute_path)
     if file_ready:
@@ -332,6 +391,19 @@ def _render_job(db: Session, job: VideoJob) -> None:
         job.output_rel_path = relative_path
         job.error_text = None
         job.finished_at = datetime.utcnow()
+        processing_ms = int((job.finished_at - (job.started_at or started_processing_at)).total_seconds() * 1000)
+        total_ms = None
+        if job.requested_at:
+            total_ms = int((job.finished_at - job.requested_at).total_seconds() * 1000)
+        logger.info(
+            "affiliation_video_render_end job_id=%s application_id=%s mode=%s processing_ms=%s total_ms=%s renderer_timings=%s",
+            job.id,
+            job.application_id,
+            job.mode,
+            processing_ms,
+            total_ms,
+            payload.get("timingsMs") if isinstance(payload, dict) else None,
+        )
         return
 
     if result.returncode != 0:
@@ -397,12 +469,29 @@ def _claim_jobs_for_processing(db: Session, batch_limit: int) -> list[VideoJob]:
     if not claimed_ids:
         return []
 
-    return (
+    jobs = (
         db.query(VideoJob)
         .filter(VideoJob.id.in_(claimed_ids))
         .order_by(VideoJob.requested_at.asc(), VideoJob.id.asc())
         .all()
     )
+    for job in jobs:
+        queue_wait_ms: int | None = None
+        if job.requested_at and job.started_at:
+            queue_wait_ms = max(
+                0,
+                int((job.started_at - job.requested_at).total_seconds() * 1000),
+            )
+        logger.info(
+            "affiliation_video_job_claimed job_id=%s application_id=%s mode=%s requested_at=%s started_at=%s queue_wait_ms=%s",
+            job.id,
+            job.application_id,
+            job.mode,
+            job.requested_at.isoformat() if job.requested_at else None,
+            job.started_at.isoformat() if job.started_at else None,
+            queue_wait_ms,
+        )
+    return jobs
 
 
 def process_video_jobs_once(limit: int | None = None) -> dict[str, int]:
