@@ -2705,3 +2705,11 @@ pm --prefix frontend run build -> OK
 - Ogni notifica non letta puo essere chiusa singolarmente dal dropdown tramite `X` / azione `Chiudi`, senza aprire la sezione target; la chiusura usa l'endpoint di mark-as-read gia esistente.
 - Apertura del dettaglio continua a marcare la notifica come letta e a navigare verso la sezione corretta.
 - Verifica: `npm --prefix frontend run build` -> OK
+
+## Review Addendum (Org Admin notification email recipients - Mar 07, 2026)
+- Il recipient email e stato reso esplicito sul path notifiche: il sistema usa gli `AdminUser.email` degli Org Admin attivi dell'associazione, cioe le stesse credenziali login create/gestite dal Super Admin nella sezione `Amministratori`.
+- Aggiunta normalizzazione/deduplica dei recipient e logging strutturato con `admin_ids` e `recipient_emails` su invio documento e alert low-cards, per rendere verificabile in produzione chi viene realmente messo in coda.
+- Rafforzata la verifica automatica: nuovi test end-to-end drenano l'email worker in `EMAIL_MODE=test` e confermano che la consegna va alla mail login dell'Org Admin, non alla mail generica dell'associazione.
+- Verifiche:
+  - `python -m pytest -q tests/test_org_admin_notifications.py tests/test_low_cards_alert_job.py` -> `12 passed`
+  - `python -m py_compile app/services/org_admin_notifications.py` -> OK

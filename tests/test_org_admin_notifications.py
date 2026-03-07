@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
+from app.config import settings
 from app.db import SessionLocal
 from app.models import (
     AdminRole,
@@ -15,7 +16,7 @@ from app.models import (
     Organization,
 )
 from app.services import low_cards_alerts as low_cards_alerts_service
-from app.utils import hash_token
+from app.utils import clear_captured_emails, get_captured_emails, hash_token
 
 
 @pytest.fixture
@@ -23,6 +24,16 @@ def db():
     session = SessionLocal()
     yield session
     session.close()
+
+
+@pytest.fixture(autouse=True)
+def _email_mode_test():
+    original_mode = settings.EMAIL_MODE
+    settings.EMAIL_MODE = "test"
+    clear_captured_emails()
+    yield
+    settings.EMAIL_MODE = original_mode
+    clear_captured_emails()
 
 
 def _login_super_admin(client) -> None:
@@ -167,6 +178,27 @@ def test_accounting_document_notification_targets_accounting_tab(client, db):
     assert outbox[0].email_type == "document_accounting"
 
 
+def test_general_document_email_is_delivered_to_org_admin_login_email(client, db, drain_email_outbox):
+    org, admin = _create_org_with_admin(db)
+    _login_super_admin(client)
+    clear_captured_emails()
+    data, files = _build_document_upload(
+        title="Verbale assemblea",
+        kind="general",
+        target_mode="single",
+        association_ids=[org.id],
+    )
+
+    response = client.post("/api/super-admin/documents", data=data, files=files)
+    assert response.status_code == 200, response.text
+
+    drain_email_outbox()
+    captured = get_captured_emails()
+    assert len(captured) == 1
+    assert (captured[0]["to"] or "").lower() == admin.email.lower()
+    assert "Verbale assemblea" in (captured[0]["text_body"] or "")
+
+
 def test_org_admin_notification_endpoints_mark_read_and_count(client, db):
     org, admin = _create_org_with_admin(db)
     notification = OrgAdminNotification(
@@ -289,3 +321,35 @@ def test_low_cards_alert_creates_single_notification_and_resets_above_threshold(
         .count()
         == 2
     )
+
+
+def test_low_cards_email_targets_org_admin_login_email(db, monkeypatch, drain_email_outbox):
+    org, admin = _create_org_with_admin(db)
+    org.email = "association-office@example.com"
+    db.add(org)
+    db.commit()
+    _create_batch(db, org_id=org.id, quantity=40)
+
+    monkeypatch.setattr(low_cards_alerts_service, "twilio_alerts_are_configured", lambda: False)
+    monkeypatch.setattr(
+        low_cards_alerts_service,
+        "get_remaining_cards_by_org",
+        lambda _db, association_ids, *, now=None: {
+            association_id: 25 if association_id == org.id else 200 for association_id in association_ids
+        },
+    )
+
+    clear_captured_emails()
+    result = low_cards_alerts_service.run_low_cards_alert_job(
+        db=db,
+        now=datetime.utcnow(),
+        force=False,
+    )
+    assert result["emails_queued"] == 1
+
+    drain_email_outbox()
+    captured = get_captured_emails()
+    assert len(captured) == 1
+    assert (captured[0]["to"] or "").lower() == admin.email.lower()
+    assert (captured[0]["to"] or "").lower() != org.email.lower()
+    assert "Tessere in esaurimento" in (captured[0]["subject"] or "")

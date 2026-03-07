@@ -96,3 +96,8 @@
 - Quando la larghezza disponibile dipende da `sidebar + gap + content`, stimare il budget complessivo prima di scegliere il nuovo `max-width`: aumenti troppo prudenti del shell portano a iterazioni inutili.
 - Se aggiungo colonne/tabelle usate subito dai model in ambienti dev/test che bootstrappano con `create_all()`, devo anche estendere il path di repair in `init_db.py`: un DB SQLite gia esistente non viene alterato da `create_all()` e rompe i test/local boot.
 - Nelle migration Postgres che introducono boolean legacy, non posso fare `UPDATE ... SET col = FALSE` assumendo che il tipo sia gia boolean: prima devo normalizzare/castare eventuali colonne `INTEGER`, altrimenti l'upgrade fallisce con `expression is of type boolean`.
+## 2026-03-07 - Email flow verification must prove delivery, not just queueing
+
+- Quando aggiungo un flusso email basato su outbox/worker, non basta verificare che esista una riga in `email_outbox`.
+- Devo aggiungere almeno un test end-to-end che dreni il worker in `EMAIL_MODE=test` e controlli il destinatario finale catturato.
+- Se il requisito utente riguarda "a quale email arriva", devo loggare e testare esplicitamente i recipient reali (`admin_ids`, `recipient_emails`) invece di inferirli solo dalla query backend.

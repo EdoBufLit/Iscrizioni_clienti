@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import Iterable
 
@@ -16,6 +17,8 @@ from app.models import (
     OrganizationSharedDocument,
 )
 from app.services.email_outbox import build_email_payload, enqueue_email
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_frontend_base_url(request: Request | None = None) -> str:
@@ -40,6 +43,18 @@ def _list_active_org_admins(db: Session, org_id: int) -> list[AdminUser]:
         .order_by(AdminUser.id.asc())
         .all()
     )
+
+
+def _unique_org_admin_recipient_emails(admins: Iterable[AdminUser]) -> list[tuple[AdminUser, str]]:
+    recipients: list[tuple[AdminUser, str]] = []
+    seen: set[str] = set()
+    for admin in admins:
+        normalized_email = (admin.email or "").strip().lower()
+        if not normalized_email or normalized_email in seen:
+            continue
+        seen.add(normalized_email)
+        recipients.append((admin, normalized_email))
+    return recipients
 
 
 def _create_notification_rows(
@@ -104,6 +119,7 @@ def notify_org_admins_about_shared_document(
     request: Request,
 ) -> dict[str, int]:
     admins = _list_active_org_admins(db, organization.id)
+    recipient_emails = _unique_org_admin_recipient_emails(admins)
     href = (
         "/org-admin/contabilita"
         if document.kind == "accounting"
@@ -155,13 +171,11 @@ def notify_org_admins_about_shared_document(
     )
     text_body = f"{title}\n\n{body}\n\nApri la dashboard: {cta_url}"
 
-    for admin in admins:
-        if not admin.email:
-            continue
+    for admin, email in recipient_emails:
         enqueue_email(
             db,
             email_type=notification_type.value,
-            to_email=admin.email,
+            to_email=email,
             subject=subject,
             payload=build_email_payload(
                 text_body=text_body,
@@ -178,6 +192,17 @@ def notify_org_admins_about_shared_document(
         )
         emails_queued += 1
 
+    logger.info(
+        "org_admin_document_alerts_queued org_id=%s document_id=%s type=%s admin_ids=%s recipient_emails=%s notifications=%s emails=%s",
+        organization.id,
+        document.id,
+        notification_type.value,
+        [admin.id for admin in admins],
+        [email for _, email in recipient_emails],
+        notifications_created,
+        emails_queued,
+    )
+
     return {
         "notifications_created": notifications_created,
         "emails_queued": emails_queued,
@@ -193,6 +218,7 @@ def notify_org_admins_low_cards(
     request: Request | None = None,
 ) -> dict[str, int]:
     admins = _list_active_org_admins(db, organization.id)
+    recipient_emails = _unique_org_admin_recipient_emails(admins)
     href = "/org-admin/tessere"
     frontend_base_url = _resolve_frontend_base_url(request)
     cta_url = f"{frontend_base_url}{href}" if frontend_base_url else href
@@ -224,13 +250,11 @@ def notify_org_admins_low_cards(
 
     emails_queued = 0
     alert_marker = now.isoformat()
-    for admin in admins:
-        if not admin.email:
-            continue
+    for admin, email in recipient_emails:
         enqueue_email(
             db,
             email_type=OrgAdminNotificationType.LOW_CARDS.value,
-            to_email=admin.email,
+            to_email=email,
             subject=f"Tessere in esaurimento per {organization.name}",
             payload=build_email_payload(
                 text_body=text_body,
@@ -246,6 +270,16 @@ def notify_org_admins_low_cards(
             dedupe_key=f"low_cards:{organization.id}:{admin.id}:{alert_marker}",
         )
         emails_queued += 1
+
+    logger.info(
+        "org_admin_low_cards_alerts_queued org_id=%s remaining=%s admin_ids=%s recipient_emails=%s notifications=%s emails=%s",
+        organization.id,
+        remaining,
+        [admin.id for admin in admins],
+        [email for _, email in recipient_emails],
+        notifications_created,
+        emails_queued,
+    )
 
     return {
         "notifications_created": notifications_created,
