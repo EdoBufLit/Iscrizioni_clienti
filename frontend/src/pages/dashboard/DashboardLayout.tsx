@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { fetchMe, apiLogout, AuthError, type MemberProfile } from "../../lib/api";
 import { applySeo } from "../../lib/seo";
 import Skeleton from "../../components/ui/Skeleton";
+import MobileDashboardNav, { type MobileDashboardNavItem } from "../../components/ui/MobileDashboardNav";
 import { OnboardingTour, ReviewGuideButton } from "../../components/onboarding";
 
 export type DashboardContext = {
@@ -107,6 +108,24 @@ const DashboardLayout = () => {
   const displayName = user ? `${user.first_name} ${user.last_name}` : null;
   const orgName = user?.organization?.name ?? null;
   const statusInfo = user ? STATUS_MAP[user.status] ?? null : null;
+  const mobileNavItems = useMemo(
+    (): MobileDashboardNavItem[] => [
+      { key: "home", label: "Riepilogo", to: "/dashboard", exact: true, icon: "home" as const },
+      { key: "profile", label: "Profilo", to: "/dashboard/profilo", activeMatch: ["/dashboard/profilo"], icon: "user" as const },
+      { key: "documents", label: "Documenti", to: "/dashboard/documenti", activeMatch: ["/dashboard/documenti"], icon: "docs" as const },
+      {
+        key: "logout",
+        label: "Esci",
+        icon: "logout" as const,
+        tone: "danger" as const,
+        onSelect: async () => {
+          await apiLogout();
+          navigate("/login", { replace: true });
+        },
+      },
+    ],
+    [navigate],
+  );
 
   return (
     <div className="min-h-screen bg-[#f8f9fa]/50">
@@ -194,7 +213,7 @@ const DashboardLayout = () => {
       </header>
 
       {/* Main content */}
-      <main className="mx-auto w-full max-w-[100rem] px-6 py-8">
+      <main className="dashboard-mobile-safe mx-auto w-full max-w-[100rem] px-6 py-8 md:pb-8">
         <div className="md:flex md:gap-12">
           {/* Sidebar — desktop */}
           <aside className="hidden w-60 shrink-0 md:block">
@@ -253,7 +272,7 @@ const DashboardLayout = () => {
 
           {/* Tabs — mobile */}
           <nav
-            className="flex gap-1 border-b border-neutral-200/60 md:hidden overflow-x-auto no-scrollbar"
+            className="hidden gap-1 border-b border-neutral-200/60 md:hidden overflow-x-auto no-scrollbar"
             aria-label="Dashboard navigation mobile"
           >
             {NAV_ITEMS.map((item) => (
@@ -274,6 +293,7 @@ const DashboardLayout = () => {
         </div>
       </main>
 
+      {!loading && user && <MobileDashboardNav items={mobileNavItems} />}
       {!loading && user && <OnboardingTour role="member" />}
     </div>
   );

@@ -2713,3 +2713,40 @@ pm --prefix frontend run build -> OK
 - Verifiche:
   - `python -m pytest -q tests/test_org_admin_notifications.py tests/test_low_cards_alert_job.py` -> `12 passed`
   - `python -m py_compile app/services/org_admin_notifications.py` -> OK
+
+## Spec (Dashboard mobile bottom navigation - Mar 07, 2026)
+- Obiettivo: rendere le dashboard ASSONAM piu simili a una web app su mobile con bottom navigation fissa, mantenendo invariata la navigazione desktop.
+- Scope:
+  - applicazione solo alle dashboard `Socio`, `Org Admin`, `Super Admin`;
+  - componente condiviso con massimo 5 voci visibili e sheet `Altro` per azioni secondarie;
+  - active state coerente con le route esistenti;
+  - safe area / padding contenuto per evitare overlap con card, tabelle e CTA;
+  - nessun cambiamento a backend, routing o landing pubblica.
+
+## Plan (Dashboard mobile bottom navigation - Mar 07, 2026)
+- [x] Ispezionare i layout dashboard Socio, Org Admin e Super Admin e annotare nav/azioni esistenti da replicare su mobile.
+- [x] Implementare componente condiviso di mobile bottom navigation con voce Altro che apre bottom sheet.
+- [x] Integrare la bottom nav nei tre layout dashboard con safe-area e padding contenuto, mantenendo desktop invariato.
+- [x] Verificare build frontend e aggiornare tasks/todo.md con review del batch.
+
+## Review (Dashboard mobile bottom navigation - Mar 07, 2026)
+- Creato il componente condiviso [MobileDashboardNav.tsx](/C:/Users/edoar/OneDrive/Desktop/CODE/iscrizioni%20clienti/Iscrizioni_clienti/frontend/src/components/ui/MobileDashboardNav.tsx) con:
+  - barra flottante mobile premium;
+  - active state route-aware;
+  - bottom sheet `Altro` con backdrop, chiusura e safe area;
+  - supporto a link e azioni (`Esci`) senza cambiare il routing.
+- Dashboard Socio:
+  - sostituite su mobile le tabs top con bottom nav `Riepilogo`, `Profilo`, `Documenti`, `Esci`;
+  - desktop invariato con sidebar attuale.
+- Dashboard Org Admin:
+  - bottom nav mobile con `Panoramica`, `Soci`, `Tessere`, `Documenti`, `Altro`;
+  - nello sheet `Altro`: `Inviti`, `Associazione`, `Contabilità` solo se abilitata, `Rivedi guida`, `Torna al sito`, `Esci`;
+  - top nav desktop mantenuta e nascosta sotto `md`.
+- Dashboard Super Admin:
+  - bottom nav mobile con `Associazioni`, `Affiliazioni`, `Documenti`, `Altro`;
+  - nello sheet `Altro`: `Amministratori`, `Soci`, `Torna al sito`, `Esci`;
+  - top nav desktop mantenuta e nascosta sotto `md`.
+- Safe area:
+  - aggiunta classe `dashboard-mobile-safe` per evitare che il contenuto finale venga coperto dalla barra.
+- Verifica:
+  - `npm --prefix frontend run build` -> OK

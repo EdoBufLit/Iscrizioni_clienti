@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   fetchSuperAdminMe,
@@ -9,6 +9,7 @@ import {
   type VersionInfo,
 } from "../../lib/api";
 import { applySeo } from "../../lib/seo";
+import MobileDashboardNav, { type MobileDashboardNavItem } from "../../components/ui/MobileDashboardNav";
 
 const SuperAdminLayout = () => {
   const navigate = useNavigate();
@@ -47,6 +48,31 @@ const SuperAdminLayout = () => {
     { label: "Amministratori", path: "/super-admin/org-admins" },
     { label: "Soci", path: "/super-admin/soci" },
   ];
+
+  const mobilePrimaryNav = useMemo(
+    (): MobileDashboardNavItem[] => [
+      { key: "orgs", label: "Associazioni", to: "/super-admin/associazioni", activeMatch: ["/super-admin/associazioni"], icon: "building" as const },
+      { key: "affiliations", label: "Affiliazioni", to: "/super-admin/affiliazioni", activeMatch: ["/super-admin/affiliazioni"], icon: "chart" as const },
+      { key: "documents", label: "Documenti", to: "/super-admin/documenti", activeMatch: ["/super-admin/documenti"], icon: "docs" as const },
+    ],
+    [],
+  );
+
+  const mobileMoreNav = useMemo(
+    (): MobileDashboardNavItem[] => [
+      { key: "admins", label: "Amministratori", to: "/super-admin/org-admins", activeMatch: ["/super-admin/org-admins"], icon: "shield" as const },
+      { key: "members", label: "Soci", to: "/super-admin/soci", activeMatch: ["/super-admin/soci"], icon: "users" as const },
+      { key: "site", label: "Torna al sito", to: "/", icon: "globe" as const },
+      {
+        key: "logout",
+        label: "Esci",
+        icon: "logout" as const,
+        tone: "danger" as const,
+        onSelect: handleLogout,
+      },
+    ],
+    [],
+  );
 
   if (loading) {
     return (
@@ -126,7 +152,7 @@ const SuperAdminLayout = () => {
 
         {/* Navigation Tabs */}
         <div className="container-shell">
-          <nav className="flex flex-wrap gap-6 pb-0 overflow-x-auto no-scrollbar">
+          <nav className="hidden flex-wrap gap-6 pb-0 overflow-x-auto no-scrollbar md:flex">
             {navLinks.map((link) => {
               const isActive = location.pathname.startsWith(link.path);
               return (
@@ -150,7 +176,7 @@ const SuperAdminLayout = () => {
         </div>
       </header>
 
-      <main className="container-shell py-10 animate-in fade-in duration-500">
+      <main className="dashboard-mobile-safe container-shell py-10 animate-in fade-in duration-500 md:pb-10">
         <Outlet context={{ profile }} />
       </main>
 
@@ -161,6 +187,12 @@ const SuperAdminLayout = () => {
           {ver.git_sha ? ` [${ver.git_sha.slice(0, 7)}]` : ""}
         </footer>
       )}
+
+      <MobileDashboardNav
+        items={mobilePrimaryNav}
+        moreItems={mobileMoreNav}
+        moreTitle="Altro"
+      />
     </div>
   );
 };

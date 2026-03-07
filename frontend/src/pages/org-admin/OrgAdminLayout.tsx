@@ -10,6 +10,7 @@ import {
 } from "../../lib/api";
 import { applySeo } from "../../lib/seo";
 import Skeleton from "../../components/ui/Skeleton";
+import MobileDashboardNav, { type MobileDashboardNavItem } from "../../components/ui/MobileDashboardNav";
 import { OnboardingTour, ReviewGuideButton } from "../../components/onboarding";
 import OrgAdminNotificationBell from "./components/OrgAdminNotificationBell";
 
@@ -60,6 +61,43 @@ const OrgAdminLayout = () => {
     if (admin?.organization?.accounting_enabled) {
       items.splice(5, 0, { to: "/org-admin/contabilita", label: "Contabilità", end: false });
     }
+    return items;
+  }, [admin?.organization?.accounting_enabled]);
+
+  const mobilePrimaryNav = useMemo(
+    (): MobileDashboardNavItem[] => [
+      { key: "overview", label: "Panoramica", to: "/org-admin", exact: true, icon: "home" as const },
+      { key: "members", label: "Soci", to: "/org-admin/soci", activeMatch: ["/org-admin/soci"], icon: "users" as const },
+      { key: "cards", label: "Tessere", to: "/org-admin/tessere", activeMatch: ["/org-admin/tessere"], icon: "cards" as const },
+      { key: "documents", label: "Documenti", to: "/org-admin/documenti", activeMatch: ["/org-admin/documenti"], icon: "docs" as const },
+    ],
+    [],
+  );
+
+  const mobileMoreNav = useMemo(() => {
+    const items: MobileDashboardNavItem[] = [
+      { key: "invites", label: "Inviti", to: "/org-admin/inviti", activeMatch: ["/org-admin/inviti"], icon: "book" as const },
+      { key: "association", label: "Associazione", to: "/org-admin/associazione", activeMatch: ["/org-admin/associazione"], icon: "building" as const },
+    ];
+    if (admin?.organization?.accounting_enabled) {
+      items.splice(1, 0, {
+        key: "accounting",
+        label: "Contabilità",
+        to: "/org-admin/contabilita",
+        activeMatch: ["/org-admin/contabilita"],
+        icon: "chart" as const,
+      });
+    }
+    items.push(
+      { key: "site", label: "Torna al sito", to: "/", icon: "globe" as const },
+      {
+        key: "logout",
+        label: "Esci",
+        icon: "logout" as const,
+        tone: "danger" as const,
+        onSelect: handleLogout,
+      },
+    );
     return items;
   }, [admin?.organization?.accounting_enabled]);
 
@@ -148,7 +186,7 @@ const OrgAdminLayout = () => {
           {/* Nav tabs */}
           {!loading && admin && (
             <div className="container-shell">
-              <nav className="flex flex-wrap gap-6 pb-0 overflow-x-auto no-scrollbar">
+              <nav className="hidden flex-wrap gap-6 pb-0 overflow-x-auto no-scrollbar md:flex">
                 {navItems.map((item) => (
                   <NavLink
                     key={item.to}
@@ -178,18 +216,28 @@ const OrgAdminLayout = () => {
         </header>
 
         {/* Content */}
-        <main className="animate-in fade-in duration-500">
+        <main className="dashboard-mobile-safe animate-in fade-in duration-500 md:pb-0">
           <Outlet />
         </main>
 
         {/* Version footer */}
         {ver && (
-          <footer className="container-shell pb-8 pt-12 text-[10px] font-bold uppercase tracking-widest text-neutral-300">
+          <footer className="container-shell pb-8 pt-12 text-[10px] font-bold uppercase tracking-widest text-neutral-300 md:pb-8">
             Piattaforma ASSO.N.A.M. v{ver.version}
             {ver.git_sha ? ` [${ver.git_sha.slice(0, 7)}]` : ""}
           </footer>
         )}
 
+        {!loading && admin && (
+          <MobileDashboardNav
+            items={mobilePrimaryNav}
+            moreItems={mobileMoreNav}
+            moreTitle="Altro"
+            moreContent={
+              <ReviewGuideButton className="mobile-dashboard-sheet__action w-full justify-start rounded-[1.4rem] border border-neutral-200/70 bg-white/85 px-4 py-3.5 text-sm font-semibold text-neutral-700 shadow-sm" />
+            }
+          />
+        )}
         {!loading && admin && <OnboardingTour role="org_admin" />}
       </div>
     </Ctx.Provider>
