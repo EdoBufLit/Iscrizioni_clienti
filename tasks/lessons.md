@@ -95,3 +95,4 @@
 - Se un child continua a sembrare "uguale a prima", verificare il parent che ne limita la larghezza visibile: allargare un box figlio dentro un shell troppo stretto non produce effetto percepibile.
 - Quando la larghezza disponibile dipende da `sidebar + gap + content`, stimare il budget complessivo prima di scegliere il nuovo `max-width`: aumenti troppo prudenti del shell portano a iterazioni inutili.
 - Se aggiungo colonne/tabelle usate subito dai model in ambienti dev/test che bootstrappano con `create_all()`, devo anche estendere il path di repair in `init_db.py`: un DB SQLite gia esistente non viene alterato da `create_all()` e rompe i test/local boot.
+- Nelle migration Postgres che introducono boolean legacy, non posso fare `UPDATE ... SET col = FALSE` assumendo che il tipo sia gia boolean: prima devo normalizzare/castare eventuali colonne `INTEGER`, altrimenti l'upgrade fallisce con `expression is of type boolean`.

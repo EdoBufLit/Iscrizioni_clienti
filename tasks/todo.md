@@ -2664,3 +2664,8 @@ pm --prefix frontend run build -> OK
   - `python -m pytest -q tests/test_org_shared_documents.py` -> `4 passed`
   - `python -m pytest -q tests/test_org_admin_statute_upload.py tests/test_super_admin_organizations_pagination.py` -> `7 passed`
   - `npm --prefix frontend run build` -> OK
+
+## Review Addendum (Accounting migration Postgres fix - Mar 07, 2026)
+- Root cause: la migration `g2h3i4j5k6l7` assumeva che `organizations.accounting_enabled` fosse gia `BOOLEAN`, ma su alcuni ambienti Postgres legacy la colonna esisteva come `INTEGER`.
+- Fix: la migration ora rileva il tipo reale della colonna, porta eventuali `NULL` a `0`, rimuove il default legacy e in Postgres converte esplicitamente a boolean con `postgresql_using="COALESCE(accounting_enabled, 0) <> 0"` prima di eseguire l'update a `FALSE`.
+- Verifica: parsing Python della migration con `python -m py_compile alembic/versions/g2h3i4j5k6l7_add_org_documents_and_accounting_flag.py` -> OK.

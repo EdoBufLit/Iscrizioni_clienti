@@ -51,8 +51,22 @@ def _index_exists(table_name: str, index_name: str) -> bool:
     return any(index.get("name") == index_name for index in indexes)
 
 
+def _column_type(table_name: str, column_name: str):
+    if not _table_exists(table_name):
+        return None
+    try:
+        columns = _inspector().get_columns(table_name)
+    except Exception:
+        return None
+    for column in columns:
+        if column.get("name") == column_name:
+            return column.get("type")
+    return None
+
+
 def upgrade() -> None:
     bind = op.get_bind()
+    dialect_name = bind.dialect.name
 
     if _table_exists("organizations") and not _column_exists(
         "organizations", "accounting_enabled"
@@ -68,6 +82,46 @@ def upgrade() -> None:
         )
 
     if _column_exists("organizations", "accounting_enabled"):
+        accounting_type = _column_type("organizations", "accounting_enabled")
+        is_boolean_column = isinstance(accounting_type, sa.Boolean)
+
+        if not is_boolean_column:
+            bind.execute(
+                sa.text(
+                    """
+                    UPDATE organizations
+                       SET accounting_enabled = 0
+                     WHERE accounting_enabled IS NULL
+                    """
+                )
+            )
+            if dialect_name == "postgresql":
+                bind.execute(
+                    sa.text(
+                        """
+                        ALTER TABLE organizations
+                        ALTER COLUMN accounting_enabled DROP DEFAULT
+                        """
+                    )
+                )
+                op.alter_column(
+                    "organizations",
+                    "accounting_enabled",
+                    existing_type=accounting_type or sa.Integer(),
+                    type_=sa.Boolean(),
+                    postgresql_using="COALESCE(accounting_enabled, 0) <> 0",
+                )
+            else:
+                bind.execute(
+                    sa.text(
+                        """
+                        UPDATE organizations
+                           SET accounting_enabled = 0
+                         WHERE accounting_enabled IS NULL
+                        """
+                    )
+                )
+
         bind.execute(
             sa.text(
                 """
@@ -80,7 +134,7 @@ def upgrade() -> None:
         op.alter_column(
             "organizations",
             "accounting_enabled",
-            existing_type=sa.Boolean(),
+            existing_type=sa.Boolean() if dialect_name == "postgresql" or is_boolean_column else accounting_type,
             nullable=False,
             server_default=sa.text("false"),
         )
