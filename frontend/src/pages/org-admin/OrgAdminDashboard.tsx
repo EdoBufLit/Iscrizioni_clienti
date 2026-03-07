@@ -78,46 +78,54 @@ const OrgAdminDashboard = () => {
   const [videoGuideFailed, setVideoGuideFailed] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    if (adminLoading) return;
-    if (!admin) return;
+  const loadDashboardData = useCallback(async () => {
+    if (adminLoading || !admin) return;
 
-    Promise.allSettled([fetchOrgAdminMetrics(), fetchOrgAdminReferralSummary()])
-      .then(([metricsResult, referralResult]) => {
-        if (metricsResult.status === "fulfilled") {
-          setMetrics(metricsResult.value);
-          setMetricsError(false);
-        } else {
-          const err = metricsResult.reason;
-          if (err instanceof AuthError) {
-            navigate("/org-admin/login", { replace: true });
-            return;
-          }
-          setMetricsError(true);
-        }
+    setLoading(true);
+    const [metricsResult, referralResult] = await Promise.allSettled([
+      fetchOrgAdminMetrics(),
+      fetchOrgAdminReferralSummary(),
+    ]);
 
-        if (referralResult.status === "fulfilled") {
-          setReferralSummary(referralResult.value);
-          setReferralError("");
-        } else {
-          const err = referralResult.reason;
-          if (err instanceof AuthError) {
-            navigate("/org-admin/login", { replace: true });
-            return;
-          }
-          setReferralError(err instanceof Error ? err.message : "Errore caricamento inviti.");
-        }
-      })
-      .catch((err) => {
-        if (err instanceof AuthError) {
-          navigate("/org-admin/login", { replace: true });
-        } else {
-          setMetricsError(true);
-          setReferralError(err instanceof Error ? err.message : "Errore caricamento inviti.");
-        }
-      })
-      .finally(() => setLoading(false));
+    if (metricsResult.status === "fulfilled") {
+      setMetrics(metricsResult.value);
+      setMetricsError(false);
+    } else {
+      const err = metricsResult.reason;
+      if (err instanceof AuthError) {
+        navigate("/org-admin/login", { replace: true });
+        return;
+      }
+      setMetricsError(true);
+    }
+
+    if (referralResult.status === "fulfilled") {
+      setReferralSummary(referralResult.value);
+      setReferralError("");
+    } else {
+      const err = referralResult.reason;
+      if (err instanceof AuthError) {
+        navigate("/org-admin/login", { replace: true });
+        return;
+      }
+      setReferralError(err instanceof Error ? err.message : "Errore caricamento inviti.");
+    }
+
+    setLoading(false);
   }, [admin, adminLoading, navigate]);
+
+  useEffect(() => {
+    if (adminLoading || !admin) return;
+    void loadDashboardData().catch((err) => {
+      if (err instanceof AuthError) {
+        navigate("/org-admin/login", { replace: true });
+      } else {
+        setMetricsError(true);
+        setReferralError(err instanceof Error ? err.message : "Errore caricamento inviti.");
+        setLoading(false);
+      }
+    });
+  }, [admin, adminLoading, loadDashboardData, navigate]);
 
   useEffect(() => {
     if (!videoGuideOpen) return;
@@ -179,8 +187,8 @@ const OrgAdminDashboard = () => {
           <p className="text-sm font-medium text-red-600/80 max-w-md mx-auto">
             Non è stato possibile recuperare i dati operativi. Ricarica la pagina o contatta il supporto se il problema persiste.
           </p>
-          <button onClick={() => window.location.reload()} className="btn-ghost !border-red-200 !text-red-700 hover:!bg-red-100">
-            Ricarica ora
+          <button onClick={() => void loadDashboardData()} className="btn-ghost !border-red-200 !text-red-700 hover:!bg-red-100">
+            Riprova
           </button>
         </div>
       ) : (

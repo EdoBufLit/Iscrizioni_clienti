@@ -1,10 +1,13 @@
 import { memo, useEffect, useState } from "react";
+import AsyncActionButton, { type AsyncActionState } from "../../../components/ui/AsyncActionButton";
 
 type MemberDecisionPanelProps = {
   status: string;
   decisionAt?: string;
   initialNotes?: string;
   isSubmitting: boolean;
+  approveState?: AsyncActionState;
+  rejectState?: AsyncActionState;
   onSubmit: (decision: "approve" | "reject", notes: string) => void;
 };
 
@@ -13,6 +16,8 @@ const MemberDecisionPanel = memo(function MemberDecisionPanel({
   decisionAt,
   initialNotes,
   isSubmitting,
+  approveState = "idle",
+  rejectState = "idle",
   onSubmit,
 }: MemberDecisionPanelProps) {
   const [notes, setNotes] = useState(initialNotes ?? "");
@@ -60,20 +65,26 @@ const MemberDecisionPanel = memo(function MemberDecisionPanel({
           </div>
         ) : (
           <div className="flex gap-4">
-            <button
+            <AsyncActionButton
               onClick={() => onSubmit("approve", notes)}
               disabled={isSubmitting}
-              className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
-            >
-              Approva Iscrizione
-            </button>
-            <button
+              state={approveState}
+              idleLabel="Approva Iscrizione"
+              loadingLabel="Approvazione..."
+              successLabel="Approvata"
+              errorLabel="Errore"
+              className="flex-1 rounded-lg bg-green-600 px-4 py-2 font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 shadow-sm"
+            />
+            <AsyncActionButton
               onClick={() => onSubmit("reject", notes)}
               disabled={isSubmitting}
-              className="flex-1 bg-white text-red-600 border border-red-200 px-4 py-2 rounded-lg font-medium hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
-            >
-              Rigetta Iscrizione
-            </button>
+              state={rejectState}
+              idleLabel="Rigetta Iscrizione"
+              loadingLabel="Rigetto..."
+              successLabel="Rigettata"
+              errorLabel="Errore"
+              className="flex-1 rounded-lg border border-red-200 bg-white px-4 py-2 font-medium text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 shadow-sm"
+            />
           </div>
         )}
       </div>

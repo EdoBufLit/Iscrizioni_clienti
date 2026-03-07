@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { createManualPayment } from "../../lib/api";
 import ManualPaymentForm, { type ManualPaymentPayload } from "./components/ManualPaymentForm";
 import MemberDecisionPanel from "./components/MemberDecisionPanel";
 import RejectDocumentModal from "./components/RejectDocumentModal";
+import AsyncActionButton, { type AsyncActionState } from "../../components/ui/AsyncActionButton";
+import ConfirmModal from "../../components/ui/ConfirmModal";
+import { useToast } from "../../components/ui/ToastProvider";
 
 interface Document {
   id: number;
@@ -84,6 +87,8 @@ interface MemberDetail {
 
 export default function OrgAdminMemberDetail() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { showToast } = useToast();
   const [member, setMember] = useState<MemberDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -95,6 +100,14 @@ export default function OrgAdminMemberDetail() {
   const [rejectingDoc, setRejectingDoc] = useState<Document | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [decisionDraft, setDecisionDraft] = useState<{ decision: "approve" | "reject"; notes: string } | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteActionState, setDeleteActionState] = useState<AsyncActionState>("idle");
+  const [decisionActionStates, setDecisionActionStates] = useState<Record<"approve" | "reject", AsyncActionState>>({
+    approve: "idle",
+    reject: "idle",
+  });
+  const [docActionStates, setDocActionStates] = useState<Record<number, AsyncActionState>>({});
 
   const ACTION_LABELS: Record<string, string> = {
     "member.manual_create": "Socio creato",
@@ -185,6 +198,18 @@ export default function OrgAdminMemberDetail() {
 
   const [isSubmittingDecision, setIsSubmittingDecision] = useState(false);
 
+  const resetActionStateLater = (reset: () => void) => {
+    window.setTimeout(reset, 1300);
+  };
+
+  const setDecisionActionState = (decision: "approve" | "reject", state: AsyncActionState) => {
+    setDecisionActionStates((prev) => ({ ...prev, [decision]: state }));
+  };
+
+  const setDocActionState = (docId: number, state: AsyncActionState) => {
+    setDocActionStates((prev) => ({ ...prev, [docId]: state }));
+  };
+
   useEffect(() => {
     fetchMember();
   }, [id]);
@@ -237,8 +262,20 @@ export default function OrgAdminMemberDetail() {
             }
           : prev
       );
+      showToast({
+        tone: "success",
+        title: "Accesso socio",
+        message:
+          data.email_status === "queued"
+            ? "Invio accesso accodato correttamente."
+            : data.email_sent
+              ? "Accesso inviato via email."
+              : "Invio completato senza conferma email.",
+      });
     } catch (err) {
-      setSendAccessError(err instanceof Error ? err.message : "Errore durante l'invio");
+      const message = err instanceof Error ? err.message : "Errore durante l'invio";
+      setSendAccessError(message);
+      showToast({ tone: "error", title: "Accesso socio", message });
     } finally {
       setSendingAccess(false);
     }
@@ -246,6 +283,7 @@ export default function OrgAdminMemberDetail() {
 
   const handleApprove = async (docId: number) => {
     setReviewingDocId(docId);
+    setDocActionState(docId, "loading");
     try {
       const res = await fetch(`/api/org-admin/documents/${docId}/approve`, {
         method: "POST",
@@ -261,8 +299,19 @@ export default function OrgAdminMemberDetail() {
 
       setActionMessage("Documento approvato con successo.");
       setActionError(null);
+      setDocActionState(docId, "success");
+      showToast({
+        tone: "success",
+        title: "Documenti socio",
+        message: "Documento approvato con successo.",
+      });
+      resetActionStateLater(() => setDocActionState(docId, "idle"));
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      setActionError(message);
+      setDocActionState(docId, "error");
+      showToast({ tone: "error", title: "Documenti socio", message });
+      resetActionStateLater(() => setDocActionState(docId, "idle"));
     } finally {
       setReviewingDocId(null);
     }
@@ -275,7 +324,9 @@ export default function OrgAdminMemberDetail() {
   };
 
   const handleReject = async (note: string) => {
-    if (!rejectingDoc) return;    setReviewingDocId(rejectingDoc.id);
+    if (!rejectingDoc) return;
+    setReviewingDocId(rejectingDoc.id);
+    setDocActionState(rejectingDoc.id, "loading");
     try {
       const res = await fetch(`/api/org-admin/documents/${rejectingDoc.id}/reject`, {
         method: "POST",
@@ -288,35 +339,65 @@ export default function OrgAdminMemberDetail() {
       }
       await res.json();
       await fetchMember();
-      setRejectingDoc(null);      setActionMessage("Documento rigettato.");
+      setRejectingDoc(null);
+      setActionMessage("Documento rigettato.");
       setActionError(null);
+      setDocActionState(rejectingDoc.id, "success");
+      showToast({
+        tone: "success",
+        title: "Documenti socio",
+        message: "Documento rigettato con motivazione salvata.",
+      });
+      resetActionStateLater(() => setDocActionState(rejectingDoc.id, "idle"));
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      setActionError(message);
+      setDocActionState(rejectingDoc.id, "error");
+      showToast({ tone: "error", title: "Documenti socio", message });
+      resetActionStateLater(() => setDocActionState(rejectingDoc.id, "idle"));
     } finally {
       setReviewingDocId(null);
     }
   };
 
   const handleDecision = async (decision: "approve" | "reject", notes: string) => {
-    if (!confirm(`Sei sicuro di voler ${decision === "approve" ? "approvare" : "rifiutare"} questa iscrizione?`)) return;
+    setDecisionDraft({ decision, notes });
+    setActionError(null);
+    setActionMessage(null);
+  };
 
+  const confirmDecision = async () => {
+    if (!decisionDraft) return;
     setIsSubmittingDecision(true);
+    setDecisionActionState(decisionDraft.decision, "loading");
     try {
       const res = await fetch(`/api/org-admin/members/${id}/decision`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ decision, notes }),
+        body: JSON.stringify({ decision: decisionDraft.decision, notes: decisionDraft.notes }),
       });
       if (!res.ok) throw new Error("Errore durante il salvataggio della decisione");
 
       await res.json();
       await fetchMember();
-      alert("Decisione salvata con successo!");
-
+      setDecisionDraft(null);
+      setDecisionActionState(decisionDraft.decision, "success");
+      showToast({
+        tone: "success",
+        title: "Decisione iscrizione",
+        message:
+          decisionDraft.decision === "approve"
+            ? "Iscrizione approvata correttamente."
+            : "Iscrizione rigettata correttamente.",
+      });
+      resetActionStateLater(() => setDecisionActionState(decisionDraft.decision, "idle"));
     } catch (err) {
-        alert("Errore: " + (err instanceof Error ? err.message : String(err)));
+      const message = err instanceof Error ? err.message : String(err);
+      setDecisionActionState(decisionDraft.decision, "error");
+      showToast({ tone: "error", title: "Decisione iscrizione", message });
+      resetActionStateLater(() => setDecisionActionState(decisionDraft.decision, "idle"));
     } finally {
-        setIsSubmittingDecision(false);
+      setIsSubmittingDecision(false);
     }
   };
 
@@ -358,10 +439,21 @@ export default function OrgAdminMemberDetail() {
         const detail = payload?.detail ?? "Errore durante il download";
         if (res.status === 404) {
           setActionError("Documento non disponibile sul server. Potrebbe essere stato rimosso.");
+          showToast({
+            tone: "error",
+            title: "Documenti socio",
+            message: "Documento non disponibile sul server.",
+          });
         } else if (res.status === 403) {
           setActionError("Permesso negato per questo documento.");
+          showToast({
+            tone: "error",
+            title: "Documenti socio",
+            message: "Permesso negato per questo documento.",
+          });
         } else {
           setActionError(detail);
+          showToast({ tone: "error", title: "Documenti socio", message: detail });
         }
         return;
       }
@@ -378,25 +470,36 @@ export default function OrgAdminMemberDetail() {
       }, 100);
     } catch {
       setActionError("Errore di rete durante il download del documento.");
+      showToast({
+        tone: "error",
+        title: "Documenti socio",
+        message: "Errore di rete durante il download del documento.",
+      });
     } finally {
       setDownloadingDocId(null);
     }
   };
 
-  const handleDelete = async () => {
-    if (!confirm("ATTENZIONE: Sei sicuro di voler ELIMINARE definitivamente questo socio? L'operazione rimuoverà immediatamente l'accesso al socio.")) return;
-
+  const confirmDelete = async () => {
+    setDeleteActionState("loading");
     try {
       const res = await fetch(`/api/org-admin/members/${id}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error("Errore durante l'eliminazione");
 
-      alert("Socio eliminato con successo.");
-      window.location.href = "/org-admin/soci";
-
+      setDeleteActionState("success");
+      showToast({
+        tone: "success",
+        title: "Soci",
+        message: "Socio eliminato con successo.",
+      });
+      navigate("/org-admin/soci", { replace: true });
     } catch (err) {
-      alert("Errore: " + (err instanceof Error ? err.message : String(err)));
+      const message = err instanceof Error ? err.message : String(err);
+      setDeleteActionState("error");
+      showToast({ tone: "error", title: "Soci", message });
+      resetActionStateLater(() => setDeleteActionState("idle"));
     }
   };
 
@@ -765,14 +868,16 @@ export default function OrgAdminMemberDetail() {
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                             <span className="hidden md:inline">{downloadingDocId === doc.id ? "..." : "Scarica"}</span>
                           </button>
-                          <button
+                          <AsyncActionButton
                             onClick={() => handleApprove(doc.id)}
                             disabled={reviewingDocId === doc.id || isDecisionMade}
-                            className="px-3 py-1.5 bg-green-50 text-green-700 hover:bg-green-100 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                            Approva
-                          </button>
+                            state={docActionStates[doc.id] ?? "idle"}
+                            idleLabel="Approva"
+                            loadingLabel="Invio..."
+                            successLabel="Approvato"
+                            errorLabel="Errore"
+                            className="rounded-lg bg-green-50 px-3 py-1.5 text-sm font-medium text-green-700 hover:bg-green-100"
+                          />
                           <button
                             onClick={() => openRejectModal(doc)}
                             disabled={reviewingDocId === doc.id || isDecisionMade}
@@ -802,11 +907,13 @@ export default function OrgAdminMemberDetail() {
         </div>
       </div>
 
-            <MemberDecisionPanel
+      <MemberDecisionPanel
         status={workflowStatus || member.status}
         decisionAt={member.decision_at}
         initialNotes={member.decision_notes}
         isSubmitting={isSubmittingDecision}
+        approveState={decisionActionStates.approve}
+        rejectState={decisionActionStates.reject}
         onSubmit={handleDecision}
       />
 
@@ -816,12 +923,45 @@ export default function OrgAdminMemberDetail() {
           Eliminando il socio, verranno rimossi i suoi accessi e non comparira piu negli elenchi attivi.
         </p>
         <button
-          onClick={handleDelete}
+          onClick={() => setDeleteConfirmOpen(true)}
           className="bg-red-50 text-red-700 border border-red-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
         >
           Elimina Socio
         </button>
       </div>
+      <ConfirmModal
+        open={Boolean(decisionDraft)}
+        title={decisionDraft?.decision === "approve" ? "Approva iscrizione" : "Rifiuta iscrizione"}
+        description={
+          decisionDraft?.decision === "approve"
+            ? "Conferma l'approvazione di questa iscrizione. Il profilo verrà aggiornato subito senza refresh completo."
+            : "Conferma il rifiuto di questa iscrizione. Le note inserite resteranno associate alla decisione."
+        }
+        confirmLabel={decisionDraft?.decision === "approve" ? "Conferma approvazione" : "Conferma rifiuto"}
+        tone={decisionDraft?.decision === "approve" ? "brand" : "danger"}
+        confirmState={decisionDraft ? decisionActionStates[decisionDraft.decision] : "idle"}
+        onClose={() => {
+          if (!isSubmittingDecision) {
+            setDecisionDraft(null);
+          }
+        }}
+        onConfirm={confirmDecision}
+      />
+      <ConfirmModal
+        open={deleteConfirmOpen}
+        title="Elimina socio"
+        description="Questa azione rimuove definitivamente il socio e revoca subito i suoi accessi. Nessun refresh completo della pagina."
+        confirmLabel="Elimina definitivamente"
+        tone="danger"
+        confirmState={deleteActionState}
+        onClose={() => {
+          if (deleteActionState !== "loading") {
+            setDeleteConfirmOpen(false);
+            setDeleteActionState("idle");
+          }
+        }}
+        onConfirm={confirmDelete}
+      />
       </>
       )}
     </div>

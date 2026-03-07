@@ -15,7 +15,11 @@ import {
   type SuperAdminProfile,
   verifySuperAdminAffiliationPayment,
 } from "../../lib/api";
+import AsyncActionButton, { type AsyncActionState } from "../../components/ui/AsyncActionButton";
+import ConfirmModal from "../../components/ui/ConfirmModal";
+import PromptModal from "../../components/ui/PromptModal";
 import Skeleton from "../../components/ui/Skeleton";
+import { useToast } from "../../components/ui/ToastProvider";
 
 const STATUS_OPTIONS = [
   { value: "", label: "Tutti" },
@@ -79,6 +83,7 @@ const SuperAdminAffiliations = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { profile } = useOutletContext<{ profile: SuperAdminProfile | null }>();
+  const { showToast } = useToast();
 
   const [items, setItems] = useState<SuperAdminAffiliationListItem[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -91,6 +96,25 @@ const SuperAdminAffiliations = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [actionStates, setActionStates] = useState<Record<string, AsyncActionState>>({});
+  const [modalActionState, setModalActionState] = useState<AsyncActionState>("idle");
+  const [modalError, setModalError] = useState("");
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    description: string;
+    confirmLabel: string;
+    tone?: "brand" | "danger";
+    onConfirm: () => Promise<void>;
+  } | null>(null);
+  const [promptModal, setPromptModal] = useState<{
+    title: string;
+    description: string;
+    label: string;
+    placeholder?: string;
+    confirmLabel: string;
+    initialValue?: string;
+    onConfirm: (value: string) => Promise<void>;
+  } | null>(null);
   const initialOpenId = Number(searchParams.get("applicationId") || "");
 
   const selectedItem = useMemo(
@@ -171,13 +195,68 @@ const SuperAdminAffiliations = () => {
     }
   }, [loadDetail, loadList, selectedId]);
 
-  const withAction = async (fn: () => Promise<void>) => {
+  const setActionState = (key: string, state: AsyncActionState) => {
+    setActionStates((prev) => ({ ...prev, [key]: state }));
+  };
+
+  const resetActionStateLater = (key: string) => {
+    window.setTimeout(() => {
+      setActionStates((prev) => ({ ...prev, [key]: "idle" }));
+    }, 1300);
+  };
+
+  const runInlineAction = async (key: string, successMessage: string, fn: () => Promise<void>) => {
+    setActionState(key, "loading");
     try {
       setActionLoading(true);
       await fn();
       setError("");
+      setActionState(key, "success");
+      showToast({ tone: "success", title: "Affiliazioni", message: successMessage });
+      resetActionStateLater(key);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Operazione non riuscita");
+      const message = err instanceof Error ? err.message : "Operazione non riuscita";
+      setError(message);
+      setActionState(key, "error");
+      showToast({ tone: "error", title: "Affiliazioni", message });
+      resetActionStateLater(key);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const closeModalState = () => {
+    if (modalActionState === "loading") {
+      return;
+    }
+    setConfirmModal(null);
+    setPromptModal(null);
+    setModalError("");
+    setModalActionState("idle");
+  };
+
+  const runModalAction = async (successMessage: string, fn: () => Promise<void>) => {
+    try {
+      setActionLoading(true);
+      setModalActionState("loading");
+      setModalError("");
+      await fn();
+      setError("");
+      setModalActionState("success");
+      showToast({ tone: "success", title: "Affiliazioni", message: successMessage });
+      window.setTimeout(() => {
+        setConfirmModal(null);
+        setPromptModal(null);
+        setModalError("");
+        setModalActionState("idle");
+      }, 900);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Operazione non riuscita";
+      setError(message);
+      setModalError(message);
+      setModalActionState("error");
+      showToast({ tone: "error", title: "Affiliazioni", message });
+      window.setTimeout(() => setModalActionState("idle"), 1300);
     } finally {
       setActionLoading(false);
     }
@@ -185,7 +264,7 @@ const SuperAdminAffiliations = () => {
 
   const onApproveDocument = async (doc: AffiliationDraftDocument) => {
     if (!detail) return;
-    await withAction(async () => {
+    await runInlineAction(`doc-approve-${doc.id}`, "Documento approvato.", async () => {
       await reviewSuperAdminAffiliationDocument(detail.id, doc.id, {
         status: "approved",
         notes: "Documento verificato",
@@ -196,20 +275,26 @@ const SuperAdminAffiliations = () => {
 
   const onRejectDocument = async (doc: AffiliationDraftDocument) => {
     if (!detail) return;
-    const note = window.prompt("Inserisci la nota di rifiuto:");
-    if (!note) return;
-    await withAction(async () => {
-      await reviewSuperAdminAffiliationDocument(detail.id, doc.id, {
-        status: "rejected",
-        notes: note,
-      });
-      await refreshAll();
+    setPromptModal({
+      title: "Rifiuta documento",
+      description: `Inserisci la motivazione del rifiuto per ${doc.doc_type}.`,
+      label: "Motivo del rifiuto",
+      placeholder: "Scrivi una nota chiara per l'associazione...",
+      confirmLabel: "Conferma rifiuto",
+      onConfirm: async (note) =>
+        runModalAction("Documento rigettato.", async () => {
+          await reviewSuperAdminAffiliationDocument(detail.id, doc.id, {
+            status: "rejected",
+            notes: note,
+          });
+          await refreshAll();
+        }),
     });
   };
 
   const onVerifyPayment = async () => {
     if (!detail) return;
-    await withAction(async () => {
+    await runInlineAction("verify-payment", "Pagamento manuale verificato.", async () => {
       await verifySuperAdminAffiliationPayment(detail.id, {
         verified: true,
         notes: "Pagamento manuale verificato da super admin",
@@ -220,45 +305,65 @@ const SuperAdminAffiliations = () => {
 
   const onRequestChanges = async () => {
     if (!detail) return;
-    const note = window.prompt("Nota modifiche richiesta:");
-    if (!note) return;
-    await withAction(async () => {
-      await requestChangesSuperAdminAffiliation(detail.id, note);
-      await refreshAll();
+    setPromptModal({
+      title: "Richiedi modifiche",
+      description: "Spiega all'associazione quali integrazioni o correzioni servono prima di proseguire.",
+      label: "Nota modifiche richiesta",
+      placeholder: "Indica i punti da correggere...",
+      confirmLabel: "Invia richiesta",
+      onConfirm: async (note) =>
+        runModalAction("Richiesta modifiche inviata.", async () => {
+          await requestChangesSuperAdminAffiliation(detail.id, note);
+          await refreshAll();
+        }),
     });
   };
 
   const onApprove = async () => {
     if (!detail) return;
-    const confirmed = window.confirm("Confermi l'approvazione dell'affiliazione?");
-    if (!confirmed) return;
-    await withAction(async () => {
-      await approveSuperAdminAffiliation(detail.id, "Approvazione super admin");
-      await refreshAll();
+    setConfirmModal({
+      title: "Approva affiliazione",
+      description: "Conferma l'approvazione della pratica. Lo stato verrà aggiornato senza refresh completo della pagina.",
+      confirmLabel: "Approva pratica",
+      tone: "brand",
+      onConfirm: async () =>
+        runModalAction("Affiliazione approvata.", async () => {
+          await approveSuperAdminAffiliation(detail.id, "Approvazione super admin");
+          await refreshAll();
+        }),
     });
   };
 
   const onReject = async () => {
     if (!detail) return;
-    const note = window.prompt("Inserisci motivo rifiuto:");
-    if (!note) return;
-    await withAction(async () => {
-      await rejectSuperAdminAffiliation(detail.id, note);
-      await refreshAll();
+    setPromptModal({
+      title: "Rifiuta richiesta",
+      description: "Inserisci il motivo del rifiuto. Il testo sarà salvato nel workflow della pratica.",
+      label: "Motivo del rifiuto",
+      placeholder: "Spiega perché la pratica non può essere approvata...",
+      confirmLabel: "Conferma rifiuto",
+      onConfirm: async (note) =>
+        runModalAction("Pratica rigettata.", async () => {
+          await rejectSuperAdminAffiliation(detail.id, note);
+          await refreshAll();
+        }),
     });
   };
 
   const onDeleteDraft = async () => {
     if (!detail) return;
-    const confirmed = window.confirm(
-      "Eliminare questa bozza? L'operazione e irreversibile.",
-    );
-    if (!confirmed) return;
-    await withAction(async () => {
-      await deleteSuperAdminAffiliationDraft(detail.id);
-      setDetail(null);
-      setSelectedId(null);
-      await loadList();
+    setConfirmModal({
+      title: "Elimina bozza",
+      description: "Questa operazione è irreversibile. La bozza verrà rimossa dall'archivio super admin.",
+      confirmLabel: "Elimina bozza",
+      tone: "danger",
+      onConfirm: async () =>
+        runModalAction("Bozza eliminata.", async () => {
+          await deleteSuperAdminAffiliationDraft(detail.id);
+          setDetail(null);
+          setSelectedId(null);
+          await loadList();
+        }),
     });
   };
 
@@ -559,13 +664,16 @@ const SuperAdminAffiliations = () => {
                         
                         {doc.status !== 'approved' && (
                           <div className="mt-4 flex gap-2 pt-4 border-t border-neutral-100/50">
-                            <button
-                              className="flex-1 bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase tracking-widest py-2 rounded-lg hover:bg-emerald-500 hover:text-white transition-all disabled:opacity-30"
+                            <AsyncActionButton
+                              className="flex-1 rounded-lg bg-emerald-50 py-2 text-[10px] font-bold uppercase tracking-widest text-emerald-700 hover:bg-emerald-500 hover:text-white"
                               disabled={actionLoading}
+                              state={actionStates[`doc-approve-${doc.id}`] ?? "idle"}
+                              idleLabel="Approve"
+                              loadingLabel="Invio..."
+                              successLabel="Approved"
+                              errorLabel="Errore"
                               onClick={() => onApproveDocument(doc)}
-                            >
-                              Approve
-                            </button>
+                            />
                             <button
                               className="flex-1 bg-red-50 text-red-700 text-[10px] font-bold uppercase tracking-widest py-2 rounded-lg hover:bg-red-500 hover:text-white transition-all disabled:opacity-30"
                               disabled={actionLoading}
@@ -594,13 +702,16 @@ const SuperAdminAffiliations = () => {
                       </button>
                     )}
                     {detail.status !== "draft" && detail.payment_method !== "stripe" && detail.payment_status !== "paid" && (
-                      <button
-                        className="w-full bg-amber-50 text-amber-700 text-[10px] font-bold uppercase tracking-widest py-3 rounded-xl border border-amber-100 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50"
+                      <AsyncActionButton
+                        className="w-full rounded-xl border border-amber-100 bg-amber-50 py-3 text-[10px] font-bold uppercase tracking-widest text-amber-700 hover:bg-amber-500 hover:text-white"
                         disabled={actionLoading}
+                        state={actionStates["verify-payment"] ?? "idle"}
+                        idleLabel="Valida Pagamento Manuale"
+                        loadingLabel="Verifica..."
+                        successLabel="Pagamento verificato"
+                        errorLabel="Errore"
                         onClick={onVerifyPayment}
-                      >
-                        Valida Pagamento Manuale
-                      </button>
+                      />
                     )}
                     <div className="grid grid-cols-2 gap-3 w-full mt-2">
                       {detail.status !== "draft" && detail.status !== "approved" && detail.status !== "rejected" && (
@@ -641,6 +752,37 @@ const SuperAdminAffiliations = () => {
           )}
         </div>
       </div>
+      <ConfirmModal
+        open={Boolean(confirmModal)}
+        title={confirmModal?.title ?? ""}
+        description={confirmModal?.description ?? ""}
+        confirmLabel={confirmModal?.confirmLabel ?? "Conferma"}
+        tone={confirmModal?.tone ?? "brand"}
+        confirmState={modalActionState}
+        onClose={closeModalState}
+        onConfirm={() => {
+          if (confirmModal) {
+            void confirmModal.onConfirm();
+          }
+        }}
+      />
+      <PromptModal
+        open={Boolean(promptModal)}
+        title={promptModal?.title ?? ""}
+        description={promptModal?.description ?? ""}
+        label={promptModal?.label ?? ""}
+        placeholder={promptModal?.placeholder}
+        initialValue={promptModal?.initialValue}
+        confirmLabel={promptModal?.confirmLabel ?? "Conferma"}
+        confirmState={modalActionState}
+        error={modalError}
+        onClose={closeModalState}
+        onConfirm={(value) => {
+          if (promptModal) {
+            void promptModal.onConfirm(value);
+          }
+        }}
+      />
     </div>
   );
 };

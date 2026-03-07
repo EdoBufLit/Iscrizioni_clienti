@@ -7,11 +7,9 @@ import {
   rotateSuperAdminIntegrationKey,
   type SuperAdminIntegrationKey,
 } from "../../../lib/api";
-
-type IntegrationToast = {
-  type: "success" | "error";
-  message: string;
-} | null;
+import ConfirmModal from "../../../components/ui/ConfirmModal";
+import ModalShell from "../../../components/ui/ModalShell";
+import { useToast } from "../../../components/ui/ToastProvider";
 
 type OneTimeKeyModalState = {
   title: string;
@@ -46,9 +44,10 @@ const SuperAdminPienissimoIntegrationCard = ({
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<"create" | "rotate" | "disable" | null>(null);
   const [inlineError, setInlineError] = useState<string>("");
-  const [toast, setToast] = useState<IntegrationToast>(null);
   const [oneTimeKeyModal, setOneTimeKeyModal] = useState<OneTimeKeyModalState>(null);
   const [copied, setCopied] = useState(false);
+  const [disableConfirmOpen, setDisableConfirmOpen] = useState(false);
+  const { showToast } = useToast();
 
   const activeKey = useMemo(
     () => keys.find((key) => key.is_active) ?? null,
@@ -56,28 +55,21 @@ const SuperAdminPienissimoIntegrationCard = ({
   );
   const lastUsedAt = activeKey?.last_used_at ?? keys.find((key) => key.last_used_at)?.last_used_at ?? null;
 
-  useEffect(() => {
-    if (!toast) {
-      return;
-    }
-    const timer = window.setTimeout(() => setToast(null), 2800);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
-
   const showErrorToast = useCallback((err: unknown) => {
     if (err instanceof AuthError) {
-      setToast({ type: "error", message: "Sessione scaduta (401). Effettua nuovamente il login." });
+      showToast({ tone: "error", title: "Integrazione API", message: "Sessione scaduta (401). Effettua nuovamente il login." });
       return;
     }
     if (err instanceof Error && err.message.toLowerCase().includes("accesso negato")) {
-      setToast({ type: "error", message: "Accesso negato (403)." });
+      showToast({ tone: "error", title: "Integrazione API", message: "Accesso negato (403)." });
       return;
     }
-    setToast({
-      type: "error",
+    showToast({
+      tone: "error",
+      title: "Integrazione API",
       message: err instanceof Error ? err.message : "Errore inatteso",
     });
-  }, []);
+  }, [showToast]);
 
   const loadKeys = useCallback(async () => {
     if (!isSuperAdmin) {
@@ -116,7 +108,7 @@ const SuperAdminPienissimoIntegrationCard = ({
         rawKey: created.raw_key,
       });
       setCopied(false);
-      setToast({ type: "success", message: "Chiave creata con successo." });
+      showToast({ tone: "success", title: "Integrazione API", message: "Chiave creata con successo." });
       await loadKeys();
     } catch (err) {
       setInlineError(err instanceof Error ? err.message : "Errore creazione chiave");
@@ -139,7 +131,7 @@ const SuperAdminPienissimoIntegrationCard = ({
         rawKey: rotated.raw_key,
       });
       setCopied(false);
-      setToast({ type: "success", message: "Chiave ruotata con successo." });
+      showToast({ tone: "success", title: "Integrazione API", message: "Chiave ruotata con successo." });
       await loadKeys();
     } catch (err) {
       setInlineError(err instanceof Error ? err.message : "Errore rotazione chiave");
@@ -153,14 +145,12 @@ const SuperAdminPienissimoIntegrationCard = ({
     if (!activeKey) {
       return;
     }
-    if (!window.confirm("Disattivare la chiave attiva di Pienissimo?")) {
-      return;
-    }
     setActionLoading("disable");
     setInlineError("");
     try {
       await disableSuperAdminIntegrationKey(orgId, activeKey.id);
-      setToast({ type: "success", message: "Chiave disattivata." });
+      setDisableConfirmOpen(false);
+      showToast({ tone: "success", title: "Integrazione API", message: "Chiave disattivata." });
       await loadKeys();
     } catch (err) {
       setInlineError(err instanceof Error ? err.message : "Errore disattivazione chiave");
@@ -168,24 +158,24 @@ const SuperAdminPienissimoIntegrationCard = ({
     } finally {
       setActionLoading(null);
     }
-  }, [activeKey, loadKeys, orgId, showErrorToast]);
+  }, [activeKey, loadKeys, orgId, showErrorToast, showToast]);
 
   const handleCopy = useCallback(async () => {
     if (!oneTimeKeyModal) {
       return;
     }
     if (!navigator.clipboard || !navigator.clipboard.writeText) {
-      setToast({ type: "error", message: "Clipboard non disponibile in questo browser." });
+      showToast({ tone: "error", title: "Integrazione API", message: "Clipboard non disponibile in questo browser." });
       return;
     }
     try {
       await navigator.clipboard.writeText(oneTimeKeyModal.rawKey);
       setCopied(true);
-      setToast({ type: "success", message: "Chiave copiata." });
+      showToast({ tone: "success", title: "Integrazione API", message: "Chiave copiata." });
     } catch {
-      setToast({ type: "error", message: "Impossibile copiare la chiave." });
+      showToast({ tone: "error", title: "Integrazione API", message: "Impossibile copiare la chiave." });
     }
-  }, [oneTimeKeyModal]);
+  }, [oneTimeKeyModal, showToast]);
 
   const closeOneTimeModal = useCallback(() => {
     setOneTimeKeyModal(null);
@@ -257,7 +247,7 @@ const SuperAdminPienissimoIntegrationCard = ({
               <button
                 type="button"
                 className="inline-flex items-center justify-center rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-60"
-                onClick={handleDisableKey}
+                onClick={() => setDisableConfirmOpen(true)}
                 disabled={loading || actionLoading !== null}
               >
                 {actionLoading === "disable" ? "Disattivazione..." : "Disattiva"}
@@ -267,29 +257,31 @@ const SuperAdminPienissimoIntegrationCard = ({
         </div>
       </section>
 
-      {toast && (
-        <div className="pointer-events-none fixed right-4 top-4 z-[80]">
-          <div
-            className={`rounded-md border px-4 py-2 text-sm shadow-lg ${
-              toast.type === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                : "border-red-200 bg-red-50 text-red-800"
-            }`}
-          >
-            {toast.message}
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={disableConfirmOpen}
+        title="Disattiva chiave"
+        description="Conferma la disattivazione della chiave Pienissimo attiva. L'integrazione si fermerà subito."
+        confirmLabel="Disattiva chiave"
+        tone="danger"
+        confirmState={actionLoading === "disable" ? "loading" : "idle"}
+        onClose={() => {
+          if (actionLoading !== "disable") {
+            setDisableConfirmOpen(false);
+          }
+        }}
+        onConfirm={handleDisableKey}
+      />
 
-      {oneTimeKeyModal && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4">
-          <div className="modal-panel w-full max-w-xl p-6">
-            <h5 className="text-lg font-semibold text-neutral-900">{oneTimeKeyModal.title}</h5>
-            <p className="mt-2 text-sm text-neutral-600">
-              Salvala ora: non sara piu visibile dopo la chiusura.
-            </p>
-
-            <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+      <ModalShell
+        open={Boolean(oneTimeKeyModal)}
+        title={oneTimeKeyModal?.title ?? ""}
+        description="Salvala ora: non sarà più visibile dopo la chiusura."
+        onClose={closeOneTimeModal}
+        sizeClassName="max-w-xl"
+      >
+        {oneTimeKeyModal ? (
+          <>
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
               Chiave one-time: conserva questa stringa in un luogo sicuro.
             </div>
 
@@ -318,9 +310,9 @@ const SuperAdminPienissimoIntegrationCard = ({
                 Chiudi
               </button>
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        ) : null}
+      </ModalShell>
     </>
   );
 };

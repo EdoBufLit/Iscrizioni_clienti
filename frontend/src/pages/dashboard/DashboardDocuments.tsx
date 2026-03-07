@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AuthError,
@@ -9,6 +9,7 @@ import {
   type MemberDocumentItem,
   type MemberOrganizationStatuteResponse,
 } from "../../lib/api";
+import { useToast } from "../../components/ui/ToastProvider";
 
 const DOC_LABELS: Record<string, string> = {
   identity: "Documento Identità",
@@ -63,14 +64,13 @@ const DashboardDocuments = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<number | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [statute, setStatute] = useState<MemberOrganizationStatuteResponse | null>(null);
   const [statuteLoading, setStatuteLoading] = useState(true);
   const [statuteError, setStatuteError] = useState<string | null>(null);
   const [statuteDownloading, setStatuteDownloading] = useState(false);
+  const { showToast } = useToast();
 
-  const loadDocuments = async () => {
+  const loadDocuments = useCallback(async () => {
     setLoading(true);
     setStatuteLoading(true);
     setError(null);
@@ -112,11 +112,11 @@ const DashboardDocuments = () => {
       setLoading(false);
       setStatuteLoading(false);
     }
-  };
+  }, [navigate]);
 
   useEffect(() => {
-    loadDocuments();
-  }, []);
+    void loadDocuments();
+  }, [loadDocuments]);
 
   const docsByType = useMemo(() => {
     const map = new Map<string, MemberDocumentItem[]>();
@@ -144,15 +144,18 @@ const DashboardDocuments = () => {
 
   const handleResubmit = async (docId: number, file?: File) => {
     if (!file) return;
-    setActionError(null);
-    setActionMessage(null);
     setUploadingId(docId);
     try {
       await resubmitMemberDocument(docId, file);
-      setActionMessage("Documento reinviato. Stato: In revisione.");
+      showToast({
+        tone: "success",
+        title: "Documenti",
+        message: "Documento reinviato. Stato aggiornato a In revisione.",
+      });
       await loadDocuments();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Errore durante il reinvio");
+      const message = err instanceof Error ? err.message : "Errore durante il reinvio";
+      showToast({ tone: "error", title: "Documenti", message });
     } finally {
       setUploadingId(null);
     }
@@ -172,7 +175,9 @@ const DashboardDocuments = () => {
         navigate("/login", { replace: true });
         return;
       }
-      setStatuteError(err instanceof Error ? err.message : "Impossibile scaricare lo statuto");
+      const message = err instanceof Error ? err.message : "Impossibile scaricare lo statuto";
+      setStatuteError(message);
+      showToast({ tone: "error", title: "Statuto", message });
     } finally {
       setStatuteDownloading(false);
     }
@@ -295,7 +300,9 @@ const DashboardDocuments = () => {
         ) : error ? (
           <div className="surface p-8 text-center bg-red-50/30 border-red-100">
             <p className="text-sm font-bold text-red-600">{error}</p>
-            <button onClick={() => window.location.reload()} className="btn-ghost mt-4 !text-red-700 !border-red-200">Ricarica</button>
+            <button onClick={() => void loadDocuments()} className="btn-ghost mt-4 !text-red-700 !border-red-200">
+              Riprova
+            </button>
           </div>
         ) : allTypes.length === 0 ? (
           <div className="surface p-12 text-center bg-neutral-50/50 border-dashed border-2">
@@ -396,17 +403,6 @@ const DashboardDocuments = () => {
           </div>
         )}
       </div>
-
-      {actionError && (
-        <div className="fixed bottom-8 right-8 rounded-xl border border-red-200 bg-white p-4 shadow-2xl animate-in slide-in-from-right-8 duration-500 max-w-sm">
-          <p className="text-sm font-bold text-red-600">{actionError}</p>
-        </div>
-      )}
-      {actionMessage && (
-        <div className="fixed bottom-8 right-8 rounded-xl border border-emerald-200 bg-white p-4 shadow-2xl animate-in slide-in-from-right-8 duration-500 max-w-sm">
-          <p className="text-sm font-bold text-emerald-600">{actionMessage}</p>
-        </div>
-      )}
     </div>
   );
 };

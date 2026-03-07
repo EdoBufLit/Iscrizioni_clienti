@@ -18,6 +18,7 @@ import {
   TOUR_FINAL_MESSAGE,
   type TourStep,
 } from "./tourSteps";
+import { ONBOARDING_RESET_EVENT } from "./ReviewGuideButton";
 
 type OnboardingTourProps = {
   role: "member" | "org_admin";
@@ -456,6 +457,26 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
       }
     };
   }, [role, isMemberTour, steps.length]);
+
+  useEffect(() => {
+    const handleReset = () => {
+      tourEndedRef.current = false;
+      finalStepDismissedRef.current = false;
+      skippedStepsRef.current.clear();
+      memberTargetRetriesRef.current = {};
+      setShowFinalStep(false);
+      setStepIndex(0);
+      if (isMemberTour) {
+        clearMemberTourProgressInStorage();
+      }
+      window.setTimeout(() => {
+        setRun(true);
+      }, 120);
+    };
+
+    window.addEventListener(ONBOARDING_RESET_EVENT, handleReset);
+    return () => window.removeEventListener(ONBOARDING_RESET_EVENT, handleReset);
+  }, [isMemberTour]);
 
   // Persist member in-progress state to survive remounts during route/tab changes.
   useEffect(() => {

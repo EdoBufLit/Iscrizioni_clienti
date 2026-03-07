@@ -2769,3 +2769,50 @@ pm --prefix frontend run build -> OK
 - Verifiche:
   - `python -m pytest -q tests/test_low_cards_alert_job.py tests/test_org_admin_notifications.py tests/test_low_cards_scheduler.py tests/test_email_worker_low_cards_isolation.py` -> `17 passed`
   - `python -m py_compile app/services/card_inventory.py app/services/low_cards_alerts.py` -> OK
+- [x] Mappare tutti i popup browser/reload nelle dashboard Super Admin e Org Admin e definire i flussi da sostituire
+- [x] Introdurre componenti frontend condivisi per modal, toast e button async state coerenti col tema ASSONAM
+- [x] Sostituire confirm/prompt/alert/reload nei flussi CRUD dashboard senza rompere API o routing esistenti
+- [x] Verificare build frontend e documentare il nuovo comportamento UX
+
+## Spec (Dashboard UX without browser popups/reloads - Mar 07, 2026)
+- Obiettivo: eliminare popup nativi browser e full page reload nelle dashboard Super Admin e Org Admin, introducendo una UX coerente con modali interni, toast globali e feedback asincrono dei bottoni.
+- Scope:
+  - sostituzione di `window.confirm`, `window.prompt`, `window.alert`, `location.reload` nei flussi dashboard rilevanti;
+  - modali riusabili per conferma semplice e richiesta motivazione rifiuto;
+  - toast globali per esiti success/error;
+  - refetch mirato o update locale al posto di full refresh;
+  - chiusura modali/pannelli con `X`, `ESC` e overlay quando coerente.
+
+## Plan (Dashboard UX without browser popups/reloads - Mar 07, 2026)
+- [x] Mappare tutti gli usi dashboard di confirm/prompt/alert/reload e i pattern UI gia presenti.
+- [x] Implementare componenti condivisi minimi per modal, toast e action button async coerenti col tema.
+- [x] Sostituire i flussi in Super Admin e Org Admin eliminando popup nativi e full reload.
+- [x] Verificare build frontend, aggiornare review e ricontrollare regressioni UX principali.
+
+## Review (Dashboard UX without browser popups/reloads - Mar 07, 2026)
+- Creati componenti condivisi frontend per UX coerente nelle dashboard:
+  - `ToastProvider` globale montato in `frontend/src/App.tsx`;
+  - `ModalShell`, `ConfirmModal`, `PromptModal`, `AsyncActionButton` in `frontend/src/components/ui/`.
+- Super Admin:
+  - `frontend/src/pages/super-admin/SuperAdminAffiliations.tsx` non usa piu `window.confirm` / `window.prompt`; reject/modifiche/approve/delete bozza ora passano da modal interne con submit asincrono, toast e refresh mirato dei dati;
+  - approvazione documento e verifica pagamento manuale mostrano stato loading/success/error sul bottone senza reload;
+  - `frontend/src/pages/super-admin/components/OrganizationManageModal.tsx` sostituisce la conferma manutenzione annuale con `ConfirmModal` e aggiunge chiusura coerente via overlay/X/ESC ai pannelli principali;
+  - `frontend/src/pages/super-admin/components/SuperAdminPienissimoIntegrationCard.tsx` sostituisce la conferma browser di disattivazione chiave con `ConfirmModal`, usa toast globali e mostra la raw key in un modal interno chiudibile con X/overlay.
+- Org Admin:
+  - `frontend/src/pages/org-admin/OrgAdminMemberDetail.tsx` elimina `confirm/alert` da decisione iscrizione e delete socio; ora usa modali interne, toast globali, action states e navigazione verso `/org-admin/soci` senza full reload;
+  - `frontend/src/pages/org-admin/components/MemberDecisionPanel.tsx` usa `AsyncActionButton` per approve/reject con loading/success/error;
+  - `frontend/src/pages/org-admin/components/RejectDocumentModal.tsx` ora usa `ModalShell`, quindi ha X, ESC e overlay close coerenti;
+  - `frontend/src/pages/org-admin/OrgAdminDashboard.tsx` non usa piu `window.location.reload()` per il retry metriche.
+- Dashboard socio:
+  - `frontend/src/pages/dashboard/DashboardDocuments.tsx` sostituisce il reload completo con refetch mirato e usa toast globali per resubmit/statuto error.
+- Verifiche:
+  - `npm --prefix frontend run build` -> OK
+  - grep sui path dashboard `frontend/src/pages/super-admin`, `frontend/src/pages/org-admin`, `frontend/src/pages/dashboard` -> nessun `window.confirm`, `window.prompt`, `window.alert`, `location.reload`
+
+## Review Addendum (Residual frontend reload/navigation cleanup - Mar 07, 2026)
+- `frontend/src/components/onboarding/ReviewGuideButton.tsx` non usa più `window.location.reload()`: dopo il reset backend/localStorage emette l'evento frontend `assonam:onboarding-reset`.
+- `frontend/src/components/onboarding/OnboardingTour.tsx` ascolta quell'evento e riavvia Joyride in-place, senza buttare giù tutta la pagina.
+- `frontend/src/components/ErrorBoundary.tsx` non usa più reload o hard navigation alla home: ora resetta internamente lo stato di errore, remounta il subtree figli e, sul comando `Torna alla home`, usa `history.pushState + popstate` per tornare alla root in SPA.
+- Verifica:
+  - `npm --prefix frontend run build` -> OK
+  - grep frontend globale: nessun `window.confirm`, `window.prompt`, `window.alert`, `window.location.reload`, `location.reload`; restano solo navigazioni intenzionali via `window.location.href/assign` su flussi wallet/join esterni.

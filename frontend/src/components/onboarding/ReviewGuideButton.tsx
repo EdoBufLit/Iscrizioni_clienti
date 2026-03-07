@@ -5,6 +5,7 @@ import { resetOnboardingTour } from "../../lib/api";
 const TOUR_STORAGE_KEY_PREFIX = "onboarding_tour_";
 const MEMBER_TOUR_RUN_KEY = "tour_member_run";
 const MEMBER_TOUR_STEP_INDEX_KEY = "tour_member_step_index";
+export const ONBOARDING_RESET_EVENT = "assonam:onboarding-reset";
 
 const clearTourStorage = () => {
   try {
@@ -33,7 +34,8 @@ export const ReviewGuideButton = ({ className = "" }: ReviewGuideButtonProps) =>
       clearTourStorage();
       // Then reset backend
       await resetOnboardingTour();
-      window.location.reload();
+      window.dispatchEvent(new CustomEvent(ONBOARDING_RESET_EVENT));
+      setLoading(false);
     } catch {
       // Silently fail
       setLoading(false);

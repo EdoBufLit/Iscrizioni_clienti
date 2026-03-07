@@ -12,6 +12,7 @@ import {
   type SuperAdminOrganization,
   type OrgBatch,
 } from "../../../lib/api";
+import ConfirmModal from "../../../components/ui/ConfirmModal";
 
 export type OrganizationModalType = "create" | "range" | "add-batch" | "view-batches" | "branding";
 
@@ -111,6 +112,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
   const [loadingBatches, setLoadingBatches] = useState(false);
   const [maintenanceRunning, setMaintenanceRunning] = useState(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState("");
+  const [maintenanceConfirmOpen, setMaintenanceConfirmOpen] = useState(false);
   const [batchesCurrentYear, setBatchesCurrentYear] = useState<number | null>(null);
   const [nextResetAt, setNextResetAt] = useState<string | null>(null);
   const [editingBatch, setEditingBatch] = useState<OrgBatch | null>(null);
@@ -183,6 +185,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
     setBatches([]);
     setBatchesSummary(null);
     setMaintenanceMessage("");
+    setMaintenanceConfirmOpen(false);
     setBatchesCurrentYear(null);
     setNextResetAt(null);
     setEditingBatch(null);
@@ -238,6 +241,34 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
       active = false;
     };
   }, [open, modalType, selectedOrg]);
+
+  useEffect(() => {
+    if (!open && !editingBatch && !deleteBatchTarget && !maintenanceConfirmOpen) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      if (deleteBatchTarget) {
+        closeDeleteBatchDialog();
+        return;
+      }
+      if (editingBatch) {
+        closeEditBatchDialog();
+        return;
+      }
+      if (maintenanceConfirmOpen && !maintenanceRunning) {
+        setMaintenanceConfirmOpen(false);
+        return;
+      }
+      onClose();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [deleteBatchTarget, editingBatch, maintenanceConfirmOpen, maintenanceRunning, onClose, open]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -303,13 +334,12 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
     }
   };
 
-  const handleRunMaintenance = async () => {
+  const handleRunMaintenance = () => {
     if (maintenanceRunning) return;
-    const confirmed = window.confirm(
-      "Confermi l'esecuzione della manutenzione annuale? Verranno scaduti e purgati i soci con tessera di anni precedenti."
-    );
-    if (!confirmed) return;
+    setMaintenanceConfirmOpen(true);
+  };
 
+  const confirmRunMaintenance = async () => {
     setMaintenanceRunning(true);
     setMaintenanceMessage("");
     setSubmitError("");
@@ -438,15 +468,34 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-        <div className={panelClassName} data-component="superadmin-org-manage-modal">
-          <h3 className="text-lg font-semibold text-neutral-900">
-            {modalType === "create" && "Nuova associazione"}
-            {modalType === "range" && `Imposta range tessere: ${selectedOrg?.name}`}
-            {modalType === "add-batch" && `Aggiungi lotto tessere: ${selectedOrg?.name}`}
-            {modalType === "view-batches" && `Lotti tessere: ${selectedOrg?.name}`}
-            {modalType === "branding" && `Branding e alert: ${selectedOrg?.name}`}
-          </h3>
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        onClick={(event) => {
+          if (event.target === event.currentTarget) {
+            onClose();
+          }
+        }}
+      >
+        <div className={`${panelClassName} relative`} data-component="superadmin-org-manage-modal">
+          <div className="flex items-start justify-between gap-4">
+            <h3 className="text-lg font-semibold text-neutral-900">
+              {modalType === "create" && "Nuova associazione"}
+              {modalType === "range" && `Imposta range tessere: ${selectedOrg?.name}`}
+              {modalType === "add-batch" && `Aggiungi lotto tessere: ${selectedOrg?.name}`}
+              {modalType === "view-batches" && `Lotti tessere: ${selectedOrg?.name}`}
+              {modalType === "branding" && `Branding e alert: ${selectedOrg?.name}`}
+            </h3>
+            <button
+              type="button"
+              className="rounded-full p-2 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-900"
+              onClick={onClose}
+              aria-label="Chiudi finestra"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6l-12 12" />
+              </svg>
+            </button>
+          </div>
 
           <div className="mt-4 min-h-[48px]">
             {submitError && (
@@ -1002,7 +1051,14 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
         </div>
       </div>
       {editingBatch && editBatchFormData && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              closeEditBatchDialog();
+            }
+          }}
+        >
           <div className="modal-panel w-full max-w-2xl p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -1164,9 +1220,28 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
         </div>
       )}
       {deleteBatchTarget && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              closeDeleteBatchDialog();
+            }
+          }}
+        >
           <div className="modal-panel w-full max-w-lg p-6">
-            <h4 className="text-lg font-semibold text-neutral-900">Elimina lotto</h4>
+            <div className="flex items-start justify-between gap-4">
+              <h4 className="text-lg font-semibold text-neutral-900">Elimina lotto</h4>
+              <button
+                type="button"
+                className="rounded-full p-2 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-900"
+                onClick={closeDeleteBatchDialog}
+                aria-label="Chiudi finestra"
+              >
+                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6l-12 12" />
+                </svg>
+              </button>
+            </div>
             <p className="mt-2 text-sm leading-6 text-neutral-600">
               Questa azione rimuove il lotto{" "}
               <span className="font-semibold tabular-nums">
@@ -1218,6 +1293,20 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
           </div>
         </div>
       )}
+      <ConfirmModal
+        open={maintenanceConfirmOpen}
+        title="Esegui manutenzione annuale"
+        description="Conferma l'esecuzione della manutenzione annuale. Verranno scaduti e purgati i soci con tessera di anni precedenti."
+        confirmLabel="Esegui manutenzione"
+        tone="danger"
+        confirmState={maintenanceRunning ? "loading" : "idle"}
+        onClose={() => {
+          if (!maintenanceRunning) {
+            setMaintenanceConfirmOpen(false);
+          }
+        }}
+        onConfirm={confirmRunMaintenance}
+      />
     </>
   );
 });

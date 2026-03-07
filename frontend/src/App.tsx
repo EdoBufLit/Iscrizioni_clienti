@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Layout from "./components/Layout";
+import { ToastProvider } from "./components/ui/ToastProvider";
 import Home from "./pages/Home";
 import Associazioni from "./pages/Associazioni";
 import { useStatePlatformCapabilities } from "./hooks/useStatePlatformCapabilities";
@@ -64,81 +65,83 @@ const App = () => {
 
   return (
     <ErrorBoundary>
-    <Suspense fallback={<Loading />}>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route index element={<Home />} />
-          <Route path="lo-studio" element={<LoStudio />} />
-          <Route path="servizi" element={<Servizi />} />
-          <Route
-            path="affiliazione"
-            element={
-              capabilitiesLoading ? (
-                <Loading />
-              ) : affiliazioneEnabled ? (
-                <Affiliazione />
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="invito/:slug"
-            element={
-              capabilitiesLoading ? (
-                <Loading />
-              ) : affiliazioneEnabled ? (
-                <InvitoAffiliazioneRedirect />
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route path="affiliazione-info" element={<AffiliazioneInfo />} />
-          <Route path="associazioni" element={<Associazioni />} />
-          <Route path="associazioni/:slug" element={<AffiliazioneDettaglio />} />
-          <Route path="associazioni/:slug/iscrizione" element={<Iscrizione />} />
-          <Route path="associazioni/:orgSlug/tessera" element={<PienissimoThankYouPage />} />
-          <Route path="contatti" element={<Contatti />} />
-          <Route path="privacy" element={<Privacy />} />
-          <Route path="login" element={<Login />} />
-          <Route path="area-riservata" element={<ReservedAreaRedirect />} />
-          <Route path="pienissimo/thank-you/:orgSlug" element={<PienissimoThankYouPage />} />
-          <Route path="auth/verify" element={<MagicLinkVerify />} />
-          <Route path="wallet/google/add" element={<WalletGoogleAdd />} />
-          <Route path="dashboard" element={<DashboardLayout />}>
-            <Route index element={<DashboardHome />} />
-            <Route path="profilo" element={<DashboardProfile />} />
-            <Route path="documenti" element={<DashboardDocuments />} />
-          </Route>
-          <Route path="admin" element={<AdminLayout />}>
-            <Route index element={<AdminHome />} />
-            <Route path="affiliazioni" element={<AdminAffiliations />} />
-          </Route>
-          <Route path="super-admin/login" element={<SuperAdminLogin />} />
-          <Route path="super-admin" element={<SuperAdminLayout />}>
-            <Route path="associazioni" element={<SuperAdminOrganizations />} />
-            <Route path="affiliazioni" element={<SuperAdminAffiliations />} />
-            <Route path="documenti" element={<SuperAdminDocuments />} />
-            <Route path="org-admins" element={<SuperAdminOrgAdmins />} />
-            <Route path="soci" element={<SuperAdminMemberDetail />} />
-          </Route>
-          <Route path="org-admin/login" element={<OrgAdminLogin />} />
-          <Route path="org-admin/callback" element={<OrgAdminCallback />} />
-          <Route path="org-admin" element={<OrgAdminLayout />}>
-            <Route index element={<OrgAdminDashboard />} />
-            <Route path="inviti" element={<OrgAdminInvites />} />
-            <Route path="soci" element={<OrgAdminMembers />} />
-            <Route path="soci/:id" element={<OrgAdminMemberDetail />} />
-            <Route path="tessere" element={<OrgAdminCards />} />
-            <Route path="documenti" element={<OrgAdminSharedDocuments />} />
-            <Route path="contabilita" element={<OrgAdminSharedDocuments />} />
-            <Route path="associazione" element={<OrgAdminSettings />} />
-          </Route>
-          <Route path="*" element={<NotFound />} />
-        </Route>
-      </Routes>
-    </Suspense>
+      <ToastProvider>
+        <Suspense fallback={<Loading />}>
+          <Routes>
+            <Route element={<Layout />}>
+              <Route index element={<Home />} />
+              <Route path="lo-studio" element={<LoStudio />} />
+              <Route path="servizi" element={<Servizi />} />
+              <Route
+                path="affiliazione"
+                element={
+                  capabilitiesLoading ? (
+                    <Loading />
+                  ) : affiliazioneEnabled ? (
+                    <Affiliazione />
+                  ) : (
+                    <Navigate to="/" replace />
+                  )
+                }
+              />
+              <Route
+                path="invito/:slug"
+                element={
+                  capabilitiesLoading ? (
+                    <Loading />
+                  ) : affiliazioneEnabled ? (
+                    <InvitoAffiliazioneRedirect />
+                  ) : (
+                    <Navigate to="/" replace />
+                  )
+                }
+              />
+              <Route path="affiliazione-info" element={<AffiliazioneInfo />} />
+              <Route path="associazioni" element={<Associazioni />} />
+              <Route path="associazioni/:slug" element={<AffiliazioneDettaglio />} />
+              <Route path="associazioni/:slug/iscrizione" element={<Iscrizione />} />
+              <Route path="associazioni/:orgSlug/tessera" element={<PienissimoThankYouPage />} />
+              <Route path="contatti" element={<Contatti />} />
+              <Route path="privacy" element={<Privacy />} />
+              <Route path="login" element={<Login />} />
+              <Route path="area-riservata" element={<ReservedAreaRedirect />} />
+              <Route path="pienissimo/thank-you/:orgSlug" element={<PienissimoThankYouPage />} />
+              <Route path="auth/verify" element={<MagicLinkVerify />} />
+              <Route path="wallet/google/add" element={<WalletGoogleAdd />} />
+              <Route path="dashboard" element={<DashboardLayout />}>
+                <Route index element={<DashboardHome />} />
+                <Route path="profilo" element={<DashboardProfile />} />
+                <Route path="documenti" element={<DashboardDocuments />} />
+              </Route>
+              <Route path="admin" element={<AdminLayout />}>
+                <Route index element={<AdminHome />} />
+                <Route path="affiliazioni" element={<AdminAffiliations />} />
+              </Route>
+              <Route path="super-admin/login" element={<SuperAdminLogin />} />
+              <Route path="super-admin" element={<SuperAdminLayout />}>
+                <Route path="associazioni" element={<SuperAdminOrganizations />} />
+                <Route path="affiliazioni" element={<SuperAdminAffiliations />} />
+                <Route path="documenti" element={<SuperAdminDocuments />} />
+                <Route path="org-admins" element={<SuperAdminOrgAdmins />} />
+                <Route path="soci" element={<SuperAdminMemberDetail />} />
+              </Route>
+              <Route path="org-admin/login" element={<OrgAdminLogin />} />
+              <Route path="org-admin/callback" element={<OrgAdminCallback />} />
+              <Route path="org-admin" element={<OrgAdminLayout />}>
+                <Route index element={<OrgAdminDashboard />} />
+                <Route path="inviti" element={<OrgAdminInvites />} />
+                <Route path="soci" element={<OrgAdminMembers />} />
+                <Route path="soci/:id" element={<OrgAdminMemberDetail />} />
+                <Route path="tessere" element={<OrgAdminCards />} />
+                <Route path="documenti" element={<OrgAdminSharedDocuments />} />
+                <Route path="contabilita" element={<OrgAdminSharedDocuments />} />
+                <Route path="associazione" element={<OrgAdminSettings />} />
+              </Route>
+              <Route path="*" element={<NotFound />} />
+            </Route>
+          </Routes>
+        </Suspense>
+      </ToastProvider>
     </ErrorBoundary>
   );
 };

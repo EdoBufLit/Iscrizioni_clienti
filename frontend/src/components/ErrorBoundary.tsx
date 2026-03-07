@@ -1,12 +1,12 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
 type Props = { children: ReactNode };
-type State = { hasError: boolean; error: Error | null };
+type State = { hasError: boolean; error: Error | null; resetKey: number };
 
 class ErrorBoundary extends Component<Props, State> {
-  state: State = { hasError: false, error: null };
+  state: State = { hasError: false, error: null, resetKey: 0 };
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Pick<State, "hasError" | "error"> {
     return { hasError: true, error };
   }
 
@@ -20,17 +20,23 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   private handleRetry = () => {
-    // Full page reload to guarantee clean state
-    window.location.reload();
+    this.setState((prev) => ({
+      hasError: false,
+      error: null,
+      resetKey: prev.resetKey + 1,
+    }));
   };
 
   private handleGoHome = () => {
-    // Use full navigation (not SPA) so error state is fully cleared
-    window.location.href = "/";
+    window.history.pushState({}, "", "/");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    this.handleRetry();
   };
 
   render() {
-    if (!this.state.hasError) return this.props.children;
+    if (!this.state.hasError) {
+      return <div key={this.state.resetKey}>{this.props.children}</div>;
+    }
 
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-6">

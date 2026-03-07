@@ -1,4 +1,5 @@
 import { memo, useEffect, useState } from "react";
+import ModalShell from "../../../components/ui/ModalShell";
 
 type RejectDocumentModalProps = {
   open: boolean;
@@ -35,26 +36,14 @@ const RejectDocumentModal = memo(function RejectDocumentModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="modal-panel max-w-lg p-6" data-component="orgadmin-reject-doc-modal">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="text-lg font-semibold text-neutral-900">Rigetta documento</h3>
-            <p className="mt-1 text-sm text-neutral-500">
-              Inserisci la motivazione del rigetto per {docLabel}.
-            </p>
-          </div>
-          <button
-            type="button"
-            className="rounded-full p-2 text-neutral-500 transition hover:bg-neutral-100"
-            onClick={onClose}
-          >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6l-12 12" />
-            </svg>
-          </button>
-        </div>
-
+    <ModalShell
+      open={open}
+      title="Rigetta documento"
+      description={`Inserisci la motivazione del rigetto per ${docLabel}.`}
+      onClose={onClose}
+      sizeClassName="max-w-lg"
+    >
+      <div data-component="orgadmin-reject-doc-modal">
         <div className="mt-4">
           <label className="block text-xs font-medium text-neutral-600">
             Motivazione / Note *
@@ -105,7 +94,7 @@ const RejectDocumentModal = memo(function RejectDocumentModal({
           </button>
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 });
 
