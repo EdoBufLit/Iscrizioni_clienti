@@ -5,7 +5,12 @@ from datetime import datetime
 
 from app.db import SessionLocal
 from app.models import Organization
-from app.services.card_inventory import get_remaining_cards, get_remaining_cards_by_org
+from app.services.card_inventory import (
+    compute_org_card_stock,
+    get_remaining_cards,
+    get_remaining_cards_by_org,
+    get_total_cards_by_org,
+)
 from app.services.org_admin_notifications import notify_org_admins_low_cards
 from app.services.twilio_notifications import (
     execute_low_cards_alert_flow,
@@ -35,6 +40,7 @@ def run_low_cards_alert_job(
         "twilio_sent": 0,
         "skipped_threshold": 0,
         "skipped_recent": 0,
+        "skipped_never_reached_threshold": 0,
         "skipped_missing_phone": 0,
         "skipped_missing_admins": 0,
         "skipped_not_determinable": 0,
@@ -62,10 +68,16 @@ def run_low_cards_alert_job(
     )
 
     bulk_remaining: dict[int, int] = {}
+    bulk_total_capacity: dict[int, int] = {}
     bulk_lookup_failed = False
     if organizations:
         try:
             bulk_remaining = get_remaining_cards_by_org(
+                db,
+                [org.id for org in organizations],
+                now=current_time,
+            )
+            bulk_total_capacity = get_total_cards_by_org(
                 db,
                 [org.id for org in organizations],
                 now=current_time,
@@ -80,9 +92,12 @@ def run_low_cards_alert_job(
     for org in organizations:
         stats["scanned"] += 1
         if bulk_lookup_failed:
-            remaining = get_remaining_cards(db, org.id, now=current_time)
+            stock = compute_org_card_stock(db, org.id, now=current_time)
+            remaining = stock.get("remaining")
+            total_capacity = int(stock.get("total", 0) or 0)
         else:
             remaining = bulk_remaining.get(org.id, 0)
+            total_capacity = bulk_total_capacity.get(org.id, 0)
         if remaining is None:
             stats["skipped_not_determinable"] += 1
             continue
@@ -94,12 +109,24 @@ def run_low_cards_alert_job(
             stats["skipped_threshold"] += 1
             continue
 
+        if total_capacity < LOW_CARDS_THRESHOLD:
+            stats["skipped_never_reached_threshold"] += 1
+            logger.info(
+                "low_cards_alert_skipped_never_reached_threshold org_id=%s slug=%s remaining=%s total_capacity=%s",
+                org.id,
+                org.slug,
+                remaining,
+                total_capacity,
+            )
+            continue
+
         stats["eligible"] += 1
         logger.info(
-            "low_cards_alert_candidate org_id=%s slug=%s remaining=%s force=%s",
+            "low_cards_alert_candidate org_id=%s slug=%s remaining=%s total_capacity=%s force=%s",
             org.id,
             org.slug,
             remaining,
+            total_capacity,
             force,
         )
         if not force and org.last_low_cards_alert_at is not None:

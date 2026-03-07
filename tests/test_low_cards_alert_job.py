@@ -97,8 +97,8 @@ def test_low_cards_alert_job_sends_twilio_execution_and_respects_cooldown(
         slug_prefix="org-missing-phone",
         whatsapp_e164=None,
     )
-    _create_batch(db, org_id=alerted_org.id, start_no=910000, quantity=40)
-    _create_batch(db, org_id=skipped_org.id, start_no=920000, quantity=30)
+    _create_batch(db, org_id=alerted_org.id, start_no=910000, quantity=60)
+    _create_batch(db, org_id=skipped_org.id, start_no=920000, quantity=70)
 
     def _fake_bulk_remaining(_db, association_ids: list[int], *, now=None):
         return {
@@ -157,6 +157,47 @@ def test_low_cards_alert_job_sends_twilio_execution_and_respects_cooldown(
     )
     assert forced_run["sent"] == 1
     assert len(sent_calls) == 2
+
+
+def test_low_cards_alert_job_skips_orgs_that_never_had_50_cards(
+    db,
+    monkeypatch,
+    caplog,
+):
+    monkeypatch.setattr(
+        low_cards_alerts_service,
+        "twilio_alerts_are_configured",
+        lambda: False,
+    )
+
+    org = _create_org(
+        db,
+        name="Org Always Low",
+        slug_prefix="org-always-low",
+        whatsapp_e164="+39333111222",
+    )
+    _create_batch(db, org_id=org.id, start_no=915000, quantity=20)
+
+    monkeypatch.setattr(
+        low_cards_alerts_service,
+        "get_remaining_cards_by_org",
+        lambda _db, association_ids, *, now=None: {
+            association_id: 0 if association_id == org.id else 200 for association_id in association_ids
+        },
+    )
+
+    caplog.set_level(logging.INFO)
+    result = low_cards_alerts_service.run_low_cards_alert_job(
+        db=db,
+        now=datetime.utcnow(),
+        force=False,
+    )
+
+    db.refresh(org)
+    assert result["sent"] == 0
+    assert result["skipped_never_reached_threshold"] >= 1
+    assert org.last_low_cards_alert_at is None
+    assert f"low_cards_alert_skipped_never_reached_threshold org_id={org.id} slug={org.slug}" in caplog.text
 
 
 def test_execute_low_cards_alert_flow_passes_flow_parameters_with_phone_fallback(
@@ -384,7 +425,7 @@ def test_low_cards_alert_job_skips_unconfigured_execution_without_marking_sent(
         slug_prefix="org-unconfigured",
         whatsapp_e164="+39333111222",
     )
-    _create_batch(db, org_id=org.id, start_no=940000, quantity=20)
+    _create_batch(db, org_id=org.id, start_no=940000, quantity=60)
 
     monkeypatch.setattr(
         low_cards_alerts_service,

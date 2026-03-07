@@ -144,3 +144,32 @@ def get_remaining_cards_by_org(
         org_id: max(totals.get(org_id, 0) - allocated.get(org_id, 0), 0)
         for org_id in org_ids
     }
+
+
+def get_total_cards_by_org(
+    db: Session,
+    association_ids: list[int],
+    *,
+    now: datetime | None = None,
+) -> dict[int, int]:
+    target_year = int((now or datetime.utcnow()).year)
+    org_ids = sorted({int(org_id) for org_id in association_ids if org_id is not None})
+    if not org_ids:
+        return {}
+
+    total_rows = (
+        db.query(
+            CardBatch.org_id,
+            func.sum(CardBatch.end_no - CardBatch.start_no + 1),
+        )
+        .filter(
+            CardBatch.org_id.in_(org_ids),
+            CardBatch.year == target_year,
+            CardBatch.is_enabled.is_(True),
+            CardBatch.released_at.is_(None),
+        )
+        .group_by(CardBatch.org_id)
+        .all()
+    )
+    totals = {int(org_id): int(total or 0) for org_id, total in total_rows}
+    return {org_id: totals.get(org_id, 0) for org_id in org_ids}

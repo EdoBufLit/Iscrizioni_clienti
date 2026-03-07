@@ -101,3 +101,9 @@
 - Quando aggiungo un flusso email basato su outbox/worker, non basta verificare che esista una riga in `email_outbox`.
 - Devo aggiungere almeno un test end-to-end che dreni il worker in `EMAIL_MODE=test` e controlli il destinatario finale catturato.
 - Se il requisito utente riguarda "a quale email arriva", devo loggare e testare esplicitamente i recipient reali (`admin_ids`, `recipient_emails`) invece di inferirli solo dalla query backend.
+
+## 2026-03-07 - Low-stock alerts must detect threshold crossing, not raw low values
+
+- Un alert "tessere sotto 50" non va basato solo su `remaining < 50`.
+- Se il requisito parla di "scendere sotto soglia", devo introdurre un gating che provi che l'organizzazione sia stata almeno una volta a `>= soglia` nello stesso dominio temporale del job.
+- In pratica: gli org sempre a `0` o comunque sempre sotto soglia non devono ricevere alert iniziali solo perché il valore corrente e basso.

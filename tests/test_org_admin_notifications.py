@@ -238,7 +238,7 @@ def test_org_admin_notification_endpoints_mark_read_and_count(client, db):
 
 def test_low_cards_alert_creates_single_notification_and_resets_above_threshold(db, monkeypatch):
     org, admin = _create_org_with_admin(db)
-    _create_batch(db, org_id=org.id, quantity=40)
+    _create_batch(db, org_id=org.id, quantity=60)
 
     monkeypatch.setattr(low_cards_alerts_service, "twilio_alerts_are_configured", lambda: False)
     monkeypatch.setattr(
@@ -328,7 +328,7 @@ def test_low_cards_email_targets_org_admin_login_email(db, monkeypatch, drain_em
     org.email = "association-office@example.com"
     db.add(org)
     db.commit()
-    _create_batch(db, org_id=org.id, quantity=40)
+    _create_batch(db, org_id=org.id, quantity=60)
 
     monkeypatch.setattr(low_cards_alerts_service, "twilio_alerts_are_configured", lambda: False)
     monkeypatch.setattr(
@@ -353,3 +353,46 @@ def test_low_cards_email_targets_org_admin_login_email(db, monkeypatch, drain_em
     assert (captured[0]["to"] or "").lower() == admin.email.lower()
     assert (captured[0]["to"] or "").lower() != org.email.lower()
     assert "Tessere in esaurimento" in (captured[0]["subject"] or "")
+
+
+def test_low_cards_alert_does_not_notify_orgs_that_never_had_50_cards(db, monkeypatch):
+    org, admin = _create_org_with_admin(db)
+    _create_batch(db, org_id=org.id, quantity=20)
+
+    monkeypatch.setattr(low_cards_alerts_service, "twilio_alerts_are_configured", lambda: False)
+    monkeypatch.setattr(
+        low_cards_alerts_service,
+        "get_remaining_cards_by_org",
+        lambda _db, association_ids, *, now=None: {
+            association_id: 0 if association_id == org.id else 200 for association_id in association_ids
+        },
+    )
+
+    result = low_cards_alerts_service.run_low_cards_alert_job(
+        db=db,
+        now=datetime.utcnow(),
+        force=False,
+    )
+
+    assert result["sent"] == 0
+    assert result["notifications_created"] == 0
+    assert result["emails_queued"] == 0
+    assert result["skipped_never_reached_threshold"] >= 1
+    assert (
+        db.query(OrgAdminNotification)
+        .filter(
+            OrgAdminNotification.admin_user_id == admin.id,
+            OrgAdminNotification.type == "low_cards",
+        )
+        .count()
+        == 0
+    )
+    assert (
+        db.query(EmailOutbox)
+        .filter(
+            EmailOutbox.email_type == "low_cards",
+            EmailOutbox.to_email == admin.email,
+        )
+        .count()
+        == 0
+    )

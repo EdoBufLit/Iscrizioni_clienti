@@ -2756,3 +2756,16 @@ pm --prefix frontend run build -> OK
 - Il dropdown ora su mobile usa positioning viewport-safe (`fixed left/right` sotto l'header mobile) e torna al posizionamento originale su `sm+`, quindi desktop resta invariato.
 - Aggiunto anche un `max-height` responsive per evitare clipping verticale sui display bassi.
 - Verifica: `npm --prefix frontend run build` -> OK
+
+## Review Addendum (Low-cards threshold crossing rule - Mar 07, 2026)
+- Root cause: il job low-cards considerava solo `remaining < 50`, quindi inviava alert anche alle associazioni che non avevano mai avuto almeno 50 tessere disponibili e risultavano da subito a `0` o comunque sotto soglia.
+- Fix:
+  - introdotto in [card_inventory.py](/C:/Users/edoar/OneDrive/Desktop/CODE/iscrizioni%20clienti/Iscrizioni_clienti/app/services/card_inventory.py) un helper bulk `get_total_cards_by_org(...)` per leggere la capacità totale provisionata dell'anno corrente;
+  - il job in [low_cards_alerts.py](/C:/Users/edoar/OneDrive/Desktop/CODE/iscrizioni%20clienti/Iscrizioni_clienti/app/services/low_cards_alerts.py) ora scarta gli org con `total_capacity < 50`, quindi l'alert parte solo se l'associazione è stata davvero almeno a soglia e poi è scesa sotto;
+  - mantenuto il reset già introdotto quando si torna sopra soglia, così il nuovo invio può ripartire solo dopo un nuovo attraversamento reale.
+- Test aggiornati:
+  - i casi low-cards che devono alertare ora usano batch iniziali `>= 50`;
+  - aggiunta regressione esplicita per gli org sempre sotto soglia, che non devono creare né notifiche né email.
+- Verifiche:
+  - `python -m pytest -q tests/test_low_cards_alert_job.py tests/test_org_admin_notifications.py tests/test_low_cards_scheduler.py tests/test_email_worker_low_cards_isolation.py` -> `17 passed`
+  - `python -m py_compile app/services/card_inventory.py app/services/low_cards_alerts.py` -> OK
