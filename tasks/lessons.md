@@ -94,3 +94,4 @@
 - Se il cliente quantifica il fix layout (es. "20% più largo"), implementare quel rapporto in modo esplicito nel CSS/classi e non continuare con tentativi incrementali in `rem`.
 - Se un child continua a sembrare "uguale a prima", verificare il parent che ne limita la larghezza visibile: allargare un box figlio dentro un shell troppo stretto non produce effetto percepibile.
 - Quando la larghezza disponibile dipende da `sidebar + gap + content`, stimare il budget complessivo prima di scegliere il nuovo `max-width`: aumenti troppo prudenti del shell portano a iterazioni inutili.
+- Se aggiungo colonne/tabelle usate subito dai model in ambienti dev/test che bootstrappano con `create_all()`, devo anche estendere il path di repair in `init_db.py`: un DB SQLite gia esistente non viene alterato da `create_all()` e rompe i test/local boot.

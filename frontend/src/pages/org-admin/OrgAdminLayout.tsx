@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   fetchOrgAdminMe,
@@ -19,14 +19,6 @@ type OrgAdminCtx = {
 
 const Ctx = createContext<OrgAdminCtx>({ admin: null, loading: true });
 export const useOrgAdmin = () => useContext(Ctx);
-
-const NAV_ITEMS = [
-  { to: "/org-admin", label: "Panoramica", end: true },
-  { to: "/org-admin/inviti", label: "Inviti", end: false },
-  { to: "/org-admin/soci", label: "Soci", end: false },
-  { to: "/org-admin/tessere", label: "Tessere", end: false },
-  { to: "/org-admin/associazione", label: "Associazione", end: false },
-];
 
 const OrgAdminLayout = () => {
   const [admin, setAdmin] = useState<OrgAdminProfile | null>(null);
@@ -54,6 +46,21 @@ const OrgAdminLayout = () => {
     await orgAdminLogout();
     navigate("/org-admin/login", { replace: true });
   };
+
+  const navItems = useMemo(() => {
+    const items = [
+      { to: "/org-admin", label: "Panoramica", end: true },
+      { to: "/org-admin/inviti", label: "Inviti", end: false },
+      { to: "/org-admin/soci", label: "Soci", end: false },
+      { to: "/org-admin/tessere", label: "Tessere", end: false },
+      { to: "/org-admin/documenti", label: "Documenti", end: false },
+      { to: "/org-admin/associazione", label: "Associazione", end: false },
+    ];
+    if (admin?.organization?.accounting_enabled) {
+      items.splice(5, 0, { to: "/org-admin/contabilita", label: "Contabilità", end: false });
+    }
+    return items;
+  }, [admin?.organization?.accounting_enabled]);
 
   return (
     <Ctx.Provider value={{ admin, loading }}>
@@ -140,7 +147,7 @@ const OrgAdminLayout = () => {
           {!loading && admin && (
             <div className="container-shell">
               <nav className="flex flex-wrap gap-6 pb-0 overflow-x-auto no-scrollbar">
-                {NAV_ITEMS.map((item) => (
+                {navItems.map((item) => (
                   <NavLink
                     key={item.to}
                     to={item.to}

@@ -43,6 +43,7 @@ const SuperAdminLayout = () => {
   const navLinks = [
     { label: "Associazioni", path: "/super-admin/associazioni" },
     { label: "Affiliazioni", path: "/super-admin/affiliazioni" },
+    { label: "Documenti", path: "/super-admin/documenti" },
     { label: "Amministratori", path: "/super-admin/org-admins" },
     { label: "Soci", path: "/super-admin/soci" },
   ];

@@ -36,6 +36,7 @@ type ModalFormData = {
   description_short: string;
   is_active: boolean;
   auto_approve_signup: boolean;
+  accounting_enabled: boolean;
   from_no: string;
   to_no: string;
 };
@@ -60,6 +61,7 @@ const createInitialFormData = (): ModalFormData => ({
   description_short: "",
   is_active: true,
   auto_approve_signup: false,
+  accounting_enabled: false,
   from_no: "",
   to_no: "",
 });
@@ -204,6 +206,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
       card_email_subject: selectedOrg.card_email_subject ?? "",
       card_logo_url: selectedOrg.card_logo_url ?? "",
       auto_approve_signup: Boolean(selectedOrg.auto_approve_signup),
+      accounting_enabled: Boolean(selectedOrg.accounting_enabled),
     }));
   }, [open, modalType, selectedOrg]);
 
@@ -257,6 +260,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
           description_short: formData.description_short || undefined,
           is_active: formData.is_active,
           auto_approve_signup: formData.auto_approve_signup,
+          accounting_enabled: formData.accounting_enabled,
         };
         const newOrg = await createSuperAdminOrganization(payload);
         if (statuteFile && newOrg.id) {
@@ -287,6 +291,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
           card_email_subject: normalizeOptionalString(formData.card_email_subject),
           card_logo_url: normalizeOptionalString(formData.card_logo_url),
           auto_approve_signup: formData.auto_approve_signup,
+          accounting_enabled: formData.accounting_enabled,
         });
       }
 
@@ -922,6 +927,33 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                     </label>
                     <p className="mt-1 text-xs text-neutral-500">
                       Se attivo, i nuovi soci vengono approvati subito e ricevono immediatamente la tessera.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-neutral-600">
+                  Modulo documenti
+                </p>
+                <div className="mt-3 flex items-start gap-3">
+                  <input
+                    id="accounting_enabled"
+                    type="checkbox"
+                    className="mt-0.5 rounded border-gray-300 text-brand focus:ring-brand"
+                    checked={formData.accounting_enabled}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        accounting_enabled: e.target.checked,
+                      }))
+                    }
+                  />
+                  <div>
+                    <label htmlFor="accounting_enabled" className="text-sm font-medium text-neutral-800">
+                      Contabilità attiva
+                    </label>
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Abilita la tab Contabilità per gli Org Admin e consenti l'invio di documenti accounting.
                     </p>
                   </div>
                 </div>

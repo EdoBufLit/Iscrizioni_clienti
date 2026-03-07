@@ -37,6 +37,7 @@ const SuperAdminOrgAdmins = lazy(() => import("./pages/super-admin/SuperAdminOrg
 const SuperAdminOrganizations = lazy(() => import("./pages/super-admin/SuperAdminOrganizations"));
 const SuperAdminMemberDetail = lazy(() => import("./pages/super-admin/SuperAdminMemberDetail"));
 const SuperAdminAffiliations = lazy(() => import("./pages/super-admin/SuperAdminAffiliations"));
+const SuperAdminDocuments = lazy(() => import("./pages/super-admin/SuperAdminDocuments"));
 
 const OrgAdminLogin = lazy(() => import("./pages/org-admin/OrgAdminLogin"));
 const OrgAdminCallback = lazy(() => import("./pages/org-admin/OrgAdminCallback"));
@@ -47,6 +48,7 @@ const OrgAdminMembers = lazy(() => import("./pages/org-admin/OrgAdminMembers"));
 const OrgAdminMemberDetail = lazy(() => import("./pages/org-admin/OrgAdminMemberDetail"));
 const OrgAdminCards = lazy(() => import("./pages/org-admin/OrgAdminCards"));
 const OrgAdminSettings = lazy(() => import("./pages/org-admin/OrgAdminSettings"));
+const OrgAdminSharedDocuments = lazy(() => import("./pages/org-admin/OrgAdminSharedDocuments"));
 
 const Loading = () => (
   <div className="flex justify-center py-16">
@@ -117,6 +119,7 @@ const App = () => {
           <Route path="super-admin" element={<SuperAdminLayout />}>
             <Route path="associazioni" element={<SuperAdminOrganizations />} />
             <Route path="affiliazioni" element={<SuperAdminAffiliations />} />
+            <Route path="documenti" element={<SuperAdminDocuments />} />
             <Route path="org-admins" element={<SuperAdminOrgAdmins />} />
             <Route path="soci" element={<SuperAdminMemberDetail />} />
           </Route>
@@ -128,6 +131,8 @@ const App = () => {
             <Route path="soci" element={<OrgAdminMembers />} />
             <Route path="soci/:id" element={<OrgAdminMemberDetail />} />
             <Route path="tessere" element={<OrgAdminCards />} />
+            <Route path="documenti" element={<OrgAdminSharedDocuments />} />
+            <Route path="contabilita" element={<OrgAdminSharedDocuments />} />
             <Route path="associazione" element={<OrgAdminSettings />} />
           </Route>
           <Route path="*" element={<NotFound />} />

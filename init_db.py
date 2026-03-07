@@ -27,6 +27,8 @@ from app.models import (
     EmailOutbox,
     WhatsAppSession,
     RechargeRequest,
+    OrganizationSharedDocument,
+    OrganizationSharedDocumentAssignment,
 )
 from app.security import get_password_hash
 from app.config import settings
@@ -126,6 +128,20 @@ def init_db():
             "run 'alembic upgrade head' to align schema history."
         )
         RechargeRequest.__table__.create(bind=engine, checkfirst=True)
+
+    if "organization_shared_documents" not in inspect(engine).get_table_names():
+        logger.warning(
+            "organization_shared_documents table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        OrganizationSharedDocument.__table__.create(bind=engine, checkfirst=True)
+
+    if "organization_shared_document_assignments" not in inspect(engine).get_table_names():
+        logger.warning(
+            "organization_shared_document_assignments table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        OrganizationSharedDocumentAssignment.__table__.create(bind=engine, checkfirst=True)
 
     # Legacy column migrations - DEPRECATED, kept for backwards compatibility
     with engine.begin() as conn:
@@ -247,6 +263,9 @@ def init_db():
         )
         _add_column_if_missing(
             conn, "organizations", "auto_approve_signup", "INTEGER DEFAULT 0"
+        )
+        _add_column_if_missing(
+            conn, "organizations", "accounting_enabled", "INTEGER DEFAULT 0"
         )
         _add_column_if_missing(
             conn, "organizations", "last_low_cards_alert_at", "DATETIME"

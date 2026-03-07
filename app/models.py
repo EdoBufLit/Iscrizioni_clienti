@@ -243,6 +243,9 @@ class Organization(Base):
     auto_approve_signup = Column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    accounting_enabled = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     is_active = Column(Boolean, default=True)
     last_low_cards_alert_at = Column(DateTime, nullable=True)
     deleted_at = Column(DateTime, nullable=True)
@@ -271,6 +274,11 @@ class Organization(Base):
         "Referral",
         back_populates="referrer_organization",
         foreign_keys="Referral.referrer_org_id",
+    )
+    shared_document_assignments = relationship(
+        "OrganizationSharedDocumentAssignment",
+        back_populates="organization",
+        foreign_keys="OrganizationSharedDocumentAssignment.association_id",
     )
 
 
@@ -390,6 +398,68 @@ class AdminUser(Base):
 
     organization = relationship(
         "Organization", back_populates="admins", foreign_keys=[org_id]
+    )
+    uploaded_shared_documents = relationship(
+        "OrganizationSharedDocument",
+        back_populates="uploaded_by_admin",
+        foreign_keys="OrganizationSharedDocument.uploaded_by_admin_id",
+    )
+
+
+class OrganizationSharedDocument(Base):
+    __tablename__ = "organization_shared_documents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    kind = Column(String, nullable=False, index=True)
+    rel_path = Column(String, nullable=False)
+    original_filename = Column(String, nullable=False)
+    mime_type = Column(String, nullable=True)
+    size_bytes = Column(Integer, nullable=True)
+    sha256 = Column(String, nullable=True)
+    uploaded_by_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    uploaded_by_admin = relationship(
+        "AdminUser",
+        back_populates="uploaded_shared_documents",
+        foreign_keys=[uploaded_by_admin_id],
+    )
+    assignments = relationship(
+        "OrganizationSharedDocumentAssignment",
+        back_populates="document",
+        cascade="all, delete-orphan",
+    )
+
+
+class OrganizationSharedDocumentAssignment(Base):
+    __tablename__ = "organization_shared_document_assignments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(
+        Integer, ForeignKey("organization_shared_documents.id"), nullable=False, index=True
+    )
+    association_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    document = relationship(
+        "OrganizationSharedDocument",
+        back_populates="assignments",
+        foreign_keys=[document_id],
+    )
+    organization = relationship(
+        "Organization",
+        back_populates="shared_document_assignments",
+        foreign_keys=[association_id],
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "document_id",
+            "association_id",
+            name="uq_org_shared_document_assignment",
+        ),
     )
 
 

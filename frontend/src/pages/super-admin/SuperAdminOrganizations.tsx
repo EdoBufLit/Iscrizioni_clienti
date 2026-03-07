@@ -351,21 +351,32 @@ const SuperAdminOrganizations = () => {
                       </p>
                     </td>
                     <td className="px-5 py-4">
-                      {org.is_archived || org.deleted_at ? (
-                        <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-bold text-neutral-500 uppercase tracking-tighter ring-1 ring-inset ring-neutral-200">
-                          Archiviata
-                        </span>
-                      ) : (
+                      <div className="flex flex-col items-start gap-1.5">
+                        {org.is_archived || org.deleted_at ? (
+                          <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-bold text-neutral-500 uppercase tracking-tighter ring-1 ring-inset ring-neutral-200">
+                            Archiviata
+                          </span>
+                        ) : (
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter ring-1 ring-inset ${
+                              org.is_active
+                                ? "bg-emerald-50 text-emerald-700 ring-emerald-200/50"
+                                : "bg-neutral-50 text-neutral-400 ring-neutral-200"
+                            }`}
+                          >
+                            {org.is_active ? "Attiva" : "Sospesa"}
+                          </span>
+                        )}
                         <span
                           className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter ring-1 ring-inset ${
-                            org.is_active
-                              ? "bg-emerald-50 text-emerald-700 ring-emerald-200/50"
+                            org.accounting_enabled
+                              ? "bg-amber-50 text-amber-700 ring-amber-200/50"
                               : "bg-neutral-50 text-neutral-400 ring-neutral-200"
                           }`}
                         >
-                          {org.is_active ? "Attiva" : "Sospesa"}
+                          {org.accounting_enabled ? "Contabilità on" : "Contabilità off"}
                         </span>
-                      )}
+                      </div>
                     </td>
                     <td className="px-5 py-4">
                       {org.affiliation_status ? (

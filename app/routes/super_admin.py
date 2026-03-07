@@ -1,6 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File
+import hashlib
+import json
+import os
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import Session, aliased, joinedload
 from datetime import datetime, timedelta
 from typing import Literal, Optional
 import secrets
@@ -21,6 +27,8 @@ from app.models import (
     Member,
     PaymentMethod,
     IntegrationApiKey,
+    OrganizationSharedDocument,
+    OrganizationSharedDocumentAssignment,
 )
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.security import hash_api_key, verify_password
@@ -51,6 +59,30 @@ _ALLOWED_MEMBER_PAYMENT_METHODS = {
     PaymentMethod.BONIFICO.value,
 }
 _ALLOWED_INTEGRATION_SCOPES = {"issue_member"}
+_ALLOWED_SHARED_DOCUMENT_KINDS = {"general", "accounting"}
+_ALLOWED_SHARED_DOCUMENT_TARGET_MODES = {
+    "single",
+    "multiple",
+    "all",
+    "accounting_enabled",
+}
+_SHARED_DOCUMENT_ALLOWED_EXTENSIONS = {
+    ".pdf": {"application/pdf"},
+    ".png": {"image/png"},
+    ".jpg": {"image/jpeg"},
+    ".jpeg": {"image/jpeg"},
+    ".csv": {"text/csv", "application/csv"},
+    ".xls": {"application/vnd.ms-excel"},
+    ".xlsx": {
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/octet-stream",
+    },
+    ".doc": {"application/msword"},
+    ".docx": {
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/octet-stream",
+    },
+}
 _ORGANIZATION_SORT_FIELDS = {
     "created_at": Organization.created_at,
     "name": Organization.name,
@@ -165,6 +197,7 @@ def _serialize_organization_row(
         "city": org.city,
         "province": org.province,
         "auto_approve_signup": bool(org.auto_approve_signup),
+        "accounting_enabled": bool(org.accounting_enabled),
         "card_min": card_min,
         "card_max": card_max,
         "affiliation_application_id": affiliation_application_id,
@@ -321,6 +354,7 @@ class CreateOrganization(BaseModel):
     website: Optional[str] = None
     is_active: bool = True
     auto_approve_signup: bool = False
+    accounting_enabled: bool = False
 
 
 class PatchOrganization(BaseModel):
@@ -342,12 +376,205 @@ class PatchOrganization(BaseModel):
     website: Optional[str] = None
     is_active: Optional[bool] = None
     auto_approve_signup: Optional[bool] = None
+    accounting_enabled: Optional[bool] = None
 
 
 def _normalize_tag_culture(value: Optional[str]) -> Optional[str]:
     if value is None:
         return None
     return value.replace("T.A.G.", "TAG")
+
+
+def _serialize_document_target(org: Organization) -> dict[str, object]:
+    return {
+        "id": org.id,
+        "name": org.name,
+        "slug": org.slug,
+        "is_active": bool(org.is_active),
+        "accounting_enabled": bool(org.accounting_enabled),
+    }
+
+
+def _serialize_shared_document(
+    document: OrganizationSharedDocument,
+    *,
+    include_recipients: bool = False,
+) -> dict[str, object]:
+    recipient_rows = []
+    for assignment in sorted(
+        document.assignments,
+        key=lambda item: (
+            item.organization.name.lower() if item.organization and item.organization.name else "",
+            item.association_id,
+        ),
+    ):
+        org = assignment.organization
+        if not org:
+            continue
+        recipient_rows.append(
+            {
+                "id": org.id,
+                "name": org.name,
+                "slug": org.slug,
+                "accounting_enabled": bool(org.accounting_enabled),
+                "assigned_at": assignment.created_at.isoformat()
+                if assignment.created_at
+                else None,
+            }
+        )
+
+    payload = {
+        "id": document.id,
+        "title": document.title,
+        "description": document.description,
+        "kind": document.kind,
+        "created_at": document.created_at.isoformat() if document.created_at else None,
+        "original_filename": document.original_filename,
+        "mime_type": document.mime_type,
+        "size_bytes": document.size_bytes,
+        "recipient_count": len(recipient_rows),
+        "recipient_preview": recipient_rows[:5],
+        "download_url": f"/api/super-admin/documents/{document.id}/download",
+        "uploaded_by": {
+            "id": document.uploaded_by_admin.id,
+            "email": document.uploaded_by_admin.email,
+        }
+        if document.uploaded_by_admin
+        else None,
+    }
+    if include_recipients:
+        payload["recipients"] = recipient_rows
+    return payload
+
+
+async def _save_shared_document_file(upload_file: UploadFile) -> tuple[str, int, str]:
+    content_type = (upload_file.content_type or "").strip().lower()
+    file_ext = os.path.splitext(upload_file.filename or "")[1].lower()
+    allowed_types = _SHARED_DOCUMENT_ALLOWED_EXTENSIONS.get(file_ext)
+    if not allowed_types or content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail="Formato file non supportato. Usa PDF, immagini o documenti Office comuni.",
+        )
+
+    safe_filename = "".join(
+        c for c in (upload_file.filename or "document") if c.isalnum() or c in "._-"
+    ).strip("._")
+    if not safe_filename:
+        safe_filename = f"document{file_ext or '.bin'}"
+
+    sub_directory = os.path.join("org-shared-documents", datetime.utcnow().strftime("%Y/%m"))
+    target_dir = os.path.join(settings.UPLOAD_DIR, sub_directory)
+    os.makedirs(target_dir, exist_ok=True)
+
+    unique_filename = f"{uuid.uuid4()}_{safe_filename}"
+    full_path = os.path.join(target_dir, unique_filename)
+    size_bytes = 0
+    sha256_hash = hashlib.sha256()
+
+    try:
+        with open(full_path, "wb") as buffer:
+            while True:
+                chunk = await upload_file.read(4096)
+                if not chunk:
+                    break
+                size_bytes += len(chunk)
+                if size_bytes > 20 * 1024 * 1024:
+                    raise HTTPException(status_code=400, detail="File troppo grande. Max 20 MB.")
+                buffer.write(chunk)
+                sha256_hash.update(chunk)
+    except Exception:
+        if os.path.exists(full_path):
+            os.remove(full_path)
+        raise
+
+    if size_bytes <= 0:
+        if os.path.exists(full_path):
+            os.remove(full_path)
+        raise HTTPException(status_code=400, detail="File vuoto.")
+
+    rel_path = os.path.join(sub_directory, unique_filename)
+    return rel_path, size_bytes, sha256_hash.hexdigest()
+
+
+def _parse_association_ids(raw_value: str | None) -> list[int]:
+    if raw_value is None or not raw_value.strip():
+        return []
+    try:
+        decoded = json.loads(raw_value)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="association_ids non valido.") from exc
+    if not isinstance(decoded, list):
+        raise HTTPException(status_code=400, detail="association_ids deve essere una lista.")
+
+    ids: list[int] = []
+    for item in decoded:
+        try:
+            parsed = int(item)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="association_ids contiene valori non validi.") from exc
+        if parsed not in ids:
+            ids.append(parsed)
+    return ids
+
+
+def _resolve_document_targets(
+    *,
+    db: Session,
+    kind: str,
+    target_mode: str,
+    association_ids: list[int],
+) -> list[Organization]:
+    if kind not in _ALLOWED_SHARED_DOCUMENT_KINDS:
+        raise HTTPException(status_code=422, detail="Tipo documento non valido.")
+    if target_mode not in _ALLOWED_SHARED_DOCUMENT_TARGET_MODES:
+        raise HTTPException(status_code=422, detail="Modalita destinatari non valida.")
+
+    base_query = db.query(Organization).filter(Organization.deleted_at.is_(None))
+    if target_mode == "all":
+        targets = (
+            base_query.order_by(Organization.name.asc(), Organization.id.asc()).all()
+        )
+    elif target_mode == "accounting_enabled":
+        targets = (
+            base_query.filter(Organization.accounting_enabled.is_(True))
+            .order_by(Organization.name.asc(), Organization.id.asc())
+            .all()
+        )
+    else:
+        if not association_ids:
+            raise HTTPException(status_code=422, detail="Seleziona almeno un'associazione.")
+        targets = (
+            base_query.filter(Organization.id.in_(association_ids))
+            .order_by(Organization.name.asc(), Organization.id.asc())
+            .all()
+        )
+        found_ids = {org.id for org in targets}
+        missing_ids = [org_id for org_id in association_ids if org_id not in found_ids]
+        if missing_ids:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Associazioni non trovate: {', '.join(str(item) for item in missing_ids)}",
+            )
+        if target_mode == "single" and len(targets) != 1:
+            raise HTTPException(
+                status_code=422,
+                detail="La modalita singola richiede una sola associazione.",
+            )
+
+    if not targets:
+        raise HTTPException(status_code=422, detail="Nessun destinatario disponibile.")
+
+    if kind == "accounting":
+        invalid_targets = [org for org in targets if not bool(org.accounting_enabled)]
+        if invalid_targets:
+            names = ", ".join(org.name for org in invalid_targets[:5])
+            raise HTTPException(
+                status_code=422,
+                detail=f"I documenti contabili possono essere inviati solo ad associazioni con contabilita attiva. Destinatari non validi: {names}",
+            )
+
+    return targets
 
 
 @auth_router.post("/login")
@@ -1167,6 +1394,7 @@ def create_organization(
         website=body.website,
         is_active=body.is_active,
         auto_approve_signup=body.auto_approve_signup,
+        accounting_enabled=body.accounting_enabled,
         created_by_admin_id=admin.id,
     )
     db.add(org)
@@ -1328,6 +1556,8 @@ def update_organization(
         )
     if "auto_approve_signup" in update_data:
         update_data["auto_approve_signup"] = bool(update_data["auto_approve_signup"])
+    if "accounting_enabled" in update_data:
+        update_data["accounting_enabled"] = bool(update_data["accounting_enabled"])
 
     for key, value in update_data.items():
         setattr(org, key, value)
@@ -1349,6 +1579,187 @@ def update_organization(
     db.refresh(org)
 
     return org
+
+
+@router.get("/documents/targets")
+def list_document_targets(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    organizations = (
+        db.query(Organization)
+        .filter(Organization.deleted_at.is_(None))
+        .order_by(Organization.name.asc(), Organization.id.asc())
+        .all()
+    )
+    return {
+        "items": [_serialize_document_target(org) for org in organizations],
+        "total": len(organizations),
+    }
+
+
+@router.post("/documents")
+async def create_shared_document(
+    request: Request,
+    title: str = Form(...),
+    description: Optional[str] = Form(None),
+    kind: str = Form(...),
+    target_mode: str = Form(...),
+    association_ids: Optional[str] = Form(None),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+
+    normalized_title = (title or "").strip()
+    if not normalized_title:
+        raise HTTPException(status_code=422, detail="Titolo obbligatorio.")
+
+    parsed_association_ids = _parse_association_ids(association_ids)
+    targets = _resolve_document_targets(
+        db=db,
+        kind=(kind or "").strip().lower(),
+        target_mode=(target_mode or "").strip().lower(),
+        association_ids=parsed_association_ids,
+    )
+
+    rel_path, size_bytes, sha256 = await _save_shared_document_file(file)
+
+    document = OrganizationSharedDocument(
+        title=normalized_title,
+        description=(description or "").strip() or None,
+        kind=(kind or "").strip().lower(),
+        rel_path=rel_path,
+        original_filename=file.filename or os.path.basename(rel_path),
+        mime_type=file.content_type,
+        size_bytes=size_bytes,
+        sha256=sha256,
+        uploaded_by_admin_id=admin.id,
+    )
+    db.add(document)
+    db.flush()
+
+    for org in targets:
+        db.add(
+            OrganizationSharedDocumentAssignment(
+                document_id=document.id,
+                association_id=org.id,
+            )
+        )
+
+    audit.log_operation(
+        db,
+        action="org_shared_document.create",
+        entity_type="organization_shared_document",
+        entity_id=document.id,
+        actor_admin_id=admin.id,
+        actor_role=AdminRole.SUPER_ADMIN.value,
+        metadata={
+            "title": document.title,
+            "kind": document.kind,
+            "target_mode": target_mode,
+            "association_ids": [org.id for org in targets],
+            "size_bytes": size_bytes,
+            "filename": document.original_filename,
+        },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    db.refresh(document)
+
+    document = (
+        db.query(OrganizationSharedDocument)
+        .options(
+            joinedload(OrganizationSharedDocument.uploaded_by_admin),
+            joinedload(OrganizationSharedDocument.assignments).joinedload(
+                OrganizationSharedDocumentAssignment.organization
+            ),
+        )
+        .filter(OrganizationSharedDocument.id == document.id)
+        .first()
+    )
+    return {"ok": True, "document": _serialize_shared_document(document, include_recipients=True)}
+
+
+@router.get("/documents")
+def list_shared_documents(
+    request: Request,
+    kind: Optional[str] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    query = db.query(OrganizationSharedDocument).options(
+        joinedload(OrganizationSharedDocument.uploaded_by_admin),
+        joinedload(OrganizationSharedDocument.assignments).joinedload(
+            OrganizationSharedDocumentAssignment.organization
+        ),
+    )
+    normalized_kind = (kind or "").strip().lower()
+    if normalized_kind:
+        query = query.filter(OrganizationSharedDocument.kind == normalized_kind)
+
+    documents = (
+        query.order_by(
+            OrganizationSharedDocument.created_at.desc(),
+            OrganizationSharedDocument.id.desc(),
+        ).all()
+    )
+    return {
+        "items": [_serialize_shared_document(document) for document in documents],
+        "total": len(documents),
+    }
+
+
+@router.get("/documents/{document_id}")
+def get_shared_document_detail(
+    request: Request,
+    document_id: int,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    document = (
+        db.query(OrganizationSharedDocument)
+        .options(
+            joinedload(OrganizationSharedDocument.uploaded_by_admin),
+            joinedload(OrganizationSharedDocument.assignments).joinedload(
+                OrganizationSharedDocumentAssignment.organization
+            ),
+        )
+        .filter(OrganizationSharedDocument.id == document_id)
+        .first()
+    )
+    if not document:
+        raise HTTPException(status_code=404, detail="Documento non trovato.")
+    return _serialize_shared_document(document, include_recipients=True)
+
+
+@router.get("/documents/{document_id}/download")
+def download_shared_document(
+    request: Request,
+    document_id: int,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    document = (
+        db.query(OrganizationSharedDocument)
+        .filter(OrganizationSharedDocument.id == document_id)
+        .first()
+    )
+    if not document:
+        raise HTTPException(status_code=404, detail="Documento non trovato.")
+
+    full_path = os.path.join(settings.UPLOAD_DIR, document.rel_path)
+    if not os.path.exists(full_path):
+        raise HTTPException(status_code=404, detail="File non trovato su disco.")
+
+    return FileResponse(
+        full_path,
+        filename=document.original_filename,
+        media_type=document.mime_type or "application/octet-stream",
+        content_disposition_type="attachment",
+    )
 
 
 @router.post("/organizations/{org_id}/logo")

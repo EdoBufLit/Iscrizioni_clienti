@@ -2630,3 +2630,37 @@ pm --prefix frontend run build -> OK
 ## Review Addendum (Dashboard shell width correction v2 - Mar 06, 2026)
 - Il valore `90rem` restava ancora insufficiente rispetto allo spazio richiesto dalla sezione tessera.
 - Il shell del dashboard member e stato ampliato ulteriormente a `max-w-[100rem]`, mantenendo invariati contenuto interno e card.
+
+## Spec (Super Admin / Org Admin documenti e contabilità - Mar 06, 2026)
+- Obiettivo: introdurre il modulo documenti condivisi tra Super Admin e Org Admin con separazione `general` / `accounting`, senza notifiche o email automatiche in questa fase.
+- Scope:
+  - flag persistente `accounting_enabled` sull'associazione;
+  - upload documento master + assegnazioni a una/molte/tutte associazioni o sole associazioni con contabilità attiva;
+  - archivio invii lato Super Admin;
+  - tab `Documenti` e `Contabilità` lato Org Admin con filtri coerenti col flag e con i permessi;
+  - migrazioni, permessi backend, API frontend e UI base coerente con le dashboard esistenti.
+
+## Plan (Super Admin / Org Admin documenti e contabilità - Mar 06, 2026)
+- [x] Mappare modelli, storage file, route Super Admin / Org Admin e pattern già esistenti per documenti/upload.
+- [x] Aggiungere schema DB + migrazione per `accounting_enabled`, documenti master e assegnazioni.
+- [x] Implementare endpoint/backend con validazione permessi e destinatari accounting.
+- [x] Integrare frontend Super Admin e Org Admin con tab, form upload e liste documenti.
+- [x] Verificare con test/build mirati e documentare l'esito.
+
+## Review (Super Admin / Org Admin documenti e contabilità - Mar 06, 2026)
+- Backend:
+  - aggiunto `organizations.accounting_enabled` con default `false`;
+  - introdotte le tabelle `organization_shared_documents` e `organization_shared_document_assignments`;
+  - nuovi endpoint Super Admin per target list, upload/invio documento, archivio, dettaglio e download;
+  - nuovi endpoint Org Admin per lista documenti assegnati per `kind` e download privato;
+  - validazione backend che blocca documenti `accounting` verso associazioni senza `accounting_enabled`;
+  - bootstrap dev/test reso resiliente su DB SQLite legacy tramite `init_db.py` (nuova colonna + nuove tabelle idempotenti).
+- Frontend:
+  - nuova sezione `Documenti` nel Super Admin con form upload + archivio invii;
+  - toggle `Contabilità attiva` nel modal gestione associazione Super Admin;
+  - nuove tab Org Admin `Documenti` e `Contabilità` con gating sul flag `accounting_enabled`;
+  - navbar Org Admin resa dinamica senza toccare i flussi auth esistenti.
+- Verifiche:
+  - `python -m pytest -q tests/test_org_shared_documents.py` -> `4 passed`
+  - `python -m pytest -q tests/test_org_admin_statute_upload.py tests/test_super_admin_organizations_pagination.py` -> `7 passed`
+  - `npm --prefix frontend run build` -> OK

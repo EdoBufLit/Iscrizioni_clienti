@@ -35,6 +35,8 @@ from app.models import (
     Referral,
     ReferralStatus,
     AffiliationEvent,
+    OrganizationSharedDocument,
+    OrganizationSharedDocumentAssignment,
 )
 from app.models_affiliation import (
     AffiliationApplication,
@@ -72,6 +74,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/org-admin")
 
 auth_router = APIRouter(prefix="/auth")
+
+_ORG_SHARED_DOCUMENT_KINDS = {"general", "accounting"}
 
 
 def _get_current_org_admin(request: Request, db: Session):
@@ -147,6 +151,22 @@ def _normalize_tag_culture(value: Optional[str]) -> Optional[str]:
     if value is None:
         return None
     return value.replace("T.A.G.", "TAG")
+
+
+def _serialize_org_shared_document(
+    document: OrganizationSharedDocument,
+) -> dict[str, object]:
+    return {
+        "id": document.id,
+        "title": document.title,
+        "description": document.description,
+        "kind": document.kind,
+        "created_at": document.created_at.isoformat() if document.created_at else None,
+        "original_filename": document.original_filename,
+        "mime_type": document.mime_type,
+        "size_bytes": document.size_bytes,
+        "download_url": f"/api/org-admin/shared-documents/{document.id}/download",
+    }
 
 
 def _resolve_frontend_base(request: Request) -> str:
@@ -580,6 +600,7 @@ def me(request: Request, db: Session = Depends(get_db)):
             "id": admin.organization.id,
             "name": admin.organization.name,
             "slug": admin.organization.slug,
+            "accounting_enabled": bool(admin.organization.accounting_enabled),
         }
         if admin.organization
         else None,
@@ -645,11 +666,91 @@ def get_organization_detail(
         "wallet_hero_image_url": org.wallet_hero_image_url,
         "wallet_title_override": org.wallet_title_override,
         "wallet_is_test_prefix": bool(org.wallet_is_test_prefix),
+        "accounting_enabled": bool(org.accounting_enabled),
         "wallet_effective_bg_color": wallet_defaults["wallet_bg_color"],
         "wallet_effective_logo_url": wallet_defaults["wallet_logo_url"],
         "wallet_effective_hero_image_url": wallet_defaults["wallet_hero_image_url"],
         "wallet_effective_title_override": wallet_defaults["wallet_title_override"],
     }
+
+
+@router.get("/shared-documents")
+def list_org_shared_documents(
+    request: Request,
+    kind: str = Query(default="general"),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    normalized_kind = (kind or "").strip().lower()
+    if normalized_kind not in _ORG_SHARED_DOCUMENT_KINDS:
+        raise HTTPException(status_code=422, detail="Tipo documento non valido.")
+    if normalized_kind == "accounting" and not bool(admin.organization.accounting_enabled):
+        raise HTTPException(status_code=403, detail="Contabilita non abilitata.")
+
+    documents = (
+        db.query(OrganizationSharedDocument)
+        .join(
+            OrganizationSharedDocumentAssignment,
+            OrganizationSharedDocumentAssignment.document_id == OrganizationSharedDocument.id,
+        )
+        .filter(
+            OrganizationSharedDocumentAssignment.association_id == admin.org_id,
+            OrganizationSharedDocument.kind == normalized_kind,
+        )
+        .order_by(
+            OrganizationSharedDocument.created_at.desc(),
+            OrganizationSharedDocument.id.desc(),
+        )
+        .all()
+    )
+    return {
+        "items": [_serialize_org_shared_document(document) for document in documents],
+        "total": len(documents),
+    }
+
+
+@router.get("/shared-documents/{document_id}/download")
+def download_org_shared_document(
+    request: Request,
+    document_id: int,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    assignment = (
+        db.query(OrganizationSharedDocumentAssignment)
+        .join(
+            OrganizationSharedDocument,
+            OrganizationSharedDocument.id == OrganizationSharedDocumentAssignment.document_id,
+        )
+        .filter(
+            OrganizationSharedDocumentAssignment.document_id == document_id,
+            OrganizationSharedDocumentAssignment.association_id == admin.org_id,
+        )
+        .first()
+    )
+    if not assignment or not assignment.document:
+        raise HTTPException(status_code=404, detail="Documento non trovato.")
+
+    document = assignment.document
+    if document.kind == "accounting" and not bool(admin.organization.accounting_enabled):
+        raise HTTPException(status_code=403, detail="Contabilita non abilitata.")
+
+    full_path = os.path.join(settings.UPLOAD_DIR, document.rel_path)
+    if not os.path.exists(full_path):
+        raise HTTPException(status_code=404, detail="File non trovato su disco.")
+
+    return FileResponse(
+        full_path,
+        filename=document.original_filename,
+        media_type=document.mime_type or "application/octet-stream",
+        content_disposition_type="attachment",
+    )
 
 
 @router.patch("/organization")

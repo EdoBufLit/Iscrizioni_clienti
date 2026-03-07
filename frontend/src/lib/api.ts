@@ -435,6 +435,29 @@ export async function downloadMemberOrganizationStatute(
   window.URL.revokeObjectURL(objectUrl);
 }
 
+async function downloadAuthenticatedFile(
+  url: string,
+  fallbackFilename: string,
+  fallbackError: string,
+): Promise<void> {
+  const res = await fetch(url, { method: "GET" });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null);
+    throw new Error(payload?.detail ?? fallbackError);
+  }
+
+  const blob = await res.blob();
+  const objectUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = fallbackFilename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(objectUrl);
+}
+
 export async function resubmitMemberDocument(
   docId: number,
   file: File,
@@ -500,6 +523,7 @@ export type OrgAdminProfile = {
     id: number;
     name: string;
     slug: string;
+    accounting_enabled: boolean;
   } | null;
 };
 
@@ -572,6 +596,7 @@ export type OrgAdminOrganizationDetail = {
   statute_updated_at: string | null;
   statute_url: string | null;
   has_statute: boolean;
+  accounting_enabled: boolean;
   wallet_bg_color: string | null;
   wallet_logo_url: string | null;
   wallet_hero_image_url: string | null;
@@ -1055,6 +1080,7 @@ export type SuperAdminOrganization = {
   city: string | null;
   province: string | null;
   auto_approve_signup?: boolean;
+  accounting_enabled?: boolean;
   card_min: number | null;
   card_max: number | null;
   affiliation_application_id?: number | null;
@@ -1100,6 +1126,113 @@ export async function fetchSuperAdminOrganizations(
   if (res.status === 403) throw new Error("Accesso negato");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento associazioni"));
   return res.json();
+}
+
+export type SuperAdminDocumentTarget = {
+  id: number;
+  name: string;
+  slug: string;
+  is_active: boolean;
+  accounting_enabled: boolean;
+};
+
+export type SuperAdminSharedDocument = {
+  id: number;
+  title: string;
+  description: string | null;
+  kind: "general" | "accounting";
+  created_at: string | null;
+  original_filename: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  recipient_count: number;
+  recipient_preview: Array<{
+    id: number;
+    name: string;
+    slug: string;
+    accounting_enabled: boolean;
+    assigned_at: string | null;
+  }>;
+  recipients?: Array<{
+    id: number;
+    name: string;
+    slug: string;
+    accounting_enabled: boolean;
+    assigned_at: string | null;
+  }>;
+  download_url: string;
+  uploaded_by: {
+    id: number;
+    email: string;
+  } | null;
+};
+
+export async function fetchSuperAdminDocumentTargets(): Promise<{
+  items: SuperAdminDocumentTarget[];
+  total: number;
+}> {
+  const res = await fetch("/api/super-admin/documents/targets");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento destinatari"));
+  return res.json();
+}
+
+export async function createSuperAdminSharedDocument(input: {
+  title: string;
+  description?: string;
+  kind: "general" | "accounting";
+  targetMode: "single" | "multiple" | "all" | "accounting_enabled";
+  associationIds?: number[];
+  file: File;
+}): Promise<{ ok: boolean; document: SuperAdminSharedDocument }> {
+  const body = new FormData();
+  body.append("title", input.title);
+  if (input.description) body.append("description", input.description);
+  body.append("kind", input.kind);
+  body.append("target_mode", input.targetMode);
+  if (input.associationIds?.length) {
+    body.append("association_ids", JSON.stringify(input.associationIds));
+  }
+  body.append("file", input.file);
+
+  const res = await fetch("/api/super-admin/documents", {
+    method: "POST",
+    body,
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore invio documento"));
+  return res.json();
+}
+
+export async function fetchSuperAdminSharedDocuments(params?: {
+  kind?: "general" | "accounting";
+}): Promise<{ items: SuperAdminSharedDocument[]; total: number }> {
+  const sp = new URLSearchParams();
+  if (params?.kind) sp.set("kind", params.kind);
+  const res = await fetch(`/api/super-admin/documents${sp.toString() ? `?${sp.toString()}` : ""}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento archivio documenti"));
+  return res.json();
+}
+
+export async function fetchSuperAdminSharedDocumentDetail(
+  documentId: number,
+): Promise<SuperAdminSharedDocument> {
+  const res = await fetch(`/api/super-admin/documents/${documentId}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Documento non trovato");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento documento"));
+  return res.json();
+}
+
+export async function downloadSuperAdminSharedDocument(
+  document: Pick<SuperAdminSharedDocument, "download_url" | "original_filename">,
+): Promise<void> {
+  await downloadAuthenticatedFile(
+    document.download_url,
+    document.original_filename || "documento",
+    "Impossibile scaricare il documento",
+  );
 }
 
 export type AffiliationDraftPerson = {
@@ -1384,6 +1517,42 @@ export async function retryAffiliationWelcomeVideo(
   return res.json();
 }
 
+export type OrgSharedDocumentKind = "general" | "accounting";
+
+export type OrgSharedDocumentItem = {
+  id: number;
+  title: string;
+  description: string | null;
+  kind: OrgSharedDocumentKind;
+  created_at: string | null;
+  original_filename: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  download_url: string;
+};
+
+export async function fetchOrgAdminSharedDocuments(
+  kind: OrgSharedDocumentKind,
+): Promise<{ items: OrgSharedDocumentItem[]; total: number }> {
+  const sp = new URLSearchParams();
+  sp.set("kind", kind);
+  const res = await fetch(`/api/org-admin/shared-documents?${sp.toString()}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 403) throw new Error(await parseApiErrorDetail(res, "Accesso negato"));
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento documenti"));
+  return res.json();
+}
+
+export async function downloadOrgAdminSharedDocument(
+  document: Pick<OrgSharedDocumentItem, "download_url" | "original_filename">,
+): Promise<void> {
+  await downloadAuthenticatedFile(
+    document.download_url,
+    document.original_filename || "documento",
+    "Impossibile scaricare il documento",
+  );
+}
+
 export type SuperAdminAffiliationListItem = {
   id: number;
   public_token: string | null;
@@ -1657,6 +1826,7 @@ export async function createSuperAdminOrganization(data: {
   description_short?: string;
   is_active?: boolean;
   auto_approve_signup?: boolean;
+  accounting_enabled?: boolean;
 }): Promise<SuperAdminOrganization> {
   const res = await fetch("/api/super-admin/organizations", {
     method: "POST",
@@ -1680,6 +1850,7 @@ export async function patchSuperAdminOrganization(
     description?: string;
     is_active?: boolean;
     auto_approve_signup?: boolean;
+    accounting_enabled?: boolean;
   },
 ): Promise<SuperAdminOrganization> {
   const res = await fetch(`/api/super-admin/organizations/${orgId}`, {
