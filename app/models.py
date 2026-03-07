@@ -132,6 +132,12 @@ class AdminRole(str, enum.Enum):
     ORG_ADMIN = "org_admin"
 
 
+class OrgAdminNotificationType(str, enum.Enum):
+    DOCUMENT_GENERAL = "document_general"
+    DOCUMENT_ACCOUNTING = "document_accounting"
+    LOW_CARDS = "low_cards"
+
+
 class SignupSource(str, enum.Enum):
     ASSONAM_FORM = "assonam_form"
     PIENISSIMO = "pienissimo"
@@ -404,6 +410,12 @@ class AdminUser(Base):
         back_populates="uploaded_by_admin",
         foreign_keys="OrganizationSharedDocument.uploaded_by_admin_id",
     )
+    notifications = relationship(
+        "OrgAdminNotification",
+        back_populates="admin_user",
+        foreign_keys="OrgAdminNotification.admin_user_id",
+        cascade="all, delete-orphan",
+    )
 
 
 class OrganizationSharedDocument(Base):
@@ -461,6 +473,28 @@ class OrganizationSharedDocumentAssignment(Base):
             name="uq_org_shared_document_assignment",
         ),
     )
+
+
+class OrgAdminNotification(Base):
+    __tablename__ = "org_admin_notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    admin_user_id = Column(Integer, ForeignKey("admin_users.id"), nullable=False, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    type = Column(String, nullable=False, index=True)
+    title = Column(String, nullable=False)
+    body = Column(Text, nullable=False)
+    href = Column(String, nullable=False)
+    is_read = Column(Boolean, nullable=False, default=False, server_default="false", index=True)
+    read_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    admin_user = relationship(
+        "AdminUser",
+        back_populates="notifications",
+        foreign_keys=[admin_user_id],
+    )
+    organization = relationship("Organization", foreign_keys=[org_id])
 
 
 class CardBatch(Base):

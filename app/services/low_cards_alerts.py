@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from app.db import SessionLocal
 from app.models import Organization
 from app.services.card_inventory import get_remaining_cards, get_remaining_cards_by_org
+from app.services.org_admin_notifications import notify_org_admins_low_cards
 from app.services.twilio_notifications import (
     execute_low_cards_alert_flow,
     twilio_alerts_are_configured,
@@ -14,7 +15,6 @@ from app.services.twilio_notifications import (
 logger = logging.getLogger(__name__)
 
 LOW_CARDS_THRESHOLD = 50
-LOW_CARDS_ALERT_COOLDOWN = timedelta(hours=24)
 
 def run_low_cards_alert_job(
     *,
@@ -30,9 +30,13 @@ def run_low_cards_alert_job(
         "scanned": 0,
         "eligible": 0,
         "sent": 0,
+        "emails_queued": 0,
+        "notifications_created": 0,
+        "twilio_sent": 0,
         "skipped_threshold": 0,
         "skipped_recent": 0,
         "skipped_missing_phone": 0,
+        "skipped_missing_admins": 0,
         "skipped_not_determinable": 0,
         "errors": 0,
     }
@@ -43,12 +47,9 @@ def run_low_cards_alert_job(
         current_time.isoformat(),
     )
 
-    if not twilio_alerts_are_configured():
-        logger.warning("low_cards_alert_job_skipped missing_twilio_alert_config")
-        stats["ok"] = False
-        stats["ran"] = False
-        logger.info("low_cards_alert_job_done %s", stats)
-        return stats
+    twilio_enabled = twilio_alerts_are_configured()
+    if not twilio_enabled:
+        logger.info("low_cards_alert_job_twilio_disabled notifications_and_email_only")
 
     organizations = (
         db.query(Organization)
@@ -86,6 +87,10 @@ def run_low_cards_alert_job(
             stats["skipped_not_determinable"] += 1
             continue
         if remaining >= LOW_CARDS_THRESHOLD:
+            if org.last_low_cards_alert_at is not None:
+                org.last_low_cards_alert_at = None
+                db.add(org)
+                db.commit()
             stats["skipped_threshold"] += 1
             continue
 
@@ -97,39 +102,57 @@ def run_low_cards_alert_job(
             remaining,
             force,
         )
-        if (
-            not force
-            and org.last_low_cards_alert_at is not None
-            and org.last_low_cards_alert_at > current_time - LOW_CARDS_ALERT_COOLDOWN
-        ):
+        if not force and org.last_low_cards_alert_at is not None:
             stats["skipped_recent"] += 1
             continue
 
         try:
-            execution_sid = execute_low_cards_alert_flow(
-                org=org,
+            execution_sid = None
+            if twilio_enabled:
+                execution_sid = execute_low_cards_alert_flow(
+                    org=org,
+                    remaining=remaining,
+                )
+                if execution_sid:
+                    stats["twilio_sent"] += 1
+                elif not getattr(org, "whatsapp_e164", None):
+                    stats["skipped_missing_phone"] += 1
+
+            notification_result = notify_org_admins_low_cards(
+                db,
+                organization=org,
                 remaining=remaining,
+                now=current_time,
             )
-            if not execution_sid:
+            notifications_created = int(
+                notification_result.get("notifications_created", 0)
+            )
+            emails_queued = int(notification_result.get("emails_queued", 0))
+            stats["notifications_created"] += notifications_created
+            stats["emails_queued"] += emails_queued
+
+            if not execution_sid and notifications_created == 0 and emails_queued == 0:
+                stats["skipped_missing_admins"] += 1
                 logger.info(
                     "low_cards_alert_skipped_unconfigured org_id=%s slug=%s remaining=%s",
                     org.id,
                     org.slug,
                     remaining,
                 )
-                if not getattr(org, "whatsapp_e164", None):
-                    stats["skipped_missing_phone"] += 1
                 continue
+
             org.last_low_cards_alert_at = current_time
             db.add(org)
             db.commit()
             stats["sent"] += 1
             logger.info(
-                "low_cards_alert_sent org_id=%s slug=%s remaining=%s execution_sid=%s",
+                "low_cards_alert_sent org_id=%s slug=%s remaining=%s execution_sid=%s notifications=%s emails=%s",
                 org.id,
                 org.slug,
                 remaining,
                 execution_sid,
+                notifications_created,
+                emails_queued,
             )
         except Exception as exc:
             db.rollback()

@@ -37,6 +37,7 @@ from app.models import (
     AffiliationEvent,
     OrganizationSharedDocument,
     OrganizationSharedDocumentAssignment,
+    OrgAdminNotification,
 )
 from app.models_affiliation import (
     AffiliationApplication,
@@ -166,6 +167,23 @@ def _serialize_org_shared_document(
         "mime_type": document.mime_type,
         "size_bytes": document.size_bytes,
         "download_url": f"/api/org-admin/shared-documents/{document.id}/download",
+    }
+
+
+def _serialize_org_admin_notification(
+    notification: OrgAdminNotification,
+) -> dict[str, object]:
+    return {
+        "id": notification.id,
+        "type": notification.type,
+        "title": notification.title,
+        "body": notification.body,
+        "href": notification.href,
+        "is_read": bool(notification.is_read),
+        "created_at": notification.created_at.isoformat()
+        if notification.created_at
+        else None,
+        "read_at": notification.read_at.isoformat() if notification.read_at else None,
     }
 
 
@@ -608,6 +626,120 @@ def me(request: Request, db: Session = Depends(get_db)):
 
 
 router.include_router(auth_router)
+
+
+@router.get("/notifications")
+def list_org_admin_notifications(
+    request: Request,
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    items = (
+        db.query(OrgAdminNotification)
+        .filter(OrgAdminNotification.admin_user_id == admin.id)
+        .order_by(
+            OrgAdminNotification.created_at.desc(),
+            OrgAdminNotification.id.desc(),
+        )
+        .limit(limit)
+        .all()
+    )
+    unread_count = (
+        db.query(func.count(OrgAdminNotification.id))
+        .filter(
+            OrgAdminNotification.admin_user_id == admin.id,
+            OrgAdminNotification.is_read.is_(False),
+        )
+        .scalar()
+        or 0
+    )
+    return {
+        "items": [_serialize_org_admin_notification(item) for item in items],
+        "unread_count": int(unread_count),
+    }
+
+
+@router.get("/notifications/unread-count")
+def get_org_admin_notifications_unread_count(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    unread_count = (
+        db.query(func.count(OrgAdminNotification.id))
+        .filter(
+            OrgAdminNotification.admin_user_id == admin.id,
+            OrgAdminNotification.is_read.is_(False),
+        )
+        .scalar()
+        or 0
+    )
+    return {"unread_count": int(unread_count)}
+
+
+@router.post("/notifications/{notification_id}/read")
+def mark_org_admin_notification_read(
+    request: Request,
+    notification_id: int,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    notification = (
+        db.query(OrgAdminNotification)
+        .filter(
+            OrgAdminNotification.id == notification_id,
+            OrgAdminNotification.admin_user_id == admin.id,
+        )
+        .first()
+    )
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notifica non trovata.")
+
+    if not notification.is_read:
+        notification.is_read = True
+        notification.read_at = datetime.utcnow()
+        db.add(notification)
+        db.commit()
+
+    return {"ok": True, "notification": _serialize_org_admin_notification(notification)}
+
+
+@router.post("/notifications/read-all")
+def mark_all_org_admin_notifications_read(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    now = datetime.utcnow()
+    updated = (
+        db.query(OrgAdminNotification)
+        .filter(
+            OrgAdminNotification.admin_user_id == admin.id,
+            OrgAdminNotification.is_read.is_(False),
+        )
+        .update(
+            {
+                OrgAdminNotification.is_read: True,
+                OrgAdminNotification.read_at: now,
+            },
+            synchronize_session=False,
+        )
+    )
+    db.commit()
+    return {"ok": True, "updated": int(updated or 0)}
 
 
 class PatchOrgOrganization(BaseModel):

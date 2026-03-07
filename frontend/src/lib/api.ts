@@ -1519,6 +1519,17 @@ export async function retryAffiliationWelcomeVideo(
 
 export type OrgSharedDocumentKind = "general" | "accounting";
 
+export type OrgAdminNotification = {
+  id: number;
+  type: "document_general" | "document_accounting" | "low_cards" | string;
+  title: string;
+  body: string;
+  href: string;
+  is_read: boolean;
+  created_at: string | null;
+  read_at: string | null;
+};
+
 export type OrgSharedDocumentItem = {
   id: number;
   title: string;
@@ -1551,6 +1562,45 @@ export async function downloadOrgAdminSharedDocument(
     document.original_filename || "documento",
     "Impossibile scaricare il documento",
   );
+}
+
+export async function fetchOrgAdminNotifications(
+  limit = 20,
+): Promise<{ items: OrgAdminNotification[]; unread_count: number }> {
+  const sp = new URLSearchParams();
+  sp.set("limit", String(limit));
+  const res = await fetch(`/api/org-admin/notifications?${sp.toString()}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento notifiche"));
+  return res.json();
+}
+
+export async function fetchOrgAdminUnreadNotificationCount(): Promise<{ unread_count: number }> {
+  const res = await fetch("/api/org-admin/notifications/unread-count");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento badge notifiche"));
+  return res.json();
+}
+
+export async function markOrgAdminNotificationRead(
+  notificationId: number,
+): Promise<{ ok: boolean; notification: OrgAdminNotification }> {
+  const res = await fetch(`/api/org-admin/notifications/${notificationId}/read`, {
+    method: "POST",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Notifica non trovata");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento notifica"));
+  return res.json();
+}
+
+export async function markAllOrgAdminNotificationsRead(): Promise<{ ok: boolean; updated: number }> {
+  const res = await fetch("/api/org-admin/notifications/read-all", {
+    method: "POST",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento notifiche"));
+  return res.json();
 }
 
 export type SuperAdminAffiliationListItem = {

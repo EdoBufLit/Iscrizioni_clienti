@@ -2669,3 +2669,39 @@ pm --prefix frontend run build -> OK
 - Root cause: la migration `g2h3i4j5k6l7` assumeva che `organizations.accounting_enabled` fosse gia `BOOLEAN`, ma su alcuni ambienti Postgres legacy la colonna esisteva come `INTEGER`.
 - Fix: la migration ora rileva il tipo reale della colonna, porta eventuali `NULL` a `0`, rimuove il default legacy e in Postgres converte esplicitamente a boolean con `postgresql_using="COALESCE(accounting_enabled, 0) <> 0"` prima di eseguire l'update a `FALSE`.
 - Verifica: parsing Python della migration con `python -m py_compile alembic/versions/g2h3i4j5k6l7_add_org_documents_and_accounting_flag.py` -> OK.
+
+## Spec (Org Admin notifications + email alerts - Mar 07, 2026)
+- Obiettivo: estendere il modulo documenti/contabilita con notifiche in-app persistenti per Org Admin e invio email via worker outbox gia esistente.
+- Scope:
+  - campanellina notifiche in header Org Admin con badge unread e pannello lista;
+  - notifiche per documento `general`, documento `accounting` e alert tessere < 50;
+  - persistenza DB notifiche con mark-as-read e routing verso `Documenti`, `Contabilità`, `Tessere`;
+  - invio email asincrono a tutti gli Org Admin attivi dell'associazione;
+  - anti-duplicazione robusta del low-stock con reset quando si torna sopra soglia.
+
+## Plan (Org Admin notifications + email alerts - Mar 07, 2026)
+- [x] Mappare worker email, low-stock job, header Org Admin e punti di trigger dei documenti.
+- [x] Aggiungere schema DB e backend notifiche con API read/read-all/unread-count.
+- [x] Integrare trigger documento + low-stock con creazione notifiche e queue email.
+- [x] Implementare campanellina premium nell'header Org Admin e collegare i link di navigazione.
+- [x] Verificare con test backend mirati e build frontend, poi documentare l'esito.
+
+## Review (Org Admin notifications + email alerts - Mar 07, 2026)
+- Backend:
+  - aggiunta la tabella persistente `org_admin_notifications` con stato read/unread, target route e timestamp per singolo Org Admin;
+  - nuovi endpoint Org Admin per lista notifiche, conteggio unread, mark singolo e mark-all;
+  - integrazione sul send documenti Super Admin che crea notifiche per `general`/`accounting` e accoda email via outbox worker agli Org Admin attivi;
+  - estensione del job low-cards per inviare notifiche + email sotto soglia `< 50`, con anti-duplicazione basata sul latch `last_low_cards_alert_at` e reset automatico quando il numero torna sopra soglia.
+- Frontend:
+  - nuova campanellina notifiche nell'header Org Admin con badge unread, dropdown lista, click-to-read e `Segna tutto letto`;
+  - link coerenti verso `/org-admin/documenti`, `/org-admin/contabilita` e `/org-admin/tessere`.
+- Verifiche:
+  - `python -m pytest -q tests/test_org_admin_notifications.py tests/test_low_cards_alert_job.py tests/test_org_shared_documents.py tests/test_low_cards_scheduler.py tests/test_email_worker_low_cards_isolation.py` -> `17 passed`
+  - `python -m py_compile app/models.py app/routes/org_admin.py app/routes/super_admin.py app/services/low_cards_alerts.py app/services/org_admin_notifications.py alembic/versions/h3i4j5k6l7m8_add_org_admin_notifications.py` -> OK
+  - `npm --prefix frontend run build` -> OK
+
+## Review Addendum (Org Admin notification bell UX - Mar 07, 2026)
+- La campanellina Org Admin ora enfatizza la presenza di notifiche non lette con beacon rosso pulsante, ring rosato e badge numerico piu evidente.
+- Ogni notifica non letta puo essere chiusa singolarmente dal dropdown tramite `X` / azione `Chiudi`, senza aprire la sezione target; la chiusura usa l'endpoint di mark-as-read gia esistente.
+- Apertura del dettaglio continua a marcare la notifica come letta e a navigare verso la sezione corretta.
+- Verifica: `npm --prefix frontend run build` -> OK

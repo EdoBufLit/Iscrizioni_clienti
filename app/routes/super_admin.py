@@ -40,6 +40,7 @@ from app.services.association_delete import delete_association_and_release_range
 from app.services.low_cards_alerts import run_low_cards_alert_job
 from app.services.member_activity import get_member_lifecycle_status, is_member_active
 from app.services.member_maintenance import expire_and_purge_members
+from app.services.org_admin_notifications import notify_org_admins_about_shared_document
 from app.services.statute_upload import (
     enforce_statute_request_size_from_headers,
     save_statute_pdf,
@@ -1648,6 +1649,19 @@ async def create_shared_document(
             )
         )
 
+    notification_totals = {"notifications_created": 0, "emails_queued": 0}
+    for org in targets:
+        result = notify_org_admins_about_shared_document(
+            db,
+            organization=org,
+            document=document,
+            request=request,
+        )
+        notification_totals["notifications_created"] += int(
+            result.get("notifications_created", 0)
+        )
+        notification_totals["emails_queued"] += int(result.get("emails_queued", 0))
+
     audit.log_operation(
         db,
         action="org_shared_document.create",
@@ -1662,6 +1676,8 @@ async def create_shared_document(
             "association_ids": [org.id for org in targets],
             "size_bytes": size_bytes,
             "filename": document.original_filename,
+            "notifications_created": notification_totals["notifications_created"],
+            "emails_queued": notification_totals["emails_queued"],
         },
         ip=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),

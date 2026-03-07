@@ -11,6 +11,7 @@ import {
 import { applySeo } from "../../lib/seo";
 import Skeleton from "../../components/ui/Skeleton";
 import { OnboardingTour, ReviewGuideButton } from "../../components/onboarding";
+import OrgAdminNotificationBell from "./components/OrgAdminNotificationBell";
 
 type OrgAdminCtx = {
   admin: OrgAdminProfile | null;
@@ -126,6 +127,7 @@ const OrgAdminLayout = () => {
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-4">
+              {!loading && admin && <OrgAdminNotificationBell />}
               {!loading && admin && <ReviewGuideButton className="hidden md:flex" />}
               <Link className="link-muted hidden text-sm font-bold tracking-tight sm:block" to="/">
                 Sito pubblico

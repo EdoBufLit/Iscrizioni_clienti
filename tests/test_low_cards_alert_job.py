@@ -369,6 +369,14 @@ def test_low_cards_alert_job_skips_unconfigured_execution_without_marking_sent(
         "execute_low_cards_alert_flow",
         lambda **_kwargs: None,
     )
+    monkeypatch.setattr(
+        low_cards_alerts_service,
+        "notify_org_admins_low_cards",
+        lambda *_args, **_kwargs: {
+            "notifications_created": 0,
+            "emails_queued": 0,
+        },
+    )
 
     org = _create_org(
         db,
