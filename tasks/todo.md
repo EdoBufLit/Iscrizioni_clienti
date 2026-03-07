@@ -2816,3 +2816,38 @@ pm --prefix frontend run build -> OK
 - Verifica:
   - `npm --prefix frontend run build` -> OK
   - grep frontend globale: nessun `window.confirm`, `window.prompt`, `window.alert`, `window.location.reload`, `location.reload`; restano solo navigazioni intenzionali via `window.location.href/assign` su flussi wallet/join esterni.
+
+## Spec (Installable PWA + install prompt - Mar 07, 2026)
+- Obiettivo: rendere ASSONAM installabile come PWA su browser compatibili, mantenendo invariata l'esperienza browser classica e senza introdurre caching rischioso su API, dashboard o sessioni.
+- Scope:
+  - integrazione PWA nel frontend Vite con `vite-plugin-pwa`;
+  - manifest brandizzato ASSONAM con icone adeguate;
+  - service worker conservativo con auto-update e caching limitato agli asset statici;
+  - prompt/banner installazione leggero, dismissibile e non ripetitivo;
+  - nessun impatto ai flussi auth/dashboard oltre all'installabilità.
+
+## Plan (Installable PWA + install prompt - Mar 07, 2026)
+- [x] Ispezionare entrypoint frontend, layout pubblico e asset esistenti per agganciare PWA e prompt senza toccare le dashboard.
+- [x] Integrare `vite-plugin-pwa`, manifest e service worker con caching prudente e auto-update.
+- [x] Aggiungere icone PWA coerenti col brand riusando gli asset pubblici esistenti.
+- [x] Implementare banner/pill "Installa app" non invasivo con dismiss persistente e detection install state.
+- [x] Verificare build frontend e output PWA generato senza regressioni evidenti.
+
+## Review (Installable PWA + install prompt - Mar 07, 2026)
+- Integrata la PWA Vite in modo conservativo:
+  - `frontend/vite.config.ts` ora usa `vite-plugin-pwa` con manifest ASSONAM, `registerType: autoUpdate` e service worker prudente;
+  - il runtime caching copre solo asset statici (`/assets/*.js|css`, immagini, font) e il fallback SPA esclude esplicitamente `/api`, `/member`, `/health`, `/version`;
+  - nessuna cache runtime dedicata a API autenticate, dashboard o sessioni.
+- Registrazione service worker:
+  - `frontend/src/main.tsx` registra il SW solo in produzione e forza un check update al bootstrap.
+- Metadati / installabilità:
+  - `frontend/index.html` aggiunge `theme-color`, apple touch icon e capability meta per mobile web app;
+  - aggiunte icone PWA dedicate in `frontend/public/` (`192`, `512`, `maskable`, `apple-touch-icon`) riusando il brand già presente.
+- Prompt installazione:
+  - nuovo componente `frontend/src/components/public/InstallAppPrompt.tsx`;
+  - mostrato solo nel layout pubblico tramite `frontend/src/components/Layout.tsx`, quindi non invade le dashboard;
+  - usa `beforeinstallprompt` quando disponibile, fallback leggero su iOS Safari, dismiss persistente in `localStorage`, auto-hide se l'app è già installata.
+- Verifiche:
+  - `npm --prefix frontend run build` -> OK
+  - output build generato: `frontend/dist/manifest.webmanifest`, `frontend/dist/sw.js`
+  - controllo su `frontend/dist/sw.js`: fallback SPA denylist su `/api`, `/member`, `/health`, `/version`, nessuna runtime cache dedicata a endpoint sensibili.

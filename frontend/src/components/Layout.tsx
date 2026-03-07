@@ -6,6 +6,7 @@ import MotionProvider from "./motion/MotionProvider";
 import { pageVariants } from "./motion/motionPresets";
 import { usePublicMotion } from "./public/usePublicMotion";
 import { PUBLIC_MOTION } from "./public/motionTokens";
+import InstallAppPrompt from "./public/InstallAppPrompt";
 import { trackUiEvent } from "../lib/tracking";
 import { useStatePlatformCapabilities } from "../hooks/useStatePlatformCapabilities";
 import { fetchWhoAmI, type WhoAmIResponse } from "../lib/api";
@@ -339,6 +340,7 @@ const Layout = () => {
         )}
 
         <main className={isDashboardRoute ? "" : "public-main"}>
+          {!isDashboardRoute ? <InstallAppPrompt hidden={menuOpen} /> : null}
           {isDashboardRoute ? (
             <Outlet />
           ) : (
