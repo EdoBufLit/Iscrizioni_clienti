@@ -2750,3 +2750,9 @@ pm --prefix frontend run build -> OK
   - aggiunta classe `dashboard-mobile-safe` per evitare che il contenuto finale venga coperto dalla barra.
 - Verifica:
   - `npm --prefix frontend run build` -> OK
+
+## Review Addendum (Org Admin notification dropdown mobile positioning - Mar 07, 2026)
+- Corretto il menu notifiche Org Admin su mobile: prima il pannello era ancorato `absolute right-0` al bottone e su viewport stretti poteva uscire dal viewport a sinistra.
+- Il dropdown ora su mobile usa positioning viewport-safe (`fixed left/right` sotto l'header mobile) e torna al posizionamento originale su `sm+`, quindi desktop resta invariato.
+- Aggiunto anche un `max-height` responsive per evitare clipping verticale sui display bassi.
+- Verifica: `npm --prefix frontend run build` -> OK

@@ -215,7 +215,7 @@ const OrgAdminNotificationBell = () => {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-[calc(100%+0.75rem)] z-[70] w-[min(92vw,26rem)] overflow-hidden rounded-[28px] border border-neutral-200 bg-white shadow-[0_40px_120px_-50px_rgba(15,23,42,0.45)]">
+        <div className="fixed left-3 right-3 top-[calc(4rem+0.75rem)] z-[70] overflow-hidden rounded-[28px] border border-neutral-200 bg-white shadow-[0_40px_120px_-50px_rgba(15,23,42,0.45)] sm:absolute sm:left-auto sm:right-0 sm:top-[calc(100%+0.75rem)] sm:w-[min(92vw,26rem)]">
           <div className="border-b border-neutral-100 bg-[radial-gradient(circle_at_top_right,rgba(15,118,110,0.08),transparent_45%),linear-gradient(180deg,rgba(248,250,252,0.95),rgba(255,255,255,0.98))] px-5 py-5">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -239,7 +239,7 @@ const OrgAdminNotificationBell = () => {
             </div>
           )}
 
-          <div className="max-h-[28rem] overflow-auto p-3">
+          <div className="max-h-[min(28rem,calc(100vh-6.5rem))] overflow-auto p-3">
             {loading ? (
               <div className="space-y-3 p-2">
                 {[0, 1, 2].map((item) => (
