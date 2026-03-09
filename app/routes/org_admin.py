@@ -8,10 +8,10 @@ import secrets
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, Body, Query
 from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy import func, or_, case, and_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timedelta, date
 from typing import Optional
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, TypeAdapter
 
 from fastapi import UploadFile, File
 from app.db import get_db
@@ -38,6 +38,9 @@ from app.models import (
     OrganizationSharedDocument,
     OrganizationSharedDocumentAssignment,
     OrgAdminNotification,
+    EmailCampaign,
+    EmailCampaignRecipient,
+    EmailTemplate,
 )
 from app.models_affiliation import (
     AffiliationApplication,
@@ -46,6 +49,28 @@ from app.models_affiliation import (
     AffiliationPaymentStatus,
 )
 from app.services.email_outbox import build_email_payload, enqueue_email
+from app.services.email_sender import (
+    build_sender_payload,
+    resolve_email_sender,
+    sanitize_email_local_part,
+)
+from app.services.email_campaigns import (
+    ALLOWED_AUDIENCE_TYPES,
+    campaign_status_counts,
+    create_campaign_draft,
+    enqueue_test_email,
+    resolve_audience_recipients,
+    send_campaign,
+)
+from app.services.email_templates import (
+    AVAILABLE_TEMPLATE_VARIABLES,
+    EMAIL_TEMPLATE_CHANNEL,
+    build_template_context,
+    normalize_template_bodies,
+    normalize_template_channel,
+    normalize_template_scope,
+    render_template_content,
+)
 from app.services.card_allocation import allocate_next_card, release_card_number
 from app.services.card_inventory import compute_org_card_stock
 from app.utils import generate_token, hash_token
@@ -77,6 +102,7 @@ router = APIRouter(prefix="/api/org-admin")
 auth_router = APIRouter(prefix="/auth")
 
 _ORG_SHARED_DOCUMENT_KINDS = {"general", "accounting"}
+_EMAIL_STR_ADAPTER = TypeAdapter(EmailStr)
 
 
 def _get_current_org_admin(request: Request, db: Session):
@@ -154,6 +180,132 @@ def _normalize_tag_culture(value: Optional[str]) -> Optional[str]:
     return value.replace("T.A.G.", "TAG")
 
 
+def _normalize_optional_text(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    return cleaned or None
+
+
+def _validate_optional_email(value: Optional[str], *, field_name: str) -> Optional[str]:
+    normalized = _normalize_optional_text(value)
+    if normalized is None:
+        return None
+    try:
+        return str(_EMAIL_STR_ADAPTER.validate_python(normalized))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{field_name} non valida.",
+        ) from exc
+
+
+def _normalize_org_communications_update(
+    update_data: dict[str, object],
+) -> dict[str, object]:
+    normalized = dict(update_data)
+
+    if "sender_email_local_part" in normalized:
+        raw_local_part = _normalize_optional_text(
+            normalized.get("sender_email_local_part")  # type: ignore[arg-type]
+        )
+        normalized["sender_email_local_part"] = (
+            sanitize_email_local_part(raw_local_part) if raw_local_part else None
+        )
+
+    if "email_from_name_override" in normalized:
+        raw_override = _normalize_optional_text(
+            normalized.get("email_from_name_override")  # type: ignore[arg-type]
+        )
+        normalized["email_from_name_override"] = (
+            _normalize_tag_culture(raw_override) if raw_override else None
+        )
+
+    if "reply_to_email" in normalized:
+        normalized["reply_to_email"] = _validate_optional_email(
+            normalized.get("reply_to_email"),  # type: ignore[arg-type]
+            field_name="reply_to_email",
+        )
+
+    return normalized
+
+
+def _serialize_communications_sender(sender) -> dict[str, object]:
+    return {
+        "from_name": sender.from_name,
+        "from_email": sender.from_email,
+        "from_header": sender.from_header,
+        "reply_to": sender.reply_to,
+        "selected_mode": sender.selected_mode,
+        "fallback_used": sender.fallback_used,
+    }
+
+
+def _serialize_org_admin_communications_settings(
+    org: Organization,
+) -> dict[str, object]:
+    system_sender = resolve_email_sender(mode="system")
+    association_sender = resolve_email_sender(mode="association", association=org)
+    return {
+        "communications_enabled": bool(org.communications_enabled),
+        "sender_email_local_part": org.sender_email_local_part,
+        "email_from_name_override": org.email_from_name_override,
+        "reply_to_email": org.reply_to_email,
+        "mail_from_domain": (settings.MAIL_FROM_DOMAIN or "").strip().lower() or None,
+        "system_email_sender": _serialize_communications_sender(system_sender),
+        "association_email_sender": _serialize_communications_sender(association_sender),
+    }
+
+
+def _serialize_org_admin_organization(
+    request: Request,
+    org: Organization,
+) -> dict[str, object]:
+    wallet_defaults = wallet_branding_defaults(
+        org, base_url=str(request.base_url).rstrip("/")
+    )
+    communications_settings = _serialize_org_admin_communications_settings(org)
+    return {
+        "id": org.id,
+        "name": org.name,
+        "slug": org.slug,
+        "description": org.description,
+        "address_line1": org.address_line1,
+        "address_line2": org.address_line2,
+        "city": org.city,
+        "province": org.province,
+        "postal_code": org.postal_code,
+        "country": org.country,
+        "email": org.email,
+        "phone": org.phone,
+        "website": org.website,
+        "logo_url": f"/api/organizations/{org.slug}/logo" if org.logo_path else None,
+        "statute_version": org.statute_version,
+        "statute_updated_at": org.statute_updated_at,
+        "statute_url": f"/api/organizations/{org.slug}/statute"
+        if org.statute_pdf_path
+        else None,
+        "has_statute": bool(org.statute_pdf_path),
+        "wallet_bg_color": org.wallet_bg_color,
+        "wallet_logo_url": org.wallet_logo_url,
+        "wallet_hero_image_url": org.wallet_hero_image_url,
+        "wallet_title_override": org.wallet_title_override,
+        "wallet_is_test_prefix": bool(org.wallet_is_test_prefix),
+        "accounting_enabled": bool(org.accounting_enabled),
+        "communications_enabled": communications_settings["communications_enabled"],
+        "sender_email_local_part": communications_settings["sender_email_local_part"],
+        "email_from_name_override": communications_settings["email_from_name_override"],
+        "reply_to_email": communications_settings["reply_to_email"],
+        "mail_from_domain": communications_settings["mail_from_domain"],
+        "wallet_effective_bg_color": wallet_defaults["wallet_bg_color"],
+        "wallet_effective_logo_url": wallet_defaults["wallet_logo_url"],
+        "wallet_effective_hero_image_url": wallet_defaults["wallet_hero_image_url"],
+        "wallet_effective_title_override": wallet_defaults["wallet_title_override"],
+        "system_email_sender": communications_settings["system_email_sender"],
+        "association_email_sender": communications_settings["association_email_sender"],
+    }
+
+
 def _serialize_org_shared_document(
     document: OrganizationSharedDocument,
 ) -> dict[str, object]:
@@ -185,6 +337,121 @@ def _serialize_org_admin_notification(
         else None,
         "read_at": notification.read_at.isoformat() if notification.read_at else None,
     }
+
+
+def _serialize_email_campaign(
+    campaign: EmailCampaign,
+    *,
+    include_body: bool = False,
+) -> dict[str, object]:
+    recipients = list(campaign.recipients or [])
+    payload = {
+        "id": campaign.id,
+        "association_id": campaign.association_id,
+        "name": campaign.name,
+        "subject": campaign.subject,
+        "audience_type": campaign.audience_type,
+        "status": campaign.status,
+        "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
+        "scheduled_at": campaign.scheduled_at.isoformat() if campaign.scheduled_at else None,
+        "sent_at": campaign.sent_at.isoformat() if campaign.sent_at else None,
+        "recipient_count": len(recipients),
+        "recipient_status_counts": campaign_status_counts(recipients),
+        "created_by": (
+            {
+                "id": campaign.created_by_user.id,
+                "email": campaign.created_by_user.email,
+            }
+            if campaign.created_by_user is not None
+            else None
+        ),
+    }
+    if include_body:
+        payload["body_html"] = campaign.body_html
+        payload["body_text"] = campaign.body_text
+    return payload
+
+
+def _serialize_email_campaign_recipient(
+    recipient: EmailCampaignRecipient,
+) -> dict[str, object]:
+    return {
+        "id": recipient.id,
+        "campaign_id": recipient.campaign_id,
+        "association_id": recipient.association_id,
+        "user_id": recipient.user_id,
+        "recipient_email": recipient.recipient_email,
+        "recipient_name": recipient.recipient_name,
+        "provider_message_id": recipient.provider_message_id,
+        "delivery_status": recipient.delivery_status,
+        "error_message": recipient.error_message,
+        "created_at": recipient.created_at.isoformat() if recipient.created_at else None,
+        "sent_at": recipient.sent_at.isoformat() if recipient.sent_at else None,
+    }
+
+
+def _serialize_email_template(
+    template: EmailTemplate,
+    *,
+    include_body: bool = False,
+) -> dict[str, object]:
+    payload = {
+        "id": template.id,
+        "association_id": template.association_id,
+        "is_system": bool(template.is_system),
+        "name": template.name,
+        "category": template.category,
+        "subject": template.subject,
+        "channel": template.channel,
+        "is_active": bool(template.is_active),
+        "created_by_user_id": template.created_by_user_id,
+        "created_at": template.created_at.isoformat() if template.created_at else None,
+        "updated_at": template.updated_at.isoformat() if template.updated_at else None,
+        "is_editable": not bool(template.is_system),
+        "is_duplicable": True,
+        "scope": "system" if template.is_system else "association",
+    }
+    if include_body:
+        payload["body_html"] = template.body_html
+        payload["body_text"] = template.body_text
+    return payload
+
+
+def _get_email_template_for_admin(
+    db: Session,
+    *,
+    admin: AdminUser,
+    template_id: int,
+) -> EmailTemplate:
+    template = (
+        db.query(EmailTemplate)
+        .filter(
+            EmailTemplate.id == template_id,
+            or_(
+                EmailTemplate.is_system.is_(True),
+                EmailTemplate.association_id == admin.org_id,
+            ),
+            EmailTemplate.channel == EMAIL_TEMPLATE_CHANNEL,
+        )
+        .first()
+    )
+    if template is None:
+        raise HTTPException(status_code=404, detail="Template non trovato.")
+    return template
+
+
+def _normalize_template_name(value: str | None) -> str:
+    normalized = _normalize_optional_text(value)
+    if normalized is None:
+        raise HTTPException(status_code=422, detail="Nome template obbligatorio.")
+    return normalized
+
+
+def _normalize_template_subject(value: str | None) -> str:
+    normalized = _normalize_optional_text(value)
+    if normalized is None:
+        raise HTTPException(status_code=422, detail="Oggetto template obbligatorio.")
+    return normalized
 
 
 def _resolve_frontend_base(request: Request) -> str:
@@ -455,6 +722,10 @@ def _send_member_magic_link(
                 "Sei stato registrato come socio. "
                 f"Clicca qui per accedere alla tua area riservata: {link}\n\n"
                 f"Il link scade tra {settings.LOGIN_TOKEN_EXPIRE_MINUTES} minuti."
+            ),
+            sender=build_sender_payload(
+                mode="association",
+                association=member.organization,
             ),
             meta={
                 "member_id": member.id,
@@ -757,6 +1028,59 @@ class PatchOrgOrganization(BaseModel):
     wallet_bg_color: Optional[str] = None
     wallet_title_override: Optional[str] = None
     wallet_is_test_prefix: Optional[bool] = None
+    communications_enabled: Optional[bool] = None
+    sender_email_local_part: Optional[str] = None
+    email_from_name_override: Optional[str] = None
+    reply_to_email: Optional[str] = None
+
+
+class PutOrgCommunicationSettings(BaseModel):
+    communications_enabled: bool = False
+    sender_email_local_part: Optional[str] = None
+    email_from_name_override: Optional[str] = None
+    reply_to_email: Optional[str] = None
+
+
+class SendOrgCommunicationTestEmailBody(BaseModel):
+    to_email: EmailStr
+
+
+class CreateEmailCampaignBody(BaseModel):
+    name: Optional[str] = Field(default=None, max_length=160)
+    subject: str = Field(min_length=1, max_length=255)
+    body_html: Optional[str] = None
+    body_text: Optional[str] = None
+    audience_type: str
+
+
+class CreateEmailTemplateBody(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    category: Optional[str] = Field(default=None, max_length=80)
+    subject: str = Field(min_length=1, max_length=255)
+    body_html: Optional[str] = None
+    body_text: Optional[str] = None
+    channel: str = Field(default=EMAIL_TEMPLATE_CHANNEL, max_length=40)
+
+
+class UpdateEmailTemplateBody(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    category: Optional[str] = Field(default=None, max_length=80)
+    subject: str = Field(min_length=1, max_length=255)
+    body_html: Optional[str] = None
+    body_text: Optional[str] = None
+    channel: str = Field(default=EMAIL_TEMPLATE_CHANNEL, max_length=40)
+    is_active: Optional[bool] = None
+
+
+class DuplicateEmailTemplateBody(BaseModel):
+    name: Optional[str] = Field(default=None, max_length=160)
+
+
+class RenderEmailTemplatePreviewBody(BaseModel):
+    template_id: Optional[int] = None
+    subject: Optional[str] = None
+    body_html: Optional[str] = None
+    body_text: Optional[str] = None
 
 
 @router.get("/organization")
@@ -769,41 +1093,7 @@ def get_organization_detail(
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     org = admin.organization
-    wallet_defaults = wallet_branding_defaults(
-        org, base_url=str(request.base_url).rstrip("/")
-    )
-    return {
-        "id": org.id,
-        "name": org.name,
-        "slug": org.slug,
-        "description": org.description,
-        "address_line1": org.address_line1,
-        "address_line2": org.address_line2,
-        "city": org.city,
-        "province": org.province,
-        "postal_code": org.postal_code,
-        "country": org.country,
-        "email": org.email,
-        "phone": org.phone,
-        "website": org.website,
-        "logo_url": f"/api/organizations/{org.slug}/logo" if org.logo_path else None,
-        "statute_version": org.statute_version,
-        "statute_updated_at": org.statute_updated_at,
-        "statute_url": f"/api/organizations/{org.slug}/statute"
-        if org.statute_pdf_path
-        else None,
-        "has_statute": bool(org.statute_pdf_path),
-        "wallet_bg_color": org.wallet_bg_color,
-        "wallet_logo_url": org.wallet_logo_url,
-        "wallet_hero_image_url": org.wallet_hero_image_url,
-        "wallet_title_override": org.wallet_title_override,
-        "wallet_is_test_prefix": bool(org.wallet_is_test_prefix),
-        "accounting_enabled": bool(org.accounting_enabled),
-        "wallet_effective_bg_color": wallet_defaults["wallet_bg_color"],
-        "wallet_effective_logo_url": wallet_defaults["wallet_logo_url"],
-        "wallet_effective_hero_image_url": wallet_defaults["wallet_hero_image_url"],
-        "wallet_effective_title_override": wallet_defaults["wallet_title_override"],
-    }
+    return _serialize_org_admin_organization(request, org)
 
 
 @router.get("/shared-documents")
@@ -922,10 +1212,13 @@ def patch_organization(
     if "name" in update_data:
         update_data["name"] = _normalize_tag_culture(update_data.get("name"))
 
+    update_data = _normalize_org_communications_update(update_data)
+
     for key, value in update_data.items():
         setattr(org, key, value)
 
     db.commit()
+    db.refresh(org)
 
     audit.log_operation(
         db,
@@ -940,7 +1233,540 @@ def patch_organization(
     )
     db.commit()
 
-    return {"ok": True}
+    return {
+        "ok": True,
+        "organization": _serialize_org_admin_organization(request, org),
+    }
+
+
+@router.get("/communications/settings")
+def get_communications_settings(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return _serialize_org_admin_communications_settings(admin.organization)
+
+
+@router.put("/communications/settings")
+def put_communications_settings(
+    request: Request,
+    body: PutOrgCommunicationSettings,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    org = admin.organization
+    update_data = _normalize_org_communications_update(body.model_dump())
+    update_data["communications_enabled"] = bool(update_data.get("communications_enabled"))
+
+    for key, value in update_data.items():
+        setattr(org, key, value)
+
+    db.commit()
+    db.refresh(org)
+
+    audit.log_operation(
+        db,
+        action="org.communications_settings.update",
+        entity_type="organization",
+        entity_id=org.id,
+        actor_admin_id=admin.id,
+        actor_role="org_admin",
+        metadata=update_data,
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+
+    return {
+        "ok": True,
+        "settings": _serialize_org_admin_communications_settings(org),
+    }
+
+
+@router.post("/communications/test-email")
+def send_communications_test_email(
+    request: Request,
+    body: SendOrgCommunicationTestEmailBody,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    org = admin.organization
+    outbox_id = enqueue_test_email(
+        db,
+        organization=org,
+        to_email=str(body.to_email),
+        requested_by_user_id=admin.id,
+    )
+    db.commit()
+
+    sender = resolve_email_sender(mode="association", association=org)
+    return {
+        "ok": True,
+        "outbox_id": outbox_id,
+        "sender": _serialize_communications_sender(sender),
+        "message": "Email di test accodata correttamente.",
+    }
+
+
+@router.get("/communications/templates")
+def list_communication_templates(
+    request: Request,
+    scope: str = Query(default="all"),
+    include_inactive: bool = Query(default=False),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    normalized_scope = normalize_template_scope(scope)
+    query = (
+        db.query(EmailTemplate)
+        .filter(EmailTemplate.channel == EMAIL_TEMPLATE_CHANNEL)
+        .order_by(
+            EmailTemplate.is_system.desc(),
+            EmailTemplate.name.asc(),
+            EmailTemplate.id.desc(),
+        )
+    )
+    if normalized_scope == "system":
+        query = query.filter(EmailTemplate.is_system.is_(True))
+    elif normalized_scope == "association":
+        query = query.filter(
+            EmailTemplate.is_system.is_(False),
+            EmailTemplate.association_id == admin.org_id,
+        )
+    else:
+        query = query.filter(
+            or_(
+                EmailTemplate.is_system.is_(True),
+                EmailTemplate.association_id == admin.org_id,
+            )
+        )
+    if not include_inactive:
+        query = query.filter(EmailTemplate.is_active.is_(True))
+
+    items = query.all()
+    return {
+        "items": [_serialize_email_template(item) for item in items],
+        "total": len(items),
+        "scope": normalized_scope,
+    }
+
+
+@router.post("/communications/templates", status_code=201)
+def create_communication_template(
+    request: Request,
+    body: CreateEmailTemplateBody,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    body_html, body_text = normalize_template_bodies(
+        body_html=body.body_html,
+        body_text=body.body_text,
+    )
+    template = EmailTemplate(
+        association_id=admin.org_id,
+        is_system=False,
+        name=_normalize_template_name(body.name),
+        category=_normalize_optional_text(body.category),
+        subject=_normalize_template_subject(body.subject),
+        body_html=body_html,
+        body_text=body_text,
+        channel=normalize_template_channel(body.channel),
+        is_active=True,
+        created_by_user_id=admin.id,
+    )
+    db.add(template)
+    db.commit()
+    db.refresh(template)
+    return {
+        "ok": True,
+        "template": _serialize_email_template(template, include_body=True),
+    }
+
+
+@router.get("/communications/templates/variables")
+def get_communication_template_variables(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    fake_context = build_template_context(association=admin.organization, fake=True)
+    return {
+        "items": AVAILABLE_TEMPLATE_VARIABLES,
+        "fake_context": fake_context,
+    }
+
+
+@router.post("/communications/templates/preview")
+def preview_communication_template(
+    request: Request,
+    body: RenderEmailTemplatePreviewBody,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    template = None
+    if body.template_id is not None:
+        template = _get_email_template_for_admin(db, admin=admin, template_id=body.template_id)
+
+    subject = _normalize_optional_text(body.subject) or (template.subject if template else None)
+    body_html = _normalize_optional_text(body.body_html) if body.body_html is not None else (
+        template.body_html if template else None
+    )
+    body_text = _normalize_optional_text(body.body_text) if body.body_text is not None else (
+        template.body_text if template else None
+    )
+    if subject is None:
+        raise HTTPException(status_code=422, detail="Oggetto template obbligatorio.")
+    body_html, body_text = normalize_template_bodies(body_html=body_html, body_text=body_text)
+    rendered = render_template_content(
+        subject=subject,
+        body_html=body_html,
+        body_text=body_text,
+        association=admin.organization,
+        fake=True,
+    )
+    return {
+        "preview": {
+            "subject": rendered.subject,
+            "body_html": rendered.body_html,
+            "body_text": rendered.body_text,
+        },
+        "fake_context": rendered.context,
+    }
+
+
+@router.get("/communications/templates/{template_id}")
+def get_communication_template_detail(
+    template_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    template = _get_email_template_for_admin(db, admin=admin, template_id=template_id)
+    return {
+        "template": _serialize_email_template(template, include_body=True),
+    }
+
+
+@router.put("/communications/templates/{template_id}")
+def update_communication_template(
+    template_id: int,
+    request: Request,
+    body: UpdateEmailTemplateBody,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    template = _get_email_template_for_admin(db, admin=admin, template_id=template_id)
+    if template.is_system:
+        raise HTTPException(
+            status_code=409,
+            detail="I template di sistema non possono essere modificati direttamente.",
+        )
+    if template.association_id != admin.org_id:
+        raise HTTPException(status_code=404, detail="Template non trovato.")
+
+    body_html, body_text = normalize_template_bodies(
+        body_html=body.body_html,
+        body_text=body.body_text,
+    )
+    template.name = _normalize_template_name(body.name)
+    template.category = _normalize_optional_text(body.category)
+    template.subject = _normalize_template_subject(body.subject)
+    template.body_html = body_html
+    template.body_text = body_text
+    template.channel = normalize_template_channel(body.channel)
+    if body.is_active is not None:
+        template.is_active = bool(body.is_active)
+    db.commit()
+    db.refresh(template)
+    return {
+        "ok": True,
+        "template": _serialize_email_template(template, include_body=True),
+    }
+
+
+@router.post("/communications/templates/{template_id}/duplicate", status_code=201)
+def duplicate_communication_template(
+    template_id: int,
+    request: Request,
+    body: DuplicateEmailTemplateBody,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    template = _get_email_template_for_admin(db, admin=admin, template_id=template_id)
+    duplicate = EmailTemplate(
+        association_id=admin.org_id,
+        is_system=False,
+        name=_normalize_template_name(body.name or f"{template.name} (copia)"),
+        category=template.category,
+        subject=template.subject,
+        body_html=template.body_html,
+        body_text=template.body_text,
+        channel=template.channel,
+        is_active=True,
+        created_by_user_id=admin.id,
+    )
+    db.add(duplicate)
+    db.commit()
+    db.refresh(duplicate)
+    return {
+        "ok": True,
+        "template": _serialize_email_template(duplicate, include_body=True),
+    }
+
+
+@router.post("/communications/templates/{template_id}/archive")
+def archive_communication_template(
+    template_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    template = _get_email_template_for_admin(db, admin=admin, template_id=template_id)
+    if template.is_system:
+        raise HTTPException(
+            status_code=409,
+            detail="I template di sistema non possono essere archiviati.",
+        )
+    if template.association_id != admin.org_id:
+        raise HTTPException(status_code=404, detail="Template non trovato.")
+
+    template.is_active = False
+    db.commit()
+    db.refresh(template)
+    return {
+        "ok": True,
+        "template": _serialize_email_template(template, include_body=True),
+    }
+
+
+@router.get("/communications/audience-estimate")
+def get_communications_audience_estimate(
+    request: Request,
+    audience_type: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    normalized_audience = (audience_type or "").strip()
+    recipients = resolve_audience_recipients(
+        db,
+        association_id=admin.org_id,
+        audience_type=normalized_audience,
+    )
+    return {
+        "audience_type": normalized_audience,
+        "count": len(recipients),
+        "available_audiences": sorted(ALLOWED_AUDIENCE_TYPES),
+    }
+
+
+@router.get("/communications/campaigns")
+def list_communications_campaigns(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    campaigns = (
+        db.query(EmailCampaign)
+        .options(
+            joinedload(EmailCampaign.recipients),
+            joinedload(EmailCampaign.created_by_user),
+        )
+        .filter(EmailCampaign.association_id == admin.org_id)
+        .order_by(EmailCampaign.created_at.desc(), EmailCampaign.id.desc())
+        .all()
+    )
+    return {
+        "items": [_serialize_email_campaign(campaign) for campaign in campaigns],
+        "total": len(campaigns),
+    }
+
+
+@router.post("/communications/campaigns", status_code=201)
+def create_communications_campaign(
+    request: Request,
+    body: CreateEmailCampaignBody,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    campaign = create_campaign_draft(
+        db,
+        organization=admin.organization,
+        created_by_user_id=admin.id,
+        name=body.name,
+        subject=body.subject,
+        body_html=body.body_html,
+        body_text=body.body_text,
+        audience_type=body.audience_type,
+    )
+    db.commit()
+    campaign = (
+        db.query(EmailCampaign)
+        .options(
+            joinedload(EmailCampaign.recipients),
+            joinedload(EmailCampaign.created_by_user),
+        )
+        .filter(EmailCampaign.id == campaign.id)
+        .first()
+    )
+    return {
+        "ok": True,
+        "campaign": _serialize_email_campaign(campaign, include_body=True),
+    }
+
+
+@router.get("/communications/campaigns/{campaign_id}")
+def get_communications_campaign_detail(
+    request: Request,
+    campaign_id: int,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    campaign = (
+        db.query(EmailCampaign)
+        .options(
+            joinedload(EmailCampaign.recipients),
+            joinedload(EmailCampaign.created_by_user),
+        )
+        .filter(
+            EmailCampaign.id == campaign_id,
+            EmailCampaign.association_id == admin.org_id,
+        )
+        .first()
+    )
+    if campaign is None:
+        raise HTTPException(status_code=404, detail="Campagna non trovata.")
+
+    return {
+        "campaign": _serialize_email_campaign(campaign, include_body=True),
+    }
+
+
+@router.get("/communications/campaigns/{campaign_id}/recipients")
+def get_communications_campaign_recipients(
+    request: Request,
+    campaign_id: int,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    campaign = (
+        db.query(EmailCampaign)
+        .filter(
+            EmailCampaign.id == campaign_id,
+            EmailCampaign.association_id == admin.org_id,
+        )
+        .first()
+    )
+    if campaign is None:
+        raise HTTPException(status_code=404, detail="Campagna non trovata.")
+
+    recipients = (
+        db.query(EmailCampaignRecipient)
+        .filter(
+            EmailCampaignRecipient.campaign_id == campaign_id,
+            EmailCampaignRecipient.association_id == admin.org_id,
+        )
+        .order_by(
+            EmailCampaignRecipient.created_at.desc(),
+            EmailCampaignRecipient.id.desc(),
+        )
+        .all()
+    )
+    return {
+        "items": [_serialize_email_campaign_recipient(recipient) for recipient in recipients],
+        "total": len(recipients),
+    }
+
+
+@router.post("/communications/campaigns/{campaign_id}/send")
+def send_communications_campaign(
+    request: Request,
+    campaign_id: int,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    campaign = (
+        db.query(EmailCampaign)
+        .filter(
+            EmailCampaign.id == campaign_id,
+            EmailCampaign.association_id == admin.org_id,
+        )
+        .first()
+    )
+    if campaign is None:
+        raise HTTPException(status_code=404, detail="Campagna non trovata.")
+
+    campaign, recipient_count = send_campaign(
+        db,
+        campaign=campaign,
+        organization=admin.organization,
+    )
+    db.commit()
+    campaign = (
+        db.query(EmailCampaign)
+        .options(
+            joinedload(EmailCampaign.recipients),
+            joinedload(EmailCampaign.created_by_user),
+        )
+        .filter(EmailCampaign.id == campaign.id)
+        .first()
+    )
+    return {
+        "ok": True,
+        "campaign": _serialize_email_campaign(campaign, include_body=True),
+        "recipient_count": recipient_count,
+        "message": "Campagna accodata correttamente per l'invio.",
+    }
 
 
 @router.post("/organization/statute")
@@ -1438,6 +2264,10 @@ def create_referral_invite(
                 f"Hai ricevuto un invito ad affiliare '{organization_name}' su ASSONAM.\n"
                 f"Apri questo link per completare la richiesta: {invite_url}\n\n"
                 "La richiesta viene verificata dal Super Admin prima dell'attivazione."
+            ),
+            sender=build_sender_payload(
+                mode="association",
+                association=organization,
             ),
             meta={
                 "application_id": application.id,

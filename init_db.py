@@ -29,6 +29,9 @@ from app.models import (
     RechargeRequest,
     OrganizationSharedDocument,
     OrganizationSharedDocumentAssignment,
+    EmailCampaign,
+    EmailCampaignRecipient,
+    EmailTemplate,
 )
 from app.security import get_password_hash
 from app.config import settings
@@ -37,6 +40,7 @@ from app.services.member_cleanup import (
     cleanup_deleted_member_traces,
     purge_deleted_members_permanently,
 )
+from app.services.email_templates import seed_system_email_templates
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +146,27 @@ def init_db():
             "run 'alembic upgrade head' to align schema history."
         )
         OrganizationSharedDocumentAssignment.__table__.create(bind=engine, checkfirst=True)
+
+    if "email_campaigns" not in inspect(engine).get_table_names():
+        logger.warning(
+            "email_campaigns table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        EmailCampaign.__table__.create(bind=engine, checkfirst=True)
+
+    if "email_campaign_recipients" not in inspect(engine).get_table_names():
+        logger.warning(
+            "email_campaign_recipients table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        EmailCampaignRecipient.__table__.create(bind=engine, checkfirst=True)
+
+    if "email_templates" not in inspect(engine).get_table_names():
+        logger.warning(
+            "email_templates table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        EmailTemplate.__table__.create(bind=engine, checkfirst=True)
 
     # Legacy column migrations - DEPRECATED, kept for backwards compatibility
     with engine.begin() as conn:
@@ -259,6 +284,16 @@ def init_db():
             conn, "organizations", "wallet_title_override", "VARCHAR"
         )
         _add_column_if_missing(
+            conn, "organizations", "communications_enabled", "INTEGER DEFAULT 0"
+        )
+        _add_column_if_missing(
+            conn, "organizations", "sender_email_local_part", "VARCHAR"
+        )
+        _add_column_if_missing(
+            conn, "organizations", "email_from_name_override", "VARCHAR"
+        )
+        _add_column_if_missing(conn, "organizations", "reply_to_email", "VARCHAR")
+        _add_column_if_missing(
             conn, "organizations", "wallet_is_test_prefix", "INTEGER DEFAULT 0"
         )
         _add_column_if_missing(
@@ -269,6 +304,15 @@ def init_db():
         )
         _add_column_if_missing(
             conn, "organizations", "last_low_cards_alert_at", "DATETIME"
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE organizations
+                   SET communications_enabled = 0
+                 WHERE communications_enabled IS NULL
+                """
+            )
         )
         _add_column_if_missing(conn, "card_batches", "year", "INTEGER")
         _add_column_if_missing(
@@ -392,6 +436,10 @@ def init_db():
     db = SessionLocal()
 
     try:
+        seeded_templates = seed_system_email_templates(db)
+        if seeded_templates:
+            db.commit()
+            logger.info("Seeded %s system email templates.", seeded_templates)
         affiliation_identity_updates = 0
         active_seen_idempotency_keys: set[str] = set()
         applications = (

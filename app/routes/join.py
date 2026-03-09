@@ -18,6 +18,7 @@ from app.models import (
     AdminRole,
 )
 from app.services.email_outbox import build_email_payload, enqueue_email
+from app.services.email_sender import build_sender_payload
 from app.utils import generate_token, save_upload_file, hash_token
 from app.services.card_allocation import allocate_next_card
 from app.services.fiscal_code import validate_fiscal_code
@@ -435,6 +436,7 @@ def api_join_start(
         subject=f"Complete your registration for {display_name}",
         payload=build_email_payload(
             text_body=f"Click here to upload documents and complete registration: {link}",
+            sender=build_sender_payload(mode="association", association=org),
             meta={
                 "member_id": member.id,
                 "token_purpose": TokenType.SIGNUP_CONTINUE.value,
@@ -589,6 +591,7 @@ async def api_join_continue(
                     "Your registration is complete. "
                     f"You can now login at {settings.BASE_URL}/member/login"
                 ),
+                sender=build_sender_payload(mode="association", association=org),
                 meta={"member_id": member.id},
             ),
             priority=5,
@@ -936,6 +939,7 @@ async def api_join_submit_multipart(
                         "Abbiamo ricevuto la tua richiesta e i documenti. "
                         "Un amministratore li verifichera a breve."
                     ),
+                    sender=build_sender_payload(mode="association", association=org),
                     meta={"member_id": member.id},
                 ),
                 priority=5,

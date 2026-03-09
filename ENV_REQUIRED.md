@@ -39,8 +39,10 @@ When `SMTP_HOST` is empty the application falls back to writing emails to `email
 | `SMTP_PORT` | No | `587` | SMTP server port. |
 | `SMTP_USER` | **Yes** (prod) | _(empty)_ | SMTP authentication username. |
 | `SMTP_PASSWORD` | **Yes** (prod) | _(empty)_ | SMTP authentication password or app-specific password. |
-| `SMTP_FROM` | No | `noreply@assonam.it` | Sender address for outgoing emails. |
+| `SMTP_FROM` | No | `noreply@assonam.it` | SMTP envelope sender used for delivery. Remains the canonical ASSONAM transport sender. |
+| `EMAIL_FROM` | No | `SMTP_FROM` | Visible `From` header used by `system` mode. Leave unchanged for official ASSONAM emails. |
 | `SMTP_USE_TLS` | No | `true` | Enable STARTTLS (`true`, `1`, or `yes` to enable). |
+| `MAIL_FROM_DOMAIN` | No | _(empty)_ | Visible sender domain used only in `association` mode (example: `notifiche.assonam.it`). If missing, all association emails fall back to `system` mode. |
 
 ## WhatsApp / Twilio
 

@@ -9,13 +9,88 @@ import {
   type OrgAdminOrganizationDetail,
 } from "../../lib/api";
 import Skeleton from "../../components/ui/Skeleton";
+import { useToast } from "../../components/ui/ToastProvider";
 
 const inputClass =
   "mt-1 w-full rounded-md border border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20";
 const labelClass = "block text-sm font-medium text-neutral-700";
 
+type EmailPreview = {
+  requestedMode: "association";
+  selectedMode: "system" | "association";
+  fromName: string | null;
+  fromEmail: string;
+  fromHeader: string;
+  replyTo: string | null;
+  fallbackUsed: boolean;
+};
+
+function normalizeText(value: string | null | undefined): string | null {
+  const cleaned = (value || "").trim();
+  return cleaned || null;
+}
+
+function sanitizeEmailLocalPartPreview(value: string | null | undefined): string {
+  const normalized = (value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const lowered = normalized.toLowerCase().trim();
+  const spaced = lowered.replace(/\s+/g, "-");
+  const stripped = spaced.replace(/[^a-z0-9-]+/g, "-");
+  const collapsed = stripped.replace(/-{2,}/g, "-").replace(/^-+|-+$/g, "");
+  return collapsed.slice(0, 48).replace(/^-+|-+$/g, "");
+}
+
+function buildAssociationEmailPreview(input: {
+  associationId: number | null | undefined;
+  associationName: string | null | undefined;
+  communicationsEnabled: boolean;
+  senderEmailLocalPart: string | null | undefined;
+  emailFromNameOverride: string | null | undefined;
+  replyToEmail: string | null | undefined;
+  mailFromDomain: string | null | undefined;
+  systemSender?: OrgAdminOrganizationDetail["system_email_sender"];
+}): EmailPreview {
+  const systemSender = input.systemSender;
+  const systemEmail = systemSender?.from_email || "noreply@assonam.it";
+  const systemHeader = systemSender?.from_header || systemEmail;
+  const systemName = systemSender?.from_name || null;
+  const systemReplyTo = systemSender?.reply_to || null;
+  const associationName = normalizeText(input.emailFromNameOverride)
+    || normalizeText(input.associationName)
+    || "ASSONAM";
+  const domain = normalizeText(input.mailFromDomain)?.toLowerCase() || null;
+  const configuredLocalPart = sanitizeEmailLocalPartPreview(input.senderEmailLocalPart);
+  const generatedLocalPart = sanitizeEmailLocalPartPreview(input.associationName);
+  const fallbackLocalPart = sanitizeEmailLocalPartPreview(`org-${input.associationId ?? "x"}`);
+  const localPart = configuredLocalPart || generatedLocalPart || fallbackLocalPart;
+  const associationAvailable = Boolean(input.communicationsEnabled && domain && localPart);
+
+  if (!associationAvailable) {
+    return {
+      requestedMode: "association",
+      selectedMode: "system",
+      fromName: systemName,
+      fromEmail: systemEmail,
+      fromHeader: systemHeader,
+      replyTo: systemReplyTo,
+      fallbackUsed: true,
+    };
+  }
+
+  const fromEmail = `${localPart}@${domain}`;
+  return {
+    requestedMode: "association",
+    selectedMode: "association",
+    fromName: associationName,
+    fromEmail,
+    fromHeader: `${associationName} <${fromEmail}>`,
+    replyTo: normalizeText(input.replyToEmail),
+    fallbackUsed: false,
+  };
+}
+
 const OrgAdminSettings = () => {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [org, setOrg] = useState<OrgAdminOrganizationDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -33,6 +108,16 @@ const OrgAdminSettings = () => {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
   const [saveError, setSaveError] = useState("");
+
+  const [emailSettingsForm, setEmailSettingsForm] = useState({
+    communications_enabled: false,
+    sender_email_local_part: "",
+    email_from_name_override: "",
+    reply_to_email: "",
+  });
+  const [emailSettingsSaving, setEmailSettingsSaving] = useState(false);
+  const [emailSettingsError, setEmailSettingsError] = useState("");
+  const [emailSettingsSaved, setEmailSettingsSaved] = useState(false);
 
   // Statute upload
   const [statuteFile, setStatuteFile] = useState<File | null>(null);
@@ -74,6 +159,12 @@ const OrgAdminSettings = () => {
             data.wallet_title_override || data.wallet_effective_title_override || "",
           wallet_is_test_prefix: Boolean(data.wallet_is_test_prefix),
         });
+        setEmailSettingsForm({
+          communications_enabled: Boolean(data.communications_enabled),
+          sender_email_local_part: data.sender_email_local_part || "",
+          email_from_name_override: data.email_from_name_override || "",
+          reply_to_email: data.reply_to_email || "",
+        });
       })
       .catch((err) => {
         if (err instanceof AuthError) {
@@ -89,6 +180,16 @@ const OrgAdminSettings = () => {
     (field: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
+  const handleEmailSettingsChange =
+    (field: keyof typeof emailSettingsForm) =>
+    (e: ChangeEvent<HTMLInputElement>) => {
+      setEmailSettingsSaved(false);
+      setEmailSettingsForm((prev) => ({
+        ...prev,
+        [field]: field === "communications_enabled" ? e.target.checked : e.target.value,
+      }));
+    };
+
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
     if (saving) return;
@@ -96,7 +197,20 @@ const OrgAdminSettings = () => {
     setSaveMsg("");
     setSaveError("");
     try {
-      await patchOrgAdminOrganization(form);
+      const result = await patchOrgAdminOrganization(form);
+      if (result.organization) {
+        setOrg(result.organization);
+        setForm((prev) => ({
+          ...prev,
+          name: result.organization?.name || "",
+          description: result.organization?.description || "",
+          city: result.organization?.city || "",
+          province: result.organization?.province || "",
+          email: result.organization?.email || "",
+          phone: result.organization?.phone || "",
+          website: result.organization?.website || "",
+        }));
+      }
       setSaveMsg("Dati aggiornati correttamente.");
     } catch (err) {
       if (err instanceof AuthError) {
@@ -165,18 +279,21 @@ const OrgAdminSettings = () => {
         wallet_title_override: walletForm.wallet_title_override.trim() || null,
         wallet_is_test_prefix: walletForm.wallet_is_test_prefix,
       };
-      await patchOrgAdminOrganization(payload);
-      setOrg((prev) =>
-        prev
-          ? {
-              ...prev,
-              ...payload,
-              wallet_effective_bg_color: payload.wallet_bg_color || prev.wallet_effective_bg_color,
-              wallet_effective_title_override:
-                payload.wallet_title_override || prev.wallet_effective_title_override,
-            }
-          : prev,
-      );
+      const result = await patchOrgAdminOrganization(payload);
+      if (result.organization) {
+        setOrg(result.organization);
+        setWalletForm({
+          wallet_bg_color:
+            result.organization.wallet_bg_color
+            || result.organization.wallet_effective_bg_color
+            || "#0B3C75",
+          wallet_title_override:
+            result.organization.wallet_title_override
+            || result.organization.wallet_effective_title_override
+            || "",
+          wallet_is_test_prefix: Boolean(result.organization.wallet_is_test_prefix),
+        });
+      }
       setWalletSaveMsg("Branding Google Wallet salvato.");
     } catch (err) {
       if (err instanceof AuthError) {
@@ -260,6 +377,58 @@ const OrgAdminSettings = () => {
       setWalletAssetsUploading(false);
     }
   };
+
+  const handleAssociationEmailSave = async () => {
+    if (emailSettingsSaving) return;
+    setEmailSettingsSaving(true);
+    setEmailSettingsError("");
+    setEmailSettingsSaved(false);
+    try {
+      const result = await patchOrgAdminOrganization({
+        communications_enabled: emailSettingsForm.communications_enabled,
+        sender_email_local_part: normalizeText(emailSettingsForm.sender_email_local_part),
+        email_from_name_override: normalizeText(emailSettingsForm.email_from_name_override),
+        reply_to_email: normalizeText(emailSettingsForm.reply_to_email),
+      });
+      if (result.organization) {
+        setOrg(result.organization);
+        setEmailSettingsForm({
+          communications_enabled: Boolean(result.organization.communications_enabled),
+          sender_email_local_part: result.organization.sender_email_local_part || "",
+          email_from_name_override: result.organization.email_from_name_override || "",
+          reply_to_email: result.organization.reply_to_email || "",
+        });
+      }
+      setEmailSettingsSaved(true);
+      window.setTimeout(() => setEmailSettingsSaved(false), 2200);
+      showToast({
+        tone: "success",
+        title: "Email associazione",
+        message: "Impostazioni salvate.",
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Errore nel salvataggio impostazioni email.";
+      setEmailSettingsError(message);
+      showToast({
+        tone: "error",
+        title: "Email associazione",
+        message,
+      });
+    } finally {
+      setEmailSettingsSaving(false);
+    }
+  };
+
+  const emailPreview = buildAssociationEmailPreview({
+    associationId: org?.id,
+    associationName: normalizeText(form.name) || org?.name,
+    communicationsEnabled: emailSettingsForm.communications_enabled,
+    senderEmailLocalPart: emailSettingsForm.sender_email_local_part,
+    emailFromNameOverride: emailSettingsForm.email_from_name_override,
+    replyToEmail: emailSettingsForm.reply_to_email,
+    mailFromDomain: org?.mail_from_domain,
+    systemSender: org?.system_email_sender,
+  });
 
   if (loading) {
     return (
@@ -406,6 +575,164 @@ const OrgAdminSettings = () => {
           </button>
         </div>
       </form>
+
+      <div className="surface mt-8 p-7">
+        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-neutral-900">Impostazioni email associazione</h3>
+            <p className="mt-1 text-sm text-neutral-500">
+              Configura il mittente visibile delle comunicazioni associazione. Se la configurazione non e completa, il sistema torna automaticamente al mittente ASSONAM.
+            </p>
+          </div>
+          <div className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">
+            Mode attuale: {emailPreview.selectedMode}
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-5 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <label className="inline-flex items-center gap-3 text-sm text-neutral-700">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-neutral-300 text-brand focus:ring-brand/30"
+                checked={emailSettingsForm.communications_enabled}
+                onChange={handleEmailSettingsChange("communications_enabled")}
+              />
+              Abilita comunicazioni associazione con mittente dedicato
+            </label>
+          </div>
+
+          <div>
+            <label htmlFor="sender-email-local-part" className={labelClass}>
+              Local part mittente
+            </label>
+            <input
+              id="sender-email-local-part"
+              className={inputClass}
+              type="text"
+              placeholder="golden-age-club"
+              value={emailSettingsForm.sender_email_local_part}
+              onChange={handleEmailSettingsChange("sender_email_local_part")}
+            />
+            <p className="mt-2 text-xs text-neutral-500">
+              Se lasci vuoto, il sistema genera automaticamente il local part dal nome associazione.
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="email-from-name-override" className={labelClass}>
+              Nome mittente visibile
+            </label>
+            <input
+              id="email-from-name-override"
+              className={inputClass}
+              type="text"
+              placeholder={normalizeText(form.name) || org?.name || "ASSONAM"}
+              value={emailSettingsForm.email_from_name_override}
+              onChange={handleEmailSettingsChange("email_from_name_override")}
+            />
+            <p className="mt-2 text-xs text-neutral-500">
+              Se lasci vuoto, verra usato il nome dell&apos;associazione.
+            </p>
+          </div>
+
+          <div className="md:col-span-2">
+            <label htmlFor="reply-to-email" className={labelClass}>
+              Reply-To
+            </label>
+            <input
+              id="reply-to-email"
+              className={inputClass}
+              type="email"
+              placeholder="segreteria@associazione.it"
+              value={emailSettingsForm.reply_to_email}
+              onChange={handleEmailSettingsChange("reply_to_email")}
+            />
+            <p className="mt-2 text-xs text-neutral-500">
+              Opzionale. Se valorizzato, verra usato come Reply-To in association mode.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-4 rounded-2xl border border-neutral-200 bg-neutral-50/80 p-5 md:grid-cols-2">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">Preview</p>
+            <dl className="mt-4 space-y-3">
+              <div>
+                <dt className="text-xs uppercase tracking-[0.16em] text-neutral-400">From name previsto</dt>
+                <dd className="mt-1 text-sm font-semibold text-neutral-900">{emailPreview.fromName || "-"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-[0.16em] text-neutral-400">From email previsto</dt>
+                <dd className="mt-1 break-all font-mono text-sm text-neutral-900">{emailPreview.fromEmail}</dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-[0.16em] text-neutral-400">From header completo previsto</dt>
+                <dd className="mt-1 break-all font-mono text-sm text-neutral-900">{emailPreview.fromHeader}</dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-[0.16em] text-neutral-400">Reply-To previsto</dt>
+                <dd className="mt-1 break-all font-mono text-sm text-neutral-900">{emailPreview.replyTo || "-"}</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div className="rounded-2xl border border-neutral-200 bg-white p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">Regole attive</p>
+            <div className="mt-4 space-y-3 text-sm text-neutral-600">
+              <p>
+                Dominio mittente:{" "}
+                <span className="font-semibold text-neutral-900">{org?.mail_from_domain || "non configurato"}</span>
+              </p>
+              <p>
+                Local part calcolato:{" "}
+                <span className="font-mono text-neutral-900">
+                  {sanitizeEmailLocalPartPreview(emailSettingsForm.sender_email_local_part)
+                    || sanitizeEmailLocalPartPreview(normalizeText(form.name) || org?.name)
+                    || `org-${org?.id ?? "x"}`}
+                </span>
+              </p>
+              <p>
+                Fallback usato:{" "}
+                <span className={emailPreview.fallbackUsed ? "font-semibold text-amber-700" : "font-semibold text-emerald-700"}>
+                  {emailPreview.fallbackUsed ? "Si, system mode" : "No, association mode"}
+                </span>
+              </p>
+              {!org?.mail_from_domain && (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
+                  <code>MAIL_FROM_DOMAIN</code> non configurato: la preview e l&apos;invio useranno system mode.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {emailSettingsError && (
+          <div className="mt-5 rounded-md border border-red-200/60 bg-red-50 px-4 py-3">
+            <p className="text-sm text-red-700">{emailSettingsError}</p>
+          </div>
+        )}
+
+        <div className="mt-6 flex justify-end">
+          <button
+            type="button"
+            className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white transition ${
+              emailSettingsSaved
+                ? "bg-emerald-600 hover:bg-emerald-700"
+                : "bg-neutral-900 hover:bg-neutral-800"
+            } disabled:cursor-not-allowed disabled:opacity-60`}
+            disabled={emailSettingsSaving}
+            onClick={handleAssociationEmailSave}
+          >
+            {emailSettingsSaved && !emailSettingsSaving && (
+              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fillRule="evenodd" d="M16.704 5.29a1 1 0 0 1 .006 1.414l-7.25 7.313a1 1 0 0 1-1.42 0l-3-3.024a1 1 0 1 1 1.42-1.408l2.29 2.308 6.54-6.597a1 1 0 0 1 1.414-.006Z" clipRule="evenodd" />
+              </svg>
+            )}
+            {emailSettingsSaving ? "Salvataggio..." : emailSettingsSaved ? "Salvato" : "Salva impostazioni email"}
+          </button>
+        </div>
+      </div>
 
       {/* Statute management */}
       <div className="surface mt-8 p-7">

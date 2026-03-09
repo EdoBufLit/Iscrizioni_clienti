@@ -13,6 +13,7 @@ from app.email_templates.member_card_email import build_member_card_email
 from app.models import DocStatus, Member, MemberDocument, Organization, Token, TokenType
 from app.services.card_verification import build_card_verification_token
 from app.services.email_outbox import build_email_payload, enqueue_email
+from app.services.email_sender import build_sender_payload
 from app.services.member_activity import is_member_active
 from app.services.org_branding import (
     resolve_assonam_logo_url,
@@ -197,6 +198,7 @@ def _enqueue_member_card_ready_email(
         text_body=text_body,
         html_body=html_body,
         inline_images=inline_images if inline_images else None,
+        sender=build_sender_payload(mode="association", association=org),
         meta={
             "member_id": member.id,
             "org_id": member.org_id,

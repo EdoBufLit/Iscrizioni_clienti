@@ -14,6 +14,7 @@ from typing import List, Optional, Tuple
 from fastapi import HTTPException, UploadFile
 
 from .config import settings
+from .services.email_sender import resolve_email_sender
 
 logger = logging.getLogger(__name__)
 
@@ -179,10 +180,12 @@ def _build_message(
     text_body: str,
     html_body: Optional[str] = None,
     inline_images: Optional[List[dict]] = None,
+    from_header: str,
+    reply_to: Optional[str] = None,
 ) -> tuple[object, str]:
     safe_to = _sanitize_header_value(to_email)
     safe_subject = _sanitize_header_value(subject)
-    safe_from = _sanitize_header_value(settings.SMTP_FROM)
+    safe_from = _sanitize_header_value(from_header)
 
     has_inline_images = bool(inline_images)
     if has_inline_images:
@@ -203,6 +206,8 @@ def _build_message(
     msg["To"] = safe_to
     msg["Subject"] = safe_subject
     msg["Message-ID"] = provider_message_id
+    if reply_to:
+        msg["Reply-To"] = _sanitize_header_value(reply_to)
 
     if has_inline_images:
         for image in inline_images or []:
@@ -265,8 +270,31 @@ def send_email_via_smtp_low_level(
     text_body: str,
     html_body: Optional[str] = None,
     inline_images: Optional[List[dict]] = None,
+    mode: str = "system",
+    association: object | None = None,
+    reply_to: Optional[str] = None,
 ) -> str:
-    logger.info("smtp_send_start to=%s subject=%s", to_email, subject)
+    sender_selection = resolve_email_sender(
+        mode=mode,
+        association=association,
+        reply_to=reply_to,
+    )
+    logger.info(
+        "email_sender_resolved requested_mode=%s selected_mode=%s from_name=%s from_email=%s from_header=%s reply_to=%s fallback_used=%s",
+        sender_selection.requested_mode,
+        sender_selection.selected_mode,
+        sender_selection.from_name or "",
+        sender_selection.from_email,
+        sender_selection.from_header,
+        sender_selection.reply_to or "",
+        sender_selection.fallback_used,
+    )
+    logger.info(
+        "smtp_send_start to=%s subject=%s selected_mode=%s",
+        to_email,
+        subject,
+        sender_selection.selected_mode,
+    )
 
     msg, provider_message_id = _build_message(
         to_email=to_email,
@@ -274,6 +302,8 @@ def send_email_via_smtp_low_level(
         text_body=text_body,
         html_body=html_body,
         inline_images=inline_images,
+        from_header=sender_selection.from_header,
+        reply_to=sender_selection.reply_to,
     )
 
     if settings.EMAIL_MODE == "test":
@@ -292,6 +322,12 @@ def send_email_via_smtp_low_level(
                     }
                     for item in (inline_images or [])
                 ],
+                "from_name": sender_selection.from_name,
+                "from_email": sender_selection.from_email,
+                "from_header": sender_selection.from_header,
+                "reply_to": sender_selection.reply_to,
+                "selected_mode": sender_selection.selected_mode,
+                "fallback_used": sender_selection.fallback_used,
                 "provider_message_id": provider_message_id,
             }
         )
@@ -321,7 +357,11 @@ def send_email_via_smtp_low_level(
                 server.starttls()
                 server.ehlo()
             server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-            server.sendmail(settings.SMTP_FROM, [_sanitize_header_value(to_email)], msg.as_string())
+            server.sendmail(
+                settings.SMTP_FROM,
+                [_sanitize_header_value(to_email)],
+                msg.as_string(),
+            )
         logger.info(
             "smtp_send_ok to=%s provider_message_id=%s",
             to_email,
@@ -377,6 +417,9 @@ def send_email_html(
     text_body: str,
     html_body: str,
     inline_images: Optional[List[dict]] = None,
+    mode: str = "system",
+    association: object | None = None,
+    reply_to: Optional[str] = None,
 ) -> bool:
     """
     Send a multipart/alternative email (plain text + HTML).
@@ -389,6 +432,9 @@ def send_email_html(
             text_body=text_body,
             html_body=html_body,
             inline_images=inline_images,
+            mode=mode,
+            association=association,
+            reply_to=reply_to,
         )
         return True
     except EmailDeliveryError as exc:
@@ -413,6 +459,9 @@ def send_email(
     subject: str,
     body: str,
     html_body: Optional[str] = None,
+    mode: str = "system",
+    association: object | None = None,
+    reply_to: Optional[str] = None,
 ) -> bool:
     """
     Send an email and return True on success, False on failure.
@@ -423,6 +472,9 @@ def send_email(
             subject=subject,
             text_body=body,
             html_body=html_body,
+            mode=mode,
+            association=association,
+            reply_to=reply_to,
         )
         return True
     except EmailDeliveryError as exc:

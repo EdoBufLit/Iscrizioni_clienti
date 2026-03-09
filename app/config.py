@@ -112,7 +112,9 @@ class Settings:
     SMTP_USER: str = os.getenv("SMTP_USER", "")
     SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
     SMTP_FROM: str = os.getenv("SMTP_FROM", "noreply@assonam.it")
+    EMAIL_FROM: str = os.getenv("EMAIL_FROM", os.getenv("SMTP_FROM", "noreply@assonam.it"))
     SMTP_USE_TLS: bool = os.getenv("SMTP_USE_TLS", "true").lower() in ("true", "1", "yes")
+    MAIL_FROM_DOMAIN: str = os.getenv("MAIL_FROM_DOMAIN", "")
 
     # Twilio / WhatsApp
     TWILIO_ACCOUNT_SID: str = os.getenv("TWILIO_ACCOUNT_SID", "")

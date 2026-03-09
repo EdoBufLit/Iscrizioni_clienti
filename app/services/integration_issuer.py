@@ -25,6 +25,7 @@ from app.models import (
 from app.services.card_allocation import allocate_next_card, release_card_number
 from app.services.card_verification import build_card_verification_token
 from app.services.email_outbox import build_email_payload, enqueue_email
+from app.services.email_sender import build_sender_payload
 from app.services.org_branding import (
     resolve_assonam_logo_url,
     resolve_card_email_subject,
@@ -578,6 +579,7 @@ def issue_member_from_integration(
                 text_body=text_body,
                 html_body=html_body,
                 inline_images=inline_images if inline_images else None,
+                sender=build_sender_payload(mode="association", association=org),
                 meta={
                     "member_id": member.id,
                     "org_id": member.org_id,

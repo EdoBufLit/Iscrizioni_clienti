@@ -602,10 +602,111 @@ export type OrgAdminOrganizationDetail = {
   wallet_hero_image_url: string | null;
   wallet_title_override: string | null;
   wallet_is_test_prefix: boolean;
+  communications_enabled: boolean;
+  sender_email_local_part: string | null;
+  email_from_name_override: string | null;
+  reply_to_email: string | null;
+  mail_from_domain: string | null;
   wallet_effective_bg_color?: string | null;
   wallet_effective_logo_url?: string | null;
   wallet_effective_hero_image_url?: string | null;
   wallet_effective_title_override?: string | null;
+  system_email_sender?: {
+    from_name: string | null;
+    from_email: string;
+    from_header: string;
+    reply_to: string | null;
+    selected_mode: "system";
+    fallback_used: boolean;
+  };
+  association_email_sender?: {
+    from_name: string | null;
+    from_email: string;
+    from_header: string;
+    reply_to: string | null;
+    selected_mode: "system" | "association";
+    fallback_used: boolean;
+  };
+};
+
+export type OrgAdminCommunicationSettings = {
+  communications_enabled: boolean;
+  sender_email_local_part: string | null;
+  email_from_name_override: string | null;
+  reply_to_email: string | null;
+  mail_from_domain: string | null;
+  system_email_sender: NonNullable<OrgAdminOrganizationDetail["system_email_sender"]>;
+  association_email_sender: NonNullable<OrgAdminOrganizationDetail["association_email_sender"]>;
+};
+
+export type OrgAdminCampaignAudienceType =
+  | "active_members"
+  | "expired_members"
+  | "renewal_due_members";
+
+export type OrgAdminEmailCampaign = {
+  id: number;
+  association_id: number;
+  name: string | null;
+  subject: string;
+  body_html?: string | null;
+  body_text?: string | null;
+  audience_type: OrgAdminCampaignAudienceType;
+  status: string;
+  created_at: string | null;
+  scheduled_at: string | null;
+  sent_at: string | null;
+  recipient_count: number;
+  recipient_status_counts: {
+    queued: number;
+    sent: number;
+    failed: number;
+  };
+  created_by: {
+    id: number;
+    email: string;
+  } | null;
+};
+
+export type OrgAdminEmailCampaignRecipient = {
+  id: number;
+  campaign_id: number;
+  association_id: number;
+  user_id: number | null;
+  recipient_email: string;
+  recipient_name: string | null;
+  provider_message_id: string | null;
+  delivery_status: string | null;
+  error_message: string | null;
+  created_at: string | null;
+  sent_at: string | null;
+};
+
+export type OrgAdminEmailTemplate = {
+  id: number;
+  association_id: number | null;
+  is_system: boolean;
+  name: string;
+  category: string | null;
+  subject: string;
+  body_html?: string | null;
+  body_text?: string | null;
+  channel: string;
+  is_active: boolean;
+  created_by_user_id: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+  is_editable: boolean;
+  is_duplicable: boolean;
+  scope: "system" | "association";
+};
+
+export type OrgAdminEmailTemplateVariable = {
+  key: string;
+  placeholder: string;
+  label: string;
+  description: string;
+  example: string;
 };
 
 export async function fetchOrgAdminOrganization(): Promise<OrgAdminOrganizationDetail> {
@@ -630,14 +731,250 @@ export async function patchOrgAdminOrganization(data: {
   wallet_bg_color?: string | null;
   wallet_title_override?: string | null;
   wallet_is_test_prefix?: boolean;
-}): Promise<{ ok: boolean }> {
+  communications_enabled?: boolean;
+  sender_email_local_part?: string | null;
+  email_from_name_override?: string | null;
+  reply_to_email?: string | null;
+}): Promise<{ ok: boolean; organization?: OrgAdminOrganizationDetail }> {
   const res = await fetch("/api/org-admin/organization", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
-  if (!res.ok) throw new Error("Failed to update organization");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento associazione"));
+  return res.json();
+}
+
+export async function fetchOrgAdminCommunicationSettings(): Promise<OrgAdminCommunicationSettings> {
+  const res = await fetch("/api/org-admin/communications/settings");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento impostazioni comunicazioni"));
+  return res.json();
+}
+
+export async function putOrgAdminCommunicationSettings(data: {
+  communications_enabled: boolean;
+  sender_email_local_part?: string | null;
+  email_from_name_override?: string | null;
+  reply_to_email?: string | null;
+}): Promise<{ ok: boolean; settings: OrgAdminCommunicationSettings }> {
+  const res = await fetch("/api/org-admin/communications/settings", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore salvataggio impostazioni comunicazioni"));
+  return res.json();
+}
+
+export async function sendOrgAdminCommunicationTestEmail(
+  toEmail: string,
+): Promise<{
+  ok: boolean;
+  outbox_id: string;
+  message: string;
+  sender: OrgAdminCommunicationSettings["association_email_sender"];
+}> {
+  const res = await fetch("/api/org-admin/communications/test-email", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ to_email: toEmail }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore invio email di test"));
+  return res.json();
+}
+
+export async function fetchOrgAdminCommunicationAudienceEstimate(
+  audienceType: OrgAdminCampaignAudienceType,
+): Promise<{
+  audience_type: string;
+  count: number;
+  available_audiences: string[];
+}> {
+  const res = await fetch(
+    `/api/org-admin/communications/audience-estimate?audience_type=${encodeURIComponent(audienceType)}`,
+  );
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore calcolo audience"));
+  return res.json();
+}
+
+export async function fetchOrgAdminEmailCampaigns(): Promise<{
+  items: OrgAdminEmailCampaign[];
+  total: number;
+}> {
+  const res = await fetch("/api/org-admin/communications/campaigns");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento campagne"));
+  return res.json();
+}
+
+export async function createOrgAdminEmailCampaign(data: {
+  name?: string | null;
+  subject: string;
+  body_html?: string | null;
+  body_text?: string | null;
+  audience_type: OrgAdminCampaignAudienceType;
+}): Promise<{ ok: boolean; campaign: OrgAdminEmailCampaign }> {
+  const res = await fetch("/api/org-admin/communications/campaigns", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione campagna"));
+  return res.json();
+}
+
+export async function fetchOrgAdminEmailCampaign(
+  campaignId: number,
+): Promise<{ campaign: OrgAdminEmailCampaign }> {
+  const res = await fetch(`/api/org-admin/communications/campaigns/${campaignId}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento dettaglio campagna"));
+  return res.json();
+}
+
+export async function sendOrgAdminEmailCampaign(
+  campaignId: number,
+): Promise<{ ok: boolean; campaign: OrgAdminEmailCampaign; recipient_count: number; message: string }> {
+  const res = await fetch(`/api/org-admin/communications/campaigns/${campaignId}/send`, {
+    method: "POST",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore invio campagna"));
+  return res.json();
+}
+
+export async function fetchOrgAdminEmailCampaignRecipients(
+  campaignId: number,
+): Promise<{ items: OrgAdminEmailCampaignRecipient[]; total: number }> {
+  const res = await fetch(`/api/org-admin/communications/campaigns/${campaignId}/recipients`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento destinatari"));
+  return res.json();
+}
+
+export async function fetchOrgAdminEmailTemplates(input?: {
+  scope?: "all" | "system" | "association";
+  includeInactive?: boolean;
+}): Promise<{ items: OrgAdminEmailTemplate[]; total: number; scope: string }> {
+  const params = new URLSearchParams();
+  if (input?.scope) params.set("scope", input.scope);
+  if (input?.includeInactive) params.set("include_inactive", "true");
+  const res = await fetch(`/api/org-admin/communications/templates${params.toString() ? `?${params.toString()}` : ""}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento template"));
+  return res.json();
+}
+
+export async function fetchOrgAdminEmailTemplateVariables(): Promise<{
+  items: OrgAdminEmailTemplateVariable[];
+  fake_context: Record<string, string>;
+}> {
+  const res = await fetch("/api/org-admin/communications/templates/variables");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento variabili template"));
+  return res.json();
+}
+
+export async function fetchOrgAdminEmailTemplate(
+  templateId: number,
+): Promise<{ template: OrgAdminEmailTemplate }> {
+  const res = await fetch(`/api/org-admin/communications/templates/${templateId}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento template"));
+  return res.json();
+}
+
+export async function createOrgAdminEmailTemplate(data: {
+  name: string;
+  category?: string | null;
+  subject: string;
+  body_html?: string | null;
+  body_text?: string | null;
+  channel?: string;
+}): Promise<{ ok: boolean; template: OrgAdminEmailTemplate }> {
+  const res = await fetch("/api/org-admin/communications/templates", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione template"));
+  return res.json();
+}
+
+export async function updateOrgAdminEmailTemplate(
+  templateId: number,
+  data: {
+    name: string;
+    category?: string | null;
+    subject: string;
+    body_html?: string | null;
+    body_text?: string | null;
+    channel?: string;
+    is_active?: boolean;
+  },
+): Promise<{ ok: boolean; template: OrgAdminEmailTemplate }> {
+  const res = await fetch(`/api/org-admin/communications/templates/${templateId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento template"));
+  return res.json();
+}
+
+export async function duplicateOrgAdminEmailTemplate(
+  templateId: number,
+  name?: string | null,
+): Promise<{ ok: boolean; template: OrgAdminEmailTemplate }> {
+  const res = await fetch(`/api/org-admin/communications/templates/${templateId}/duplicate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore duplicazione template"));
+  return res.json();
+}
+
+export async function archiveOrgAdminEmailTemplate(
+  templateId: number,
+): Promise<{ ok: boolean; template: OrgAdminEmailTemplate }> {
+  const res = await fetch(`/api/org-admin/communications/templates/${templateId}/archive`, {
+    method: "POST",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore archiviazione template"));
+  return res.json();
+}
+
+export async function previewOrgAdminEmailTemplate(data: {
+  template_id?: number;
+  subject?: string | null;
+  body_html?: string | null;
+  body_text?: string | null;
+}): Promise<{
+  preview: {
+    subject: string;
+    body_html: string | null;
+    body_text: string | null;
+  };
+  fake_context: Record<string, string>;
+}> {
+  const res = await fetch("/api/org-admin/communications/templates/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore preview template"));
   return res.json();
 }
 

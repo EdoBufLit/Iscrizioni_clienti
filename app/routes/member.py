@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from app.db import get_db
 from app.models import Member, Token, TokenType, MemberDocument, MemberStatus, PaymentMethod, Organization, AdminUser, AdminRole, DocStatus, SignupSource
 from app.services.email_outbox import build_email_payload, enqueue_email
+from app.services.email_sender import build_sender_payload
 from app.utils import generate_token, hash_token, save_upload_file
 from app.security import get_password_hash, verify_password
 from app.config import settings
@@ -439,6 +440,10 @@ def api_auth_login(request: Request, email: str = Form(...), password: str = For
                 text_body=(
                     f"Clicca qui per accedere alla tua area riservata: {link}\n\n"
                     f"Il link scade tra {settings.LOGIN_TOKEN_EXPIRE_MINUTES} minuti."
+                ),
+                sender=build_sender_payload(
+                    mode="association",
+                    association=member.organization,
                 ),
                 meta={
                     "member_id": member.id,

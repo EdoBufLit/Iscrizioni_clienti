@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import SessionLocal
 from app.models import EmailOutbox, EmailOutboxStatus, Member
+from app.services.email_sender import build_sender_payload
 from app.utils import (
     PermanentEmailDeliveryError,
     RetryableEmailDeliveryError,
@@ -91,12 +92,14 @@ def build_email_payload(
     html_body: str | None = None,
     inline_images: list[dict] | None = None,
     meta: dict[str, Any] | None = None,
+    sender: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "text_body": text_body,
         "html_body": html_body,
         "inline_images": _serialize_inline_images(inline_images),
         "meta": meta or {},
+        "sender": copy.deepcopy(sender) if sender is not None else build_sender_payload(),
     }
     return payload
 
@@ -232,6 +235,8 @@ def mark_failed(
     outbox_id: str,
     error: str,
     next_retry_at: datetime,
+    *,
+    final_failure: bool = False,
 ) -> None:
     outbox = db.query(EmailOutbox).filter(EmailOutbox.id == outbox_id).first()
     if outbox is None:
@@ -240,6 +245,8 @@ def mark_failed(
     outbox.last_error = (error or "").strip() or "smtp_delivery_failed"
     outbox.next_retry_at = next_retry_at
     outbox.updated_at = utcnow_aware()
+    if final_failure:
+        _apply_post_failure_effects(db, outbox, outbox.last_error)
     db.flush()
 
 
@@ -303,12 +310,54 @@ def _apply_post_send_effects(
             member.card_email_sent_at = delivered_at
             member.card_delivered_at = delivered_at
 
+    campaign_recipient_id = meta.get("campaign_recipient_id")
+    if campaign_recipient_id is not None:
+        from app.services.email_campaigns import mark_campaign_recipient_sent
+
+        mark_campaign_recipient_sent(
+            db,
+            recipient_id=int(campaign_recipient_id),
+            provider_message_id=outbox.provider_message_id,
+            sent_at=_to_naive_utc(sent_at),
+        )
+
+
+def _apply_post_failure_effects(
+    db: Session,
+    outbox: EmailOutbox,
+    error: str,
+) -> None:
+    payload = outbox.payload_json or {}
+    meta = payload.get("meta") if isinstance(payload, dict) else {}
+    if not isinstance(meta, dict):
+        return
+
+    campaign_recipient_id = meta.get("campaign_recipient_id")
+    if campaign_recipient_id is None:
+        return
+
+    from app.services.email_campaigns import mark_campaign_recipient_failed
+
+    mark_campaign_recipient_failed(
+        db,
+        recipient_id=int(campaign_recipient_id),
+        error_message=error,
+    )
+
 
 def _send_claimed_job(job: ClaimedEmailOutboxJob) -> str:
     payload = job.payload_json or {}
     text_body = str(payload.get("text_body") or "").strip()
     html_body = payload.get("html_body")
     inline_images = _deserialize_inline_images(payload.get("inline_images"))
+    sender = payload.get("sender") if isinstance(payload, dict) else None
+    sender_mode = "system"
+    association = None
+    reply_to = None
+    if isinstance(sender, dict):
+        sender_mode = str(sender.get("mode") or "system")
+        association = sender.get("association")
+        reply_to = sender.get("reply_to")
     if not text_body:
         raise PermanentEmailDeliveryError("Email payload missing text_body")
     return send_email_via_smtp_low_level(
@@ -317,6 +366,9 @@ def _send_claimed_job(job: ClaimedEmailOutboxJob) -> str:
         text_body=text_body,
         html_body=str(html_body) if html_body is not None else None,
         inline_images=inline_images or None,
+        mode=sender_mode,
+        association=association,
+        reply_to=reply_to,
     )
 
 
@@ -359,7 +411,7 @@ def process_outbox_once(limit: int | None = None) -> dict[str, int]:
         except PermanentEmailDeliveryError as exc:
             next_retry_at = compute_permanent_failure_next_retry()
             with SessionLocal() as db:
-                mark_failed(db, job.id, str(exc), next_retry_at)
+                mark_failed(db, job.id, str(exc), next_retry_at, final_failure=True)
                 db.commit()
             stats["permanent_failed"] += 1
             logger.error(

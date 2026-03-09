@@ -165,6 +165,40 @@ docker logs -f email-worker
 
 Dettagli operativi e query utili sono in [`DEPLOY.md`](DEPLOY.md).
 
+### Association Email Sender Modes
+
+Il sistema supporta due modalita esplicite per il mittente email:
+
+- `system`: usa il mittente storico ASSONAM (`SMTP_FROM` per envelope SMTP, `EMAIL_FROM` come header visibile se configurato).
+- `association`: usa `MAIL_FROM_DOMAIN` e i campi dell'associazione per comporre il mittente visibile, ad esempio `Golden Age Club <golden-age-club@notifiche.assonam.it>`.
+
+Regole operative:
+
+- `SMTP_FROM` e `EMAIL_FROM` restano invariati e continuano a coprire tutte le email ufficiali ASSONAM.
+- `association` mode si attiva solo se `MAIL_FROM_DOMAIN` esiste e `organizations.communications_enabled=true`.
+- Il nome visibile usa `email_from_name_override`, altrimenti `organization.name`, con fallback finale `ASSONAM`.
+- La parte locale usa `sender_email_local_part`, altrimenti viene generata dal nome associazione; se resta vuota, fallback a `org-{id}`.
+- `reply_to_email` viene applicato solo in `association` mode.
+- Se configurazione o association mode non sono disponibili, il sistema fa fallback automatico e loggato a `system`.
+
+### Org-admin Comunicazioni
+
+La dashboard org-admin include ora la sezione `Comunicazioni` su `/org-admin/comunicazioni`.
+
+- `Impostazioni`: gestisce `communications_enabled`, `sender_email_local_part`, `email_from_name_override`, `reply_to_email` e mostra una preview live del mittente effettivo.
+- `Campagne`: crea bozze o invia subito campagne verso `tutti i soci attivi`, `soci scaduti` o `soci con rinnovo in scadenza`, anche partendo da template riutilizzabili.
+- `Template`: libreria con template `system` ASSONAM non modificabili ma duplicabili e template `association` modificabili/archiviabili per la singola associazione.
+- `Storico`: mostra campagne inviate/bozze, numero destinatari, stato e dettaglio dei recipient snapshot con `sent` o `failed` e `error_message` se presente.
+
+Regole operative:
+
+- Le campagne usano sempre `association` mode.
+- Se `communications_enabled=false`, la creazione bozza resta disponibile ma l'invio viene bloccato con messaggio chiaro.
+- L'invio email di test usa lo stesso sender resolver dell'associazione e passa comunque dall'outbox esistente.
+- Ogni invio campagna salva uno snapshot destinatari in `email_campaign_recipients` prima dell'accodamento SMTP.
+- I placeholder supportati sono `{{nome_socio}}`, `{{nome_associazione}}`, `{{numero_tessera}}`, `{{data_scadenza}}`, `{{link_rinnovo}}`, `{{link_documento}}`.
+- I template di sistema non si modificano direttamente: vanno duplicati in template associazione prima della personalizzazione.
+
 ## Integration API (Issuer Tessera)
 
 External management systems can issue members directly as active through:

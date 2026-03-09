@@ -2851,3 +2851,51 @@ pm --prefix frontend run build -> OK
   - `npm --prefix frontend run build` -> OK
   - output build generato: `frontend/dist/manifest.webmanifest`, `frontend/dist/sw.js`
   - controllo su `frontend/dist/sw.js`: fallback SPA denylist su `/api`, `/member`, `/health`, `/version`, nessuna runtime cache dedicata a endpoint sensibili.
+## Association Email Sender Modes (Mar 09, 2026)
+- [x] Analizzare flussi email esistenti e individuare tutti i punti che devono restare in `system` mode
+- [x] Aggiungere schema dati associazione (migration Alembic, model `Organization`, bootstrap/repair se necessario)
+- [x] Introdurre helper per mittente associazione e aggiornare servizio email/outbox con `mode=\"system\"|\"association\"` + fallback esplicito
+- [x] Esporre e salvare le impostazioni email associazione negli endpoint org-admin senza regressioni sui payload esistenti
+- [x] Aggiungere UI org-admin minimale con preview live, salvataggio pulito e feedback inline
+- [x] Verificare con test mirati/backend+frontend build e documentare review finale
+
+## Review (Association Email Sender Modes - Mar 09, 2026)
+- Backend: aggiunte colonne `communications_enabled`, `sender_email_local_part`, `email_from_name_override`, `reply_to_email` a `organizations` con migration `a1c9e8f7b6d5` + repair path in `init_db.py`.
+- Sender service: nuovo modulo `app/services/email_sender.py` con helper richiesti (`sanitize_email_local_part`, `generate_email_local_part_from_name`, `build_association_from_name`, `build_association_from_email`, `build_association_from_header`) e resolver esplicito `system`/`association`.
+- Delivery: `app/utils.py` e `app/services/email_outbox.py` ora propagano `mode`, snapshot associazione, `reply_to`, logging del sender finale e fallback hard a `system`; il test capture salva anche `from_name`, `from_email`, `from_header`, `reply_to`, `selected_mode`, `fallback_used`.
+- Flussi attivati in `association` mode: magic link socio da area org-admin, login magic link socio, email iscrizione/join org-specifiche, invito referral org-admin, email tessera attiva/pronta. Le mail istituzionali ASSONAM/org-admin/super-admin restano in `system` mode.
+- API/UI: `GET/PATCH /api/org-admin/organization` espongono e salvano le nuove impostazioni, restituendo preview `system`/`association`; `frontend/src/pages/org-admin/OrgAdminSettings.tsx` aggiunge sezione dedicata con preview live, fallback visibility, loading state, bottone con check verde e toast interno.
+- Documentazione: aggiornati `README.md` e `ENV_REQUIRED.md` con `EMAIL_FROM`, `MAIL_FROM_DOMAIN` e spiegazione `system` vs `association`.
+- Verifiche OK: `python -m compileall app tests`; `python -m pytest -q tests/test_association_email_sender.py tests/test_email_flows.py tests/test_org_admin_send_access.py tests/test_integration_issue_member.py tests/test_join_auto_issue.py tests/test_ingest_pienissimo.py`; `npm --prefix frontend run build`.
+- Rischio residuo preesistente: `python -m alembic heads` mostra gia due head (`a1c9e8f7b6d5`, `h3i4j5k6l7m8`) e `python -m alembic upgrade heads` fallisce su una migration legacy precedente (`m4n5o6p7q8r9`, colonna `members.deleted_at` assente su SQLite). Non e stato introdotto da questa modifica ma impedisce una verifica Alembic completa su DB SQLite vuoto.
+## Org Admin Comunicazioni (Mar 09, 2026)
+- [x] Mappare routing, modello dati e outbox attuali per integrare campagne email senza toccare il modulo tessere
+- [x] Aggiungere schema DB per campagne e destinatari (migration Alembic, model SQLAlchemy, repair/bootstrap se necessario)
+- [x] Implementare service/backend per audience estimate, test email, draft/send campaign e storico con recipient snapshot
+- [x] Agganciare l'outbox esistente per aggiornare delivery status/error_message dei recipient e stato campagna
+- [x] Aggiungere sezione dashboard org admin Comunicazioni con tab Impostazioni/Campagne/Storico e UX pulita
+- [x] Eseguire verifiche mirate backend/frontend, aggiornare review e documentazione breve README
+
+## Review (Org Admin Comunicazioni - Mar 09, 2026)
+- Backend: aggiunte tabelle `email_campaigns` e `email_campaign_recipients` con migration `c6d7e8f9a0b1_add_email_campaign_tables.py`, modelli SQLAlchemy e bootstrap tabelle in `init_db.py`.
+- Service: nuovo `app/services/email_campaigns.py` per audience estimate, draft, invio, recipient snapshot e stato campagna; `app/services/email_outbox.py` aggiorna recipient/campaign status su invio riuscito e fallimento permanente senza rompere i retry.
+- API org-admin: nuovi endpoint `/api/org-admin/communications/*` per settings, test email, audience estimate, create/send campaign, list/detail campaign e recipients history.
+- Frontend: nuova pagina `frontend/src/pages/org-admin/OrgAdminCommunications.tsx` con tab `Impostazioni`, `Campagne`, `Storico`, preview live sender, test email, save draft, send campaign, storico e dettaglio destinatari; route e navigazione aggiunte in `App.tsx` e `OrgAdminLayout.tsx`.
+- Compatibilita: `system` mode e flussi tessere restano invariati; le campagne usano `association` mode e bloccano l'invio quando `communications_enabled=false`.
+- Verifiche OK: `python -m compileall app`, `npm --prefix frontend run build`, `python -m pytest -q tests/test_org_admin_communications.py`, `python -m pytest -q tests/test_association_email_sender.py tests/test_org_admin_communications.py tests/test_org_admin_send_access.py tests/test_email_flows.py`.
+
+## Template Library Comunicazioni (Mar 09, 2026)
+- [x] Mappare integration points per template library su modello comunicazioni, seed e composer campagne
+- [x] Aggiungere schema DB e model `email_templates` con seed iniziale template di sistema
+- [x] Implementare service/backend per list/detail/create/update/duplicate/archive, available variables e render preview
+- [x] Integrare la libreria template nella UI Comunicazioni con filtro, editor, preview e azione "usa nel composer"
+- [x] Aggiornare composer campagne per caricare subject/body dal template selezionato senza rompere il flusso esistente
+- [x] Eseguire verifiche mirate e aggiornare review/README
+
+## Review (Template Library Comunicazioni - Mar 09, 2026)
+- Schema/model: aggiunta tabella `email_templates` con migration `d7e8f9a0b1c2_add_email_templates.py`, model SQLAlchemy e relazioni su `organizations` e `admin_users`.
+- Seed: introdotti 8 template di sistema ASSONAM (`Benvenuto nuovo socio`, `Iscrizione approvata`, `Tessera disponibile`, `Rinnovo quota in scadenza`, `Sollecito quota gentile`, `Convocazione assemblea`, `Documento disponibile`, `Avviso evento`) tramite migration e bootstrap `init_db.py`.
+- Backend: nuovo service `app/services/email_templates.py` con variabili disponibili, rendering placeholder, fake preview context e normalizzazione body HTML/testo; nuovi endpoint `/api/org-admin/communications/templates*` per list/detail/create/update/duplicate/archive/variables/preview.
+- Campagne: il sender campagne ora rende i placeholder per destinatario al momento dell'accodamento outbox, quindi `{{nome_socio}}`, `{{numero_tessera}}` e le altre variabili funzionano anche nel body scritto manualmente.
+- Frontend: la pagina `OrgAdminCommunications.tsx` ora include il tab `Template`, filtro system/personalizzati, editor semplice, preview fake, duplica/archivia/usa, e il composer campagne permette di selezionare e caricare un template nella bozza.
+- Verifiche OK: `python -m compileall app tests`, `npm --prefix frontend run build`, `python -m pytest -q tests/test_org_admin_communications.py tests/test_association_email_sender.py tests/test_org_admin_send_access.py tests/test_email_flows.py`.

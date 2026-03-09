@@ -249,6 +249,12 @@ class Organization(Base):
     auto_approve_signup = Column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    communications_enabled = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    sender_email_local_part = Column(String, nullable=True)
+    email_from_name_override = Column(String, nullable=True)
+    reply_to_email = Column(String, nullable=True)
     accounting_enabled = Column(
         Boolean, nullable=False, default=False, server_default="false"
     )
@@ -285,6 +291,23 @@ class Organization(Base):
         "OrganizationSharedDocumentAssignment",
         back_populates="organization",
         foreign_keys="OrganizationSharedDocumentAssignment.association_id",
+    )
+    email_campaigns = relationship(
+        "EmailCampaign",
+        back_populates="organization",
+        foreign_keys="EmailCampaign.association_id",
+        cascade="all, delete-orphan",
+    )
+    email_templates = relationship(
+        "EmailTemplate",
+        back_populates="organization",
+        foreign_keys="EmailTemplate.association_id",
+        cascade="all, delete-orphan",
+    )
+    email_campaign_recipients = relationship(
+        "EmailCampaignRecipient",
+        back_populates="organization",
+        foreign_keys="EmailCampaignRecipient.association_id",
     )
 
 
@@ -416,6 +439,16 @@ class AdminUser(Base):
         foreign_keys="OrgAdminNotification.admin_user_id",
         cascade="all, delete-orphan",
     )
+    email_campaigns = relationship(
+        "EmailCampaign",
+        back_populates="created_by_user",
+        foreign_keys="EmailCampaign.created_by_user_id",
+    )
+    email_templates = relationship(
+        "EmailTemplate",
+        back_populates="created_by_user",
+        foreign_keys="EmailTemplate.created_by_user_id",
+    )
 
 
 class OrganizationSharedDocument(Base):
@@ -495,6 +528,105 @@ class OrgAdminNotification(Base):
         foreign_keys=[admin_user_id],
     )
     organization = relationship("Organization", foreign_keys=[org_id])
+
+
+class EmailTemplate(Base):
+    __tablename__ = "email_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    association_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    is_system = Column(
+        Boolean, nullable=False, default=False, server_default="false", index=True
+    )
+    name = Column(String, nullable=False)
+    category = Column(String, nullable=True, index=True)
+    subject = Column(String, nullable=False)
+    body_html = Column(Text, nullable=True)
+    body_text = Column(Text, nullable=True)
+    channel = Column(String, nullable=False, default="email", server_default="email", index=True)
+    is_active = Column(
+        Boolean, nullable=False, default=True, server_default="true", index=True
+    )
+    created_by_user_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    organization = relationship(
+        "Organization",
+        back_populates="email_templates",
+        foreign_keys=[association_id],
+    )
+    created_by_user = relationship(
+        "AdminUser",
+        back_populates="email_templates",
+        foreign_keys=[created_by_user_id],
+    )
+
+
+class EmailCampaign(Base):
+    __tablename__ = "email_campaigns"
+
+    id = Column(Integer, primary_key=True, index=True)
+    association_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    name = Column(String, nullable=True)
+    subject = Column(String, nullable=False)
+    body_html = Column(Text, nullable=True)
+    body_text = Column(Text, nullable=True)
+    audience_type = Column(String, nullable=False, index=True)
+    status = Column(String, nullable=False, default="draft", server_default="draft", index=True)
+    created_by_user_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    scheduled_at = Column(DateTime, nullable=True)
+    sent_at = Column(DateTime, nullable=True)
+
+    organization = relationship(
+        "Organization",
+        back_populates="email_campaigns",
+        foreign_keys=[association_id],
+    )
+    created_by_user = relationship(
+        "AdminUser",
+        back_populates="email_campaigns",
+        foreign_keys=[created_by_user_id],
+    )
+    recipients = relationship(
+        "EmailCampaignRecipient",
+        back_populates="campaign",
+        cascade="all, delete-orphan",
+    )
+
+
+class EmailCampaignRecipient(Base):
+    __tablename__ = "email_campaign_recipients"
+
+    id = Column(Integer, primary_key=True, index=True)
+    campaign_id = Column(Integer, ForeignKey("email_campaigns.id"), nullable=False, index=True)
+    association_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("members.id"), nullable=True, index=True)
+    recipient_email = Column(String, nullable=False, index=True)
+    recipient_name = Column(String, nullable=True)
+    provider_message_id = Column(Text, nullable=True)
+    delivery_status = Column(String, nullable=True, index=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    sent_at = Column(DateTime, nullable=True)
+
+    campaign = relationship(
+        "EmailCampaign",
+        back_populates="recipients",
+        foreign_keys=[campaign_id],
+    )
+    organization = relationship(
+        "Organization",
+        back_populates="email_campaign_recipients",
+        foreign_keys=[association_id],
+    )
+    member = relationship("Member", foreign_keys=[user_id])
 
 
 class CardBatch(Base):
