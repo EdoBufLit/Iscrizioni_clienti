@@ -2899,3 +2899,16 @@ pm --prefix frontend run build -> OK
 - Campagne: il sender campagne ora rende i placeholder per destinatario al momento dell'accodamento outbox, quindi `{{nome_socio}}`, `{{numero_tessera}}` e le altre variabili funzionano anche nel body scritto manualmente.
 - Frontend: la pagina `OrgAdminCommunications.tsx` ora include il tab `Template`, filtro system/personalizzati, editor semplice, preview fake, duplica/archivia/usa, e il composer campagne permette di selezionare e caricare un template nella bozza.
 - Verifiche OK: `python -m compileall app tests`, `npm --prefix frontend run build`, `python -m pytest -q tests/test_org_admin_communications.py tests/test_association_email_sender.py tests/test_org_admin_send_access.py tests/test_email_flows.py`.
+- [x] Rimuovere la possibilita per org-admin di attivare/disattivare `communications_enabled`
+- [x] Bloccare via backend tutte le azioni operative Comunicazioni quando il modulo non e attivo
+- [x] Aggiungere controllo super-admin per attivare/disattivare il modulo Comunicazioni per associazione
+- [x] Aggiornare UI org-admin con stato locked, badge e CTA disabilitate
+- [x] Aggiornare UI super-admin lista associazioni con badge/toggle modulo Comunicazioni
+- [x] Eseguire test/build mirati e documentare review
+
+## Review (Modulo Comunicazioni super-admin only - Mar 09, 2026)
+- `communications_enabled` resta un entitlement commerciale con default `false` e puo essere aggiornato solo dagli endpoint super-admin organizzazione.
+- Gli endpoint org-admin operativi del modulo (`settings` write, test email, audience estimate, create/send campaign, create/update/duplicate/archive/preview template) ora rispondono `403` con messaggio uniforme quando il modulo non e attivo.
+- La UI org-admin mostra badge `Non attivo`, stato locked e CTA disabilitate sia in `Comunicazioni` sia nella sezione email dell'area impostazioni associazione.
+- La UI super-admin espone badge stato + toggle rapido per il modulo Comunicazioni nella lista associazioni, con feedback toast pulito.
+- Verifiche eseguite: `python -m compileall app tests`, `python -m pytest -q tests/test_org_admin_communications.py tests/test_association_email_sender.py`, `npm --prefix frontend run build`.

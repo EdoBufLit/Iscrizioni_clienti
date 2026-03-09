@@ -4,10 +4,12 @@ import {
   AuthError,
   deleteOrganization,
   fetchSuperAdminOrganizations,
+  patchSuperAdminOrganization,
   type SuperAdminProfile,
   type SuperAdminOrganization,
 } from "../../lib/api";
 import Skeleton from "../../components/ui/Skeleton";
+import { useToast } from "../../components/ui/ToastProvider";
 import OrganizationManageModal from "./components/OrganizationManageModal";
 import SuperAdminPienissimoIntegrationCard from "./components/SuperAdminPienissimoIntegrationCard";
 
@@ -15,6 +17,7 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 const SuperAdminOrganizations = () => {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const { profile } = useOutletContext<{ profile: SuperAdminProfile | null }>();
   const isSuperAdmin = profile?.role === "super_admin";
 
@@ -43,6 +46,7 @@ const SuperAdminOrganizations = () => {
   const [deleteSuccess, setDeleteSuccess] = useState("");
 
   const [integrationOrg, setIntegrationOrg] = useState<SuperAdminOrganization | null>(null);
+  const [communicationsSavingOrgId, setCommunicationsSavingOrgId] = useState<number | null>(null);
 
   const searchTimeout = useRef<any>(null);
 
@@ -159,6 +163,30 @@ const SuperAdminOrganizations = () => {
 
   const closeIntegrationModal = () => {
     setIntegrationOrg(null);
+  };
+
+  const handleToggleCommunications = async (org: SuperAdminOrganization, enabled: boolean) => {
+    if (communicationsSavingOrgId === org.id) return;
+    setCommunicationsSavingOrgId(org.id);
+    try {
+      const updated = await patchSuperAdminOrganization(org.id, {
+        communications_enabled: enabled,
+      });
+      setOrgs((prev) => prev.map((item) => (item.id === org.id ? { ...item, ...updated } : item)));
+      showToast({
+        title: "Modulo Comunicazioni",
+        message: `${updated.name}: ${enabled ? "attivato" : "disattivato"}.`,
+        tone: "success",
+      });
+    } catch (err) {
+      showToast({
+        title: "Modulo Comunicazioni",
+        message: err instanceof Error ? err.message : "Errore aggiornamento modulo.",
+        tone: "error",
+      });
+    } finally {
+      setCommunicationsSavingOrgId(null);
+    }
   };
 
   const visiblePages = useMemo(() => {
@@ -376,6 +404,15 @@ const SuperAdminOrganizations = () => {
                         >
                           {org.accounting_enabled ? "Contabilità on" : "Contabilità off"}
                         </span>
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter ring-1 ring-inset ${
+                            org.communications_enabled
+                              ? "bg-sky-50 text-sky-700 ring-sky-200/60"
+                              : "bg-neutral-50 text-neutral-400 ring-neutral-200"
+                          }`}
+                        >
+                          {org.communications_enabled ? "Comunicazioni on" : "Comunicazioni off"}
+                        </span>
                       </div>
                     </td>
                     <td className="px-5 py-4">
@@ -428,6 +465,27 @@ const SuperAdminOrganizations = () => {
                     </td>
                     <td className="px-5 py-4 text-right">
                       <div className="flex items-center justify-end gap-1">
+                        {isSuperAdmin && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void handleToggleCommunications(org, !Boolean(org.communications_enabled))
+                            }
+                            className={`btn-ghost !px-2.5 !py-1 !text-[10px] font-bold uppercase tracking-widest ${
+                              org.communications_enabled
+                                ? "!border-sky-200 !text-sky-700 hover:!bg-sky-50"
+                                : "!border-neutral-200 !text-neutral-600 hover:!bg-neutral-50"
+                            }`}
+                            disabled={communicationsSavingOrgId === org.id}
+                            title="Attiva o disattiva il modulo Comunicazioni"
+                          >
+                            {communicationsSavingOrgId === org.id
+                              ? "Salvataggio..."
+                              : org.communications_enabled
+                                ? "Comunicazioni off"
+                                : "Comunicazioni on"}
+                          </button>
+                        )}
                         <button
                           onClick={() => openModal(org.card_min ? "view-batches" : "range", org)}
                           className="btn-ghost !px-2.5 !py-1 !text-[10px] font-bold uppercase tracking-widest"

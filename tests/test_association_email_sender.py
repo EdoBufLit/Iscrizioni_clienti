@@ -154,6 +154,10 @@ def test_org_admin_patch_organization_email_settings_returns_preview(client) -> 
             db.commit()
             db.refresh(org)
 
+        org.communications_enabled = True
+        db.commit()
+        db.refresh(org)
+
         admin = db.query(AdminUser).filter_by(email="mail.preview.admin@example.com").first()
         if not admin:
             admin = AdminUser(
@@ -168,10 +172,9 @@ def test_org_admin_patch_organization_email_settings_returns_preview(client) -> 
 
         _login_org_admin(client, db, admin.id)
 
-        response = client.patch(
-            "/api/org-admin/organization",
+        response = client.put(
+            "/api/org-admin/communications/settings",
             json={
-                "communications_enabled": True,
                 "sender_email_local_part": "Gólden   Age Club!!!",
                 "email_from_name_override": "Golden Age Club",
                 "reply_to_email": "segreteria@goldenage.it",
@@ -180,7 +183,7 @@ def test_org_admin_patch_organization_email_settings_returns_preview(client) -> 
         assert response.status_code == 200
         payload = response.json()
         assert payload["ok"] is True
-        organization = payload["organization"]
+        organization = payload["settings"]
         assert organization["communications_enabled"] is True
         assert organization["sender_email_local_part"] == "golden-age-club"
         assert organization["email_from_name_override"] == "Golden Age Club"

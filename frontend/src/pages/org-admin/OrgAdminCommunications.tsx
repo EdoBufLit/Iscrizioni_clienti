@@ -34,6 +34,8 @@ import { useOrgAdmin } from "./OrgAdminLayout";
 const inputClass =
   "mt-1 w-full rounded-md border border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20";
 const labelClass = "block text-sm font-medium text-neutral-700";
+const COMMUNICATIONS_LOCKED_MESSAGE =
+  "Modulo Comunicazioni non attivo. Contatta ASSONAM per abilitarlo.";
 
 type TabKey = "settings" | "campaigns" | "templates" | "history";
 type ContentMode = "text" | "html";
@@ -167,7 +169,6 @@ const OrgAdminCommunications = () => {
 
   const [settings, setSettings] = useState<OrgAdminCommunicationSettings | null>(null);
   const [settingsForm, setSettingsForm] = useState({
-    communications_enabled: false,
     sender_email_local_part: "",
     email_from_name_override: "",
     reply_to_email: "",
@@ -361,7 +362,6 @@ const OrgAdminCommunications = () => {
         if (cancelled) return;
         setSettings(settingsData);
         setSettingsForm({
-          communications_enabled: Boolean(settingsData.communications_enabled),
           sender_email_local_part: settingsData.sender_email_local_part || "",
           email_from_name_override: settingsData.email_from_name_override || "",
           reply_to_email: settingsData.reply_to_email || "",
@@ -402,6 +402,16 @@ const OrgAdminCommunications = () => {
   }, [loadCampaignDetail, selectedCampaignId]);
 
   useEffect(() => {
+    if (!settings) {
+      setAudienceEstimate(null);
+      setAudienceLoading(false);
+      return;
+    }
+    if (!settings.communications_enabled) {
+      setAudienceEstimate(null);
+      setAudienceLoading(false);
+      return;
+    }
     let cancelled = false;
     setAudienceLoading(true);
     fetchOrgAdminCommunicationAudienceEstimate(campaignForm.audience_type)
@@ -423,7 +433,7 @@ const OrgAdminCommunications = () => {
     return () => {
       cancelled = true;
     };
-  }, [campaignForm.audience_type, navigate]);
+  }, [campaignForm.audience_type, navigate, settings]);
 
   useEffect(() => {
     void loadTemplates(templateFilter, selectedTemplate?.id ?? undefined);
@@ -434,7 +444,7 @@ const OrgAdminCommunications = () => {
       buildAssociationEmailPreview({
         associationId: admin?.organization?.id,
         associationName: admin?.organization?.name,
-        communicationsEnabled: settingsForm.communications_enabled,
+        communicationsEnabled: Boolean(settings?.communications_enabled),
         senderEmailLocalPart: settingsForm.sender_email_local_part,
         emailFromNameOverride: settingsForm.email_from_name_override,
         replyToEmail: settingsForm.reply_to_email,
@@ -444,7 +454,8 @@ const OrgAdminCommunications = () => {
     [admin?.organization?.id, admin?.organization?.name, settings, settingsForm],
   );
 
-  const canSendCampaigns = Boolean(settingsForm.communications_enabled);
+  const moduleActive = Boolean(settings?.communications_enabled);
+  const communicationsLocked = !moduleActive;
 
   const handleSaveSettings = async (e: FormEvent) => {
     e.preventDefault();
@@ -452,15 +463,16 @@ const OrgAdminCommunications = () => {
     setSettingsSaving(true);
     setSettingsSaved(false);
     try {
+      if (communicationsLocked) {
+        throw new Error(COMMUNICATIONS_LOCKED_MESSAGE);
+      }
       const response = await putOrgAdminCommunicationSettings({
-        communications_enabled: settingsForm.communications_enabled,
         sender_email_local_part: normalizeText(settingsForm.sender_email_local_part),
         email_from_name_override: normalizeText(settingsForm.email_from_name_override),
         reply_to_email: normalizeText(settingsForm.reply_to_email),
       });
       setSettings(response.settings);
       setSettingsForm({
-        communications_enabled: Boolean(response.settings.communications_enabled),
         sender_email_local_part: response.settings.sender_email_local_part || "",
         email_from_name_override: response.settings.email_from_name_override || "",
         reply_to_email: response.settings.reply_to_email || "",
@@ -487,6 +499,9 @@ const OrgAdminCommunications = () => {
     if (testSending) return;
     setTestSending(true);
     try {
+      if (communicationsLocked) {
+        throw new Error(COMMUNICATIONS_LOCKED_MESSAGE);
+      }
       const response = await sendOrgAdminCommunicationTestEmail(testEmail);
       showToast({ title: "Email di test", message: response.message, tone: "success" });
     } catch (err) {
@@ -508,6 +523,9 @@ const OrgAdminCommunications = () => {
     if (draftSaving) return;
     setDraftSaving(true);
     try {
+      if (communicationsLocked) {
+        throw new Error(COMMUNICATIONS_LOCKED_MESSAGE);
+      }
       const createResponse = await createOrgAdminEmailCampaign({
         name: normalizeText(campaignForm.name),
         subject: campaignForm.subject.trim(),
@@ -557,6 +575,9 @@ const OrgAdminCommunications = () => {
     if (sendLoading) return;
     setSendLoading(true);
     try {
+      if (communicationsLocked) {
+        throw new Error(COMMUNICATIONS_LOCKED_MESSAGE);
+      }
       const response = await sendOrgAdminEmailCampaign(campaignId);
       showToast({
         title: "Storico campagne",
@@ -605,6 +626,9 @@ const OrgAdminCommunications = () => {
   const handlePreviewTemplate = async () => {
     setTemplatePreviewLoading(true);
     try {
+      if (communicationsLocked) {
+        throw new Error(COMMUNICATIONS_LOCKED_MESSAGE);
+      }
       const response = await previewOrgAdminEmailTemplate({
         template_id: selectedTemplate?.id,
         subject: templateEditor.subject,
@@ -632,6 +656,9 @@ const OrgAdminCommunications = () => {
     if (templateSaving) return;
     setTemplateSaving(true);
     try {
+      if (communicationsLocked) {
+        throw new Error(COMMUNICATIONS_LOCKED_MESSAGE);
+      }
       const response = await createOrgAdminEmailTemplate({
         name: templateEditor.name.trim(),
         category: normalizeText(templateEditor.category),
@@ -663,6 +690,9 @@ const OrgAdminCommunications = () => {
     if (!selectedTemplate || selectedTemplate.is_system || templateSaving) return;
     setTemplateSaving(true);
     try {
+      if (communicationsLocked) {
+        throw new Error(COMMUNICATIONS_LOCKED_MESSAGE);
+      }
       const response = await updateOrgAdminEmailTemplate(selectedTemplate.id, {
         name: templateEditor.name.trim(),
         category: normalizeText(templateEditor.category),
@@ -695,6 +725,9 @@ const OrgAdminCommunications = () => {
     if (!selectedTemplate || templateSaving) return;
     setTemplateSaving(true);
     try {
+      if (communicationsLocked) {
+        throw new Error(COMMUNICATIONS_LOCKED_MESSAGE);
+      }
       const response = await duplicateOrgAdminEmailTemplate(selectedTemplate.id);
       setSelectedTemplate(response.template);
       syncTemplateEditor(response.template);
@@ -720,6 +753,9 @@ const OrgAdminCommunications = () => {
     if (!selectedTemplate || selectedTemplate.is_system || templateSaving) return;
     setTemplateSaving(true);
     try {
+      if (communicationsLocked) {
+        throw new Error(COMMUNICATIONS_LOCKED_MESSAGE);
+      }
       await archiveOrgAdminEmailTemplate(selectedTemplate.id);
       showToast({ title: "Template", message: "Template archiviato.", tone: "success" });
       setSelectedTemplate(null);
@@ -742,6 +778,9 @@ const OrgAdminCommunications = () => {
 
   const handleUseTemplateInCampaign = async (template: OrgAdminEmailTemplate) => {
     try {
+      if (communicationsLocked) {
+        throw new Error(COMMUNICATIONS_LOCKED_MESSAGE);
+      }
       const detail = template.body_html === undefined && template.body_text === undefined
         ? (await fetchOrgAdminEmailTemplate(template.id)).template
         : template;
@@ -807,13 +846,27 @@ const OrgAdminCommunications = () => {
               <p className="font-semibold text-neutral-900">{admin?.organization?.name || "Associazione"}</p>
               <p className="mt-1 text-neutral-700">
                 Stato comunicazioni:{" "}
-                <span className={canSendCampaigns ? "text-emerald-700" : "text-amber-700"}>
-                  {canSendCampaigns ? "abilitate" : "disabilitate"}
+                <span className={moduleActive ? "text-emerald-700" : "text-amber-700"}>
+                  {moduleActive ? "attivo" : "non attivo"}
                 </span>
               </p>
             </div>
           </div>
         </div>
+
+        {communicationsLocked ? (
+          <div className="mx-6 mt-6 rounded-[1.75rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900 md:mx-8">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-700">Modulo non attivo</p>
+                <p className="mt-2">{COMMUNICATIONS_LOCKED_MESSAGE}</p>
+              </div>
+              <span className="inline-flex rounded-full border border-amber-300 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
+                Non attivo
+              </span>
+            </div>
+          </div>
+        ) : null}
 
         <div className="px-4 pt-4 md:px-8">
           <div className="flex flex-wrap gap-2 border-b border-neutral-200">
@@ -844,23 +897,19 @@ const OrgAdminCommunications = () => {
             <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
               <form className="space-y-5" onSubmit={handleSaveSettings}>
                 <div className="rounded-[1.75rem] border border-neutral-200 bg-white p-5">
-                  <label className="flex items-start gap-3">
-                    <input
-                      type="checkbox"
-                      className="mt-1 h-4 w-4 rounded border-neutral-300 text-brand focus:ring-brand/30"
-                      checked={settingsForm.communications_enabled}
-                      onChange={(e) => {
-                        setSettingsSaved(false);
-                        setSettingsForm((prev) => ({ ...prev, communications_enabled: e.target.checked }));
-                      }}
-                    />
-                    <span className="text-sm text-neutral-700">
-                      <span className="block font-semibold text-neutral-900">Abilita comunicazioni associazione</span>
-                      <span className="mt-1 block">
-                        Se disattivato puoi salvare la configurazione, ma l'invio campagne resta bloccato.
-                      </span>
-                    </span>
-                  </label>
+                  <p className="text-sm font-semibold text-neutral-900">Stato modulo</p>
+                  <p className="mt-2 text-sm text-neutral-600">
+                    Attivazione commerciale gestita solo dal super admin ASSONAM.
+                  </p>
+                  <span
+                    className={`mt-4 inline-flex rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${
+                      moduleActive
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        : "border-amber-200 bg-amber-50 text-amber-700"
+                    }`}
+                  >
+                    {moduleActive ? "Attivo" : "Non attivo"}
+                  </span>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
@@ -868,6 +917,7 @@ const OrgAdminCommunications = () => {
                     <label className={labelClass}>Local part mittente</label>
                     <input
                       className={inputClass}
+                      disabled={communicationsLocked}
                       value={settingsForm.sender_email_local_part}
                       onChange={(e) => {
                         setSettingsSaved(false);
@@ -881,6 +931,7 @@ const OrgAdminCommunications = () => {
                     <label className={labelClass}>Nome visibile mittente</label>
                     <input
                       className={inputClass}
+                      disabled={communicationsLocked}
                       value={settingsForm.email_from_name_override}
                       onChange={(e) => {
                         setSettingsSaved(false);
@@ -896,6 +947,7 @@ const OrgAdminCommunications = () => {
                   <input
                     className={inputClass}
                     type="email"
+                    disabled={communicationsLocked}
                     value={settingsForm.reply_to_email}
                     onChange={(e) => {
                       setSettingsSaved(false);
@@ -906,8 +958,14 @@ const OrgAdminCommunications = () => {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
-                  <button className="btn-primary" type="submit" disabled={settingsSaving}>
-                    {settingsSaving ? "Salvataggio..." : settingsSaved ? "Salvato ✓" : "Salva impostazioni"}
+                  <button className="btn-primary" type="submit" disabled={settingsSaving || communicationsLocked}>
+                    {communicationsLocked
+                      ? "Modulo non attivo"
+                      : settingsSaving
+                        ? "Salvataggio..."
+                        : settingsSaved
+                          ? "Salvato ✓"
+                          : "Salva impostazioni"}
                   </button>
                   <span className="text-sm text-neutral-500">
                     Dominio: <strong>{settings?.mail_from_domain || "non configurato"}</strong>
@@ -930,9 +988,14 @@ const OrgAdminCommunications = () => {
                   <p className="font-semibold text-neutral-900">
                     {preview.selectedMode === "association" ? "association" : "system fallback"}
                   </p>
+                  {communicationsLocked ? (
+                    <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
+                      {COMMUNICATIONS_LOCKED_MESSAGE}
+                    </p>
+                  ) : null}
                   {preview.fallbackUsed ? (
                     <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
-                      La preview sta usando il fallback system mode. Servono `communications_enabled=true` e `MAIL_FROM_DOMAIN`.
+                      La preview sta usando il fallback system mode. Serve anche `MAIL_FROM_DOMAIN`.
                     </p>
                   ) : null}
                 </div>
@@ -942,13 +1005,14 @@ const OrgAdminCommunications = () => {
                   <input
                     className={inputClass}
                     type="email"
+                    disabled={communicationsLocked}
                     value={testEmail}
                     onChange={(e) => setTestEmail(e.target.value)}
                     placeholder="nome@dominio.it"
                   />
                   <div className="mt-4 flex items-center gap-3">
-                    <button className="btn-primary" type="submit" disabled={testSending}>
-                      {testSending ? "Invio in corso..." : "Invia test"}
+                    <button className="btn-primary" type="submit" disabled={testSending || communicationsLocked}>
+                      {communicationsLocked ? "Non disponibile" : testSending ? "Invio in corso..." : "Invia test"}
                     </button>
                     <span className="text-xs text-neutral-500">Usa l'outbox email già esistente.</span>
                   </div>
@@ -971,6 +1035,7 @@ const OrgAdminCommunications = () => {
                     <label className={labelClass}>Nome interno</label>
                     <input
                       className={inputClass}
+                      disabled={communicationsLocked}
                       value={campaignForm.name}
                       onChange={(e) => setCampaignForm((prev) => ({ ...prev, name: e.target.value }))}
                       placeholder="Rinnovi marzo"
@@ -980,6 +1045,7 @@ const OrgAdminCommunications = () => {
                     <label className={labelClass}>Audience</label>
                     <select
                       className={inputClass}
+                      disabled={communicationsLocked}
                       value={campaignForm.audience_type}
                       onChange={(e) =>
                         setCampaignForm((prev) => ({
@@ -1003,6 +1069,7 @@ const OrgAdminCommunications = () => {
                     <label className={labelClass}>Template riutilizzabile</label>
                     <select
                       className={inputClass}
+                      disabled={communicationsLocked}
                       value={selectedTemplateId ?? ""}
                       onChange={(e) => {
                         const nextId = Number(e.target.value || 0);
@@ -1022,7 +1089,7 @@ const OrgAdminCommunications = () => {
                   <button
                     type="button"
                     className="btn-secondary"
-                    disabled={!selectedTemplateId}
+                    disabled={!selectedTemplateId || communicationsLocked}
                     onClick={() => {
                       const template = templates.find((item) => item.id === selectedTemplateId);
                       if (template) {
@@ -1036,9 +1103,10 @@ const OrgAdminCommunications = () => {
 
                 <div>
                   <label className={labelClass}>Oggetto</label>
-                  <input
-                    className={inputClass}
-                    value={campaignForm.subject}
+                    <input
+                      className={inputClass}
+                      disabled={communicationsLocked}
+                      value={campaignForm.subject}
                     onChange={(e) => setCampaignForm((prev) => ({ ...prev, subject: e.target.value }))}
                     placeholder="Rinnova la tua iscrizione"
                   />
@@ -1054,6 +1122,7 @@ const OrgAdminCommunications = () => {
                           ? "bg-brand text-white"
                           : "border border-neutral-200 bg-white text-neutral-600 hover:text-neutral-900"
                       }`}
+                      disabled={communicationsLocked}
                       onClick={() => setContentMode(mode)}
                     >
                       {mode === "text" ? "Testo semplice" : "HTML"}
@@ -1065,29 +1134,30 @@ const OrgAdminCommunications = () => {
                   <label className={labelClass}>Corpo messaggio</label>
                   <textarea
                     className={`${inputClass} min-h-[240px]`}
+                    disabled={communicationsLocked}
                     value={campaignForm.body}
                     onChange={(e) => setCampaignForm((prev) => ({ ...prev, body: e.target.value }))}
                     placeholder={contentMode === "html" ? "<p>Ciao...</p>" : "Ciao,\n\nla tua tessera sta per scadere..."}
                   />
                 </div>
 
-                {!canSendCampaigns ? (
+                {communicationsLocked ? (
                   <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                     Le campagne non possono essere inviate finché le comunicazioni associazione non sono abilitate.
                   </div>
                 ) : null}
 
                 <div className="flex flex-wrap gap-3">
-                  <button className="btn-secondary" type="submit" disabled={draftSaving}>
-                    {draftSaving ? "Salvataggio..." : "Salva bozza"}
+                  <button className="btn-secondary" type="submit" disabled={draftSaving || communicationsLocked}>
+                    {communicationsLocked ? "Bloccato" : draftSaving ? "Salvataggio..." : "Salva bozza"}
                   </button>
                   <button
                     className="btn-primary"
                     type="button"
-                    disabled={draftSaving || !canSendCampaigns}
+                    disabled={draftSaving || communicationsLocked}
                     onClick={() => void handleCreateCampaign("send")}
                   >
-                    {draftSaving ? "Invio..." : "Salva e invia"}
+                    {communicationsLocked ? "Invio bloccato" : draftSaving ? "Invio..." : "Salva e invia"}
                   </button>
                 </div>
               </form>
@@ -1096,10 +1166,16 @@ const OrgAdminCommunications = () => {
                 <div className="rounded-[1.75rem] border border-neutral-200 bg-neutral-50 p-5">
                   <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Stima audience</p>
                   <p className="mt-3 text-3xl font-bold tracking-tight text-neutral-900">
-                    {audienceLoading ? "..." : audienceEstimate ?? "-"}
+                    {communicationsLocked ? "-" : audienceLoading ? "..." : audienceEstimate ?? "-"}
                   </p>
                   <p className="mt-2 text-sm text-neutral-600">
-                    Destinatari previsti per <strong>{audienceLabel(campaignForm.audience_type)}</strong>.
+                    {communicationsLocked ? (
+                      "Stima audience disponibile dopo l'attivazione del modulo."
+                    ) : (
+                      <>
+                        Destinatari previsti per <strong>{audienceLabel(campaignForm.audience_type)}</strong>.
+                      </>
+                    )}
                   </p>
                 </div>
                 <div className="rounded-[1.75rem] border border-neutral-200 bg-white p-5">
@@ -1141,6 +1217,7 @@ const OrgAdminCommunications = () => {
                   <button
                     type="button"
                     className="btn-secondary"
+                    disabled={communicationsLocked}
                     onClick={() => {
                       setSelectedTemplate(null);
                       syncTemplateEditor(null);
@@ -1213,7 +1290,8 @@ const OrgAdminCommunications = () => {
                           </div>
                           <button
                             type="button"
-                            className="text-xs font-semibold text-brand hover:text-brand/80"
+                            className="text-xs font-semibold text-brand hover:text-brand/80 disabled:cursor-not-allowed disabled:text-neutral-400"
+                            disabled={communicationsLocked}
                             onClick={(e) => {
                               e.stopPropagation();
                               void handleUseTemplateInCampaign(template);
@@ -1244,12 +1322,12 @@ const OrgAdminCommunications = () => {
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {selectedTemplate ? (
-                        <button className="btn-secondary" type="button" onClick={() => void handleDuplicateTemplate()} disabled={templateSaving}>
+                        <button className="btn-secondary" type="button" onClick={() => void handleDuplicateTemplate()} disabled={templateSaving || communicationsLocked}>
                           Duplica
                         </button>
                       ) : null}
                       {selectedTemplate && !selectedTemplate.is_system ? (
-                        <button className="btn-secondary" type="button" onClick={() => void handleArchiveTemplate()} disabled={templateSaving}>
+                        <button className="btn-secondary" type="button" onClick={() => void handleArchiveTemplate()} disabled={templateSaving || communicationsLocked}>
                           Archivia
                         </button>
                       ) : null}
@@ -1262,7 +1340,7 @@ const OrgAdminCommunications = () => {
                         <label className={labelClass}>Nome</label>
                         <input
                           className={inputClass}
-                          disabled={Boolean(selectedTemplate?.is_system)}
+                          disabled={Boolean(selectedTemplate?.is_system) || communicationsLocked}
                           value={templateEditor.name}
                           onChange={(e) => setTemplateEditor((prev) => ({ ...prev, name: e.target.value }))}
                           placeholder="Sollecito rinnovo premium"
@@ -1272,7 +1350,7 @@ const OrgAdminCommunications = () => {
                         <label className={labelClass}>Categoria</label>
                         <input
                           className={inputClass}
-                          disabled={Boolean(selectedTemplate?.is_system)}
+                          disabled={Boolean(selectedTemplate?.is_system) || communicationsLocked}
                           value={templateEditor.category}
                           onChange={(e) => setTemplateEditor((prev) => ({ ...prev, category: e.target.value }))}
                           placeholder="renewal"
@@ -1284,7 +1362,7 @@ const OrgAdminCommunications = () => {
                       <label className={labelClass}>Oggetto</label>
                       <input
                         className={inputClass}
-                        disabled={Boolean(selectedTemplate?.is_system)}
+                        disabled={Boolean(selectedTemplate?.is_system) || communicationsLocked}
                         value={templateEditor.subject}
                         onChange={(e) => setTemplateEditor((prev) => ({ ...prev, subject: e.target.value }))}
                         placeholder="Oggetto email"
@@ -1301,6 +1379,7 @@ const OrgAdminCommunications = () => {
                               ? "bg-brand text-white"
                               : "border border-neutral-200 bg-white text-neutral-600 hover:text-neutral-900"
                           }`}
+                          disabled={communicationsLocked}
                           onClick={() => setTemplateContentMode(mode)}
                         >
                           {mode === "text" ? "Testo semplice" : "HTML"}
@@ -1312,7 +1391,7 @@ const OrgAdminCommunications = () => {
                       <label className={labelClass}>Body</label>
                       <textarea
                         className={`${inputClass} min-h-[220px]`}
-                        disabled={Boolean(selectedTemplate?.is_system)}
+                        disabled={Boolean(selectedTemplate?.is_system) || communicationsLocked}
                         value={templateEditor.body}
                         onChange={(e) => setTemplateEditor((prev) => ({ ...prev, body: e.target.value }))}
                         placeholder={templateContentMode === "html" ? "<p>Ciao {{nome_socio}}</p>" : "Ciao {{nome_socio}}"}
@@ -1320,20 +1399,31 @@ const OrgAdminCommunications = () => {
                     </div>
 
                     <div className="flex flex-wrap gap-3">
-                      <button className="btn-secondary" type="button" onClick={() => void handlePreviewTemplate()} disabled={templatePreviewLoading}>
-                        {templatePreviewLoading ? "Preview..." : "Aggiorna preview"}
+                      <button className="btn-secondary" type="button" onClick={() => void handlePreviewTemplate()} disabled={templatePreviewLoading || communicationsLocked}>
+                        {communicationsLocked ? "Preview bloccata" : templatePreviewLoading ? "Preview..." : "Aggiorna preview"}
                       </button>
                       {!selectedTemplate || !selectedTemplate.is_system ? (
                         <button
                           className="btn-primary"
                           type="button"
-                          disabled={templateSaving}
+                          disabled={templateSaving || communicationsLocked}
                           onClick={() => void (selectedTemplate ? handleUpdateTemplate() : handleCreateTemplate())}
                         >
-                          {templateSaving ? "Salvataggio..." : selectedTemplate ? "Salva template" : "Crea template"}
+                          {communicationsLocked
+                            ? "Salvataggio bloccato"
+                            : templateSaving
+                              ? "Salvataggio..."
+                              : selectedTemplate
+                                ? "Salva template"
+                                : "Crea template"}
                         </button>
                       ) : null}
                     </div>
+                    {communicationsLocked ? (
+                      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                        {COMMUNICATIONS_LOCKED_MESSAGE}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 
@@ -1469,17 +1559,17 @@ const OrgAdminCommunications = () => {
                         <button
                           type="button"
                           className="btn-primary"
-                          disabled={sendLoading || !canSendCampaigns}
+                          disabled={sendLoading || communicationsLocked}
                           onClick={() => void handleSendExistingCampaign(selectedCampaign.id)}
                         >
-                          {sendLoading ? "Invio..." : "Invia campagna"}
+                          {communicationsLocked ? "Invio bloccato" : sendLoading ? "Invio..." : "Invia campagna"}
                         </button>
                       ) : null}
                     </div>
 
-                    {!canSendCampaigns ? (
+                    {communicationsLocked ? (
                       <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                        Invio disabilitato: abilita prima le comunicazioni associazione nel tab Impostazioni.
+                        {COMMUNICATIONS_LOCKED_MESSAGE}
                       </div>
                     ) : null}
 

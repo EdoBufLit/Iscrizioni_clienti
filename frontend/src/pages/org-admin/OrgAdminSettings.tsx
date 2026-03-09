@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   fetchOrgAdminOrganization,
   patchOrgAdminOrganization,
+  putOrgAdminCommunicationSettings,
   uploadOrgAdminStatute,
   uploadOrgAdminWalletAssets,
   AuthError,
@@ -14,6 +15,8 @@ import { useToast } from "../../components/ui/ToastProvider";
 const inputClass =
   "mt-1 w-full rounded-md border border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20";
 const labelClass = "block text-sm font-medium text-neutral-700";
+const COMMUNICATIONS_LOCKED_MESSAGE =
+  "Modulo Comunicazioni non attivo. Contatta ASSONAM per abilitarlo.";
 
 type EmailPreview = {
   requestedMode: "association";
@@ -110,7 +113,6 @@ const OrgAdminSettings = () => {
   const [saveError, setSaveError] = useState("");
 
   const [emailSettingsForm, setEmailSettingsForm] = useState({
-    communications_enabled: false,
     sender_email_local_part: "",
     email_from_name_override: "",
     reply_to_email: "",
@@ -160,7 +162,6 @@ const OrgAdminSettings = () => {
           wallet_is_test_prefix: Boolean(data.wallet_is_test_prefix),
         });
         setEmailSettingsForm({
-          communications_enabled: Boolean(data.communications_enabled),
           sender_email_local_part: data.sender_email_local_part || "",
           email_from_name_override: data.email_from_name_override || "",
           reply_to_email: data.reply_to_email || "",
@@ -186,7 +187,7 @@ const OrgAdminSettings = () => {
       setEmailSettingsSaved(false);
       setEmailSettingsForm((prev) => ({
         ...prev,
-        [field]: field === "communications_enabled" ? e.target.checked : e.target.value,
+        [field]: e.target.value,
       }));
     };
 
@@ -384,19 +385,28 @@ const OrgAdminSettings = () => {
     setEmailSettingsError("");
     setEmailSettingsSaved(false);
     try {
-      const result = await patchOrgAdminOrganization({
-        communications_enabled: emailSettingsForm.communications_enabled,
+      if (!org?.communications_enabled) {
+        throw new Error(COMMUNICATIONS_LOCKED_MESSAGE);
+      }
+      const result = await putOrgAdminCommunicationSettings({
         sender_email_local_part: normalizeText(emailSettingsForm.sender_email_local_part),
         email_from_name_override: normalizeText(emailSettingsForm.email_from_name_override),
         reply_to_email: normalizeText(emailSettingsForm.reply_to_email),
       });
-      if (result.organization) {
-        setOrg(result.organization);
+      if (org) {
+        setOrg({
+          ...org,
+          sender_email_local_part: result.settings.sender_email_local_part,
+          email_from_name_override: result.settings.email_from_name_override,
+          reply_to_email: result.settings.reply_to_email,
+          mail_from_domain: result.settings.mail_from_domain,
+          system_email_sender: result.settings.system_email_sender,
+          association_email_sender: result.settings.association_email_sender,
+        });
         setEmailSettingsForm({
-          communications_enabled: Boolean(result.organization.communications_enabled),
-          sender_email_local_part: result.organization.sender_email_local_part || "",
-          email_from_name_override: result.organization.email_from_name_override || "",
-          reply_to_email: result.organization.reply_to_email || "",
+          sender_email_local_part: result.settings.sender_email_local_part || "",
+          email_from_name_override: result.settings.email_from_name_override || "",
+          reply_to_email: result.settings.reply_to_email || "",
         });
       }
       setEmailSettingsSaved(true);
@@ -422,13 +432,14 @@ const OrgAdminSettings = () => {
   const emailPreview = buildAssociationEmailPreview({
     associationId: org?.id,
     associationName: normalizeText(form.name) || org?.name,
-    communicationsEnabled: emailSettingsForm.communications_enabled,
+    communicationsEnabled: Boolean(org?.communications_enabled),
     senderEmailLocalPart: emailSettingsForm.sender_email_local_part,
     emailFromNameOverride: emailSettingsForm.email_from_name_override,
     replyToEmail: emailSettingsForm.reply_to_email,
     mailFromDomain: org?.mail_from_domain,
     systemSender: org?.system_email_sender,
   });
+  const communicationsLocked = !Boolean(org?.communications_enabled);
 
   if (loading) {
     return (
@@ -585,23 +596,17 @@ const OrgAdminSettings = () => {
             </p>
           </div>
           <div className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">
-            Mode attuale: {emailPreview.selectedMode}
+            {communicationsLocked ? "Modulo non attivo" : `Mode attuale: ${emailPreview.selectedMode}`}
           </div>
         </div>
 
-        <div className="mt-6 grid gap-5 md:grid-cols-2">
-          <div className="md:col-span-2">
-            <label className="inline-flex items-center gap-3 text-sm text-neutral-700">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-neutral-300 text-brand focus:ring-brand/30"
-                checked={emailSettingsForm.communications_enabled}
-                onChange={handleEmailSettingsChange("communications_enabled")}
-              />
-              Abilita comunicazioni associazione con mittente dedicato
-            </label>
+        {communicationsLocked && (
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+            {COMMUNICATIONS_LOCKED_MESSAGE}
           </div>
+        )}
 
+        <div className="mt-6 grid gap-5 md:grid-cols-2">
           <div>
             <label htmlFor="sender-email-local-part" className={labelClass}>
               Local part mittente
@@ -610,6 +615,7 @@ const OrgAdminSettings = () => {
               id="sender-email-local-part"
               className={inputClass}
               type="text"
+              disabled={communicationsLocked}
               placeholder="golden-age-club"
               value={emailSettingsForm.sender_email_local_part}
               onChange={handleEmailSettingsChange("sender_email_local_part")}
@@ -627,6 +633,7 @@ const OrgAdminSettings = () => {
               id="email-from-name-override"
               className={inputClass}
               type="text"
+              disabled={communicationsLocked}
               placeholder={normalizeText(form.name) || org?.name || "ASSONAM"}
               value={emailSettingsForm.email_from_name_override}
               onChange={handleEmailSettingsChange("email_from_name_override")}
@@ -644,6 +651,7 @@ const OrgAdminSettings = () => {
               id="reply-to-email"
               className={inputClass}
               type="email"
+              disabled={communicationsLocked}
               placeholder="segreteria@associazione.it"
               value={emailSettingsForm.reply_to_email}
               onChange={handleEmailSettingsChange("reply_to_email")}
@@ -681,6 +689,18 @@ const OrgAdminSettings = () => {
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">Regole attive</p>
             <div className="mt-4 space-y-3 text-sm text-neutral-600">
               <p>
+                Stato modulo:{" "}
+                <span
+                  className={
+                    communicationsLocked
+                      ? "font-semibold text-amber-700"
+                      : "font-semibold text-emerald-700"
+                  }
+                >
+                  {communicationsLocked ? "Non attivo" : "Attivo"}
+                </span>
+              </p>
+              <p>
                 Dominio mittente:{" "}
                 <span className="font-semibold text-neutral-900">{org?.mail_from_domain || "non configurato"}</span>
               </p>
@@ -698,6 +718,11 @@ const OrgAdminSettings = () => {
                   {emailPreview.fallbackUsed ? "Si, system mode" : "No, association mode"}
                 </span>
               </p>
+              {communicationsLocked && (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
+                  L'attivazione del modulo Comunicazioni e gestita solo dal super admin ASSONAM.
+                </p>
+              )}
               {!org?.mail_from_domain && (
                 <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
                   <code>MAIL_FROM_DOMAIN</code> non configurato: la preview e l&apos;invio useranno system mode.
@@ -721,7 +746,7 @@ const OrgAdminSettings = () => {
                 ? "bg-emerald-600 hover:bg-emerald-700"
                 : "bg-neutral-900 hover:bg-neutral-800"
             } disabled:cursor-not-allowed disabled:opacity-60`}
-            disabled={emailSettingsSaving}
+            disabled={emailSettingsSaving || communicationsLocked}
             onClick={handleAssociationEmailSave}
           >
             {emailSettingsSaved && !emailSettingsSaving && (
@@ -729,7 +754,13 @@ const OrgAdminSettings = () => {
                 <path fillRule="evenodd" d="M16.704 5.29a1 1 0 0 1 .006 1.414l-7.25 7.313a1 1 0 0 1-1.42 0l-3-3.024a1 1 0 1 1 1.42-1.408l2.29 2.308 6.54-6.597a1 1 0 0 1 1.414-.006Z" clipRule="evenodd" />
               </svg>
             )}
-            {emailSettingsSaving ? "Salvataggio..." : emailSettingsSaved ? "Salvato" : "Salva impostazioni email"}
+            {communicationsLocked
+              ? "Modulo non attivo"
+              : emailSettingsSaving
+                ? "Salvataggio..."
+                : emailSettingsSaved
+                  ? "Salvato"
+                  : "Salva impostazioni email"}
           </button>
         </div>
       </div>

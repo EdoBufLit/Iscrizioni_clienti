@@ -199,6 +199,7 @@ def _serialize_organization_row(
         "province": org.province,
         "auto_approve_signup": bool(org.auto_approve_signup),
         "accounting_enabled": bool(org.accounting_enabled),
+        "communications_enabled": bool(org.communications_enabled),
         "card_min": card_min,
         "card_max": card_max,
         "affiliation_application_id": affiliation_application_id,
@@ -378,6 +379,7 @@ class PatchOrganization(BaseModel):
     is_active: Optional[bool] = None
     auto_approve_signup: Optional[bool] = None
     accounting_enabled: Optional[bool] = None
+    communications_enabled: Optional[bool] = None
 
 
 def _normalize_tag_culture(value: Optional[str]) -> Optional[str]:
@@ -1559,6 +1561,8 @@ def update_organization(
         update_data["auto_approve_signup"] = bool(update_data["auto_approve_signup"])
     if "accounting_enabled" in update_data:
         update_data["accounting_enabled"] = bool(update_data["accounting_enabled"])
+    if "communications_enabled" in update_data:
+        update_data["communications_enabled"] = bool(update_data["communications_enabled"])
 
     for key, value in update_data.items():
         setattr(org, key, value)

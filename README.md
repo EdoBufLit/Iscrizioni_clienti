@@ -181,11 +181,19 @@ Regole operative:
 - `reply_to_email` viene applicato solo in `association` mode.
 - Se configurazione o association mode non sono disponibili, il sistema fa fallback automatico e loggato a `system`.
 
+### Modulo Comunicazioni
+
+`organizations.communications_enabled` e un flag commerciale con default `false` ed e gestito solo dal super admin ASSONAM.
+
+- Super admin: puo attivare o disattivare il modulo dalla gestione associazioni.
+- Org admin: puo vedere la sezione `Comunicazioni`, ma puo usarla solo quando il modulo e attivo.
+- Se il modulo non e attivo, la UI org-admin mostra stato locked con messaggio `Modulo Comunicazioni non attivo. Contatta ASSONAM per abilitarlo.` e blocca test email, campagne, template e altre azioni operative.
+
 ### Org-admin Comunicazioni
 
 La dashboard org-admin include ora la sezione `Comunicazioni` su `/org-admin/comunicazioni`.
 
-- `Impostazioni`: gestisce `communications_enabled`, `sender_email_local_part`, `email_from_name_override`, `reply_to_email` e mostra una preview live del mittente effettivo.
+- `Impostazioni`: gestisce `sender_email_local_part`, `email_from_name_override`, `reply_to_email` e mostra una preview live del mittente effettivo.
 - `Campagne`: crea bozze o invia subito campagne verso `tutti i soci attivi`, `soci scaduti` o `soci con rinnovo in scadenza`, anche partendo da template riutilizzabili.
 - `Template`: libreria con template `system` ASSONAM non modificabili ma duplicabili e template `association` modificabili/archiviabili per la singola associazione.
 - `Storico`: mostra campagne inviate/bozze, numero destinatari, stato e dettaglio dei recipient snapshot con `sent` o `failed` e `error_message` se presente.
@@ -193,7 +201,7 @@ La dashboard org-admin include ora la sezione `Comunicazioni` su `/org-admin/com
 Regole operative:
 
 - Le campagne usano sempre `association` mode.
-- Se `communications_enabled=false`, la creazione bozza resta disponibile ma l'invio viene bloccato con messaggio chiaro.
+- Se `communications_enabled=false`, tutte le azioni operative org-admin del modulo restano bloccate.
 - L'invio email di test usa lo stesso sender resolver dell'associazione e passa comunque dall'outbox esistente.
 - Ogni invio campagna salva uno snapshot destinatari in `email_campaign_recipients` prima dell'accodamento SMTP.
 - I placeholder supportati sono `{{nome_socio}}`, `{{nome_associazione}}`, `{{numero_tessera}}`, `{{data_scadenza}}`, `{{link_rinnovo}}`, `{{link_documento}}`.

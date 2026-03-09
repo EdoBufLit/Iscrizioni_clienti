@@ -11,6 +11,7 @@ from app.db import SessionLocal
 from app.models import (
     AdminRole,
     AdminUser,
+    EmailCampaign,
     Member,
     OrgAdminToken,
     Organization,
@@ -35,6 +36,15 @@ def _login_org_admin(client, db, admin_id: int) -> None:
     db.add(token)
     db.commit()
     client.get(f"/api/org-admin/auth/verify?token={token_str}", follow_redirects=False)
+
+
+def _login_super_admin(client) -> None:
+    client.post("/api/super-admin/auth/logout")
+    response = client.post(
+        "/api/super-admin/auth/login",
+        json={"email": "admin@assonam.it", "password": "admin"},
+    )
+    assert response.status_code == 200, response.text
 
 
 def _create_org_admin(db, *, communications_enabled: bool) -> tuple[Organization, AdminUser]:
@@ -106,7 +116,6 @@ def test_org_admin_communications_settings_and_test_email(client, db, drain_emai
         put_res = client.put(
             "/api/org-admin/communications/settings",
             json={
-                "communications_enabled": True,
                 "sender_email_local_part": "Golden   Age Club!!!",
                 "email_from_name_override": "Golden Age Club",
                 "reply_to_email": "segreteria@goldenage.it",
@@ -301,9 +310,116 @@ def test_org_admin_campaign_send_blocked_when_communications_disabled(client, db
             "audience_type": "active_members",
         },
     )
-    assert create_res.status_code == 201, create_res.text
-    campaign_id = create_res.json()["campaign"]["id"]
+    assert create_res.status_code == 403, create_res.text
+    assert "Modulo Comunicazioni non attivo" in create_res.json()["detail"]
 
-    send_res = client.post(f"/api/org-admin/communications/campaigns/{campaign_id}/send")
-    assert send_res.status_code == 409, send_res.text
-    assert "non sono abilitate" in send_res.json()["detail"]
+    campaign = EmailCampaign(
+        association_id=org.id,
+        subject="Newsletter",
+        body_text="Test",
+        audience_type="active_members",
+        status="draft",
+        created_by_user_id=admin.id,
+    )
+    db.add(campaign)
+    db.commit()
+    db.refresh(campaign)
+
+    send_res = client.post(f"/api/org-admin/communications/campaigns/{campaign.id}/send")
+    assert send_res.status_code == 403, send_res.text
+    assert "Modulo Comunicazioni non attivo" in send_res.json()["detail"]
+
+
+def test_org_admin_cannot_toggle_communications_module_via_generic_update(client, db):
+    org, admin = _create_org_admin(db, communications_enabled=False)
+    _login_org_admin(client, db, admin.id)
+
+    response = client.patch(
+        "/api/org-admin/organization",
+        json={"communications_enabled": True},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["organization"]["communications_enabled"] is False
+    db.refresh(org)
+    assert bool(org.communications_enabled) is False
+
+
+def test_org_admin_operational_communications_endpoints_are_locked_when_module_disabled(client, db):
+    org, admin = _create_org_admin(db, communications_enabled=False)
+    _login_org_admin(client, db, admin.id)
+
+    settings_res = client.get("/api/org-admin/communications/settings")
+    assert settings_res.status_code == 200, settings_res.text
+    assert settings_res.json()["communications_enabled"] is False
+
+    system_templates = client.get("/api/org-admin/communications/templates?scope=system")
+    assert system_templates.status_code == 200, system_templates.text
+    template_id = system_templates.json()["items"][0]["id"]
+
+    blocked_requests = [
+        (
+            "put",
+            "/api/org-admin/communications/settings",
+            {
+                "sender_email_local_part": "golden-age-club",
+                "email_from_name_override": "Golden Age Club",
+                "reply_to_email": "segreteria@goldenage.it",
+            },
+        ),
+        ("post", "/api/org-admin/communications/test-email", {"to_email": "destinatario@example.com"}),
+        ("get", "/api/org-admin/communications/audience-estimate?audience_type=active_members", None),
+        (
+            "post",
+            "/api/org-admin/communications/campaigns",
+            {
+                "name": "Draft",
+                "subject": "Newsletter",
+                "body_text": "Test",
+                "audience_type": "active_members",
+            },
+        ),
+        (
+            "post",
+            "/api/org-admin/communications/templates",
+            {
+                "name": "Template custom",
+                "subject": "Oggetto",
+                "body_text": "Ciao",
+                "channel": "email",
+            },
+        ),
+        (
+            "post",
+            "/api/org-admin/communications/templates/preview",
+            {"template_id": template_id},
+        ),
+        (
+            "post",
+            f"/api/org-admin/communications/templates/{template_id}/duplicate",
+            {"name": "Copia bloccata"},
+        ),
+    ]
+
+    for method, path, payload in blocked_requests:
+        if method == "get":
+            response = client.get(path)
+        elif method == "put":
+            response = client.put(path, json=payload)
+        else:
+            response = client.post(path, json=payload)
+        assert response.status_code == 403, (path, response.status_code, response.text)
+        assert "Modulo Comunicazioni non attivo" in response.json()["detail"]
+
+
+def test_super_admin_can_toggle_communications_module_for_organization(client, db):
+    org, _admin = _create_org_admin(db, communications_enabled=False)
+    _login_super_admin(client)
+
+    response = client.patch(
+        f"/api/super-admin/organizations/{org.id}",
+        json={"communications_enabled": True},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["communications_enabled"] is True
+    db.refresh(org)
+    assert bool(org.communications_enabled) is True

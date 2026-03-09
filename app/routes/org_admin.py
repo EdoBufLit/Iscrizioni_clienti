@@ -230,6 +230,19 @@ def _normalize_org_communications_update(
     return normalized
 
 
+COMMUNICATIONS_MODULE_LOCKED_MESSAGE = (
+    "Modulo Comunicazioni non attivo. Contatta ASSONAM per abilitarlo."
+)
+
+
+def _require_active_communications_module(org: Organization) -> None:
+    if not bool(org.communications_enabled):
+        raise HTTPException(
+            status_code=403,
+            detail=COMMUNICATIONS_MODULE_LOCKED_MESSAGE,
+        )
+
+
 def _serialize_communications_sender(sender) -> dict[str, object]:
     return {
         "from_name": sender.from_name,
@@ -1028,14 +1041,9 @@ class PatchOrgOrganization(BaseModel):
     wallet_bg_color: Optional[str] = None
     wallet_title_override: Optional[str] = None
     wallet_is_test_prefix: Optional[bool] = None
-    communications_enabled: Optional[bool] = None
-    sender_email_local_part: Optional[str] = None
-    email_from_name_override: Optional[str] = None
-    reply_to_email: Optional[str] = None
 
 
 class PutOrgCommunicationSettings(BaseModel):
-    communications_enabled: bool = False
     sender_email_local_part: Optional[str] = None
     email_from_name_override: Optional[str] = None
     reply_to_email: Optional[str] = None
@@ -1212,8 +1220,6 @@ def patch_organization(
     if "name" in update_data:
         update_data["name"] = _normalize_tag_culture(update_data.get("name"))
 
-    update_data = _normalize_org_communications_update(update_data)
-
     for key, value in update_data.items():
         setattr(org, key, value)
 
@@ -1261,8 +1267,8 @@ def put_communications_settings(
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     org = admin.organization
+    _require_active_communications_module(org)
     update_data = _normalize_org_communications_update(body.model_dump())
-    update_data["communications_enabled"] = bool(update_data.get("communications_enabled"))
 
     for key, value in update_data.items():
         setattr(org, key, value)
@@ -1300,6 +1306,7 @@ def send_communications_test_email(
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     org = admin.organization
+    _require_active_communications_module(org)
     outbox_id = enqueue_test_email(
         db,
         organization=org,
@@ -1373,6 +1380,7 @@ def create_communication_template(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
+    _require_active_communications_module(admin.organization)
     body_html, body_text = normalize_template_bodies(
         body_html=body.body_html,
         body_text=body.body_text,
@@ -1424,6 +1432,7 @@ def preview_communication_template(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
+    _require_active_communications_module(admin.organization)
     template = None
     if body.template_id is not None:
         template = _get_email_template_for_admin(db, admin=admin, template_id=body.template_id)
@@ -1482,6 +1491,7 @@ def update_communication_template(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
+    _require_active_communications_module(admin.organization)
     template = _get_email_template_for_admin(db, admin=admin, template_id=template_id)
     if template.is_system:
         raise HTTPException(
@@ -1522,6 +1532,7 @@ def duplicate_communication_template(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
+    _require_active_communications_module(admin.organization)
     template = _get_email_template_for_admin(db, admin=admin, template_id=template_id)
     duplicate = EmailTemplate(
         association_id=admin.org_id,
@@ -1554,6 +1565,7 @@ def archive_communication_template(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
+    _require_active_communications_module(admin.organization)
     template = _get_email_template_for_admin(db, admin=admin, template_id=template_id)
     if template.is_system:
         raise HTTPException(
@@ -1582,6 +1594,7 @@ def get_communications_audience_estimate(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
+    _require_active_communications_module(admin.organization)
     normalized_audience = (audience_type or "").strip()
     recipients = resolve_audience_recipients(
         db,
@@ -1630,6 +1643,7 @@ def create_communications_campaign(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
+    _require_active_communications_module(admin.organization)
     campaign = create_campaign_draft(
         db,
         organization=admin.organization,
@@ -1696,6 +1710,7 @@ def get_communications_campaign_recipients(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
+    _require_active_communications_module(admin.organization)
     campaign = (
         db.query(EmailCampaign)
         .filter(
@@ -1735,6 +1750,7 @@ def send_communications_campaign(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
+    _require_active_communications_module(admin.organization)
     campaign = (
         db.query(EmailCampaign)
         .filter(

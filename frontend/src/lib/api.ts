@@ -731,10 +731,6 @@ export async function patchOrgAdminOrganization(data: {
   wallet_bg_color?: string | null;
   wallet_title_override?: string | null;
   wallet_is_test_prefix?: boolean;
-  communications_enabled?: boolean;
-  sender_email_local_part?: string | null;
-  email_from_name_override?: string | null;
-  reply_to_email?: string | null;
 }): Promise<{ ok: boolean; organization?: OrgAdminOrganizationDetail }> {
   const res = await fetch("/api/org-admin/organization", {
     method: "PATCH",
@@ -754,7 +750,6 @@ export async function fetchOrgAdminCommunicationSettings(): Promise<OrgAdminComm
 }
 
 export async function putOrgAdminCommunicationSettings(data: {
-  communications_enabled: boolean;
   sender_email_local_part?: string | null;
   email_from_name_override?: string | null;
   reply_to_email?: string | null;
@@ -1418,6 +1413,7 @@ export type SuperAdminOrganization = {
   province: string | null;
   auto_approve_signup?: boolean;
   accounting_enabled?: boolean;
+  communications_enabled?: boolean;
   card_min: number | null;
   card_max: number | null;
   affiliation_application_id?: number | null;
@@ -2238,6 +2234,7 @@ export async function patchSuperAdminOrganization(
     is_active?: boolean;
     auto_approve_signup?: boolean;
     accounting_enabled?: boolean;
+    communications_enabled?: boolean;
   },
 ): Promise<SuperAdminOrganization> {
   const res = await fetch(`/api/super-admin/organizations/${orgId}`, {
