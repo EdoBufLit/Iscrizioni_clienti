@@ -768,7 +768,7 @@ export async function sendOrgAdminCommunicationTestEmail(
   toEmail: string,
 ): Promise<{
   ok: boolean;
-  outbox_id: string;
+  provider_message_id: string;
   message: string;
   sender: OrgAdminCommunicationSettings["association_email_sender"];
 }> {

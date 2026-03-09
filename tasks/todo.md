@@ -2933,3 +2933,18 @@ pm --prefix frontend run build -> OK
 - Fix: il path SMTP usa ora `sender_selection.from_email` come envelope sender, allineato alla stessa logica `resolve_email_sender(...)` usata dalla preview UI e dal `From` header MIME.
 - Logging: aggiunti campi espliciti prima dell'invio (`selected_mode`, `communications_enabled`, `mail_from_domain_present`, `from_name`, `from_email`, `from_header`, `fallback_used`).
 - Verifiche: `python -m compileall app tests`; `python -m pytest -q tests/test_association_email_sender.py tests/test_org_admin_communications.py`.
+
+## Communications transport Mailtrap refactor (Mar 10, 2026)
+- [x] Mappare send path attuali (test email, campagne, worker/outbox) e aggiornare config minima per il token Mailtrap
+- [x] Introdurre transport Mailtrap dedicato per `association` mode con supporto `reply_to`, attachment inline e classificazione errori provider
+- [x] Rendere il test-email org-admin sincrono con esito reale e allineare worker/status recipient su `queued -> processing -> sent/failed`
+- [x] Aggiornare FE minimale, test mirati e nota README/ENV sulle sole env `MAIL_FROM_DOMAIN` e `ASSOCIATION_MAIL_API_TOKEN`
+
+## Review (Communications transport Mailtrap refactor - Mar 10, 2026)
+- `system` mode continua a usare il path SMTP esistente senza modificare `SMTP_HOST/PORT/USER/PASSWORD`, `SMTP_FROM` o `EMAIL_FROM`.
+- `association` mode ora usa un transport dedicato Mailtrap API (`POST https://send.api.mailtrap.io/api/send`) alimentato da `ASSOCIATION_MAIL_API_TOKEN` e `MAIL_FROM_DOMAIN`; se il sender non e realmente risolvibile in association mode, il resolver fa ancora fallback esplicito a `system`.
+- L'endpoint org-admin `POST /api/org-admin/communications/test-email` non accoda piu soltanto: invia subito, ritorna `provider_message_id` e propaga al frontend gli errori reali provider/configurazione (`502` permanente, `503` retryable).
+- Il worker/outbox mantiene la struttura esistente ma le email campaign recipient passano ora da `queued` a `processing` quando il job viene claimato, poi a `sent` o `failed`; gli errori Mailtrap `401/403/422` diventano failure permanenti e non restano in retry infinito.
+- Supporto preservato per immagini inline/CID sui flussi association mode esistenti (es. email tessera) tramite attachments base64 inline nella chiamata Mailtrap API.
+- Deploy/runtime allineati: aggiunta propagazione di `ASSOCIATION_MAIL_API_TOKEN` in `.github/workflows/deploy-hetzner.yml` e `docker-compose.yml`.
+- Verifiche OK: `python -m compileall app tests`; `python -m pytest -q tests/test_association_email_sender.py tests/test_org_admin_communications.py`; `python -m pytest -q tests/test_email_flows.py tests/test_org_admin_send_access.py tests/test_integration_issue_member.py tests/test_join_auto_issue.py`; `npm --prefix frontend run build`.

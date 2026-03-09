@@ -70,6 +70,7 @@ const statusToneClass: Record<string, string> = {
   failed: "border-red-200 bg-red-50 text-red-700",
   partial_failed: "border-orange-200 bg-orange-50 text-orange-700",
   queued: "border-slate-200 bg-slate-50 text-slate-700",
+  processing: "border-sky-200 bg-sky-50 text-sky-700",
 };
 
 function normalizeText(value: string | null | undefined): string | null {
@@ -155,6 +156,7 @@ function statusLabel(value: string | null | undefined): string {
   if (normalized === "failed") return "Fallita";
   if (normalized === "partial_failed") return "Parziale";
   if (normalized === "queued") return "In coda";
+  if (normalized === "processing") return "In lavorazione";
   return normalized || "-";
 }
 

@@ -58,8 +58,8 @@ from app.services.email_campaigns import (
     ALLOWED_AUDIENCE_TYPES,
     campaign_status_counts,
     create_campaign_draft,
-    enqueue_test_email,
     resolve_audience_recipients,
+    send_test_email_now,
     send_campaign,
 )
 from app.services.email_templates import (
@@ -73,7 +73,12 @@ from app.services.email_templates import (
 )
 from app.services.card_allocation import allocate_next_card, release_card_number
 from app.services.card_inventory import compute_org_card_stock
-from app.utils import generate_token, hash_token
+from app.utils import (
+    PermanentEmailDeliveryError,
+    RetryableEmailDeliveryError,
+    generate_token,
+    hash_token,
+)
 from app.services.member_activity import (
     get_member_lifecycle_status,
     is_member_active,
@@ -1307,20 +1312,23 @@ def send_communications_test_email(
 
     org = admin.organization
     _require_active_communications_module(org)
-    outbox_id = enqueue_test_email(
-        db,
-        organization=org,
-        to_email=str(body.to_email),
-        requested_by_user_id=admin.id,
-    )
-    db.commit()
+    try:
+        provider_message_id = send_test_email_now(
+            organization=org,
+            to_email=str(body.to_email),
+            requested_by_user_id=admin.id,
+        )
+    except PermanentEmailDeliveryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except RetryableEmailDeliveryError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     sender = resolve_email_sender(mode="association", association=org)
     return {
         "ok": True,
-        "outbox_id": outbox_id,
+        "provider_message_id": provider_message_id,
         "sender": _serialize_communications_sender(sender),
-        "message": "Email di test accodata correttamente.",
+        "message": "Email di test inviata correttamente.",
     }
 
 

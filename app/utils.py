@@ -5,18 +5,25 @@ import secrets
 import smtplib
 import socket
 import uuid
+import base64
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import make_msgid
 from typing import List, Optional, Tuple
 
+import requests
 from fastapi import HTTPException, UploadFile
 
 from .config import settings
-from .services.email_sender import resolve_email_sender, serialize_association_sender
+from .services.email_sender import (
+    EmailSenderSelection,
+    resolve_email_sender,
+    serialize_association_sender,
+)
 
 logger = logging.getLogger(__name__)
+_MAILTRAP_SEND_API_URL = "https://send.api.mailtrap.io/api/send"
 
 # Global list for email capture in tests
 _captured_emails = []
@@ -263,6 +270,264 @@ def _raise_classified_smtp_error(code: int | None, message: object):
     raise RetryableEmailDeliveryError(error_text)
 
 
+def _capture_email_for_tests(
+    *,
+    to_email: str,
+    subject: str,
+    text_body: str,
+    html_body: str | None,
+    inline_images: list[dict] | None,
+    sender_selection: EmailSenderSelection,
+    provider_message_id: str,
+    transport: str,
+) -> None:
+    _captured_emails.append(
+        {
+            "to": to_email,
+            "subject": subject,
+            "body": text_body,
+            "text_body": text_body,
+            "html_body": html_body,
+            "inline_images": [
+                {
+                    "cid": str(item.get("cid") or ""),
+                    "content_type": str(item.get("content_type") or ""),
+                    "size": len(item.get("data") or b""),
+                }
+                for item in (inline_images or [])
+            ],
+            "from_name": sender_selection.from_name,
+            "from_email": sender_selection.from_email,
+            "from_header": sender_selection.from_header,
+            "reply_to": sender_selection.reply_to,
+            "selected_mode": sender_selection.selected_mode,
+            "fallback_used": sender_selection.fallback_used,
+            "provider_message_id": provider_message_id,
+            "transport": transport,
+        }
+    )
+
+
+def _provider_body_text(response: requests.Response) -> str:
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = None
+    if isinstance(payload, dict):
+        for key in ("message", "error", "errors", "detail"):
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+            if isinstance(value, list) and value:
+                first = value[0]
+                if isinstance(first, str) and first.strip():
+                    return first.strip()
+                if isinstance(first, dict):
+                    for nested_key in ("message", "error", "detail"):
+                        nested_value = first.get(nested_key)
+                        if isinstance(nested_value, str) and nested_value.strip():
+                            return nested_value.strip()
+    text = (response.text or "").strip()
+    return text[:1000]
+
+
+def _extract_provider_message_id(payload: object, fallback: str) -> str:
+    if isinstance(payload, dict):
+        for key in ("message_id", "id"):
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        message_ids = payload.get("message_ids")
+        if isinstance(message_ids, list) and message_ids:
+            first = message_ids[0]
+            if isinstance(first, str) and first.strip():
+                return first.strip()
+            if isinstance(first, dict):
+                for key in ("id", "message_id"):
+                    value = first.get(key)
+                    if isinstance(value, str) and value.strip():
+                        return value.strip()
+    return fallback
+
+
+def _build_mailtrap_attachments(inline_images: list[dict] | None) -> list[dict]:
+    attachments: list[dict] = []
+    for item in inline_images or []:
+        data = item.get("data")
+        if not isinstance(data, (bytes, bytearray)) or not data:
+            continue
+        content_type = str(item.get("content_type") or "application/octet-stream").strip()
+        filename = str(item.get("filename") or "attachment.bin").strip() or "attachment.bin"
+        attachment: dict[str, object] = {
+            "content": base64.b64encode(bytes(data)).decode("ascii"),
+            "filename": filename,
+            "type": content_type,
+        }
+        cid = str(item.get("cid") or "").strip()
+        if cid:
+            attachment["disposition"] = "inline"
+            attachment["content_id"] = cid
+        attachments.append(attachment)
+    return attachments
+
+
+def _is_retryable_http_status(status_code: int) -> bool:
+    return status_code in {408, 429} or status_code >= 500
+
+
+def _log_transport_selection(
+    *,
+    transport: str,
+    sender_selection: EmailSenderSelection,
+    association_snapshot: dict[str, object] | None,
+) -> None:
+    communications_enabled = (
+        association_snapshot.get("communications_enabled")
+        if association_snapshot is not None
+        else None
+    )
+    mail_from_domain_present = bool((settings.MAIL_FROM_DOMAIN or "").strip())
+    logger.info(
+        "email_transport_selected transport=%s requested_mode=%s selected_mode=%s communications_enabled=%s mail_from_domain_present=%s from_name=%s from_email=%s from_header=%s reply_to=%s fallback_used=%s",
+        transport,
+        sender_selection.requested_mode,
+        sender_selection.selected_mode,
+        communications_enabled,
+        mail_from_domain_present,
+        sender_selection.from_name or "",
+        sender_selection.from_email,
+        sender_selection.from_header,
+        sender_selection.reply_to or "",
+        sender_selection.fallback_used,
+    )
+
+
+def send_association_email_via_mailtrap_api(
+    *,
+    to_email: str,
+    subject: str,
+    text_body: str,
+    html_body: Optional[str] = None,
+    inline_images: Optional[List[dict]] = None,
+    sender_selection: EmailSenderSelection,
+) -> str:
+    provider_message_id = make_msgid()
+    logger.info(
+        "association_mailtrap_api_call_started to=%s subject=%s from_email=%s from_header=%s",
+        to_email,
+        subject,
+        sender_selection.from_email,
+        sender_selection.from_header,
+    )
+
+    if settings.EMAIL_MODE == "test":
+        _capture_email_for_tests(
+            to_email=to_email,
+            subject=subject,
+            text_body=text_body,
+            html_body=html_body,
+            inline_images=inline_images or None,
+            sender_selection=sender_selection,
+            provider_message_id=provider_message_id,
+            transport="mailtrap_api",
+        )
+        logger.info(
+            "association_mailtrap_api_call_finished result=test_captured provider_message_id=%s",
+            provider_message_id,
+        )
+        return provider_message_id
+
+    api_token = (settings.ASSOCIATION_MAIL_API_TOKEN or "").strip()
+    if not api_token:
+        logger.error(
+            "association_mailtrap_api_call_finished result=permanent_failed error=missing ASSOCIATION_MAIL_API_TOKEN"
+        )
+        raise PermanentEmailDeliveryError(
+            "Association mail transport non configurato: manca ASSOCIATION_MAIL_API_TOKEN."
+        )
+
+    payload: dict[str, object] = {
+        "from": {
+            "email": sender_selection.from_email,
+            "name": sender_selection.from_name or "",
+        },
+        "to": [{"email": _sanitize_header_value(to_email)}],
+        "subject": _sanitize_header_value(subject),
+        "text": text_body,
+    }
+    if html_body:
+        payload["html"] = html_body
+    if sender_selection.reply_to:
+        payload["reply_to"] = {"email": sender_selection.reply_to}
+    attachments = _build_mailtrap_attachments(inline_images or None)
+    if attachments:
+        payload["attachments"] = attachments
+
+    try:
+        response = requests.post(
+            _MAILTRAP_SEND_API_URL,
+            headers={
+                "Authorization": f"Bearer {api_token}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=20,
+        )
+    except (requests.Timeout, requests.ConnectionError) as exc:
+        logger.warning(
+            "association_mailtrap_api_call_finished result=retryable_failed status=network_error error=%s",
+            exc,
+        )
+        raise RetryableEmailDeliveryError(
+            f"Mailtrap API temporaneamente non raggiungibile: {exc}"
+        ) from exc
+    except requests.RequestException as exc:
+        logger.warning(
+            "association_mailtrap_api_call_finished result=retryable_failed status=request_exception error=%s",
+            exc,
+        )
+        raise RetryableEmailDeliveryError(str(exc) or exc.__class__.__name__) from exc
+
+    provider_error_body = _provider_body_text(response)
+    logger.info(
+        "association_mailtrap_api_response_status status=%s ok=%s provider_error_body=%s",
+        response.status_code,
+        response.ok,
+        provider_error_body or "",
+    )
+
+    if response.ok:
+        try:
+            response_payload = response.json()
+        except ValueError:
+            response_payload = None
+        resolved_message_id = _extract_provider_message_id(response_payload, provider_message_id)
+        logger.info(
+            "association_mailtrap_api_call_finished result=sent provider_message_id=%s",
+            resolved_message_id,
+        )
+        return resolved_message_id
+
+    error_text = (
+        f"Mailtrap API {response.status_code}: "
+        f"{provider_error_body or response.reason or 'Errore provider senza dettaglio.'}"
+    )
+    if _is_retryable_http_status(response.status_code):
+        logger.warning(
+            "association_mailtrap_api_call_finished result=retryable_failed status=%s error=%s",
+            response.status_code,
+            error_text,
+        )
+        raise RetryableEmailDeliveryError(error_text)
+
+    logger.error(
+        "association_mailtrap_api_call_finished result=permanent_failed status=%s error=%s",
+        response.status_code,
+        error_text,
+    )
+    raise PermanentEmailDeliveryError(error_text)
+
+
 def send_email_via_smtp_low_level(
     *,
     to_email: str,
@@ -273,30 +538,23 @@ def send_email_via_smtp_low_level(
     mode: str = "system",
     association: object | None = None,
     reply_to: Optional[str] = None,
+    sender_selection: EmailSenderSelection | None = None,
+    association_snapshot: dict[str, object] | None = None,
 ) -> str:
-    association_snapshot = serialize_association_sender(association)
-    sender_selection = resolve_email_sender(
+    association_snapshot = (
+        association_snapshot
+        if association_snapshot is not None
+        else serialize_association_sender(association)
+    )
+    sender_selection = sender_selection or resolve_email_sender(
         mode=mode,
         association=association,
         reply_to=reply_to,
     )
-    communications_enabled = (
-        association_snapshot.get("communications_enabled")
-        if association_snapshot is not None
-        else None
-    )
-    mail_from_domain_present = bool((settings.MAIL_FROM_DOMAIN or "").strip())
-    logger.info(
-        "email_sender_resolved requested_mode=%s selected_mode=%s communications_enabled=%s mail_from_domain_present=%s from_name=%s from_email=%s from_header=%s reply_to=%s fallback_used=%s",
-        sender_selection.requested_mode,
-        sender_selection.selected_mode,
-        communications_enabled,
-        mail_from_domain_present,
-        sender_selection.from_name or "",
-        sender_selection.from_email,
-        sender_selection.from_header,
-        sender_selection.reply_to or "",
-        sender_selection.fallback_used,
+    _log_transport_selection(
+        transport="smtp",
+        sender_selection=sender_selection,
+        association_snapshot=association_snapshot,
     )
     logger.info(
         "smtp_send_start to=%s subject=%s selected_mode=%s envelope_from=%s",
@@ -317,29 +575,15 @@ def send_email_via_smtp_low_level(
     )
 
     if settings.EMAIL_MODE == "test":
-        _captured_emails.append(
-            {
-                "to": to_email,
-                "subject": subject,
-                "body": text_body,
-                "text_body": text_body,
-                "html_body": html_body,
-                "inline_images": [
-                    {
-                        "cid": str(item.get("cid") or ""),
-                        "content_type": str(item.get("content_type") or ""),
-                        "size": len(item.get("data") or b""),
-                    }
-                    for item in (inline_images or [])
-                ],
-                "from_name": sender_selection.from_name,
-                "from_email": sender_selection.from_email,
-                "from_header": sender_selection.from_header,
-                "reply_to": sender_selection.reply_to,
-                "selected_mode": sender_selection.selected_mode,
-                "fallback_used": sender_selection.fallback_used,
-                "provider_message_id": provider_message_id,
-            }
+        _capture_email_for_tests(
+            to_email=to_email,
+            subject=subject,
+            text_body=text_body,
+            html_body=html_body,
+            inline_images=inline_images or None,
+            sender_selection=sender_selection,
+            provider_message_id=provider_message_id,
+            transport="smtp",
         )
         logger.info("smtp_send_captured provider_message_id=%s", provider_message_id)
         return provider_message_id
@@ -421,6 +665,56 @@ def send_email_via_smtp_low_level(
         raise RetryableEmailDeliveryError(str(exc) or exc.__class__.__name__) from exc
 
 
+def send_email_via_transport_low_level(
+    *,
+    to_email: str,
+    subject: str,
+    text_body: str,
+    html_body: Optional[str] = None,
+    inline_images: Optional[List[dict]] = None,
+    mode: str = "system",
+    association: object | None = None,
+    reply_to: Optional[str] = None,
+) -> str:
+    association_snapshot = serialize_association_sender(association)
+    sender_selection = resolve_email_sender(
+        mode=mode,
+        association=association,
+        reply_to=reply_to,
+    )
+    selected_transport = (
+        "mailtrap_api"
+        if sender_selection.selected_mode == "association" and not sender_selection.fallback_used
+        else "smtp"
+    )
+    _log_transport_selection(
+        transport=selected_transport,
+        sender_selection=sender_selection,
+        association_snapshot=association_snapshot,
+    )
+    if selected_transport == "mailtrap_api":
+        return send_association_email_via_mailtrap_api(
+            to_email=to_email,
+            subject=subject,
+            text_body=text_body,
+            html_body=html_body,
+            inline_images=inline_images,
+            sender_selection=sender_selection,
+        )
+    return send_email_via_smtp_low_level(
+        to_email=to_email,
+        subject=subject,
+        text_body=text_body,
+        html_body=html_body,
+        inline_images=inline_images,
+        mode=mode,
+        association=association,
+        reply_to=reply_to,
+        sender_selection=sender_selection,
+        association_snapshot=association_snapshot,
+    )
+
+
 def send_email_html(
     to_email: str,
     subject: str,
@@ -436,7 +730,7 @@ def send_email_html(
     Returns True on success, False on failure.
     """
     try:
-        send_email_via_smtp_low_level(
+        send_email_via_transport_low_level(
             to_email=to_email,
             subject=subject,
             text_body=text_body,
@@ -477,7 +771,7 @@ def send_email(
     Send an email and return True on success, False on failure.
     """
     try:
-        send_email_via_smtp_low_level(
+        send_email_via_transport_low_level(
             to_email=to_email,
             subject=subject,
             text_body=body,

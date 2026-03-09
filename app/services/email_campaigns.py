@@ -14,6 +14,7 @@ from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 from app.services.email_templates import render_template_content
 from app.services.member_activity import get_member_lifecycle_status, is_member_active
+from app.utils import send_email_via_transport_low_level
 
 
 AUDIENCE_ALL_ACTIVE = "active_members"
@@ -32,6 +33,7 @@ CAMPAIGN_STATUS_FAILED = "failed"
 CAMPAIGN_STATUS_PARTIAL_FAILED = "partial_failed"
 
 RECIPIENT_STATUS_QUEUED = "queued"
+RECIPIENT_STATUS_PROCESSING = "processing"
 RECIPIENT_STATUS_SENT = "sent"
 RECIPIENT_STATUS_FAILED = "failed"
 
@@ -200,38 +202,29 @@ def create_campaign_draft(
     return campaign
 
 
-def enqueue_test_email(
-    db: Session,
+def send_test_email_now(
     *,
     organization: Organization,
     to_email: str,
-    requested_by_user_id: int | None,
+    requested_by_user_id: int | None = None,
 ) -> str:
     normalized_email = _normalize_email(to_email)
     if normalized_email is None:
         raise HTTPException(status_code=422, detail="Email destinatario non valida.")
 
-    return enqueue_email(
-        db,
-        email_type="association_test_email",
+    return send_email_via_transport_low_level(
         to_email=normalized_email,
         subject=f"Test comunicazioni {organization.name}",
-        payload=build_email_payload(
-            text_body=(
-                f"Questa e una email di test per le comunicazioni dell'associazione {organization.name}.\n"
-                "Se la ricevi, il sender association mode e configurato correttamente."
-            ),
-            html_body=(
-                f"<p>Questa e una email di test per le comunicazioni dell'associazione <strong>{html.escape(organization.name or 'ASSONAM')}</strong>.</p>"
-                "<p>Se la ricevi, il sender association mode e configurato correttamente.</p>"
-            ),
-            sender=build_sender_payload(mode="association", association=organization),
-            meta={
-                "org_id": organization.id,
-                "requested_by_user_id": requested_by_user_id,
-            },
+        text_body=(
+            f"Questa e una email di test per le comunicazioni dell'associazione {organization.name}.\n"
+            "Se la ricevi, il sender association mode e configurato correttamente."
         ),
-        priority=2,
+        html_body=(
+            f"<p>Questa e una email di test per le comunicazioni dell'associazione <strong>{html.escape(organization.name or 'ASSONAM')}</strong>.</p>"
+            "<p>Se la ricevi, il sender association mode e configurato correttamente.</p>"
+        ),
+        mode="association",
+        association=organization,
     )
 
 
@@ -358,6 +351,24 @@ def mark_campaign_recipient_sent(
     refresh_campaign_status(db, recipient.campaign_id)
 
 
+def mark_campaign_recipient_processing(
+    db: Session,
+    *,
+    recipient_id: int,
+) -> None:
+    recipient = (
+        db.query(EmailCampaignRecipient)
+        .filter(EmailCampaignRecipient.id == recipient_id)
+        .first()
+    )
+    if recipient is None:
+        return
+    recipient.delivery_status = RECIPIENT_STATUS_PROCESSING
+    recipient.error_message = None
+    db.flush()
+    refresh_campaign_status(db, recipient.campaign_id)
+
+
 def mark_campaign_recipient_failed(
     db: Session,
     *,
@@ -380,6 +391,7 @@ def mark_campaign_recipient_failed(
 def campaign_status_counts(recipients: Iterable[EmailCampaignRecipient]) -> dict[str, int]:
     counts = {
         RECIPIENT_STATUS_QUEUED: 0,
+        RECIPIENT_STATUS_PROCESSING: 0,
         RECIPIENT_STATUS_SENT: 0,
         RECIPIENT_STATUS_FAILED: 0,
     }

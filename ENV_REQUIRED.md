@@ -43,6 +43,7 @@ When `SMTP_HOST` is empty the application falls back to writing emails to `email
 | `EMAIL_FROM` | No | `SMTP_FROM` | Visible `From` header used by `system` mode. Leave unchanged for official ASSONAM emails. |
 | `SMTP_USE_TLS` | No | `true` | Enable STARTTLS (`true`, `1`, or `yes` to enable). |
 | `MAIL_FROM_DOMAIN` | No | _(empty)_ | Visible sender domain used only in `association` mode (example: `notifiche.assonam.it`). If missing, all association emails fall back to `system` mode. |
+| `ASSOCIATION_MAIL_API_TOKEN` | No | _(empty)_ | Mailtrap API Bearer token used only for `association` mode delivery. If missing, association-mode sends fail explicitly instead of reusing SMTP. |
 
 ## WhatsApp / Twilio
 

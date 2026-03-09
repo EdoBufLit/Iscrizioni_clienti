@@ -18,7 +18,7 @@ from app.services.email_sender import build_sender_payload
 from app.utils import (
     PermanentEmailDeliveryError,
     RetryableEmailDeliveryError,
-    send_email_via_smtp_low_level,
+    send_email_via_transport_low_level,
 )
 
 logger = logging.getLogger(__name__)
@@ -211,6 +211,7 @@ def mark_sending(db: Session, outbox_id: str) -> int:
     outbox.attempts = int(outbox.attempts or 0) + 1
     outbox.last_error = None
     outbox.updated_at = utcnow_aware()
+    _apply_post_processing_effects(db, outbox)
     db.flush()
     return int(outbox.attempts)
 
@@ -322,6 +323,27 @@ def _apply_post_send_effects(
         )
 
 
+def _apply_post_processing_effects(
+    db: Session,
+    outbox: EmailOutbox,
+) -> None:
+    payload = outbox.payload_json or {}
+    meta = payload.get("meta") if isinstance(payload, dict) else {}
+    if not isinstance(meta, dict):
+        return
+
+    campaign_recipient_id = meta.get("campaign_recipient_id")
+    if campaign_recipient_id is None:
+        return
+
+    from app.services.email_campaigns import mark_campaign_recipient_processing
+
+    mark_campaign_recipient_processing(
+        db,
+        recipient_id=int(campaign_recipient_id),
+    )
+
+
 def _apply_post_failure_effects(
     db: Session,
     outbox: EmailOutbox,
@@ -360,7 +382,7 @@ def _send_claimed_job(job: ClaimedEmailOutboxJob) -> str:
         reply_to = sender.get("reply_to")
     if not text_body:
         raise PermanentEmailDeliveryError("Email payload missing text_body")
-    return send_email_via_smtp_low_level(
+    return send_email_via_transport_low_level(
         to_email=job.to_email,
         subject=job.subject,
         text_body=text_body,

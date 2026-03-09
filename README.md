@@ -169,8 +169,8 @@ Dettagli operativi e query utili sono in [`DEPLOY.md`](DEPLOY.md).
 
 Il sistema supporta due modalita esplicite per il mittente email:
 
-- `system`: usa il mittente storico ASSONAM (`SMTP_FROM` per envelope SMTP, `EMAIL_FROM` come header visibile se configurato).
-- `association`: usa `MAIL_FROM_DOMAIN` e i campi dell'associazione per comporre il mittente visibile, ad esempio `Golden Age Club <golden-age-club@notifiche.assonam.it>`.
+- `system`: usa il mittente storico ASSONAM via SMTP (`SMTP_FROM` per envelope SMTP, `EMAIL_FROM` come header visibile se configurato).
+- `association`: usa Mailtrap API con `ASSOCIATION_MAIL_API_TOKEN` e `MAIL_FROM_DOMAIN` per comporre il mittente visibile, ad esempio `Golden Age Club <golden-age-club@notifiche.assonam.it>`.
 
 Regole operative:
 
@@ -179,7 +179,8 @@ Regole operative:
 - Il nome visibile usa `email_from_name_override`, altrimenti `organization.name`, con fallback finale `ASSONAM`.
 - La parte locale usa `sender_email_local_part`, altrimenti viene generata dal nome associazione; se resta vuota, fallback a `org-{id}`.
 - `reply_to_email` viene applicato solo in `association` mode.
-- Se configurazione o association mode non sono disponibili, il sistema fa fallback automatico e loggato a `system`.
+- Se configurazione sender o association mode non sono disponibili, il sistema fa fallback automatico e loggato a `system`.
+- Se `association` mode e selezionato ma `ASSOCIATION_MAIL_API_TOKEN` manca o Mailtrap rifiuta il sender, l'invio fallisce esplicitamente senza ricadere su SMTP.
 
 ### Modulo Comunicazioni
 
@@ -202,8 +203,8 @@ Regole operative:
 
 - Le campagne usano sempre `association` mode.
 - Se `communications_enabled=false`, tutte le azioni operative org-admin del modulo restano bloccate.
-- L'invio email di test usa lo stesso sender resolver dell'associazione e passa comunque dall'outbox esistente.
-- Ogni invio campagna salva uno snapshot destinatari in `email_campaign_recipients` prima dell'accodamento SMTP.
+- L'invio email di test usa lo stesso sender resolver dell'associazione ma viene eseguito subito, restituendo successo o errore reale del provider.
+- Ogni invio campagna salva uno snapshot destinatari in `email_campaign_recipients` prima dell'accodamento nel worker email; i recipient transitano tra `queued`, `processing`, `sent` e `failed`.
 - I placeholder supportati sono `{{nome_socio}}`, `{{nome_associazione}}`, `{{numero_tessera}}`, `{{data_scadenza}}`, `{{link_rinnovo}}`, `{{link_documento}}`.
 - I template di sistema non si modificano direttamente: vanno duplicati in template associazione prima della personalizzazione.
 

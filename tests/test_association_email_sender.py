@@ -17,7 +17,7 @@ from app.utils import (
     clear_captured_emails,
     get_captured_emails,
     hash_token,
-    send_email_via_smtp_low_level,
+    send_email_via_transport_low_level,
 )
 
 
@@ -131,6 +131,7 @@ def test_email_outbox_uses_association_sender_and_system_fallback() -> None:
         association_email = next(item for item in captured if item["to"] == "member@example.com")
         assert association_email["selected_mode"] == "association"
         assert association_email["fallback_used"] is False
+        assert association_email["transport"] == "mailtrap_api"
         assert association_email["from_email"] == "golden-age-club@notifiche.assonam.it"
         assert association_email["from_header"] == "Golden Age Club <golden-age-club@notifiche.assonam.it>"
         assert association_email["reply_to"] == "segreteria@goldenage.it"
@@ -138,6 +139,7 @@ def test_email_outbox_uses_association_sender_and_system_fallback() -> None:
         fallback_email = next(item for item in captured if item["to"] == "member2@example.com")
         assert fallback_email["selected_mode"] == "system"
         assert fallback_email["fallback_used"] is True
+        assert fallback_email["transport"] == "smtp"
         assert fallback_email["from_email"] == "noreply@assonam.it"
         assert fallback_email["from_header"] == "ASSONAM <noreply@assonam.it>"
     finally:
@@ -147,9 +149,81 @@ def test_email_outbox_uses_association_sender_and_system_fallback() -> None:
         clear_captured_emails()
 
 
-def test_smtp_delivery_uses_association_envelope_sender(monkeypatch) -> None:
+def test_mailtrap_transport_is_used_for_association_mode(monkeypatch) -> None:
     original_mode = settings.EMAIL_MODE
     original_domain = settings.MAIL_FROM_DOMAIN
+    original_token = settings.ASSOCIATION_MAIL_API_TOKEN
+    records: dict[str, object] = {}
+
+    class FakeResponse:
+        status_code = 200
+        ok = True
+        reason = "OK"
+        text = ""
+
+        def json(self):
+            return {"message_ids": ["mtp-123"]}
+
+    def fake_post(url, *, headers, json, timeout):
+        records["url"] = url
+        records["headers"] = headers
+        records["json"] = json
+        records["timeout"] = timeout
+        return FakeResponse()
+
+    monkeypatch.setattr("app.utils.requests.post", fake_post)
+
+    settings.EMAIL_MODE = "normal"
+    settings.MAIL_FROM_DOMAIN = "notifiche.assonam.it"
+    settings.ASSOCIATION_MAIL_API_TOKEN = "mailtrap-token"
+
+    try:
+        provider_message_id = send_email_via_transport_low_level(
+            to_email="member@example.com",
+            subject="Association sender",
+            text_body="hello",
+            html_body="<p>hello</p><img src=\"cid:card_front@assonam\" />",
+            inline_images=[
+                {
+                    "cid": "card_front@assonam",
+                    "content_type": "image/png",
+                    "filename": "tessera.png",
+                    "data": b"png-binary",
+                }
+            ],
+            mode="association",
+            association={
+                "id": 7,
+                "name": "Golden Age Club",
+                "communications_enabled": True,
+                "sender_email_local_part": "golden age club",
+                "email_from_name_override": "Golden Age Club",
+                "reply_to_email": "segreteria@goldenage.it",
+            },
+        )
+
+        payload = records["json"]
+        assert provider_message_id == "mtp-123"
+        assert records["url"] == "https://send.api.mailtrap.io/api/send"
+        assert records["timeout"] == 20
+        assert records["headers"] == {
+            "Authorization": "Bearer mailtrap-token",
+            "Content-Type": "application/json",
+        }
+        assert payload["from"]["email"] == "golden-age-club@notifiche.assonam.it"
+        assert payload["from"]["name"] == "Golden Age Club"
+        assert payload["to"] == [{"email": "member@example.com"}]
+        assert payload["reply_to"] == {"email": "segreteria@goldenage.it"}
+        assert payload["attachments"][0]["disposition"] == "inline"
+        assert payload["attachments"][0]["content_id"] == "card_front@assonam"
+    finally:
+        settings.EMAIL_MODE = original_mode
+        settings.MAIL_FROM_DOMAIN = original_domain
+        settings.ASSOCIATION_MAIL_API_TOKEN = original_token
+
+
+def test_smtp_transport_still_used_for_system_mode(monkeypatch) -> None:
+    original_mode = settings.EMAIL_MODE
     original_email_from = settings.EMAIL_FROM
     original_host = settings.SMTP_HOST
     original_port = settings.SMTP_PORT
@@ -184,8 +258,7 @@ def test_smtp_delivery_uses_association_envelope_sender(monkeypatch) -> None:
 
     monkeypatch.setattr("app.utils.smtplib.SMTP", FakeSMTP)
 
-    settings.EMAIL_MODE = "smtp"
-    settings.MAIL_FROM_DOMAIN = "notifiche.assonam.it"
+    settings.EMAIL_MODE = "normal"
     settings.EMAIL_FROM = "ASSONAM <noreply@assonam.it>"
     settings.SMTP_HOST = "smtp.example.test"
     settings.SMTP_PORT = 587
@@ -194,33 +267,21 @@ def test_smtp_delivery_uses_association_envelope_sender(monkeypatch) -> None:
     settings.SMTP_USE_TLS = True
 
     try:
-        provider_message_id = send_email_via_smtp_low_level(
-            to_email="member@example.com",
-            subject="Association sender",
+        provider_message_id = send_email_via_transport_low_level(
+            to_email="official@example.com",
+            subject="Official sender",
             text_body="hello",
-            mode="association",
-            association={
-                "id": 7,
-                "name": "Golden Age Club",
-                "communications_enabled": True,
-                "sender_email_local_part": "golden age club",
-                "email_from_name_override": "Golden Age Club",
-                "reply_to_email": "segreteria@goldenage.it",
-            },
+            mode="system",
         )
 
         assert provider_message_id
         assert records["connect"] == ("smtp.example.test", 587, 15)
         assert records["login"] == ("mailer", "secret")
-        assert records["from_addr"] == "golden-age-club@notifiche.assonam.it"
-        assert records["to_addrs"] == ["member@example.com"]
-        assert (
-            "From: Golden Age Club <golden-age-club@notifiche.assonam.it>"
-            in str(records["message"])
-        )
+        assert records["from_addr"] == "noreply@assonam.it"
+        assert records["to_addrs"] == ["official@example.com"]
+        assert "From: ASSONAM <noreply@assonam.it>" in str(records["message"])
     finally:
         settings.EMAIL_MODE = original_mode
-        settings.MAIL_FROM_DOMAIN = original_domain
         settings.EMAIL_FROM = original_email_from
         settings.SMTP_HOST = original_host
         settings.SMTP_PORT = original_port

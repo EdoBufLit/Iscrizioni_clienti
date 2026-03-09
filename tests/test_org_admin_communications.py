@@ -99,7 +99,7 @@ def _create_member(
     return member
 
 
-def test_org_admin_communications_settings_and_test_email(client, db, drain_email_outbox):
+def test_org_admin_communications_settings_and_test_email(client, db):
     original_mode = settings.EMAIL_MODE
     original_domain = settings.MAIL_FROM_DOMAIN
     settings.EMAIL_MODE = "test"
@@ -134,12 +134,14 @@ def test_org_admin_communications_settings_and_test_email(client, db, drain_emai
             json={"to_email": "destinatario@example.com"},
         )
         assert test_res.status_code == 200, test_res.text
+        assert test_res.json()["provider_message_id"]
         assert test_res.json()["sender"]["selected_mode"] == "association"
+        assert test_res.json()["message"] == "Email di test inviata correttamente."
 
-        drain_email_outbox()
         captured = get_captured_emails()
         assert len(captured) == 1
         assert captured[0]["to"] == "destinatario@example.com"
+        assert captured[0]["transport"] == "mailtrap_api"
         assert captured[0]["selected_mode"] == "association"
         assert captured[0]["from_header"] == "Golden Age Club <golden-age-club@notifiche.assonam.it>"
         assert captured[0]["reply_to"] == "segreteria@goldenage.it"
@@ -259,6 +261,7 @@ def test_org_admin_campaign_send_snapshots_recipients_and_updates_history(client
         captured = get_captured_emails()
         assert len(captured) == 1
         assert captured[0]["to"] == "active.member@example.com"
+        assert captured[0]["transport"] == "mailtrap_api"
         assert captured[0]["selected_mode"] == "association"
         assert "Mario Rossi" in captured[0]["subject"]
         assert "{{nome_socio}}" not in captured[0]["body"]
@@ -285,6 +288,47 @@ def test_org_admin_campaign_send_snapshots_recipients_and_updates_history(client
     finally:
         settings.EMAIL_MODE = original_mode
         settings.MAIL_FROM_DOMAIN = original_domain
+        clear_captured_emails()
+
+
+def test_org_admin_test_email_surfaces_mailtrap_provider_error(client, db, monkeypatch):
+    original_mode = settings.EMAIL_MODE
+    original_domain = settings.MAIL_FROM_DOMAIN
+    original_token = settings.ASSOCIATION_MAIL_API_TOKEN
+
+    class FakeResponse:
+        status_code = 403
+        ok = False
+        reason = "Forbidden"
+        text = '{"message":"sender domain not allowed"}'
+
+        def json(self):
+            return {"message": "sender domain not allowed"}
+
+    def fake_post(*args, **kwargs):
+        return FakeResponse()
+
+    monkeypatch.setattr("app.utils.requests.post", fake_post)
+
+    settings.EMAIL_MODE = "normal"
+    settings.MAIL_FROM_DOMAIN = "notifiche.assonam.it"
+    settings.ASSOCIATION_MAIL_API_TOKEN = "invalid-token"
+    clear_captured_emails()
+    try:
+        _org, admin = _create_org_admin(db, communications_enabled=True)
+        _login_org_admin(client, db, admin.id)
+
+        test_res = client.post(
+            "/api/org-admin/communications/test-email",
+            json={"to_email": "destinatario@example.com"},
+        )
+        assert test_res.status_code == 502, test_res.text
+        assert "sender domain not allowed" in test_res.json()["detail"]
+        assert get_captured_emails() == []
+    finally:
+        settings.EMAIL_MODE = original_mode
+        settings.MAIL_FROM_DOMAIN = original_domain
+        settings.ASSOCIATION_MAIL_API_TOKEN = original_token
         clear_captured_emails()
 
 
