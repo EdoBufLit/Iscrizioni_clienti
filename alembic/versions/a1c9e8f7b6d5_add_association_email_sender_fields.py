@@ -21,7 +21,12 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
-    columns = {column["name"] for column in inspector.get_columns("organizations")}
+    organization_columns = inspector.get_columns("organizations")
+    columns = {column["name"] for column in organization_columns}
+    communications_column = next(
+        (column for column in organization_columns if column["name"] == "communications_enabled"),
+        None,
+    )
 
     if "communications_enabled" not in columns:
         op.add_column(
@@ -29,10 +34,34 @@ def upgrade() -> None:
             sa.Column(
                 "communications_enabled",
                 sa.Boolean(),
-                nullable=False,
+                nullable=True,
                 server_default=sa.text("false"),
             ),
         )
+    elif bind.dialect.name == "postgresql":
+        existing_type_name = type(communications_column["type"]).__name__.lower()
+        if existing_type_name in {"integer", "smallinteger", "biginteger"}:
+            op.execute(
+                sa.text(
+                    """
+                    ALTER TABLE organizations
+                    ALTER COLUMN communications_enabled DROP DEFAULT
+                    """
+                )
+            )
+            op.execute(
+                sa.text(
+                    """
+                    ALTER TABLE organizations
+                    ALTER COLUMN communications_enabled TYPE BOOLEAN
+                    USING CASE
+                        WHEN communications_enabled IS NULL THEN NULL
+                        WHEN communications_enabled = 0 THEN FALSE
+                        ELSE TRUE
+                    END
+                    """
+                )
+            )
     if "sender_email_local_part" not in columns:
         op.add_column(
             "organizations",
@@ -57,6 +86,13 @@ def upgrade() -> None:
              WHERE communications_enabled IS NULL
             """
         )
+    )
+    op.alter_column(
+        "organizations",
+        "communications_enabled",
+        existing_type=sa.Boolean(),
+        nullable=False,
+        server_default=sa.text("false"),
     )
 
 
