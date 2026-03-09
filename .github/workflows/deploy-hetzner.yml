@@ -77,6 +77,7 @@ jobs:
             SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
             SMTP_FROM=${{ secrets.SMTP_FROM }}
             SMTP_USE_TLS=${{ secrets.SMTP_USE_TLS }}
+            MAIL_FROM_DOMAIN=${{ secrets.MAIL_FROM_DOMAIN }}
             TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }}
             TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }}
             OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}

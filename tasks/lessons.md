@@ -97,6 +97,7 @@
 - Se aggiungo colonne/tabelle usate subito dai model in ambienti dev/test che bootstrappano con `create_all()`, devo anche estendere il path di repair in `init_db.py`: un DB SQLite gia esistente non viene alterato da `create_all()` e rompe i test/local boot.
 - Nelle migration Postgres che introducono boolean legacy, non posso fare `UPDATE ... SET col = FALSE` assumendo che il tipo sia gia boolean: prima devo normalizzare/castare eventuali colonne `INTEGER`, altrimenti l'upgrade fallisce con `expression is of type boolean`.
 - Se un modulo e un entitlement commerciale opzionale, il flag di attivazione deve essere gestito solo dal super-admin: i tenant admin possono solo configurare e usare il modulo dopo l'abilitazione, mai attivarlo da soli.
+- Quando introduco una nuova env applicativa usata in produzione, devo tracciarla fino in fondo: GitHub Secret, step deploy che scrive `.env` e `docker-compose`/runtime container, altrimenti la feature sembra rotta solo dopo il deploy.
 ## 2026-03-07 - Email flow verification must prove delivery, not just queueing
 
 - Quando aggiungo un flusso email basato su outbox/worker, non basta verificare che esista una riga in `email_outbox`.

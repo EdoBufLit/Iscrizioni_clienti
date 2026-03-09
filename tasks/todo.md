@@ -2912,3 +2912,13 @@ pm --prefix frontend run build -> OK
 - La UI org-admin mostra badge `Non attivo`, stato locked e CTA disabilitate sia in `Comunicazioni` sia nella sezione email dell'area impostazioni associazione.
 - La UI super-admin espone badge stato + toggle rapido per il modulo Comunicazioni nella lista associazioni, con feedback toast pulito.
 - Verifiche eseguite: `python -m compileall app tests`, `python -m pytest -q tests/test_org_admin_communications.py tests/test_association_email_sender.py`, `npm --prefix frontend run build`.
+
+- [x] Aggiungere `MAIL_FROM_DOMAIN` al workflow deploy Hetzner che scrive `.env`
+- [x] Propagare `MAIL_FROM_DOMAIN` al runtime del backend via docker compose
+- [x] Verificare localmente che workflow e compose includano la variabile e documentare review
+
+## Review (MAIL_FROM_DOMAIN deploy propagation - Mar 09, 2026)
+- Aggiunta la riga `MAIL_FROM_DOMAIN=${{ secrets.MAIL_FROM_DOMAIN }}` nel blocco `.env` generato dal workflow Hetzner, quindi il secret viene scritto sul server durante il deploy.
+- Aggiunta la variabile `MAIL_FROM_DOMAIN: ${MAIL_FROM_DOMAIN}` in `x-app-env` di `docker-compose.yml`, che viene riusato da `web`, `email-worker` e `low-cards-worker`.
+- Nessuna modifica a `SMTP_FROM` o `EMAIL_FROM`; il fix tocca solo il threading della nuova env.
+- Verifiche locali: `rg -n "MAIL_FROM_DOMAIN" .github/workflows/deploy-hetzner.yml docker-compose.yml` e `docker compose config --no-interpolate | Select-String -Pattern 'MAIL_FROM_DOMAIN' -Context 1,1`.
