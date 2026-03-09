@@ -13,7 +13,12 @@ from app.services.email_sender import (
     generate_email_local_part_from_name,
     sanitize_email_local_part,
 )
-from app.utils import clear_captured_emails, get_captured_emails, hash_token
+from app.utils import (
+    clear_captured_emails,
+    get_captured_emails,
+    hash_token,
+    send_email_via_smtp_low_level,
+)
 
 
 def _login_org_admin(client, db, admin_id: int) -> None:
@@ -140,6 +145,88 @@ def test_email_outbox_uses_association_sender_and_system_fallback() -> None:
         settings.MAIL_FROM_DOMAIN = original_domain
         settings.EMAIL_FROM = original_email_from
         clear_captured_emails()
+
+
+def test_smtp_delivery_uses_association_envelope_sender(monkeypatch) -> None:
+    original_mode = settings.EMAIL_MODE
+    original_domain = settings.MAIL_FROM_DOMAIN
+    original_email_from = settings.EMAIL_FROM
+    original_host = settings.SMTP_HOST
+    original_port = settings.SMTP_PORT
+    original_user = settings.SMTP_USER
+    original_password = settings.SMTP_PASSWORD
+    original_use_tls = settings.SMTP_USE_TLS
+    records: dict[str, object] = {}
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout):
+            records["connect"] = (host, port, timeout)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def ehlo(self):
+            records["ehlo"] = True
+
+        def starttls(self):
+            records["starttls"] = True
+
+        def login(self, user, password):
+            records["login"] = (user, password)
+
+        def sendmail(self, from_addr, to_addrs, message):
+            records["from_addr"] = from_addr
+            records["to_addrs"] = to_addrs
+            records["message"] = message
+
+    monkeypatch.setattr("app.utils.smtplib.SMTP", FakeSMTP)
+
+    settings.EMAIL_MODE = "smtp"
+    settings.MAIL_FROM_DOMAIN = "notifiche.assonam.it"
+    settings.EMAIL_FROM = "ASSONAM <noreply@assonam.it>"
+    settings.SMTP_HOST = "smtp.example.test"
+    settings.SMTP_PORT = 587
+    settings.SMTP_USER = "mailer"
+    settings.SMTP_PASSWORD = "secret"
+    settings.SMTP_USE_TLS = True
+
+    try:
+        provider_message_id = send_email_via_smtp_low_level(
+            to_email="member@example.com",
+            subject="Association sender",
+            text_body="hello",
+            mode="association",
+            association={
+                "id": 7,
+                "name": "Golden Age Club",
+                "communications_enabled": True,
+                "sender_email_local_part": "golden age club",
+                "email_from_name_override": "Golden Age Club",
+                "reply_to_email": "segreteria@goldenage.it",
+            },
+        )
+
+        assert provider_message_id
+        assert records["connect"] == ("smtp.example.test", 587, 15)
+        assert records["login"] == ("mailer", "secret")
+        assert records["from_addr"] == "golden-age-club@notifiche.assonam.it"
+        assert records["to_addrs"] == ["member@example.com"]
+        assert (
+            "From: Golden Age Club <golden-age-club@notifiche.assonam.it>"
+            in str(records["message"])
+        )
+    finally:
+        settings.EMAIL_MODE = original_mode
+        settings.MAIL_FROM_DOMAIN = original_domain
+        settings.EMAIL_FROM = original_email_from
+        settings.SMTP_HOST = original_host
+        settings.SMTP_PORT = original_port
+        settings.SMTP_USER = original_user
+        settings.SMTP_PASSWORD = original_password
+        settings.SMTP_USE_TLS = original_use_tls
 
 
 def test_org_admin_patch_organization_email_settings_returns_preview(client) -> None:

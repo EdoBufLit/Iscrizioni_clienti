@@ -14,7 +14,7 @@ from typing import List, Optional, Tuple
 from fastapi import HTTPException, UploadFile
 
 from .config import settings
-from .services.email_sender import resolve_email_sender
+from .services.email_sender import resolve_email_sender, serialize_association_sender
 
 logger = logging.getLogger(__name__)
 
@@ -274,15 +274,24 @@ def send_email_via_smtp_low_level(
     association: object | None = None,
     reply_to: Optional[str] = None,
 ) -> str:
+    association_snapshot = serialize_association_sender(association)
     sender_selection = resolve_email_sender(
         mode=mode,
         association=association,
         reply_to=reply_to,
     )
+    communications_enabled = (
+        association_snapshot.get("communications_enabled")
+        if association_snapshot is not None
+        else None
+    )
+    mail_from_domain_present = bool((settings.MAIL_FROM_DOMAIN or "").strip())
     logger.info(
-        "email_sender_resolved requested_mode=%s selected_mode=%s from_name=%s from_email=%s from_header=%s reply_to=%s fallback_used=%s",
+        "email_sender_resolved requested_mode=%s selected_mode=%s communications_enabled=%s mail_from_domain_present=%s from_name=%s from_email=%s from_header=%s reply_to=%s fallback_used=%s",
         sender_selection.requested_mode,
         sender_selection.selected_mode,
+        communications_enabled,
+        mail_from_domain_present,
         sender_selection.from_name or "",
         sender_selection.from_email,
         sender_selection.from_header,
@@ -290,10 +299,11 @@ def send_email_via_smtp_low_level(
         sender_selection.fallback_used,
     )
     logger.info(
-        "smtp_send_start to=%s subject=%s selected_mode=%s",
+        "smtp_send_start to=%s subject=%s selected_mode=%s envelope_from=%s",
         to_email,
         subject,
         sender_selection.selected_mode,
+        sender_selection.from_email,
     )
 
     msg, provider_message_id = _build_message(
@@ -358,7 +368,7 @@ def send_email_via_smtp_low_level(
                 server.ehlo()
             server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
             server.sendmail(
-                settings.SMTP_FROM,
+                sender_selection.from_email,
                 [_sanitize_header_value(to_email)],
                 msg.as_string(),
             )

@@ -2922,3 +2922,14 @@ pm --prefix frontend run build -> OK
 - Aggiunta la variabile `MAIL_FROM_DOMAIN: ${MAIL_FROM_DOMAIN}` in `x-app-env` di `docker-compose.yml`, che viene riusato da `web`, `email-worker` e `low-cards-worker`.
 - Nessuna modifica a `SMTP_FROM` o `EMAIL_FROM`; il fix tocca solo il threading della nuova env.
 - Verifiche locali: `rg -n "MAIL_FROM_DOMAIN" .github/workflows/deploy-hetzner.yml docker-compose.yml` e `docker compose config --no-interpolate | Select-String -Pattern 'MAIL_FROM_DOMAIN' -Context 1,1`.
+
+## Communication sender mismatch fix (Mar 09, 2026)
+- [x] Ispezionare endpoint test Comunicazioni, composer campagne e path SMTP reale per trovare dove il sender torna a `system`
+- [x] Correggere il send path SMTP per usare il sender risolto in `association mode` anche come envelope sender e aggiungere logging esplicito
+- [x] Aggiungere regressione test sul parametro `from_addr` inviato a SMTP ed eseguire verifiche mirate
+
+## Review (Communication sender mismatch fix - Mar 09, 2026)
+- Root cause: endpoint test e campagne accodavano gia `mode="association"`, ma `app/utils.py` passava sempre `settings.SMTP_FROM` a `server.sendmail(...)`, quindi l'envelope sender restava `no-reply@assonam.it`.
+- Fix: il path SMTP usa ora `sender_selection.from_email` come envelope sender, allineato alla stessa logica `resolve_email_sender(...)` usata dalla preview UI e dal `From` header MIME.
+- Logging: aggiunti campi espliciti prima dell'invio (`selected_mode`, `communications_enabled`, `mail_from_domain_present`, `from_name`, `from_email`, `from_header`, `fallback_used`).
+- Verifiche: `python -m compileall app tests`; `python -m pytest -q tests/test_association_email_sender.py tests/test_org_admin_communications.py`.
