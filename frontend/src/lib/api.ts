@@ -107,6 +107,7 @@ export type OrganizationDetail = {
   statute_url?: string;
   has_statute: boolean;
   privacy_version?: string;
+  require_membership_document: boolean;
 };
 
 export async function fetchOrganizationDetail(
@@ -2185,6 +2186,7 @@ export type SuperAdminOrganization = {
   city: string | null;
   province: string | null;
   auto_approve_signup?: boolean;
+  require_membership_document?: boolean;
   accounting_enabled?: boolean;
   communications_enabled?: boolean;
   card_min: number | null;
@@ -2982,6 +2984,7 @@ export async function createSuperAdminOrganization(data: {
   description_short?: string;
   is_active?: boolean;
   auto_approve_signup?: boolean;
+  require_membership_document?: boolean;
   accounting_enabled?: boolean;
 }): Promise<SuperAdminOrganization> {
   const res = await fetch("/api/super-admin/organizations", {
@@ -3006,6 +3009,7 @@ export async function patchSuperAdminOrganization(
     description?: string;
     is_active?: boolean;
     auto_approve_signup?: boolean;
+    require_membership_document?: boolean;
     accounting_enabled?: boolean;
     communications_enabled?: boolean;
   },

@@ -45,6 +45,7 @@ def repair_db():
             ("card_email_subject", "VARCHAR"),
             ("card_logo_url", "VARCHAR"),
             ("is_active", "BOOLEAN DEFAULT 1"),
+            ("require_membership_document", "BOOLEAN DEFAULT 0"),
             ("statute_pdf_path", "VARCHAR"),
             ("statute_updated_at", "DATETIME"),
             ("privacy_version", "VARCHAR"),

@@ -423,6 +423,9 @@ def init_db():
             conn, "organizations", "auto_approve_signup", "INTEGER DEFAULT 0"
         )
         _add_column_if_missing(
+            conn, "organizations", "require_membership_document", "INTEGER DEFAULT 0"
+        )
+        _add_column_if_missing(
             conn, "organizations", "accounting_enabled", "INTEGER DEFAULT 0"
         )
         _add_column_if_missing(
@@ -434,6 +437,15 @@ def init_db():
                 UPDATE organizations
                    SET communications_enabled = 0
                  WHERE communications_enabled IS NULL
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE organizations
+                   SET require_membership_document = 0
+                 WHERE require_membership_document IS NULL
                 """
             )
         )

@@ -198,6 +198,9 @@ def _serialize_organization_row(
         "city": org.city,
         "province": org.province,
         "auto_approve_signup": bool(org.auto_approve_signup),
+        "require_membership_document": bool(
+            getattr(org, "require_membership_document", False)
+        ),
         "accounting_enabled": bool(org.accounting_enabled),
         "communications_enabled": bool(org.communications_enabled),
         "card_min": card_min,
@@ -356,6 +359,7 @@ class CreateOrganization(BaseModel):
     website: Optional[str] = None
     is_active: bool = True
     auto_approve_signup: bool = False
+    require_membership_document: bool = False
     accounting_enabled: bool = False
 
 
@@ -378,6 +382,7 @@ class PatchOrganization(BaseModel):
     website: Optional[str] = None
     is_active: Optional[bool] = None
     auto_approve_signup: Optional[bool] = None
+    require_membership_document: Optional[bool] = None
     accounting_enabled: Optional[bool] = None
     communications_enabled: Optional[bool] = None
 
@@ -1397,6 +1402,7 @@ def create_organization(
         website=body.website,
         is_active=body.is_active,
         auto_approve_signup=body.auto_approve_signup,
+        require_membership_document=body.require_membership_document,
         accounting_enabled=body.accounting_enabled,
         created_by_admin_id=admin.id,
     )
@@ -1559,6 +1565,10 @@ def update_organization(
         )
     if "auto_approve_signup" in update_data:
         update_data["auto_approve_signup"] = bool(update_data["auto_approve_signup"])
+    if "require_membership_document" in update_data:
+        update_data["require_membership_document"] = bool(
+            update_data["require_membership_document"]
+        )
     if "accounting_enabled" in update_data:
         update_data["accounting_enabled"] = bool(update_data["accounting_enabled"])
     if "communications_enabled" in update_data:

@@ -3115,3 +3115,18 @@ pm --prefix frontend run build -> OK
 - Verifica aggiuntiva confermata: il flusso automatico `form pubblico booking-enabled -> submission -> booking -> agenda org-admin` continua a funzionare ed è coperto dai test `test_booking_enabled_form_creates_booking_and_exposes_agenda` e `test_booking_rooms_tables_and_assignment_flow`.
 - `frontend/src/pages/org-admin/OrgAdminBookings.tsx`: agenda, dettaglio booking e Mappa sala ora condividono lo stesso contesto (`room_id`, `booking_date`, `booking_time`, `table_id`); quando creo, seleziono o assegno una prenotazione, la mappa si sposta sulla sala corretta e evidenzia subito il tavolo collegato.
 - Verifica eseguita: `python -m pytest -q tests/test_forms_module.py -k "manual_booking_from_agenda or booking_rooms_tables_and_assignment_flow or booking_enabled_form_creates_booking_and_exposes_agenda"`.
+
+## Public membership document requirement toggle (Mar 10, 2026)
+- [x] Individuare model/config associazione, endpoint super-admin e flow pubblico iscrizione socio
+- [x] Aggiungere flag per-associazione retrocompatibile con default `false` e propagarlo negli endpoint già esistenti
+- [x] Validare lato backend il documento nel submit pubblico solo quando il flag è attivo
+- [x] Aggiornare UI super-admin e pagina pubblica iscrizione con messaggi/toggle coerenti
+- [x] Eseguire test/build mirati e documentare review finale
+
+## Review (Public membership document requirement toggle - Mar 10, 2026)
+- `organizations`: aggiunto il flag `require_membership_document` con default `false` in [app/models.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\models.py) e migration dedicata [4a5b6c7d8e9f_add_require_membership_document_flag.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\alembic\versions\4a5b6c7d8e9f_add_require_membership_document_flag.py), più repair path SQLite in `init_db.py` e `app/scripts/repair_sqlite.py`.
+- Super admin: il flag è serializzato e patchabile negli endpoint già esistenti in [app/routes/super_admin.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\routes\super_admin.py); la UI lo espone nel modal associazione in [OrganizationManageModal.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\super-admin\components\OrganizationManageModal.tsx) con toggle e helper text dedicati.
+- Pubblico: [app/routes/public.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\routes\public.py) include il nuovo flag nella response `/api/organizations/{slug}`, così [Iscrizione.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\Iscrizione.tsx) può aggiornare copy, badge, label e blocco inline del passaggio 2 senza cambiare il flow quando il flag è spento.
+- Backend submit: [app/routes/join.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\routes\join.py) ora impone il documento solo se `require_membership_document=true`; se esiste già una submission pendente con documento identity, la resubmission resta valida anche senza ricaricarlo.
+- Retrocompatibilità confermata: con toggle disattivo il documento resta facoltativo e il submit continua a funzionare come prima; il comportamento è coperto dai test `test_join_submit_without_identity_document_ok` e `test_join_submit_requires_identity_document_when_org_flag_enabled`.
+- Verifiche eseguite: `python -m pytest -q tests/test_optional_identity_document.py tests/test_org_admin_communications.py`; `npm --prefix frontend run build`.

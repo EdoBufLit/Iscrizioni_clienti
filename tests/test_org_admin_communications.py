@@ -467,3 +467,19 @@ def test_super_admin_can_toggle_communications_module_for_organization(client, d
     assert response.json()["communications_enabled"] is True
     db.refresh(org)
     assert bool(org.communications_enabled) is True
+
+
+def test_super_admin_can_toggle_membership_document_requirement_for_organization(client, db):
+    org, _admin = _create_org_admin(db, communications_enabled=False)
+    org.require_membership_document = False
+    db.commit()
+    _login_super_admin(client)
+
+    response = client.patch(
+        f"/api/super-admin/organizations/{org.id}",
+        json={"require_membership_document": True},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["require_membership_document"] is True
+    db.refresh(org)
+    assert bool(org.require_membership_document) is True

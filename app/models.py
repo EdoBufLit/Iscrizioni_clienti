@@ -259,6 +259,9 @@ class Organization(Base):
     auto_approve_signup = Column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    require_membership_document = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     communications_enabled = Column(
         Boolean, nullable=False, default=False, server_default="false"
     )

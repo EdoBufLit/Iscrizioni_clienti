@@ -86,6 +86,9 @@ def _ensure_org_admin_session(client, db, org: Organization) -> AdminUser:
 
 def test_join_submit_without_identity_document_ok(client, db):
     org = _ensure_org(db, "optional-doc-submit-org")
+    org.require_membership_document = False
+    db.commit()
+    db.refresh(org)
     email = f"nodoc-submit-{int(datetime.utcnow().timestamp())}@example.com"
 
     resp = client.post(
@@ -114,6 +117,69 @@ def test_join_submit_without_identity_document_ok(client, db):
     assert member.status == MemberStatus.PENDING_VERIFICATION
     docs_count = db.query(MemberDocument).filter(MemberDocument.member_id == member.id).count()
     assert docs_count == 0
+
+
+def test_join_submit_requires_identity_document_when_org_flag_enabled(client, db):
+    org = _ensure_org(db, "required-doc-submit-org")
+    org.require_membership_document = True
+    db.commit()
+    db.refresh(org)
+    email = f"require-doc-{int(datetime.utcnow().timestamp())}@example.com"
+
+    detail_resp = client.get(f"/api/organizations/{org.slug}")
+    assert detail_resp.status_code == 200, detail_resp.text
+    assert detail_resp.json()["require_membership_document"] is True
+
+    resp = client.post(
+        f"/api/join/{org.slug}/submit",
+        data=build_join_submit_data(
+            first_name="Need",
+            last_name="Document",
+            email=email,
+            phone="333000222",
+            payment_method="CASH",
+            accept_statute="true",
+            accept_privacy="true",
+        ),
+    )
+    assert resp.status_code == 400, resp.text
+    assert "documento di identità" in resp.json()["detail"]
+
+
+def test_join_submit_accepts_identity_document_when_org_flag_enabled(client, db):
+    org = _ensure_org(db, "required-doc-submit-with-file-org")
+    org.require_membership_document = True
+    db.commit()
+    db.refresh(org)
+    email = f"require-doc-file-{int(datetime.utcnow().timestamp())}@example.com"
+
+    resp = client.post(
+        f"/api/join/{org.slug}/submit",
+        data=build_join_submit_data(
+            first_name="Need",
+            last_name="File",
+            email=email,
+            phone="333000333",
+            payment_method="CASH",
+            accept_statute="true",
+            accept_privacy="true",
+        ),
+        files={
+            "id_document": ("id.pdf", b"%PDF-1.4 required identity", "application/pdf"),
+        },
+    )
+    assert resp.status_code == 200, resp.text
+
+    member = (
+        db.query(Member)
+        .filter(Member.org_id == org.id, Member.email == email)
+        .order_by(Member.id.desc())
+        .first()
+    )
+    assert member is not None
+    docs = db.query(MemberDocument).filter(MemberDocument.member_id == member.id).all()
+    assert len(docs) == 1
+    assert docs[0].doc_type == "identity"
 
 
 def test_org_admin_can_activate_member_without_documents(client, db):

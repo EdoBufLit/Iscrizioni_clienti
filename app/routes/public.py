@@ -116,6 +116,9 @@ def _org_to_dict_detail(org: Organization) -> dict:
         if org.statute_pdf_path
         else None,
         "has_statute": bool(org.statute_pdf_path),
+        "require_membership_document": bool(
+            getattr(org, "require_membership_document", False)
+        ),
     }
 
 

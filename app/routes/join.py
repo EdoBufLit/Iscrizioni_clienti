@@ -728,6 +728,25 @@ async def api_join_submit_multipart(
         request,
         fiscal_code=normalized_fiscal_code,
     )
+    require_membership_document = bool(
+        getattr(org, "require_membership_document", False)
+    )
+    existing_identity_document = False
+    if existing:
+        existing_identity_document = (
+            db.query(MemberDocument.id)
+            .filter(
+                MemberDocument.member_id == existing.id,
+                MemberDocument.doc_type == "identity",
+            )
+            .first()
+            is not None
+        )
+    if require_membership_document and not id_document and not existing_identity_document:
+        raise HTTPException(
+            status_code=400,
+            detail="Per completare l'iscrizione è necessario caricare il documento di identità.",
+        )
 
     # Transactional
     rel_path_id = None

@@ -18,6 +18,7 @@ REQUIRED_ORG_COLUMNS = {
     "card_email_subject",
     "card_logo_url",
     "auto_approve_signup",
+    "require_membership_document",
 }
 
 

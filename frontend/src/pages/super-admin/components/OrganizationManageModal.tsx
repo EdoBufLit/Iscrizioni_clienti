@@ -37,6 +37,7 @@ type ModalFormData = {
   description_short: string;
   is_active: boolean;
   auto_approve_signup: boolean;
+  require_membership_document: boolean;
   accounting_enabled: boolean;
   from_no: string;
   to_no: string;
@@ -62,6 +63,7 @@ const createInitialFormData = (): ModalFormData => ({
   description_short: "",
   is_active: true,
   auto_approve_signup: false,
+  require_membership_document: false,
   accounting_enabled: false,
   from_no: "",
   to_no: "",
@@ -209,6 +211,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
       card_email_subject: selectedOrg.card_email_subject ?? "",
       card_logo_url: selectedOrg.card_logo_url ?? "",
       auto_approve_signup: Boolean(selectedOrg.auto_approve_signup),
+      require_membership_document: Boolean(selectedOrg.require_membership_document),
       accounting_enabled: Boolean(selectedOrg.accounting_enabled),
     }));
   }, [open, modalType, selectedOrg]);
@@ -291,6 +294,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
           description_short: formData.description_short || undefined,
           is_active: formData.is_active,
           auto_approve_signup: formData.auto_approve_signup,
+          require_membership_document: formData.require_membership_document,
           accounting_enabled: formData.accounting_enabled,
         };
         const newOrg = await createSuperAdminOrganization(payload);
@@ -322,6 +326,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
           card_email_subject: normalizeOptionalString(formData.card_email_subject),
           card_logo_url: normalizeOptionalString(formData.card_logo_url),
           auto_approve_signup: formData.auto_approve_signup,
+          require_membership_document: formData.require_membership_document,
           accounting_enabled: formData.accounting_enabled,
         });
       }
@@ -1003,6 +1008,29 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                     </label>
                     <p className="mt-1 text-xs text-neutral-500">
                       Abilita la tab Contabilità per gli Org Admin e consenti l'invio di documenti accounting.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-4 flex items-start gap-3 border-t border-neutral-200 pt-4">
+                  <input
+                    id="require_membership_document"
+                    type="checkbox"
+                    className="mt-0.5 rounded border-gray-300 text-brand focus:ring-brand"
+                    checked={formData.require_membership_document}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        require_membership_document: e.target.checked,
+                      }))
+                    }
+                  />
+                  <div>
+                    <label htmlFor="require_membership_document" className="text-sm font-medium text-neutral-800">
+                      Documento obbligatorio per completare l'iscrizione
+                    </label>
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Se attivo, il socio dovrà caricare il documento nella pagina pubblica di iscrizione.
+                      Se disattivato, il documento resta facoltativo come ora.
                     </p>
                   </div>
                 </div>
