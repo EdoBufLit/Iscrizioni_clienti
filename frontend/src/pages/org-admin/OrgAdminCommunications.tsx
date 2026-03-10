@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { applySeo } from "../../lib/seo";
 import { fetchOrgAdminCommunicationSettings } from "../../lib/api";
-import { useOrgAdmin } from "./OrgAdminLayout";
 import Skeleton from "../../components/ui/Skeleton";
 
 import { CommunicationsOverview } from "./components/communications/CommunicationsOverview";
@@ -16,7 +15,6 @@ const COMMUNICATIONS_LOCKED_MESSAGE = "Modulo Comunicazioni non attivo. Contatta
 
 export default function OrgAdminCommunications() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { admin } = useOrgAdmin();
 
   const initialTab = (searchParams.get("tab") || "").trim().toLowerCase();
   const isValidTab = (value: string): value is TabKey =>
@@ -80,27 +78,6 @@ export default function OrgAdminCommunications() {
   return (
     <div className="container-shell py-8 space-y-6">
       <section className="surface overflow-hidden">
-        <div className="border-b border-neutral-200 px-6 py-5 md:px-8">
-          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand/80">Comunicazioni</p>
-              <h1 className="mt-2 text-2xl font-bold tracking-tight text-neutral-900">Spazio Comunicazioni</h1>
-              <p className="mt-1 text-sm text-neutral-600">
-                Invia messaggi ai soci, crea pagine per il pubblico e gestisci le email.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm">
-              <p className="font-semibold text-neutral-900">{admin?.organization?.name || "Associazione"}</p>
-              <p className="mt-1 text-neutral-700">
-                Stato comunicazioni:{" "}
-                <span className={communicationsLocked ? "text-amber-700" : "text-emerald-700"}>
-                  {communicationsLocked ? "non attivo" : "attivo"}
-                </span>
-              </p>
-            </div>
-          </div>
-        </div>
-
         {communicationsLocked && (
           <div className="mx-6 mt-6 rounded-[1.75rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900 md:mx-8">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -112,7 +89,7 @@ export default function OrgAdminCommunications() {
           </div>
         )}
 
-        <div className="px-4 pt-4 md:px-8">
+        <div className="px-4 pt-6 md:px-8">
           <div className="flex flex-wrap gap-2 border-b border-neutral-200">
             {[
               { key: "panoramica", label: "Panoramica" },
