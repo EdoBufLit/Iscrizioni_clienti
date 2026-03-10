@@ -80,6 +80,7 @@ from app.services.forms import (
     apply_form_field_updates,
     apply_form_updates,
     build_unique_form_slug,
+    ensure_forms_module_enabled,
     export_submissions_csv,
     get_form_for_org_admin,
     normalize_form_slug,
@@ -1115,23 +1116,45 @@ class RenderEmailTemplatePreviewBody(BaseModel):
 class CreateAssociationFormBody(BaseModel):
     title: str = Field(min_length=1, max_length=160)
     description: Optional[str] = None
+    accent_color: Optional[str] = Field(default=None, max_length=16)
+    submit_button_text: Optional[str] = Field(default=None, max_length=120)
+    show_logo: bool = True
+    cover_image_url: Optional[str] = None
+    page_style: Optional[str] = Field(default="editorial", max_length=40)
     public_slug: Optional[str] = Field(default=None, max_length=120)
     is_active: bool = False
     visibility: str = Field(default="public", max_length=40)
     success_message: Optional[str] = None
     notification_email: Optional[EmailStr] = None
     allow_multiple_submissions: bool = True
+    notify_admin_on_submit: bool = True
+    send_user_confirmation: bool = True
+    admin_notification_template_id: Optional[int] = None
+    user_confirmation_template_id: Optional[int] = None
+    create_internal_request: bool = False
+    create_booking: bool = False
 
 
 class UpdateAssociationFormBody(BaseModel):
     title: str = Field(min_length=1, max_length=160)
     description: Optional[str] = None
+    accent_color: Optional[str] = Field(default=None, max_length=16)
+    submit_button_text: Optional[str] = Field(default=None, max_length=120)
+    show_logo: bool = True
+    cover_image_url: Optional[str] = None
+    page_style: Optional[str] = Field(default="editorial", max_length=40)
     public_slug: Optional[str] = Field(default=None, max_length=120)
     is_active: bool = False
     visibility: str = Field(default="public", max_length=40)
     success_message: Optional[str] = None
     notification_email: Optional[EmailStr] = None
     allow_multiple_submissions: bool = True
+    notify_admin_on_submit: bool = True
+    send_user_confirmation: bool = True
+    admin_notification_template_id: Optional[int] = None
+    user_confirmation_template_id: Optional[int] = None
+    create_internal_request: bool = False
+    create_booking: bool = False
 
 
 class DuplicateAssociationFormBody(BaseModel):
@@ -3727,12 +3750,15 @@ def list_association_forms(
     admin = _get_current_org_admin(request, db)
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
 
     forms = (
         db.query(AssociationForm)
         .options(
             joinedload(AssociationForm.fields),
             joinedload(AssociationForm.submissions),
+            joinedload(AssociationForm.admin_notification_template),
+            joinedload(AssociationForm.user_confirmation_template),
         )
         .filter(AssociationForm.association_id == admin.org_id)
         .order_by(AssociationForm.updated_at.desc(), AssociationForm.id.desc())
@@ -3755,6 +3781,7 @@ def create_association_form(
     admin = _get_current_org_admin(request, db)
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
 
     form = AssociationForm(
         association_id=admin.org_id,
@@ -3767,12 +3794,23 @@ def create_association_form(
         form=form,
         title=body.title,
         description=body.description,
+        accent_color=body.accent_color,
+        submit_button_text=body.submit_button_text,
+        show_logo=body.show_logo,
+        cover_image_url=body.cover_image_url,
+        page_style=body.page_style,
         public_slug=form.public_slug,
         is_active=body.is_active,
         visibility=body.visibility,
         success_message=body.success_message,
         notification_email=body.notification_email,
         allow_multiple_submissions=body.allow_multiple_submissions,
+        notify_admin_on_submit=body.notify_admin_on_submit,
+        send_user_confirmation=body.send_user_confirmation,
+        admin_notification_template_id=body.admin_notification_template_id,
+        user_confirmation_template_id=body.user_confirmation_template_id,
+        create_internal_request=body.create_internal_request,
+        create_booking=body.create_booking,
     )
     db.add(form)
     db.commit()
@@ -3789,6 +3827,7 @@ def get_association_form_detail(
     admin = _get_current_org_admin(request, db)
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
     form = get_form_for_org_admin(db, association_id=admin.org_id, form_id=form_id)
     return {"form": serialize_form(form)}
 
@@ -3803,18 +3842,30 @@ def update_association_form(
     admin = _get_current_org_admin(request, db)
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
     form = get_form_for_org_admin(db, association_id=admin.org_id, form_id=form_id)
     apply_form_updates(
         db,
         form=form,
         title=body.title,
         description=body.description,
+        accent_color=body.accent_color,
+        submit_button_text=body.submit_button_text,
+        show_logo=body.show_logo,
+        cover_image_url=body.cover_image_url,
+        page_style=body.page_style,
         public_slug=body.public_slug or body.title,
         is_active=body.is_active,
         visibility=body.visibility,
         success_message=body.success_message,
         notification_email=body.notification_email,
         allow_multiple_submissions=body.allow_multiple_submissions,
+        notify_admin_on_submit=body.notify_admin_on_submit,
+        send_user_confirmation=body.send_user_confirmation,
+        admin_notification_template_id=body.admin_notification_template_id,
+        user_confirmation_template_id=body.user_confirmation_template_id,
+        create_internal_request=body.create_internal_request,
+        create_booking=body.create_booking,
     )
     db.commit()
     db.refresh(form)
@@ -3830,6 +3881,7 @@ def delete_association_form(
     admin = _get_current_org_admin(request, db)
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
     form = get_form_for_org_admin(db, association_id=admin.org_id, form_id=form_id)
     db.delete(form)
     db.commit()
@@ -3846,6 +3898,7 @@ def duplicate_association_form(
     admin = _get_current_org_admin(request, db)
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
     source_form = get_form_for_org_admin(db, association_id=admin.org_id, form_id=form_id)
     duplicate_title = (body.title or f"{source_form.title} copia").strip()
     duplicate_slug = build_unique_form_slug(
@@ -3856,12 +3909,23 @@ def duplicate_association_form(
         association_id=admin.org_id,
         title=duplicate_title,
         description=source_form.description,
+        accent_color=source_form.accent_color,
+        submit_button_text=source_form.submit_button_text,
+        show_logo=bool(source_form.show_logo),
+        cover_image_url=source_form.cover_image_url,
+        page_style=source_form.page_style,
         public_slug=duplicate_slug,
         is_active=False,
         visibility=source_form.visibility,
         success_message=source_form.success_message,
         notification_email=source_form.notification_email,
         allow_multiple_submissions=bool(source_form.allow_multiple_submissions),
+        notify_admin_on_submit=bool(source_form.notify_admin_on_submit),
+        send_user_confirmation=bool(source_form.send_user_confirmation),
+        admin_notification_template_id=source_form.admin_notification_template_id,
+        user_confirmation_template_id=source_form.user_confirmation_template_id,
+        create_internal_request=bool(source_form.create_internal_request),
+        create_booking=bool(source_form.create_booking),
         created_by_user_id=admin.id,
     )
     db.add(cloned_form)
@@ -3900,6 +3964,7 @@ def activate_association_form(
     admin = _get_current_org_admin(request, db)
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
     form = get_form_for_org_admin(db, association_id=admin.org_id, form_id=form_id)
     form.is_active = True
     db.commit()
@@ -3916,6 +3981,7 @@ def deactivate_association_form(
     admin = _get_current_org_admin(request, db)
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
     form = get_form_for_org_admin(db, association_id=admin.org_id, form_id=form_id)
     form.is_active = False
     db.commit()
@@ -3933,6 +3999,7 @@ def create_association_form_field(
     admin = _get_current_org_admin(request, db)
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
     form = get_form_for_org_admin(db, association_id=admin.org_id, form_id=form_id)
     field = FormField(form_id=form.id)
     apply_form_field_updates(
@@ -3963,6 +4030,7 @@ def update_association_form_field(
     admin = _get_current_org_admin(request, db)
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
     get_form_for_org_admin(db, association_id=admin.org_id, form_id=form_id)
     field = (
         db.query(FormField)
@@ -3997,6 +4065,7 @@ def delete_association_form_field(
     admin = _get_current_org_admin(request, db)
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
     get_form_for_org_admin(db, association_id=admin.org_id, form_id=form_id)
     field = (
         db.query(FormField)
@@ -4019,11 +4088,14 @@ def list_association_form_submissions(
     admin = _get_current_org_admin(request, db)
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
     form = (
         db.query(AssociationForm)
         .options(
             joinedload(AssociationForm.fields),
             joinedload(AssociationForm.submissions).joinedload(FormSubmission.member),
+            joinedload(AssociationForm.admin_notification_template),
+            joinedload(AssociationForm.user_confirmation_template),
         )
         .filter(AssociationForm.id == form_id, AssociationForm.association_id == admin.org_id)
         .first()
@@ -4051,11 +4123,14 @@ def export_association_form_submissions_csv(
     admin = _get_current_org_admin(request, db)
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
     form = (
         db.query(AssociationForm)
         .options(
             joinedload(AssociationForm.fields),
             joinedload(AssociationForm.submissions),
+            joinedload(AssociationForm.admin_notification_template),
+            joinedload(AssociationForm.user_confirmation_template),
         )
         .filter(AssociationForm.id == form_id, AssociationForm.association_id == admin.org_id)
         .first()
@@ -4081,6 +4156,7 @@ def get_association_form_submission_detail(
     admin = _get_current_org_admin(request, db)
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
     get_form_for_org_admin(db, association_id=admin.org_id, form_id=form_id)
     submission = (
         db.query(FormSubmission)

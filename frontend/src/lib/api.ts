@@ -736,23 +736,60 @@ export type AssociationFormField = {
   options: string[];
 };
 
+export type AssociationFormActionTemplate = {
+  id: number;
+  name: string;
+  subject: string;
+  is_system: boolean;
+  is_active: boolean;
+};
+
 export type AssociationForm = {
   id: number;
   association_id: number;
   title: string;
   description: string | null;
+  accent_color: string | null;
+  submit_button_text: string | null;
+  show_logo: boolean;
+  cover_image_url: string | null;
+  page_style: string;
   public_slug: string;
   is_active: boolean;
   visibility: AssociationFormVisibility;
   success_message: string | null;
   notification_email: string | null;
   allow_multiple_submissions: boolean;
+  notify_admin_on_submit: boolean;
+  send_user_confirmation: boolean;
+  admin_notification_template_id: number | null;
+  user_confirmation_template_id: number | null;
+  create_internal_request: boolean;
+  create_booking: boolean;
   created_by_user_id: number | null;
   created_at: string | null;
   updated_at: string | null;
   field_count: number;
   submission_count: number;
   fields: AssociationFormField[];
+  design: {
+    title: string;
+    description: string | null;
+    accent_color: string | null;
+    submit_button_text: string | null;
+    show_logo: boolean;
+    cover_image_url: string | null;
+    page_style: string;
+  };
+  actions: {
+    save_submission: boolean;
+    notify_admin_on_submit: boolean;
+    send_user_confirmation: boolean;
+    admin_notification_template: AssociationFormActionTemplate | null;
+    user_confirmation_template: AssociationFormActionTemplate | null;
+    create_internal_request: boolean;
+    create_booking: boolean;
+  };
 };
 
 export type AssociationFormSubmission = {
@@ -1022,12 +1059,23 @@ export async function fetchOrgAdminForms(): Promise<{
 export async function createOrgAdminForm(data: {
   title: string;
   description?: string | null;
+  accent_color?: string | null;
+  submit_button_text?: string | null;
+  show_logo?: boolean;
+  cover_image_url?: string | null;
+  page_style?: string | null;
   public_slug?: string | null;
   is_active?: boolean;
   visibility?: AssociationFormVisibility;
   success_message?: string | null;
   notification_email?: string | null;
   allow_multiple_submissions?: boolean;
+  notify_admin_on_submit?: boolean;
+  send_user_confirmation?: boolean;
+  admin_notification_template_id?: number | null;
+  user_confirmation_template_id?: number | null;
+  create_internal_request?: boolean;
+  create_booking?: boolean;
 }): Promise<{ form: AssociationForm }> {
   const res = await fetch("/api/org-admin/forms", {
     method: "POST",
@@ -1051,12 +1099,23 @@ export async function updateOrgAdminForm(
   data: {
     title: string;
     description?: string | null;
+    accent_color?: string | null;
+    submit_button_text?: string | null;
+    show_logo?: boolean;
+    cover_image_url?: string | null;
+    page_style?: string | null;
     public_slug?: string | null;
     is_active?: boolean;
     visibility?: AssociationFormVisibility;
     success_message?: string | null;
     notification_email?: string | null;
     allow_multiple_submissions?: boolean;
+    notify_admin_on_submit?: boolean;
+    send_user_confirmation?: boolean;
+    admin_notification_template_id?: number | null;
+    user_confirmation_template_id?: number | null;
+    create_internal_request?: boolean;
+    create_booking?: boolean;
   },
 ): Promise<{ form: AssociationForm }> {
   const res = await fetch(`/api/org-admin/forms/${formId}`, {

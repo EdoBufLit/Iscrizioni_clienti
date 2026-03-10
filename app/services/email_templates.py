@@ -68,6 +68,20 @@ AVAILABLE_TEMPLATE_VARIABLES = [
         "description": "Link al documento o alla pagina associazione.",
         "example": "https://app.assonam.it/associazioni/golden-age-club",
     },
+    {
+        "key": "titolo_form",
+        "placeholder": "{{titolo_form}}",
+        "label": "Titolo form",
+        "description": "Titolo del form o workflow che ha generato il messaggio.",
+        "example": "Prenotazione tavolo",
+    },
+    {
+        "key": "email_destinatario",
+        "placeholder": "{{email_destinatario}}",
+        "label": "Email destinatario",
+        "description": "Email usata per il submit del form o per la conferma utente.",
+        "example": "mario.rossi@example.com",
+    },
 ]
 
 
@@ -246,6 +260,7 @@ def build_template_context(
     association: Any = None,
     member: Any = None,
     fake: bool = False,
+    extra_context: dict[str, str] | None = None,
 ) -> dict[str, str]:
     association_name = _normalize_text(getattr(association, "name", None) if association is not None else None) or "ASSONAM"
     association_slug = _normalize_text(getattr(association, "slug", None) if association is not None else None)
@@ -270,14 +285,22 @@ def build_template_context(
         renewal_link = ""
         document_link = ""
 
-    return {
+    context = {
         "nome_socio": full_name,
         "nome_associazione": association_name,
         "numero_tessera": str(card_no or ""),
         "data_scadenza": expiry,
         "link_rinnovo": renewal_link,
         "link_documento": document_link,
+        "titolo_form": "",
+        "email_destinatario": "",
     }
+    for key, value in (extra_context or {}).items():
+        normalized_key = _normalize_text(key)
+        if not normalized_key:
+            continue
+        context[normalized_key] = str(value or "")
+    return context
 
 
 def render_template_string(
@@ -305,8 +328,14 @@ def render_template_content(
     association: Any = None,
     member: Any = None,
     fake: bool = False,
+    extra_context: dict[str, str] | None = None,
 ) -> RenderedTemplateContent:
-    context = build_template_context(association=association, member=member, fake=fake)
+    context = build_template_context(
+        association=association,
+        member=member,
+        fake=fake,
+        extra_context=extra_context,
+    )
     return RenderedTemplateContent(
         subject=render_template_string(subject, context=context) or "",
         body_html=render_template_string(

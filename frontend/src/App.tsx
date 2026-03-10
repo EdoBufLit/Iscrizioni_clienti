@@ -50,7 +50,6 @@ const OrgAdminMembers = lazy(() => import("./pages/org-admin/OrgAdminMembers"));
 const OrgAdminMemberDetail = lazy(() => import("./pages/org-admin/OrgAdminMemberDetail"));
 const OrgAdminCards = lazy(() => import("./pages/org-admin/OrgAdminCards"));
 const OrgAdminCommunications = lazy(() => import("./pages/org-admin/OrgAdminCommunications"));
-const OrgAdminForms = lazy(() => import("./pages/org-admin/OrgAdminForms"));
 const OrgAdminSettings = lazy(() => import("./pages/org-admin/OrgAdminSettings"));
 const OrgAdminSharedDocuments = lazy(() => import("./pages/org-admin/OrgAdminSharedDocuments"));
 
@@ -139,7 +138,7 @@ const App = () => {
                 <Route path="tessere" element={<OrgAdminCards />} />
                 <Route path="documenti" element={<OrgAdminSharedDocuments />} />
                 <Route path="comunicazioni" element={<OrgAdminCommunications />} />
-                <Route path="forms" element={<OrgAdminForms />} />
+                <Route path="forms" element={<Navigate to="/org-admin/comunicazioni?tab=forms" replace />} />
                 <Route path="contabilita" element={<OrgAdminSharedDocuments />} />
                 <Route path="associazione" element={<OrgAdminSettings />} />
               </Route>

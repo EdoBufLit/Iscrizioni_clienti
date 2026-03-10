@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   AuthError,
   archiveOrgAdminEmailTemplate,
@@ -30,6 +30,7 @@ import { applySeo } from "../../lib/seo";
 import Skeleton from "../../components/ui/Skeleton";
 import { useToast } from "../../components/ui/ToastProvider";
 import { useOrgAdmin } from "./OrgAdminLayout";
+import { OrgAdminFormsWorkspace } from "./OrgAdminForms";
 
 const inputClass =
   "mt-1 w-full rounded-md border border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20";
@@ -37,9 +38,9 @@ const labelClass = "block text-sm font-medium text-neutral-700";
 const COMMUNICATIONS_LOCKED_MESSAGE =
   "Modulo Comunicazioni non attivo. Contatta ASSONAM per abilitarlo.";
 
-type TabKey = "settings" | "campaigns" | "templates" | "history";
+type TabKey = "overview" | "campaigns" | "templates" | "forms" | "sending";
 type ContentMode = "text" | "html";
-type TemplateFilter = "all" | "system" | "association";
+type TemplateFilter = "all" | "system" | "custom" | "archived";
 
 const audienceOptions: Array<{
   value: OrgAdminCampaignAudienceType;
@@ -162,10 +163,14 @@ function statusLabel(value: string | null | undefined): string {
 
 const OrgAdminCommunications = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { showToast } = useToast();
   const { admin } = useOrgAdmin();
 
-  const [activeTab, setActiveTab] = useState<TabKey>("settings");
+  const initialTab = (searchParams.get("tab") || "").trim().toLowerCase();
+  const isValidTab = (value: string): value is TabKey =>
+    value === "overview" || value === "campaigns" || value === "templates" || value === "forms" || value === "sending";
+  const [activeTab, setActiveTab] = useState<TabKey>(isValidTab(initialTab) ? initialTab : "overview");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -308,11 +313,11 @@ const OrgAdminCommunications = () => {
   }, []);
 
   const loadTemplates = useCallback(
-    async (scope: TemplateFilter, nextSelectedId?: number | null) => {
+    async (nextSelectedId?: number | null) => {
       setTemplatesLoading(true);
       try {
         const [templateData, variableData] = await Promise.all([
-          fetchOrgAdminEmailTemplates({ scope, includeInactive: true }),
+          fetchOrgAdminEmailTemplates({ scope: "all", includeInactive: true }),
           fetchOrgAdminEmailTemplateVariables(),
         ]);
         setTemplates(templateData.items);
@@ -438,8 +443,8 @@ const OrgAdminCommunications = () => {
   }, [campaignForm.audience_type, navigate, settings]);
 
   useEffect(() => {
-    void loadTemplates(templateFilter, selectedTemplate?.id ?? undefined);
-  }, [loadTemplates, templateFilter]);
+    void loadTemplates(selectedTemplate?.id ?? undefined);
+  }, [loadTemplates]);
 
   const preview = useMemo(
     () =>
@@ -458,6 +463,34 @@ const OrgAdminCommunications = () => {
 
   const moduleActive = Boolean(settings?.communications_enabled);
   const communicationsLocked = !moduleActive;
+  const filteredTemplates = useMemo(() => {
+    if (templateFilter === "system") {
+      return templates.filter((item) => item.is_system);
+    }
+    if (templateFilter === "custom") {
+      return templates.filter((item) => !item.is_system && item.is_active);
+    }
+    if (templateFilter === "archived") {
+      return templates.filter((item) => !item.is_active);
+    }
+    return templates;
+  }, [templateFilter, templates]);
+  const selectTab = useCallback(
+    (tab: TabKey) => {
+      setActiveTab(tab);
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.set("tab", tab);
+      setSearchParams(nextParams, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+
+  useEffect(() => {
+    const next = (searchParams.get("tab") || "").trim().toLowerCase();
+    if (isValidTab(next) && next !== activeTab) {
+      setActiveTab(next);
+    }
+  }, [activeTab, searchParams]);
 
   const handleSaveSettings = async (e: FormEvent) => {
     e.preventDefault();
@@ -555,7 +588,7 @@ const OrgAdminCommunications = () => {
         body: "",
       });
       setContentMode("text");
-      setActiveTab("history");
+      selectTab("campaigns");
       await loadCampaigns(campaign.id);
       await loadCampaignDetail(campaign.id);
     } catch (err) {
@@ -671,7 +704,7 @@ const OrgAdminCommunications = () => {
       });
       setSelectedTemplate(response.template);
       syncTemplateEditor(response.template);
-      await loadTemplates(templateFilter, response.template.id);
+      await loadTemplates(response.template.id);
       showToast({ title: "Template", message: "Template salvato correttamente.", tone: "success" });
     } catch (err) {
       if (err instanceof AuthError) {
@@ -706,7 +739,7 @@ const OrgAdminCommunications = () => {
       });
       setSelectedTemplate(response.template);
       syncTemplateEditor(response.template);
-      await loadTemplates(templateFilter, response.template.id);
+      await loadTemplates(response.template.id);
       showToast({ title: "Template", message: "Template aggiornato.", tone: "success" });
     } catch (err) {
       if (err instanceof AuthError) {
@@ -733,8 +766,8 @@ const OrgAdminCommunications = () => {
       const response = await duplicateOrgAdminEmailTemplate(selectedTemplate.id);
       setSelectedTemplate(response.template);
       syncTemplateEditor(response.template);
-      setTemplateFilter("association");
-      await loadTemplates("association", response.template.id);
+      setTemplateFilter("custom");
+      await loadTemplates(response.template.id);
       showToast({ title: "Template", message: "Template duplicato.", tone: "success" });
     } catch (err) {
       if (err instanceof AuthError) {
@@ -762,7 +795,7 @@ const OrgAdminCommunications = () => {
       showToast({ title: "Template", message: "Template archiviato.", tone: "success" });
       setSelectedTemplate(null);
       syncTemplateEditor(null);
-      await loadTemplates(templateFilter);
+      await loadTemplates();
     } catch (err) {
       if (err instanceof AuthError) {
         navigate("/org-admin/login", { replace: true });
@@ -794,7 +827,7 @@ const OrgAdminCommunications = () => {
         body: hasHtml ? detail.body_html || "" : detail.body_text || "",
       }));
       setContentMode(hasHtml ? "html" : "text");
-      setActiveTab("campaigns");
+      selectTab("campaigns");
       showToast({
         title: "Campagne",
         message: `Template "${detail.name}" caricato nel composer.`,
@@ -839,9 +872,9 @@ const OrgAdminCommunications = () => {
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.24em] text-brand/80">Comunicazioni</p>
-              <h1 className="mt-2 text-2xl font-bold tracking-tight text-neutral-900">Email associazione e campagne</h1>
+              <h1 className="mt-2 text-2xl font-bold tracking-tight text-neutral-900">Workflow comunicazioni associazione</h1>
               <p className="mt-2 max-w-2xl text-sm text-neutral-600">
-                Gestisci il mittente association mode, invia email di test e lancia campagne verso i soci.
+                Campagne, template, form pubblici e impostazioni di invio nello stesso pacchetto operativo.
               </p>
             </div>
             <div className="rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm">
@@ -873,10 +906,11 @@ const OrgAdminCommunications = () => {
         <div className="px-4 pt-4 md:px-8">
           <div className="flex flex-wrap gap-2 border-b border-neutral-200">
             {[
-              { key: "settings", label: "Impostazioni" },
+              { key: "overview", label: "Overview" },
               { key: "campaigns", label: "Campagne" },
               { key: "templates", label: "Template" },
-              { key: "history", label: "Storico" },
+              { key: "forms", label: "Forms & automations" },
+              { key: "sending", label: "Sending settings" },
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -886,7 +920,7 @@ const OrgAdminCommunications = () => {
                     ? "bg-brand text-white shadow-sm"
                     : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900"
                 }`}
-                onClick={() => setActiveTab(tab.key as TabKey)}
+                onClick={() => selectTab(tab.key as TabKey)}
               >
                 {tab.label}
               </button>
@@ -895,7 +929,103 @@ const OrgAdminCommunications = () => {
         </div>
 
         <div className="px-6 py-6 md:px-8 md:py-8">
-          {activeTab === "settings" ? (
+          {activeTab === "overview" ? (
+            <div className="space-y-6">
+              <div className="grid gap-4 lg:grid-cols-4">
+                <button
+                  type="button"
+                  onClick={() => selectTab("campaigns")}
+                  className="rounded-[1.75rem] border border-neutral-200 bg-white p-5 text-left transition hover:border-brand/40 hover:bg-brand/5"
+                >
+                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Campaigns</p>
+                  <p className="mt-3 text-3xl font-bold tracking-tight text-neutral-900">{campaigns.length}</p>
+                  <p className="mt-2 text-sm text-neutral-600">Bozze, invii e storico campagne in un solo flusso.</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selectTab("templates")}
+                  className="rounded-[1.75rem] border border-neutral-200 bg-white p-5 text-left transition hover:border-brand/40 hover:bg-brand/5"
+                >
+                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Templates</p>
+                  <p className="mt-3 text-3xl font-bold tracking-tight text-neutral-900">{templates.filter((item) => item.is_active).length}</p>
+                  <p className="mt-2 text-sm text-neutral-600">Template system, custom e archiviati con preview variabili.</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selectTab("forms")}
+                  className="rounded-[1.75rem] border border-neutral-200 bg-white p-5 text-left transition hover:border-brand/40 hover:bg-brand/5"
+                >
+                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Forms</p>
+                  <p className="mt-3 text-lg font-bold tracking-tight text-neutral-900">Workflow pubblici</p>
+                  <p className="mt-2 text-sm text-neutral-600">Form collegati a notifiche email, conferme e richieste interne.</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selectTab("sending")}
+                  className="rounded-[1.75rem] border border-neutral-200 bg-white p-5 text-left transition hover:border-brand/40 hover:bg-brand/5"
+                >
+                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Sending</p>
+                  <p className="mt-3 text-lg font-bold tracking-tight text-neutral-900">
+                    {preview.selectedMode === "association" ? "Association mode" : "System fallback"}
+                  </p>
+                  <p className="mt-2 text-sm text-neutral-600">Controlla mittente, reply-to e test email reali.</p>
+                </button>
+              </div>
+
+              <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+                <div className="rounded-[1.75rem] border border-neutral-200 bg-white p-5">
+                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Panoramica workflow</p>
+                  <div className="mt-4 space-y-4">
+                    {[
+                      ["1", "Templates", "Crea template custom o duplica quelli ASSONAM per uniformare il tono."],
+                      ["2", "Forms & automations", "Collega i template ai form pubblici per gestire notifiche e conferme."],
+                      ["3", "Campaigns", "Usa gli stessi template nel composer campagne e monitora gli invii."],
+                    ].map(([step, title, body]) => (
+                      <div key={step} className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+                        <div className="flex items-start gap-4">
+                          <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-brand text-xs font-bold text-white">{step}</span>
+                          <div>
+                            <p className="text-sm font-semibold text-neutral-900">{title}</p>
+                            <p className="mt-1 text-sm text-neutral-600">{body}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-5">
+                  <div className="rounded-[1.75rem] border border-neutral-200 bg-neutral-50 p-5 text-sm">
+                    <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Sender attuale</p>
+                    <p className="mt-4 text-neutral-500">From header</p>
+                    <p className="font-semibold text-neutral-900 break-all">{preview.fromHeader}</p>
+                    <p className="mt-3 text-neutral-500">Reply-To</p>
+                    <p className="font-semibold text-neutral-900 break-all">{preview.replyTo || "-"}</p>
+                    {preview.fallbackUsed ? (
+                      <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
+                        La configurazione sta ancora usando il fallback system mode.
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="rounded-[1.75rem] border border-neutral-200 bg-white p-5">
+                    <p className="text-sm font-semibold text-neutral-900">Azioni rapide</p>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <button className="btn-secondary" type="button" onClick={() => selectTab("templates")} disabled={communicationsLocked}>
+                        Crea template
+                      </button>
+                      <button className="btn-secondary" type="button" onClick={() => selectTab("forms")} disabled={communicationsLocked}>
+                        Crea form
+                      </button>
+                      <button className="btn-primary" type="button" onClick={() => selectTab("campaigns")} disabled={communicationsLocked}>
+                        Crea campagna
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {activeTab === "sending" ? (
             <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
               <form className="space-y-5" onSubmit={handleSaveSettings}>
                 <div className="rounded-[1.75rem] border border-neutral-200 bg-white p-5">
@@ -1016,7 +1146,7 @@ const OrgAdminCommunications = () => {
                     <button className="btn-primary" type="submit" disabled={testSending || communicationsLocked}>
                       {communicationsLocked ? "Non disponibile" : testSending ? "Invio in corso..." : "Invia test"}
                     </button>
-                    <span className="text-xs text-neutral-500">Usa l'outbox email già esistente.</span>
+                    <span className="text-xs text-neutral-500">Invio diretto con esito reale del provider.</span>
                   </div>
                 </form>
               </div>
@@ -1223,9 +1353,10 @@ const OrgAdminCommunications = () => {
                     onClick={() => {
                       setSelectedTemplate(null);
                       syncTemplateEditor(null);
+                      setTemplatePreview(null);
                     }}
                   >
-                    Nuovo template
+                    Crea template da zero
                   </button>
                 </div>
 
@@ -1233,7 +1364,8 @@ const OrgAdminCommunications = () => {
                   {([
                     { key: "all", label: "Tutti" },
                     { key: "system", label: "System" },
-                    { key: "association", label: "Personalizzati" },
+                    { key: "custom", label: "Custom" },
+                    { key: "archived", label: "Archiviati" },
                   ] as Array<{ key: TemplateFilter; label: string }>).map((item) => (
                     <button
                       key={item.key}
@@ -1255,12 +1387,12 @@ const OrgAdminCommunications = () => {
                     <div className="rounded-[1.75rem] border border-neutral-200 bg-white p-5">
                       <Skeleton className="h-24 w-full" />
                     </div>
-                  ) : templates.length === 0 ? (
+                  ) : filteredTemplates.length === 0 ? (
                     <div className="rounded-[1.75rem] border border-neutral-200 bg-white p-5 text-sm text-neutral-500">
                       Nessun template disponibile per questo filtro.
                     </div>
                   ) : (
-                    templates.map((template) => (
+                    filteredTemplates.map((template) => (
                       <button
                         key={template.id}
                         type="button"
@@ -1314,12 +1446,14 @@ const OrgAdminCommunications = () => {
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Editor template</p>
                       <h3 className="mt-2 text-lg font-semibold text-neutral-900">
-                        {selectedTemplate ? selectedTemplate.name : "Nuovo template associazione"}
+                        {selectedTemplate ? selectedTemplate.name : "Nuovo template custom"}
                       </h3>
                       <p className="mt-1 text-sm text-neutral-600">
-                        {selectedTemplate?.is_system
-                          ? "Template di sistema ASSONAM: puoi usarlo o duplicarlo."
-                          : "Template personalizzato modificabile dall'associazione."}
+                        {!selectedTemplate
+                          ? "Parti da zero con un template personalizzato dell'associazione."
+                          : selectedTemplate.is_system
+                            ? "Template di sistema ASSONAM: puoi usarlo o duplicarlo."
+                            : "Template personalizzato modificabile liberamente dall'associazione."}
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -1432,6 +1566,9 @@ const OrgAdminCommunications = () => {
                 <div className="grid gap-5 xl:grid-cols-[0.72fr_1.28fr]">
                   <div className="rounded-[1.75rem] border border-neutral-200 bg-neutral-50 p-5">
                     <p className="text-sm font-semibold text-neutral-900">Variabili disponibili</p>
+                    <p className="mt-1 text-sm text-neutral-500">
+                      Usa gli stessi placeholder nei template che poi colleghi ai form o alle campagne.
+                    </p>
                     <div className="mt-4 space-y-3">
                       {templateVariables.map((variable) => (
                         <div key={variable.key} className="rounded-2xl border border-neutral-200 bg-white p-3">
@@ -1485,7 +1622,16 @@ const OrgAdminCommunications = () => {
             </div>
           ) : null}
 
-          {activeTab === "history" ? (
+          {activeTab === "forms" ? (
+            <OrgAdminFormsWorkspace
+              embedded
+              locked={communicationsLocked}
+              lockedMessage="I Form richiedono il modulo Comunicazioni attivo."
+              availableTemplates={templates.filter((item) => item.is_active)}
+            />
+          ) : null}
+
+          {activeTab === "campaigns" ? (
             <div className="space-y-6">
               <div className="flex items-center justify-between gap-3">
                 <div>

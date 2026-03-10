@@ -2964,3 +2964,37 @@ pm --prefix frontend run build -> OK
 - Frontend admin: nuova pagina `OrgAdminForms.tsx` con lista form, editor configurazione, builder campi, storico risposte e export senza refresh brutti.
 - Frontend pubblico: nuova pagina dinamica `PublicFormPage.tsx` collegata alla route unica `/forms/:slug`, con rendering campi da DB, errori inline e success state chiaro.
 - Verifiche OK: `python -m compileall app tests init_db.py`, `python -m pytest -q tests/test_forms_module.py`, `npm --prefix frontend run build`.
+
+## Forms + Comunicazioni integration refactor (Mar 10, 2026)
+- [x] Mappare UI Comunicazioni/Form e punti backend da unificare senza rompere campagne/template/trasporto email esistenti
+- [x] Aggiungere gating backend Form su `communications_enabled` e blocco coerente anche sui form pubblici
+- [x] Estendere schema/model Form con azioni post-submit e collegamento ai template email
+- [x] Collegare submit form a template admin/user e creare richiesta interna semplice quando configurato
+- [x] Rifattorizzare IA/frontend Comunicazioni con sezioni chiare `Overview`, `Campaigns`, `Templates`, `Forms & automations`, `Sending settings`
+- [x] Integrare i Form dentro Comunicazioni, migliorare UX template creation/filter/editor e rimuovere l'impressione di modulo isolato
+- [x] Verificare build/test mirati e aggiornare review/README
+
+## Review (Forms + Comunicazioni integration refactor - Mar 10, 2026)
+- Backend: i form sono ora gated da `communications_enabled` sia lato org-admin sia sulla route pubblica `/api/forms/{slug}`, con messaggio coerente `I Form richiedono il modulo Comunicazioni attivo.`.
+- Schema/model: il form supporta azioni post-submit minimali (`notify_admin_on_submit`, `send_user_confirmation`, `admin_notification_template_id`, `user_confirmation_template_id`, `create_internal_request`, `create_booking`) con migration dedicata `f0a1b2c3d4e5_add_form_action_settings.py`.
+- Workflow submit: `app/services/forms.py` collega i form alla libreria template Comunicazioni per notifiche admin/conferme utente e crea una richiesta interna semplice via `OrgAdminNotification` quando configurato.
+- IA frontend: `Comunicazioni` e stata rifattorizzata in `Overview`, `Campaigns`, `Templates`, `Forms & automations`, `Sending settings`; la route legacy `/org-admin/forms` ora reindirizza alla tab form di Comunicazioni.
+- UX: i form usano stati locked coerenti con CTA disabilitate, la libreria template espone creazione da zero e filtri `all/system/custom/archived`, e il builder form mostra chiaramente i collegamenti ai template admin/user.
+- Verifiche: `python -m pytest -q tests/test_forms_module.py tests/test_org_admin_communications.py tests/test_association_email_sender.py`; `npm --prefix frontend run build`.
+
+## Forms visual builder redesign (Mar 10, 2026)
+- [x] Estendere il modello Form con i soli campi visuali minimi per una pagina pubblica configurabile
+- [x] Esporre i nuovi campi design via backend/API senza rompere i form esistenti
+- [x] Ridisegnare la lista form con card, stato, conteggi e quick actions piu chiare
+- [x] Riscrivere l'editor form come workspace a tab: `Builder`, `Design`, `Automazioni`, `Risposte`, `Condividi`
+- [x] Implementare builder visuale con libreria campi, canvas centrale, pannello impostazioni e drag & drop nativo
+- [x] Ridisegnare la pagina pubblica `/forms/:slug` per usare i settaggi visuali e sembrare una landing page/form reale
+- [x] Eseguire verifiche mirate e aggiornare review/README
+
+## Review (Forms visual builder redesign - Mar 10, 2026)
+- Schema/model: il form ora salva anche il design della pagina pubblica (`accent_color`, `submit_button_text`, `show_logo`, `cover_image_url`, `page_style`) tramite migration `0b1c2d3e4f5a_add_form_design_fields.py`.
+- Backend/API: i nuovi campi sono serializzati nei payload org-admin/public senza rompere il modello esistente dei form o il flusso submit.
+- Frontend org-admin: `OrgAdminForms.tsx` e diventato uno studio visuale con card list, quick actions e workspace a tab `Builder`, `Design`, `Automazioni`, `Risposte`, `Condividi`.
+- Builder: aggiunta libreria campi visiva, canvas centrale con riordino drag & drop nativo e pannello impostazioni focalizzato sul campo selezionato; la chiave tecnica resta secondaria e auto-generata.
+- Public page: la route `/forms/:slug` usa ora una resa piu vicina a una landing page attraverso il componente condiviso `FormPublicCanvas`, riusato anche nella preview admin del tab Design.
+- Verifiche: `python -m compileall app init_db.py alembic/versions/0b1c2d3e4f5a_add_form_design_fields.py`; `python -m pytest -q tests/test_forms_module.py tests/test_org_admin_communications.py`; `npm --prefix frontend run build`.

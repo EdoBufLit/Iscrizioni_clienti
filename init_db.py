@@ -239,6 +239,28 @@ def init_db():
         _add_column_if_missing(conn, "referrals", "wheel_result", "TEXT")
         _add_column_if_missing(conn, "referrals", "wheel_spun_at", "DATETIME")
         _add_column_if_missing(conn, "referrals", "wheel_spun_by_org_admin_id", "INTEGER")
+        if "forms" in table_names:
+            _add_column_if_missing(conn, "forms", "accent_color", "TEXT")
+            _add_column_if_missing(conn, "forms", "submit_button_text", "TEXT")
+            _add_column_if_missing(conn, "forms", "show_logo", "INTEGER DEFAULT 1")
+            _add_column_if_missing(conn, "forms", "cover_image_url", "TEXT")
+            _add_column_if_missing(conn, "forms", "page_style", "TEXT DEFAULT 'editorial'")
+            _add_column_if_missing(conn, "forms", "notify_admin_on_submit", "INTEGER DEFAULT 1")
+            _add_column_if_missing(conn, "forms", "send_user_confirmation", "INTEGER DEFAULT 1")
+            _add_column_if_missing(
+                conn,
+                "forms",
+                "admin_notification_template_id",
+                "INTEGER REFERENCES email_templates(id)",
+            )
+            _add_column_if_missing(
+                conn,
+                "forms",
+                "user_confirmation_template_id",
+                "INTEGER REFERENCES email_templates(id)",
+            )
+            _add_column_if_missing(conn, "forms", "create_internal_request", "INTEGER DEFAULT 0")
+            _add_column_if_missing(conn, "forms", "create_booking", "INTEGER DEFAULT 0")
         if "affiliation_applications" in table_names:
             _add_column_if_missing(
                 conn, "affiliation_applications", "normalized_applicant_email", "TEXT"

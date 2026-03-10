@@ -582,6 +582,16 @@ class EmailTemplate(Base):
         back_populates="email_templates",
         foreign_keys=[created_by_user_id],
     )
+    admin_action_forms = relationship(
+        "Form",
+        foreign_keys="Form.admin_notification_template_id",
+        overlaps="admin_notification_template",
+    )
+    user_action_forms = relationship(
+        "Form",
+        foreign_keys="Form.user_confirmation_template_id",
+        overlaps="user_confirmation_template",
+    )
 
 
 class EmailCampaign(Base):
@@ -652,6 +662,15 @@ class Form(Base):
     association_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
+    accent_color = Column(String, nullable=True)
+    submit_button_text = Column(String, nullable=True)
+    show_logo = Column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    cover_image_url = Column(Text, nullable=True)
+    page_style = Column(
+        String, nullable=False, default="editorial", server_default="editorial"
+    )
     public_slug = Column(String, nullable=False, unique=True, index=True)
     is_active = Column(
         Boolean, nullable=False, default=False, server_default="false", index=True
@@ -663,6 +682,24 @@ class Form(Base):
     notification_email = Column(String, nullable=True)
     allow_multiple_submissions = Column(
         Boolean, nullable=False, default=True, server_default="true"
+    )
+    notify_admin_on_submit = Column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    send_user_confirmation = Column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    admin_notification_template_id = Column(
+        Integer, ForeignKey("email_templates.id"), nullable=True, index=True
+    )
+    user_confirmation_template_id = Column(
+        Integer, ForeignKey("email_templates.id"), nullable=True, index=True
+    )
+    create_internal_request = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    create_booking = Column(
+        Boolean, nullable=False, default=False, server_default="false"
     )
     created_by_user_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True, index=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
@@ -682,6 +719,16 @@ class Form(Base):
         "AdminUser",
         back_populates="forms",
         foreign_keys=[created_by_user_id],
+    )
+    admin_notification_template = relationship(
+        "EmailTemplate",
+        foreign_keys=[admin_notification_template_id],
+        overlaps="admin_action_forms",
+    )
+    user_confirmation_template = relationship(
+        "EmailTemplate",
+        foreign_keys=[user_confirmation_template_id],
+        overlaps="user_action_forms",
     )
     fields = relationship(
         "FormField",

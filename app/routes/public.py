@@ -19,6 +19,7 @@ from app.services.forms import (
     create_submission,
     enqueue_submission_notifications,
     ensure_submission_allowed,
+    ensure_forms_module_enabled,
     get_form_by_slug_for_public,
     normalize_form_slug,
     serialize_public_form,
@@ -163,6 +164,7 @@ def _build_qr_data_uri(value: str) -> str | None:
 def _ensure_form_is_visible(form, member: Member | None) -> None:
     if not bool(form.is_active):
         raise HTTPException(status_code=404, detail="Form non disponibile.")
+    ensure_forms_module_enabled(form.organization)
     if (form.visibility or "").strip().lower() == "members_only":
         if member is None:
             raise HTTPException(
@@ -314,6 +316,8 @@ def submit_public_form(
         .options(
             joinedload(AssociationForm.fields),
             joinedload(AssociationForm.organization),
+            joinedload(AssociationForm.admin_notification_template),
+            joinedload(AssociationForm.user_confirmation_template),
         )
         .filter(AssociationForm.public_slug == form_slug)
         .first()

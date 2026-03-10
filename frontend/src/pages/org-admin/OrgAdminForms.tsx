@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   buildOrgAdminFormSubmissionsExportUrl,
   createOrgAdminForm,
@@ -18,53 +18,80 @@ import {
   type AssociationFormFieldType,
   type AssociationFormSubmission,
   type AssociationFormVisibility,
+  type OrgAdminEmailTemplate,
 } from "../../lib/api";
 import { applySeo } from "../../lib/seo";
 import Skeleton from "../../components/ui/Skeleton";
 import { useToast } from "../../components/ui/ToastProvider";
 import { useOrgAdmin } from "./OrgAdminLayout";
+import { FormPublicCanvas } from "../../components/forms/FormPublicCanvas";
 
 const inputClass =
-  "mt-1 w-full rounded-md border border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20";
+  "mt-1 w-full rounded-[1.1rem] border border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-neutral-900/40 focus:ring-2 focus:ring-neutral-900/10";
 const labelClass = "block text-sm font-medium text-neutral-700";
+const studioCardClass = "rounded-[1.85rem] border border-neutral-200 bg-white/92 shadow-[0_24px_80px_rgba(15,23,42,0.06)] backdrop-blur";
 
-const fieldTypeOptions: Array<{ value: AssociationFormFieldType; label: string }> = [
-  { value: "short_text", label: "Testo breve" },
-  { value: "long_text", label: "Testo lungo" },
-  { value: "email", label: "Email" },
-  { value: "phone", label: "Telefono" },
-  { value: "number", label: "Numero" },
-  { value: "date", label: "Data" },
-  { value: "select", label: "Select" },
-  { value: "radio", label: "Radio" },
-  { value: "checkbox", label: "Checkbox" },
-  { value: "consent", label: "Consenso privacy" },
+type EditorTab = "builder" | "design" | "automations" | "responses" | "share";
+type PageStyleOption = "editorial" | "minimal" | "spotlight";
+
+const editorTabs: Array<{ key: EditorTab; label: string; hint: string }> = [
+  { key: "builder", label: "Builder", hint: "Campi e struttura" },
+  { key: "design", label: "Design", hint: "Look & feel pubblico" },
+  { key: "automations", label: "Automazioni", hint: "Template e follow-up" },
+  { key: "responses", label: "Risposte", hint: "Invii raccolti" },
+  { key: "share", label: "Condividi", hint: "Link, stato e accesso" },
 ];
 
-function emptyFormDraft() {
-  return {
-    title: "",
-    description: "",
-    public_slug: "",
-    is_active: false,
-    visibility: "public" as AssociationFormVisibility,
-    success_message: "Richiesta inviata correttamente.",
-    notification_email: "",
-    allow_multiple_submissions: true,
-  };
+const pageStyleOptions: Array<{
+  value: PageStyleOption;
+  label: string;
+  hint: string;
+}> = [
+  { value: "editorial", label: "Editorial", hint: "Look premium da pagina evento o richiesta." },
+  { value: "minimal", label: "Minimal", hint: "Pulito, leggero e immediato." },
+  { value: "spotlight", label: "Spotlight", hint: "Più scenografico, con hero forte." },
+];
+
+const fieldTypeOptions: Array<{
+  value: AssociationFormFieldType;
+  label: string;
+  icon: string;
+  hint: string;
+}> = [
+  { value: "short_text", label: "Testo breve", icon: "Aa", hint: "Per nome, titolo, codice o risposta corta." },
+  { value: "long_text", label: "Testo lungo", icon: "¶", hint: "Per note, richieste o messaggi più lunghi." },
+  { value: "email", label: "Email", icon: "@", hint: "Raccoglie email valida e abilita conferme utente." },
+  { value: "phone", label: "Telefono", icon: "☎", hint: "Numero di contatto rapido." },
+  { value: "number", label: "Numero", icon: "123", hint: "Quantità, posti o valori numerici." },
+  { value: "date", label: "Data", icon: "◷", hint: "Per appuntamenti, scadenze o disponibilità." },
+  { value: "select", label: "Select", icon: "▾", hint: "Una scelta da menu." },
+  { value: "radio", label: "Radio", icon: "◉", hint: "Una scelta tra poche opzioni visibili." },
+  { value: "checkbox", label: "Checkbox", icon: "☑", hint: "Più opzioni selezionabili." },
+  { value: "consent", label: "Consenso", icon: "✓", hint: "Privacy, termini o autorizzazioni." },
+];
+
+function slugifyKey(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/_{2,}/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 64);
 }
 
-function emptyFieldDraft(form?: AssociationForm | null) {
-  return {
-    field_key: "",
-    field_type: "short_text" as AssociationFormFieldType,
-    label: "",
-    placeholder: "",
-    help_text: "",
-    is_required: false,
-    sort_order: form?.fields?.length ?? 0,
-    options_text: "",
-  };
+function derivePublicSlug(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
 }
 
 function formatDateTime(value: string | null | undefined): string {
@@ -81,7 +108,86 @@ function stringifySubmissionValue(value: unknown): string {
   return String(value);
 }
 
-const OrgAdminForms = () => {
+function emptyFormDraft() {
+  return {
+    title: "",
+    description: "",
+    accent_color: "#0f766e",
+    submit_button_text: "Invia richiesta",
+    show_logo: true,
+    cover_image_url: "",
+    page_style: "editorial" as PageStyleOption,
+    public_slug: "",
+    is_active: false,
+    visibility: "public" as AssociationFormVisibility,
+    success_message: "Richiesta inviata correttamente.",
+    notification_email: "",
+    allow_multiple_submissions: true,
+    notify_admin_on_submit: true,
+    send_user_confirmation: true,
+    admin_notification_template_id: null as number | null,
+    user_confirmation_template_id: null as number | null,
+    create_internal_request: false,
+    create_booking: false,
+  };
+}
+
+function emptyFieldDraft(form?: AssociationForm | null, fieldType: AssociationFormFieldType = "short_text") {
+  const option = fieldTypeOptions.find((item) => item.value === fieldType);
+  const label = option ? option.label : "Nuovo campo";
+  return {
+    field_key: slugifyKey(label),
+    field_type: fieldType,
+    label,
+    placeholder: "",
+    help_text: "",
+    is_required: false,
+    sort_order: ((form?.fields?.length ?? 0) + 1) * 10,
+    options_text: fieldType === "select" || fieldType === "radio" || fieldType === "checkbox" ? "Opzione 1, Opzione 2" : "",
+  };
+}
+
+function buildPreviewValues(form: AssociationForm | null): Record<string, unknown> {
+  const values: Record<string, unknown> = {};
+  for (const field of form?.fields || []) {
+    if (field.field_type === "checkbox") values[field.field_key] = [field.options[0]].filter(Boolean);
+    else if (field.field_type === "consent") values[field.field_key] = true;
+    else if (field.field_type === "select" || field.field_type === "radio") values[field.field_key] = field.options[0] || "";
+    else if (field.field_type === "email") values[field.field_key] = "mario@example.com";
+    else if (field.field_type === "phone") values[field.field_key] = "+39 333 1234567";
+    else if (field.field_type === "date") values[field.field_key] = "2026-03-20";
+    else if (field.field_type === "number") values[field.field_key] = "2";
+    else values[field.field_key] = "Anteprima contenuto";
+  }
+  return values;
+}
+
+function buildFieldPayload(draft: ReturnType<typeof emptyFieldDraft>) {
+  return {
+    field_key: draft.field_key || null,
+    field_type: draft.field_type,
+    label: draft.label,
+    placeholder: draft.placeholder || null,
+    help_text: draft.help_text || null,
+    is_required: draft.is_required,
+    sort_order: Number(draft.sort_order || 0),
+    options: draft.options_text || null,
+  };
+}
+
+type OrgAdminFormsWorkspaceProps = {
+  embedded?: boolean;
+  locked?: boolean;
+  lockedMessage?: string;
+  availableTemplates?: OrgAdminEmailTemplate[];
+};
+
+export function OrgAdminFormsWorkspace({
+  embedded = false,
+  locked = false,
+  lockedMessage = "I Form richiedono il modulo Comunicazioni attivo.",
+  availableTemplates = [],
+}: OrgAdminFormsWorkspaceProps) {
   const { admin, loading: adminLoading } = useOrgAdmin();
   const { showToast } = useToast();
 
@@ -95,62 +201,111 @@ const OrgAdminForms = () => {
   const [formSaved, setFormSaved] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
   const [deleteArmed, setDeleteArmed] = useState(false);
+  const [activeTab, setActiveTab] = useState<EditorTab>("builder");
 
   const [fieldDraft, setFieldDraft] = useState(emptyFieldDraft(null));
   const [editingFieldId, setEditingFieldId] = useState<number | null>(null);
+  const [fieldKeyManual, setFieldKeyManual] = useState(false);
   const [savingField, setSavingField] = useState(false);
   const [fieldSaved, setFieldSaved] = useState(false);
   const [deleteFieldArmed, setDeleteFieldArmed] = useState<number | null>(null);
+  const [draggingFieldId, setDraggingFieldId] = useState<number | null>(null);
+  const [reorderingFields, setReorderingFields] = useState(false);
 
   const [submissions, setSubmissions] = useState<AssociationFormSubmission[]>([]);
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
   const [selectedSubmission, setSelectedSubmission] = useState<AssociationFormSubmission | null>(null);
 
   useEffect(() => {
+    if (embedded) return;
     applySeo({
-      title: "Form associazione",
-      description: "Builder form pubblico dinamico per l'area org admin ASSONAM.",
+      title: "Form Studio",
+      description: "Builder visuale per pagine form pubbliche nell'area org admin.",
       noindex: true,
     });
-  }, []);
+  }, [embedded]);
 
   useEffect(() => {
     if (adminLoading || !admin) return;
+    if (locked) {
+      setLoading(false);
+      setForms([]);
+      setSelectedFormId(null);
+      setSelectedForm(null);
+      return;
+    }
     void loadForms();
-  }, [adminLoading, admin]);
+  }, [adminLoading, admin, locked]);
 
   useEffect(() => {
     if (!selectedForm) {
       setFormDraft(emptyFormDraft());
       setFieldDraft(emptyFieldDraft(null));
       setEditingFieldId(null);
+      setFieldKeyManual(false);
       return;
     }
     setFormDraft({
       title: selectedForm.title || "",
       description: selectedForm.description || "",
+      accent_color: selectedForm.accent_color || "#0f766e",
+      submit_button_text: selectedForm.submit_button_text || "Invia richiesta",
+      show_logo: Boolean(selectedForm.show_logo),
+      cover_image_url: selectedForm.cover_image_url || "",
+      page_style: (selectedForm.page_style as PageStyleOption) || "editorial",
       public_slug: selectedForm.public_slug || "",
       is_active: Boolean(selectedForm.is_active),
       visibility: selectedForm.visibility,
       success_message: selectedForm.success_message || "",
       notification_email: selectedForm.notification_email || "",
       allow_multiple_submissions: Boolean(selectedForm.allow_multiple_submissions),
+      notify_admin_on_submit: Boolean(selectedForm.notify_admin_on_submit),
+      send_user_confirmation: Boolean(selectedForm.send_user_confirmation),
+      admin_notification_template_id: selectedForm.admin_notification_template_id,
+      user_confirmation_template_id: selectedForm.user_confirmation_template_id,
+      create_internal_request: Boolean(selectedForm.create_internal_request),
+      create_booking: Boolean(selectedForm.create_booking),
     });
-    setFieldDraft(emptyFieldDraft(selectedForm));
-    setEditingFieldId(null);
+    const firstField = selectedForm.fields[0] || null;
+    if (firstField) {
+      handleEditField(firstField);
+    } else {
+      setFieldDraft(emptyFieldDraft(selectedForm));
+      setEditingFieldId(null);
+      setFieldKeyManual(false);
+    }
     setDeleteArmed(false);
   }, [selectedForm]);
 
   useEffect(() => {
-    if (!selectedFormId) {
-      setSubmissions([]);
-      setSelectedSubmission(null);
+    if (!selectedFormId || activeTab !== "responses") {
+      if (!selectedFormId) {
+        setSubmissions([]);
+        setSelectedSubmission(null);
+      }
       return;
     }
     void loadSubmissions(selectedFormId);
-  }, [selectedFormId]);
+  }, [activeTab, selectedFormId]);
+
+  const activeFormsCount = useMemo(() => forms.filter((form) => form.is_active).length, [forms]);
+  const totalResponses = useMemo(() => forms.reduce((sum, form) => sum + form.submission_count, 0), [forms]);
+  const publicUrl = useMemo(() => {
+    const slug = formDraft.public_slug || derivePublicSlug(formDraft.title) || selectedForm?.public_slug;
+    if (!slug) return "";
+    return `${window.location.origin}/forms/${slug}`;
+  }, [formDraft.public_slug, formDraft.title, selectedForm?.public_slug]);
+  const sortedFields = useMemo(
+    () => [...(selectedForm?.fields || [])].sort((left, right) => left.sort_order - right.sort_order),
+    [selectedForm?.fields],
+  );
+  const previewValues = useMemo(() => buildPreviewValues(selectedForm), [selectedForm]);
 
   async function loadForms(nextSelectedId?: number | null) {
+    if (locked) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -199,17 +354,37 @@ const OrgAdminForms = () => {
     }
   }
 
-  async function handleSaveForm(event: FormEvent) {
-    event.preventDefault();
+  function syncFormDraft<K extends keyof ReturnType<typeof emptyFormDraft>>(key: K, value: ReturnType<typeof emptyFormDraft>[K]) {
+    setFormSaved(false);
+    setFormDraft((current) => {
+      const next = { ...current, [key]: value };
+      if (key === "title" && !current.public_slug) {
+        next.public_slug = derivePublicSlug(String(value || ""));
+      }
+      return next;
+    });
+  }
+
+  async function handleSaveForm(event?: FormEvent) {
+    event?.preventDefault();
+    if (locked) {
+      showToast({ tone: "error", title: "Form bloccati", message: lockedMessage });
+      return;
+    }
     setSavingForm(true);
     setFormSaved(false);
     try {
       const payload = {
         ...formDraft,
         description: formDraft.description || null,
+        accent_color: formDraft.accent_color || null,
+        submit_button_text: formDraft.submit_button_text || null,
+        cover_image_url: formDraft.cover_image_url || null,
         public_slug: formDraft.public_slug || null,
         success_message: formDraft.success_message || null,
         notification_email: formDraft.notification_email || null,
+        admin_notification_template_id: formDraft.admin_notification_template_id || null,
+        user_confirmation_template_id: formDraft.user_confirmation_template_id || null,
       };
       const response = selectedFormId
         ? await updateOrgAdminForm(selectedFormId, payload)
@@ -220,7 +395,7 @@ const OrgAdminForms = () => {
       showToast({
         tone: "success",
         title: selectedFormId ? "Form aggiornato" : "Form creato",
-        message: `${response.form.title} e pronto.`,
+        message: "La pagina pubblica è pronta per essere rifinita e condivisa.",
       });
       await loadForms(response.form.id);
       window.setTimeout(() => setFormSaved(false), 1600);
@@ -235,17 +410,20 @@ const OrgAdminForms = () => {
     }
   }
 
-  async function handleDuplicateForm() {
-    if (!selectedFormId || !selectedForm) return;
+  async function handleDuplicateForm(form: AssociationForm) {
+    if (locked) {
+      showToast({ tone: "error", title: "Form bloccati", message: lockedMessage });
+      return;
+    }
     setDuplicating(true);
     try {
-      const response = await duplicateOrgAdminForm(selectedFormId, {
-        title: `${selectedForm.title} copia`,
+      const response = await duplicateOrgAdminForm(form.id, {
+        title: `${form.title} copia`,
       });
       showToast({
         tone: "success",
         title: "Form duplicato",
-        message: "La copia e stata creata in stato non attivo.",
+        message: "La copia è stata creata in stato non attivo.",
       });
       await loadForms(response.form.id);
     } catch (err) {
@@ -261,6 +439,10 @@ const OrgAdminForms = () => {
 
   async function handleToggleActive() {
     if (!selectedFormId || !selectedForm) return;
+    if (locked) {
+      showToast({ tone: "error", title: "Form bloccati", message: lockedMessage });
+      return;
+    }
     try {
       const response = await setOrgAdminFormActive(selectedFormId, !selectedForm.is_active);
       setSelectedForm(response.form);
@@ -268,7 +450,7 @@ const OrgAdminForms = () => {
       showToast({
         tone: "success",
         title: response.form.is_active ? "Form attivato" : "Form disattivato",
-        message: response.form.is_active ? "Il link pubblico e online." : "Il link pubblico e stato chiuso.",
+        message: response.form.is_active ? "Il link pubblico è ora online." : "Il link pubblico è stato chiuso.",
       });
     } catch (err) {
       showToast({
@@ -281,6 +463,10 @@ const OrgAdminForms = () => {
 
   async function handleDeleteForm() {
     if (!selectedFormId) return;
+    if (locked) {
+      showToast({ tone: "error", title: "Form bloccati", message: lockedMessage });
+      return;
+    }
     if (!deleteArmed) {
       setDeleteArmed(true);
       return;
@@ -290,7 +476,7 @@ const OrgAdminForms = () => {
       showToast({
         tone: "success",
         title: "Form eliminato",
-        message: "Il form e stato rimosso.",
+        message: "La pagina pubblica è stata rimossa.",
       });
       setDeleteArmed(false);
       await loadForms(null);
@@ -303,22 +489,56 @@ const OrgAdminForms = () => {
     }
   }
 
-  async function handleSaveField(event: FormEvent) {
-    event.preventDefault();
-    if (!selectedFormId) return;
+  function handleEditField(field: AssociationFormField) {
+    setEditingFieldId(field.id);
+    setDeleteFieldArmed(null);
+    setFieldKeyManual(slugifyKey(field.label) !== field.field_key);
+    setFieldDraft({
+      field_key: field.field_key,
+      field_type: field.field_type,
+      label: field.label,
+      placeholder: field.placeholder || "",
+      help_text: field.help_text || "",
+      is_required: field.is_required,
+      sort_order: field.sort_order,
+      options_text: (field.options || []).join(", "),
+    });
+  }
+
+  function startNewField(fieldType: AssociationFormFieldType = "short_text") {
+    setActiveTab("builder");
+    setEditingFieldId(null);
+    setDeleteFieldArmed(null);
+    setFieldKeyManual(false);
+    setFieldDraft(emptyFieldDraft(selectedForm, fieldType));
+  }
+
+  function handleFieldLabelChange(nextLabel: string) {
+    setFieldDraft((current) => ({
+      ...current,
+      label: nextLabel,
+      field_key: fieldKeyManual ? current.field_key : slugifyKey(nextLabel),
+    }));
+  }
+
+  async function handleSaveField(event?: FormEvent) {
+    event?.preventDefault();
+    if (!selectedFormId) {
+      showToast({
+        tone: "error",
+        title: "Salva prima il form",
+        message: "Per aggiungere campi serve prima creare il form e ottenere il link pubblico.",
+      });
+      return;
+    }
+    if (locked) {
+      showToast({ tone: "error", title: "Form bloccati", message: lockedMessage });
+      return;
+    }
     setSavingField(true);
     setFieldSaved(false);
     try {
-      const payload = {
-        field_key: fieldDraft.field_key || null,
-        field_type: fieldDraft.field_type,
-        label: fieldDraft.label,
-        placeholder: fieldDraft.placeholder || null,
-        help_text: fieldDraft.help_text || null,
-        is_required: fieldDraft.is_required,
-        sort_order: Number(fieldDraft.sort_order || 0),
-        options: fieldDraft.options_text || null,
-      };
+      const payload = buildFieldPayload(fieldDraft);
       if (editingFieldId) {
         await updateOrgAdminFormField(selectedFormId, editingFieldId, payload);
       } else {
@@ -327,14 +547,20 @@ const OrgAdminForms = () => {
       const detail = await fetchOrgAdminForm(selectedFormId);
       setSelectedForm(detail.form);
       setForms((current) => current.map((item) => (item.id === detail.form.id ? detail.form : item)));
-      setFieldDraft(emptyFieldDraft(detail.form));
-      setEditingFieldId(null);
-      setDeleteFieldArmed(null);
+      const justSavedField =
+        detail.form.fields.find((field) => field.field_key === (payload.field_key || slugifyKey(payload.label)))
+        || detail.form.fields[detail.form.fields.length - 1]
+        || null;
+      if (justSavedField) {
+        handleEditField(justSavedField);
+      } else {
+        startNewField();
+      }
       setFieldSaved(true);
       showToast({
         tone: "success",
         title: editingFieldId ? "Campo aggiornato" : "Campo aggiunto",
-        message: "Il builder e stato aggiornato.",
+        message: "Il canvas del form è stato aggiornato.",
       });
       window.setTimeout(() => setFieldSaved(false), 1600);
     } catch (err) {
@@ -350,6 +576,10 @@ const OrgAdminForms = () => {
 
   async function handleDeleteField() {
     if (!selectedFormId || !editingFieldId) return;
+    if (locked) {
+      showToast({ tone: "error", title: "Form bloccati", message: lockedMessage });
+      return;
+    }
     if (deleteFieldArmed !== editingFieldId) {
       setDeleteFieldArmed(editingFieldId);
       return;
@@ -359,13 +589,11 @@ const OrgAdminForms = () => {
       const detail = await fetchOrgAdminForm(selectedFormId);
       setSelectedForm(detail.form);
       setForms((current) => current.map((item) => (item.id === detail.form.id ? detail.form : item)));
-      setFieldDraft(emptyFieldDraft(detail.form));
-      setEditingFieldId(null);
-      setDeleteFieldArmed(null);
+      startNewField();
       showToast({
         tone: "success",
         title: "Campo eliminato",
-        message: "Il builder e stato aggiornato.",
+        message: "La struttura del form è stata aggiornata.",
       });
     } catch (err) {
       showToast({
@@ -376,19 +604,77 @@ const OrgAdminForms = () => {
     }
   }
 
-  function handleEditField(field: AssociationFormField) {
-    setEditingFieldId(field.id);
-    setDeleteFieldArmed(null);
-    setFieldDraft({
-      field_key: field.field_key,
-      field_type: field.field_type,
-      label: field.label,
-      placeholder: field.placeholder || "",
-      help_text: field.help_text || "",
-      is_required: field.is_required,
-      sort_order: field.sort_order,
-      options_text: (field.options || []).join(", "),
-    });
+  async function persistFieldOrder(nextFields: AssociationFormField[]) {
+    if (!selectedFormId || locked) return;
+    setReorderingFields(true);
+    try {
+      await Promise.all(
+        nextFields.map((field, index) =>
+          updateOrgAdminFormField(selectedFormId, field.id, {
+            field_key: field.field_key,
+            field_type: field.field_type,
+            label: field.label,
+            placeholder: field.placeholder,
+            help_text: field.help_text,
+            is_required: field.is_required,
+            sort_order: (index + 1) * 10,
+            options: field.options,
+          }),
+        ),
+      );
+      const detail = await fetchOrgAdminForm(selectedFormId);
+      setSelectedForm(detail.form);
+      setForms((current) => current.map((item) => (item.id === detail.form.id ? detail.form : item)));
+      showToast({
+        tone: "success",
+        title: "Ordine aggiornato",
+        message: "Il canvas ora riflette il nuovo ordine dei campi.",
+      });
+    } catch (err) {
+      showToast({
+        tone: "error",
+        title: "Riordino non riuscito",
+        message: err instanceof Error ? err.message : "Errore durante il riordino campi.",
+      });
+    } finally {
+      setReorderingFields(false);
+      setDraggingFieldId(null);
+    }
+  }
+
+  async function handleFieldDrop(targetFieldId: number | null) {
+    if (draggingFieldId == null || !selectedForm) return;
+    const ordered = [...sortedFields];
+    const sourceIndex = ordered.findIndex((field) => field.id === draggingFieldId);
+    if (sourceIndex === -1) return;
+    const [dragged] = ordered.splice(sourceIndex, 1);
+    const targetIndex = targetFieldId == null ? ordered.length : ordered.findIndex((field) => field.id === targetFieldId);
+    const insertionIndex = targetIndex < 0 ? ordered.length : targetIndex;
+    ordered.splice(insertionIndex, 0, dragged);
+    await persistFieldOrder(ordered);
+  }
+
+  async function copyPublicLink(link: string) {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      showToast({
+        tone: "success",
+        title: "Link copiato",
+        message: "URL pubblico copiato negli appunti.",
+      });
+    } catch {
+      showToast({
+        tone: "error",
+        title: "Copia non riuscita",
+        message: "Impossibile copiare il link in questo browser.",
+      });
+    }
+  }
+
+  function openPublicLink(link: string) {
+    if (!link) return;
+    window.open(link, "_blank", "noopener,noreferrer");
   }
 
   function handleCreateNewForm() {
@@ -397,107 +683,1030 @@ const OrgAdminForms = () => {
     setSubmissions([]);
     setSelectedSubmission(null);
     setDeleteArmed(false);
+    setActiveTab("design");
     setFormDraft(emptyFormDraft());
     setFieldDraft(emptyFieldDraft(null));
     setEditingFieldId(null);
+    setFieldKeyManual(false);
   }
 
-  const publicUrl = selectedForm?.public_slug ? `${window.location.origin}/forms/${selectedForm.public_slug}` : "";
+  const previewForm = useMemo(
+    () => ({
+      title: formDraft.title || "Titolo del form pubblico",
+      description: formDraft.description || "Una breve descrizione aiuta a far capire subito perche qualcuno dovrebbe compilare il form.",
+      accent_color: formDraft.accent_color || "#0f766e",
+      submit_button_text: formDraft.submit_button_text || "Invia richiesta",
+      show_logo: formDraft.show_logo,
+      cover_image_url: formDraft.cover_image_url || null,
+      page_style: formDraft.page_style,
+      fields: selectedForm?.fields || [],
+      association: {
+        name: admin?.organization?.name || "Associazione",
+      },
+    }),
+    [admin?.organization?.name, formDraft, selectedForm?.fields],
+  );
 
-  return (
-    <div className="container-shell py-8 md:py-10">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-brand/70">Modulo Form</p>
-            <h1 className="text-3xl font-semibold tracking-tight text-neutral-900">Builder form pubblico</h1>
-            <p className="mt-2 max-w-3xl text-sm text-neutral-600">
-              Crea moduli dinamici pubblici o riservati soci con una sola route frontend: <code>/forms/:slug</code>.
+  const builderTab = (
+    <div className="grid gap-5 xl:grid-cols-[240px_minmax(0,1fr)_320px]">
+      <aside className="space-y-4">
+        <div className="rounded-[1.6rem] border border-neutral-200 bg-neutral-50 p-4">
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Field library</p>
+          <p className="mt-2 text-sm text-neutral-600">
+            Aggiungi nuovi blocchi al canvas. La chiave tecnica viene generata automaticamente.
+          </p>
+          <div className="mt-4 grid gap-2">
+            {fieldTypeOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                disabled={locked}
+                onClick={() => startNewField(option.value)}
+                className="rounded-[1.2rem] border border-neutral-200 bg-white px-3 py-3 text-left transition hover:-translate-y-0.5 hover:border-neutral-300 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <div className="flex items-start gap-3">
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-neutral-950 text-xs font-bold text-white">
+                    {option.icon}
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-neutral-900">{option.label}</p>
+                    <p className="mt-1 text-xs leading-5 text-neutral-500">{option.hint}</p>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </aside>
+
+      <div className="space-y-4">
+        <div className="rounded-[1.6rem] border border-neutral-200 bg-[linear-gradient(180deg,#f9fafb,#ffffff)] p-4">
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Canvas</p>
+              <h3 className="mt-2 text-xl font-semibold tracking-tight text-neutral-950">Struttura del form</h3>
+              <p className="mt-1 text-sm text-neutral-600">Trascina i blocchi per cambiare l'ordine e clicca un campo per modificarlo.</p>
+            </div>
+            <div className="rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-semibold text-neutral-600">
+              {sortedFields.length} campi
+            </div>
+          </div>
+        </div>
+
+        {!selectedFormId ? (
+          <div className="rounded-[1.6rem] border border-dashed border-neutral-200 bg-neutral-50 px-5 py-10 text-center text-sm text-neutral-500">
+            Salva prima la pagina form per iniziare a costruire il canvas e generare il link pubblico.
+          </div>
+        ) : sortedFields.length === 0 ? (
+          <div className="rounded-[1.6rem] border border-dashed border-neutral-200 bg-neutral-50 px-5 py-10 text-center">
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-400">Builder vuoto</p>
+            <h3 className="mt-3 font-serif text-3xl tracking-tight text-neutral-950">Inizia dal primo campo</h3>
+            <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-neutral-600">
+              Scegli un blocco dalla libreria a sinistra. Il canvas centrale mostrerà subito l'ordine reale della pagina pubblica.
             </p>
           </div>
-          <button className="btn-primary" type="button" onClick={handleCreateNewForm}>
-            Nuovo form
-          </button>
+        ) : (
+          <div className="grid gap-3">
+            {sortedFields.map((field) => {
+              const meta = fieldTypeOptions.find((option) => option.value === field.field_type);
+              const isSelected = editingFieldId === field.id;
+              return (
+                <button
+                  key={field.id}
+                  type="button"
+                  draggable={!locked}
+                  disabled={locked}
+                  onDragStart={() => setDraggingFieldId(field.id)}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    void handleFieldDrop(field.id);
+                  }}
+                  onClick={() => handleEditField(field)}
+                  className={`rounded-[1.5rem] border p-4 text-left transition ${
+                    isSelected
+                      ? "border-neutral-900 bg-neutral-950 text-white shadow-[0_18px_70px_rgba(15,23,42,0.24)]"
+                      : "border-neutral-200 bg-white hover:-translate-y-0.5 hover:border-neutral-300"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-4">
+                      <span className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl text-xs font-bold ${
+                        isSelected ? "bg-white/12 text-white" : "bg-neutral-100 text-neutral-700"
+                      }`}>
+                        {meta?.icon || "Aa"}
+                      </span>
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-base font-semibold">{field.label}</p>
+                          <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${
+                            isSelected ? "bg-white/10 text-white/72" : "bg-neutral-100 text-neutral-500"
+                          }`}>
+                            {meta?.label || field.field_type}
+                          </span>
+                          {field.is_required ? (
+                            <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${
+                              isSelected ? "bg-amber-300/16 text-amber-200" : "bg-amber-100 text-amber-700"
+                            }`}>
+                              Obbligatorio
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className={`mt-2 text-sm ${isSelected ? "text-white/72" : "text-neutral-500"}`}>
+                          {field.help_text || meta?.hint || "Campo configurabile dal pannello laterale."}
+                        </p>
+                        {field.options.length > 0 ? (
+                          <p className={`mt-3 text-xs ${isSelected ? "text-white/60" : "text-neutral-400"}`}>
+                            {field.options.join(" · ")}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                      isSelected ? "bg-white/10 text-white/78" : "bg-neutral-100 text-neutral-500"
+                    }`}>
+                      #{field.sort_order}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+            <div
+              className="rounded-[1.4rem] border border-dashed border-neutral-200 bg-neutral-50 px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-neutral-400"
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                void handleFieldDrop(null);
+              }}
+            >
+              {reorderingFields ? "Riordino..." : "Trascina qui per spostare il campo in fondo"}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <aside className="space-y-4">
+        <div className="rounded-[1.6rem] border border-neutral-200 bg-white p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Field settings</p>
+              <h3 className="mt-2 text-lg font-semibold text-neutral-950">
+                {editingFieldId ? "Modifica campo" : "Nuovo campo"}
+              </h3>
+            </div>
+            {editingFieldId ? (
+              <button
+                type="button"
+                className="text-xs font-semibold text-neutral-500 transition hover:text-neutral-900"
+                disabled={locked}
+                onClick={() => startNewField(fieldDraft.field_type)}
+              >
+                Nuovo
+              </button>
+            ) : null}
+          </div>
+
+          <form className="mt-5 space-y-4" onSubmit={(event) => void handleSaveField(event)}>
+            <label className={labelClass}>
+              Etichetta visibile
+              <input
+                className={inputClass}
+                disabled={locked}
+                value={fieldDraft.label}
+                onChange={(event) => handleFieldLabelChange(event.target.value)}
+                placeholder="Nome e cognome"
+              />
+            </label>
+
+            <label className={labelClass}>
+              Tipo campo
+              <select
+                className={inputClass}
+                disabled={locked}
+                value={fieldDraft.field_type}
+                onChange={(event) => {
+                  const nextType = event.target.value as AssociationFormFieldType;
+                  const defaultDraft = emptyFieldDraft(selectedForm, nextType);
+                  setFieldDraft((current) => ({
+                    ...current,
+                    field_type: nextType,
+                    options_text: defaultDraft.options_text,
+                  }));
+                }}
+              >
+                {fieldTypeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className={labelClass}>
+              Placeholder
+              <input
+                className={inputClass}
+                disabled={locked}
+                value={fieldDraft.placeholder}
+                onChange={(event) => setFieldDraft((current) => ({ ...current, placeholder: event.target.value }))}
+                placeholder="Scrivi qui"
+              />
+            </label>
+
+            <label className={labelClass}>
+              Help text
+              <textarea
+                className={`${inputClass} min-h-[88px]`}
+                disabled={locked}
+                value={fieldDraft.help_text}
+                onChange={(event) => setFieldDraft((current) => ({ ...current, help_text: event.target.value }))}
+                placeholder="Micro-copy di supporto sotto al campo"
+              />
+            </label>
+
+            {["select", "radio", "checkbox"].includes(fieldDraft.field_type) ? (
+              <label className={labelClass}>
+                Opzioni
+                <input
+                  className={inputClass}
+                  disabled={locked}
+                  value={fieldDraft.options_text}
+                  onChange={(event) => setFieldDraft((current) => ({ ...current, options_text: event.target.value }))}
+                  placeholder="Mattina, Pomeriggio, Sera"
+                />
+              </label>
+            ) : null}
+
+            <div className="rounded-[1.3rem] border border-neutral-200 bg-neutral-50 px-4 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-neutral-900">Chiave tecnica</p>
+                  <p className="mt-1 text-xs leading-5 text-neutral-500">
+                    Di default viene derivata dall'etichetta. Modificala solo se ti serve una chiave stabile personalizzata.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-neutral-500 transition hover:text-neutral-900"
+                  disabled={locked}
+                  onClick={() => {
+                    setFieldKeyManual(false);
+                    setFieldDraft((current) => ({ ...current, field_key: slugifyKey(current.label) }));
+                  }}
+                >
+                  Rigenera
+                </button>
+              </div>
+              <input
+                className={inputClass}
+                disabled={locked}
+                value={fieldDraft.field_key}
+                onChange={(event) => {
+                  setFieldKeyManual(true);
+                  setFieldDraft((current) => ({ ...current, field_key: slugifyKey(event.target.value) }));
+                }}
+                placeholder="nome_socio"
+              />
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className={labelClass}>
+                Ordine
+                <input
+                  className={inputClass}
+                  type="number"
+                  disabled={locked}
+                  value={fieldDraft.sort_order}
+                  onChange={(event) => setFieldDraft((current) => ({ ...current, sort_order: Number(event.target.value || 0) }))}
+                />
+              </label>
+              <label className="flex items-center gap-3 rounded-[1.2rem] border border-neutral-200 bg-neutral-50 px-4 py-4 text-sm text-neutral-700">
+                <input
+                  type="checkbox"
+                  disabled={locked}
+                  checked={fieldDraft.is_required}
+                  onChange={(event) => setFieldDraft((current) => ({ ...current, is_required: event.target.checked }))}
+                />
+                Campo obbligatorio
+              </label>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button className="btn-primary" disabled={savingField || !selectedFormId || locked} type="submit">
+                {savingField ? "Salvataggio..." : fieldSaved ? "Salvato" : editingFieldId ? "Aggiorna campo" : "Aggiungi campo"}
+              </button>
+              {editingFieldId ? (
+                <button
+                  type="button"
+                  className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                    deleteFieldArmed === editingFieldId
+                      ? "bg-red-600 text-white hover:bg-red-700"
+                      : "border border-red-200 bg-red-50 text-red-700 hover:border-red-300"
+                  }`}
+                  onClick={handleDeleteField}
+                  disabled={locked}
+                >
+                  {deleteFieldArmed === editingFieldId ? "Conferma eliminazione" : "Elimina campo"}
+                </button>
+              ) : null}
+            </div>
+          </form>
         </div>
+      </aside>
+    </div>
+  );
+
+  const designTab = (
+    <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
+      <div className="space-y-4">
+        <div className="rounded-[1.6rem] border border-neutral-200 bg-white p-4">
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Contenuto pagina</p>
+          <div className="mt-4 space-y-4">
+            <label className={labelClass}>
+              Titolo
+              <input
+                className={inputClass}
+                disabled={locked}
+                value={formDraft.title}
+                onChange={(event) => syncFormDraft("title", event.target.value)}
+                placeholder="Prenotazione tavolo"
+              />
+            </label>
+            <label className={labelClass}>
+              Sottotitolo / descrizione
+              <textarea
+                className={`${inputClass} min-h-[120px]`}
+                disabled={locked}
+                value={formDraft.description}
+                onChange={(event) => syncFormDraft("description", event.target.value)}
+                placeholder="Spiega chiaramente a cosa serve la pagina e cosa succede dopo l'invio."
+              />
+            </label>
+            <label className={labelClass}>
+              Messaggio post-invio
+              <textarea
+                className={`${inputClass} min-h-[90px]`}
+                disabled={locked}
+                value={formDraft.success_message}
+                onChange={(event) => syncFormDraft("success_message", event.target.value)}
+                placeholder="Abbiamo ricevuto la tua richiesta."
+              />
+            </label>
+          </div>
+        </div>
+
+        <div className="rounded-[1.6rem] border border-neutral-200 bg-white p-4">
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Look & feel</p>
+          <div className="mt-4 grid gap-4">
+            <label className={labelClass}>
+              Colore accento
+              <div className="mt-2 flex items-center gap-3">
+                <input
+                  className="h-12 w-16 cursor-pointer rounded-2xl border border-neutral-200 bg-white p-1"
+                  type="color"
+                  disabled={locked}
+                  value={formDraft.accent_color || "#0f766e"}
+                  onChange={(event) => syncFormDraft("accent_color", event.target.value)}
+                />
+                <input
+                  className={inputClass}
+                  disabled={locked}
+                  value={formDraft.accent_color}
+                  onChange={(event) => syncFormDraft("accent_color", event.target.value)}
+                  placeholder="#0f766e"
+                />
+              </div>
+            </label>
+            <label className={labelClass}>
+              Testo bottone invio
+              <input
+                className={inputClass}
+                disabled={locked}
+                value={formDraft.submit_button_text}
+                onChange={(event) => syncFormDraft("submit_button_text", event.target.value)}
+                placeholder="Invia richiesta"
+              />
+            </label>
+            <label className={labelClass}>
+              Cover image URL
+              <input
+                className={inputClass}
+                disabled={locked}
+                value={formDraft.cover_image_url}
+                onChange={(event) => syncFormDraft("cover_image_url", event.target.value)}
+                placeholder="https://..."
+              />
+            </label>
+            <label className="flex items-center gap-3 rounded-[1.2rem] border border-neutral-200 bg-neutral-50 px-4 py-4 text-sm text-neutral-700">
+              <input
+                type="checkbox"
+                disabled={locked}
+                checked={formDraft.show_logo}
+                onChange={(event) => syncFormDraft("show_logo", event.target.checked)}
+              />
+              Mostra badge/logo associazione nella hero pubblica
+            </label>
+          </div>
+        </div>
+
+        <div className="rounded-[1.6rem] border border-neutral-200 bg-white p-4">
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Stile pagina</p>
+          <div className="mt-4 grid gap-3">
+            {pageStyleOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                disabled={locked}
+                onClick={() => syncFormDraft("page_style", option.value)}
+                className={`rounded-[1.3rem] border px-4 py-4 text-left transition ${
+                  formDraft.page_style === option.value
+                    ? "border-neutral-900 bg-neutral-950 text-white"
+                    : "border-neutral-200 bg-white hover:border-neutral-300"
+                }`}
+              >
+                <p className="text-sm font-semibold">{option.label}</p>
+                <p className={`mt-1 text-xs leading-5 ${formDraft.page_style === option.value ? "text-white/72" : "text-neutral-500"}`}>
+                  {option.hint}
+                </p>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <div className="rounded-[1.6rem] border border-neutral-200 bg-neutral-50 px-4 py-4">
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Live preview</p>
+          <p className="mt-2 text-sm text-neutral-600">
+            Questa è la stessa resa usata dalla route pubblica `/forms/:slug`, con i campi attualmente salvati nel form.
+          </p>
+        </div>
+        <FormPublicCanvas form={previewForm} values={previewValues} heroLabel="Anteprima pagina pubblica" />
+      </div>
+    </div>
+  );
+
+  const automationsTab = (
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="space-y-4">
+        <div className="rounded-[1.6rem] border border-neutral-200 bg-white p-5">
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Workflow post-submit</p>
+          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            <label className="flex items-center gap-3 rounded-[1.2rem] border border-neutral-200 bg-neutral-50 px-4 py-4 text-sm text-neutral-700">
+              <input
+                type="checkbox"
+                disabled={locked}
+                checked={formDraft.notify_admin_on_submit}
+                onChange={(event) => syncFormDraft("notify_admin_on_submit", event.target.checked)}
+              />
+              Notifica admin via email
+            </label>
+            <label className="flex items-center gap-3 rounded-[1.2rem] border border-neutral-200 bg-neutral-50 px-4 py-4 text-sm text-neutral-700">
+              <input
+                type="checkbox"
+                disabled={locked}
+                checked={formDraft.send_user_confirmation}
+                onChange={(event) => syncFormDraft("send_user_confirmation", event.target.checked)}
+              />
+              Invia conferma utente
+            </label>
+            <label className="flex items-center gap-3 rounded-[1.2rem] border border-neutral-200 bg-neutral-50 px-4 py-4 text-sm text-neutral-700">
+              <input
+                type="checkbox"
+                disabled={locked}
+                checked={formDraft.create_internal_request}
+                onChange={(event) => syncFormDraft("create_internal_request", event.target.checked)}
+              />
+              Crea richiesta interna
+            </label>
+            <label className="flex items-center gap-3 rounded-[1.2rem] border border-neutral-200 bg-neutral-50 px-4 py-4 text-sm text-neutral-700">
+              <input
+                type="checkbox"
+                disabled={locked}
+                checked={formDraft.create_booking}
+                onChange={(event) => syncFormDraft("create_booking", event.target.checked)}
+              />
+              Booking futuro
+            </label>
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-[1.6rem] border border-neutral-200 bg-white p-5">
+            <label className={labelClass}>
+              Email admin notifiche
+              <input
+                className={inputClass}
+                type="email"
+                disabled={locked}
+                value={formDraft.notification_email}
+                onChange={(event) => syncFormDraft("notification_email", event.target.value)}
+                placeholder="segreteria@associazione.it"
+              />
+            </label>
+            <label className={`${labelClass} mt-4`}>
+              Template notifica admin
+              <select
+                className={inputClass}
+                disabled={locked}
+                value={formDraft.admin_notification_template_id ?? ""}
+                onChange={(event) =>
+                  syncFormDraft(
+                    "admin_notification_template_id",
+                    event.target.value ? Number(event.target.value) : null,
+                  )
+                }
+              >
+                <option value="">Riepilogo automatico</option>
+                {availableTemplates.filter((item) => item.is_active).map((template) => (
+                  <option key={`admin-${template.id}`} value={template.id}>
+                    {template.is_system ? "ASSONAM" : "Custom"} · {template.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="rounded-[1.6rem] border border-neutral-200 bg-white p-5">
+            <label className={labelClass}>
+              Template conferma utente
+              <select
+                className={inputClass}
+                disabled={locked}
+                value={formDraft.user_confirmation_template_id ?? ""}
+                onChange={(event) =>
+                  syncFormDraft(
+                    "user_confirmation_template_id",
+                    event.target.value ? Number(event.target.value) : null,
+                  )
+                }
+              >
+                <option value="">Conferma automatica semplice</option>
+                {availableTemplates.filter((item) => item.is_active).map((template) => (
+                  <option key={`user-${template.id}`} value={template.id}>
+                    {template.is_system ? "ASSONAM" : "Custom"} · {template.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="mt-4 flex items-center gap-3 rounded-[1.2rem] border border-neutral-200 bg-neutral-50 px-4 py-4 text-sm text-neutral-700">
+              <input
+                type="checkbox"
+                disabled={locked}
+                checked={formDraft.allow_multiple_submissions}
+                onChange={(event) => syncFormDraft("allow_multiple_submissions", event.target.checked)}
+              />
+              Consenti invii multipli dallo stesso form
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <aside className="rounded-[1.6rem] border border-neutral-200 bg-neutral-50 p-5">
+        <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Scenario</p>
+        <div className="mt-4 space-y-3 text-sm text-neutral-600">
+          <div className="rounded-[1.2rem] border border-neutral-200 bg-white px-4 py-4">
+            <p className="font-semibold text-neutral-900">Admin</p>
+            <p className="mt-1">
+              {formDraft.notify_admin_on_submit
+                ? `Riceve una notifica${formDraft.admin_notification_template_id ? " con template dedicato" : " con riepilogo automatico"}.`
+                : "Nessuna email admin automatica."}
+            </p>
+          </div>
+          <div className="rounded-[1.2rem] border border-neutral-200 bg-white px-4 py-4">
+            <p className="font-semibold text-neutral-900">Utente</p>
+            <p className="mt-1">
+              {formDraft.send_user_confirmation
+                ? `Riceve una conferma${formDraft.user_confirmation_template_id ? " personalizzata" : " semplice"}.`
+                : "Nessuna conferma automatica."}
+            </p>
+          </div>
+          <div className="rounded-[1.2rem] border border-neutral-200 bg-white px-4 py-4">
+            <p className="font-semibold text-neutral-900">Processo interno</p>
+            <p className="mt-1">
+              {formDraft.create_internal_request
+                ? "Viene anche creata una richiesta interna per l'org admin."
+                : "Nessuna richiesta interna aggiuntiva."}
+            </p>
+          </div>
+        </div>
+      </aside>
+    </div>
+  );
+
+  const responsesTab = (
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="space-y-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Risposte</p>
+            <h3 className="mt-2 text-xl font-semibold tracking-tight text-neutral-950">Invii raccolti</h3>
+            <p className="mt-1 text-sm text-neutral-600">Consulta il dettaglio e scarica il CSV in uno spazio separato dal builder.</p>
+          </div>
+          {selectedFormId ? (
+            <a className="btn-secondary" href={buildOrgAdminFormSubmissionsExportUrl(selectedFormId)}>
+              Export CSV
+            </a>
+          ) : null}
+        </div>
+
+        {!selectedFormId ? (
+          <div className="rounded-[1.6rem] border border-dashed border-neutral-200 bg-neutral-50 px-5 py-10 text-center text-sm text-neutral-500">
+            Le risposte appariranno qui dopo il primo invio pubblico.
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-[1.6rem] border border-neutral-200 bg-white">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-neutral-200 text-sm">
+                <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-500">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Data</th>
+                    <th className="px-4 py-3 font-semibold">Stato</th>
+                    <th className="px-4 py-3 font-semibold">Identità</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-200 bg-white">
+                  {submissionsLoading ? (
+                    <tr>
+                      <td className="px-4 py-4 text-neutral-500" colSpan={3}>
+                        Caricamento risposte...
+                      </td>
+                    </tr>
+                  ) : submissions.length === 0 ? (
+                    <tr>
+                      <td className="px-4 py-4 text-neutral-500" colSpan={3}>
+                        Nessuna risposta ricevuta.
+                      </td>
+                    </tr>
+                  ) : (
+                    submissions.map((submission) => (
+                      <tr
+                        key={submission.id}
+                        className={`cursor-pointer transition hover:bg-neutral-50 ${
+                          selectedSubmission?.id === submission.id ? "bg-neutral-950 text-white" : ""
+                        }`}
+                        onClick={() => {
+                          fetchOrgAdminFormSubmission(selectedFormId, submission.id)
+                            .then((response) => setSelectedSubmission(response.submission))
+                            .catch(() => setSelectedSubmission(submission));
+                        }}
+                      >
+                        <td className="px-4 py-3">{formatDateTime(submission.submitted_at)}</td>
+                        <td className="px-4 py-3">{submission.status}</td>
+                        <td className="px-4 py-3">
+                          {submission.submitted_by?.name || submission.submitted_by?.email || `#${submission.id}`}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <aside className="rounded-[1.6rem] border border-neutral-200 bg-neutral-50 p-5">
+        <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Dettaglio risposta</p>
+        {selectedSubmission ? (
+          <div className="mt-4 space-y-3">
+            <div className="text-xs text-neutral-500">Ricevuta il {formatDateTime(selectedSubmission.submitted_at)}</div>
+            {Object.entries(selectedSubmission.payload_json || {}).map(([key, value]) => (
+              <div key={key} className="rounded-[1.2rem] border border-white bg-white px-3 py-3 shadow-sm">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{key}</div>
+                <div className="mt-1 text-sm text-neutral-800">{stringifySubmissionValue(value)}</div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-neutral-500">Seleziona una risposta dalla tabella per vedere il payload completo.</p>
+        )}
+      </aside>
+    </div>
+  );
+
+  const shareTab = (
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="space-y-4">
+        <div className="rounded-[1.8rem] border border-neutral-200 bg-[linear-gradient(135deg,#ffffff,#f4f7f8)] p-5 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Link pubblico</p>
+          <div className="mt-4 rounded-[1.4rem] border border-neutral-200 bg-white px-4 py-5">
+            <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">URL da condividere</p>
+            <p className="mt-2 break-all text-lg font-semibold tracking-tight text-neutral-950">
+              {publicUrl || "Salva il form per generare il link pubblico"}
+            </p>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button className="btn-secondary" type="button" onClick={() => void copyPublicLink(publicUrl)} disabled={!publicUrl}>
+              Copia link
+            </button>
+            <button className="btn-primary" type="button" onClick={() => openPublicLink(publicUrl)} disabled={!publicUrl || !formDraft.is_active}>
+              Apri pagina pubblica
+            </button>
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-[1.6rem] border border-neutral-200 bg-white p-5">
+            <label className={labelClass}>
+              Slug pubblico
+              <input
+                className={inputClass}
+                disabled={locked}
+                value={formDraft.public_slug}
+                onChange={(event) => syncFormDraft("public_slug", derivePublicSlug(event.target.value))}
+                placeholder="prenotazione-tavolo"
+              />
+            </label>
+            <div className="mt-4 grid gap-3">
+              <label className="flex items-center gap-3 rounded-[1.2rem] border border-neutral-200 bg-neutral-50 px-4 py-4 text-sm text-neutral-700">
+                <input
+                  type="checkbox"
+                  disabled={locked}
+                  checked={formDraft.is_active}
+                  onChange={(event) => syncFormDraft("is_active", event.target.checked)}
+                />
+                Pagina pubblica attiva
+              </label>
+              <label className={labelClass}>
+                Visibilità
+                <select
+                  className={inputClass}
+                  disabled={locked}
+                  value={formDraft.visibility}
+                  onChange={(event) => syncFormDraft("visibility", event.target.value as AssociationFormVisibility)}
+                >
+                  <option value="public">Pubblico</option>
+                  <option value="members_only">Solo soci</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div className="rounded-[1.6rem] border border-neutral-200 bg-white p-5">
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Stato attuale</p>
+            <div className="mt-4 space-y-3">
+              <div className="rounded-[1.2rem] border border-neutral-200 bg-neutral-50 px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">Pubblicazione</p>
+                <p className="mt-1 text-lg font-semibold text-neutral-950">{formDraft.is_active ? "Online" : "Bozza / offline"}</p>
+              </div>
+              <div className="rounded-[1.2rem] border border-neutral-200 bg-neutral-50 px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">Accesso</p>
+                <p className="mt-1 text-lg font-semibold text-neutral-950">{formDraft.visibility === "members_only" ? "Solo soci" : "Pubblico"}</p>
+              </div>
+              <div className="rounded-[1.2rem] border border-neutral-200 bg-neutral-50 px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">Condivisione</p>
+                <p className="mt-1 text-sm text-neutral-700">
+                  {formDraft.is_active
+                    ? "Il link può essere condiviso subito via email, sito o social."
+                    : "Prima di condividerlo, salva e attiva il form."}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside className="rounded-[1.6rem] border border-neutral-200 bg-neutral-50 p-5">
+        <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Checklist</p>
+        <div className="mt-4 space-y-3 text-sm text-neutral-600">
+          <div className="rounded-[1.2rem] border border-neutral-200 bg-white px-4 py-4">
+            <p className="font-semibold text-neutral-900">1. Design</p>
+            <p className="mt-1">Titolo, descrizione, hero e bottone sono pronti?</p>
+          </div>
+          <div className="rounded-[1.2rem] border border-neutral-200 bg-white px-4 py-4">
+            <p className="font-semibold text-neutral-900">2. Builder</p>
+            <p className="mt-1">Hai aggiunto e ordinato i campi che vuoi far compilare?</p>
+          </div>
+          <div className="rounded-[1.2rem] border border-neutral-200 bg-white px-4 py-4">
+            <p className="font-semibold text-neutral-900">3. Condivisione</p>
+            <p className="mt-1">Quando il form è attivo, copia il link e aprilo per un controllo finale.</p>
+          </div>
+        </div>
+      </aside>
+    </div>
+  );
+
+  return (
+    <div className={embedded ? "" : "container-shell py-8 md:py-10"}>
+      <div className={`${embedded ? "space-y-6" : "mx-auto max-w-7xl space-y-6"}`}>
+        <section className="relative overflow-hidden rounded-[2.2rem] border border-black/10 bg-[linear-gradient(135deg,#0b1320,#141f34_55%,#1e3a36)] px-6 py-7 text-white shadow-[0_40px_140px_rgba(2,6,23,0.35)] md:px-8">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(15,118,110,0.44),transparent_28%)]" />
+          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl">
+              <p className="text-xs font-bold uppercase tracking-[0.28em] text-white/55">
+                {embedded ? "Forms & automations" : "Form Studio"}
+              </p>
+              <h1 className="mt-3 font-serif text-[clamp(2.1rem,4vw,4rem)] leading-[0.9] tracking-tight">
+                Costruisci una vera pagina pubblica, non solo un modulo.
+              </h1>
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-white/72 md:text-base">
+                Ogni form viene trattato come una mini landing page dell'associazione: builder visuale, design, automazioni, link pubblico e risposte in aree separate.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-[1.4rem] border border-white/10 bg-white/10 px-4 py-4 backdrop-blur">
+                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-white/50">Form</p>
+                <p className="mt-2 text-3xl font-bold">{forms.length}</p>
+              </div>
+              <div className="rounded-[1.4rem] border border-white/10 bg-white/10 px-4 py-4 backdrop-blur">
+                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-white/50">Attivi</p>
+                <p className="mt-2 text-3xl font-bold">{activeFormsCount}</p>
+              </div>
+              <div className="rounded-[1.4rem] border border-white/10 bg-white/10 px-4 py-4 backdrop-blur">
+                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-white/50">Risposte</p>
+                <p className="mt-2 text-3xl font-bold">{totalResponses}</p>
+              </div>
+            </div>
+          </div>
+        </section>
 
         {error ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         ) : null}
+        {locked ? (
+          <div className="rounded-[1.9rem] border border-amber-200 bg-amber-50 px-5 py-5 text-sm text-amber-900 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-700">Workflow bloccato</p>
+            <p className="mt-2">{lockedMessage}</p>
+          </div>
+        ) : null}
 
-        <div className="grid gap-6 xl:grid-cols-[300px_minmax(0,1fr)]">
-          <section className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-neutral-900">I tuoi form</h2>
-              <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-600">
-                {forms.length}
-              </span>
+        <section className={`${studioCardClass} overflow-hidden`}>
+          <div className="border-b border-neutral-200/80 px-5 py-5 md:px-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.24em] text-neutral-500">Forms library</p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-neutral-950">Le tue pagine modulo</h2>
+                <p className="mt-2 text-sm text-neutral-600">
+                  Seleziona una pagina esistente oppure crea un nuovo form con link pubblico dedicato.
+                </p>
+              </div>
+              <button className="btn-primary" type="button" onClick={handleCreateNewForm} disabled={locked}>
+                {locked ? "Modulo richiesto" : "Nuovo form"}
+              </button>
             </div>
-            <div className="mt-4 space-y-3">
-              {loading || adminLoading ? (
-                <>
-                  <Skeleton className="h-24 w-full rounded-2xl" />
-                  <Skeleton className="h-24 w-full rounded-2xl" />
-                </>
-              ) : forms.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-neutral-200 bg-neutral-50 px-4 py-5 text-sm text-neutral-500">
-                  Nessun form creato. Inizia da titolo, slug e campi base.
-                </div>
-              ) : (
-                forms.map((form) => (
-                  <button
-                    key={form.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedFormId(form.id);
-                      setSelectedForm(form);
-                    }}
-                    className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
-                      selectedFormId === form.id
-                        ? "border-brand bg-brand/5 shadow-sm"
-                        : "border-neutral-200 bg-white hover:border-neutral-300"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-neutral-900">{form.title}</p>
-                        <p className="mt-1 text-xs text-neutral-500">/{form.public_slug}</p>
+          </div>
+
+          <div className="px-5 py-5 md:px-6">
+            {loading || adminLoading ? (
+              <div className="grid gap-4 lg:grid-cols-3">
+                <Skeleton className="h-44 w-full rounded-[1.5rem]" />
+                <Skeleton className="h-44 w-full rounded-[1.5rem]" />
+                <Skeleton className="h-44 w-full rounded-[1.5rem]" />
+              </div>
+            ) : forms.length === 0 ? (
+              <div className="rounded-[1.7rem] border border-dashed border-neutral-200 bg-neutral-50 px-5 py-10 text-center">
+                <p className="text-xs font-bold uppercase tracking-[0.24em] text-neutral-400">Empty state</p>
+                <h3 className="mt-3 font-serif text-3xl tracking-tight text-neutral-950">Ancora nessuna pagina form</h3>
+                <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-neutral-600">
+                  Parti da un form per richieste informazioni, iscrizioni eventi o prenotazioni. Ogni form avrà il suo link pubblico pronto da condividere.
+                </p>
+                <button className="btn-primary mt-6" type="button" onClick={handleCreateNewForm} disabled={locked}>
+                  Crea il primo form
+                </button>
+              </div>
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                {forms.map((form) => {
+                  const isSelected = selectedFormId === form.id;
+                  const formLink = `${window.location.origin}/forms/${form.public_slug}`;
+                  return (
+                    <button
+                      key={form.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedFormId(form.id);
+                        setSelectedForm(form);
+                      }}
+                      className={`group rounded-[1.6rem] border p-5 text-left transition ${
+                        isSelected
+                          ? "border-neutral-900 bg-neutral-950 text-white shadow-[0_28px_100px_rgba(15,23,42,0.26)]"
+                          : "border-neutral-200 bg-white hover:-translate-y-0.5 hover:border-neutral-300 hover:shadow-[0_18px_60px_rgba(15,23,42,0.08)]"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${
+                                form.is_active
+                                  ? isSelected
+                                    ? "bg-white/12 text-white"
+                                    : "bg-emerald-100 text-emerald-700"
+                                  : isSelected
+                                    ? "bg-white/10 text-white/72"
+                                    : "bg-neutral-100 text-neutral-600"
+                              }`}
+                            >
+                              {form.is_active ? "Attivo" : "Bozza"}
+                            </span>
+                            <span
+                              className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${
+                                isSelected ? "bg-white/10 text-white/72" : "bg-neutral-100 text-neutral-600"
+                              }`}
+                            >
+                              {form.visibility === "members_only" ? "Solo soci" : "Pubblico"}
+                            </span>
+                          </div>
+                          <h3 className={`mt-4 text-xl font-semibold tracking-tight ${isSelected ? "text-white" : "text-neutral-950"}`}>
+                            {form.title}
+                          </h3>
+                          <p className={`mt-2 text-sm ${isSelected ? "text-white/70" : "text-neutral-500"}`}>/{form.public_slug}</p>
+                        </div>
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                            isSelected ? "bg-white/10 text-white/80" : "bg-neutral-100 text-neutral-600"
+                          }`}
+                        >
+                          {form.submission_count} risposte
+                        </span>
                       </div>
-                      <span
-                        className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${
-                          form.is_active ? "bg-emerald-100 text-emerald-700" : "bg-neutral-100 text-neutral-600"
-                        }`}
-                      >
-                        {form.is_active ? "Attivo" : "Bozza"}
-                      </span>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-neutral-500">
-                      <span>{form.field_count} campi</span>
-                      <span>{form.submission_count} risposte</span>
-                      <span>{form.visibility === "members_only" ? "Solo soci" : "Pubblico"}</span>
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          </section>
 
-          <div className="space-y-6">
-            <section className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm">
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-neutral-900">
-                    {selectedFormId ? "Configura form" : "Crea nuovo form"}
-                  </h2>
-                  <p className="mt-1 text-sm text-neutral-500">
-                    Gestisci metadati, visibilita, link pubblico e messaggi di conferma.
-                  </p>
-                </div>
+                      <div className={`mt-5 grid grid-cols-2 gap-3 rounded-[1.4rem] border px-3 py-3 text-sm ${
+                        isSelected ? "border-white/10 bg-white/6 text-white/78" : "border-neutral-100 bg-neutral-50 text-neutral-600"
+                      }`}>
+                        <div>
+                          <p className="text-[11px] uppercase tracking-[0.18em] opacity-70">Campi</p>
+                          <p className="mt-1 font-semibold">{form.field_count}</p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] uppercase tracking-[0.18em] opacity-70">Aggiornato</p>
+                          <p className="mt-1 font-semibold">{formatDateTime(form.updated_at)}</p>
+                        </div>
+                      </div>
+
+                      <div className="mt-5 flex flex-wrap gap-2">
+                        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                          isSelected ? "border-white/10 text-white/78" : "border-neutral-200 text-neutral-600"
+                        }`}>
+                          Modifica
+                        </span>
+                        <button
+                          type="button"
+                          className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                            isSelected ? "border-white/12 text-white/80 hover:bg-white/10" : "border-neutral-200 text-neutral-700 hover:bg-neutral-100"
+                          }`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openPublicLink(formLink);
+                          }}
+                          disabled={!form.is_active}
+                        >
+                          Apri
+                        </button>
+                        <button
+                          type="button"
+                          className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                            isSelected ? "border-white/12 text-white/80 hover:bg-white/10" : "border-neutral-200 text-neutral-700 hover:bg-neutral-100"
+                          }`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleDuplicateForm(form);
+                          }}
+                          disabled={locked || duplicating}
+                        >
+                          Duplica
+                        </button>
+                        <button
+                          type="button"
+                          className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                            isSelected ? "border-white/12 text-white/80 hover:bg-white/10" : "border-neutral-200 text-neutral-700 hover:bg-neutral-100"
+                          }`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void copyPublicLink(formLink);
+                          }}
+                        >
+                          Copia link
+                        </button>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className={`${studioCardClass} overflow-hidden`}>
+          <div className="border-b border-neutral-200/80 px-5 py-5 md:px-6">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.24em] text-neutral-500">Form Studio</p>
+                <h2 className="mt-2 font-serif text-3xl tracking-tight text-neutral-950">
+                  {selectedFormId ? formDraft.title || selectedForm?.title || "Configura form" : "Nuova pagina form"}
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm leading-7 text-neutral-600">
+                  Ogni tab separa un compito preciso: costruzione campi, aspetto della pagina, automazioni, risposte e condivisione pubblica.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
                 {selectedForm ? (
-                  <div className="flex flex-wrap gap-2">
-                    <button className="btn-secondary" type="button" onClick={handleDuplicateForm} disabled={duplicating}>
+                  <>
+                    <button className="btn-secondary" type="button" onClick={() => void handleDuplicateForm(selectedForm)} disabled={duplicating || locked}>
                       {duplicating ? "Duplicazione..." : "Duplica"}
                     </button>
-                    <button className="btn-secondary" type="button" onClick={handleToggleActive}>
+                    <button className="btn-secondary" type="button" onClick={handleToggleActive} disabled={locked}>
                       {selectedForm.is_active ? "Disattiva" : "Attiva"}
                     </button>
                     <button
@@ -508,399 +1717,57 @@ const OrgAdminForms = () => {
                       }`}
                       type="button"
                       onClick={handleDeleteForm}
+                      disabled={locked}
                     >
                       {deleteArmed ? "Conferma eliminazione" : "Elimina"}
                     </button>
-                  </div>
+                  </>
                 ) : null}
+                <button className="btn-primary" type="button" onClick={() => void handleSaveForm()} disabled={savingForm || locked}>
+                  {locked
+                    ? "Modulo richiesto"
+                    : savingForm
+                      ? "Salvataggio..."
+                      : formSaved
+                        ? "Salvato"
+                        : selectedFormId
+                          ? "Salva pagina"
+                          : "Crea form"}
+                </button>
               </div>
+            </div>
 
-              <form className="mt-5 grid gap-4 lg:grid-cols-2" onSubmit={handleSaveForm}>
-                <label className={labelClass}>
-                  Titolo
-                  <input
-                    className={inputClass}
-                    value={formDraft.title}
-                    onChange={(event) => setFormDraft((current) => ({ ...current, title: event.target.value }))}
-                    placeholder="Prenotazione tavolo"
-                  />
-                </label>
-                <label className={labelClass}>
-                  Slug pubblico
-                  <input
-                    className={inputClass}
-                    value={formDraft.public_slug}
-                    onChange={(event) => setFormDraft((current) => ({ ...current, public_slug: event.target.value }))}
-                    placeholder="prenotazione-tavolo"
-                  />
-                </label>
-                <label className={`${labelClass} lg:col-span-2`}>
-                  Descrizione
-                  <textarea
-                    className={`${inputClass} min-h-[110px]`}
-                    value={formDraft.description}
-                    onChange={(event) => setFormDraft((current) => ({ ...current, description: event.target.value }))}
-                    placeholder="Spiega in poche righe a cosa serve il form."
-                  />
-                </label>
-                <label className={labelClass}>
-                  Visibilita
-                  <select
-                    className={inputClass}
-                    value={formDraft.visibility}
-                    onChange={(event) =>
-                      setFormDraft((current) => ({ ...current, visibility: event.target.value as AssociationFormVisibility }))
-                    }
-                  >
-                    <option value="public">Pubblico</option>
-                    <option value="members_only">Solo soci</option>
-                  </select>
-                </label>
-                <label className={labelClass}>
-                  Email notifiche
-                  <input
-                    className={inputClass}
-                    type="email"
-                    value={formDraft.notification_email}
-                    onChange={(event) =>
-                      setFormDraft((current) => ({ ...current, notification_email: event.target.value }))
-                    }
-                    placeholder="segreteria@associazione.it"
-                  />
-                </label>
-                <label className={`${labelClass} lg:col-span-2`}>
-                  Messaggio di successo
-                  <textarea
-                    className={`${inputClass} min-h-[90px]`}
-                    value={formDraft.success_message}
-                    onChange={(event) =>
-                      setFormDraft((current) => ({ ...current, success_message: event.target.value }))
-                    }
-                    placeholder="Abbiamo ricevuto la tua richiesta."
-                  />
-                </label>
-                <div className="flex flex-wrap gap-5 lg:col-span-2">
-                  <label className="flex items-center gap-3 text-sm text-neutral-700">
-                    <input
-                      type="checkbox"
-                      checked={formDraft.is_active}
-                      onChange={(event) => setFormDraft((current) => ({ ...current, is_active: event.target.checked }))}
-                    />
-                    Form attivo
-                  </label>
-                  <label className="flex items-center gap-3 text-sm text-neutral-700">
-                    <input
-                      type="checkbox"
-                      checked={formDraft.allow_multiple_submissions}
-                      onChange={(event) =>
-                        setFormDraft((current) => ({ ...current, allow_multiple_submissions: event.target.checked }))
-                      }
-                    />
-                    Consenti invii multipli
-                  </label>
-                </div>
-                <div className="lg:col-span-2 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div className="text-xs text-neutral-500">
-                    Link pubblico:
-                    <span className="ml-2 rounded-full bg-neutral-100 px-2 py-1 font-medium text-neutral-700">
-                      {publicUrl || "Salva il form per generare il link"}
-                    </span>
-                  </div>
-                  <button className="btn-primary" disabled={savingForm} type="submit">
-                    {savingForm ? "Salvataggio..." : formSaved ? "Salvato" : selectedFormId ? "Salva modifiche" : "Crea form"}
-                  </button>
-                </div>
-              </form>
-            </section>
-
-            <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-              <div className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-lg font-semibold text-neutral-900">Campi del form</h2>
-                    <p className="mt-1 text-sm text-neutral-500">Aggiungi, ordina, modifica o elimina i campi del builder.</p>
-                  </div>
-                  {selectedForm ? (
-                    <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-600">
-                      {selectedForm.fields.length} campi
-                    </span>
-                  ) : null}
-                </div>
-                {!selectedFormId ? (
-                  <div className="mt-5 rounded-2xl border border-dashed border-neutral-200 bg-neutral-50 px-4 py-5 text-sm text-neutral-500">
-                    Salva prima il form per iniziare ad aggiungere campi.
-                  </div>
-                ) : selectedForm?.fields.length ? (
-                  <div className="mt-5 grid gap-3">
-                    {selectedForm.fields
-                      .slice()
-                      .sort((left, right) => left.sort_order - right.sort_order)
-                      .map((field) => (
-                        <button
-                          key={field.id}
-                          type="button"
-                          onClick={() => handleEditField(field)}
-                          className={`rounded-2xl border px-4 py-4 text-left transition ${
-                            editingFieldId === field.id
-                              ? "border-brand bg-brand/5"
-                              : "border-neutral-200 bg-white hover:border-neutral-300"
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-semibold text-neutral-900">{field.label}</p>
-                              <p className="mt-1 text-xs text-neutral-500">
-                                {field.field_type} · key `{field.field_key}` · ordine {field.sort_order}
-                              </p>
-                            </div>
-                            {field.is_required ? (
-                              <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-700">
-                                Obbligatorio
-                              </span>
-                            ) : null}
-                          </div>
-                          {field.options.length > 0 ? (
-                            <p className="mt-3 text-xs text-neutral-500">Opzioni: {field.options.join(", ")}</p>
-                          ) : null}
-                        </button>
-                      ))}
-                  </div>
-                ) : (
-                  <div className="mt-5 rounded-2xl border border-dashed border-neutral-200 bg-neutral-50 px-4 py-5 text-sm text-neutral-500">
-                    Nessun campo configurato. Aggiungi il primo campo dal pannello qui a destra.
-                  </div>
-                )}
-              </div>
-
-              <div className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-base font-semibold text-neutral-900">
-                    {editingFieldId ? "Modifica campo" : "Nuovo campo"}
-                  </h3>
-                  {editingFieldId ? (
-                    <button
-                      type="button"
-                      className="text-xs font-semibold text-neutral-500 hover:text-neutral-800"
-                      onClick={() => {
-                        setEditingFieldId(null);
-                        setDeleteFieldArmed(null);
-                        setFieldDraft(emptyFieldDraft(selectedForm));
-                      }}
-                    >
-                      Reset
-                    </button>
-                  ) : null}
-                </div>
-                <form className="mt-4 space-y-4" onSubmit={handleSaveField}>
-                  <label className={labelClass}>
-                    Etichetta
-                    <input
-                      className={inputClass}
-                      value={fieldDraft.label}
-                      onChange={(event) => setFieldDraft((current) => ({ ...current, label: event.target.value }))}
-                      placeholder="Nome e cognome"
-                    />
-                  </label>
-                  <label className={labelClass}>
-                    Tipo campo
-                    <select
-                      className={inputClass}
-                      value={fieldDraft.field_type}
-                      onChange={(event) =>
-                        setFieldDraft((current) => ({
-                          ...current,
-                          field_type: event.target.value as AssociationFormFieldType,
-                        }))
-                      }
-                    >
-                      {fieldTypeOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className={labelClass}>
-                    Chiave tecnica
-                    <input
-                      className={inputClass}
-                      value={fieldDraft.field_key}
-                      onChange={(event) => setFieldDraft((current) => ({ ...current, field_key: event.target.value }))}
-                      placeholder="nome_socio"
-                    />
-                  </label>
-                  <label className={labelClass}>
-                    Placeholder
-                    <input
-                      className={inputClass}
-                      value={fieldDraft.placeholder}
-                      onChange={(event) =>
-                        setFieldDraft((current) => ({ ...current, placeholder: event.target.value }))
-                      }
-                      placeholder="Scrivi qui"
-                    />
-                  </label>
-                  <label className={labelClass}>
-                    Help text
-                    <textarea
-                      className={`${inputClass} min-h-[80px]`}
-                      value={fieldDraft.help_text}
-                      onChange={(event) =>
-                        setFieldDraft((current) => ({ ...current, help_text: event.target.value }))
-                      }
-                      placeholder="Testo di supporto sotto al campo"
-                    />
-                  </label>
-                  {["select", "radio", "checkbox"].includes(fieldDraft.field_type) ? (
-                    <label className={labelClass}>
-                      Opzioni
-                      <input
-                        className={inputClass}
-                        value={fieldDraft.options_text}
-                        onChange={(event) =>
-                          setFieldDraft((current) => ({ ...current, options_text: event.target.value }))
-                        }
-                        placeholder="Mattina, Pomeriggio, Sera"
-                      />
-                    </label>
-                  ) : null}
-                  <label className={labelClass}>
-                    Ordine
-                    <input
-                      className={inputClass}
-                      type="number"
-                      value={fieldDraft.sort_order}
-                      onChange={(event) =>
-                        setFieldDraft((current) => ({ ...current, sort_order: Number(event.target.value || 0) }))
-                      }
-                    />
-                  </label>
-                  <label className="flex items-center gap-3 text-sm text-neutral-700">
-                    <input
-                      type="checkbox"
-                      checked={fieldDraft.is_required}
-                      onChange={(event) =>
-                        setFieldDraft((current) => ({ ...current, is_required: event.target.checked }))
-                      }
-                    />
-                    Campo obbligatorio
-                  </label>
-                  <div className="flex flex-wrap gap-3">
-                    <button className="btn-primary" disabled={savingField || !selectedFormId} type="submit">
-                      {savingField ? "Salvataggio..." : fieldSaved ? "Salvato" : editingFieldId ? "Aggiorna campo" : "Aggiungi campo"}
-                    </button>
-                    {editingFieldId ? (
-                      <button
-                        type="button"
-                        className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                          deleteFieldArmed === editingFieldId
-                            ? "bg-red-600 text-white hover:bg-red-700"
-                            : "border border-red-200 bg-red-50 text-red-700 hover:border-red-300"
-                        }`}
-                        onClick={handleDeleteField}
-                      >
-                        {deleteFieldArmed === editingFieldId ? "Conferma eliminazione" : "Elimina campo"}
-                      </button>
-                    ) : null}
-                  </div>
-                </form>
-              </div>
-            </section>
-
-            <section className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-neutral-900">Risposte raccolte</h2>
-                  <p className="mt-1 text-sm text-neutral-500">Consulta il dettaglio e scarica il CSV senza lasciare la pagina.</p>
-                </div>
-                {selectedFormId ? (
-                  <a className="btn-secondary" href={buildOrgAdminFormSubmissionsExportUrl(selectedFormId)}>
-                    Export CSV
-                  </a>
-                ) : null}
-              </div>
-
-              {!selectedFormId ? (
-                <div className="mt-5 rounded-2xl border border-dashed border-neutral-200 bg-neutral-50 px-4 py-5 text-sm text-neutral-500">
-                  Le risposte compariranno qui dopo il primo invio pubblico.
-                </div>
-              ) : (
-                <div className="mt-5 grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-                  <div className="overflow-hidden rounded-2xl border border-neutral-200">
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-neutral-200 text-sm">
-                        <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-500">
-                          <tr>
-                            <th className="px-4 py-3 font-semibold">Data</th>
-                            <th className="px-4 py-3 font-semibold">Stato</th>
-                            <th className="px-4 py-3 font-semibold">Identita</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-neutral-200 bg-white">
-                          {submissionsLoading ? (
-                            <tr>
-                              <td className="px-4 py-4 text-neutral-500" colSpan={3}>
-                                Caricamento risposte...
-                              </td>
-                            </tr>
-                          ) : submissions.length === 0 ? (
-                            <tr>
-                              <td className="px-4 py-4 text-neutral-500" colSpan={3}>
-                                Nessuna risposta ricevuta.
-                              </td>
-                            </tr>
-                          ) : (
-                            submissions.map((submission) => (
-                              <tr
-                                key={submission.id}
-                                className={`cursor-pointer transition hover:bg-neutral-50 ${
-                                  selectedSubmission?.id === submission.id ? "bg-brand/5" : ""
-                                }`}
-                                onClick={() => {
-                                  fetchOrgAdminFormSubmission(selectedFormId, submission.id)
-                                    .then((response) => setSelectedSubmission(response.submission))
-                                    .catch(() => setSelectedSubmission(submission));
-                                }}
-                              >
-                                <td className="px-4 py-3 text-neutral-700">{formatDateTime(submission.submitted_at)}</td>
-                                <td className="px-4 py-3 text-neutral-600">{submission.status}</td>
-                                <td className="px-4 py-3 text-neutral-600">
-                                  {submission.submitted_by?.name || submission.submitted_by?.email || `#${submission.id}`}
-                                </td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  <aside className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
-                    <h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-600">Dettaglio risposta</h3>
-                    {selectedSubmission ? (
-                      <div className="mt-4 space-y-3">
-                        <div className="text-xs text-neutral-500">
-                          Ricevuta il {formatDateTime(selectedSubmission.submitted_at)}
-                        </div>
-                        {Object.entries(selectedSubmission.payload_json || {}).map(([key, value]) => (
-                          <div key={key} className="rounded-2xl border border-white bg-white px-3 py-3 shadow-sm">
-                            <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{key}</div>
-                            <div className="mt-1 text-sm text-neutral-800">{stringifySubmissionValue(value)}</div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="mt-4 text-sm text-neutral-500">Seleziona una risposta dalla tabella per vedere il payload completo.</p>
-                    )}
-                  </aside>
-                </div>
-              )}
-            </section>
+            <div className="mt-5 flex flex-wrap gap-2">
+              {editorTabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                    activeTab === tab.key
+                      ? "bg-neutral-950 text-white"
+                      : "border border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:text-neutral-900"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+
+          <div className="px-5 py-5 md:px-6">
+            {activeTab === "builder" ? builderTab : null}
+            {activeTab === "design" ? designTab : null}
+            {activeTab === "automations" ? automationsTab : null}
+            {activeTab === "responses" ? responsesTab : null}
+            {activeTab === "share" ? shareTab : null}
+          </div>
+        </section>
       </div>
     </div>
   );
-};
+}
+
+const OrgAdminForms = () => <OrgAdminFormsWorkspace />;
 
 export default OrgAdminForms;

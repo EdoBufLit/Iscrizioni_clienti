@@ -194,10 +194,11 @@ Regole operative:
 
 La dashboard org-admin include ora la sezione `Comunicazioni` su `/org-admin/comunicazioni`.
 
-- `Impostazioni`: gestisce `sender_email_local_part`, `email_from_name_override`, `reply_to_email` e mostra una preview live del mittente effettivo.
-- `Campagne`: crea bozze o invia subito campagne verso `tutti i soci attivi`, `soci scaduti` o `soci con rinnovo in scadenza`, anche partendo da template riutilizzabili.
-- `Template`: libreria con template `system` ASSONAM non modificabili ma duplicabili e template `association` modificabili/archiviabili per la singola associazione.
-- `Storico`: mostra campagne inviate/bozze, numero destinatari, stato e dettaglio dei recipient snapshot con `sent` o `failed` e `error_message` se presente.
+- `Overview`: stato del pacchetto, sender attuale e scorciatoie verso template, form e campagne.
+- `Campaigns`: composer + storico invii nello stesso flusso, con audience estimate, dettaglio recipient e stato `queued/processing/sent/failed`.
+- `Templates`: libreria con template `system` ASSONAM read-only ma duplicabili, filtri `all/system/custom/archived`, creazione da zero e preview fake.
+- `Forms & automations`: builder form pubblico collegato alla libreria template e alle azioni post-submit.
+- `Sending settings`: configurazione sender associazione, preview live e test email con esito reale del provider.
 
 Regole operative:
 
@@ -207,6 +208,8 @@ Regole operative:
 - Ogni invio campagna salva uno snapshot destinatari in `email_campaign_recipients` prima dell'accodamento nel worker email; i recipient transitano tra `queued`, `processing`, `sent` e `failed`.
 - I placeholder supportati sono `{{nome_socio}}`, `{{nome_associazione}}`, `{{numero_tessera}}`, `{{data_scadenza}}`, `{{link_rinnovo}}`, `{{link_documento}}`.
 - I template di sistema non si modificano direttamente: vanno duplicati in template associazione prima della personalizzazione.
+- I form condividono lo stesso gating del modulo Comunicazioni: se il modulo non e attivo, la sezione resta visibile ma locked con CTA disabilitate.
+- Ogni form puo usare azioni post-submit semplici: `save submission` sempre attivo, `notify admin`, `send user confirmation`, `create internal request` e collegamento a un template admin/user della libreria Comunicazioni.
 
 ## Integration API (Issuer Tessera)
 
@@ -305,11 +308,13 @@ Content-Type: application/json
 
 ## Forms module
 
-- Admin route: `org-admin/forms`
+- Admin route legacy: `org-admin/forms` -> redirect verso `/org-admin/comunicazioni?tab=forms`
 - Public route: `/forms/:slug`
 - The frontend public page is a single dynamic route that fetches form structure from `GET /api/forms/{slug}` and submits to `POST /api/forms/{slug}/submit`.
-- Each form stores its own `public_slug`, fields, visibility (`public` or `members_only`) and submissions in DB.
-- Submission notifications and simple confirmations currently use `system mode` email transport for a minimal, safe MVP.
+- The org-admin experience is now a visual studio with clear sections: `Builder`, `Design`, `Automazioni`, `Risposte`, `Condividi`.
+- Each form stores its own `public_slug`, fields, visibility (`public` or `members_only`), post-submit actions, and public-page design settings (`accent_color`, `submit_button_text`, `show_logo`, `cover_image_url`, `page_style`).
+- Forms are part of the Comunicazioni workflow package: they reuse the email template library for admin notifications and user confirmations, and can create an internal org-admin request on submit.
+- Public forms are available only while the owning association has `communications_enabled=true`.
 
 ### Frontend Development
 

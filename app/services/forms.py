@@ -12,9 +12,20 @@ from fastapi import HTTPException
 from pydantic import EmailStr, TypeAdapter
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import Form, FormField, FormSubmission, Member, Organization
+from app.models import (
+    AdminRole,
+    AdminUser,
+    EmailTemplate,
+    Form,
+    FormField,
+    FormSubmission,
+    Member,
+    OrgAdminNotification,
+    Organization,
+)
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
+from app.services.email_templates import render_template_content
 
 
 FORM_VISIBILITY_PUBLIC = "public"
@@ -23,6 +34,8 @@ ALLOWED_FORM_VISIBILITY = {
     FORM_VISIBILITY_PUBLIC,
     FORM_VISIBILITY_MEMBERS_ONLY,
 }
+DEFAULT_FORM_PAGE_STYLE = "editorial"
+ALLOWED_FORM_PAGE_STYLES = {"editorial", "minimal", "spotlight"}
 FIELD_TYPE_CONSENT = "consent"
 ALLOWED_FORM_FIELD_TYPES = {
     "short_text",
@@ -41,6 +54,7 @@ FIELD_TYPE_ALIASES = {
     "privacy": FIELD_TYPE_CONSENT,
 }
 _EMAIL_ADAPTER = TypeAdapter(EmailStr)
+FORMS_MODULE_LOCKED_MESSAGE = "I Form richiedono il modulo Comunicazioni attivo."
 
 
 @dataclass(frozen=True)
@@ -114,6 +128,76 @@ def normalize_form_notification_email(value: Any) -> str | None:
         raise HTTPException(status_code=422, detail="Email notifica non valida.") from exc
 
 
+def normalize_form_accent_color(value: Any) -> str | None:
+    normalized = _normalize_text(value)
+    if normalized is None:
+        return None
+    cleaned = normalized.lower()
+    if re.fullmatch(r"#[0-9a-f]{6}", cleaned) or re.fullmatch(r"#[0-9a-f]{3}", cleaned):
+        return cleaned
+    raise HTTPException(status_code=422, detail="Colore accento non valido.")
+
+
+def normalize_form_submit_button_text(value: Any) -> str | None:
+    normalized = _normalize_text(value)
+    if normalized is None:
+        return None
+    return normalized[:120]
+
+
+def normalize_form_cover_image_url(value: Any) -> str | None:
+    normalized = _normalize_text(value)
+    if normalized is None:
+        return None
+    if normalized.startswith(("https://", "http://", "/")):
+        return normalized[:2000]
+    raise HTTPException(status_code=422, detail="URL cover image non valido.")
+
+
+def normalize_form_page_style(value: Any) -> str:
+    normalized = _normalize_text(value)
+    if normalized is None:
+        return DEFAULT_FORM_PAGE_STYLE
+    lowered = normalized.lower()
+    if lowered not in ALLOWED_FORM_PAGE_STYLES:
+        raise HTTPException(status_code=422, detail="Stile pagina non valido.")
+    return lowered
+
+
+def ensure_forms_module_enabled(organization: Organization | None) -> None:
+    if organization is None or not bool(getattr(organization, "communications_enabled", False)):
+        raise HTTPException(status_code=403, detail=FORMS_MODULE_LOCKED_MESSAGE)
+
+
+def _resolve_template_reference(
+    db: Session,
+    *,
+    association_id: int,
+    template_id: Any,
+    field_label: str,
+) -> int | None:
+    if template_id in (None, "", 0, "0"):
+        return None
+    try:
+        normalized_id = int(template_id)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=f"{field_label} non valido.") from exc
+    template = (
+        db.query(EmailTemplate)
+        .filter(
+            EmailTemplate.id == normalized_id,
+            EmailTemplate.channel == "email",
+            EmailTemplate.is_active.is_(True),
+        )
+        .first()
+    )
+    if template is None:
+        raise HTTPException(status_code=422, detail=f"{field_label} non trovato.")
+    if not template.is_system and int(template.association_id or 0) != int(association_id):
+        raise HTTPException(status_code=422, detail=f"{field_label} fuori scope.")
+    return template.id
+
+
 def normalize_field_type(value: Any) -> str:
     normalized = _normalize_text(value)
     if normalized is None:
@@ -170,6 +254,8 @@ def get_form_for_org_admin(db: Session, *, association_id: int, form_id: int) ->
         .options(
             joinedload(Form.fields),
             joinedload(Form.submissions),
+            joinedload(Form.admin_notification_template),
+            joinedload(Form.user_confirmation_template),
         )
         .filter(Form.id == form_id, Form.association_id == association_id)
         .first()
@@ -185,6 +271,8 @@ def get_form_by_slug_for_public(db: Session, *, slug: str) -> Form:
         .options(
             joinedload(Form.fields),
             joinedload(Form.organization),
+            joinedload(Form.admin_notification_template),
+            joinedload(Form.user_confirmation_template),
         )
         .filter(Form.public_slug == normalize_form_slug(slug))
         .first()
@@ -209,6 +297,18 @@ def serialize_form_field(field: FormField) -> dict[str, Any]:
     }
 
 
+def _serialize_template_summary(template: EmailTemplate | None) -> dict[str, Any] | None:
+    if template is None:
+        return None
+    return {
+        "id": template.id,
+        "name": template.name,
+        "subject": template.subject,
+        "is_system": bool(template.is_system),
+        "is_active": bool(template.is_active),
+    }
+
+
 def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]:
     items = sorted(
         list(form.fields or []),
@@ -219,18 +319,51 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
         "association_id": form.association_id,
         "title": form.title,
         "description": form.description,
+        "accent_color": getattr(form, "accent_color", None),
+        "submit_button_text": getattr(form, "submit_button_text", None),
+        "show_logo": bool(getattr(form, "show_logo", True)),
+        "cover_image_url": getattr(form, "cover_image_url", None),
+        "page_style": getattr(form, "page_style", DEFAULT_FORM_PAGE_STYLE),
         "public_slug": form.public_slug,
         "is_active": bool(form.is_active),
         "visibility": form.visibility,
         "success_message": form.success_message,
         "notification_email": form.notification_email,
         "allow_multiple_submissions": bool(form.allow_multiple_submissions),
+        "notify_admin_on_submit": bool(getattr(form, "notify_admin_on_submit", True)),
+        "send_user_confirmation": bool(getattr(form, "send_user_confirmation", True)),
+        "admin_notification_template_id": getattr(form, "admin_notification_template_id", None),
+        "user_confirmation_template_id": getattr(form, "user_confirmation_template_id", None),
+        "create_internal_request": bool(getattr(form, "create_internal_request", False)),
+        "create_booking": bool(getattr(form, "create_booking", False)),
         "created_by_user_id": form.created_by_user_id,
         "created_at": form.created_at.isoformat() if form.created_at else None,
         "updated_at": form.updated_at.isoformat() if form.updated_at else None,
         "field_count": len(items),
         "submission_count": len(form.submissions or []),
         "fields": [serialize_form_field(field) for field in items] if include_fields else [],
+        "design": {
+            "title": form.title,
+            "description": form.description,
+            "accent_color": getattr(form, "accent_color", None),
+            "submit_button_text": getattr(form, "submit_button_text", None),
+            "show_logo": bool(getattr(form, "show_logo", True)),
+            "cover_image_url": getattr(form, "cover_image_url", None),
+            "page_style": getattr(form, "page_style", DEFAULT_FORM_PAGE_STYLE),
+        },
+        "actions": {
+            "save_submission": True,
+            "notify_admin_on_submit": bool(getattr(form, "notify_admin_on_submit", True)),
+            "send_user_confirmation": bool(getattr(form, "send_user_confirmation", True)),
+            "admin_notification_template": _serialize_template_summary(
+                getattr(form, "admin_notification_template", None)
+            ),
+            "user_confirmation_template": _serialize_template_summary(
+                getattr(form, "user_confirmation_template", None)
+            ),
+            "create_internal_request": bool(getattr(form, "create_internal_request", False)),
+            "create_booking": bool(getattr(form, "create_booking", False)),
+        },
     }
 
 
@@ -270,12 +403,23 @@ def apply_form_updates(
     form: Form,
     title: Any,
     description: Any,
+    accent_color: Any,
+    submit_button_text: Any,
+    show_logo: bool,
+    cover_image_url: Any,
+    page_style: Any,
     public_slug: Any,
     is_active: bool,
     visibility: Any,
     success_message: Any,
     notification_email: Any,
     allow_multiple_submissions: bool,
+    notify_admin_on_submit: bool,
+    send_user_confirmation: bool,
+    admin_notification_template_id: Any,
+    user_confirmation_template_id: Any,
+    create_internal_request: bool,
+    create_booking: bool,
 ) -> Form:
     normalized_title = _normalize_text(title)
     if normalized_title is None:
@@ -283,6 +427,11 @@ def apply_form_updates(
     requested_slug = normalize_form_slug(public_slug or normalized_title)
     form.title = normalized_title
     form.description = _normalize_multiline_text(description)
+    form.accent_color = normalize_form_accent_color(accent_color)
+    form.submit_button_text = normalize_form_submit_button_text(submit_button_text)
+    form.show_logo = bool(show_logo)
+    form.cover_image_url = normalize_form_cover_image_url(cover_image_url)
+    form.page_style = normalize_form_page_style(page_style)
     form.public_slug = build_unique_form_slug(
         db,
         base_slug=requested_slug,
@@ -293,6 +442,22 @@ def apply_form_updates(
     form.success_message = _normalize_multiline_text(success_message)
     form.notification_email = normalize_form_notification_email(notification_email)
     form.allow_multiple_submissions = bool(allow_multiple_submissions)
+    form.notify_admin_on_submit = bool(notify_admin_on_submit)
+    form.send_user_confirmation = bool(send_user_confirmation)
+    form.admin_notification_template_id = _resolve_template_reference(
+        db,
+        association_id=form.association_id,
+        template_id=admin_notification_template_id,
+        field_label="Template notifica admin",
+    )
+    form.user_confirmation_template_id = _resolve_template_reference(
+        db,
+        association_id=form.association_id,
+        template_id=user_confirmation_template_id,
+        field_label="Template conferma utente",
+    )
+    form.create_internal_request = bool(create_internal_request)
+    form.create_booking = bool(create_booking)
     return form
 
 
@@ -512,6 +677,107 @@ def _format_submission_for_email(form: Form, payload: dict[str, Any]) -> tuple[s
     return "\n".join(lines), "".join(html_rows)
 
 
+def _guess_submitter_name(payload: dict[str, Any]) -> str:
+    for key in ("nome_socio", "nome", "full_name", "name"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    first_name = str(payload.get("first_name") or "").strip()
+    last_name = str(payload.get("last_name") or "").strip()
+    full_name = f"{first_name} {last_name}".strip()
+    return full_name
+
+
+def build_form_template_context(
+    *,
+    form: Form,
+    validated_submission: ValidatedSubmission,
+) -> dict[str, str]:
+    submitter_name = _guess_submitter_name(validated_submission.payload)
+    return {
+        "titolo_form": form.title or "",
+        "email_destinatario": validated_submission.submitter_email or "",
+        "nome_socio": submitter_name,
+    }
+
+
+def _enqueue_rendered_template_email(
+    db: Session,
+    *,
+    email_type: str,
+    to_email: str,
+    form: Form,
+    submission: FormSubmission,
+    template: EmailTemplate,
+    validated_submission: ValidatedSubmission,
+    priority: int,
+) -> None:
+    rendered = render_template_content(
+        subject=template.subject,
+        body_html=template.body_html,
+        body_text=template.body_text,
+        association=form.organization,
+        extra_context=build_form_template_context(
+            form=form,
+            validated_submission=validated_submission,
+        ),
+    )
+    enqueue_email(
+        db,
+        email_type=email_type,
+        to_email=to_email,
+        subject=rendered.subject or template.subject,
+        payload=build_email_payload(
+            text_body=rendered.body_text or "",
+            html_body=rendered.body_html,
+            sender=build_sender_payload(mode="system"),
+            meta={
+                "form_id": form.id,
+                "submission_id": submission.id,
+                "association_id": form.association_id,
+                "template_id": template.id,
+            },
+        ),
+        priority=priority,
+    )
+
+
+def _create_internal_request_notifications(
+    db: Session,
+    *,
+    form: Form,
+    submission: FormSubmission,
+    validated_submission: ValidatedSubmission,
+) -> int:
+    admins = (
+        db.query(AdminUser)
+        .filter(
+            AdminUser.org_id == form.association_id,
+            AdminUser.role == AdminRole.ORG_ADMIN,
+            AdminUser.is_active.is_(True),
+            AdminUser.deleted_at.is_(None),
+        )
+        .all()
+    )
+    created = 0
+    submitter_name = _guess_submitter_name(validated_submission.payload) or validated_submission.submitter_email or "Nuovo contatto"
+    href = f"/org-admin/comunicazioni?tab=forms&formId={form.id}&submissionId={submission.id}"
+    for admin in admins:
+        db.add(
+            OrgAdminNotification(
+                admin_user_id=admin.id,
+                org_id=form.association_id,
+                type="form_submission",
+                title=f"Nuova richiesta da {submitter_name}",
+                body=f"Il form '{form.title}' ha ricevuto una nuova risposta.",
+                href=href,
+                is_read=False,
+            )
+        )
+        created += 1
+    return created
+
+
 def enqueue_submission_notifications(
     db: Session,
     *,
@@ -521,52 +787,83 @@ def enqueue_submission_notifications(
 ) -> None:
     notification_email = normalize_form_notification_email(form.notification_email)
     text_summary, html_summary = _format_submission_for_email(form, validated_submission.payload)
-
-    if notification_email:
-        enqueue_email(
+    if bool(getattr(form, "create_internal_request", False)):
+        _create_internal_request_notifications(
             db,
-            email_type="form_submission_notification",
-            to_email=notification_email,
-            subject=f"Nuova risposta form: {form.title}",
-            payload=build_email_payload(
-                text_body=text_summary,
-                html_body=html_summary,
-                sender=build_sender_payload(mode="system"),
-                meta={
-                    "form_id": form.id,
-                    "submission_id": submission.id,
-                    "association_id": form.association_id,
-                },
-            ),
-            priority=4,
+            form=form,
+            submission=submission,
+            validated_submission=validated_submission,
         )
 
-    if validated_submission.submitter_email:
-        confirmation_text = (
-            f"Abbiamo ricevuto la tua richiesta per '{form.title}'.\n\n"
-            f"{form.success_message or 'Ti ricontatteremo al piu presto.'}"
-        )
-        confirmation_html = (
-            f"<p>Abbiamo ricevuto la tua richiesta per <strong>{html.escape(form.title)}</strong>.</p>"
-            f"<p>{html.escape(form.success_message or 'Ti ricontatteremo al piu presto.')}</p>"
-        )
-        enqueue_email(
-            db,
-            email_type="form_submission_confirmation",
-            to_email=validated_submission.submitter_email,
-            subject=f"Conferma invio: {form.title}",
-            payload=build_email_payload(
-                text_body=confirmation_text,
-                html_body=confirmation_html,
-                sender=build_sender_payload(mode="system"),
-                meta={
-                    "form_id": form.id,
-                    "submission_id": submission.id,
-                    "association_id": form.association_id,
-                },
-            ),
-            priority=5,
-        )
+    if bool(getattr(form, "notify_admin_on_submit", True)) and notification_email:
+        if getattr(form, "admin_notification_template", None) is not None:
+            _enqueue_rendered_template_email(
+                db,
+                email_type="form_submission_notification",
+                to_email=notification_email,
+                form=form,
+                submission=submission,
+                template=form.admin_notification_template,
+                validated_submission=validated_submission,
+                priority=4,
+            )
+        else:
+            enqueue_email(
+                db,
+                email_type="form_submission_notification",
+                to_email=notification_email,
+                subject=f"Nuova risposta form: {form.title}",
+                payload=build_email_payload(
+                    text_body=text_summary,
+                    html_body=html_summary,
+                    sender=build_sender_payload(mode="system"),
+                    meta={
+                        "form_id": form.id,
+                        "submission_id": submission.id,
+                        "association_id": form.association_id,
+                    },
+                ),
+                priority=4,
+            )
+
+    if bool(getattr(form, "send_user_confirmation", True)) and validated_submission.submitter_email:
+        if getattr(form, "user_confirmation_template", None) is not None:
+            _enqueue_rendered_template_email(
+                db,
+                email_type="form_submission_confirmation",
+                to_email=validated_submission.submitter_email,
+                form=form,
+                submission=submission,
+                template=form.user_confirmation_template,
+                validated_submission=validated_submission,
+                priority=5,
+            )
+        else:
+            confirmation_text = (
+                f"Abbiamo ricevuto la tua richiesta per '{form.title}'.\n\n"
+                f"{form.success_message or 'Ti ricontatteremo al piu presto.'}"
+            )
+            confirmation_html = (
+                f"<p>Abbiamo ricevuto la tua richiesta per <strong>{html.escape(form.title)}</strong>.</p>"
+                f"<p>{html.escape(form.success_message or 'Ti ricontatteremo al piu presto.')}</p>"
+            )
+            enqueue_email(
+                db,
+                email_type="form_submission_confirmation",
+                to_email=validated_submission.submitter_email,
+                subject=f"Conferma invio: {form.title}",
+                payload=build_email_payload(
+                    text_body=confirmation_text,
+                    html_body=confirmation_html,
+                    sender=build_sender_payload(mode="system"),
+                    meta={
+                        "form_id": form.id,
+                        "submission_id": submission.id,
+                        "association_id": form.association_id,
+                    },
+                ),
+                priority=5,
+            )
 
 
 def export_submissions_csv(form: Form) -> io.StringIO:
