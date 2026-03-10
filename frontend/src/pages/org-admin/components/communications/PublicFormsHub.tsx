@@ -99,6 +99,7 @@ export function PublicFormsHub({ locked = false }: { locked?: boolean; }) {
 
   const [fieldDraft, setFieldDraft] = useState(emptyFieldDraft(null));
   const [editingFieldId, setEditingFieldId] = useState<number | null>(null);
+  const [isEditingFieldPanel, setIsEditingFieldPanel] = useState(false);
   const [savingField, setSavingField] = useState(false);
 
   const [submissions, setSubmissions] = useState<AssociationFormSubmission[]>([]);
@@ -257,6 +258,7 @@ export function PublicFormsHub({ locked = false }: { locked?: boolean; }) {
           <button key={opt.value} className="flex w-full items-center gap-2 rounded-lg border border-neutral-200 bg-white p-2 text-left text-sm hover:border-neutral-300" onClick={() => {
             setFieldDraft(emptyFieldDraft(selectedForm, opt.value));
             setEditingFieldId(null);
+            setIsEditingFieldPanel(true);
           }}>
             <span className="flex h-6 w-6 items-center justify-center rounded bg-neutral-100 text-xs font-bold">{opt.icon}</span>
             <span>{opt.label}</span>
@@ -270,6 +272,7 @@ export function PublicFormsHub({ locked = false }: { locked?: boolean; }) {
           sortedFields.map((f) => (
             <div key={f.id} className={`flex items-center justify-between rounded-xl border p-4 transition ${editingFieldId === f.id ? "border-brand bg-brand/5" : "border-neutral-200 bg-white"}`} onClick={() => {
               setEditingFieldId(f.id);
+              setIsEditingFieldPanel(true);
               setFieldDraft({ ...f, placeholder: f.placeholder || "", help_text: f.help_text || "", options_text: f.options?.join(", ") || "" });
             }}>
               <div>
@@ -284,7 +287,7 @@ export function PublicFormsHub({ locked = false }: { locked?: boolean; }) {
         )}
       </div>
       <div>
-        {editingFieldId === null && !fieldDraft.label.includes("Nuovo") ? (
+        {!isEditingFieldPanel ? (
           <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-6 text-center text-sm text-neutral-500">Seleziona un campo per modificarne le impostazioni.</div>
         ) : (
           <form className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm" onSubmit={handleSaveField}>

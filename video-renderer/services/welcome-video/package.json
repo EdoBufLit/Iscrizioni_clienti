@@ -6,7 +6,8 @@
     "preview": "remotion preview src/remotion/Root.tsx",
     "build": "tsup src/render.ts src/renderHud.ts --format cjs --out-dir dist --target node20",
     "render:local": "npm run build && node dist/render.cjs --orgId test --orgName \"ASSONAM\"",
-    "render-hud:local": "npm run build && node dist/renderHud.cjs --orgId test --orgName \"ASSONAM\""
+    "render-hud:local": "npm run build && node dist/renderHud.cjs --orgId test --orgName \"ASSONAM\"",
+    "render-base": "npm run build && node dist/renderHud.cjs --orgId base --orgName \"ASSOCIATION\" --template base --skip-audio-generation --output ../../../frontend/public/videos/welcome_base.mp4"
   },
   "dependencies": {
     "@remotion/bundler": "^4.0.366",
