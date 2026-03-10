@@ -15,7 +15,7 @@ function buildInitialValues(form: PublicAssociationForm): Record<string, unknown
 }
 
 const PublicFormPage = () => {
-  const { slug } = useParams();
+  const { orgSlug, slug } = useParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -28,7 +28,7 @@ const PublicFormPage = () => {
     setLoading(true);
     setError("");
     setSuccessMessage("");
-    fetchPublicForm(slug)
+    fetchPublicForm(orgSlug || slug, orgSlug ? slug : undefined)
       .then((response) => {
         setForm(response.form);
         setValues(buildInitialValues(response.form));
@@ -41,7 +41,7 @@ const PublicFormPage = () => {
         setError(err instanceof Error ? err.message : "Form non disponibile.");
       })
       .finally(() => setLoading(false));
-  }, [slug]);
+  }, [orgSlug, slug]);
 
   function updateValue(fieldKey: string, nextValue: unknown) {
     setValues((current) => ({ ...current, [fieldKey]: nextValue }));
@@ -53,7 +53,9 @@ const PublicFormPage = () => {
     setSubmitting(true);
     setError("");
     try {
-      const response = await submitPublicForm(slug, values);
+      const response = orgSlug
+        ? await submitPublicForm(orgSlug, slug, values)
+        : await submitPublicForm(slug, values);
       setSuccessMessage(response.message);
       setValues(buildInitialValues(form));
     } catch (err) {

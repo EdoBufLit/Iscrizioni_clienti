@@ -108,6 +108,7 @@ const App = () => {
               <Route path="login" element={<Login />} />
               <Route path="area-riservata" element={<ReservedAreaRedirect />} />
               <Route path="pienissimo/thank-you/:orgSlug" element={<PienissimoThankYouPage />} />
+              <Route path="forms/:orgSlug/:slug" element={<PublicFormPage />} />
               <Route path="forms/:slug" element={<PublicFormPage />} />
               <Route path="auth/verify" element={<MagicLinkVerify />} />
               <Route path="wallet/google/add" element={<WalletGoogleAdd />} />

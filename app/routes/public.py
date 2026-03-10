@@ -20,6 +20,7 @@ from app.services.forms import (
     enqueue_submission_notifications,
     ensure_submission_allowed,
     ensure_forms_module_enabled,
+    get_form_by_org_slug_and_form_slug_for_public,
     get_form_by_slug_for_public,
     normalize_form_slug,
     serialize_public_form,
@@ -294,36 +295,53 @@ def api_public_org_info(org_slug: str, request: Request, db: Session = Depends(g
     }
 
 
-@router.get("/api/forms/{slug}")
-def get_public_form(slug: str, request: Request, db: Session = Depends(get_db)):
+def _load_public_form(
+    db: Session,
+    *,
+    slug: str,
+    org_slug: str | None = None,
+):
+    if org_slug:
+        return get_form_by_org_slug_and_form_slug_for_public(
+            db,
+            org_slug=org_slug,
+            slug=slug,
+        )
+    return get_form_by_slug_for_public(db, slug=slug)
+
+
+@router.get("/api/forms/{org_slug}/{slug}")
+def get_public_form_scoped(
+    org_slug: str,
+    slug: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
     member = get_current_member(request, db)
-    form = get_form_by_slug_for_public(db, slug=slug)
+    form = _load_public_form(db, org_slug=org_slug, slug=slug)
     _ensure_form_is_visible(form, member)
     return {"form": serialize_public_form(form)}
 
 
-@router.post("/api/forms/{slug}/submit")
-def submit_public_form(
+@router.get("/api/forms/{slug}")
+def get_public_form(slug: str, request: Request, db: Session = Depends(get_db)):
+    member = get_current_member(request, db)
+    form = _load_public_form(db, slug=slug)
+    _ensure_form_is_visible(form, member)
+    return {"form": serialize_public_form(form)}
+
+
+def _submit_public_form(
+    *,
     slug: str,
+    org_slug: str | None,
     request: Request,
     payload: dict,
-    db: Session = Depends(get_db),
+    db: Session,
 ):
     member = get_current_member(request, db)
     form_slug = normalize_form_slug(slug)
-    form = (
-        db.query(AssociationForm)
-        .options(
-            joinedload(AssociationForm.fields),
-            joinedload(AssociationForm.organization),
-            joinedload(AssociationForm.admin_notification_template),
-            joinedload(AssociationForm.user_confirmation_template),
-        )
-        .filter(AssociationForm.public_slug == form_slug)
-        .first()
-    )
-    if form is None:
-        raise HTTPException(status_code=404, detail="Form non trovato.")
+    form = _load_public_form(db, org_slug=org_slug, slug=form_slug)
     _ensure_form_is_visible(form, member)
     validated_submission = validate_form_submission_payload(form=form, raw_payload=payload)
     ensure_submission_allowed(
@@ -351,6 +369,39 @@ def submit_public_form(
         "message": form.success_message or "Richiesta inviata correttamente.",
         "submission": serialize_submission(submission),
     }
+
+
+@router.post("/api/forms/{org_slug}/{slug}/submit")
+def submit_public_form_scoped(
+    org_slug: str,
+    slug: str,
+    request: Request,
+    payload: dict,
+    db: Session = Depends(get_db),
+):
+    return _submit_public_form(
+        slug=slug,
+        org_slug=org_slug,
+        request=request,
+        payload=payload,
+        db=db,
+    )
+
+
+@router.post("/api/forms/{slug}/submit")
+def submit_public_form(
+    slug: str,
+    request: Request,
+    payload: dict,
+    db: Session = Depends(get_db),
+):
+    return _submit_public_form(
+        slug=slug,
+        org_slug=None,
+        request=request,
+        payload=payload,
+        db=db,
+    )
 
 
 @router.get("/api/organizations/{slug}/logo")

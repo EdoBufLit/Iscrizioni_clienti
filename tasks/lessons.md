@@ -101,6 +101,7 @@
 - Se una preview email usa il sender corretto ma il provider rifiuta comunque il messaggio, verificare anche l'envelope sender passato a `server.sendmail(...)`: non basta correggere il solo header `From`.
 - Se un modulo usa un provider diverso per un sottoinsieme di email (es. association mode), il test-email admin non deve limitarsi ad accodare: deve chiamare davvero quel transport e restituire subito l’errore provider/config reale al frontend.
 - Se una capability nasce dentro un pacchetto commerciale piu ampio (es. Form dentro Comunicazioni), non va esposta come modulo isolato: gating, IA, template e automazioni devono essere progettati insieme gia dal primo MVP.
+- Se esistono due UI diverse per la stessa capability operativa, la versione live dentro il percorso principale (es. `Comunicazioni > Pagine e moduli`) va unificata subito sul workspace mantenuto: lasciare un hub legacy duplicato porta a bug reali non coperti dai test del modulo corretto.
 ## 2026-03-07 - Email flow verification must prove delivery, not just queueing
 
 - Quando aggiungo un flusso email basato su outbox/worker, non basta verificare che esista una riga in `email_outbox`.

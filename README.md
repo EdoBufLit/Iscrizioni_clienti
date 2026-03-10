@@ -309,8 +309,9 @@ Content-Type: application/json
 ## Forms module
 
 - Admin route legacy: `org-admin/forms` -> redirect verso `/org-admin/comunicazioni?tab=forms`
-- Public route: `/forms/:slug`
-- The frontend public page is a single dynamic route that fetches form structure from `GET /api/forms/{slug}` and submits to `POST /api/forms/{slug}/submit`.
+- Public route: `/forms/:orgSlug/:slug`
+- Legacy compatibility route still accepted: `/forms/:slug`
+- The frontend public page is a single dynamic route that fetches form structure from `GET /api/forms/{orgSlug}/{slug}` and submits to `POST /api/forms/{orgSlug}/{slug}/submit`.
 - The org-admin experience is now a visual studio with clear sections: `Builder`, `Design`, `Automazioni`, `Risposte`, `Condividi`.
 - Each form stores its own `public_slug`, fields, visibility (`public` or `members_only`), post-submit actions, and public-page design settings (`accent_color`, `submit_button_text`, `show_logo`, `cover_image_url`, `page_style`).
 - Forms are part of the Comunicazioni workflow package: they reuse the email template library for admin notifications and user confirmations, and can create an internal org-admin request on submit.

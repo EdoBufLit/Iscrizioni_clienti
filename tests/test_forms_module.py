@@ -124,6 +124,7 @@ def test_org_admin_forms_crud_public_submit_and_export(client, db):
     form = create_res.json()["form"]
     form_id = form["id"]
     assert form["public_slug"] == public_slug
+    assert form["public_path"] == f"/forms/{org.slug}/{public_slug}"
     assert form["accent_color"] == "#0f766e"
     assert form["submit_button_text"] == "Prenota ora"
     assert form["cover_image_url"] == "https://example.com/cover.jpg"
@@ -174,14 +175,18 @@ def test_org_admin_forms_crud_public_submit_and_export(client, db):
     assert duplicate_res.status_code == 201, duplicate_res.text
     assert duplicate_res.json()["form"]["is_active"] is False
 
-    public_res = client.get(f"/api/forms/{public_slug}")
+    public_res = client.get(f"/api/forms/{org.slug}/{public_slug}")
     assert public_res.status_code == 200, public_res.text
     assert public_res.json()["form"]["title"] == "Prenotazione tavolo"
     assert public_res.json()["form"]["accent_color"] == "#0f766e"
     assert public_res.json()["form"]["submit_button_text"] == "Prenota ora"
+    assert public_res.json()["form"]["association"]["slug"] == org.slug
+
+    legacy_public_res = client.get(f"/api/forms/{public_slug}")
+    assert legacy_public_res.status_code == 200, legacy_public_res.text
 
     submit_res = client.post(
-        f"/api/forms/{public_slug}/submit",
+        f"/api/forms/{org.slug}/{public_slug}/submit",
         json={
             "nome_socio": "Mario Rossi",
             "email": "mario@example.com",
@@ -192,7 +197,7 @@ def test_org_admin_forms_crud_public_submit_and_export(client, db):
     assert submit_res.json()["message"] == "Grazie, ti ricontatteremo."
 
     duplicate_submit_res = client.post(
-        f"/api/forms/{public_slug}/submit",
+        f"/api/forms/{org.slug}/{public_slug}/submit",
         json={
             "nome_socio": "Mario Rossi",
             "email": "mario@example.com",
@@ -261,7 +266,7 @@ def test_members_only_public_form_requires_member_session(client, db):
     )
     assert field_res.status_code == 201, field_res.text
 
-    public_res = client.get(f"/api/forms/{public_slug}")
+    public_res = client.get(f"/api/forms/{org.slug}/{public_slug}")
     assert public_res.status_code == 403, public_res.text
     assert "riservato ai soci" in public_res.json()["detail"].lower()
 
@@ -302,6 +307,6 @@ def test_public_form_is_locked_when_communications_disabled(client, db):
     db.add(org)
     db.commit()
 
-    public_res = client.get(f"/api/forms/{public_slug}")
+    public_res = client.get(f"/api/forms/{org.slug}/{public_slug}")
     assert public_res.status_code == 403, public_res.text
     assert "richiedono il modulo comunicazioni attivo" in public_res.json()["detail"].lower()

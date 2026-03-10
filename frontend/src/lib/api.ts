@@ -772,6 +772,7 @@ export type AssociationForm = {
   field_count: number;
   submission_count: number;
   fields: AssociationFormField[];
+  public_path?: string;
   design: {
     title: string;
     description: string | null;
@@ -811,6 +812,7 @@ export type PublicAssociationForm = AssociationForm & {
   association: {
     id: number;
     name: string | null;
+    slug: string | null;
   };
 };
 
@@ -1245,21 +1247,33 @@ export function buildOrgAdminFormSubmissionsExportUrl(formId: number): string {
   return `/api/org-admin/forms/${formId}/submissions/export.csv`;
 }
 
-export async function fetchPublicForm(slug: string): Promise<{ form: PublicAssociationForm }> {
-  const res = await fetch(`/api/forms/${encodeURIComponent(slug)}`);
+export async function fetchPublicForm(
+  orgSlugOrSlug: string,
+  slug?: string,
+): Promise<{ form: PublicAssociationForm }> {
+  const path = slug
+    ? `/api/forms/${encodeURIComponent(orgSlugOrSlug)}/${encodeURIComponent(slug)}`
+    : `/api/forms/${encodeURIComponent(orgSlugOrSlug)}`;
+  const res = await fetch(path);
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento form pubblico"));
   return res.json();
 }
 
 export async function submitPublicForm(
-  slug: string,
-  payload: Record<string, unknown>,
+  orgSlugOrSlug: string,
+  slugOrPayload: string | Record<string, unknown>,
+  maybePayload?: Record<string, unknown>,
 ): Promise<{
   ok: boolean;
   message: string;
   submission: AssociationFormSubmission;
 }> {
-  const res = await fetch(`/api/forms/${encodeURIComponent(slug)}/submit`, {
+  const scoped = typeof slugOrPayload === "string";
+  const path = scoped
+    ? `/api/forms/${encodeURIComponent(orgSlugOrSlug)}/${encodeURIComponent(slugOrPayload)}/submit`
+    : `/api/forms/${encodeURIComponent(orgSlugOrSlug)}/submit`;
+  const payload = (scoped ? maybePayload : slugOrPayload) as Record<string, unknown>;
+  const res = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

@@ -2998,3 +2998,16 @@ pm --prefix frontend run build -> OK
 - Builder: aggiunta libreria campi visiva, canvas centrale con riordino drag & drop nativo e pannello impostazioni focalizzato sul campo selezionato; la chiave tecnica resta secondaria e auto-generata.
 - Public page: la route `/forms/:slug` usa ora una resa piu vicina a una landing page attraverso il componente condiviso `FormPublicCanvas`, riusato anche nella preview admin del tab Design.
 - Verifiche: `python -m compileall app init_db.py alembic/versions/0b1c2d3e4f5a_add_form_design_fields.py`; `python -m pytest -q tests/test_forms_module.py tests/test_org_admin_communications.py`; `npm --prefix frontend run build`.
+- [x] Riprodurre e correggere il `422` nel salvataggio form dentro `Comunicazioni > Pagine e moduli`
+- [x] Unificare la UI forms di Comunicazioni sul workspace forms mantenuto, eliminando il vecchio hub duplicato
+- [x] Portare il link pubblico al formato `/forms/{org-slug}/{form-slug}` mantenendo compatibilita legacy
+- [x] Rendere piu chiari dettaglio risposte, destinazioni notifiche e preview finale del form
+- [x] Aggiungere affordance rapida elimina form e verificare con test/build mirati
+
+## Review (Forms in Comunicazioni hardening - Mar 10, 2026)
+- Root cause del `422`: `Comunicazioni > Pagine e moduli` stava ancora usando il vecchio `PublicFormsHub`, che serializzava payload diverso dal workspace forms mantenuto e inviava campi come `notification_email=""` senza normalizzazione coerente.
+- Fix strutturale: `PublicFormsHub` ora e solo un wrapper del vero `OrgAdminFormsWorkspace`, quindi la UI live di Comunicazioni usa lo stesso builder mantenuto, gli stessi payload e lo stesso flusso di save/detail.
+- URL pubblico: introdotto path preferito `/forms/:orgSlug/:slug` su frontend e backend, mantenendo compatibilita con la route legacy `/forms/:slug`; i payload form espongono ora anche `public_path`.
+- UX forms: nel Builder sono visibili insieme contenuto pagina + canvas campi + preview finale; la share tab espone chiaramente il nuovo link con org slug; il dettaglio Risposte usa le label dei campi invece delle sole chiavi tecniche.
+- Notifiche submit: le risposte restano sempre visibili nel sito e, se `notification_email` non e valorizzata, il backend fa fallback all'email del creator org-admin / primo org-admin attivo per l'invio notifica.
+- Verifiche OK: `python -m compileall app tests/test_forms_module.py`; `python -m pytest -q tests/test_forms_module.py`; `npm --prefix frontend run build`.

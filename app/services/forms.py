@@ -282,6 +282,36 @@ def get_form_by_slug_for_public(db: Session, *, slug: str) -> Form:
     return form
 
 
+def get_form_by_org_slug_and_form_slug_for_public(
+    db: Session,
+    *,
+    org_slug: str,
+    slug: str,
+) -> Form:
+    normalized_slug = normalize_form_slug(slug)
+    normalized_org_slug = _normalize_text(org_slug)
+    if normalized_org_slug is None:
+        raise HTTPException(status_code=404, detail="Form non trovato.")
+    form = (
+        db.query(Form)
+        .options(
+            joinedload(Form.fields),
+            joinedload(Form.organization),
+            joinedload(Form.admin_notification_template),
+            joinedload(Form.user_confirmation_template),
+        )
+        .join(Organization, Organization.id == Form.association_id)
+        .filter(
+            Form.public_slug == normalized_slug,
+            Organization.slug == normalized_org_slug.strip().lower(),
+        )
+        .first()
+    )
+    if form is None:
+        raise HTTPException(status_code=404, detail="Form non trovato.")
+    return form
+
+
 def serialize_form_field(field: FormField) -> dict[str, Any]:
     return {
         "id": field.id,
@@ -342,6 +372,11 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
         "field_count": len(items),
         "submission_count": len(form.submissions or []),
         "fields": [serialize_form_field(field) for field in items] if include_fields else [],
+        "public_path": (
+            f"/forms/{form.organization.slug}/{form.public_slug}"
+            if form.organization is not None and getattr(form.organization, "slug", None)
+            else f"/forms/{form.public_slug}"
+        ),
         "design": {
             "title": form.title,
             "description": form.description,
@@ -372,8 +407,34 @@ def serialize_public_form(form: Form) -> dict[str, Any]:
     payload["association"] = {
         "id": form.organization.id if form.organization else form.association_id,
         "name": form.organization.name if form.organization else None,
+        "slug": form.organization.slug if form.organization else None,
     }
     return payload
+
+
+def resolve_form_notification_email(db: Session, *, form: Form) -> str | None:
+    explicit_email = normalize_form_notification_email(form.notification_email)
+    if explicit_email:
+        return explicit_email
+
+    creator_email = _normalize_text(getattr(getattr(form, "created_by_user", None), "email", None))
+    if creator_email:
+        return creator_email.lower()
+
+    fallback_admin = (
+        db.query(AdminUser.email)
+        .filter(
+            AdminUser.org_id == form.association_id,
+            AdminUser.role == AdminRole.ORG_ADMIN,
+            AdminUser.is_active.is_(True),
+            AdminUser.deleted_at.is_(None),
+        )
+        .order_by(AdminUser.id.asc())
+        .first()
+    )
+    if fallback_admin and fallback_admin[0]:
+        return str(fallback_admin[0]).strip().lower()
+    return None
 
 
 def serialize_submission(submission: FormSubmission) -> dict[str, Any]:
@@ -785,7 +846,7 @@ def enqueue_submission_notifications(
     submission: FormSubmission,
     validated_submission: ValidatedSubmission,
 ) -> None:
-    notification_email = normalize_form_notification_email(form.notification_email)
+    notification_email = resolve_form_notification_email(db, form=form)
     text_summary, html_summary = _format_submission_for_email(form, validated_submission.payload)
     if bool(getattr(form, "create_internal_request", False)):
         _create_internal_request_notifications(

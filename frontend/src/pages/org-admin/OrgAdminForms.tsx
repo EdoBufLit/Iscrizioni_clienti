@@ -290,16 +290,33 @@ export function OrgAdminFormsWorkspace({
 
   const activeFormsCount = useMemo(() => forms.filter((form) => form.is_active).length, [forms]);
   const totalResponses = useMemo(() => forms.reduce((sum, form) => sum + form.submission_count, 0), [forms]);
-  const publicUrl = useMemo(() => {
+  const orgSlug = admin?.organization?.slug || "";
+  const publicPath = useMemo(() => {
     const slug = formDraft.public_slug || derivePublicSlug(formDraft.title) || selectedForm?.public_slug;
     if (!slug) return "";
-    return `${window.location.origin}/forms/${slug}`;
-  }, [formDraft.public_slug, formDraft.title, selectedForm?.public_slug]);
+    return orgSlug ? `/forms/${orgSlug}/${slug}` : `/forms/${slug}`;
+  }, [formDraft.public_slug, formDraft.title, orgSlug, selectedForm?.public_slug]);
+  const publicUrl = useMemo(() => {
+    if (!publicPath) return "";
+    return `${window.location.origin}${publicPath}`;
+  }, [publicPath]);
   const sortedFields = useMemo(
     () => [...(selectedForm?.fields || [])].sort((left, right) => left.sort_order - right.sort_order),
     [selectedForm?.fields],
   );
   const previewValues = useMemo(() => buildPreviewValues(selectedForm), [selectedForm]);
+  const responseDestinationEmail = useMemo(
+    () => formDraft.notification_email?.trim() || admin?.email || "",
+    [admin?.email, formDraft.notification_email],
+  );
+  const selectedSubmissionEntries = useMemo(() => {
+    const fieldMap = new Map((selectedForm?.fields || []).map((field) => [field.field_key, field.label]));
+    return Object.entries(selectedSubmission?.payload_json || {}).map(([key, value]) => ({
+      key,
+      label: fieldMap.get(key) || key,
+      value,
+    }));
+  }, [selectedForm?.fields, selectedSubmission?.payload_json]);
 
   async function loadForms(nextSelectedId?: number | null) {
     if (locked) {
@@ -336,8 +353,10 @@ export function OrgAdminFormsWorkspace({
       setSelectedForm(response.form);
       setForms((current) => current.map((item) => (item.id === response.form.id ? response.form : item)));
       if (response.items.length > 0) {
-        const detail = await fetchOrgAdminFormSubmission(formId, response.items[0].id).catch(() => ({
-          submission: response.items[0],
+        const preferredSubmission =
+          response.items.find((item) => item.id === selectedSubmission?.id) || response.items[0];
+        const detail = await fetchOrgAdminFormSubmission(formId, preferredSubmission.id).catch(() => ({
+          submission: preferredSubmission,
         }));
         setSelectedSubmission(detail.submission);
       } else {
@@ -708,7 +727,91 @@ export function OrgAdminFormsWorkspace({
   );
 
   const builderTab = (
-    <div className="grid gap-5 xl:grid-cols-[240px_minmax(0,1fr)_320px]">
+    <div className="space-y-5">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)]">
+        <div className="rounded-[1.6rem] border border-neutral-200 bg-white p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Contenuto pagina</p>
+              <h3 className="mt-2 text-xl font-semibold tracking-tight text-neutral-950">Testi e link del form pubblico</h3>
+              <p className="mt-1 text-sm text-neutral-600">
+                Qui costruisci la pagina vera e propria: titolo, descrizione, slug e messaggio finale restano nello stesso punto del builder.
+              </p>
+            </div>
+            <span className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-semibold text-neutral-600">
+              {sortedFields.length} campi
+            </span>
+          </div>
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <label className={labelClass}>
+              Titolo pagina
+              <input
+                className={inputClass}
+                disabled={locked}
+                value={formDraft.title}
+                onChange={(event) => syncFormDraft("title", event.target.value)}
+                placeholder="Prenotazione tavolo"
+              />
+            </label>
+            <label className={labelClass}>
+              Slug pubblico
+              <input
+                className={inputClass}
+                disabled={locked}
+                value={formDraft.public_slug}
+                onChange={(event) => syncFormDraft("public_slug", derivePublicSlug(event.target.value))}
+                placeholder="prenotazione-tavolo"
+              />
+            </label>
+            <label className={`${labelClass} md:col-span-2`}>
+              Descrizione
+              <textarea
+                className={`${inputClass} min-h-[108px]`}
+                disabled={locked}
+                value={formDraft.description}
+                onChange={(event) => syncFormDraft("description", event.target.value)}
+                placeholder="Spiega subito a chi arriva il form e cosa succede dopo l'invio."
+              />
+            </label>
+            <label className={labelClass}>
+              Testo bottone
+              <input
+                className={inputClass}
+                disabled={locked}
+                value={formDraft.submit_button_text}
+                onChange={(event) => syncFormDraft("submit_button_text", event.target.value)}
+                placeholder="Invia richiesta"
+              />
+            </label>
+            <label className={labelClass}>
+              Messaggio post-invio
+              <input
+                className={inputClass}
+                disabled={locked}
+                value={formDraft.success_message}
+                onChange={(event) => syncFormDraft("success_message", event.target.value)}
+                placeholder="Richiesta inviata correttamente."
+              />
+            </label>
+          </div>
+          <div className="mt-4 rounded-[1.25rem] border border-neutral-200 bg-neutral-50 px-4 py-4">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Link finale consigliato</p>
+            <p className="mt-2 break-all text-sm font-semibold text-neutral-900">
+              {publicUrl || "Salva il form per generare il link completo"}
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-[1.6rem] border border-neutral-200 bg-[linear-gradient(180deg,#f8fafc,#ffffff)] p-4">
+          <div className="mb-3">
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Anteprima finale</p>
+            <p className="mt-1 text-sm text-neutral-600">Questa è la stessa resa finale che vedrà l’utente sul link pubblico.</p>
+          </div>
+          <FormPublicCanvas form={previewForm} values={previewValues} heroLabel="Preview pubblica" />
+        </div>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[240px_minmax(0,1fr)_320px]">
       <aside className="space-y-4">
         <div className="rounded-[1.6rem] border border-neutral-200 bg-neutral-50 p-4">
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Field library</p>
@@ -1013,6 +1116,7 @@ export function OrgAdminFormsWorkspace({
           </form>
         </div>
       </aside>
+      </div>
     </div>
   );
 
@@ -1138,7 +1242,7 @@ export function OrgAdminFormsWorkspace({
         <div className="rounded-[1.6rem] border border-neutral-200 bg-neutral-50 px-4 py-4">
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Live preview</p>
           <p className="mt-2 text-sm text-neutral-600">
-            Questa è la stessa resa usata dalla route pubblica `/forms/:slug`, con i campi attualmente salvati nel form.
+            Questa è la stessa resa usata dalla route pubblica `/forms/:orgSlug/:slug`, con i campi attualmente salvati nel form.
           </p>
         </div>
         <FormPublicCanvas form={previewForm} values={previewValues} heroLabel="Anteprima pagina pubblica" />
@@ -1266,6 +1370,15 @@ export function OrgAdminFormsWorkspace({
         <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Scenario</p>
         <div className="mt-4 space-y-3 text-sm text-neutral-600">
           <div className="rounded-[1.2rem] border border-neutral-200 bg-white px-4 py-4">
+            <p className="font-semibold text-neutral-900">Destinazione risposte</p>
+            <p className="mt-1">Ogni invio viene sempre salvato nello storico interno del sito.</p>
+            <p className="mt-2 text-xs text-neutral-500">
+              {responseDestinationEmail
+                ? `Email segreteria prevista: ${responseDestinationEmail}`
+                : "Nessuna email segreteria configurata: le risposte restano comunque visibili nel sito."}
+            </p>
+          </div>
+          <div className="rounded-[1.2rem] border border-neutral-200 bg-white px-4 py-4">
             <p className="font-semibold text-neutral-900">Admin</p>
             <p className="mt-1">
               {formDraft.notify_admin_on_submit
@@ -1371,10 +1484,11 @@ export function OrgAdminFormsWorkspace({
         {selectedSubmission ? (
           <div className="mt-4 space-y-3">
             <div className="text-xs text-neutral-500">Ricevuta il {formatDateTime(selectedSubmission.submitted_at)}</div>
-            {Object.entries(selectedSubmission.payload_json || {}).map(([key, value]) => (
-              <div key={key} className="rounded-[1.2rem] border border-white bg-white px-3 py-3 shadow-sm">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{key}</div>
-                <div className="mt-1 text-sm text-neutral-800">{stringifySubmissionValue(value)}</div>
+            {selectedSubmissionEntries.map((entry) => (
+              <div key={entry.key} className="rounded-[1.2rem] border border-white bg-white px-3 py-3 shadow-sm">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{entry.label}</div>
+                <div className="mt-1 text-[11px] text-neutral-400">{entry.key}</div>
+                <div className="mt-2 text-sm text-neutral-800">{stringifySubmissionValue(entry.value)}</div>
               </div>
             ))}
           </div>
@@ -1394,6 +1508,9 @@ export function OrgAdminFormsWorkspace({
             <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">URL da condividere</p>
             <p className="mt-2 break-all text-lg font-semibold tracking-tight text-neutral-950">
               {publicUrl || "Salva il form per generare il link pubblico"}
+            </p>
+            <p className="mt-2 text-xs text-neutral-500">
+              Struttura consigliata: <span className="font-semibold text-neutral-700">/forms/{orgSlug || "{org-slug}"}/{formDraft.public_slug || "{nome-form}"}</span>
             </p>
           </div>
           <div className="mt-4 flex flex-wrap gap-3">
@@ -1569,7 +1686,8 @@ export function OrgAdminFormsWorkspace({
               <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
                 {forms.map((form) => {
                   const isSelected = selectedFormId === form.id;
-                  const formLink = `${window.location.origin}/forms/${form.public_slug}`;
+                  const formPath = form.public_path || (orgSlug ? `/forms/${orgSlug}/${form.public_slug}` : `/forms/${form.public_slug}`);
+                  const formLink = `${window.location.origin}${formPath}`;
                   return (
                     <button
                       key={form.id}
@@ -1710,7 +1828,7 @@ export function OrgAdminFormsWorkspace({
                       {selectedForm.is_active ? "Disattiva" : "Attiva"}
                     </button>
                     <button
-                      className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                      className={`inline-flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold transition ${
                         deleteArmed
                           ? "bg-red-600 text-white hover:bg-red-700"
                           : "border border-red-200 bg-red-50 text-red-700 hover:border-red-300"
@@ -1718,8 +1836,10 @@ export function OrgAdminFormsWorkspace({
                       type="button"
                       onClick={handleDeleteForm}
                       disabled={locked}
+                      aria-label={deleteArmed ? "Conferma eliminazione form" : "Elimina form"}
+                      title={deleteArmed ? "Conferma eliminazione" : "Elimina form"}
                     >
-                      {deleteArmed ? "Conferma eliminazione" : "Elimina"}
+                      {deleteArmed ? "!" : "×"}
                     </button>
                   </>
                 ) : null}
@@ -1768,13 +1888,11 @@ export function OrgAdminFormsWorkspace({
   );
 }
 
-import { PublicFormsHub } from "./components/communications/PublicFormsHub";
-
 const OrgAdminForms = () => (
   <div className="container-shell py-8 md:py-10">
     <div className="mx-auto max-w-7xl">
       <section className="rounded-[1.85rem] border border-neutral-200 bg-white/92 p-5 shadow-sm backdrop-blur md:p-8">
-        <PublicFormsHub />
+        <OrgAdminFormsWorkspace />
       </section>
     </div>
   </div>
