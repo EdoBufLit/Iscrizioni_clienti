@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import {
   createOrgAdminForm,
   createOrgAdminFormField,
@@ -16,13 +16,44 @@ import {
 import Skeleton from "../../../../components/ui/Skeleton";
 import { useToast } from "../../../../components/ui/ToastProvider";
 
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
 const inputClass = "mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20";
 const labelClass = "block text-sm font-medium text-neutral-700";
 
 type EditorTab = "contenuto" | "campi" | "automazioni" | "condivisione" | "risposte";
 type PageStyleOption = "editorial" | "minimal" | "spotlight";
 
-// Helper functions (slugifyKey, derivePublicSlug, formatDateTime, stringifySubmissionValue, emptyFormDraft, emptyFieldDraft, buildPreviewValues, buildFieldPayload)
+type DraftField = {
+  id: string | number;
+  is_new: boolean;
+  field_key: string;
+  field_type: AssociationFormFieldType;
+  label: string;
+  placeholder: string;
+  help_text: string;
+  is_required: boolean;
+  sort_order: number;
+  options_text: string;
+};
+
+// Helper functions (slugifyKey, derivePublicSlug, formatDateTime, stringifySubmissionValue)
 function slugifyKey(value: string): string {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/_{2,}/g, "_").replace(/^_+|_+$/g, "").slice(0, 64);
 }
@@ -68,21 +99,37 @@ const fieldTypeOptions: Array<{ value: AssociationFormFieldType; label: string; 
   { value: "consent", label: "Consenso", icon: "✓", hint: "Privacy o termini." },
 ];
 
-function emptyFieldDraft(form?: AssociationForm | null, fieldType: AssociationFormFieldType = "short_text") {
+function emptyFieldDraft(fieldType: AssociationFormFieldType = "short_text") {
   const option = fieldTypeOptions.find((item) => item.value === fieldType);
   const label = option ? option.label : "Nuovo campo";
   return {
     field_key: slugifyKey(label), field_type: fieldType, label, placeholder: "", help_text: "",
-    is_required: false, sort_order: ((form?.fields?.length ?? 0) + 1) * 10,
-    options_text: fieldType === "select" || fieldType === "radio" || fieldType === "checkbox" ? "Opzione 1, Opzione 2" : "",
+    is_required: false, options_text: fieldType === "select" || fieldType === "radio" || fieldType === "checkbox" ? "Opzione 1, Opzione 2" : "",
   };
 }
 
-function buildFieldPayload(draft: ReturnType<typeof emptyFieldDraft>) {
-  return {
-    field_key: draft.field_key || null, field_type: draft.field_type, label: draft.label, placeholder: draft.placeholder || null,
-    help_text: draft.help_text || null, is_required: draft.is_required, sort_order: Number(draft.sort_order || 0), options: draft.options_text || null,
+function SortableFieldItem({ f, editingFieldId, setEditingFieldId, setIsEditingFieldPanel, handleDeleteField }: any) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: f.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 10 : 1,
+    position: isDragging ? ("relative" as const) : ("static" as const),
   };
+  return (
+    <div ref={setNodeRef} style={style} className={`flex items-center justify-between rounded-xl border p-4 bg-white transition cursor-pointer ${editingFieldId === f.id ? "border-brand bg-brand/5 ring-1 ring-brand" : "border-neutral-200 hover:border-brand/40"} ${isDragging ? "shadow-lg opacity-90" : ""}`} onClick={() => { setEditingFieldId(f.id); setIsEditingFieldPanel(true); }}>
+      <div className="flex items-center gap-3">
+        <div {...attributes} {...listeners} className="cursor-grab p-1 text-neutral-400 hover:text-neutral-600 active:cursor-grabbing" onClick={(e) => e.stopPropagation()}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>
+        </div>
+        <div>
+          <p className="font-semibold text-sm">{f.label} {f.is_required && <span className="text-red-500">*</span>}</p>
+          <p className="text-xs text-neutral-500">{fieldTypeOptions.find(o => o.value === f.field_type)?.label}</p>
+        </div>
+      </div>
+      <button className="text-xs font-medium text-red-500 hover:underline hover:text-red-700" onClick={(e) => { e.stopPropagation(); handleDeleteField(f.id); }}>Elimina</button>
+    </div>
+  );
 }
 
 export function PublicFormsHub({ locked = false }: { locked?: boolean; }) {
@@ -97,13 +144,18 @@ export function PublicFormsHub({ locked = false }: { locked?: boolean; }) {
   const [formDraft, setFormDraft] = useState(emptyFormDraft());
   const [savingForm, setSavingForm] = useState(false);
 
-  const [fieldDraft, setFieldDraft] = useState(emptyFieldDraft(null));
-  const [editingFieldId, setEditingFieldId] = useState<number | null>(null);
+  // Campi In-Memory State
+  const [formFields, setFormFields] = useState<DraftField[]>([]);
+  const [editingFieldId, setEditingFieldId] = useState<string | number | null>(null);
   const [isEditingFieldPanel, setIsEditingFieldPanel] = useState(false);
-  const [savingField, setSavingField] = useState(false);
 
   const [submissions, setSubmissions] = useState<AssociationFormSubmission[]>([]);
   const [selectedSubmission, setSelectedSubmission] = useState<AssociationFormSubmission | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   useEffect(() => {
     if (locked) { setLoading(false); return; }
@@ -111,7 +163,13 @@ export function PublicFormsHub({ locked = false }: { locked?: boolean; }) {
   }, [locked]);
 
   useEffect(() => {
-    if (!selectedForm) { setFormDraft(emptyFormDraft()); return; }
+    if (!selectedForm) { 
+      setFormDraft(emptyFormDraft()); 
+      setFormFields([]);
+      setEditingFieldId(null);
+      setIsEditingFieldPanel(false);
+      return; 
+    }
     setFormDraft({
       title: selectedForm.title || "", description: selectedForm.description || "", accent_color: selectedForm.accent_color || "#0f766e",
       submit_button_text: selectedForm.submit_button_text || "Invia", show_logo: Boolean(selectedForm.show_logo), cover_image_url: selectedForm.cover_image_url || "",
@@ -121,14 +179,29 @@ export function PublicFormsHub({ locked = false }: { locked?: boolean; }) {
       send_user_confirmation: Boolean(selectedForm.send_user_confirmation), admin_notification_template_id: selectedForm.admin_notification_template_id,
       user_confirmation_template_id: selectedForm.user_confirmation_template_id, create_internal_request: Boolean(selectedForm.create_internal_request), create_booking: Boolean(selectedForm.create_booking),
     });
+
+    const loadedFields: DraftField[] = (selectedForm.fields || []).map(f => ({
+      id: f.id,
+      is_new: false,
+      field_key: f.field_key || "",
+      field_type: f.field_type,
+      label: f.label,
+      placeholder: f.placeholder || "",
+      help_text: f.help_text || "",
+      is_required: f.is_required,
+      sort_order: f.sort_order,
+      options_text: f.options?.join(", ") || "",
+    })).sort((a, b) => a.sort_order - b.sort_order);
+    
+    setFormFields(loadedFields);
+    setEditingFieldId(null);
+    setIsEditingFieldPanel(false);
   }, [selectedForm]);
 
   useEffect(() => {
-    if (!selectedFormId || activeTab !== "risposte") return;
+    if (!selectedFormId || selectedFormId === -1 || activeTab !== "risposte") return;
     fetchOrgAdminFormSubmissions(selectedFormId).then(res => setSubmissions(res.items));
   }, [selectedFormId, activeTab]);
-
-  const sortedFields = useMemo(() => [...(selectedForm?.fields || [])].sort((a, b) => a.sort_order - b.sort_order), [selectedForm?.fields]);
 
   const handleSaveForm = async (e?: FormEvent) => {
     e?.preventDefault();
@@ -136,14 +209,54 @@ export function PublicFormsHub({ locked = false }: { locked?: boolean; }) {
     setSavingForm(true);
     try {
       const payload = { ...formDraft, public_slug: formDraft.public_slug || derivePublicSlug(formDraft.title) };
-      const response = selectedFormId ? await updateOrgAdminForm(selectedFormId, payload) : await createOrgAdminForm(payload);
-      setSelectedForm(response.form);
-      setSelectedFormId(response.form.id);
-      showToast({ tone: "success", title: "Salvato", message: "Pagina salvata." });
-      const res = await fetchOrgAdminForms();
-      setForms(res.items);
+      
+      const response = selectedFormId && selectedFormId !== -1 
+          ? await updateOrgAdminForm(selectedFormId, payload) 
+          : await createOrgAdminForm(payload);
+          
+      const actualFormId = response.form.id;
+
+      // Sincronizzazione campi (diffing)
+      const originalFields = selectedForm?.fields || [];
+      const originalIds = new Set(originalFields.map(f => f.id));
+      
+      const currentIds = new Set(formFields.filter(f => !f.is_new).map(f => f.id as number));
+      const idsToDelete = [...originalIds].filter(id => !currentIds.has(id));
+
+      for (const id of idsToDelete) {
+         await deleteOrgAdminFormField(actualFormId, id).catch(() => {});
+      }
+
+      for (const f of formFields) {
+        const fieldPayload = {
+          field_key: f.field_key || null,
+          field_type: f.field_type,
+          label: f.label,
+          placeholder: f.placeholder || null,
+          help_text: f.help_text || null,
+          is_required: f.is_required,
+          sort_order: f.sort_order,
+          options: f.options_text || null,
+        };
+        
+        if (f.is_new) {
+           await createOrgAdminFormField(actualFormId, fieldPayload);
+        } else {
+           await updateOrgAdminFormField(actualFormId, f.id as number, fieldPayload);
+        }
+      }
+
+      showToast({ tone: "success", title: "Salvato", message: "Il modulo e i campi sono stati salvati." });
+      
+      const resList = await fetchOrgAdminForms();
+      setForms(resList.items);
+      
+      const updatedFormDetail = await fetchOrgAdminForm(actualFormId);
+      setSelectedForm(updatedFormDetail.form);
+      setSelectedFormId(actualFormId);
+      
     } catch (err) {
-      showToast({ tone: "error", title: "Errore", message: "Impossibile salvare." });
+      showToast({ tone: "error", title: "Errore", message: "Impossibile salvare il modulo." });
     } finally {
       setSavingForm(false);
     }
@@ -153,35 +266,48 @@ export function PublicFormsHub({ locked = false }: { locked?: boolean; }) {
     setFormDraft(p => ({ ...p, [key]: val }));
   };
 
-  const handleSaveField = async (e: FormEvent) => {
-    e.preventDefault();
-    if (locked || savingField || !selectedFormId) return;
-    setSavingField(true);
-    try {
-      const payload = buildFieldPayload(fieldDraft);
-      if (editingFieldId) await updateOrgAdminFormField(selectedFormId, editingFieldId, payload);
-      else await createOrgAdminFormField(selectedFormId, payload);
-      const detail = await fetchOrgAdminForm(selectedFormId);
-      setSelectedForm(detail.form);
+  const handleAddField = (fieldType: AssociationFormFieldType) => {
+    const newId = `temp-${Date.now()}-${Math.random()}`;
+    const base = emptyFieldDraft(fieldType);
+    const maxSort = formFields.reduce((max, f) => Math.max(max, f.sort_order), 0);
+    const newField: DraftField = {
+      id: newId,
+      is_new: true,
+      field_key: base.field_key,
+      field_type: base.field_type,
+      label: base.label,
+      placeholder: base.placeholder || "",
+      help_text: base.help_text || "",
+      is_required: base.is_required,
+      sort_order: maxSort + 10,
+      options_text: base.options_text
+    };
+    setFormFields(prev => [...prev, newField]);
+    setEditingFieldId(newId);
+    setIsEditingFieldPanel(true);
+  };
+
+  const handleUpdateEditingField = (changes: Partial<DraftField>) => {
+    setFormFields(prev => prev.map(f => f.id === editingFieldId ? { ...f, ...changes } : f));
+  };
+
+  const handleDeleteDraftField = (id: string | number) => {
+    setFormFields(prev => prev.filter(f => f.id !== id));
+    if (editingFieldId === id) {
       setEditingFieldId(null);
-      showToast({ tone: "success", title: "Salvato", message: "Campo aggiornato." });
-    } catch (err) {
-      showToast({ tone: "error", title: "Errore", message: "Impossibile salvare il campo." });
-    } finally {
-      setSavingField(false);
+      setIsEditingFieldPanel(false);
     }
   };
 
-  const handleDeleteField = async (id: number) => {
-    if (locked || !selectedFormId) return;
-    try {
-      await deleteOrgAdminFormField(selectedFormId, id);
-      const detail = await fetchOrgAdminForm(selectedFormId);
-      setSelectedForm(detail.form);
-      if (editingFieldId === id) setEditingFieldId(null);
-      showToast({ tone: "success", title: "Eliminato", message: "Campo rimosso." });
-    } catch (err) {
-      showToast({ tone: "error", title: "Errore", message: "Impossibile eliminare." });
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (active.id !== over?.id) {
+      setFormFields((items) => {
+        const oldIndex = items.findIndex((i) => i.id === active.id);
+        const newIndex = items.findIndex((i) => i.id === over?.id);
+        const reordered = arrayMove(items, oldIndex, newIndex);
+        return reordered.map((item, index) => ({ ...item, sort_order: (index + 1) * 10 }));
+      });
     }
   };
 
@@ -250,60 +376,57 @@ export function PublicFormsHub({ locked = false }: { locked?: boolean; }) {
     </div>
   );
 
-  const renderCampi = () => (
-    <div className="grid gap-6 lg:grid-cols-[240px_1fr_300px]">
-      <div className="space-y-2 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
-        <p className="text-xs font-bold uppercase text-neutral-500">Aggiungi Campo</p>
-        {fieldTypeOptions.map(opt => (
-          <button key={opt.value} className="flex w-full items-center gap-2 rounded-lg border border-neutral-200 bg-white p-2 text-left text-sm hover:border-neutral-300" onClick={() => {
-            setFieldDraft(emptyFieldDraft(selectedForm, opt.value));
-            setEditingFieldId(null);
-            setIsEditingFieldPanel(true);
-          }}>
-            <span className="flex h-6 w-6 items-center justify-center rounded bg-neutral-100 text-xs font-bold">{opt.icon}</span>
-            <span>{opt.label}</span>
-          </button>
-        ))}
-      </div>
-      <div className="space-y-3">
-        {sortedFields.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-neutral-300 p-10 text-center text-sm text-neutral-500">Nessun campo presente. Aggiungi il primo campo dalla colonna di sinistra.</div>
-        ) : (
-          sortedFields.map((f) => (
-            <div key={f.id} className={`flex items-center justify-between rounded-xl border p-4 transition ${editingFieldId === f.id ? "border-brand bg-brand/5" : "border-neutral-200 bg-white"}`} onClick={() => {
-              setEditingFieldId(f.id);
-              setIsEditingFieldPanel(true);
-              setFieldDraft({ ...f, placeholder: f.placeholder || "", help_text: f.help_text || "", options_text: f.options?.join(", ") || "" });
-            }}>
-              <div>
-                <p className="font-semibold">{f.label} {f.is_required && <span className="text-red-500">*</span>}</p>
-                <p className="text-xs text-neutral-500">{fieldTypeOptions.find(o => o.value === f.field_type)?.label}</p>
-              </div>
-              <div className="flex gap-2">
-                <button className="text-xs font-medium text-red-600 hover:underline" onClick={(e) => { e.stopPropagation(); handleDeleteField(f.id); }}>Elimina</button>
+  const renderCampi = () => {
+    const editingField = formFields.find(f => f.id === editingFieldId);
+
+    return (
+      <div className="grid gap-6 lg:grid-cols-[240px_1fr_300px]">
+        <div className="space-y-2 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+          <p className="text-xs font-bold uppercase text-neutral-500">Aggiungi Campo</p>
+          {fieldTypeOptions.map(opt => (
+            <button key={opt.value} type="button" className="flex w-full items-center gap-2 rounded-lg border border-neutral-200 bg-white p-2 text-left text-sm hover:border-neutral-300" onClick={() => handleAddField(opt.value)}>
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-neutral-100 text-xs font-bold">{opt.icon}</span>
+              <span>{opt.label}</span>
+            </button>
+          ))}
+        </div>
+        <div className="space-y-3">
+          {formFields.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-neutral-300 p-10 text-center text-sm text-neutral-500">Nessun campo presente. Aggiungi il primo campo dalla colonna di sinistra.</div>
+          ) : (
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={formFields.map(f => f.id)} strategy={verticalListSortingStrategy}>
+                {formFields.map((f) => (
+                  <SortableFieldItem key={f.id} f={f} editingFieldId={editingFieldId} setEditingFieldId={setEditingFieldId} setIsEditingFieldPanel={setIsEditingFieldPanel} handleDeleteField={handleDeleteDraftField} />
+                ))}
+              </SortableContext>
+            </DndContext>
+          )}
+        </div>
+        <div>
+          {!isEditingFieldPanel || !editingField ? (
+            <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-6 text-center text-sm text-neutral-500">
+              Seleziona un campo per modificarne le impostazioni.<br/><br/>
+              Le modifiche verranno salvate cliccando <strong>"Salva il Form"</strong>.
+            </div>
+          ) : (
+            <div className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+              <p className="font-semibold text-brand">{editingField.is_new ? "Nuovo Campo" : "Modifica Campo"}</p>
+              <label className={labelClass}>Etichetta <input className={inputClass} value={editingField.label} onChange={e => handleUpdateEditingField({ label: e.target.value })} required /></label>
+              <label className={labelClass}>Placeholder <input className={inputClass} value={editingField.placeholder} onChange={e => handleUpdateEditingField({ placeholder: e.target.value })} /></label>
+              {["select", "radio", "checkbox"].includes(editingField.field_type) && (
+                <label className={labelClass}>Opzioni (separate da virgola) <input className={inputClass} value={editingField.options_text} onChange={e => handleUpdateEditingField({ options_text: e.target.value })} /></label>
+              )}
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={editingField.is_required} onChange={e => handleUpdateEditingField({ is_required: e.target.checked })} /> Obbligatorio</label>
+              <div className="pt-4 border-t border-neutral-100">
+                <p className="text-xs text-neutral-500">Le modifiche ai campi sono in memoria. Ricordati di cliccare <strong>"Salva il Form"</strong> in alto a destra per applicarle definitivamente.</p>
               </div>
             </div>
-          ))
-        )}
+          )}
+        </div>
       </div>
-      <div>
-        {!isEditingFieldPanel ? (
-          <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-6 text-center text-sm text-neutral-500">Seleziona un campo per modificarne le impostazioni.</div>
-        ) : (
-          <form className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm" onSubmit={handleSaveField}>
-            <p className="font-semibold">{editingFieldId ? "Modifica Campo" : "Nuovo Campo"}</p>
-            <label className={labelClass}>Etichetta <input className={inputClass} value={fieldDraft.label} onChange={e => setFieldDraft(p => ({...p, label: e.target.value}))} required /></label>
-            <label className={labelClass}>Placeholder <input className={inputClass} value={fieldDraft.placeholder || ""} onChange={e => setFieldDraft(p => ({...p, placeholder: e.target.value}))} /></label>
-            {["select", "radio", "checkbox"].includes(fieldDraft.field_type) && (
-              <label className={labelClass}>Opzioni (separate da virgola) <input className={inputClass} value={fieldDraft.options_text} onChange={e => setFieldDraft(p => ({...p, options_text: e.target.value}))} /></label>
-            )}
-            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={fieldDraft.is_required} onChange={e => setFieldDraft(p => ({...p, is_required: e.target.checked}))} /> Obbligatorio</label>
-            <button className="btn-primary w-full" type="submit" disabled={savingField}>{savingField ? "Salvataggio..." : "Salva Campo"}</button>
-          </form>
-        )}
-      </div>
-    </div>
-  );
+    );
+  };
 
   const renderAutomazioni = () => (
     <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
@@ -377,7 +500,7 @@ export function PublicFormsHub({ locked = false }: { locked?: boolean; }) {
         <h3 className="font-semibold text-neutral-900">Checklist</h3>
         <ul className="mt-4 space-y-3 text-sm text-neutral-600">
           <li className="flex gap-2"><span>{formDraft.title ? "✅" : "❌"}</span> Titolo presente</li>
-          <li className="flex gap-2"><span>{sortedFields.length > 0 ? "✅" : "❌"}</span> Almeno un campo</li>
+          <li className="flex gap-2"><span>{formFields.length > 0 ? "✅" : "❌"}</span> Almeno un campo</li>
           <li className="flex gap-2"><span>{formDraft.is_active ? "✅" : "❌"}</span> Pagina attiva</li>
         </ul>
       </div>
@@ -426,7 +549,7 @@ export function PublicFormsHub({ locked = false }: { locked?: boolean; }) {
           <button className="text-sm font-semibold text-neutral-500 hover:text-neutral-900" onClick={() => { setSelectedFormId(null); setSelectedForm(null); }}>← Torna all'elenco</button>
           <h2 className="mt-2 text-2xl font-bold">{formDraft.title || "Nuova Pagina Modulo"}</h2>
         </div>
-        <button className="btn-primary" onClick={handleSaveForm} disabled={savingForm}>{savingForm ? "Salvataggio..." : "Salva Pagina"}</button>
+        <button className="btn-primary" onClick={handleSaveForm} disabled={savingForm}>{savingForm ? "Salvataggio..." : "Salva il Form"}</button>
       </div>
       <div className="flex gap-2 border-b border-neutral-200 pb-4">
         {[
