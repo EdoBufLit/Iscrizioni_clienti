@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   assignOrgAdminBookingTable,
   createOrgAdminBooking,
@@ -261,6 +261,23 @@ export default function OrgAdminBookings() {
     notes: ""
   });
   const [manualDraftTables, setManualDraftTables] = useState<AssociationRoomTable[]>([]);
+  const syncMapWithBooking = useCallback(
+    (booking: Pick<AssociationBooking, "room_id" | "table_id" | "booking_date" | "booking_time">) => {
+      if (typeof booking.room_id === "number") {
+        setSelectedRoomId(booking.room_id);
+      }
+      if (booking.booking_date) {
+        setMapDate(booking.booking_date);
+        setSelectedCalendarDate(booking.booking_date);
+        setAgendaMonth(firstDayOfMonthIso(booking.booking_date));
+      }
+      if (booking.booking_time) {
+        setMapTime(booking.booking_time.slice(0, 5));
+      }
+      setSelectedMapTableId(typeof booking.table_id === "number" ? booking.table_id : null);
+    },
+    [],
+  );
 
   useEffect(() => {
     applySeo({
@@ -289,6 +306,7 @@ export default function OrgAdminBookings() {
         setSelectedBooking(booking);
         setAssignmentRoomId(booking.room_id ?? "");
         setAssignmentTableId(booking.table_id ?? "");
+        syncMapWithBooking(booking);
       })
       .catch((err) =>
         showToast({
@@ -297,7 +315,7 @@ export default function OrgAdminBookings() {
           message: err instanceof Error ? err.message : "Errore caricamento prenotazione.",
         }),
       );
-  }, [selectedBookingId, locked, showToast]);
+  }, [selectedBookingId, locked, showToast, syncMapWithBooking]);
 
   useEffect(() => {
     if (!assignmentRoomId || typeof assignmentRoomId !== "number") {
@@ -591,8 +609,9 @@ export default function OrgAdminBookings() {
         table_id: typeof assignmentTableId === "number" ? assignmentTableId : null,
       });
       setSelectedBooking(booking);
+      syncMapWithBooking(booking);
       await loadBookings();
-      if (selectedRoomId) await loadRoomState(selectedRoomId);
+      await loadRoomState(assignmentRoomId);
       showToast({ tone: "success", title: "Assegnazione salvata", message: "Sala e tavolo collegati alla prenotazione." });
     } catch (err) {
       showToast({
@@ -613,6 +632,7 @@ export default function OrgAdminBookings() {
       setSelectedBooking(booking);
       setAssignmentRoomId("");
       setAssignmentTableId("");
+      setSelectedMapTableId(null);
       await loadBookings();
       if (selectedRoomId) await loadRoomState(selectedRoomId);
       showToast({ tone: "success", title: "Assegnazione rimossa", message: "La prenotazione non ha piu sala o tavolo." });
@@ -672,7 +692,7 @@ export default function OrgAdminBookings() {
     }
     setSaving("manual-booking");
     try {
-      await createOrgAdminBooking({
+      const { booking } = await createOrgAdminBooking({
         customer_name: manualDraft.customer_name,
         customer_email: manualDraft.customer_email || null,
         customer_phone: manualDraft.customer_phone || null,
@@ -684,6 +704,7 @@ export default function OrgAdminBookings() {
         status: manualDraft.status,
         notes: manualDraft.notes || null,
       });
+      syncMapWithBooking(booking);
       showToast({ tone: "success", title: "Prenotazione creata", message: "La prenotazione manuale è stata inserita in agenda." });
       setIsCreatingManual(false);
       setManualDraft({
@@ -699,6 +720,9 @@ export default function OrgAdminBookings() {
         notes: ""
       });
       await loadBookings();
+      if (typeof booking.room_id === "number") {
+        await loadRoomState(booking.room_id);
+      }
     } catch (err) {
       showToast({
         tone: "error",

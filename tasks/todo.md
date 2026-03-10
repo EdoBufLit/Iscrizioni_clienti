@@ -3106,10 +3106,12 @@ pm --prefix frontend run build -> OK
 - [x] Riprodurre il 500 nella creazione prenotazione manuale da `Prenotazioni -> Agenda`
 - [x] Correggere la route/backend di creazione manuale senza toccare i flussi booking esistenti
 - [x] Aggiungere una verifica automatica del path manuale e rieseguire i test mirati
+- [x] Allineare il refresh/sync della Mappa sala 2D con prenotazioni create o assegnate dall'agenda
 
 ## Review (Manual booking 500 fix - Mar 10, 2026)
 - Root cause: la route `POST /api/org-admin/bookings` usava un filtro legacy su `Room.deleted_at` e `RoomTable.deleted_at`, ma il layer `rooms/room_tables` non espone quei campi; il primo tentativo di prenotazione manuale con sala/tavolo generava quindi un `500`.
 - `app/routes/org_admin.py`: rimossa la dipendenza da `deleted_at` e allineata la validazione al modello reale (`association_id`, `room_id`); aggiunta anche la guardia esplicita `table_id` senza `room_id` con `400` chiaro.
 - `tests/test_forms_module.py`: nuovo test end-to-end per la creazione manuale da org-admin agenda, inclusa creazione sala/tavolo, `POST /api/org-admin/bookings` e verifica presenza della prenotazione nella lista agenda.
 - Verifica aggiuntiva confermata: il flusso automatico `form pubblico booking-enabled -> submission -> booking -> agenda org-admin` continua a funzionare ed è coperto dai test `test_booking_enabled_form_creates_booking_and_exposes_agenda` e `test_booking_rooms_tables_and_assignment_flow`.
+- `frontend/src/pages/org-admin/OrgAdminBookings.tsx`: agenda, dettaglio booking e Mappa sala ora condividono lo stesso contesto (`room_id`, `booking_date`, `booking_time`, `table_id`); quando creo, seleziono o assegno una prenotazione, la mappa si sposta sulla sala corretta e evidenzia subito il tavolo collegato.
 - Verifica eseguita: `python -m pytest -q tests/test_forms_module.py -k "manual_booking_from_agenda or booking_rooms_tables_and_assignment_flow or booking_enabled_form_creates_booking_and_exposes_agenda"`.

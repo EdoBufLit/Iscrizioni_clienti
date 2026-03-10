@@ -108,6 +108,7 @@
 - Nei workspace admin con tab gia chiari, evitare hero/header introduttivi ridondanti: se non aggiungono decisioni o azioni, vanno rimossi per lasciare spazio al contenuto operativo.
 - Se un workflow di creazione parte da un draft nuovo, il frontend non deve inizializzarlo in uno stato che il backend rifiuta subito: seed minimo valido o validazione client obbligatoria prima del `POST`, altrimenti il primo click produce 422 evitabili.
 - Se sposto una feature su un nuovo layer dati (es. `rooms` / `room_tables`), devo ripulire tutte le query dai filtri legacy del modello precedente (`deleted_at` o simili): il codice puo compilare ma il primo path runtime specifico esplode con `500`.
+- Se due viste operano sullo stesso oggetto ma con filtri propri (es. agenda prenotazioni e mappa sala 2D), dopo create/select/assign devo sincronizzare esplicitamente il contesto condiviso (`room_id`, data, ora, tavolo): aggiornare solo la lista principale lascia UI secondarie apparentemente "ferme" pur con backend corretto.
 ## 2026-03-07 - Email flow verification must prove delivery, not just queueing
 
 - Quando aggiungo un flusso email basato su outbox/worker, non basta verificare che esista una riga in `email_outbox`.
