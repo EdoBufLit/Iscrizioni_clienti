@@ -4800,14 +4800,31 @@ def create_org_admin_manual_booking(
     
     # Valida che la sala/tavolo appartengano a questa organizzazione se passati
     if body.room_id:
-        room = db.query(Room).filter(Room.id == body.room_id, Room.association_id == admin.org_id, Room.deleted_at.is_(None)).first()
+        room = (
+            db.query(Room)
+            .filter(Room.id == body.room_id, Room.association_id == admin.org_id)
+            .first()
+        )
         if not room:
             raise HTTPException(status_code=400, detail="Sala non trovata o non autorizzata")
             
         if body.table_id:
-            table = db.query(RoomTable).filter(RoomTable.id == body.table_id, RoomTable.room_id == body.room_id, RoomTable.deleted_at.is_(None)).first()
+            table = (
+                db.query(RoomTable)
+                .filter(
+                    RoomTable.id == body.table_id,
+                    RoomTable.room_id == body.room_id,
+                    RoomTable.association_id == admin.org_id,
+                )
+                .first()
+            )
             if not table:
                 raise HTTPException(status_code=400, detail="Tavolo non trovato o non autorizzato")
+    elif body.table_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Seleziona una sala prima di assegnare un tavolo.",
+        )
                 
     now = datetime.utcnow()
     booking = Booking(

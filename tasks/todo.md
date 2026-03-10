@@ -3101,3 +3101,15 @@ pm --prefix frontend run build -> OK
 - `OrgAdminForms.tsx`: `Nuovo form` ora apre un draft gia seedato con titolo/slug iniziali (`Nuovo form`), quindi il percorso minimo di creazione non parte piu da uno stato invalido.
 - `OrgAdminForms.tsx`: aggiunta anche una guardia client-side su `handleSaveForm(...)`; se il titolo viene svuotato manualmente, il submit viene bloccato prima della chiamata API con toast chiaro invece del 422 backend.
 - Verifica eseguita: `npm --prefix frontend run build`.
+
+## Manual booking 500 fix (Mar 10, 2026)
+- [x] Riprodurre il 500 nella creazione prenotazione manuale da `Prenotazioni -> Agenda`
+- [x] Correggere la route/backend di creazione manuale senza toccare i flussi booking esistenti
+- [x] Aggiungere una verifica automatica del path manuale e rieseguire i test mirati
+
+## Review (Manual booking 500 fix - Mar 10, 2026)
+- Root cause: la route `POST /api/org-admin/bookings` usava un filtro legacy su `Room.deleted_at` e `RoomTable.deleted_at`, ma il layer `rooms/room_tables` non espone quei campi; il primo tentativo di prenotazione manuale con sala/tavolo generava quindi un `500`.
+- `app/routes/org_admin.py`: rimossa la dipendenza da `deleted_at` e allineata la validazione al modello reale (`association_id`, `room_id`); aggiunta anche la guardia esplicita `table_id` senza `room_id` con `400` chiaro.
+- `tests/test_forms_module.py`: nuovo test end-to-end per la creazione manuale da org-admin agenda, inclusa creazione sala/tavolo, `POST /api/org-admin/bookings` e verifica presenza della prenotazione nella lista agenda.
+- Verifica aggiuntiva confermata: il flusso automatico `form pubblico booking-enabled -> submission -> booking -> agenda org-admin` continua a funzionare ed è coperto dai test `test_booking_enabled_form_creates_booking_and_exposes_agenda` e `test_booking_rooms_tables_and_assignment_flow`.
+- Verifica eseguita: `python -m pytest -q tests/test_forms_module.py -k "manual_booking_from_agenda or booking_rooms_tables_and_assignment_flow or booking_enabled_form_creates_booking_and_exposes_agenda"`.

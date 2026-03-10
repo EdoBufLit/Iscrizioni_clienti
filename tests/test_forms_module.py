@@ -313,6 +313,58 @@ def test_public_form_is_locked_when_communications_disabled(client, db):
     assert "richiedono il modulo comunicazioni attivo" in public_res.json()["detail"].lower()
 
 
+def test_org_admin_can_create_manual_booking_from_agenda(client, db):
+    org, admin = _create_org_admin(db)
+    _login_org_admin(client, db, admin.id)
+
+    room_res = client.post("/api/org-admin/rooms", json={"name": "Sala agenda", "is_active": True})
+    assert room_res.status_code == 201, room_res.text
+    room_id = room_res.json()["room"]["id"]
+
+    table_res = client.post(
+        f"/api/org-admin/rooms/{room_id}/tables",
+        json={
+            "name": "T2",
+            "capacity": 4,
+            "shape": "round",
+            "pos_x": 100,
+            "pos_y": 120,
+            "width": 96,
+            "height": 96,
+            "is_active": True,
+            "is_out_of_service": False,
+        },
+    )
+    assert table_res.status_code == 201, table_res.text
+    table_id = table_res.json()["table"]["id"]
+
+    create_res = client.post(
+        "/api/org-admin/bookings",
+        json={
+            "customer_name": "Prenotazione manuale",
+            "customer_email": "agenda@example.com",
+            "customer_phone": "+39 333 0000000",
+            "booking_date": "2026-03-28",
+            "booking_time": "19:30",
+            "party_size": 3,
+            "room_id": room_id,
+            "table_id": table_id,
+            "status": "confirmed",
+            "notes": "Creata dalla segreteria",
+        },
+    )
+    assert create_res.status_code == 201, create_res.text
+    booking = create_res.json()["booking"]
+    assert booking["customer_name"] == "Prenotazione manuale"
+    assert booking["room"]["name"] == "Sala agenda"
+    assert booking["table"]["name"] == "T2"
+    assert booking["status"] == "confirmed"
+
+    list_res = client.get("/api/org-admin/bookings")
+    assert list_res.status_code == 200, list_res.text
+    assert any(item["customer_name"] == "Prenotazione manuale" for item in list_res.json()["items"])
+
+
 def test_booking_enabled_form_creates_booking_and_exposes_agenda(client, db):
     org, admin = _create_org_admin(db)
     _login_org_admin(client, db, admin.id)
