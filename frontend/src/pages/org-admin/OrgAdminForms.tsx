@@ -1768,6 +1768,16 @@ export function OrgAdminFormsWorkspace({
   );
 }
 
-const OrgAdminForms = () => <OrgAdminFormsWorkspace />;
+import { PublicFormsHub } from "./components/communications/PublicFormsHub";
+
+const OrgAdminForms = () => (
+  <div className="container-shell py-8 md:py-10">
+    <div className="mx-auto max-w-7xl">
+      <section className="rounded-[1.85rem] border border-neutral-200 bg-white/92 p-5 shadow-sm backdrop-blur md:p-8">
+        <PublicFormsHub />
+      </section>
+    </div>
+  </div>
+);
 
 export default OrgAdminForms;
