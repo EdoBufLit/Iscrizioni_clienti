@@ -3130,3 +3130,15 @@ pm --prefix frontend run build -> OK
 - Backend submit: [app/routes/join.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\routes\join.py) ora impone il documento solo se `require_membership_document=true`; se esiste già una submission pendente con documento identity, la resubmission resta valida anche senza ricaricarlo.
 - Retrocompatibilità confermata: con toggle disattivo il documento resta facoltativo e il submit continua a funzionare come prima; il comportamento è coperto dai test `test_join_submit_without_identity_document_ok` e `test_join_submit_requires_identity_document_when_org_flag_enabled`.
 - Verifiche eseguite: `python -m pytest -q tests/test_optional_identity_document.py tests/test_org_admin_communications.py`; `npm --prefix frontend run build`.
+
+## Deploy workflow hardening for Docker builder snapshot failures (Mar 10, 2026)
+- [x] Individuare il workflow SSH realmente usato in produzione
+- [x] Inserire diagnostica Docker e prune sicuro della sola build cache prima della build
+- [x] Separare rebuild `--no-cache` e `up -d --remove-orphans` senza toccare volumi o dati
+- [x] Riesaminare il diff per confermare che non vengano eseguiti comandi distruttivi su Postgres o named volumes
+
+## Review (Deploy workflow hardening for Docker builder snapshot failures - Mar 10, 2026)
+- Workflow modificato: [.github/workflows/deploy-hetzner.yml](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\.github\workflows\deploy-hetzner.yml).
+- Prima del rebuild il server esegue solo diagnostica e cleanup sicuro della build cache: `docker system df || true`, `docker builder ls || true`, `docker buildx ls || true`, `docker builder prune -af || true`, `docker buildx prune -af || true`.
+- Il deploy non usa `docker system prune --volumes`, non usa `docker volume prune`, non usa `down -v` e non rimuove alcun volume database.
+- Il rebuild ora è esplicito e pulito: `docker compose ... build --no-cache`, seguito da `docker compose ... up -d --remove-orphans`, mantenendo invariati connessione SSH, env, compose files e logica di health check video-worker.

@@ -244,12 +244,25 @@ jobs:
               fi
             done
 
+            echo "[deploy] Docker diagnostics before builder cleanup"
+            docker system df || true
+            docker builder ls || true
+            docker buildx ls || true
+
+            echo "[deploy] Pruning Docker builder cache safely"
+            docker builder prune -af || true
+            docker buildx prune -af || true
+
             if [ "$AFFILIATION_VIDEO_WORKER_ENABLED" = "true" ]; then
-              echo "[deploy] Running docker compose --profile video-worker up -d --build"
-              docker compose $COMPOSE_FILES --profile video-worker up -d --build
+              echo "[deploy] Running docker compose --profile video-worker build --no-cache"
+              docker compose $COMPOSE_FILES --profile video-worker build --no-cache
+              echo "[deploy] Running docker compose --profile video-worker up -d --remove-orphans"
+              docker compose $COMPOSE_FILES --profile video-worker up -d --remove-orphans
             else
-              echo "[deploy] Running docker compose up -d --build"
-              docker compose $COMPOSE_FILES up -d --build
+              echo "[deploy] Running docker compose build --no-cache"
+              docker compose $COMPOSE_FILES build --no-cache
+              echo "[deploy] Running docker compose up -d --remove-orphans"
+              docker compose $COMPOSE_FILES up -d --remove-orphans
             fi
 
             if [ "$AFFILIATION_VIDEO_WORKER_ENABLED" = "true" ]; then
