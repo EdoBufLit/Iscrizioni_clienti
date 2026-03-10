@@ -10,6 +10,7 @@ from app.db import SessionLocal
 from app.models import (
     AdminRole,
     AdminUser,
+    Booking,
     EmailOutbox,
     EmailTemplate,
     FormSubmission,
@@ -310,3 +311,204 @@ def test_public_form_is_locked_when_communications_disabled(client, db):
     public_res = client.get(f"/api/forms/{org.slug}/{public_slug}")
     assert public_res.status_code == 403, public_res.text
     assert "richiedono il modulo comunicazioni attivo" in public_res.json()["detail"].lower()
+
+
+def test_booking_enabled_form_creates_booking_and_exposes_agenda(client, db):
+    org, admin = _create_org_admin(db)
+    _login_org_admin(client, db, admin.id)
+    public_slug = f"prenota-cena-{uuid.uuid4().hex[:6]}"
+
+    create_res = client.post(
+        "/api/org-admin/forms",
+        json={
+            "title": "Prenotazione cena sociale",
+            "public_slug": public_slug,
+            "is_active": True,
+            "visibility": "public",
+            "form_type": "booking",
+            "booking_enabled": True,
+            "booking_requires_manual_confirmation": True,
+            "booking_notification_enabled": True,
+            "booking_success_message_override": "Prenotazione ricevuta, ti confermeremo a breve.",
+            "booking_field_mapping": {
+                "customer_name": "nome_cliente",
+                "customer_email": "email",
+                "booking_date": "data_prenotazione",
+                "booking_time": "orario_prenotazione",
+                "party_size": "numero_persone",
+                "notes": "note",
+            },
+        },
+    )
+    assert create_res.status_code == 201, create_res.text
+    form = create_res.json()["form"]
+    form_id = form["id"]
+    assert form["booking_enabled"] is True
+    assert form["form_type"] == "booking"
+
+    for index, field in enumerate(
+        [
+            {"field_type": "short_text", "label": "Nome cliente", "field_key": "nome_cliente"},
+            {"field_type": "email", "label": "Email", "field_key": "email"},
+            {"field_type": "date", "label": "Data", "field_key": "data_prenotazione"},
+            {"field_type": "short_text", "label": "Orario", "field_key": "orario_prenotazione"},
+            {"field_type": "number", "label": "Persone", "field_key": "numero_persone"},
+            {"field_type": "long_text", "label": "Note", "field_key": "note"},
+        ]
+    ):
+        field_res = client.post(
+            f"/api/org-admin/forms/{form_id}/fields",
+            json={**field, "is_required": True, "sort_order": index * 10},
+        )
+        assert field_res.status_code == 201, field_res.text
+
+    submit_res = client.post(
+        f"/api/forms/{org.slug}/{public_slug}/submit",
+        json={
+            "nome_cliente": "Giulia Bianchi",
+            "email": "giulia@example.com",
+            "data_prenotazione": "2026-03-25",
+            "orario_prenotazione": "20:30",
+            "numero_persone": 4,
+            "note": "Tavolo vicino alla finestra",
+        },
+    )
+    assert submit_res.status_code == 200, submit_res.text
+    payload = submit_res.json()
+    assert payload["message"] == "Prenotazione ricevuta, ti confermeremo a breve."
+    assert payload["booking"]["status"] == "pending"
+
+    verification_db = SessionLocal()
+    try:
+        booking = verification_db.query(Booking).filter(Booking.form_id == form_id).first()
+        assert booking is not None
+        assert booking.customer_name == "Giulia Bianchi"
+        assert booking.customer_email == "giulia@example.com"
+        assert booking.party_size == 4
+        assert booking.status == "pending"
+    finally:
+        verification_db.close()
+
+    list_res = client.get("/api/org-admin/bookings")
+    assert list_res.status_code == 200, list_res.text
+    assert list_res.json()["total"] >= 1
+
+    day_res = client.get("/api/org-admin/bookings/agenda/day?date=2026-03-25")
+    assert day_res.status_code == 200, day_res.text
+    assert any(item["customer_name"] == "Giulia Bianchi" for item in day_res.json()["items"])
+
+    booking_id = payload["booking"]["id"]
+    detail_res = client.get(f"/api/org-admin/bookings/{booking_id}")
+    assert detail_res.status_code == 200, detail_res.text
+    assert detail_res.json()["booking"]["submission_id"] == payload["submission"]["id"]
+
+    patch_res = client.patch(
+        f"/api/org-admin/bookings/{booking_id}",
+        json={"status": "confirmed"},
+    )
+    assert patch_res.status_code == 200, patch_res.text
+    assert patch_res.json()["booking"]["status"] == "confirmed"
+
+    submissions_res = client.get(f"/api/org-admin/forms/{form_id}/submissions")
+    assert submissions_res.status_code == 200, submissions_res.text
+    assert submissions_res.json()["items"][0]["booking"]["status"] == "confirmed"
+
+
+def test_booking_rooms_tables_and_assignment_flow(client, db):
+    org, admin = _create_org_admin(db)
+    _login_org_admin(client, db, admin.id)
+    public_slug = f"prenota-sala-{uuid.uuid4().hex[:6]}"
+
+    create_form_res = client.post(
+        "/api/org-admin/forms",
+        json={
+            "title": "Prenotazione sala eventi",
+            "public_slug": public_slug,
+            "is_active": True,
+            "visibility": "public",
+            "form_type": "booking",
+            "booking_enabled": True,
+            "booking_requires_manual_confirmation": True,
+            "booking_field_mapping": {
+                "customer_name": "nome_cliente",
+                "booking_date": "data_prenotazione",
+                "booking_time": "orario_prenotazione",
+                "party_size": "numero_persone",
+            },
+        },
+    )
+    assert create_form_res.status_code == 201, create_form_res.text
+    form_id = create_form_res.json()["form"]["id"]
+
+    for index, field in enumerate(
+        [
+            {"field_type": "short_text", "label": "Nome cliente", "field_key": "nome_cliente"},
+            {"field_type": "date", "label": "Data", "field_key": "data_prenotazione"},
+            {"field_type": "short_text", "label": "Orario", "field_key": "orario_prenotazione"},
+            {"field_type": "number", "label": "Persone", "field_key": "numero_persone"},
+        ]
+    ):
+        field_res = client.post(
+            f"/api/org-admin/forms/{form_id}/fields",
+            json={**field, "is_required": True, "sort_order": index * 10},
+        )
+        assert field_res.status_code == 201, field_res.text
+
+    submit_res = client.post(
+        f"/api/forms/{org.slug}/{public_slug}/submit",
+        json={
+            "nome_cliente": "Elena Verdi",
+            "data_prenotazione": "2026-03-26",
+            "orario_prenotazione": "21:00",
+            "numero_persone": 6,
+        },
+    )
+    assert submit_res.status_code == 200, submit_res.text
+    booking_id = submit_res.json()["booking"]["id"]
+
+    room_res = client.post("/api/org-admin/rooms", json={"name": "Sala grande", "is_active": True})
+    assert room_res.status_code == 201, room_res.text
+    room_id = room_res.json()["room"]["id"]
+
+    table_res = client.post(
+        f"/api/org-admin/rooms/{room_id}/tables",
+        json={
+            "name": "T1",
+            "capacity": 8,
+            "shape": "round",
+            "pos_x": 120,
+            "pos_y": 160,
+            "width": 100,
+            "height": 100,
+            "is_active": True,
+            "is_out_of_service": False,
+        },
+    )
+    assert table_res.status_code == 201, table_res.text
+    table_id = table_res.json()["table"]["id"]
+
+    assign_res = client.post(
+        f"/api/org-admin/bookings/{booking_id}/assignment",
+        json={"room_id": room_id, "table_id": table_id},
+    )
+    assert assign_res.status_code == 200, assign_res.text
+    booking_payload = assign_res.json()["booking"]
+    assert booking_payload["room"]["name"] == "Sala grande"
+    assert booking_payload["table"]["name"] == "T1"
+
+    map_res = client.get(f"/api/org-admin/rooms/{room_id}/map?date=2026-03-26&time=21:00")
+    assert map_res.status_code == 200, map_res.text
+    map_payload = map_res.json()
+    assert map_payload["totals"]["reserved"] == 1
+    assert map_payload["tables"][0]["active_booking"]["customer_name"] == "Elena Verdi"
+
+    move_res = client.put(
+        f"/api/org-admin/rooms/{room_id}/map",
+        json={"positions": [{"id": table_id, "pos_x": 240, "pos_y": 260, "width": 110, "height": 110}]},
+    )
+    assert move_res.status_code == 200, move_res.text
+
+    unassign_res = client.delete(f"/api/org-admin/bookings/{booking_id}/assignment")
+    assert unassign_res.status_code == 200, unassign_res.text
+    assert unassign_res.json()["booking"]["room"] is None
+    assert unassign_res.json()["booking"]["table"] is None

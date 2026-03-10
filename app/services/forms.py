@@ -23,6 +23,11 @@ from app.models import (
     OrgAdminNotification,
     Organization,
 )
+from app.services.bookings import (
+    create_booking_from_submission,
+    normalize_booking_field_mapping,
+    normalize_form_type,
+)
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 from app.services.email_templates import render_template_content
@@ -256,6 +261,7 @@ def get_form_for_org_admin(db: Session, *, association_id: int, form_id: int) ->
             joinedload(Form.submissions),
             joinedload(Form.admin_notification_template),
             joinedload(Form.user_confirmation_template),
+            joinedload(Form.bookings),
         )
         .filter(Form.id == form_id, Form.association_id == association_id)
         .first()
@@ -273,6 +279,7 @@ def get_form_by_slug_for_public(db: Session, *, slug: str) -> Form:
             joinedload(Form.organization),
             joinedload(Form.admin_notification_template),
             joinedload(Form.user_confirmation_template),
+            joinedload(Form.bookings),
         )
         .filter(Form.public_slug == normalize_form_slug(slug))
         .first()
@@ -299,6 +306,7 @@ def get_form_by_org_slug_and_form_slug_for_public(
             joinedload(Form.organization),
             joinedload(Form.admin_notification_template),
             joinedload(Form.user_confirmation_template),
+            joinedload(Form.bookings),
         )
         .join(Organization, Organization.id == Form.association_id)
         .filter(
@@ -360,6 +368,19 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
         "success_message": form.success_message,
         "notification_email": form.notification_email,
         "allow_multiple_submissions": bool(form.allow_multiple_submissions),
+        "form_type": normalize_form_type(
+            getattr(form, "form_type", None),
+            booking_enabled=bool(getattr(form, "booking_enabled", False)),
+        ),
+        "booking_enabled": bool(getattr(form, "booking_enabled", False) or getattr(form, "create_booking", False)),
+        "booking_requires_manual_confirmation": bool(
+            getattr(form, "booking_requires_manual_confirmation", True)
+        ),
+        "booking_success_message_override": getattr(form, "booking_success_message_override", None),
+        "booking_notification_enabled": bool(getattr(form, "booking_notification_enabled", True)),
+        "booking_field_mapping": normalize_booking_field_mapping(
+            getattr(form, "booking_field_mapping", None) or {}
+        ),
         "notify_admin_on_submit": bool(getattr(form, "notify_admin_on_submit", True)),
         "send_user_confirmation": bool(getattr(form, "send_user_confirmation", True)),
         "admin_notification_template_id": getattr(form, "admin_notification_template_id", None),
@@ -371,6 +392,7 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
         "updated_at": form.updated_at.isoformat() if form.updated_at else None,
         "field_count": len(items),
         "submission_count": len(form.submissions or []),
+        "booking_count": len(form.bookings or []),
         "fields": [serialize_form_field(field) for field in items] if include_fields else [],
         "public_path": (
             f"/forms/{form.organization.slug}/{form.public_slug}"
@@ -398,6 +420,14 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
             ),
             "create_internal_request": bool(getattr(form, "create_internal_request", False)),
             "create_booking": bool(getattr(form, "create_booking", False)),
+            "booking_enabled": bool(getattr(form, "booking_enabled", False) or getattr(form, "create_booking", False)),
+            "booking_requires_manual_confirmation": bool(
+                getattr(form, "booking_requires_manual_confirmation", True)
+            ),
+            "booking_notification_enabled": bool(getattr(form, "booking_notification_enabled", True)),
+            "booking_field_mapping": normalize_booking_field_mapping(
+                getattr(form, "booking_field_mapping", None) or {}
+            ),
         },
     }
 
@@ -439,6 +469,7 @@ def resolve_form_notification_email(db: Session, *, form: Form) -> str | None:
 
 def serialize_submission(submission: FormSubmission) -> dict[str, Any]:
     member = submission.member
+    booking = next(iter(submission.bookings or []), None)
     return {
         "id": submission.id,
         "form_id": submission.form_id,
@@ -454,6 +485,16 @@ def serialize_submission(submission: FormSubmission) -> dict[str, Any]:
             "email": member.email,
         }
         if member is not None
+        else None,
+        "booking": {
+            "id": booking.id,
+            "status": booking.status,
+            "customer_name": booking.customer_name,
+            "booking_date": booking.booking_date.isoformat() if booking.booking_date else None,
+            "booking_time": booking.booking_time,
+            "party_size": booking.party_size,
+        }
+        if booking is not None
         else None,
     }
 
@@ -475,6 +516,12 @@ def apply_form_updates(
     success_message: Any,
     notification_email: Any,
     allow_multiple_submissions: bool,
+    form_type: Any,
+    booking_enabled: bool,
+    booking_requires_manual_confirmation: bool,
+    booking_success_message_override: Any,
+    booking_notification_enabled: bool,
+    booking_field_mapping: Any,
     notify_admin_on_submit: bool,
     send_user_confirmation: bool,
     admin_notification_template_id: Any,
@@ -503,6 +550,13 @@ def apply_form_updates(
     form.success_message = _normalize_multiline_text(success_message)
     form.notification_email = normalize_form_notification_email(notification_email)
     form.allow_multiple_submissions = bool(allow_multiple_submissions)
+    normalized_booking_enabled = bool(booking_enabled or create_booking)
+    form.form_type = normalize_form_type(form_type, booking_enabled=normalized_booking_enabled)
+    form.booking_enabled = normalized_booking_enabled
+    form.booking_requires_manual_confirmation = bool(booking_requires_manual_confirmation)
+    form.booking_success_message_override = _normalize_multiline_text(booking_success_message_override)
+    form.booking_notification_enabled = bool(booking_notification_enabled)
+    form.booking_field_mapping = normalize_booking_field_mapping(booking_field_mapping)
     form.notify_admin_on_submit = bool(notify_admin_on_submit)
     form.send_user_confirmation = bool(send_user_confirmation)
     form.admin_notification_template_id = _resolve_template_reference(
@@ -518,7 +572,7 @@ def apply_form_updates(
         field_label="Template conferma utente",
     )
     form.create_internal_request = bool(create_internal_request)
-    form.create_booking = bool(create_booking)
+    form.create_booking = normalized_booking_enabled
     return form
 
 
@@ -925,6 +979,21 @@ def enqueue_submission_notifications(
                 ),
                 priority=5,
             )
+
+
+def create_booking_from_form_submission(
+    db: Session,
+    *,
+    form: Form,
+    submission: FormSubmission,
+    validated_submission: ValidatedSubmission,
+):
+    return create_booking_from_submission(
+        db,
+        form=form,
+        submission=submission,
+        validated_payload=validated_submission.payload,
+    )
 
 
 def export_submissions_csv(form: Form) -> io.StringIO:

@@ -1,0 +1,520 @@
+from __future__ import annotations
+
+from datetime import date, datetime, timedelta
+import html
+import re
+from typing import Any
+
+from fastapi import HTTPException
+from sqlalchemy.orm import Session, joinedload
+
+from app.models import Booking, BookingEvent, BookingStatus, Form, FormSubmission
+from app.services.booking_rooms import (
+    maybe_record_assignment_event,
+    resolve_assignment_targets,
+    validate_booking_assignment,
+)
+from app.services.email_outbox import build_email_payload, enqueue_email
+from app.services.email_sender import build_sender_payload
+
+
+BOOKING_FORM_TYPES = {"generic", "booking", "request"}
+BOOKING_FIELD_TARGETS = {
+    "customer_name",
+    "customer_email",
+    "customer_phone",
+    "booking_date",
+    "booking_time",
+    "party_size",
+    "notes",
+}
+BOOKING_STATUSES = {
+    BookingStatus.NEW.value,
+    BookingStatus.PENDING.value,
+    BookingStatus.CONFIRMED.value,
+    BookingStatus.SEATED.value,
+    BookingStatus.COMPLETED.value,
+    BookingStatus.CANCELLED.value,
+    BookingStatus.NO_SHOW.value,
+}
+
+_TIME_PATTERN = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+
+
+def _normalize_text(value: Any) -> str | None:
+    text = str(value or "").strip()
+    return text or None
+
+
+def normalize_form_type(value: Any, *, booking_enabled: bool = False) -> str:
+    normalized = (_normalize_text(value) or ("booking" if booking_enabled else "generic")).lower()
+    if normalized not in BOOKING_FORM_TYPES:
+        raise HTTPException(status_code=422, detail="Tipo form non valido.")
+    return "booking" if booking_enabled and normalized == "generic" else normalized
+
+
+def normalize_booking_field_mapping(value: Any) -> dict[str, str]:
+    if value in (None, "", {}):
+        return {}
+    if not isinstance(value, dict):
+        raise HTTPException(status_code=422, detail="Mappatura campi prenotazione non valida.")
+    normalized: dict[str, str] = {}
+    for key, raw in value.items():
+        if key not in BOOKING_FIELD_TARGETS:
+            continue
+        field_key = _normalize_text(raw)
+        if field_key:
+            normalized[key] = field_key[:64]
+    return normalized
+
+
+def serialize_booking_event(event: BookingEvent) -> dict[str, Any]:
+    return {
+        "id": event.id,
+        "booking_id": event.booking_id,
+        "event_type": event.event_type,
+        "payload_json": event.payload_json or {},
+        "created_at": event.created_at.isoformat() if event.created_at else None,
+        "created_by_user_id": event.created_by_user_id,
+    }
+
+
+def serialize_booking(booking: Booking, *, include_events: bool = False) -> dict[str, Any]:
+    return {
+        "id": booking.id,
+        "association_id": booking.association_id,
+        "form_id": booking.form_id,
+        "submission_id": booking.submission_id,
+        "status": booking.status,
+        "customer_name": booking.customer_name,
+        "customer_email": booking.customer_email,
+        "customer_phone": booking.customer_phone,
+        "booking_date": booking.booking_date.isoformat() if booking.booking_date else None,
+        "booking_time": booking.booking_time,
+        "party_size": booking.party_size,
+        "notes": booking.notes,
+        "notes_preview": (booking.notes or "")[:120] or None,
+        "room_id": booking.room_id,
+        "table_id": booking.table_id,
+        "room": {
+            "id": booking.room.id,
+            "name": booking.room.name,
+            "is_active": bool(booking.room.is_active),
+        }
+        if booking.room is not None
+        else None,
+        "table": {
+            "id": booking.table.id,
+            "name": booking.table.name,
+            "capacity": booking.table.capacity,
+            "shape": booking.table.shape,
+            "room_id": booking.table.room_id,
+            "is_active": bool(booking.table.is_active),
+            "is_out_of_service": bool(booking.table.is_out_of_service),
+        }
+        if booking.table is not None
+        else None,
+        "created_at": booking.created_at.isoformat() if booking.created_at else None,
+        "updated_at": booking.updated_at.isoformat() if booking.updated_at else None,
+        "confirmed_at": booking.confirmed_at.isoformat() if booking.confirmed_at else None,
+        "cancelled_at": booking.cancelled_at.isoformat() if booking.cancelled_at else None,
+        "source_form": {
+            "id": booking.form.id,
+            "title": booking.form.title,
+            "public_slug": booking.form.public_slug,
+        }
+        if booking.form is not None
+        else None,
+        "submission": {
+            "id": booking.submission.id,
+            "submitted_at": booking.submission.submitted_at.isoformat() if booking.submission.submitted_at else None,
+        }
+        if booking.submission is not None
+        else None,
+        "events": [serialize_booking_event(item) for item in list(booking.events or [])] if include_events else [],
+    }
+
+
+def _guess_customer_name(payload: dict[str, Any]) -> str:
+    for key in ("customer_name", "nome_socio", "nome", "full_name", "name"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    first_name = str(payload.get("first_name") or "").strip()
+    last_name = str(payload.get("last_name") or "").strip()
+    combined = f"{first_name} {last_name}".strip()
+    if combined:
+        return combined
+    email = str(payload.get("email") or "").strip()
+    return email or "Prenotazione"
+
+
+def _mapped_payload_value(mapping: dict[str, str], target: str, payload: dict[str, Any]) -> Any:
+    key = mapping.get(target)
+    if not key:
+        return None
+    return payload.get(key)
+
+
+def _normalize_booking_date(value: Any) -> date | None:
+    if isinstance(value, date):
+        return value
+    normalized = _normalize_text(value)
+    if not normalized:
+        return None
+    try:
+        return date.fromisoformat(normalized)
+    except Exception:
+        return None
+
+
+def _normalize_booking_time(value: Any) -> str | None:
+    normalized = _normalize_text(value)
+    if not normalized:
+        return None
+    if _TIME_PATTERN.fullmatch(normalized):
+        return normalized
+    return normalized[:16]
+
+
+def _normalize_party_size(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        number = int(float(value))
+    except Exception:
+        return None
+    return number if number > 0 else None
+
+
+def _add_booking_event(
+    db: Session,
+    *,
+    booking: Booking,
+    event_type: str,
+    payload_json: dict[str, Any] | None = None,
+    created_by_user_id: int | None = None,
+) -> BookingEvent:
+    event = BookingEvent(
+        booking_id=booking.id,
+        event_type=event_type,
+        payload_json=payload_json or {},
+        created_by_user_id=created_by_user_id,
+    )
+    db.add(event)
+    db.flush()
+    return event
+
+
+def _enqueue_booking_email(
+    db: Session,
+    *,
+    booking: Booking,
+    subject: str,
+    intro: str,
+    action_message: str,
+    email_type: str,
+) -> None:
+    if not booking.customer_email:
+        return
+    date_line = booking.booking_date.isoformat() if booking.booking_date else "da definire"
+    time_line = booking.booking_time or "da definire"
+    text_body = (
+        f"{intro}\n\n"
+        f"Nome: {booking.customer_name}\n"
+        f"Data: {date_line}\n"
+        f"Orario: {time_line}\n"
+        f"Persone: {booking.party_size or '-'}\n"
+        f"{action_message}"
+    )
+    html_body = (
+        f"<p>{html.escape(intro)}</p>"
+        f"<ul>"
+        f"<li><strong>Nome:</strong> {html.escape(booking.customer_name)}</li>"
+        f"<li><strong>Data:</strong> {html.escape(date_line)}</li>"
+        f"<li><strong>Orario:</strong> {html.escape(time_line)}</li>"
+        f"<li><strong>Persone:</strong> {booking.party_size or '-'}</li>"
+        f"</ul>"
+        f"<p>{html.escape(action_message)}</p>"
+    )
+    enqueue_email(
+        db,
+        email_type=email_type,
+        to_email=booking.customer_email,
+        subject=subject,
+        payload=build_email_payload(
+            text_body=text_body,
+            html_body=html_body,
+            sender=build_sender_payload(mode="system"),
+            meta={
+                "booking_id": booking.id,
+                "form_id": booking.form_id,
+                "association_id": booking.association_id,
+            },
+        ),
+        priority=4,
+    )
+
+
+def create_booking_from_submission(
+    db: Session,
+    *,
+    form: Form,
+    submission: FormSubmission,
+    validated_payload: dict[str, Any],
+) -> Booking | None:
+    booking_enabled = bool(getattr(form, "booking_enabled", False) or getattr(form, "create_booking", False))
+    if not booking_enabled:
+        return None
+
+    mapping = normalize_booking_field_mapping(getattr(form, "booking_field_mapping", None) or {})
+    customer_name = _normalize_text(_mapped_payload_value(mapping, "customer_name", validated_payload)) or _guess_customer_name(validated_payload)
+    customer_email = _normalize_text(_mapped_payload_value(mapping, "customer_email", validated_payload))
+    customer_phone = _normalize_text(_mapped_payload_value(mapping, "customer_phone", validated_payload))
+    booking_date = _normalize_booking_date(_mapped_payload_value(mapping, "booking_date", validated_payload))
+    booking_time = _normalize_booking_time(_mapped_payload_value(mapping, "booking_time", validated_payload))
+    party_size = _normalize_party_size(_mapped_payload_value(mapping, "party_size", validated_payload))
+    notes = _normalize_text(_mapped_payload_value(mapping, "notes", validated_payload))
+
+    status = (
+        BookingStatus.PENDING.value
+        if bool(getattr(form, "booking_requires_manual_confirmation", True))
+        else BookingStatus.CONFIRMED.value
+    )
+    now = datetime.utcnow()
+    booking = Booking(
+        association_id=form.association_id,
+        form_id=form.id,
+        submission_id=submission.id,
+        status=status,
+        customer_name=customer_name or "Prenotazione",
+        customer_email=customer_email,
+        customer_phone=customer_phone,
+        booking_date=booking_date,
+        booking_time=booking_time,
+        party_size=party_size,
+        notes=notes,
+        confirmed_at=now if status == BookingStatus.CONFIRMED.value else None,
+    )
+    db.add(booking)
+    db.flush()
+    _add_booking_event(
+        db,
+        booking=booking,
+        event_type="created_from_form_submission",
+        payload_json={
+            "form_id": form.id,
+            "submission_id": submission.id,
+            "status": status,
+        },
+    )
+
+    if bool(getattr(form, "booking_notification_enabled", True)) and booking.customer_email:
+        if status == BookingStatus.PENDING.value:
+            _enqueue_booking_email(
+                db,
+                booking=booking,
+                subject=f"Prenotazione ricevuta: {form.title}",
+                intro=f"Abbiamo ricevuto la tua prenotazione per '{form.title}'.",
+                action_message="La richiesta è in attesa di conferma da parte della segreteria.",
+                email_type="booking_pending_confirmation",
+            )
+        else:
+            _enqueue_booking_email(
+                db,
+                booking=booking,
+                subject=f"Prenotazione confermata: {form.title}",
+                intro=f"La tua prenotazione per '{form.title}' è stata confermata.",
+                action_message="Ti aspettiamo all'orario indicato.",
+                email_type="booking_confirmed",
+            )
+    return booking
+
+
+def update_booking_status(
+    db: Session,
+    *,
+    booking: Booking,
+    next_status: str,
+    created_by_user_id: int | None = None,
+    room_id: int | None = None,
+    table_id: int | None = None,
+    notes: str | None = None,
+) -> Booking:
+    normalized_status = (_normalize_text(next_status) or "").lower()
+    if normalized_status not in BOOKING_STATUSES:
+        raise HTTPException(status_code=422, detail="Stato prenotazione non valido.")
+
+    previous_status = booking.status
+    previous_room_id = booking.room_id
+    previous_table_id = booking.table_id
+    resolved_room, resolved_table = resolve_assignment_targets(
+        db,
+        association_id=booking.association_id,
+        room_id=room_id,
+        table_id=table_id,
+    )
+    validate_booking_assignment(
+        db,
+        booking=booking,
+        room=resolved_room,
+        table=resolved_table,
+    )
+    booking.status = normalized_status
+    booking.room_id = resolved_room.id if resolved_room is not None else None
+    booking.table_id = resolved_table.id if resolved_table is not None else None
+    if notes is not None:
+        booking.notes = _normalize_text(notes)
+    now = datetime.utcnow()
+    if normalized_status == BookingStatus.CONFIRMED.value and booking.confirmed_at is None:
+        booking.confirmed_at = now
+    if normalized_status == BookingStatus.CANCELLED.value and booking.cancelled_at is None:
+        booking.cancelled_at = now
+    _add_booking_event(
+        db,
+        booking=booking,
+        event_type="status_updated",
+        payload_json={
+            "from_status": previous_status,
+            "to_status": normalized_status,
+            "room_id": booking.room_id,
+            "table_id": booking.table_id,
+        },
+        created_by_user_id=created_by_user_id,
+    )
+    maybe_record_assignment_event(
+        db,
+        booking=booking,
+        created_by_user_id=created_by_user_id,
+        previous_room_id=previous_room_id,
+        previous_table_id=previous_table_id,
+    )
+    if normalized_status != previous_status and bool(getattr(booking.form, "booking_notification_enabled", True)):
+        if normalized_status == BookingStatus.CONFIRMED.value:
+            _enqueue_booking_email(
+                db,
+                booking=booking,
+                subject=f"Prenotazione confermata: {booking.form.title if booking.form else 'ASSONAM'}",
+                intro="La tua prenotazione è stata confermata.",
+                action_message="Ti aspettiamo all'orario indicato.",
+                email_type="booking_confirmed_status_update",
+            )
+        elif normalized_status == BookingStatus.CANCELLED.value:
+            _enqueue_booking_email(
+                db,
+                booking=booking,
+                subject=f"Prenotazione annullata: {booking.form.title if booking.form else 'ASSONAM'}",
+                intro="La tua prenotazione è stata annullata.",
+                action_message="Per ulteriori informazioni contatta la segreteria.",
+                email_type="booking_cancelled_status_update",
+            )
+    db.flush()
+    return booking
+
+
+def build_bookings_query(db: Session, *, association_id: int):
+    return (
+        db.query(Booking)
+        .options(
+            joinedload(Booking.form),
+            joinedload(Booking.submission),
+            joinedload(Booking.events),
+            joinedload(Booking.room),
+            joinedload(Booking.table),
+        )
+        .filter(Booking.association_id == association_id)
+    )
+
+
+def list_bookings(
+    db: Session,
+    *,
+    association_id: int,
+    anchor_date: date | None = None,
+    status: str | None = None,
+    form_id: int | None = None,
+) -> list[Booking]:
+    query = build_bookings_query(db, association_id=association_id)
+    if anchor_date is not None:
+        query = query.filter(Booking.booking_date == anchor_date)
+    normalized_status = (_normalize_text(status) or "").lower()
+    if normalized_status:
+        query = query.filter(Booking.status == normalized_status)
+    if form_id:
+        query = query.filter(Booking.form_id == form_id)
+    return (
+        query.order_by(
+            Booking.booking_date.asc().nulls_last(),
+            Booking.booking_time.asc().nulls_last(),
+            Booking.created_at.asc(),
+            Booking.id.asc(),
+        )
+        .all()
+    )
+
+
+def agenda_day_payload(
+    db: Session,
+    *,
+    association_id: int,
+    agenda_date: date,
+    status: str | None = None,
+    form_id: int | None = None,
+) -> dict[str, Any]:
+    items = list_bookings(
+        db,
+        association_id=association_id,
+        anchor_date=agenda_date,
+        status=status,
+        form_id=form_id,
+    )
+    return {
+        "date": agenda_date.isoformat(),
+        "items": [serialize_booking(item) for item in items],
+        "total": len(items),
+    }
+
+
+def agenda_week_payload(
+    db: Session,
+    *,
+    association_id: int,
+    agenda_date: date,
+    status: str | None = None,
+    form_id: int | None = None,
+) -> dict[str, Any]:
+    week_start = agenda_date - timedelta(days=agenda_date.weekday())
+    week_end = week_start + timedelta(days=6)
+    query = build_bookings_query(db, association_id=association_id).filter(
+        Booking.booking_date.isnot(None),
+        Booking.booking_date >= week_start,
+        Booking.booking_date <= week_end,
+    )
+    normalized_status = (_normalize_text(status) or "").lower()
+    if normalized_status:
+        query = query.filter(Booking.status == normalized_status)
+    if form_id:
+        query = query.filter(Booking.form_id == form_id)
+    bookings = query.order_by(
+        Booking.booking_date.asc(),
+        Booking.booking_time.asc().nulls_last(),
+        Booking.created_at.asc(),
+    ).all()
+    days: list[dict[str, Any]] = []
+    for offset in range(7):
+        day = week_start + timedelta(days=offset)
+        day_items = [serialize_booking(item) for item in bookings if item.booking_date == day]
+        days.append(
+            {
+                "date": day.isoformat(),
+                "weekday": day.strftime("%A"),
+                "items": day_items,
+                "total": len(day_items),
+            }
+        )
+    return {
+        "week_start": week_start.isoformat(),
+        "week_end": week_end.isoformat(),
+        "days": days,
+        "total": len(bookings),
+    }

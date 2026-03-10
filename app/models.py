@@ -210,6 +210,16 @@ class EmailOutboxStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+class BookingStatus(str, enum.Enum):
+    NEW = "new"
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    SEATED = "seated"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    NO_SHOW = "no_show"
+
+
 class Organization(Base):
     __tablename__ = "organizations"
 
@@ -319,6 +329,24 @@ class Organization(Base):
         "FormSubmission",
         back_populates="organization",
         foreign_keys="FormSubmission.association_id",
+    )
+    bookings = relationship(
+        "Booking",
+        back_populates="organization",
+        foreign_keys="Booking.association_id",
+        cascade="all, delete-orphan",
+    )
+    rooms = relationship(
+        "Room",
+        back_populates="organization",
+        foreign_keys="Room.association_id",
+        cascade="all, delete-orphan",
+    )
+    room_tables = relationship(
+        "RoomTable",
+        back_populates="organization",
+        foreign_keys="RoomTable.association_id",
+        cascade="all, delete-orphan",
     )
 
 
@@ -464,6 +492,11 @@ class AdminUser(Base):
         "Form",
         back_populates="created_by_user",
         foreign_keys="Form.created_by_user_id",
+    )
+    booking_events = relationship(
+        "BookingEvent",
+        back_populates="created_by_user",
+        foreign_keys="BookingEvent.created_by_user_id",
     )
 
 
@@ -701,6 +734,20 @@ class Form(Base):
     create_booking = Column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    form_type = Column(
+        String, nullable=False, default="generic", server_default="generic", index=True
+    )
+    booking_enabled = Column(
+        Boolean, nullable=False, default=False, server_default="false", index=True
+    )
+    booking_requires_manual_confirmation = Column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    booking_success_message_override = Column(Text, nullable=True)
+    booking_notification_enabled = Column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    booking_field_mapping = Column(GENERIC_JSON_TYPE, nullable=True)
     created_by_user_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True, index=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
     updated_at = Column(
@@ -741,6 +788,12 @@ class Form(Base):
         back_populates="form",
         cascade="all, delete-orphan",
         order_by="FormSubmission.submitted_at.desc(), FormSubmission.id.desc()",
+    )
+    bookings = relationship(
+        "Booking",
+        back_populates="form",
+        cascade="all, delete-orphan",
+        order_by="Booking.created_at.desc(), Booking.id.desc()",
     )
 
 
@@ -786,6 +839,171 @@ class FormSubmission(Base):
         foreign_keys=[association_id],
     )
     member = relationship("Member", back_populates="form_submissions", foreign_keys=[submitted_by_user_id])
+    bookings = relationship(
+        "Booking",
+        back_populates="submission",
+        foreign_keys="Booking.submission_id",
+    )
+
+
+class Booking(Base):
+    __tablename__ = "bookings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    association_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    form_id = Column(Integer, ForeignKey("forms.id"), nullable=True, index=True)
+    submission_id = Column(Integer, ForeignKey("form_submissions.id"), nullable=True, index=True)
+    status = Column(String, nullable=False, default=BookingStatus.NEW.value, server_default=BookingStatus.NEW.value, index=True)
+    customer_name = Column(String, nullable=False)
+    customer_email = Column(String, nullable=True, index=True)
+    customer_phone = Column(String, nullable=True)
+    booking_date = Column(Date, nullable=True, index=True)
+    booking_time = Column(String, nullable=True, index=True)
+    party_size = Column(Integer, nullable=True)
+    notes = Column(Text, nullable=True)
+    room_id = Column(Integer, ForeignKey("rooms.id"), nullable=True, index=True)
+    table_id = Column(Integer, ForeignKey("room_tables.id"), nullable=True, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    confirmed_at = Column(DateTime, nullable=True)
+    cancelled_at = Column(DateTime, nullable=True)
+
+    organization = relationship(
+        "Organization",
+        back_populates="bookings",
+        foreign_keys=[association_id],
+    )
+    form = relationship(
+        "Form",
+        back_populates="bookings",
+        foreign_keys=[form_id],
+    )
+    submission = relationship(
+        "FormSubmission",
+        back_populates="bookings",
+        foreign_keys=[submission_id],
+    )
+    room = relationship(
+        "Room",
+        back_populates="bookings",
+        foreign_keys=[room_id],
+    )
+    table = relationship(
+        "RoomTable",
+        back_populates="bookings",
+        foreign_keys=[table_id],
+    )
+    events = relationship(
+        "BookingEvent",
+        back_populates="booking",
+        cascade="all, delete-orphan",
+        order_by="BookingEvent.created_at.desc(), BookingEvent.id.desc()",
+    )
+
+
+class BookingEvent(Base):
+    __tablename__ = "booking_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    booking_id = Column(Integer, ForeignKey("bookings.id"), nullable=False, index=True)
+    event_type = Column(String, nullable=False, index=True)
+    payload_json = Column(GENERIC_JSON_TYPE, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    created_by_user_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True, index=True)
+
+    booking = relationship(
+        "Booking",
+        back_populates="events",
+        foreign_keys=[booking_id],
+    )
+    created_by_user = relationship(
+        "AdminUser",
+        back_populates="booking_events",
+        foreign_keys=[created_by_user_id],
+    )
+
+
+class Room(Base):
+    __tablename__ = "rooms"
+
+    id = Column(Integer, primary_key=True, index=True)
+    association_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True, server_default="true", index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    organization = relationship(
+        "Organization",
+        back_populates="rooms",
+        foreign_keys=[association_id],
+    )
+    tables = relationship(
+        "RoomTable",
+        back_populates="room",
+        cascade="all, delete-orphan",
+        order_by="RoomTable.name.asc(), RoomTable.id.asc()",
+    )
+    bookings = relationship(
+        "Booking",
+        back_populates="room",
+        foreign_keys="Booking.room_id",
+    )
+
+
+class RoomTable(Base):
+    __tablename__ = "room_tables"
+
+    id = Column(Integer, primary_key=True, index=True)
+    association_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    room_id = Column(Integer, ForeignKey("rooms.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    capacity = Column(Integer, nullable=False, default=2, server_default="2")
+    shape = Column(String, nullable=False, default="round", server_default="round")
+    pos_x = Column(Integer, nullable=False, default=80, server_default="80")
+    pos_y = Column(Integer, nullable=False, default=80, server_default="80")
+    width = Column(Integer, nullable=True)
+    height = Column(Integer, nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True, server_default="true", index=True)
+    is_out_of_service = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        index=True,
+    )
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    organization = relationship(
+        "Organization",
+        back_populates="room_tables",
+        foreign_keys=[association_id],
+    )
+    room = relationship(
+        "Room",
+        back_populates="tables",
+        foreign_keys=[room_id],
+    )
+    bookings = relationship(
+        "Booking",
+        back_populates="table",
+        foreign_keys="Booking.table_id",
+    )
+
+    __table_args__ = (
+        UniqueConstraint("room_id", "name", name="uq_room_tables_room_name"),
+    )
 
 
 class CardBatch(Base):

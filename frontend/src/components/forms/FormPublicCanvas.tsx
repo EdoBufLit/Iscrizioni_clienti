@@ -9,11 +9,13 @@ type FormCanvasForm = Pick<
   | "show_logo"
   | "cover_image_url"
   | "page_style"
+  | "visibility"
   | "fields"
 > & {
   association?: {
     name: string | null;
   } | null;
+  is_active?: boolean;
 };
 
 type FormPublicCanvasProps = {
@@ -246,6 +248,35 @@ export function FormPublicCanvas({
             style={{ backgroundImage: `linear-gradient(180deg, rgba(15,23,42,0.12), rgba(15,23,42,0.34)), url(${form.cover_image_url})` }}
           />
         ) : null}
+        <div className="border-b border-black/5 bg-white/65 px-5 py-3 backdrop-blur md:px-8">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold uppercase tracking-[0.24em] text-white shadow-sm"
+                style={{ backgroundColor: accentColor }}
+              >
+                {(form.association?.name || "AS")
+                  .split(" ")
+                  .slice(0, 2)
+                  .map((item) => item[0] || "")
+                  .join("")
+                  .slice(0, 2)}
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Pagina pubblica</p>
+                <p className="text-sm font-semibold text-neutral-900">{form.association?.name || "Associazione"}</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 text-[11px] font-bold uppercase tracking-[0.18em]">
+              <span className="rounded-full border border-black/10 bg-white px-3 py-1 text-neutral-600">
+                {interactive ? "Compilazione live" : "Preview studio"}
+              </span>
+              <span className="rounded-full border border-black/10 bg-white px-3 py-1 text-neutral-600">
+                {form.visibility === "members_only" ? "Solo soci" : "Pubblico"}
+              </span>
+            </div>
+          </div>
+        </div>
         <div className={`relative px-5 py-6 md:px-8 md:py-8 ${theme.hero}`}>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="max-w-3xl">
@@ -312,8 +343,31 @@ export function FormPublicCanvas({
                 <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">CTA</p>
                 <p className="mt-1 font-semibold text-neutral-900">{form.submit_button_text || "Invia richiesta"}</p>
               </div>
+              <div className="rounded-2xl border border-black/5 bg-white/70 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">Esperienza</p>
+                <p className="mt-1 font-semibold text-neutral-900">
+                  {form.show_logo ? "Brand visibile" : "Pagina essenziale"}
+                </p>
+                <p className="mt-2 text-xs leading-5 text-neutral-500">
+                  Layout pensato per sembrare una vera pagina pubblica, non un semplice form embed.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-black/5 bg-white/70 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">Dopo l'invio</p>
+                <p className="mt-1 text-sm text-neutral-700">
+                  L'utente vede un messaggio di conferma chiaro e l'associazione riceve lo storico nel backoffice.
+                </p>
+              </div>
             </div>
           </aside>
+        </div>
+        <div className="border-t border-black/5 bg-white/72 px-5 py-4 md:px-8">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-neutral-500">
+            <p>Esperienza ottimizzata per mobile e desktop.</p>
+            <p>
+              {interactive ? "Compila il modulo e verifica il risultato finale." : "Questa preview rispecchia la pagina pubblica."}
+            </p>
+          </div>
         </div>
       </div>
     </div>

@@ -18,6 +18,7 @@ from app.db import get_db
 from app.models import (
     AdminUser,
     AdminRole,
+    Booking,
     OrgAdminToken,
     Member,
     MemberStatus,
@@ -44,6 +45,8 @@ from app.models import (
     Form as AssociationForm,
     FormField,
     FormSubmission,
+    Room,
+    RoomTable,
 )
 from app.models_affiliation import (
     AffiliationApplication,
@@ -87,6 +90,27 @@ from app.services.forms import (
     serialize_form,
     serialize_form_field,
     serialize_submission,
+)
+from app.services.bookings import (
+    agenda_day_payload,
+    agenda_week_payload,
+    list_bookings,
+    serialize_booking,
+    update_booking_status,
+)
+from app.services.booking_rooms import (
+    apply_room_table_updates,
+    apply_room_updates,
+    get_room_for_org_admin,
+    get_room_table_for_org_admin,
+    list_room_tables_for_org_admin,
+    list_rooms_for_org_admin,
+    resolve_assignment_targets,
+    room_map_payload,
+    serialize_room,
+    serialize_room_table,
+    update_table_positions,
+    validate_booking_assignment,
 )
 from app.services.card_allocation import allocate_next_card, release_card_number
 from app.services.card_inventory import compute_org_card_stock
@@ -1127,6 +1151,12 @@ class CreateAssociationFormBody(BaseModel):
     success_message: Optional[str] = None
     notification_email: Optional[EmailStr] = None
     allow_multiple_submissions: bool = True
+    form_type: str = Field(default="generic", max_length=40)
+    booking_enabled: bool = False
+    booking_requires_manual_confirmation: bool = True
+    booking_success_message_override: Optional[str] = None
+    booking_notification_enabled: bool = True
+    booking_field_mapping: dict[str, str] = Field(default_factory=dict)
     notify_admin_on_submit: bool = True
     send_user_confirmation: bool = True
     admin_notification_template_id: Optional[int] = None
@@ -1149,6 +1179,12 @@ class UpdateAssociationFormBody(BaseModel):
     success_message: Optional[str] = None
     notification_email: Optional[EmailStr] = None
     allow_multiple_submissions: bool = True
+    form_type: str = Field(default="generic", max_length=40)
+    booking_enabled: bool = False
+    booking_requires_manual_confirmation: bool = True
+    booking_success_message_override: Optional[str] = None
+    booking_notification_enabled: bool = True
+    booking_field_mapping: dict[str, str] = Field(default_factory=dict)
     notify_admin_on_submit: bool = True
     send_user_confirmation: bool = True
     admin_notification_template_id: Optional[int] = None
@@ -1171,6 +1207,57 @@ class UpsertAssociationFormFieldBody(BaseModel):
     is_required: bool = False
     sort_order: int = 0
     options: Optional[list[str] | str] = None
+
+
+class UpdateBookingStatusBody(BaseModel):
+    status: str = Field(min_length=1, max_length=40)
+    room_id: Optional[int] = None
+    table_id: Optional[int] = None
+    notes: Optional[str] = None
+
+
+class CreateRoomBody(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    is_active: bool = True
+
+
+class UpdateRoomBody(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    is_active: bool = True
+
+
+class CreateRoomTableBody(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    capacity: int = Field(default=2, ge=1, le=100)
+    shape: str = Field(default="round", min_length=1, max_length=40)
+    pos_x: int = Field(default=80, ge=0, le=4000)
+    pos_y: int = Field(default=80, ge=0, le=4000)
+    width: Optional[int] = Field(default=None, ge=40, le=600)
+    height: Optional[int] = Field(default=None, ge=40, le=600)
+    is_active: bool = True
+    is_out_of_service: bool = False
+
+
+class UpdateRoomTableBody(BaseModel):
+    room_id: int = Field(ge=1)
+    name: str = Field(min_length=1, max_length=120)
+    capacity: int = Field(default=2, ge=1, le=100)
+    shape: str = Field(default="round", min_length=1, max_length=40)
+    pos_x: int = Field(default=80, ge=0, le=4000)
+    pos_y: int = Field(default=80, ge=0, le=4000)
+    width: Optional[int] = Field(default=None, ge=40, le=600)
+    height: Optional[int] = Field(default=None, ge=40, le=600)
+    is_active: bool = True
+    is_out_of_service: bool = False
+
+
+class SaveRoomMapBody(BaseModel):
+    positions: list[dict[str, int | None]] = Field(default_factory=list)
+
+
+class AssignBookingTableBody(BaseModel):
+    room_id: Optional[int] = None
+    table_id: Optional[int] = None
 
 
 @router.get("/organization")
@@ -3759,6 +3846,7 @@ def list_association_forms(
             joinedload(AssociationForm.submissions),
             joinedload(AssociationForm.admin_notification_template),
             joinedload(AssociationForm.user_confirmation_template),
+            joinedload(AssociationForm.bookings),
         )
         .filter(AssociationForm.association_id == admin.org_id)
         .order_by(AssociationForm.updated_at.desc(), AssociationForm.id.desc())
@@ -3805,6 +3893,12 @@ def create_association_form(
         success_message=body.success_message,
         notification_email=body.notification_email,
         allow_multiple_submissions=body.allow_multiple_submissions,
+        form_type=body.form_type,
+        booking_enabled=body.booking_enabled,
+        booking_requires_manual_confirmation=body.booking_requires_manual_confirmation,
+        booking_success_message_override=body.booking_success_message_override,
+        booking_notification_enabled=body.booking_notification_enabled,
+        booking_field_mapping=body.booking_field_mapping,
         notify_admin_on_submit=body.notify_admin_on_submit,
         send_user_confirmation=body.send_user_confirmation,
         admin_notification_template_id=body.admin_notification_template_id,
@@ -3860,6 +3954,12 @@ def update_association_form(
         success_message=body.success_message,
         notification_email=body.notification_email,
         allow_multiple_submissions=body.allow_multiple_submissions,
+        form_type=body.form_type,
+        booking_enabled=body.booking_enabled,
+        booking_requires_manual_confirmation=body.booking_requires_manual_confirmation,
+        booking_success_message_override=body.booking_success_message_override,
+        booking_notification_enabled=body.booking_notification_enabled,
+        booking_field_mapping=body.booking_field_mapping,
         notify_admin_on_submit=body.notify_admin_on_submit,
         send_user_confirmation=body.send_user_confirmation,
         admin_notification_template_id=body.admin_notification_template_id,
@@ -3920,6 +4020,14 @@ def duplicate_association_form(
         success_message=source_form.success_message,
         notification_email=source_form.notification_email,
         allow_multiple_submissions=bool(source_form.allow_multiple_submissions),
+        form_type=getattr(source_form, "form_type", "generic"),
+        booking_enabled=bool(getattr(source_form, "booking_enabled", False) or source_form.create_booking),
+        booking_requires_manual_confirmation=bool(
+            getattr(source_form, "booking_requires_manual_confirmation", True)
+        ),
+        booking_success_message_override=getattr(source_form, "booking_success_message_override", None),
+        booking_notification_enabled=bool(getattr(source_form, "booking_notification_enabled", True)),
+        booking_field_mapping=getattr(source_form, "booking_field_mapping", None) or {},
         notify_admin_on_submit=bool(source_form.notify_admin_on_submit),
         send_user_confirmation=bool(source_form.send_user_confirmation),
         admin_notification_template_id=source_form.admin_notification_template_id,
@@ -4094,8 +4202,10 @@ def list_association_form_submissions(
         .options(
             joinedload(AssociationForm.fields),
             joinedload(AssociationForm.submissions).joinedload(FormSubmission.member),
+            joinedload(AssociationForm.submissions).joinedload(FormSubmission.bookings),
             joinedload(AssociationForm.admin_notification_template),
             joinedload(AssociationForm.user_confirmation_template),
+            joinedload(AssociationForm.bookings),
         )
         .filter(AssociationForm.id == form_id, AssociationForm.association_id == admin.org_id)
         .first()
@@ -4131,6 +4241,7 @@ def export_association_form_submissions_csv(
             joinedload(AssociationForm.submissions),
             joinedload(AssociationForm.admin_notification_template),
             joinedload(AssociationForm.user_confirmation_template),
+            joinedload(AssociationForm.bookings),
         )
         .filter(AssociationForm.id == form_id, AssociationForm.association_id == admin.org_id)
         .first()
@@ -4160,7 +4271,7 @@ def get_association_form_submission_detail(
     get_form_for_org_admin(db, association_id=admin.org_id, form_id=form_id)
     submission = (
         db.query(FormSubmission)
-        .options(joinedload(FormSubmission.member))
+        .options(joinedload(FormSubmission.member), joinedload(FormSubmission.bookings))
         .filter(
             FormSubmission.id == submission_id,
             FormSubmission.form_id == form_id,
@@ -4171,3 +4282,495 @@ def get_association_form_submission_detail(
     if submission is None:
         raise HTTPException(status_code=404, detail="Risposta non trovata.")
     return {"submission": serialize_submission(submission)}
+
+
+@router.get("/rooms")
+def list_org_admin_rooms(
+    request: Request,
+    include_inactive: bool = Query(default=True),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    rooms = list_rooms_for_org_admin(
+        db,
+        association_id=admin.org_id,
+        include_inactive=include_inactive,
+    )
+    return {"items": [serialize_room(room) for room in rooms], "total": len(rooms)}
+
+
+@router.post("/rooms", status_code=201)
+def create_org_admin_room(
+    body: CreateRoomBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    room = Room(association_id=admin.org_id)
+    apply_room_updates(room, name=body.name, is_active=body.is_active)
+    db.add(room)
+    db.commit()
+    db.refresh(room)
+    return {"room": serialize_room(room)}
+
+
+@router.get("/rooms/{room_id}")
+def get_org_admin_room(
+    room_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    room = get_room_for_org_admin(db, association_id=admin.org_id, room_id=room_id)
+    return {
+        "room": serialize_room(room),
+        "tables": [serialize_room_table(table) for table in list(room.tables or [])],
+    }
+
+
+@router.put("/rooms/{room_id}")
+def update_org_admin_room(
+    room_id: int,
+    body: UpdateRoomBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    room = get_room_for_org_admin(db, association_id=admin.org_id, room_id=room_id)
+    apply_room_updates(room, name=body.name, is_active=body.is_active)
+    db.add(room)
+    db.commit()
+    db.refresh(room)
+    return {"room": serialize_room(room)}
+
+
+@router.delete("/rooms/{room_id}")
+def delete_org_admin_room(
+    room_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    room = get_room_for_org_admin(db, association_id=admin.org_id, room_id=room_id)
+    table_ids = [table.id for table in list(room.tables or [])]
+    (
+        db.query(Booking)
+        .filter(Booking.association_id == admin.org_id, Booking.room_id == room.id)
+        .update({Booking.room_id: None}, synchronize_session=False)
+    )
+    if table_ids:
+        (
+            db.query(Booking)
+            .filter(Booking.association_id == admin.org_id, Booking.table_id.in_(table_ids))
+            .update({Booking.table_id: None}, synchronize_session=False)
+        )
+    db.delete(room)
+    db.commit()
+    return {"ok": True, "deleted_room_id": room_id}
+
+
+@router.get("/rooms/{room_id}/tables")
+def list_org_admin_room_tables(
+    room_id: int,
+    request: Request,
+    include_inactive: bool = Query(default=True),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    get_room_for_org_admin(db, association_id=admin.org_id, room_id=room_id)
+    tables = list_room_tables_for_org_admin(
+        db,
+        association_id=admin.org_id,
+        room_id=room_id,
+        include_inactive=include_inactive,
+    )
+    return {"items": [serialize_room_table(table) for table in tables], "total": len(tables)}
+
+
+@router.post("/rooms/{room_id}/tables", status_code=201)
+def create_org_admin_room_table(
+    room_id: int,
+    body: CreateRoomTableBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    get_room_for_org_admin(db, association_id=admin.org_id, room_id=room_id)
+    table = RoomTable(association_id=admin.org_id, room_id=room_id)
+    apply_room_table_updates(
+        table,
+        room_id=room_id,
+        name=body.name,
+        capacity=body.capacity,
+        shape=body.shape,
+        pos_x=body.pos_x,
+        pos_y=body.pos_y,
+        width=body.width,
+        height=body.height,
+        is_active=body.is_active,
+        is_out_of_service=body.is_out_of_service,
+    )
+    db.add(table)
+    db.commit()
+    db.refresh(table)
+    return {"table": serialize_room_table(table)}
+
+
+@router.get("/tables/{table_id}")
+def get_org_admin_room_table(
+    table_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    table = get_room_table_for_org_admin(db, association_id=admin.org_id, table_id=table_id)
+    return {"table": serialize_room_table(table)}
+
+
+@router.put("/tables/{table_id}")
+def update_org_admin_room_table(
+    table_id: int,
+    body: UpdateRoomTableBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    get_room_for_org_admin(db, association_id=admin.org_id, room_id=body.room_id)
+    table = get_room_table_for_org_admin(db, association_id=admin.org_id, table_id=table_id)
+    apply_room_table_updates(
+        table,
+        room_id=body.room_id,
+        name=body.name,
+        capacity=body.capacity,
+        shape=body.shape,
+        pos_x=body.pos_x,
+        pos_y=body.pos_y,
+        width=body.width,
+        height=body.height,
+        is_active=body.is_active,
+        is_out_of_service=body.is_out_of_service,
+    )
+    db.add(table)
+    db.commit()
+    db.refresh(table)
+    return {"table": serialize_room_table(table)}
+
+
+@router.delete("/tables/{table_id}")
+def delete_org_admin_room_table(
+    table_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    table = get_room_table_for_org_admin(db, association_id=admin.org_id, table_id=table_id)
+    (
+        db.query(Booking)
+        .filter(Booking.association_id == admin.org_id, Booking.table_id == table.id)
+        .update({Booking.table_id: None}, synchronize_session=False)
+    )
+    db.delete(table)
+    db.commit()
+    return {"ok": True, "deleted_table_id": table_id}
+
+
+@router.get("/rooms/{room_id}/map")
+def get_org_admin_room_map(
+    room_id: int,
+    request: Request,
+    date_value: Optional[date] = Query(default=None, alias="date"),
+    time_value: Optional[str] = Query(default=None, alias="time"),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    return room_map_payload(
+        db,
+        association_id=admin.org_id,
+        room_id=room_id,
+        focus_date=date_value,
+        focus_time=(time_value or "").strip() or None,
+    )
+
+
+@router.put("/rooms/{room_id}/map")
+def save_org_admin_room_map(
+    room_id: int,
+    body: SaveRoomMapBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    tables = update_table_positions(
+        db,
+        association_id=admin.org_id,
+        room_id=room_id,
+        positions=body.positions,
+    )
+    db.commit()
+    return {"ok": True, "items": [serialize_room_table(table) for table in tables]}
+
+
+@router.get("/bookings")
+def list_org_admin_bookings(
+    request: Request,
+    status: Optional[str] = Query(default=None),
+    form_id: Optional[int] = Query(default=None),
+    booking_date: Optional[date] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    items = list_bookings(
+        db,
+        association_id=admin.org_id,
+        anchor_date=booking_date,
+        status=status,
+        form_id=form_id,
+    )
+    return {
+        "items": [serialize_booking(item) for item in items],
+        "total": len(items),
+    }
+
+
+@router.get("/bookings/agenda/day")
+def org_admin_bookings_agenda_day(
+    request: Request,
+    date_value: Optional[date] = Query(default=None, alias="date"),
+    status: Optional[str] = Query(default=None),
+    form_id: Optional[int] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    agenda_date = date_value or datetime.utcnow().date()
+    return agenda_day_payload(
+        db,
+        association_id=admin.org_id,
+        agenda_date=agenda_date,
+        status=status,
+        form_id=form_id,
+    )
+
+
+@router.get("/bookings/agenda/week")
+def org_admin_bookings_agenda_week(
+    request: Request,
+    date_value: Optional[date] = Query(default=None, alias="date"),
+    status: Optional[str] = Query(default=None),
+    form_id: Optional[int] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    agenda_date = date_value or datetime.utcnow().date()
+    return agenda_week_payload(
+        db,
+        association_id=admin.org_id,
+        agenda_date=agenda_date,
+        status=status,
+        form_id=form_id,
+    )
+
+
+@router.get("/bookings/{booking_id}")
+def get_org_admin_booking_detail(
+    booking_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    booking = (
+        db.query(Booking)
+        .options(
+            joinedload(Booking.form),
+            joinedload(Booking.submission),
+            joinedload(Booking.events),
+            joinedload(Booking.room),
+            joinedload(Booking.table),
+        )
+        .filter(
+            Booking.id == booking_id,
+            Booking.association_id == admin.org_id,
+        )
+        .first()
+    )
+    if booking is None:
+        raise HTTPException(status_code=404, detail="Prenotazione non trovata.")
+    return {"booking": serialize_booking(booking, include_events=True)}
+
+
+@router.patch("/bookings/{booking_id}")
+def patch_org_admin_booking(
+    booking_id: int,
+    body: UpdateBookingStatusBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    booking = (
+        db.query(Booking)
+        .options(
+            joinedload(Booking.form),
+            joinedload(Booking.events),
+            joinedload(Booking.submission),
+            joinedload(Booking.room),
+            joinedload(Booking.table),
+        )
+        .filter(
+            Booking.id == booking_id,
+            Booking.association_id == admin.org_id,
+        )
+        .first()
+    )
+    if booking is None:
+        raise HTTPException(status_code=404, detail="Prenotazione non trovata.")
+    update_booking_status(
+        db,
+        booking=booking,
+        next_status=body.status,
+        created_by_user_id=admin.id,
+        room_id=body.room_id,
+        table_id=body.table_id,
+        notes=body.notes,
+    )
+    db.commit()
+    db.refresh(booking)
+    return {"booking": serialize_booking(booking, include_events=True)}
+
+
+@router.post("/bookings/{booking_id}/assignment")
+def assign_org_admin_booking(
+    booking_id: int,
+    body: AssignBookingTableBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    booking = (
+        db.query(Booking)
+        .options(
+            joinedload(Booking.form),
+            joinedload(Booking.events),
+            joinedload(Booking.submission),
+            joinedload(Booking.room),
+            joinedload(Booking.table),
+        )
+        .filter(Booking.id == booking_id, Booking.association_id == admin.org_id)
+        .first()
+    )
+    if booking is None:
+        raise HTTPException(status_code=404, detail="Prenotazione non trovata.")
+    resolved_room, resolved_table = resolve_assignment_targets(
+        db,
+        association_id=admin.org_id,
+        room_id=body.room_id,
+        table_id=body.table_id,
+    )
+    validate_booking_assignment(
+        db,
+        booking=booking,
+        room=resolved_room,
+        table=resolved_table,
+    )
+    update_booking_status(
+        db,
+        booking=booking,
+        next_status=booking.status,
+        created_by_user_id=admin.id,
+        room_id=resolved_room.id if resolved_room is not None else None,
+        table_id=resolved_table.id if resolved_table is not None else None,
+        notes=booking.notes,
+    )
+    db.commit()
+    db.refresh(booking)
+    return {"booking": serialize_booking(booking, include_events=True)}
+
+
+@router.delete("/bookings/{booking_id}/assignment")
+def unassign_org_admin_booking(
+    booking_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    booking = (
+        db.query(Booking)
+        .options(
+            joinedload(Booking.form),
+            joinedload(Booking.events),
+            joinedload(Booking.submission),
+            joinedload(Booking.room),
+            joinedload(Booking.table),
+        )
+        .filter(Booking.id == booking_id, Booking.association_id == admin.org_id)
+        .first()
+    )
+    if booking is None:
+        raise HTTPException(status_code=404, detail="Prenotazione non trovata.")
+    update_booking_status(
+        db,
+        booking=booking,
+        next_status=booking.status,
+        created_by_user_id=admin.id,
+        room_id=None,
+        table_id=None,
+        notes=booking.notes,
+    )
+    db.commit()
+    db.refresh(booking)
+    return {"booking": serialize_booking(booking, include_events=True)}

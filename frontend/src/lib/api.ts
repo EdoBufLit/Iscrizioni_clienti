@@ -744,6 +744,8 @@ export type AssociationFormActionTemplate = {
   is_active: boolean;
 };
 
+export type AssociationFormType = "generic" | "booking" | "request";
+
 export type AssociationForm = {
   id: number;
   association_id: number;
@@ -760,6 +762,12 @@ export type AssociationForm = {
   success_message: string | null;
   notification_email: string | null;
   allow_multiple_submissions: boolean;
+  form_type: AssociationFormType;
+  booking_enabled: boolean;
+  booking_requires_manual_confirmation: boolean;
+  booking_success_message_override: string | null;
+  booking_notification_enabled: boolean;
+  booking_field_mapping: Record<string, string>;
   notify_admin_on_submit: boolean;
   send_user_confirmation: boolean;
   admin_notification_template_id: number | null;
@@ -771,6 +779,7 @@ export type AssociationForm = {
   updated_at: string | null;
   field_count: number;
   submission_count: number;
+  booking_count: number;
   fields: AssociationFormField[];
   public_path?: string;
   design: {
@@ -790,6 +799,10 @@ export type AssociationForm = {
     user_confirmation_template: AssociationFormActionTemplate | null;
     create_internal_request: boolean;
     create_booking: boolean;
+    booking_enabled: boolean;
+    booking_requires_manual_confirmation: boolean;
+    booking_notification_enabled: boolean;
+    booking_field_mapping: Record<string, string>;
   };
 };
 
@@ -806,6 +819,14 @@ export type AssociationFormSubmission = {
     name: string | null;
     email: string | null;
   } | null;
+  booking: {
+    id: number;
+    status: string;
+    customer_name: string;
+    booking_date: string | null;
+    booking_time: string | null;
+    party_size: number | null;
+  } | null;
 };
 
 export type PublicAssociationForm = AssociationForm & {
@@ -813,6 +834,113 @@ export type PublicAssociationForm = AssociationForm & {
     id: number;
     name: string | null;
     slug: string | null;
+  };
+};
+
+export type AssociationBookingEvent = {
+  id: number;
+  booking_id: number;
+  event_type: string;
+  payload_json: Record<string, unknown>;
+  created_at: string | null;
+  created_by_user_id: number | null;
+};
+
+export type AssociationBooking = {
+  id: number;
+  association_id: number;
+  form_id: number | null;
+  submission_id: number | null;
+  status: string;
+  customer_name: string;
+  customer_email: string | null;
+  customer_phone: string | null;
+  booking_date: string | null;
+  booking_time: string | null;
+  party_size: number | null;
+  notes: string | null;
+  notes_preview: string | null;
+  room_id: number | null;
+  table_id: number | null;
+  room: {
+    id: number;
+    name: string;
+    is_active: boolean;
+  } | null;
+  table: {
+    id: number;
+    name: string;
+    capacity: number;
+    shape: string;
+    room_id: number;
+    is_active: boolean;
+    is_out_of_service: boolean;
+  } | null;
+  created_at: string | null;
+  updated_at: string | null;
+  confirmed_at: string | null;
+  cancelled_at: string | null;
+  source_form: {
+    id: number;
+    title: string;
+    public_slug: string;
+  } | null;
+  submission: {
+    id: number;
+    submitted_at: string | null;
+  } | null;
+  events: AssociationBookingEvent[];
+};
+
+export type AssociationRoom = {
+  id: number;
+  association_id: number;
+  name: string;
+  is_active: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+  table_count: number;
+  booking_count: number;
+};
+
+export type AssociationRoomTable = {
+  id: number;
+  association_id: number;
+  room_id: number;
+  name: string;
+  capacity: number;
+  shape: "round" | "square" | "rectangle" | string;
+  pos_x: number;
+  pos_y: number;
+  width: number | null;
+  height: number | null;
+  is_active: boolean;
+  is_out_of_service: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+  occupancy_state: "free" | "reserved" | "occupied" | "out_of_service" | string;
+  active_booking: {
+    id: number;
+    status: string;
+    customer_name: string;
+    booking_date: string | null;
+    booking_time: string | null;
+    party_size: number | null;
+    form_title: string | null;
+  } | null;
+};
+
+export type AssociationRoomMap = {
+  room: AssociationRoom;
+  focus_date: string | null;
+  focus_time: string | null;
+  tables: AssociationRoomTable[];
+  totals: {
+    tables: number;
+    free: number;
+    reserved: number;
+    occupied: number;
+    out_of_service: number;
   };
 };
 
@@ -1072,6 +1200,12 @@ export async function createOrgAdminForm(data: {
   success_message?: string | null;
   notification_email?: string | null;
   allow_multiple_submissions?: boolean;
+  form_type?: AssociationFormType;
+  booking_enabled?: boolean;
+  booking_requires_manual_confirmation?: boolean;
+  booking_success_message_override?: string | null;
+  booking_notification_enabled?: boolean;
+  booking_field_mapping?: Record<string, string>;
   notify_admin_on_submit?: boolean;
   send_user_confirmation?: boolean;
   admin_notification_template_id?: number | null;
@@ -1108,15 +1242,21 @@ export async function updateOrgAdminForm(
     page_style?: string | null;
     public_slug?: string | null;
     is_active?: boolean;
-    visibility?: AssociationFormVisibility;
-    success_message?: string | null;
-    notification_email?: string | null;
-    allow_multiple_submissions?: boolean;
-    notify_admin_on_submit?: boolean;
-    send_user_confirmation?: boolean;
-    admin_notification_template_id?: number | null;
-    user_confirmation_template_id?: number | null;
-    create_internal_request?: boolean;
+  visibility?: AssociationFormVisibility;
+  success_message?: string | null;
+  notification_email?: string | null;
+  allow_multiple_submissions?: boolean;
+  form_type?: AssociationFormType;
+  booking_enabled?: boolean;
+  booking_requires_manual_confirmation?: boolean;
+  booking_success_message_override?: string | null;
+  booking_notification_enabled?: boolean;
+  booking_field_mapping?: Record<string, string>;
+  notify_admin_on_submit?: boolean;
+  send_user_confirmation?: boolean;
+  admin_notification_template_id?: number | null;
+  user_confirmation_template_id?: number | null;
+  create_internal_request?: boolean;
     create_booking?: boolean;
   },
 ): Promise<{ form: AssociationForm }> {
@@ -1267,6 +1407,7 @@ export async function submitPublicForm(
   ok: boolean;
   message: string;
   submission: AssociationFormSubmission;
+  booking: AssociationBooking | null;
 }> {
   const scoped = typeof slugOrPayload === "string";
   const path = scoped
@@ -1279,6 +1420,273 @@ export async function submitPublicForm(
     body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore invio form"));
+  return res.json();
+}
+
+export async function fetchOrgAdminBookings(input?: {
+  status?: string;
+  formId?: number | null;
+  bookingDate?: string | null;
+}): Promise<{ items: AssociationBooking[]; total: number }> {
+  const params = new URLSearchParams();
+  if (input?.status) params.set("status", input.status);
+  if (input?.formId) params.set("form_id", String(input.formId));
+  if (input?.bookingDate) params.set("booking_date", input.bookingDate);
+  const res = await fetch(`/api/org-admin/bookings${params.toString() ? `?${params.toString()}` : ""}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento prenotazioni"));
+  return res.json();
+}
+
+export async function fetchOrgAdminBooking(
+  bookingId: number,
+): Promise<{ booking: AssociationBooking }> {
+  const res = await fetch(`/api/org-admin/bookings/${bookingId}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento dettaglio prenotazione"));
+  return res.json();
+}
+
+export async function updateOrgAdminBooking(
+  bookingId: number,
+  data: {
+    status: string;
+    room_id?: number | null;
+    table_id?: number | null;
+    notes?: string | null;
+  },
+): Promise<{ booking: AssociationBooking }> {
+  const res = await fetch(`/api/org-admin/bookings/${bookingId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento prenotazione"));
+  return res.json();
+}
+
+export async function fetchOrgAdminBookingsAgendaDay(input?: {
+  date?: string | null;
+  status?: string;
+  formId?: number | null;
+}): Promise<{
+  date: string;
+  items: AssociationBooking[];
+  total: number;
+}> {
+  const params = new URLSearchParams();
+  if (input?.date) params.set("date", input.date);
+  if (input?.status) params.set("status", input.status);
+  if (input?.formId) params.set("form_id", String(input.formId));
+  const res = await fetch(`/api/org-admin/bookings/agenda/day${params.toString() ? `?${params.toString()}` : ""}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore agenda giornaliera"));
+  return res.json();
+}
+
+export async function fetchOrgAdminBookingsAgendaWeek(input?: {
+  date?: string | null;
+  status?: string;
+  formId?: number | null;
+}): Promise<{
+  week_start: string;
+  week_end: string;
+  days: Array<{
+    date: string;
+    weekday: string;
+    items: AssociationBooking[];
+    total: number;
+  }>;
+  total: number;
+}> {
+  const params = new URLSearchParams();
+  if (input?.date) params.set("date", input.date);
+  if (input?.status) params.set("status", input.status);
+  if (input?.formId) params.set("form_id", String(input.formId));
+  const res = await fetch(`/api/org-admin/bookings/agenda/week${params.toString() ? `?${params.toString()}` : ""}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore agenda settimanale"));
+  return res.json();
+}
+
+export async function fetchOrgAdminRooms(input?: {
+  includeInactive?: boolean;
+}): Promise<{ items: AssociationRoom[]; total: number }> {
+  const params = new URLSearchParams();
+  if (input?.includeInactive !== undefined) {
+    params.set("include_inactive", input.includeInactive ? "true" : "false");
+  }
+  const res = await fetch(`/api/org-admin/rooms${params.toString() ? `?${params.toString()}` : ""}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento sale"));
+  return res.json();
+}
+
+export async function createOrgAdminRoom(data: {
+  name: string;
+  is_active?: boolean;
+}): Promise<{ room: AssociationRoom }> {
+  const res = await fetch("/api/org-admin/rooms", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione sala"));
+  return res.json();
+}
+
+export async function updateOrgAdminRoom(
+  roomId: number,
+  data: { name: string; is_active?: boolean },
+): Promise<{ room: AssociationRoom }> {
+  const res = await fetch(`/api/org-admin/rooms/${roomId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento sala"));
+  return res.json();
+}
+
+export async function deleteOrgAdminRoom(
+  roomId: number,
+): Promise<{ ok: boolean; deleted_room_id: number }> {
+  const res = await fetch(`/api/org-admin/rooms/${roomId}`, {
+    method: "DELETE",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore eliminazione sala"));
+  return res.json();
+}
+
+export async function fetchOrgAdminRoomTables(
+  roomId: number,
+  input?: { includeInactive?: boolean },
+): Promise<{ items: AssociationRoomTable[]; total: number }> {
+  const params = new URLSearchParams();
+  if (input?.includeInactive !== undefined) {
+    params.set("include_inactive", input.includeInactive ? "true" : "false");
+  }
+  const res = await fetch(
+    `/api/org-admin/rooms/${roomId}/tables${params.toString() ? `?${params.toString()}` : ""}`,
+  );
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento tavoli"));
+  return res.json();
+}
+
+export async function createOrgAdminRoomTable(
+  roomId: number,
+  data: {
+    name: string;
+    capacity: number;
+    shape: string;
+    pos_x: number;
+    pos_y: number;
+    width?: number | null;
+    height?: number | null;
+    is_active?: boolean;
+    is_out_of_service?: boolean;
+  },
+): Promise<{ table: AssociationRoomTable }> {
+  const res = await fetch(`/api/org-admin/rooms/${roomId}/tables`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione tavolo"));
+  return res.json();
+}
+
+export async function updateOrgAdminRoomTable(
+  tableId: number,
+  data: {
+    room_id: number;
+    name: string;
+    capacity: number;
+    shape: string;
+    pos_x: number;
+    pos_y: number;
+    width?: number | null;
+    height?: number | null;
+    is_active?: boolean;
+    is_out_of_service?: boolean;
+  },
+): Promise<{ table: AssociationRoomTable }> {
+  const res = await fetch(`/api/org-admin/tables/${tableId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento tavolo"));
+  return res.json();
+}
+
+export async function deleteOrgAdminRoomTable(
+  tableId: number,
+): Promise<{ ok: boolean; deleted_table_id: number }> {
+  const res = await fetch(`/api/org-admin/tables/${tableId}`, {
+    method: "DELETE",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore eliminazione tavolo"));
+  return res.json();
+}
+
+export async function fetchOrgAdminRoomMap(
+  roomId: number,
+  input?: { date?: string | null; time?: string | null },
+): Promise<AssociationRoomMap> {
+  const params = new URLSearchParams();
+  if (input?.date) params.set("date", input.date);
+  if (input?.time) params.set("time", input.time);
+  const res = await fetch(`/api/org-admin/rooms/${roomId}/map${params.toString() ? `?${params.toString()}` : ""}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento mappa sala"));
+  return res.json();
+}
+
+export async function saveOrgAdminRoomMap(
+  roomId: number,
+  positions: Array<{ id: number; pos_x: number; pos_y: number; width?: number | null; height?: number | null }>,
+): Promise<{ ok: boolean; items: AssociationRoomTable[] }> {
+  const res = await fetch(`/api/org-admin/rooms/${roomId}/map`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ positions }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore salvataggio mappa sala"));
+  return res.json();
+}
+
+export async function assignOrgAdminBookingTable(
+  bookingId: number,
+  data: { room_id?: number | null; table_id?: number | null },
+): Promise<{ booking: AssociationBooking }> {
+  const res = await fetch(`/api/org-admin/bookings/${bookingId}/assignment`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore assegnazione tavolo"));
+  return res.json();
+}
+
+export async function unassignOrgAdminBookingTable(
+  bookingId: number,
+): Promise<{ booking: AssociationBooking }> {
+  const res = await fetch(`/api/org-admin/bookings/${bookingId}/assignment`, {
+    method: "DELETE",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore rimozione assegnazione"));
   return res.json();
 }
 

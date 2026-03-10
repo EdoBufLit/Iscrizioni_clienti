@@ -16,6 +16,7 @@ from app.routes.member import get_current_member
 from app.services.card_verification import parse_card_verification_token
 from app.services.db_rate_limit import enforce_db_rate_limit
 from app.services.forms import (
+    create_booking_from_form_submission,
     create_submission,
     enqueue_submission_notifications,
     ensure_submission_allowed,
@@ -356,6 +357,12 @@ def _submit_public_form(
         member=member,
         validated_submission=validated_submission,
     )
+    booking = create_booking_from_form_submission(
+        db,
+        form=form,
+        submission=submission,
+        validated_submission=validated_submission,
+    )
     enqueue_submission_notifications(
         db,
         form=form,
@@ -364,10 +371,27 @@ def _submit_public_form(
     )
     db.commit()
     db.refresh(submission)
+    if booking is not None:
+        db.refresh(booking)
     return {
         "ok": True,
-        "message": form.success_message or "Richiesta inviata correttamente.",
+        "message": (
+            form.booking_success_message_override
+            if booking is not None and getattr(form, "booking_success_message_override", None)
+            else form.success_message
+        )
+        or "Richiesta inviata correttamente.",
         "submission": serialize_submission(submission),
+        "booking": {
+            "id": booking.id,
+            "status": booking.status,
+            "customer_name": booking.customer_name,
+            "booking_date": booking.booking_date.isoformat() if booking.booking_date else None,
+            "booking_time": booking.booking_time,
+            "party_size": booking.party_size,
+        }
+        if booking is not None
+        else None,
     }
 
 

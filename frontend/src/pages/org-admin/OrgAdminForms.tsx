@@ -16,6 +16,7 @@ import {
   type AssociationForm,
   type AssociationFormField,
   type AssociationFormFieldType,
+  type AssociationFormType,
   type AssociationFormSubmission,
   type AssociationFormVisibility,
   type OrgAdminEmailTemplate,
@@ -33,6 +34,14 @@ const studioCardClass = "rounded-[1.85rem] border border-neutral-200 bg-white/92
 
 type EditorTab = "builder" | "design" | "automations" | "responses" | "share";
 type PageStyleOption = "editorial" | "minimal" | "spotlight";
+type BookingMappingTarget =
+  | "customer_name"
+  | "customer_email"
+  | "customer_phone"
+  | "booking_date"
+  | "booking_time"
+  | "party_size"
+  | "notes";
 
 const editorTabs: Array<{ key: EditorTab; label: string; hint: string }> = [
   { key: "builder", label: "Builder", hint: "Campi e struttura" },
@@ -68,6 +77,22 @@ const fieldTypeOptions: Array<{
   { value: "radio", label: "Radio", icon: "◉", hint: "Una scelta tra poche opzioni visibili." },
   { value: "checkbox", label: "Checkbox", icon: "☑", hint: "Più opzioni selezionabili." },
   { value: "consent", label: "Consenso", icon: "✓", hint: "Privacy, termini o autorizzazioni." },
+];
+
+const formTypeOptions: Array<{ value: AssociationFormType; label: string; hint: string }> = [
+  { value: "generic", label: "Generico", hint: "Modulo classico per contatti o richieste." },
+  { value: "booking", label: "Prenotazione", hint: "Alla submit crea anche una prenotazione in agenda." },
+  { value: "request", label: "Richiesta", hint: "Richieste strutturate gestite dalla segreteria." },
+];
+
+const bookingMappingTargets: Array<{ key: BookingMappingTarget; label: string; hint: string }> = [
+  { key: "customer_name", label: "Nome cliente", hint: "Nome mostrato nella prenotazione." },
+  { key: "customer_email", label: "Email cliente", hint: "Serve per conferme e aggiornamenti." },
+  { key: "customer_phone", label: "Telefono cliente", hint: "Contatto rapido." },
+  { key: "booking_date", label: "Data prenotazione", hint: "Campo data da usare in agenda." },
+  { key: "booking_time", label: "Orario prenotazione", hint: "Campo orario della prenotazione." },
+  { key: "party_size", label: "Numero persone", hint: "Dimensione gruppo o coperti." },
+  { key: "notes", label: "Note", hint: "Richieste speciali o dettagli utili." },
 ];
 
 function slugifyKey(value: string): string {
@@ -123,6 +148,12 @@ function emptyFormDraft() {
     success_message: "Richiesta inviata correttamente.",
     notification_email: "",
     allow_multiple_submissions: true,
+    form_type: "generic" as AssociationFormType,
+    booking_enabled: false,
+    booking_requires_manual_confirmation: true,
+    booking_success_message_override: "",
+    booking_notification_enabled: true,
+    booking_field_mapping: {} as Record<string, string>,
     notify_admin_on_submit: true,
     send_user_confirmation: true,
     admin_notification_template_id: null as number | null,
@@ -259,6 +290,12 @@ export function OrgAdminFormsWorkspace({
       success_message: selectedForm.success_message || "",
       notification_email: selectedForm.notification_email || "",
       allow_multiple_submissions: Boolean(selectedForm.allow_multiple_submissions),
+      form_type: selectedForm.form_type || "generic",
+      booking_enabled: Boolean(selectedForm.booking_enabled || selectedForm.create_booking),
+      booking_requires_manual_confirmation: Boolean(selectedForm.booking_requires_manual_confirmation),
+      booking_success_message_override: selectedForm.booking_success_message_override || "",
+      booking_notification_enabled: Boolean(selectedForm.booking_notification_enabled),
+      booking_field_mapping: selectedForm.booking_field_mapping || {},
       notify_admin_on_submit: Boolean(selectedForm.notify_admin_on_submit),
       send_user_confirmation: Boolean(selectedForm.send_user_confirmation),
       admin_notification_template_id: selectedForm.admin_notification_template_id,
@@ -300,9 +337,22 @@ export function OrgAdminFormsWorkspace({
     if (!publicPath) return "";
     return `${window.location.origin}${publicPath}`;
   }, [publicPath]);
+  const selectedFormUrl = useMemo(() => {
+    const path = selectedForm?.public_path || publicPath;
+    if (!path) return "";
+    return `${window.location.origin}${path}`;
+  }, [publicPath, selectedForm?.public_path]);
   const sortedFields = useMemo(
     () => [...(selectedForm?.fields || [])].sort((left, right) => left.sort_order - right.sort_order),
     [selectedForm?.fields],
+  );
+  const bookingMappingFieldOptions = useMemo(
+    () =>
+      sortedFields.map((field) => ({
+        value: field.field_key,
+        label: `${field.label} (${field.field_key})`,
+      })),
+    [sortedFields],
   );
   const previewValues = useMemo(() => buildPreviewValues(selectedForm), [selectedForm]);
   const responseDestinationEmail = useMemo(
@@ -380,8 +430,29 @@ export function OrgAdminFormsWorkspace({
       if (key === "title" && !current.public_slug) {
         next.public_slug = derivePublicSlug(String(value || ""));
       }
+      if (key === "booking_enabled") {
+        next.create_booking = Boolean(value);
+        if (value && next.form_type === "generic") {
+          next.form_type = "booking";
+        }
+      }
+      if (key === "form_type" && value === "booking") {
+        next.booking_enabled = true;
+        next.create_booking = true;
+      }
       return next;
     });
+  }
+
+  function syncBookingFieldMapping(target: BookingMappingTarget, fieldKey: string) {
+    setFormSaved(false);
+    setFormDraft((current) => ({
+      ...current,
+      booking_field_mapping: {
+        ...current.booking_field_mapping,
+        [target]: fieldKey,
+      },
+    }));
   }
 
   async function handleSaveForm(event?: FormEvent) {
@@ -393,6 +464,7 @@ export function OrgAdminFormsWorkspace({
     setSavingForm(true);
     setFormSaved(false);
     try {
+      const bookingEnabled = Boolean(formDraft.booking_enabled || formDraft.create_booking);
       const payload = {
         ...formDraft,
         description: formDraft.description || null,
@@ -402,8 +474,12 @@ export function OrgAdminFormsWorkspace({
         public_slug: formDraft.public_slug || null,
         success_message: formDraft.success_message || null,
         notification_email: formDraft.notification_email || null,
+        booking_enabled: bookingEnabled,
+        booking_success_message_override: formDraft.booking_success_message_override || null,
+        booking_field_mapping: formDraft.booking_field_mapping || {},
         admin_notification_template_id: formDraft.admin_notification_template_id || null,
         user_confirmation_template_id: formDraft.user_confirmation_template_id || null,
+        create_booking: bookingEnabled,
       };
       const response = selectedFormId
         ? await updateOrgAdminForm(selectedFormId, payload)
@@ -718,6 +794,8 @@ export function OrgAdminFormsWorkspace({
       show_logo: formDraft.show_logo,
       cover_image_url: formDraft.cover_image_url || null,
       page_style: formDraft.page_style,
+      visibility: formDraft.visibility,
+      is_active: formDraft.is_active,
       fields: selectedForm?.fields || [],
       association: {
         name: admin?.organization?.name || "Associazione",
@@ -1256,6 +1334,21 @@ export function OrgAdminFormsWorkspace({
         <div className="rounded-[1.6rem] border border-neutral-200 bg-white p-5">
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Workflow post-submit</p>
           <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            <label className={labelClass}>
+              Tipo form
+              <select
+                className={inputClass}
+                disabled={locked}
+                value={formDraft.form_type}
+                onChange={(event) => syncFormDraft("form_type", event.target.value as AssociationFormType)}
+              >
+                {formTypeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="flex items-center gap-3 rounded-[1.2rem] border border-neutral-200 bg-neutral-50 px-4 py-4 text-sm text-neutral-700">
               <input
                 type="checkbox"
@@ -1287,11 +1380,28 @@ export function OrgAdminFormsWorkspace({
               <input
                 type="checkbox"
                 disabled={locked}
-                checked={formDraft.create_booking}
-                onChange={(event) => syncFormDraft("create_booking", event.target.checked)}
+                checked={formDraft.booking_enabled}
+                onChange={(event) => syncFormDraft("booking_enabled", event.target.checked)}
               />
-              Booking futuro
+              Crea prenotazione da questo form
             </label>
+          </div>
+          <div className="mt-4 grid gap-3 lg:grid-cols-3">
+            {formTypeOptions.map((option) => (
+              <div
+                key={option.value}
+                className={`rounded-[1.2rem] border px-4 py-4 text-sm ${
+                  formDraft.form_type === option.value
+                    ? "border-neutral-900 bg-neutral-950 text-white"
+                    : "border-neutral-200 bg-neutral-50 text-neutral-600"
+                }`}
+              >
+                <p className="font-semibold">{option.label}</p>
+                <p className={`mt-1 text-xs leading-5 ${formDraft.form_type === option.value ? "text-white/72" : "text-neutral-500"}`}>
+                  {option.hint}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -1364,6 +1474,89 @@ export function OrgAdminFormsWorkspace({
             </label>
           </div>
         </div>
+
+        <div className="rounded-[1.6rem] border border-neutral-200 bg-white p-5">
+          <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Prenotazioni & agenda</p>
+              <h3 className="mt-2 text-xl font-semibold tracking-tight text-neutral-950">Estendi il form come booking</h3>
+              <p className="mt-1 text-sm text-neutral-600">
+                Il submit continua a salvare una risposta normale. Se il form è booking-enabled crea anche una prenotazione collegata.
+              </p>
+            </div>
+            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${formDraft.booking_enabled ? "bg-emerald-100 text-emerald-700" : "bg-neutral-100 text-neutral-600"}`}>
+              {formDraft.booking_enabled ? "Booking attivo" : "Form normale"}
+            </span>
+          </div>
+
+          {formDraft.booking_enabled ? (
+            <div className="mt-5 space-y-4">
+              <div className="grid gap-4 lg:grid-cols-2">
+                <label className="flex items-center gap-3 rounded-[1.2rem] border border-neutral-200 bg-neutral-50 px-4 py-4 text-sm text-neutral-700">
+                  <input
+                    type="checkbox"
+                    disabled={locked}
+                    checked={formDraft.booking_requires_manual_confirmation}
+                    onChange={(event) => syncFormDraft("booking_requires_manual_confirmation", event.target.checked)}
+                  />
+                  Richiede conferma manuale prima di segnare la prenotazione come confermata
+                </label>
+                <label className="flex items-center gap-3 rounded-[1.2rem] border border-neutral-200 bg-neutral-50 px-4 py-4 text-sm text-neutral-700">
+                  <input
+                    type="checkbox"
+                    disabled={locked}
+                    checked={formDraft.booking_notification_enabled}
+                    onChange={(event) => syncFormDraft("booking_notification_enabled", event.target.checked)}
+                  />
+                  Invia notifiche email legate allo stato prenotazione
+                </label>
+              </div>
+
+              <label className={labelClass}>
+                Messaggio finale dedicato alle prenotazioni
+                <textarea
+                  className={`${inputClass} min-h-[88px]`}
+                  disabled={locked}
+                  value={formDraft.booking_success_message_override}
+                  onChange={(event) => syncFormDraft("booking_success_message_override", event.target.value)}
+                  placeholder="Prenotazione ricevuta. Ti confermeremo data e tavolo al più presto."
+                />
+              </label>
+
+              <div className="rounded-[1.3rem] border border-neutral-200 bg-neutral-50 p-4">
+                <p className="text-sm font-semibold text-neutral-900">Mappatura campi booking</p>
+                <p className="mt-1 text-xs leading-5 text-neutral-500">
+                  Seleziona quali campi del form alimentano nome, email, data, orario e note della prenotazione.
+                </p>
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  {bookingMappingTargets.map((target) => (
+                    <label key={target.key} className={labelClass}>
+                      {target.label}
+                      <select
+                        className={inputClass}
+                        disabled={locked || bookingMappingFieldOptions.length === 0}
+                        value={formDraft.booking_field_mapping[target.key] || ""}
+                        onChange={(event) => syncBookingFieldMapping(target.key, event.target.value)}
+                      >
+                        <option value="">Non collegato</option>
+                        {bookingMappingFieldOptions.map((option) => (
+                          <option key={`${target.key}-${option.value}`} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="mt-1 block text-xs leading-5 text-neutral-500">{target.hint}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-5 rounded-[1.3rem] border border-dashed border-neutral-200 bg-neutral-50 px-4 py-5 text-sm text-neutral-600">
+              Lascia disattivato se vuoi un form generico. Attivalo solo quando vuoi vedere ogni submit anche nella nuova agenda Prenotazioni.
+            </div>
+          )}
+        </div>
       </div>
 
       <aside className="rounded-[1.6rem] border border-neutral-200 bg-neutral-50 p-5">
@@ -1402,6 +1595,16 @@ export function OrgAdminFormsWorkspace({
                 : "Nessuna richiesta interna aggiuntiva."}
             </p>
           </div>
+          <div className="rounded-[1.2rem] border border-neutral-200 bg-white px-4 py-4">
+            <p className="font-semibold text-neutral-900">Prenotazione</p>
+            <p className="mt-1">
+              {formDraft.booking_enabled
+                ? formDraft.booking_requires_manual_confirmation
+                  ? "Ogni invio crea una prenotazione in stato pending."
+                  : "Ogni invio crea subito una prenotazione confermata."
+                : "Il form non crea prenotazioni: salva solo la submission."}
+            </p>
+          </div>
         </div>
       </aside>
     </div>
@@ -1423,6 +1626,30 @@ export function OrgAdminFormsWorkspace({
           ) : null}
         </div>
 
+        <div className="grid gap-3 md:grid-cols-4">
+          <div className="rounded-[1.3rem] border border-neutral-200 bg-white px-4 py-4">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Totale invii</p>
+            <p className="mt-2 text-2xl font-semibold text-neutral-950">{submissions.length}</p>
+          </div>
+          <div className="rounded-[1.3rem] border border-neutral-200 bg-white px-4 py-4">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Con booking</p>
+            <p className="mt-2 text-2xl font-semibold text-neutral-950">{submissions.filter((item) => item.booking).length}</p>
+          </div>
+          <div className="rounded-[1.3rem] border border-neutral-200 bg-white px-4 py-4">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Uso consigliato</p>
+            <p className="mt-2 text-sm leading-6 text-neutral-600">Apri una riga per leggere il payload completo senza perdere il contesto del form.</p>
+          </div>
+          <div className="rounded-[1.3rem] border border-neutral-200 bg-white px-4 py-4">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Destinazione</p>
+            <p className="mt-2 text-sm font-semibold text-neutral-950">
+              {responseDestinationEmail || "Solo backoffice"}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-neutral-600">
+              Ogni invio viene salvato qui; se configurata, parte anche la notifica verso la segreteria.
+            </p>
+          </div>
+        </div>
+
         {!selectedFormId ? (
           <div className="rounded-[1.6rem] border border-dashed border-neutral-200 bg-neutral-50 px-5 py-10 text-center text-sm text-neutral-500">
             Le risposte appariranno qui dopo il primo invio pubblico.
@@ -1435,19 +1662,20 @@ export function OrgAdminFormsWorkspace({
                   <tr>
                     <th className="px-4 py-3 font-semibold">Data</th>
                     <th className="px-4 py-3 font-semibold">Stato</th>
+                    <th className="px-4 py-3 font-semibold">Prenotazione</th>
                     <th className="px-4 py-3 font-semibold">Identità</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-200 bg-white">
                   {submissionsLoading ? (
                     <tr>
-                      <td className="px-4 py-4 text-neutral-500" colSpan={3}>
+                      <td className="px-4 py-4 text-neutral-500" colSpan={4}>
                         Caricamento risposte...
                       </td>
                     </tr>
                   ) : submissions.length === 0 ? (
                     <tr>
-                      <td className="px-4 py-4 text-neutral-500" colSpan={3}>
+                      <td className="px-4 py-4 text-neutral-500" colSpan={4}>
                         Nessuna risposta ricevuta.
                       </td>
                     </tr>
@@ -1467,6 +1695,15 @@ export function OrgAdminFormsWorkspace({
                         <td className="px-4 py-3">{formatDateTime(submission.submitted_at)}</td>
                         <td className="px-4 py-3">{submission.status}</td>
                         <td className="px-4 py-3">
+                          {submission.booking ? (
+                            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                              {submission.booking.status}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-neutral-400">Nessuna</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
                           {submission.submitted_by?.name || submission.submitted_by?.email || `#${submission.id}`}
                         </td>
                       </tr>
@@ -1484,6 +1721,22 @@ export function OrgAdminFormsWorkspace({
         {selectedSubmission ? (
           <div className="mt-4 space-y-3">
             <div className="text-xs text-neutral-500">Ricevuta il {formatDateTime(selectedSubmission.submitted_at)}</div>
+            <div className="rounded-[1.2rem] border border-white bg-white px-3 py-3 shadow-sm">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Dove arriva</div>
+              <div className="mt-2 text-sm text-neutral-800">
+                {responseDestinationEmail
+                  ? `Storico sito + notifica email a ${responseDestinationEmail}`
+                  : "Storico sito visibile all'org admin. Nessuna mail segreteria configurata."}
+              </div>
+            </div>
+            <div className="rounded-[1.2rem] border border-white bg-white px-3 py-3 shadow-sm">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Prenotazione collegata</div>
+              <div className="mt-2 text-sm text-neutral-800">
+                {selectedSubmission.booking
+                  ? `#${selectedSubmission.booking.id} - ${selectedSubmission.booking.status} - ${selectedSubmission.booking.booking_date || "data da definire"} ${selectedSubmission.booking.booking_time || ""}`.trim()
+                  : "Nessuna prenotazione collegata a questa risposta."}
+              </div>
+            </div>
             {selectedSubmissionEntries.map((entry) => (
               <div key={entry.key} className="rounded-[1.2rem] border border-white bg-white px-3 py-3 shadow-sm">
                 <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{entry.label}</div>
@@ -1502,25 +1755,37 @@ export function OrgAdminFormsWorkspace({
   const shareTab = (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
       <div className="space-y-4">
-        <div className="rounded-[1.8rem] border border-neutral-200 bg-[linear-gradient(135deg,#ffffff,#f4f7f8)] p-5 shadow-sm">
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Link pubblico</p>
-          <div className="mt-4 rounded-[1.4rem] border border-neutral-200 bg-white px-4 py-5">
-            <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">URL da condividere</p>
-            <p className="mt-2 break-all text-lg font-semibold tracking-tight text-neutral-950">
-              {publicUrl || "Salva il form per generare il link pubblico"}
+        <div className="overflow-hidden rounded-[1.9rem] border border-black/10 bg-[linear-gradient(135deg,#111827,#1f2937_58%,#4b3520)] p-5 text-white shadow-[0_30px_100px_rgba(15,23,42,0.2)]">
+          <p className="text-xs font-bold uppercase tracking-[0.24em] text-white/55">Condivisione</p>
+          <h3 className="mt-3 font-serif text-3xl tracking-tight">Il tuo link pubblico è qui.</h3>
+          <p className="mt-2 max-w-2xl text-sm leading-7 text-white/72">
+            Quando il form è online puoi copiarlo, aprirlo e usarlo su sito, email, social o QR. La route finale resta sempre organizzata come pagina reale.
+          </p>
+          <div className="mt-5 rounded-[1.5rem] border border-white/12 bg-white/8 px-4 py-5">
+            <p className="text-xs uppercase tracking-[0.18em] text-white/55">URL da condividere</p>
+            <p className="mt-3 break-all font-mono text-sm leading-7 text-white">
+              {selectedFormUrl || publicUrl || "Salva il form per generare il link pubblico"}
             </p>
-            <p className="mt-2 text-xs text-neutral-500">
-              Struttura consigliata: <span className="font-semibold text-neutral-700">/forms/{orgSlug || "{org-slug}"}/{formDraft.public_slug || "{nome-form}"}</span>
-            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${formDraft.is_active ? "bg-emerald-400/18 text-emerald-100" : "bg-white/10 text-white/70"}`}>
+                {formDraft.is_active ? "Pagina online" : "Bozza offline"}
+              </span>
+              <span className="rounded-full bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-white/70">
+                {formDraft.visibility === "members_only" ? "Solo soci" : "Pubblica"}
+              </span>
+            </div>
           </div>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <button className="btn-secondary" type="button" onClick={() => void copyPublicLink(publicUrl)} disabled={!publicUrl}>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <button className="btn-secondary" type="button" onClick={() => void copyPublicLink(selectedFormUrl || publicUrl)} disabled={!selectedFormUrl && !publicUrl}>
               Copia link
             </button>
-            <button className="btn-primary" type="button" onClick={() => openPublicLink(publicUrl)} disabled={!publicUrl || !formDraft.is_active}>
+            <button className="btn-primary" type="button" onClick={() => openPublicLink(selectedFormUrl || publicUrl)} disabled={(!selectedFormUrl && !publicUrl) || !formDraft.is_active}>
               Apri pagina pubblica
             </button>
           </div>
+          <p className="mt-4 text-xs text-white/55">
+            Struttura consigliata: <span className="font-semibold text-white/80">/forms/{orgSlug || "{org-slug}"}/{formDraft.public_slug || "{nome-form}"}</span>
+          </p>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
@@ -1657,6 +1922,9 @@ export function OrgAdminFormsWorkspace({
                 <p className="mt-2 text-sm text-neutral-600">
                   Seleziona una pagina esistente oppure crea un nuovo form con link pubblico dedicato.
                 </p>
+                <p className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-400">
+                  Ogni card rappresenta una vera pagina pubblica dell'associazione.
+                </p>
               </div>
               <button className="btn-primary" type="button" onClick={handleCreateNewForm} disabled={locked}>
                 {locked ? "Modulo richiesto" : "Nuovo form"}
@@ -1689,13 +1957,21 @@ export function OrgAdminFormsWorkspace({
                   const formPath = form.public_path || (orgSlug ? `/forms/${orgSlug}/${form.public_slug}` : `/forms/${form.public_slug}`);
                   const formLink = `${window.location.origin}${formPath}`;
                   return (
-                    <button
+                    <div
                       key={form.id}
-                      type="button"
                       onClick={() => {
                         setSelectedFormId(form.id);
                         setSelectedForm(form);
                       }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setSelectedFormId(form.id);
+                          setSelectedForm(form);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
                       className={`group rounded-[1.6rem] border p-5 text-left transition ${
                         isSelected
                           ? "border-neutral-900 bg-neutral-950 text-white shadow-[0_28px_100px_rgba(15,23,42,0.26)]"
@@ -1725,11 +2001,23 @@ export function OrgAdminFormsWorkspace({
                             >
                               {form.visibility === "members_only" ? "Solo soci" : "Pubblico"}
                             </span>
+                            {form.booking_enabled ? (
+                              <span
+                                className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${
+                                  isSelected ? "bg-emerald-400/18 text-emerald-100" : "bg-emerald-100 text-emerald-700"
+                                }`}
+                              >
+                                Prenotazioni
+                              </span>
+                            ) : null}
                           </div>
                           <h3 className={`mt-4 text-xl font-semibold tracking-tight ${isSelected ? "text-white" : "text-neutral-950"}`}>
                             {form.title}
                           </h3>
                           <p className={`mt-2 text-sm ${isSelected ? "text-white/70" : "text-neutral-500"}`}>/{form.public_slug}</p>
+                          <p className={`mt-2 line-clamp-2 text-sm leading-6 ${isSelected ? "text-white/62" : "text-neutral-600"}`}>
+                            {form.description || "Pagina pronta per raccolta lead, iscrizioni, richieste o prenotazioni."}
+                          </p>
                         </div>
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-semibold ${
@@ -1748,17 +2036,36 @@ export function OrgAdminFormsWorkspace({
                           <p className="mt-1 font-semibold">{form.field_count}</p>
                         </div>
                         <div>
-                          <p className="text-[11px] uppercase tracking-[0.18em] opacity-70">Aggiornato</p>
-                          <p className="mt-1 font-semibold">{formatDateTime(form.updated_at)}</p>
+                          <p className="text-[11px] uppercase tracking-[0.18em] opacity-70">
+                            {form.booking_enabled ? "Prenotazioni" : "Aggiornato"}
+                          </p>
+                          <p className="mt-1 font-semibold">
+                            {form.booking_enabled ? form.booking_count : formatDateTime(form.updated_at)}
+                          </p>
                         </div>
                       </div>
 
+                      <div className={`mt-4 rounded-[1.2rem] border px-3 py-3 text-sm ${
+                        isSelected ? "border-white/10 bg-white/6 text-white/72" : "border-neutral-100 bg-neutral-50 text-neutral-600"
+                      }`}>
+                        <p className="text-[11px] uppercase tracking-[0.18em] opacity-70">URL pubblico</p>
+                        <p className="mt-2 break-all font-mono text-xs">{formLink}</p>
+                      </div>
+
                       <div className="mt-5 flex flex-wrap gap-2">
-                        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                          isSelected ? "border-white/10 text-white/78" : "border-neutral-200 text-neutral-600"
-                        }`}>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSelectedFormId(form.id);
+                            setSelectedForm(form);
+                          }}
+                          className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                            isSelected ? "border-white/10 text-white/78 hover:bg-white/10" : "border-neutral-200 text-neutral-700 hover:bg-neutral-100"
+                          }`}
+                        >
                           Modifica
-                        </span>
+                        </button>
                         <button
                           type="button"
                           className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
@@ -1770,7 +2077,19 @@ export function OrgAdminFormsWorkspace({
                           }}
                           disabled={!form.is_active}
                         >
-                          Apri
+                          Preview
+                        </button>
+                        <button
+                          type="button"
+                          className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                            isSelected ? "border-white/12 text-white/80 hover:bg-white/10" : "border-neutral-200 text-neutral-700 hover:bg-neutral-100"
+                          }`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void copyPublicLink(formLink);
+                          }}
+                        >
+                          Copia link
                         </button>
                         <button
                           type="button"
@@ -1792,13 +2111,14 @@ export function OrgAdminFormsWorkspace({
                           }`}
                           onClick={(event) => {
                             event.stopPropagation();
-                            void copyPublicLink(formLink);
+                            openPublicLink(formLink);
                           }}
+                          disabled={!form.is_active}
                         >
-                          Copia link
+                          Apri
                         </button>
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -1839,7 +2159,7 @@ export function OrgAdminFormsWorkspace({
                       aria-label={deleteArmed ? "Conferma eliminazione form" : "Elimina form"}
                       title={deleteArmed ? "Conferma eliminazione" : "Elimina form"}
                     >
-                      {deleteArmed ? "!" : "×"}
+                      {deleteArmed ? "!" : "x"}
                     </button>
                   </>
                 ) : null}
@@ -1851,25 +2171,84 @@ export function OrgAdminFormsWorkspace({
                       : formSaved
                         ? "Salvato"
                         : selectedFormId
-                          ? "Salva pagina"
+                          ? "Salva il form"
                           : "Crea form"}
                 </button>
               </div>
             </div>
 
-            <div className="mt-5 flex flex-wrap gap-2">
+            <div className="mt-6 grid gap-3 xl:grid-cols-[minmax(0,1.8fr)_repeat(3,minmax(0,1fr))]">
+              <div className="rounded-[1.7rem] border border-black/10 bg-[linear-gradient(135deg,#111827,#1f2937_55%,#3f2d16)] px-5 py-5 text-white shadow-[0_24px_90px_rgba(15,23,42,0.22)]">
+                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-white/55">Link pubblico</p>
+                <p className="mt-3 max-w-3xl break-all font-mono text-sm leading-7 text-white/90">
+                  {selectedFormUrl || publicUrl || "Salva il form per generare l'URL condivisibile"}
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${formDraft.is_active ? "bg-emerald-400/18 text-emerald-100" : "bg-white/10 text-white/72"}`}>
+                    {formDraft.is_active ? "Online" : "Bozza"}
+                  </span>
+                  <span className="rounded-full bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-white/72">
+                    {formDraft.visibility === "members_only" ? "Solo soci" : "Pubblico"}
+                  </span>
+                  <span className="rounded-full bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-white/72">
+                    {sortedFields.length} campi
+                  </span>
+                </div>
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <button
+                    className="inline-flex rounded-full bg-white px-4 py-2 text-sm font-semibold text-neutral-950 transition hover:-translate-y-0.5"
+                    type="button"
+                    disabled={!selectedFormUrl && !publicUrl}
+                    onClick={() => void copyPublicLink(selectedFormUrl || publicUrl)}
+                  >
+                    Copia link
+                  </button>
+                  <button
+                    className="inline-flex rounded-full border border-white/16 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/16 disabled:cursor-not-allowed disabled:opacity-60"
+                    type="button"
+                    disabled={!formDraft.is_active || (!selectedFormUrl && !publicUrl)}
+                    onClick={() => openPublicLink(selectedFormUrl || publicUrl)}
+                  >
+                    Apri pagina pubblica
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-[1.4rem] border border-neutral-200 bg-neutral-50 px-4 py-4">
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Builder</p>
+                <p className="mt-2 text-lg font-semibold text-neutral-950">{sortedFields.length} blocchi</p>
+                <p className="mt-2 text-sm text-neutral-600">Aggiungi, ordina e seleziona i campi come se stessi componendo una piccola landing page.</p>
+              </div>
+
+              <div className="rounded-[1.4rem] border border-neutral-200 bg-neutral-50 px-4 py-4">
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Automazioni</p>
+                <p className="mt-2 text-lg font-semibold text-neutral-950">
+                  {formDraft.booking_enabled ? "Booking attivo" : "Follow-up base"}
+                </p>
+                <p className="mt-2 text-sm text-neutral-600">Notifiche, conferme utente, template e azioni post-submit vivono in un flusso dedicato.</p>
+              </div>
+
+              <div className="rounded-[1.4rem] border border-neutral-200 bg-neutral-50 px-4 py-4">
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Risposte</p>
+                <p className="mt-2 text-lg font-semibold text-neutral-950">{selectedForm?.submission_count || 0} invii</p>
+                <p className="mt-2 text-sm text-neutral-600">Lo storico è separato dal builder, così costruzione e consultazione non si confondono.</p>
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-2 md:grid-cols-5">
               {editorTabs.map((tab) => (
                 <button
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveTab(tab.key)}
-                  className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  className={`rounded-[1.2rem] border px-4 py-3 text-left transition ${
                     activeTab === tab.key
-                      ? "bg-neutral-950 text-white"
-                      : "border border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:text-neutral-900"
+                      ? "border-neutral-950 bg-neutral-950 text-white shadow-[0_14px_50px_rgba(15,23,42,0.14)]"
+                      : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:text-neutral-900"
                   }`}
                 >
-                  {tab.label}
+                  <p className="text-sm font-semibold">{tab.label}</p>
+                  <p className={`mt-1 text-xs ${activeTab === tab.key ? "text-white/70" : "text-neutral-500"}`}>{tab.hint}</p>
                 </button>
               ))}
             </div>

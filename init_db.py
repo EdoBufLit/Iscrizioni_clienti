@@ -35,6 +35,10 @@ from app.models import (
     Form,
     FormField,
     FormSubmission,
+    Booking,
+    BookingEvent,
+    Room,
+    RoomTable,
 )
 from app.security import get_password_hash
 from app.config import settings
@@ -192,6 +196,34 @@ def init_db():
         )
         FormSubmission.__table__.create(bind=engine, checkfirst=True)
 
+    if "bookings" not in inspect(engine).get_table_names():
+        logger.warning(
+            "bookings table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        Booking.__table__.create(bind=engine, checkfirst=True)
+
+    if "booking_events" not in inspect(engine).get_table_names():
+        logger.warning(
+            "booking_events table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        BookingEvent.__table__.create(bind=engine, checkfirst=True)
+
+    if "rooms" not in inspect(engine).get_table_names():
+        logger.warning(
+            "rooms table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        Room.__table__.create(bind=engine, checkfirst=True)
+
+    if "room_tables" not in inspect(engine).get_table_names():
+        logger.warning(
+            "room_tables table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        RoomTable.__table__.create(bind=engine, checkfirst=True)
+
     # Legacy column migrations - DEPRECATED, kept for backwards compatibility
     with engine.begin() as conn:
         table_names = set(inspect(conn).get_table_names())
@@ -245,6 +277,12 @@ def init_db():
             _add_column_if_missing(conn, "forms", "show_logo", "INTEGER DEFAULT 1")
             _add_column_if_missing(conn, "forms", "cover_image_url", "TEXT")
             _add_column_if_missing(conn, "forms", "page_style", "TEXT DEFAULT 'editorial'")
+            _add_column_if_missing(conn, "forms", "form_type", "TEXT DEFAULT 'generic'")
+            _add_column_if_missing(conn, "forms", "booking_enabled", "INTEGER DEFAULT 0")
+            _add_column_if_missing(conn, "forms", "booking_requires_manual_confirmation", "INTEGER DEFAULT 1")
+            _add_column_if_missing(conn, "forms", "booking_success_message_override", "TEXT")
+            _add_column_if_missing(conn, "forms", "booking_notification_enabled", "INTEGER DEFAULT 1")
+            _add_column_if_missing(conn, "forms", "booking_field_mapping", "TEXT")
             _add_column_if_missing(conn, "forms", "notify_admin_on_submit", "INTEGER DEFAULT 1")
             _add_column_if_missing(conn, "forms", "send_user_confirmation", "INTEGER DEFAULT 1")
             _add_column_if_missing(
@@ -261,6 +299,45 @@ def init_db():
             )
             _add_column_if_missing(conn, "forms", "create_internal_request", "INTEGER DEFAULT 0")
             _add_column_if_missing(conn, "forms", "create_booking", "INTEGER DEFAULT 0")
+            conn.execute(
+                text(
+                    """
+                    UPDATE forms
+                       SET form_type = CASE
+                            WHEN COALESCE(booking_enabled, create_booking, 0) = 1 THEN 'booking'
+                            ELSE COALESCE(NULLIF(trim(form_type), ''), 'generic')
+                       END
+                     WHERE form_type IS NULL
+                        OR trim(form_type) = ''
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    UPDATE forms
+                       SET booking_enabled = CASE
+                            WHEN booking_enabled IS NULL THEN COALESCE(create_booking, 0)
+                            ELSE booking_enabled
+                       END
+                     WHERE booking_enabled IS NULL
+                    """
+                )
+            )
+        if "bookings" in table_names:
+            _add_column_if_missing(conn, "bookings", "room_id", "INTEGER")
+            _add_column_if_missing(conn, "bookings", "table_id", "INTEGER")
+        if "rooms" in table_names:
+            _add_column_if_missing(conn, "rooms", "is_active", "INTEGER DEFAULT 1")
+        if "room_tables" in table_names:
+            _add_column_if_missing(conn, "room_tables", "capacity", "INTEGER DEFAULT 2")
+            _add_column_if_missing(conn, "room_tables", "shape", "TEXT DEFAULT 'round'")
+            _add_column_if_missing(conn, "room_tables", "pos_x", "INTEGER DEFAULT 80")
+            _add_column_if_missing(conn, "room_tables", "pos_y", "INTEGER DEFAULT 80")
+            _add_column_if_missing(conn, "room_tables", "width", "INTEGER")
+            _add_column_if_missing(conn, "room_tables", "height", "INTEGER")
+            _add_column_if_missing(conn, "room_tables", "is_active", "INTEGER DEFAULT 1")
+            _add_column_if_missing(conn, "room_tables", "is_out_of_service", "INTEGER DEFAULT 0")
         if "affiliation_applications" in table_names:
             _add_column_if_missing(
                 conn, "affiliation_applications", "normalized_applicant_email", "TEXT"
