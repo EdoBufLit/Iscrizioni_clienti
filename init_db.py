@@ -32,6 +32,9 @@ from app.models import (
     EmailCampaign,
     EmailCampaignRecipient,
     EmailTemplate,
+    Form,
+    FormField,
+    FormSubmission,
 )
 from app.security import get_password_hash
 from app.config import settings
@@ -167,6 +170,27 @@ def init_db():
             "run 'alembic upgrade head' to align schema history."
         )
         EmailTemplate.__table__.create(bind=engine, checkfirst=True)
+
+    if "forms" not in inspect(engine).get_table_names():
+        logger.warning(
+            "forms table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        Form.__table__.create(bind=engine, checkfirst=True)
+
+    if "form_fields" not in inspect(engine).get_table_names():
+        logger.warning(
+            "form_fields table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        FormField.__table__.create(bind=engine, checkfirst=True)
+
+    if "form_submissions" not in inspect(engine).get_table_names():
+        logger.warning(
+            "form_submissions table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        FormSubmission.__table__.create(bind=engine, checkfirst=True)
 
     # Legacy column migrations - DEPRECATED, kept for backwards compatibility
     with engine.begin() as conn:

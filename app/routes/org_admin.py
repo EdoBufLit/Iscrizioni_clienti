@@ -41,6 +41,9 @@ from app.models import (
     EmailCampaign,
     EmailCampaignRecipient,
     EmailTemplate,
+    Form as AssociationForm,
+    FormField,
+    FormSubmission,
 )
 from app.models_affiliation import (
     AffiliationApplication,
@@ -70,6 +73,19 @@ from app.services.email_templates import (
     normalize_template_channel,
     normalize_template_scope,
     render_template_content,
+)
+from app.services.forms import (
+    ALLOWED_FORM_FIELD_TYPES,
+    ALLOWED_FORM_VISIBILITY,
+    apply_form_field_updates,
+    apply_form_updates,
+    build_unique_form_slug,
+    export_submissions_csv,
+    get_form_for_org_admin,
+    normalize_form_slug,
+    serialize_form,
+    serialize_form_field,
+    serialize_submission,
 )
 from app.services.card_allocation import allocate_next_card, release_card_number
 from app.services.card_inventory import compute_org_card_stock
@@ -1094,6 +1110,44 @@ class RenderEmailTemplatePreviewBody(BaseModel):
     subject: Optional[str] = None
     body_html: Optional[str] = None
     body_text: Optional[str] = None
+
+
+class CreateAssociationFormBody(BaseModel):
+    title: str = Field(min_length=1, max_length=160)
+    description: Optional[str] = None
+    public_slug: Optional[str] = Field(default=None, max_length=120)
+    is_active: bool = False
+    visibility: str = Field(default="public", max_length=40)
+    success_message: Optional[str] = None
+    notification_email: Optional[EmailStr] = None
+    allow_multiple_submissions: bool = True
+
+
+class UpdateAssociationFormBody(BaseModel):
+    title: str = Field(min_length=1, max_length=160)
+    description: Optional[str] = None
+    public_slug: Optional[str] = Field(default=None, max_length=120)
+    is_active: bool = False
+    visibility: str = Field(default="public", max_length=40)
+    success_message: Optional[str] = None
+    notification_email: Optional[EmailStr] = None
+    allow_multiple_submissions: bool = True
+
+
+class DuplicateAssociationFormBody(BaseModel):
+    title: Optional[str] = Field(default=None, max_length=160)
+    public_slug: Optional[str] = Field(default=None, max_length=120)
+
+
+class UpsertAssociationFormFieldBody(BaseModel):
+    field_key: Optional[str] = Field(default=None, max_length=64)
+    field_type: str = Field(min_length=1, max_length=40)
+    label: str = Field(min_length=1, max_length=160)
+    placeholder: Optional[str] = None
+    help_text: Optional[str] = None
+    is_required: bool = False
+    sort_order: int = 0
+    options: Optional[list[str] | str] = None
 
 
 @router.get("/organization")
@@ -3663,3 +3717,381 @@ def card_movements(
         "total": total,
         "current_year": current_year,
     }
+
+
+@router.get("/forms")
+def list_association_forms(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    forms = (
+        db.query(AssociationForm)
+        .options(
+            joinedload(AssociationForm.fields),
+            joinedload(AssociationForm.submissions),
+        )
+        .filter(AssociationForm.association_id == admin.org_id)
+        .order_by(AssociationForm.updated_at.desc(), AssociationForm.id.desc())
+        .all()
+    )
+    return {
+        "items": [serialize_form(form) for form in forms],
+        "total": len(forms),
+        "field_types": sorted(ALLOWED_FORM_FIELD_TYPES),
+        "visibility_options": sorted(ALLOWED_FORM_VISIBILITY),
+    }
+
+
+@router.post("/forms", status_code=201)
+def create_association_form(
+    body: CreateAssociationFormBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    form = AssociationForm(
+        association_id=admin.org_id,
+        created_by_user_id=admin.id,
+    )
+    requested_slug = body.public_slug or body.title
+    form.public_slug = build_unique_form_slug(db, base_slug=requested_slug)
+    apply_form_updates(
+        db,
+        form=form,
+        title=body.title,
+        description=body.description,
+        public_slug=form.public_slug,
+        is_active=body.is_active,
+        visibility=body.visibility,
+        success_message=body.success_message,
+        notification_email=body.notification_email,
+        allow_multiple_submissions=body.allow_multiple_submissions,
+    )
+    db.add(form)
+    db.commit()
+    db.refresh(form)
+    return {"form": serialize_form(get_form_for_org_admin(db, association_id=admin.org_id, form_id=form.id))}
+
+
+@router.get("/forms/{form_id}")
+def get_association_form_detail(
+    form_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    form = get_form_for_org_admin(db, association_id=admin.org_id, form_id=form_id)
+    return {"form": serialize_form(form)}
+
+
+@router.put("/forms/{form_id}")
+def update_association_form(
+    form_id: int,
+    body: UpdateAssociationFormBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    form = get_form_for_org_admin(db, association_id=admin.org_id, form_id=form_id)
+    apply_form_updates(
+        db,
+        form=form,
+        title=body.title,
+        description=body.description,
+        public_slug=body.public_slug or body.title,
+        is_active=body.is_active,
+        visibility=body.visibility,
+        success_message=body.success_message,
+        notification_email=body.notification_email,
+        allow_multiple_submissions=body.allow_multiple_submissions,
+    )
+    db.commit()
+    db.refresh(form)
+    return {"form": serialize_form(get_form_for_org_admin(db, association_id=admin.org_id, form_id=form.id))}
+
+
+@router.delete("/forms/{form_id}")
+def delete_association_form(
+    form_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    form = get_form_for_org_admin(db, association_id=admin.org_id, form_id=form_id)
+    db.delete(form)
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/forms/{form_id}/duplicate", status_code=201)
+def duplicate_association_form(
+    form_id: int,
+    body: DuplicateAssociationFormBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    source_form = get_form_for_org_admin(db, association_id=admin.org_id, form_id=form_id)
+    duplicate_title = (body.title or f"{source_form.title} copia").strip()
+    duplicate_slug = build_unique_form_slug(
+        db,
+        base_slug=body.public_slug or f"{source_form.public_slug}-copy",
+    )
+    cloned_form = AssociationForm(
+        association_id=admin.org_id,
+        title=duplicate_title,
+        description=source_form.description,
+        public_slug=duplicate_slug,
+        is_active=False,
+        visibility=source_form.visibility,
+        success_message=source_form.success_message,
+        notification_email=source_form.notification_email,
+        allow_multiple_submissions=bool(source_form.allow_multiple_submissions),
+        created_by_user_id=admin.id,
+    )
+    db.add(cloned_form)
+    db.flush()
+    for source_field in sorted(
+        list(source_form.fields or []),
+        key=lambda item: (int(item.sort_order or 0), int(item.id or 0)),
+    ):
+        cloned_field = FormField(form_id=cloned_form.id)
+        apply_form_field_updates(
+            cloned_field,
+            field_key=source_field.field_key,
+            field_type=source_field.field_type,
+            label=source_field.label,
+            placeholder=source_field.placeholder,
+            help_text=source_field.help_text,
+            is_required=bool(source_field.is_required),
+            sort_order=int(source_field.sort_order or 0),
+            options=list(source_field.options_json or []),
+        )
+        db.add(cloned_field)
+    db.commit()
+    return {
+        "form": serialize_form(
+            get_form_for_org_admin(db, association_id=admin.org_id, form_id=cloned_form.id)
+        )
+    }
+
+
+@router.post("/forms/{form_id}/activate")
+def activate_association_form(
+    form_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    form = get_form_for_org_admin(db, association_id=admin.org_id, form_id=form_id)
+    form.is_active = True
+    db.commit()
+    db.refresh(form)
+    return {"form": serialize_form(get_form_for_org_admin(db, association_id=admin.org_id, form_id=form.id))}
+
+
+@router.post("/forms/{form_id}/deactivate")
+def deactivate_association_form(
+    form_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    form = get_form_for_org_admin(db, association_id=admin.org_id, form_id=form_id)
+    form.is_active = False
+    db.commit()
+    db.refresh(form)
+    return {"form": serialize_form(get_form_for_org_admin(db, association_id=admin.org_id, form_id=form.id))}
+
+
+@router.post("/forms/{form_id}/fields", status_code=201)
+def create_association_form_field(
+    form_id: int,
+    body: UpsertAssociationFormFieldBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    form = get_form_for_org_admin(db, association_id=admin.org_id, form_id=form_id)
+    field = FormField(form_id=form.id)
+    apply_form_field_updates(
+        field,
+        field_key=body.field_key,
+        field_type=body.field_type,
+        label=body.label,
+        placeholder=body.placeholder,
+        help_text=body.help_text,
+        is_required=body.is_required,
+        sort_order=body.sort_order,
+        options=body.options,
+    )
+    db.add(field)
+    db.commit()
+    db.refresh(field)
+    return {"field": serialize_form_field(field)}
+
+
+@router.put("/forms/{form_id}/fields/{field_id}")
+def update_association_form_field(
+    form_id: int,
+    field_id: int,
+    body: UpsertAssociationFormFieldBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    get_form_for_org_admin(db, association_id=admin.org_id, form_id=form_id)
+    field = (
+        db.query(FormField)
+        .filter(FormField.id == field_id, FormField.form_id == form_id)
+        .first()
+    )
+    if field is None:
+        raise HTTPException(status_code=404, detail="Campo non trovato.")
+    apply_form_field_updates(
+        field,
+        field_key=body.field_key,
+        field_type=body.field_type,
+        label=body.label,
+        placeholder=body.placeholder,
+        help_text=body.help_text,
+        is_required=body.is_required,
+        sort_order=body.sort_order,
+        options=body.options,
+    )
+    db.commit()
+    db.refresh(field)
+    return {"field": serialize_form_field(field)}
+
+
+@router.delete("/forms/{form_id}/fields/{field_id}")
+def delete_association_form_field(
+    form_id: int,
+    field_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    get_form_for_org_admin(db, association_id=admin.org_id, form_id=form_id)
+    field = (
+        db.query(FormField)
+        .filter(FormField.id == field_id, FormField.form_id == form_id)
+        .first()
+    )
+    if field is None:
+        raise HTTPException(status_code=404, detail="Campo non trovato.")
+    db.delete(field)
+    db.commit()
+    return {"ok": True}
+
+
+@router.get("/forms/{form_id}/submissions")
+def list_association_form_submissions(
+    form_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    form = (
+        db.query(AssociationForm)
+        .options(
+            joinedload(AssociationForm.fields),
+            joinedload(AssociationForm.submissions).joinedload(FormSubmission.member),
+        )
+        .filter(AssociationForm.id == form_id, AssociationForm.association_id == admin.org_id)
+        .first()
+    )
+    if form is None:
+        raise HTTPException(status_code=404, detail="Form non trovato.")
+    submissions = sorted(
+        list(form.submissions or []),
+        key=lambda item: (item.submitted_at or datetime.min, int(item.id or 0)),
+        reverse=True,
+    )
+    return {
+        "form": serialize_form(form),
+        "items": [serialize_submission(item) for item in submissions],
+        "total": len(submissions),
+    }
+
+
+@router.get("/forms/{form_id}/submissions/export.csv")
+def export_association_form_submissions_csv(
+    form_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    form = (
+        db.query(AssociationForm)
+        .options(
+            joinedload(AssociationForm.fields),
+            joinedload(AssociationForm.submissions),
+        )
+        .filter(AssociationForm.id == form_id, AssociationForm.association_id == admin.org_id)
+        .first()
+    )
+    if form is None:
+        raise HTTPException(status_code=404, detail="Form non trovato.")
+    csv_buffer = export_submissions_csv(form)
+    filename = f"{normalize_form_slug(form.public_slug)}-submissions.csv"
+    return StreamingResponse(
+        csv_buffer,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@router.get("/forms/{form_id}/submissions/{submission_id}")
+def get_association_form_submission_detail(
+    form_id: int,
+    submission_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    get_form_for_org_admin(db, association_id=admin.org_id, form_id=form_id)
+    submission = (
+        db.query(FormSubmission)
+        .options(joinedload(FormSubmission.member))
+        .filter(
+            FormSubmission.id == submission_id,
+            FormSubmission.form_id == form_id,
+            FormSubmission.association_id == admin.org_id,
+        )
+        .first()
+    )
+    if submission is None:
+        raise HTTPException(status_code=404, detail="Risposta non trovata.")
+    return {"submission": serialize_submission(submission)}

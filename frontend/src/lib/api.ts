@@ -709,6 +709,74 @@ export type OrgAdminEmailTemplateVariable = {
   example: string;
 };
 
+export type AssociationFormVisibility = "public" | "members_only";
+
+export type AssociationFormFieldType =
+  | "short_text"
+  | "long_text"
+  | "email"
+  | "phone"
+  | "number"
+  | "date"
+  | "select"
+  | "radio"
+  | "checkbox"
+  | "consent";
+
+export type AssociationFormField = {
+  id: number;
+  form_id: number;
+  field_key: string;
+  field_type: AssociationFormFieldType;
+  label: string;
+  placeholder: string | null;
+  help_text: string | null;
+  is_required: boolean;
+  sort_order: number;
+  options: string[];
+};
+
+export type AssociationForm = {
+  id: number;
+  association_id: number;
+  title: string;
+  description: string | null;
+  public_slug: string;
+  is_active: boolean;
+  visibility: AssociationFormVisibility;
+  success_message: string | null;
+  notification_email: string | null;
+  allow_multiple_submissions: boolean;
+  created_by_user_id: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+  field_count: number;
+  submission_count: number;
+  fields: AssociationFormField[];
+};
+
+export type AssociationFormSubmission = {
+  id: number;
+  form_id: number;
+  association_id: number;
+  submitted_by_user_id: number | null;
+  submitted_at: string | null;
+  status: string;
+  payload_json: Record<string, unknown>;
+  submitted_by: {
+    id: number;
+    name: string | null;
+    email: string | null;
+  } | null;
+};
+
+export type PublicAssociationForm = AssociationForm & {
+  association: {
+    id: number;
+    name: string | null;
+  };
+};
+
 export async function fetchOrgAdminOrganization(): Promise<OrgAdminOrganizationDetail> {
   const res = await fetch("/api/org-admin/organization");
   if (res.status === 401) throw new AuthError("Not authenticated");
@@ -936,6 +1004,208 @@ export async function duplicateOrgAdminEmailTemplate(
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore duplicazione template"));
+  return res.json();
+}
+
+export async function fetchOrgAdminForms(): Promise<{
+  items: AssociationForm[];
+  total: number;
+  field_types: AssociationFormFieldType[];
+  visibility_options: AssociationFormVisibility[];
+}> {
+  const res = await fetch("/api/org-admin/forms");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento form"));
+  return res.json();
+}
+
+export async function createOrgAdminForm(data: {
+  title: string;
+  description?: string | null;
+  public_slug?: string | null;
+  is_active?: boolean;
+  visibility?: AssociationFormVisibility;
+  success_message?: string | null;
+  notification_email?: string | null;
+  allow_multiple_submissions?: boolean;
+}): Promise<{ form: AssociationForm }> {
+  const res = await fetch("/api/org-admin/forms", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione form"));
+  return res.json();
+}
+
+export async function fetchOrgAdminForm(formId: number): Promise<{ form: AssociationForm }> {
+  const res = await fetch(`/api/org-admin/forms/${formId}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento dettaglio form"));
+  return res.json();
+}
+
+export async function updateOrgAdminForm(
+  formId: number,
+  data: {
+    title: string;
+    description?: string | null;
+    public_slug?: string | null;
+    is_active?: boolean;
+    visibility?: AssociationFormVisibility;
+    success_message?: string | null;
+    notification_email?: string | null;
+    allow_multiple_submissions?: boolean;
+  },
+): Promise<{ form: AssociationForm }> {
+  const res = await fetch(`/api/org-admin/forms/${formId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento form"));
+  return res.json();
+}
+
+export async function deleteOrgAdminForm(formId: number): Promise<{ ok: boolean }> {
+  const res = await fetch(`/api/org-admin/forms/${formId}`, {
+    method: "DELETE",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore eliminazione form"));
+  return res.json();
+}
+
+export async function duplicateOrgAdminForm(
+  formId: number,
+  data?: { title?: string | null; public_slug?: string | null },
+): Promise<{ form: AssociationForm }> {
+  const res = await fetch(`/api/org-admin/forms/${formId}/duplicate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data || {}),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore duplicazione form"));
+  return res.json();
+}
+
+export async function setOrgAdminFormActive(
+  formId: number,
+  isActive: boolean,
+): Promise<{ form: AssociationForm }> {
+  const res = await fetch(`/api/org-admin/forms/${formId}/${isActive ? "activate" : "deactivate"}`, {
+    method: "POST",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento stato form"));
+  return res.json();
+}
+
+export async function createOrgAdminFormField(
+  formId: number,
+  data: {
+    field_key?: string | null;
+    field_type: AssociationFormFieldType;
+    label: string;
+    placeholder?: string | null;
+    help_text?: string | null;
+    is_required?: boolean;
+    sort_order?: number;
+    options?: string[] | string | null;
+  },
+): Promise<{ field: AssociationFormField }> {
+  const res = await fetch(`/api/org-admin/forms/${formId}/fields`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione campo"));
+  return res.json();
+}
+
+export async function updateOrgAdminFormField(
+  formId: number,
+  fieldId: number,
+  data: {
+    field_key?: string | null;
+    field_type: AssociationFormFieldType;
+    label: string;
+    placeholder?: string | null;
+    help_text?: string | null;
+    is_required?: boolean;
+    sort_order?: number;
+    options?: string[] | string | null;
+  },
+): Promise<{ field: AssociationFormField }> {
+  const res = await fetch(`/api/org-admin/forms/${formId}/fields/${fieldId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento campo"));
+  return res.json();
+}
+
+export async function deleteOrgAdminFormField(
+  formId: number,
+  fieldId: number,
+): Promise<{ ok: boolean }> {
+  const res = await fetch(`/api/org-admin/forms/${formId}/fields/${fieldId}`, {
+    method: "DELETE",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore eliminazione campo"));
+  return res.json();
+}
+
+export async function fetchOrgAdminFormSubmissions(
+  formId: number,
+): Promise<{ form: AssociationForm; items: AssociationFormSubmission[]; total: number }> {
+  const res = await fetch(`/api/org-admin/forms/${formId}/submissions`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento risposte"));
+  return res.json();
+}
+
+export async function fetchOrgAdminFormSubmission(
+  formId: number,
+  submissionId: number,
+): Promise<{ submission: AssociationFormSubmission }> {
+  const res = await fetch(`/api/org-admin/forms/${formId}/submissions/${submissionId}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento dettaglio risposta"));
+  return res.json();
+}
+
+export function buildOrgAdminFormSubmissionsExportUrl(formId: number): string {
+  return `/api/org-admin/forms/${formId}/submissions/export.csv`;
+}
+
+export async function fetchPublicForm(slug: string): Promise<{ form: PublicAssociationForm }> {
+  const res = await fetch(`/api/forms/${encodeURIComponent(slug)}`);
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento form pubblico"));
+  return res.json();
+}
+
+export async function submitPublicForm(
+  slug: string,
+  payload: Record<string, unknown>,
+): Promise<{
+  ok: boolean;
+  message: string;
+  submission: AssociationFormSubmission;
+}> {
+  const res = await fetch(`/api/forms/${encodeURIComponent(slug)}/submit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore invio form"));
   return res.json();
 }
 

@@ -8,12 +8,23 @@ from time import monotonic
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse, FileResponse, Response, HTMLResponse
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.db import get_db
-from app.models import Member, Organization
+from app.models import Member, Organization, Form as AssociationForm
 from app.config import settings
+from app.routes.member import get_current_member
 from app.services.card_verification import parse_card_verification_token
 from app.services.db_rate_limit import enforce_db_rate_limit
+from app.services.forms import (
+    create_submission,
+    enqueue_submission_notifications,
+    ensure_submission_allowed,
+    get_form_by_slug_for_public,
+    normalize_form_slug,
+    serialize_public_form,
+    serialize_submission,
+    validate_form_submission_payload,
+)
 from app.services.member_activity import (
     MEMBER_INACTIVE_REASON_DELETED,
     MEMBER_INACTIVE_REASON_NOT_APPROVED,
@@ -149,6 +160,19 @@ def _build_qr_data_uri(value: str) -> str | None:
         return None
 
 
+def _ensure_form_is_visible(form, member: Member | None) -> None:
+    if not bool(form.is_active):
+        raise HTTPException(status_code=404, detail="Form non disponibile.")
+    if (form.visibility or "").strip().lower() == "members_only":
+        if member is None:
+            raise HTTPException(
+                status_code=403,
+                detail="Questo form e riservato ai soci autenticati.",
+            )
+        if int(member.org_id or 0) != int(form.association_id or 0):
+            raise HTTPException(status_code=403, detail="Form non accessibile.")
+
+
 @router.get("/api/organizations")
 def api_list_organizations(q: str = None, db: Session = Depends(get_db)):
     # Only active organizations
@@ -265,6 +289,63 @@ def api_public_org_info(org_slug: str, request: Request, db: Session = Depends(g
         "club_display_name": club_display_name,
         "card_logo_url": card_logo_url,
         "wallet_enabled": False,
+    }
+
+
+@router.get("/api/forms/{slug}")
+def get_public_form(slug: str, request: Request, db: Session = Depends(get_db)):
+    member = get_current_member(request, db)
+    form = get_form_by_slug_for_public(db, slug=slug)
+    _ensure_form_is_visible(form, member)
+    return {"form": serialize_public_form(form)}
+
+
+@router.post("/api/forms/{slug}/submit")
+def submit_public_form(
+    slug: str,
+    request: Request,
+    payload: dict,
+    db: Session = Depends(get_db),
+):
+    member = get_current_member(request, db)
+    form_slug = normalize_form_slug(slug)
+    form = (
+        db.query(AssociationForm)
+        .options(
+            joinedload(AssociationForm.fields),
+            joinedload(AssociationForm.organization),
+        )
+        .filter(AssociationForm.public_slug == form_slug)
+        .first()
+    )
+    if form is None:
+        raise HTTPException(status_code=404, detail="Form non trovato.")
+    _ensure_form_is_visible(form, member)
+    validated_submission = validate_form_submission_payload(form=form, raw_payload=payload)
+    ensure_submission_allowed(
+        db,
+        form=form,
+        member=member,
+        validated_submission=validated_submission,
+    )
+    submission = create_submission(
+        db,
+        form=form,
+        member=member,
+        validated_submission=validated_submission,
+    )
+    enqueue_submission_notifications(
+        db,
+        form=form,
+        submission=submission,
+        validated_submission=validated_submission,
+    )
+    db.commit()
+    db.refresh(submission)
+    return {
+        "ok": True,
+        "message": form.success_message or "Richiesta inviata correttamente.",
+        "submission": serialize_submission(submission),
     }
 
 

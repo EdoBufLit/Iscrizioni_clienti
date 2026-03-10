@@ -56,6 +56,7 @@ const OrgAdminLayout = () => {
       { to: "/org-admin/soci", label: "Soci", end: false },
       { to: "/org-admin/tessere", label: "Tessere", end: false },
       { to: "/org-admin/comunicazioni", label: "Comunicazioni", end: false },
+      { to: "/org-admin/forms", label: "Form", end: false },
       { to: "/org-admin/documenti", label: "Documenti", end: false },
       { to: "/org-admin/associazione", label: "Associazione", end: false },
     ];
@@ -71,6 +72,7 @@ const OrgAdminLayout = () => {
       { key: "members", label: "Soci", to: "/org-admin/soci", activeMatch: ["/org-admin/soci"], icon: "users" as const },
       { key: "cards", label: "Tessere", to: "/org-admin/tessere", activeMatch: ["/org-admin/tessere"], icon: "cards" as const },
       { key: "communications", label: "Comunicazioni", to: "/org-admin/comunicazioni", activeMatch: ["/org-admin/comunicazioni"], icon: "book" as const },
+      { key: "forms", label: "Form", to: "/org-admin/forms", activeMatch: ["/org-admin/forms"], icon: "docs" as const },
       { key: "documents", label: "Documenti", to: "/org-admin/documenti", activeMatch: ["/org-admin/documenti"], icon: "docs" as const },
     ],
     [],

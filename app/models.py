@@ -309,6 +309,17 @@ class Organization(Base):
         back_populates="organization",
         foreign_keys="EmailCampaignRecipient.association_id",
     )
+    forms = relationship(
+        "Form",
+        back_populates="organization",
+        foreign_keys="Form.association_id",
+        cascade="all, delete-orphan",
+    )
+    form_submissions = relationship(
+        "FormSubmission",
+        back_populates="organization",
+        foreign_keys="FormSubmission.association_id",
+    )
 
 
 class OperationLog(Base):
@@ -448,6 +459,11 @@ class AdminUser(Base):
         "EmailTemplate",
         back_populates="created_by_user",
         foreign_keys="EmailTemplate.created_by_user_id",
+    )
+    forms = relationship(
+        "Form",
+        back_populates="created_by_user",
+        foreign_keys="Form.created_by_user_id",
     )
 
 
@@ -629,6 +645,102 @@ class EmailCampaignRecipient(Base):
     member = relationship("Member", foreign_keys=[user_id])
 
 
+class Form(Base):
+    __tablename__ = "forms"
+
+    id = Column(Integer, primary_key=True, index=True)
+    association_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    public_slug = Column(String, nullable=False, unique=True, index=True)
+    is_active = Column(
+        Boolean, nullable=False, default=False, server_default="false", index=True
+    )
+    visibility = Column(
+        String, nullable=False, default="public", server_default="public", index=True
+    )
+    success_message = Column(Text, nullable=True)
+    notification_email = Column(String, nullable=True)
+    allow_multiple_submissions = Column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    created_by_user_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    organization = relationship(
+        "Organization",
+        back_populates="forms",
+        foreign_keys=[association_id],
+    )
+    created_by_user = relationship(
+        "AdminUser",
+        back_populates="forms",
+        foreign_keys=[created_by_user_id],
+    )
+    fields = relationship(
+        "FormField",
+        back_populates="form",
+        cascade="all, delete-orphan",
+        order_by="FormField.sort_order.asc(), FormField.id.asc()",
+    )
+    submissions = relationship(
+        "FormSubmission",
+        back_populates="form",
+        cascade="all, delete-orphan",
+        order_by="FormSubmission.submitted_at.desc(), FormSubmission.id.desc()",
+    )
+
+
+class FormField(Base):
+    __tablename__ = "form_fields"
+
+    id = Column(Integer, primary_key=True, index=True)
+    form_id = Column(Integer, ForeignKey("forms.id"), nullable=False, index=True)
+    field_key = Column(String, nullable=False)
+    field_type = Column(String, nullable=False, index=True)
+    label = Column(String, nullable=False)
+    placeholder = Column(Text, nullable=True)
+    help_text = Column(Text, nullable=True)
+    is_required = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    sort_order = Column(Integer, nullable=False, default=0, server_default="0", index=True)
+    options_json = Column(GENERIC_JSON_TYPE, nullable=True)
+
+    form = relationship("Form", back_populates="fields", foreign_keys=[form_id])
+
+    __table_args__ = (
+        UniqueConstraint("form_id", "field_key", name="uq_form_fields_form_key"),
+        Index("ix_form_fields_form_sort", "form_id", "sort_order"),
+    )
+
+
+class FormSubmission(Base):
+    __tablename__ = "form_submissions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    form_id = Column(Integer, ForeignKey("forms.id"), nullable=False, index=True)
+    association_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    submitted_by_user_id = Column(Integer, ForeignKey("members.id"), nullable=True, index=True)
+    submitted_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    status = Column(String, nullable=False, default="new", server_default="new", index=True)
+    payload_json = Column(GENERIC_JSON_TYPE, nullable=False, default=dict)
+
+    form = relationship("Form", back_populates="submissions", foreign_keys=[form_id])
+    organization = relationship(
+        "Organization",
+        back_populates="form_submissions",
+        foreign_keys=[association_id],
+    )
+    member = relationship("Member", back_populates="form_submissions", foreign_keys=[submitted_by_user_id])
+
+
 class CardBatch(Base):
     __tablename__ = "card_batches"
 
@@ -708,6 +820,11 @@ class Member(Base):
     payments = relationship("MemberPayment", back_populates="member")
     tokens = relationship("Token", back_populates="member")
     batch = relationship("CardBatch")
+    form_submissions = relationship(
+        "FormSubmission",
+        back_populates="member",
+        foreign_keys="FormSubmission.submitted_by_user_id",
+    )
 
     __table_args__ = (
         UniqueConstraint("org_id", "card_no", name="uix_org_card"),

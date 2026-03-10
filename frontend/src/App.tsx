@@ -21,6 +21,7 @@ const WalletGoogleAdd = lazy(() => import("./pages/WalletGoogleAdd"));
 const ReservedAreaRedirect = lazy(() => import("./pages/ReservedAreaRedirect"));
 const InvitoAffiliazioneRedirect = lazy(() => import("./pages/InvitoAffiliazioneRedirect"));
 const PienissimoThankYouPage = lazy(() => import("./pages/PienissimoThankYouPage"));
+const PublicFormPage = lazy(() => import("./pages/PublicFormPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const DashboardLayout = lazy(() => import("./pages/dashboard/DashboardLayout"));
@@ -49,6 +50,7 @@ const OrgAdminMembers = lazy(() => import("./pages/org-admin/OrgAdminMembers"));
 const OrgAdminMemberDetail = lazy(() => import("./pages/org-admin/OrgAdminMemberDetail"));
 const OrgAdminCards = lazy(() => import("./pages/org-admin/OrgAdminCards"));
 const OrgAdminCommunications = lazy(() => import("./pages/org-admin/OrgAdminCommunications"));
+const OrgAdminForms = lazy(() => import("./pages/org-admin/OrgAdminForms"));
 const OrgAdminSettings = lazy(() => import("./pages/org-admin/OrgAdminSettings"));
 const OrgAdminSharedDocuments = lazy(() => import("./pages/org-admin/OrgAdminSharedDocuments"));
 
@@ -107,6 +109,7 @@ const App = () => {
               <Route path="login" element={<Login />} />
               <Route path="area-riservata" element={<ReservedAreaRedirect />} />
               <Route path="pienissimo/thank-you/:orgSlug" element={<PienissimoThankYouPage />} />
+              <Route path="forms/:slug" element={<PublicFormPage />} />
               <Route path="auth/verify" element={<MagicLinkVerify />} />
               <Route path="wallet/google/add" element={<WalletGoogleAdd />} />
               <Route path="dashboard" element={<DashboardLayout />}>
@@ -136,6 +139,7 @@ const App = () => {
                 <Route path="tessere" element={<OrgAdminCards />} />
                 <Route path="documenti" element={<OrgAdminSharedDocuments />} />
                 <Route path="comunicazioni" element={<OrgAdminCommunications />} />
+                <Route path="forms" element={<OrgAdminForms />} />
                 <Route path="contabilita" element={<OrgAdminSharedDocuments />} />
                 <Route path="associazione" element={<OrgAdminSettings />} />
               </Route>

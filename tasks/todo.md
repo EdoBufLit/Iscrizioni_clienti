@@ -2948,3 +2948,19 @@ pm --prefix frontend run build -> OK
 - Supporto preservato per immagini inline/CID sui flussi association mode esistenti (es. email tessera) tramite attachments base64 inline nella chiamata Mailtrap API.
 - Deploy/runtime allineati: aggiunta propagazione di `ASSOCIATION_MAIL_API_TOKEN` in `.github/workflows/deploy-hetzner.yml` e `docker-compose.yml`.
 - Verifiche OK: `python -m compileall app tests`; `python -m pytest -q tests/test_association_email_sender.py tests/test_org_admin_communications.py`; `python -m pytest -q tests/test_email_flows.py tests/test_org_admin_send_access.py tests/test_integration_issue_member.py tests/test_join_auto_issue.py`; `npm --prefix frontend run build`.
+
+## Forms module MVP (Mar 10, 2026)
+- [x] Mappare router, layout admin e routing pubblico esistenti per integrare il modulo Form senza pagine statiche duplicate
+- [x] Aggiungere migration Alembic e modelli SQLAlchemy per `forms`, `form_fields` e `form_submissions`
+- [x] Implementare API org-admin per CRUD form/campi, duplicate, activate/deactivate, submissions list/detail ed export CSV
+- [x] Implementare API pubbliche `GET /api/forms/{slug}` e `POST /api/forms/{slug}/submit` con validazione payload e notifiche email base
+- [x] Aggiungere UI org-admin builder/submissions ed esporre route pubblica dinamica frontend `/forms/:slug`
+- [x] Eseguire verifiche mirate backend/frontend e aggiornare README con architettura `/forms/:slug`
+
+## Review (Forms module MVP - Mar 10, 2026)
+- Schema: aggiunte tabelle `forms`, `form_fields` e `form_submissions` con migration `e9f0a1b2c3d4_add_forms_module.py`, modelli SQLAlchemy e bootstrap idempotente in `init_db.py`.
+- Backend org-admin: nuovi endpoint `/api/org-admin/forms*` per CRUD form, CRUD campi, duplicate, activate/deactivate, storico risposte, dettaglio submission ed export CSV.
+- Backend pubblico: nuova API dinamica `/api/forms/{slug}` e `/api/forms/{slug}/submit` con controllo `public` vs `members_only`, validazione campi richiesti, blocco su invii multipli e notifiche email base via `system mode`.
+- Frontend admin: nuova pagina `OrgAdminForms.tsx` con lista form, editor configurazione, builder campi, storico risposte e export senza refresh brutti.
+- Frontend pubblico: nuova pagina dinamica `PublicFormPage.tsx` collegata alla route unica `/forms/:slug`, con rendering campi da DB, errori inline e success state chiaro.
+- Verifiche OK: `python -m compileall app tests init_db.py`, `python -m pytest -q tests/test_forms_module.py`, `npm --prefix frontend run build`.

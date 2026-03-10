@@ -303,6 +303,14 @@ Content-Type: application/json
 - **Logs**: Output to stdout
 - **Frontend**: React + Vite in `frontend/`
 
+## Forms module
+
+- Admin route: `org-admin/forms`
+- Public route: `/forms/:slug`
+- The frontend public page is a single dynamic route that fetches form structure from `GET /api/forms/{slug}` and submits to `POST /api/forms/{slug}/submit`.
+- Each form stores its own `public_slug`, fields, visibility (`public` or `members_only`) and submissions in DB.
+- Submission notifications and simple confirmations currently use `system mode` email transport for a minimal, safe MVP.
+
 ### Frontend Development
 
 ```bash
