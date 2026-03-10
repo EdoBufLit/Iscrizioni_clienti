@@ -315,6 +315,11 @@ Content-Type: application/json
 - The org-admin experience is now a visual studio with clear sections: `Builder`, `Design`, `Automazioni`, `Risposte`, `Condividi`.
 - Each form stores its own `public_slug`, fields, visibility (`public` or `members_only`), post-submit actions, and public-page design settings (`accent_color`, `submit_button_text`, `show_logo`, `cover_image_url`, `page_style`).
 - Forms are part of the Comunicazioni workflow package: they reuse the email template library for admin notifications and user confirmations, and can create an internal org-admin request on submit.
+- A form can also become booking-enabled: the same public route still saves the normal `form_submission`, but it additionally creates a linked row in `bookings` using the form-level `booking_field_mapping`.
+- Booking-enabled forms are configured inside the existing Form Studio (`Automazioni` tab), while daily operations live in the dedicated org-admin page `/org-admin/prenotazioni` with day/week/list views and status updates.
+- Phase 2 extends the same booking layer with `rooms` and `room_tables`: associations can configure sale, place round/square/rectangular tables on a polished 2D floor map, and assign a room/table manually to each booking.
+- The room map is still driven by the existing booking records: no separate reservation engine or `booking_forms` tables were introduced.
+- `GET /api/org-admin/rooms/{room_id}/map` returns the live occupancy state (`free`, `reserved`, `occupied`, `out_of_service`) for the selected date/time context, so the org-admin UI and the agenda share the same source of truth.
 - Public forms are available only while the owning association has `communications_enabled=true`.
 
 ### Frontend Development

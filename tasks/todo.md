@@ -4,6 +4,22 @@
 - [x] Ottimizzare asset/effetti HUD e operazioni ripetute nel frame loop senza cambiare output 720p/24fps
 - [x] Eseguire benchmark comparativi + test mirati e documentare l'impatto
 
+## Forms studio UX refinement (Mar 10, 2026)
+- [x] Rivalutare il workspace Forms attuale rispetto ai punti UX richiesti e identificare i punti ancora troppo tecnici/confusi
+- [x] Rifinire lista form e header editor per far percepire il prodotto come page builder condivisibile, non metadata editor
+- [x] Rendere Builder, Design, Risposte e Condividi più visuali con migliore gerarchia e link pubblico prominente
+- [x] Migliorare micro-copy, quick actions ed empty states senza rimuovere funzionalita esistenti
+- [x] Eseguire build frontend e aggiornare review/lesson
+
+## Review (Forms studio UX refinement - Mar 10, 2026)
+- Direzione visuale ricavata dallo skill `ui-ux-pro-max`: premium light shell con forte contrasto, URL pubblico trattato come asset primario e tab editor con gerarchia più esplicita.
+- `OrgAdminForms.tsx`: la library dei form ora comunica meglio che ogni card è una pagina condivisibile, con descrizione, URL visibile e quick actions esplicite (`Modifica`, `Preview`, `Copia link`, `Duplica`, `Apri`) senza nesting di button invalidi.
+- Header editor rifatto come cockpit: link pubblico in evidenza subito sopra i tab, badge di stato, contatori chiave e micro-summary dei blocchi `Builder`, `Automazioni`, `Risposte`.
+- Navigazione tab migliorata: da pill minimali a card-tab con label + hint, così la separazione tra `Builder`, `Design`, `Automazioni`, `Risposte`, `Condividi` è percepibile anche visivamente.
+- `Condividi` ora sembra un launch panel e non un dettaglio nascosto: URL grande in hero scuro, CTA immediate e stato online/bozza + pubblico/solo soci visibili al primo sguardo.
+- `FormPublicCanvas.tsx`: la preview e la pagina pubblica risultano più “pagina reale” grazie a top bar brandizzata, snapshot laterale più utile e footer contestuale, mantenendo invariato il motore campi.
+- Verifica: `npm --prefix frontend run build` OK.
+
 ## Review (Ottimizzazione renderer video affiliazione - Mar 06, 2026)
 - Bottleneck principali misurati: polling worker fino a 15s, rebundle per job, probe NVENC ripetuto, staging audio locale ripetuto e soprattutto `renderMedia` troppo lento con concurrency default 8 su questo host.
 - Timing dettagliati aggiunti in backend (`job created/claimed/render/finalize/total`) e renderer (`audioPrepare`, `bundle`, `composition`, `render`, `nvencProbe`, `encode`, `finalize`, `total`) con payload JSON `timingsMs`, `bundleCacheHit`, `resolvedConcurrency`, `slowestFrames`.
@@ -3011,3 +3027,66 @@ pm --prefix frontend run build -> OK
 - UX forms: nel Builder sono visibili insieme contenuto pagina + canvas campi + preview finale; la share tab espone chiaramente il nuovo link con org slug; il dettaglio Risposte usa le label dei campi invece delle sole chiavi tecniche.
 - Notifiche submit: le risposte restano sempre visibili nel sito e, se `notification_email` non e valorizzata, il backend fa fallback all'email del creator org-admin / primo org-admin attivo per l'invio notifica.
 - Verifiche OK: `python -m compileall app tests/test_forms_module.py`; `python -m pytest -q tests/test_forms_module.py`; `npm --prefix frontend run build`.
+## Forms bookings extension (Mar 10, 2026)
+- [x] Estendere schema Form esistente con configurazione booking-enabled e aggiungere tabelle `bookings` + `booking_events`
+- [x] Aggiornare model SQLAlchemy, bootstrap `init_db.py` e services forms/bookings senza duplicare il motore form
+- [x] Integrare il submit pubblico per creare booking collegati a `form_submissions` quando il form e booking-enabled
+- [x] Esporre API org-admin per configurazione booking sui form, list/detail/update bookings e agenda day/week
+- [x] Estendere il builder forms con configurazione prenotazione e mapping campi dinamico
+- [x] Aggiungere nuova sezione org-admin `Prenotazioni` con agenda/list/detail e stati aggiornabili
+- [x] Eseguire test/build mirati e aggiornare README/review
+
+## Review (Forms bookings extension - Mar 10, 2026)
+- Il motore Forms e stato esteso, non duplicato: `forms` ora supporta `form_type`, `booking_enabled`, conferma manuale, mapping dinamico e override messaggio finale; `form_fields` e `form_submissions` restano le sorgenti canoniche del builder e del payload inviato.
+- Il layer booking aggiunge solo `bookings` e `booking_events`: ogni submit pubblico salva sempre la submission e, se il form e booking-enabled, crea anche una prenotazione collegata con stato `pending` o `confirmed` in base alla configurazione del form.
+- Backend org-admin: nuove API `GET /api/org-admin/bookings`, `GET /api/org-admin/bookings/{id}`, `PATCH /api/org-admin/bookings/{id}`, agenda day/week e dettaglio submission con booking collegato; tutto gated sullo stesso entitlement Forms/Comunicazioni.
+- Frontend builder: il tab `Automazioni` del Form Studio consente ora di trasformare il form in prenotazione, mappare i campi dinamici (`customer_name`, `booking_date`, `party_size`, ecc.) e scegliere conferma/manuale + notifiche booking.
+- Frontend operativo: nuova pagina `/org-admin/prenotazioni` con viste `Giorno`, `Settimana`, `Lista`, dettaglio laterale, timeline eventi e aggiornamento stato inline.
+- Verifiche OK: `python -m compileall app tests init_db.py`; `python -m pytest -q tests/test_forms_module.py`; `npm --prefix frontend run build`.
+
+## Prenotazioni & Agenda phase 2 (Mar 10, 2026)
+- [x] Estendere schema e bootstrap con `rooms` e `room_tables`, riusando `bookings.room_id/table_id`
+- [x] Aggiungere services/backend org-admin per CRUD sale, CRUD tavoli, stato mappa sala e assegnazione/disassegnazione prenotazioni
+- [x] Introdurre controlli MVP su tavoli fuori servizio/inattivi e conflitti di assegnazione basilari
+- [x] Estendere API client frontend per sale, tavoli, stato mappa e update booking con room/table
+- [x] Ridisegnare `Prenotazioni` con sezioni `Agenda`, `Sale`, `Tavoli`, `Mappa sala` mantenendo il layer booking esistente
+- [x] Implementare mappa 2D visuale con drag & drop tavoli, stati occupazione e salvataggio coordinate
+- [x] Integrare assegnazione manuale sala/tavolo nel dettaglio prenotazione e rifletterla nella mappa
+- [x] Eseguire test/build mirati e aggiornare review + README
+
+## Review (Prenotazioni & Agenda phase 2 - Mar 10, 2026)
+- Schema/model: aggiunte le tabelle `rooms` e `room_tables` con migration `2d3e4f5a6b7c_add_booking_rooms_and_tables.py`; `Booking.room_id` e `Booking.table_id` ora puntano al nuovo layer sale/tavoli senza duplicare forms o submissions.
+- Bootstrap/dev safety: `init_db.py` crea e ripara in modo idempotente `rooms`, `room_tables` e relative colonne/flag, mantenendo coerente l'avvio locale su DB gia esistenti.
+- Backend org-admin: nuovi endpoint per CRUD sale, CRUD tavoli, mappa sala (`GET/PUT /api/org-admin/rooms/{room_id}/map`) e assegnazione/disassegnazione prenotazioni (`POST/DELETE /api/org-admin/bookings/{id}/assignment`).
+- Service layer: `app/services/booking_rooms.py` normalizza forme/capienze/coordinate, calcola lo stato occupazione (`free`, `reserved`, `occupied`, `out_of_service`) e blocca assegnazioni a tavoli inattivi, fuori servizio o gia occupati nella stessa fascia.
+- Frontend: `OrgAdminBookings.tsx` e stato rifattorizzato in un workspace con sezioni `Agenda`, `Sale`, `Tavoli`, `Mappa sala`; la mappa 2D usa `RoomFloorMap.tsx` con drag & drop manuale e salva le coordinate reali dei tavoli.
+- Integrazione booking: il dettaglio prenotazione ora mostra sala/tavolo risolti per nome, permette assegnazione manuale e aggiorna mappa/agenda sulla stessa sorgente dati.
+- Verifiche OK: `python -m compileall app init_db.py tests/test_forms_module.py`; `python -m pytest -q tests/test_forms_module.py`; `npm --prefix frontend run build`.
+## UX hardening Forms + Prenotazioni (Mar 10, 2026)
+- [x] Riesaminare UX/UI di Forms, Prenotazioni, Comunicazioni e pagina pubblica del form rispetto all'obiettivo "sellable feature"
+- [x] Correggere micro-copy, testi corrotti, gerarchia visiva e stati/CTA poco chiari nei workspace admin
+- [x] Rifinire esperienza pubblica del form e la percezione end-to-end tra builder, condivisione, risposte e prenotazioni
+- [x] Eseguire build/test mirati e documentare un report finale completo di funzionamento
+
+## Review (UX hardening Forms + Prenotazioni - Mar 10, 2026)
+- Audit UX eseguito su `Comunicazioni > Pagine e moduli`, `Form Studio`, `Prenotazioni & Agenda`, `Mappa sala` e route pubblica `/forms/:orgSlug/:slug`, tenendo come priorita chiarezza operativa, gerarchia visiva e percezione "pagina reale".
+- `OrgAdminForms.tsx`: il workspace e stato rifinito nei punti piu ambigui del journey, con CTA primaria coerente (`Salva il form`), affordance di eliminazione piu netta, riepilogo risposte piu chiaro e dettaglio che spiega dove finisce ogni submit (backoffice + eventuale segreteria).
+- `OrgAdminBookings.tsx`: agenda e dettaglio prenotazione ora mostrano meglio origine, note e assegnazione; nella gestione tavoli/mappa gli stati sono leggibili in linguaggio umano (`Libero`, `Riservato`, `Occupato`, `Fuori servizio`) e la selezione tavolo e piu informativa.
+- `RoomFloorMap.tsx`: aggiunti hint espliciti di interazione e una legenda visuale coerente con gli stati del layer booking, per far sembrare la mappa uno strumento operativo e non solo tecnico.
+- `PublicFormPage.tsx`: la pagina pubblica e stata incorniciata come vera landing/form page con blocchi introduttivi sopra il canvas, cosi l'utente capisce subito contesto, visibilita e cosa succede dopo l'invio.
+- Comunicazioni generale riesaminato: la struttura tab esistente resta coerente; il beneficio principale arriva dal fatto che `Pagine e moduli` eredita ora un builder/preview piu comprensibile e una route pubblica piu "vendibile".
+- Verifiche eseguite: `npm --prefix frontend run build`; `python -m pytest -q tests/test_forms_module.py`; `python -m pytest -q tests/test_org_admin_communications.py tests/test_forms_module.py`.
+
+## Agenda calendar refactor (Mar 10, 2026)
+- [x] Trasformare la vista Agenda di Prenotazioni in un calendario mensile visuale con navigazione mese/anno
+- [x] Mostrare le prenotazioni direttamente nelle caselle giorno e aprire il dettaglio tramite popup/modal
+- [x] Alleggerire la UI rimuovendo gli header ridondanti da Prenotazioni e Comunicazioni
+- [x] Eseguire build frontend e documentare la review finale del refactor
+
+## Review (Agenda calendar refactor - Mar 10, 2026)
+- `OrgAdminBookings.tsx`: la vista `Agenda` non usa piu il vecchio switch `giorno/settimana/lista`, ma un calendario mensile visuale con caselle reali, badge giornalieri, booking cards compatte e navigazione esplicita mese/anno.
+- Ogni giorno apre un popup operativo coerente con il design system tramite `ModalShell`: lista prenotazioni della giornata a sinistra, dettaglio/stato/assegnazione sala-tavolo a destra, senza affollare il calendario.
+- La UI prenotazioni ora tratta la timeline mensile come elemento principale del prodotto e non come filtro secondario; il messaggio in pagina spiega subito che il click sulla casella apre il layer operativo.
+- `OrgAdminCommunications.tsx`: rimosso l'header hero ridondante (`Spazio Comunicazioni` + card stato org) per lasciare il focus direttamente sui tab e sul contenuto utile.
+- Header inutile rimosso anche nel flusso prenotazioni: resta solo il blocco tab/metriche necessario a navigare `Agenda`, `Sale`, `Tavoli`, `Mappa sala`, mentre il vero header della pagina e ora il calendario stesso.
+- Verifica eseguita: `npm --prefix frontend run build`.
