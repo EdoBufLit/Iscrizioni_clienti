@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   assignOrgAdminBookingTable,
+  createOrgAdminBooking,
   createOrgAdminRoom,
   createOrgAdminRoomTable,
   deleteOrgAdminRoom,
@@ -244,6 +245,22 @@ export default function OrgAdminBookings() {
   const [assignmentTableId, setAssignmentTableId] = useState<number | "">("");
   const [assignmentTables, setAssignmentTables] = useState<AssociationRoomTable[]>([]);
   const [saving, setSaving] = useState("");
+  
+  // Manual booking creation
+  const [isCreatingManual, setIsCreatingManual] = useState(false);
+  const [manualDraft, setManualDraft] = useState({
+    customer_name: "",
+    customer_email: "",
+    customer_phone: "",
+    booking_date: todayIso(),
+    booking_time: "20:00",
+    party_size: 2,
+    room_id: "" as number | "",
+    table_id: "" as number | "",
+    status: "confirmed",
+    notes: ""
+  });
+  const [manualDraftTables, setManualDraftTables] = useState<AssociationRoomTable[]>([]);
 
   useEffect(() => {
     applySeo({
@@ -292,6 +309,17 @@ export default function OrgAdminBookings() {
       .then(({ items }) => setAssignmentTables(items))
       .catch(() => setAssignmentTables([]));
   }, [assignmentRoomId]);
+
+  useEffect(() => {
+    if (!manualDraft.room_id || typeof manualDraft.room_id !== "number") {
+      setManualDraftTables([]);
+      setManualDraft((prev) => ({ ...prev, table_id: "" }));
+      return;
+    }
+    fetchOrgAdminRoomTables(manualDraft.room_id, { includeInactive: false })
+      .then(({ items }) => setManualDraftTables(items))
+      .catch(() => setManualDraftTables([]));
+  }, [manualDraft.room_id]);
 
   const monthGrid = useMemo(() => buildMonthGrid(agendaMonth), [agendaMonth]);
   const bookingsByDay = useMemo(() => {
@@ -637,6 +665,51 @@ export default function OrgAdminBookings() {
     );
   }
 
+  async function handleManualBookingSave() {
+    if (!manualDraft.customer_name.trim()) {
+      showToast({ tone: "error", title: "Dati mancanti", message: "Il nome cliente è obbligatorio." });
+      return;
+    }
+    setSaving("manual-booking");
+    try {
+      await createOrgAdminBooking({
+        customer_name: manualDraft.customer_name,
+        customer_email: manualDraft.customer_email || null,
+        customer_phone: manualDraft.customer_phone || null,
+        booking_date: manualDraft.booking_date || null,
+        booking_time: manualDraft.booking_time || null,
+        party_size: manualDraft.party_size || null,
+        room_id: manualDraft.room_id ? Number(manualDraft.room_id) : null,
+        table_id: manualDraft.table_id ? Number(manualDraft.table_id) : null,
+        status: manualDraft.status,
+        notes: manualDraft.notes || null,
+      });
+      showToast({ tone: "success", title: "Prenotazione creata", message: "La prenotazione manuale è stata inserita in agenda." });
+      setIsCreatingManual(false);
+      setManualDraft({
+        customer_name: "",
+        customer_email: "",
+        customer_phone: "",
+        booking_date: todayIso(),
+        booking_time: "20:00",
+        party_size: 2,
+        room_id: "",
+        table_id: "",
+        status: "confirmed",
+        notes: ""
+      });
+      await loadBookings();
+    } catch (err) {
+      showToast({
+        tone: "error",
+        title: "Creazione non riuscita",
+        message: err instanceof Error ? err.message : "Errore creazione prenotazione manuale.",
+      });
+    } finally {
+      setSaving("");
+    }
+  }
+
   if (loading) {
     return (
       <div className="container-shell py-8 space-y-4">
@@ -689,9 +762,19 @@ export default function OrgAdminBookings() {
         </section>
 
         {section === "agenda" && (
-          <AgendaSection
-            agendaMonth={agendaMonth}
-            setAgendaMonth={setAgendaMonth}
+          <div className="space-y-6">
+            <div className="flex justify-end">
+              <button 
+                type="button" 
+                onClick={() => setIsCreatingManual(true)} 
+                className="btn-primary"
+              >
+                + Nuova prenotazione
+              </button>
+            </div>
+            <AgendaSection
+              agendaMonth={agendaMonth}
+              setAgendaMonth={setAgendaMonth}
             agendaYearOptions={agendaYearOptions}
             statusFilter={statusFilter}
             setStatusFilter={setStatusFilter}
@@ -715,9 +798,10 @@ export default function OrgAdminBookings() {
             assignmentTables={assignmentTables}
             onStatusChange={handleBookingStatus}
             onSaveAssignment={handleAssignmentSave}
-            onClearAssignment={handleAssignmentClear}
-            saving={saving}
-          />
+              onClearAssignment={handleAssignmentClear}
+              saving={saving}
+            />
+          </div>
         )}
 
         {section === "rooms" && (
@@ -726,10 +810,21 @@ export default function OrgAdminBookings() {
             subtitle="Spazi disponibili per il servizio"
             main={
               <div className="grid gap-4 md:grid-cols-2">
-                {rooms.length === 0 ? (
-                  <EmptyState message="Nessuna sala configurata. Crea la prima sala per iniziare." />
-                ) : (
-                  rooms.map((room) => (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedRoomId(null);
+                    setRoomDraft(emptyRoomDraft());
+                  }}
+                  className={`rounded-[1.6rem] border border-dashed p-5 text-center transition min-h-[140px] flex flex-col items-center justify-center ${
+                    !roomDraft.id && !selectedRoomId
+                      ? "border-slate-900 bg-slate-950 text-white"
+                      : "border-slate-300 bg-slate-50 text-slate-600 hover:border-slate-400"
+                  }`}
+                >
+                  <p className="font-semibold text-lg">+ Aggiungi nuova sala</p>
+                </button>
+                {rooms.map((room) => (
                     <button
                       key={room.id}
                       type="button"
@@ -747,7 +842,7 @@ export default function OrgAdminBookings() {
                       </p>
                     </button>
                   ))
-                )}
+                }
               </div>
             }
             side={
@@ -898,6 +993,132 @@ export default function OrgAdminBookings() {
           </section>
         )}
       </div>
+
+      <ModalShell open={isCreatingManual} onClose={() => setIsCreatingManual(false)} title="Nuova prenotazione">
+        <form onSubmit={(e) => { e.preventDefault(); void handleManualBookingSave(); }} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Nome cliente *">
+              <input 
+                className={inputClass} 
+                value={manualDraft.customer_name} 
+                onChange={(e) => setManualDraft({...manualDraft, customer_name: e.target.value})} 
+                required
+              />
+            </Field>
+            <Field label="Numero persone">
+              <input 
+                type="number" 
+                min="1" 
+                className={inputClass} 
+                value={manualDraft.party_size} 
+                onChange={(e) => setManualDraft({...manualDraft, party_size: parseInt(e.target.value) || 1})} 
+              />
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Data">
+              <input 
+                type="date" 
+                className={inputClass} 
+                value={manualDraft.booking_date} 
+                onChange={(e) => setManualDraft({...manualDraft, booking_date: e.target.value})} 
+              />
+            </Field>
+            <Field label="Orario">
+              <input 
+                type="time" 
+                className={inputClass} 
+                value={manualDraft.booking_time} 
+                onChange={(e) => setManualDraft({...manualDraft, booking_time: e.target.value})} 
+              />
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Telefono">
+              <input 
+                className={inputClass} 
+                value={manualDraft.customer_phone} 
+                onChange={(e) => setManualDraft({...manualDraft, customer_phone: e.target.value})} 
+              />
+            </Field>
+            <Field label="Email">
+              <input 
+                type="email" 
+                className={inputClass} 
+                value={manualDraft.customer_email} 
+                onChange={(e) => setManualDraft({...manualDraft, customer_email: e.target.value})} 
+              />
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Sala">
+              <select 
+                className={inputClass} 
+                value={manualDraft.room_id} 
+                onChange={(e) => setManualDraft({...manualDraft, room_id: e.target.value ? Number(e.target.value) : ""})}
+              >
+                <option value="">Nessuna sala</option>
+                {rooms.map(room => (
+                  <option key={room.id} value={room.id}>{room.name}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Tavolo">
+              <select 
+                className={inputClass} 
+                value={manualDraft.table_id} 
+                onChange={(e) => setManualDraft({...manualDraft, table_id: e.target.value ? Number(e.target.value) : ""})}
+                disabled={!manualDraft.room_id || manualDraftTables.length === 0}
+              >
+                <option value="">Nessun tavolo</option>
+                {manualDraftTables.map(table => (
+                  <option key={table.id} value={table.id}>{table.name} ({table.capacity} posti)</option>
+                ))}
+              </select>
+            </Field>
+          </div>
+
+          <Field label="Stato">
+            <select 
+              className={inputClass} 
+              value={manualDraft.status} 
+              onChange={(e) => setManualDraft({...manualDraft, status: e.target.value})}
+            >
+              {bookingStatuses.map((status) => (
+                <option key={status} value={status}>{formatStatusLabel(status)}</option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Note">
+            <textarea 
+              className={`${inputClass} min-h-[80px]`} 
+              value={manualDraft.notes} 
+              onChange={(e) => setManualDraft({...manualDraft, notes: e.target.value})} 
+            />
+          </Field>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+            <button 
+              type="button" 
+              onClick={() => setIsCreatingManual(false)} 
+              className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Annulla
+            </button>
+            <button 
+              type="submit" 
+              disabled={saving === "manual-booking"}
+              className="btn-primary"
+            >
+              {saving === "manual-booking" ? "Salvataggio..." : "Crea prenotazione"}
+            </button>
+          </div>
+        </form>
+      </ModalShell>
     </div>
   );
 }

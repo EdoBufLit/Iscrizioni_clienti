@@ -4774,3 +4774,59 @@ def unassign_org_admin_booking(
     db.commit()
     db.refresh(booking)
     return {"booking": serialize_booking(booking, include_events=True)}
+
+class CreateManualBookingBody(BaseModel):
+    customer_name: str = Field(..., min_length=1, max_length=255)
+    customer_email: Optional[str] = Field(None, max_length=255)
+    customer_phone: Optional[str] = Field(None, max_length=64)
+    booking_date: Optional[date] = None
+    booking_time: Optional[str] = Field(None, max_length=16)
+    party_size: Optional[int] = Field(None, ge=1)
+    room_id: Optional[int] = None
+    table_id: Optional[int] = None
+    status: str = Field(default="confirmed")
+    notes: Optional[str] = None
+
+@router.post("/bookings", status_code=201)
+def create_org_admin_manual_booking(
+    body: CreateManualBookingBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    
+    # Valida che la sala/tavolo appartengano a questa organizzazione se passati
+    if body.room_id:
+        room = db.query(Room).filter(Room.id == body.room_id, Room.association_id == admin.org_id, Room.deleted_at.is_(None)).first()
+        if not room:
+            raise HTTPException(status_code=400, detail="Sala non trovata o non autorizzata")
+            
+        if body.table_id:
+            table = db.query(RoomTable).filter(RoomTable.id == body.table_id, RoomTable.room_id == body.room_id, RoomTable.deleted_at.is_(None)).first()
+            if not table:
+                raise HTTPException(status_code=400, detail="Tavolo non trovato o non autorizzato")
+                
+    now = datetime.utcnow()
+    booking = Booking(
+        association_id=admin.org_id,
+        status=body.status,
+        customer_name=body.customer_name,
+        customer_email=body.customer_email,
+        customer_phone=body.customer_phone,
+        booking_date=body.booking_date,
+        booking_time=body.booking_time,
+        party_size=body.party_size,
+        room_id=body.room_id,
+        table_id=body.table_id,
+        notes=body.notes,
+        confirmed_at=now if body.status == "confirmed" else None,
+        created_at=now,
+        updated_at=now
+    )
+    db.add(booking)
+    db.commit()
+    db.refresh(booking)
+    return {"booking": serialize_booking(booking)}

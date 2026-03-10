@@ -1447,6 +1447,28 @@ export async function fetchOrgAdminBooking(
   return res.json();
 }
 
+export async function createOrgAdminBooking(data: {
+  customer_name: string;
+  customer_email?: string | null;
+  customer_phone?: string | null;
+  booking_date?: string | null;
+  booking_time?: string | null;
+  party_size?: number | null;
+  room_id?: number | null;
+  table_id?: number | null;
+  status: string;
+  notes?: string | null;
+}): Promise<{ booking: AssociationBooking }> {
+  const res = await fetch(`/api/org-admin/bookings`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione prenotazione manuale"));
+  return res.json();
+}
+
 export async function updateOrgAdminBooking(
   bookingId: number,
   data: {
