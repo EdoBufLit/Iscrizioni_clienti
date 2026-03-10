@@ -106,6 +106,7 @@
 - Se una feature ha gia tutte le funzioni richieste ma continua a essere percepita come "editor tecnico", trattare link pubblico, stato e workflow summary come elementi di primo livello nel layout: la gerarchia visiva è parte del prodotto, non rifinitura opzionale.
 - Se una vista operativa ruota attorno a un oggetto temporale ricorrente (es. prenotazioni giornaliere), il calendario deve essere il canvas principale e il dettaglio va spostato in popup/drawer: filtri e header non devono competere con la lettura del mese.
 - Nei workspace admin con tab gia chiari, evitare hero/header introduttivi ridondanti: se non aggiungono decisioni o azioni, vanno rimossi per lasciare spazio al contenuto operativo.
+- Se un workflow di creazione parte da un draft nuovo, il frontend non deve inizializzarlo in uno stato che il backend rifiuta subito: seed minimo valido o validazione client obbligatoria prima del `POST`, altrimenti il primo click produce 422 evitabili.
 ## 2026-03-07 - Email flow verification must prove delivery, not just queueing
 
 - Quando aggiungo un flusso email basato su outbox/worker, non basta verificare che esista una riga in `email_outbox`.

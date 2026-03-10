@@ -3090,3 +3090,14 @@ pm --prefix frontend run build -> OK
 - `OrgAdminCommunications.tsx`: rimosso l'header hero ridondante (`Spazio Comunicazioni` + card stato org) per lasciare il focus direttamente sui tab e sul contenuto utile.
 - Header inutile rimosso anche nel flusso prenotazioni: resta solo il blocco tab/metriche necessario a navigare `Agenda`, `Sale`, `Tavoli`, `Mappa sala`, mentre il vero header della pagina e ora il calendario stesso.
 - Verifica eseguita: `npm --prefix frontend run build`.
+
+## Forms create 422 fix (Mar 10, 2026)
+- [x] Riprodurre il 422 nella creazione form da `Comunicazioni > Pagine e moduli`
+- [x] Correggere il draft iniziale e la validazione client per evitare submit vuoti verso l'API
+- [x] Eseguire build frontend e aggiornare review/lessons
+
+## Review (Forms create 422 fix - Mar 10, 2026)
+- Root cause: il workspace forms apriva un draft completamente vuoto; se l'org admin cliccava subito `Salva il form`, il frontend inviava la create request e il backend rispondeva correttamente `422` per `title` mancante.
+- `OrgAdminForms.tsx`: `Nuovo form` ora apre un draft gia seedato con titolo/slug iniziali (`Nuovo form`), quindi il percorso minimo di creazione non parte piu da uno stato invalido.
+- `OrgAdminForms.tsx`: aggiunta anche una guardia client-side su `handleSaveForm(...)`; se il titolo viene svuotato manualmente, il submit viene bloccato prima della chiamata API con toast chiaro invece del 422 backend.
+- Verifica eseguita: `npm --prefix frontend run build`.

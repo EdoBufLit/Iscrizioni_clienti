@@ -163,6 +163,15 @@ function emptyFormDraft() {
   };
 }
 
+function createSeededFormDraft() {
+  const defaultTitle = "Nuovo form";
+  return {
+    ...emptyFormDraft(),
+    title: defaultTitle,
+    public_slug: derivePublicSlug(defaultTitle),
+  };
+}
+
 function emptyFieldDraft(form?: AssociationForm | null, fieldType: AssociationFormFieldType = "short_text") {
   const option = fieldTypeOptions.find((item) => item.value === fieldType);
   const label = option ? option.label : "Nuovo campo";
@@ -461,12 +470,23 @@ export function OrgAdminFormsWorkspace({
       showToast({ tone: "error", title: "Form bloccati", message: lockedMessage });
       return;
     }
+    const normalizedTitle = formDraft.title.trim();
+    if (!normalizedTitle) {
+      setActiveTab("design");
+      showToast({
+        tone: "error",
+        title: "Titolo richiesto",
+        message: "Inserisci almeno un titolo per creare la pagina modulo.",
+      });
+      return;
+    }
     setSavingForm(true);
     setFormSaved(false);
     try {
       const bookingEnabled = Boolean(formDraft.booking_enabled || formDraft.create_booking);
       const payload = {
         ...formDraft,
+        title: normalizedTitle,
         description: formDraft.description || null,
         accent_color: formDraft.accent_color || null,
         submit_button_text: formDraft.submit_button_text || null,
@@ -779,7 +799,7 @@ export function OrgAdminFormsWorkspace({
     setSelectedSubmission(null);
     setDeleteArmed(false);
     setActiveTab("design");
-    setFormDraft(emptyFormDraft());
+    setFormDraft(createSeededFormDraft());
     setFieldDraft(emptyFieldDraft(null));
     setEditingFieldId(null);
     setFieldKeyManual(false);
