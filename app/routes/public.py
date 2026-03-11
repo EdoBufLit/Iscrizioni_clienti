@@ -10,9 +10,18 @@ from fastapi.responses import RedirectResponse, FileResponse, Response, HTMLResp
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from app.db import get_db
-from app.models import Member, Organization, Form as AssociationForm
+from app.models import (
+    AccountingShareLink,
+    Member,
+    Organization,
+    Form as AssociationForm,
+)
 from app.config import settings
 from app.routes.member import get_current_member
+from app.services.accounting import (
+    build_accounting_file_response,
+    resolve_accounting_share_link,
+)
 from app.services.card_verification import parse_card_verification_token
 from app.services.db_rate_limit import enforce_db_rate_limit
 from app.services.forms import (
@@ -429,6 +438,24 @@ def submit_public_form(
         request=request,
         payload=payload,
         db=db,
+    )
+
+
+@router.get("/api/public/accounting-share/{token}")
+def public_accounting_share_download(
+    token: str,
+    request: Request,
+    download: bool = False,
+    db: Session = Depends(get_db),
+):
+    del request
+    share_link = resolve_accounting_share_link(db, token=token)
+    document = share_link.document
+    if document is None:
+        raise HTTPException(status_code=404, detail="Documento non trovato.")
+    return build_accounting_file_response(
+        document,
+        content_disposition_type="attachment" if download else "inline",
     )
 
 

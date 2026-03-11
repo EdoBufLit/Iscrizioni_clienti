@@ -60,6 +60,8 @@ def _has_unique_constraint(table_name: str, columns: list[str]) -> bool:
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    dialect_name = (bind.dialect.name or "").lower()
     organization_columns = _column_names("organizations")
 
     if "stripe_connected_account_id" not in organization_columns:
@@ -79,11 +81,19 @@ def upgrade() -> None:
         )
 
     if not _has_unique_constraint("organizations", ["stripe_connected_account_id"]):
-        op.create_unique_constraint(
-            "uq_organizations_stripe_connected_account_id",
-            "organizations",
-            ["stripe_connected_account_id"],
-        )
+        if dialect_name == "sqlite":
+            op.create_index(
+                "uq_organizations_stripe_connected_account_id",
+                "organizations",
+                ["stripe_connected_account_id"],
+                unique=True,
+            )
+        else:
+            op.create_unique_constraint(
+                "uq_organizations_stripe_connected_account_id",
+                "organizations",
+                ["stripe_connected_account_id"],
+            )
 
     if not _table_exists("stripe_webhook_events"):
         op.create_table(
@@ -156,11 +166,17 @@ def downgrade() -> None:
 
     if _has_unique_constraint("organizations", ["stripe_connected_account_id"]):
         try:
-            op.drop_constraint(
-                "uq_organizations_stripe_connected_account_id",
-                "organizations",
-                type_="unique",
-            )
+            if (op.get_bind().dialect.name or "").lower() == "sqlite":
+                op.drop_index(
+                    "uq_organizations_stripe_connected_account_id",
+                    table_name="organizations",
+                )
+            else:
+                op.drop_constraint(
+                    "uq_organizations_stripe_connected_account_id",
+                    "organizations",
+                    type_="unique",
+                )
         except Exception:
             # The constraint may exist under a database-generated name if the
             # schema was created earlier via SQLAlchemy metadata/create_all().

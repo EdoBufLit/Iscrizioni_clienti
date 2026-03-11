@@ -46,13 +46,22 @@ def _update_oasi2_display_name(new_value: str) -> None:
 
 def upgrade() -> None:
     _update_oasi2_display_name(_NEW_OASI2_NAME)
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    member_columns = {
+        column["name"] for column in inspector.get_columns("members")
+    }
+    deleted_filter = (
+        "deleted_at IS NULL\n               AND "
+        if "deleted_at" in member_columns
+        else ""
+    )
     op.execute(
         sa.text(
             f"""
             CREATE UNIQUE INDEX IF NOT EXISTS {_INDEX_NAME}
                 ON members (org_id, card_year, lower(email))
-             WHERE deleted_at IS NULL
-               AND email IS NOT NULL
+             WHERE {deleted_filter}email IS NOT NULL
                AND card_year IS NOT NULL
             """
         )

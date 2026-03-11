@@ -1,6 +1,7 @@
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import Skeleton from "../../components/ui/Skeleton";
+import SuperAdminAccountingWorkspace from "./components/SuperAdminAccountingWorkspace";
 import {
   AuthError,
   createSuperAdminSharedDocument,
@@ -51,6 +52,7 @@ const SuperAdminDocuments = () => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [workspace, setWorkspace] = useState<"general" | "accounting">("general");
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -243,10 +245,30 @@ const SuperAdminDocuments = () => {
     <div className="space-y-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-neutral-900">Documenti</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-neutral-900">Documenti e Contabilita</h2>
           <p className="mt-1 text-sm font-medium text-neutral-500">
-            Invia documentazione ufficiale alle associazioni e separa il flusso contabile dove previsto.
+            Mantieni separati il workspace documenti generali e il nuovo archivio contabile strutturato.
           </p>
+          <div className="mt-4 inline-flex rounded-2xl border border-neutral-200 bg-white p-1 shadow-sm">
+            <button
+              type="button"
+              className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                workspace === "general" ? "bg-neutral-900 text-white" : "text-neutral-600"
+              }`}
+              onClick={() => setWorkspace("general")}
+            >
+              Documenti generali
+            </button>
+            <button
+              type="button"
+              className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                workspace === "accounting" ? "bg-neutral-900 text-white" : "text-neutral-600"
+              }`}
+              onClick={() => setWorkspace("accounting")}
+            >
+              Contabilita
+            </button>
+          </div>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="surface px-5 py-4">
@@ -260,18 +282,22 @@ const SuperAdminDocuments = () => {
         </div>
       </div>
 
-      {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50/80 px-5 py-4 text-sm font-semibold text-red-700">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 px-5 py-4 text-sm font-semibold text-emerald-700">
-          {success}
-        </div>
-      )}
+      {workspace === "accounting" ? (
+        <SuperAdminAccountingWorkspace onAuthError={() => navigate("/super-admin/login", { replace: true })} />
+      ) : (
+        <>
+          {error && (
+            <div className="rounded-2xl border border-red-200 bg-red-50/80 px-5 py-4 text-sm font-semibold text-red-700">
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 px-5 py-4 text-sm font-semibold text-emerald-700">
+              {success}
+            </div>
+          )}
 
-      <section className="grid gap-8 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
+          <section className="grid gap-8 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
         <form className="surface overflow-hidden" onSubmit={handleSubmit}>
           <div className="border-b border-neutral-100 px-7 py-6">
             <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-neutral-400">Nuovo invio</p>
@@ -603,6 +629,8 @@ const SuperAdminDocuments = () => {
           </table>
         </div>
       </section>
+        </>
+      )}
     </div>
   );
 };

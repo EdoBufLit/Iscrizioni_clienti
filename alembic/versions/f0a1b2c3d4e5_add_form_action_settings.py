@@ -33,6 +33,7 @@ def _index_names(bind, table_name: str) -> set[str]:
 
 def upgrade() -> None:
     bind = op.get_bind()
+    dialect_name = (bind.dialect.name or "").lower()
     columns = _column_names(bind, "forms")
     if "forms" not in sa.inspect(bind).get_table_names():
         return
@@ -61,7 +62,10 @@ def upgrade() -> None:
             sa.Column(
                 "admin_notification_template_id",
                 sa.Integer(),
-                sa.ForeignKey("email_templates.id"),
+                sa.ForeignKey(
+                    "email_templates.id",
+                    name="fk_forms_admin_notification_template_id",
+                ),
                 nullable=True,
             ),
         ),
@@ -70,7 +74,10 @@ def upgrade() -> None:
             sa.Column(
                 "user_confirmation_template_id",
                 sa.Integer(),
-                sa.ForeignKey("email_templates.id"),
+                sa.ForeignKey(
+                    "email_templates.id",
+                    name="fk_forms_user_confirmation_template_id",
+                ),
                 nullable=True,
             ),
         ),
@@ -93,9 +100,15 @@ def upgrade() -> None:
             ),
         ),
     ]
-    for name, column in additions:
-        if name not in columns:
-            op.add_column("forms", column)
+    if dialect_name == "sqlite":
+        with op.batch_alter_table("forms") as batch_op:
+            for name, column in additions:
+                if name not in columns:
+                    batch_op.add_column(column)
+    else:
+        for name, column in additions:
+            if name not in columns:
+                op.add_column("forms", column)
 
     index_names = _index_names(bind, "forms")
     for index_name, column_name in [

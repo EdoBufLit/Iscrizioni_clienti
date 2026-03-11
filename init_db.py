@@ -29,6 +29,10 @@ from app.models import (
     RechargeRequest,
     OrganizationSharedDocument,
     OrganizationSharedDocumentAssignment,
+    AccountingFolder,
+    AccountingCategory,
+    AccountingDocument,
+    AccountingShareLink,
     EmailCampaign,
     EmailCampaignRecipient,
     EmailTemplate,
@@ -49,6 +53,10 @@ from app.services.member_cleanup import (
     purge_deleted_members_permanently,
 )
 from app.services.email_templates import seed_system_email_templates
+from app.services.accounting import (
+    backfill_legacy_accounting_documents,
+    ensure_accounting_seed_data,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +162,34 @@ def init_db():
             "run 'alembic upgrade head' to align schema history."
         )
         OrganizationSharedDocumentAssignment.__table__.create(bind=engine, checkfirst=True)
+
+    if "accounting_folders" not in inspect(engine).get_table_names():
+        logger.warning(
+            "accounting_folders table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        AccountingFolder.__table__.create(bind=engine, checkfirst=True)
+
+    if "accounting_categories" not in inspect(engine).get_table_names():
+        logger.warning(
+            "accounting_categories table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        AccountingCategory.__table__.create(bind=engine, checkfirst=True)
+
+    if "accounting_documents" not in inspect(engine).get_table_names():
+        logger.warning(
+            "accounting_documents table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        AccountingDocument.__table__.create(bind=engine, checkfirst=True)
+
+    if "accounting_share_links" not in inspect(engine).get_table_names():
+        logger.warning(
+            "accounting_share_links table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        AccountingShareLink.__table__.create(bind=engine, checkfirst=True)
 
     if "email_campaigns" not in inspect(engine).get_table_names():
         logger.warning(
@@ -595,6 +631,16 @@ def init_db():
     db = SessionLocal()
 
     try:
+        accounting_seed = ensure_accounting_seed_data(db)
+        accounting_backfill_count = backfill_legacy_accounting_documents(db)
+        if accounting_seed["folders_created"] or accounting_seed["categories_created"] or accounting_backfill_count:
+            db.commit()
+            logger.info(
+                "Accounting bootstrap completed: folders_created=%s categories_created=%s legacy_docs_backfilled=%s.",
+                accounting_seed["folders_created"],
+                accounting_seed["categories_created"],
+                accounting_backfill_count,
+            )
         seeded_templates = seed_system_email_templates(db)
         if seeded_templates:
             db.commit()

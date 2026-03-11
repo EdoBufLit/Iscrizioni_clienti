@@ -131,13 +131,16 @@ def upgrade() -> None:
                 """
             )
         )
-        op.alter_column(
-            "organizations",
-            "accounting_enabled",
-            existing_type=sa.Boolean() if dialect_name == "postgresql" or is_boolean_column else accounting_type,
-            nullable=False,
-            server_default=sa.text("false"),
-        )
+        if dialect_name != "sqlite":
+            op.alter_column(
+                "organizations",
+                "accounting_enabled",
+                existing_type=sa.Boolean()
+                if dialect_name == "postgresql" or is_boolean_column
+                else accounting_type,
+                nullable=False,
+                server_default=sa.text("false"),
+            )
 
     if not _table_exists("organization_shared_documents"):
         op.create_table(

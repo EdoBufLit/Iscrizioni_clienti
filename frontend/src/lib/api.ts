@@ -2497,6 +2497,312 @@ export async function downloadSuperAdminSharedDocument(
   );
 }
 
+export type AccountingFolderSummary = {
+  id: number;
+  name: string;
+  slug: string;
+  year: number | null;
+  sort_order: number;
+  is_active: boolean;
+  is_default: boolean;
+  document_count: number;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type AccountingCategorySummary = {
+  id: number;
+  code: string;
+  name: string;
+  is_system: boolean;
+  sort_order: number;
+  is_active: boolean;
+  document_count?: number;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type AccountingShareLink = {
+  id: number;
+  url: string;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string | null;
+};
+
+export type SuperAdminAccountingDocument = {
+  id: number;
+  title: string;
+  description: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  original_filename: string;
+  mime_type: string | null;
+  file_size: number | null;
+  preview_enabled: boolean;
+  preview_available: boolean;
+  is_share_enabled: boolean;
+  legacy_shared_document_id: number | null;
+  organization: {
+    id: number;
+    name: string;
+    slug: string;
+  } | null;
+  folder: AccountingFolderSummary | null;
+  category: AccountingCategorySummary | null;
+  uploaded_by: {
+    id: number;
+    email: string;
+  } | null;
+  download_url: string;
+  preview_url: string | null;
+  open_url: string;
+  share_links?: AccountingShareLink[];
+};
+
+export async function fetchSuperAdminAccountingFolders(): Promise<{
+  items: AccountingFolderSummary[];
+  total: number;
+}> {
+  const res = await fetch("/api/super-admin/accounting/folders");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento cartelle accounting"));
+  return res.json();
+}
+
+export async function createSuperAdminAccountingFolder(input: {
+  name: string;
+  year?: number | null;
+  isActive?: boolean;
+  sortOrder?: number;
+}): Promise<{ folder: AccountingFolderSummary }> {
+  const res = await fetch("/api/super-admin/accounting/folders", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: input.name,
+      year: input.year ?? null,
+      is_active: input.isActive ?? true,
+      sort_order: input.sortOrder,
+    }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione cartella accounting"));
+  return res.json();
+}
+
+export async function updateSuperAdminAccountingFolder(
+  folderId: number,
+  input: {
+    name?: string;
+    year?: number | null;
+    isActive?: boolean;
+    sortOrder?: number;
+  },
+): Promise<{ folder: AccountingFolderSummary }> {
+  const res = await fetch(`/api/super-admin/accounting/folders/${folderId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.year !== undefined ? { year: input.year } : {}),
+      ...(input.isActive !== undefined ? { is_active: input.isActive } : {}),
+      ...(input.sortOrder !== undefined ? { sort_order: input.sortOrder } : {}),
+    }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Cartella non trovata");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento cartella accounting"));
+  return res.json();
+}
+
+export async function deleteSuperAdminAccountingFolder(
+  folderId: number,
+): Promise<{ ok: boolean; deleted_folder_id: number }> {
+  const res = await fetch(`/api/super-admin/accounting/folders/${folderId}`, {
+    method: "DELETE",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Cartella non trovata");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore eliminazione cartella accounting"));
+  return res.json();
+}
+
+export async function fetchSuperAdminAccountingCategories(): Promise<{
+  items: AccountingCategorySummary[];
+  total: number;
+}> {
+  const res = await fetch("/api/super-admin/accounting/categories");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento categorie accounting"));
+  return res.json();
+}
+
+export async function createSuperAdminAccountingCategory(input: {
+  name: string;
+  isActive?: boolean;
+  sortOrder?: number;
+}): Promise<{ category: AccountingCategorySummary }> {
+  const res = await fetch("/api/super-admin/accounting/categories", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: input.name,
+      is_active: input.isActive ?? true,
+      sort_order: input.sortOrder,
+    }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione categoria accounting"));
+  return res.json();
+}
+
+export async function updateSuperAdminAccountingCategory(
+  categoryId: number,
+  input: {
+    name?: string;
+    isActive?: boolean;
+    sortOrder?: number;
+  },
+): Promise<{ category: AccountingCategorySummary }> {
+  const res = await fetch(`/api/super-admin/accounting/categories/${categoryId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.isActive !== undefined ? { is_active: input.isActive } : {}),
+      ...(input.sortOrder !== undefined ? { sort_order: input.sortOrder } : {}),
+    }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Categoria non trovata");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento categoria accounting"));
+  return res.json();
+}
+
+export async function deleteSuperAdminAccountingCategory(
+  categoryId: number,
+): Promise<{ ok: boolean; deleted_category_id: number }> {
+  const res = await fetch(`/api/super-admin/accounting/categories/${categoryId}`, {
+    method: "DELETE",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Categoria non trovata");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore eliminazione categoria accounting"));
+  return res.json();
+}
+
+export async function fetchSuperAdminAccountingDocuments(params?: {
+  q?: string;
+  orgId?: number;
+  folderId?: number;
+  categoryId?: number;
+}): Promise<{ items: SuperAdminAccountingDocument[]; total: number }> {
+  const sp = new URLSearchParams();
+  if (params?.q) sp.set("q", params.q);
+  if (params?.orgId != null) sp.set("org_id", String(params.orgId));
+  if (params?.folderId != null) sp.set("folder_id", String(params.folderId));
+  if (params?.categoryId != null) sp.set("category_id", String(params.categoryId));
+  const res = await fetch(`/api/super-admin/accounting/documents${sp.toString() ? `?${sp.toString()}` : ""}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento documenti accounting"));
+  return res.json();
+}
+
+export async function fetchSuperAdminAccountingDocument(
+  documentId: number,
+): Promise<SuperAdminAccountingDocument> {
+  const res = await fetch(`/api/super-admin/accounting/documents/${documentId}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Documento accounting non trovato");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento documento accounting"));
+  return res.json();
+}
+
+export async function createSuperAdminAccountingDocument(input: {
+  orgId: number;
+  folderId: number;
+  categoryId: number;
+  title: string;
+  description?: string;
+  previewEnabled?: boolean;
+  isShareEnabled?: boolean;
+  file: File;
+}): Promise<{ ok: boolean; document: SuperAdminAccountingDocument }> {
+  const body = new FormData();
+  body.append("org_id", String(input.orgId));
+  body.append("folder_id", String(input.folderId));
+  body.append("category_id", String(input.categoryId));
+  body.append("title", input.title);
+  if (input.description !== undefined) body.append("description", input.description);
+  body.append("preview_enabled", String(input.previewEnabled ?? true));
+  body.append("is_share_enabled", String(input.isShareEnabled ?? false));
+  body.append("file", input.file);
+  const res = await fetch("/api/super-admin/accounting/documents", {
+    method: "POST",
+    body,
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione documento accounting"));
+  return res.json();
+}
+
+export async function updateSuperAdminAccountingDocument(
+  documentId: number,
+  input: {
+    orgId?: number;
+    folderId?: number;
+    categoryId?: number;
+    title?: string;
+    description?: string;
+    previewEnabled?: boolean;
+    isShareEnabled?: boolean;
+    file?: File | null;
+  },
+): Promise<{ ok: boolean; document: SuperAdminAccountingDocument }> {
+  const body = new FormData();
+  if (input.orgId !== undefined) body.append("org_id", String(input.orgId));
+  if (input.folderId !== undefined) body.append("folder_id", String(input.folderId));
+  if (input.categoryId !== undefined) body.append("category_id", String(input.categoryId));
+  if (input.title !== undefined) body.append("title", input.title);
+  if (input.description !== undefined) body.append("description", input.description);
+  if (input.previewEnabled !== undefined) body.append("preview_enabled", String(input.previewEnabled));
+  if (input.isShareEnabled !== undefined) body.append("is_share_enabled", String(input.isShareEnabled));
+  if (input.file) body.append("file", input.file);
+  const res = await fetch(`/api/super-admin/accounting/documents/${documentId}`, {
+    method: "PATCH",
+    body,
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Documento accounting non trovato");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento documento accounting"));
+  return res.json();
+}
+
+export async function deleteSuperAdminAccountingDocument(
+  documentId: number,
+): Promise<{ ok: boolean; deleted_document_id: number }> {
+  const res = await fetch(`/api/super-admin/accounting/documents/${documentId}`, {
+    method: "DELETE",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Documento accounting non trovato");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore eliminazione documento accounting"));
+  return res.json();
+}
+
+export async function revokeSuperAdminAccountingShareLink(
+  shareLinkId: number,
+): Promise<{ ok: boolean; share_link_id: number }> {
+  const res = await fetch(`/api/super-admin/accounting/share-links/${shareLinkId}/revoke`, {
+    method: "POST",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Link di condivisione non trovato");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore revoca link accounting"));
+  return res.json();
+}
+
 export type AffiliationDraftPerson = {
   id: number;
   role: string;
@@ -2824,6 +3130,134 @@ export async function downloadOrgAdminSharedDocument(
     document.original_filename || "documento",
     "Impossibile scaricare il documento",
   );
+}
+
+export type OrgAdminAccountingDocument = {
+  id: number;
+  title: string;
+  description: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  original_filename: string;
+  mime_type: string | null;
+  file_size: number | null;
+  preview_enabled: boolean;
+  preview_available: boolean;
+  is_share_enabled: boolean;
+  folder: {
+    id: number;
+    name: string;
+    slug: string;
+    year: number | null;
+    sort_order: number;
+  } | null;
+  category: {
+    id: number;
+    code: string;
+    name: string;
+    is_system: boolean;
+    sort_order: number;
+  } | null;
+  download_url: string;
+  preview_url: string | null;
+  open_url: string;
+  share_links: AccountingShareLink[];
+};
+
+export type OrgAdminAccountingArchiveCategory = {
+  id: number;
+  code: string;
+  name: string;
+  is_system: boolean;
+  sort_order: number;
+  documents: OrgAdminAccountingDocument[];
+};
+
+export type OrgAdminAccountingArchiveFolder = {
+  id: number;
+  name: string;
+  slug: string;
+  year: number | null;
+  sort_order: number;
+  document_count: number;
+  categories: OrgAdminAccountingArchiveCategory[];
+};
+
+export type OrgAdminAccountingArchiveResponse = {
+  items: OrgAdminAccountingArchiveFolder[];
+  filters: {
+    folders: Array<{ id: number; name: string; year: number | null; slug: string }>;
+    categories: Array<{ id: number; name: string; code: string; is_system: boolean }>;
+    selected_folder_id: number | null;
+    selected_category_id: number | null;
+    query: string | null;
+  };
+  total_documents: number;
+};
+
+export async function fetchOrgAdminAccountingArchive(params?: {
+  q?: string;
+  folderId?: number;
+  categoryId?: number;
+}): Promise<OrgAdminAccountingArchiveResponse> {
+  const sp = new URLSearchParams();
+  if (params?.q) sp.set("q", params.q);
+  if (params?.folderId != null) sp.set("folder_id", String(params.folderId));
+  if (params?.categoryId != null) sp.set("category_id", String(params.categoryId));
+  const res = await fetch(`/api/org-admin/accounting/archive${sp.toString() ? `?${sp.toString()}` : ""}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 403) throw new Error(await parseApiErrorDetail(res, "Accesso negato"));
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento archivio accounting"));
+  return res.json();
+}
+
+export async function downloadOrgAdminAccountingDocument(
+  document: Pick<OrgAdminAccountingDocument, "download_url" | "original_filename">,
+): Promise<void> {
+  await downloadAuthenticatedFile(
+    document.download_url,
+    document.original_filename || "documento",
+    "Impossibile scaricare il documento contabile",
+  );
+}
+
+export async function createOrgAdminAccountingShareLink(
+  documentId: number,
+  input?: { expiresInDays?: number | null },
+): Promise<{ share_link: AccountingShareLink }> {
+  const res = await fetch(`/api/org-admin/accounting/documents/${documentId}/share-links`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      expires_in_days: input?.expiresInDays ?? null,
+    }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Documento accounting non trovato");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione link accounting"));
+  return res.json();
+}
+
+export async function fetchOrgAdminAccountingShareLinks(
+  documentId: number,
+): Promise<{ items: AccountingShareLink[]; total: number }> {
+  const res = await fetch(`/api/org-admin/accounting/documents/${documentId}/share-links`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Documento accounting non trovato");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento link accounting"));
+  return res.json();
+}
+
+export async function revokeOrgAdminAccountingShareLink(
+  shareLinkId: number,
+): Promise<{ ok: boolean; share_link_id: number }> {
+  const res = await fetch(`/api/org-admin/accounting/share-links/${shareLinkId}/revoke`, {
+    method: "POST",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Link di condivisione non trovato");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore revoca link accounting"));
+  return res.json();
 }
 
 export async function fetchOrgAdminNotifications(

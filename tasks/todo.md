@@ -4,6 +4,26 @@
 - [x] Ottimizzare asset/effetti HUD e operazioni ripetute nel frame loop senza cambiare output 720p/24fps
 - [x] Eseguire benchmark comparativi + test mirati e documentare l'impatto
 
+## Accounting refactor super admin + org admin (Mar 11, 2026)
+- [x] Analizzare il modulo Contabilità corrente (`organization_shared_documents` + toggle `accounting_enabled`) e definire il perimetro compatibile del refactor
+- [x] Introdurre il nuovo dominio dati `accounting_folders`, `accounting_categories`, `accounting_documents`, `accounting_share_links` con modelli SQLAlchemy coerenti e relazioni robuste
+- [x] Creare migration Alembic con backfill dei documenti contabili esistenti verso cartella/categoria di fallback senza rompere storage, auth o toggle attuale
+- [x] Aggiornare bootstrap/init path dev per tabelle nuove e seed/backfill idempotente minimo richiesto
+- [x] Implementare API FastAPI per cartelle, categorie, documenti contabili, preview web, download sicuro e link di condivisione revocabili
+- [x] Mantenere compatibilita del modulo documenti generali esistente e del toggle Contabilità lato organizzazione
+- [x] Rifare la UX org admin Contabilità con archivio a cartelle/categorie/documenti, filtri, ricerca, preview e azioni rapide
+- [x] Creare/migliorare la UX super admin per gestione cartelle, categorie e upload/modifica documenti contabili
+- [x] Eseguire test/build/verifiche mirate e documentare la review finale
+
+## Review (Accounting refactor super admin + org admin - Mar 11, 2026)
+- Dominio contabile separato introdotto con `accounting_folders`, `accounting_categories`, `accounting_documents`, `accounting_share_links`, mantenendo intatto il toggle esistente `organizations.accounting_enabled` e il modulo documenti generali basato su `organization_shared_documents`.
+- Compatibilita legacy preservata: gli upload contabili che passano ancora dalla route super-admin legacy vengono specchiati anche nel nuovo archivio; i documenti contabili legacy gia assegnati vengono backfillati in cartella fallback `Archivio` e categoria fallback `Generale` per ogni organizzazione.
+- Backend completato con CRUD cartelle/categorie/documenti, preview inline sicura, download autenticato, grouping/filtering per org admin e link di condivisione revocabili con token ed expiry opzionale.
+- Frontend org admin rifatto con archivio accordion `cartella -> categoria -> documenti`, ricerca, filtri, preview PDF/immagini, azioni rapide `Apri`, `Scarica`, `Preview`, `Condividi` e fallback pulito per file non previewabili.
+- Frontend super admin esteso con workspace dedicato Contabilità dentro Documenti, comprensivo di gestione cartelle/categorie, upload/edit documento, preview e revoca link condivisi, senza rimuovere il workspace documenti generali.
+- Durante la verifica reale della chain Alembic su SQLite sono emerse incompatibilita legacy non legate solo alla nuova feature; sono state corrette in modo conservativo nelle migration `m4n5o6p7q8r9`, `x7y8z9a0b1c2`, `g2h3i4j5k6l7`, `a1c9e8f7b6d5`, `f0a1b2c3d4e5`, `4a5b6c7d8e9f`, `6c7d8e9f0a1b` per consentire `alembic upgrade head` su DB SQLite pulito senza alterare il percorso Postgres.
+- Verifiche eseguite: `python -m alembic upgrade head` su `sqlite:///tmp_accounting_mig.db` OK; `python -m pytest -q tests/test_accounting_archive.py tests/test_org_shared_documents.py tests/test_org_admin_notifications.py` OK (`13 passed`); `npm --prefix frontend run build` OK.
+
 ## Forms studio UX refinement (Mar 10, 2026)
 - [x] Rivalutare il workspace Forms attuale rispetto ai punti UX richiesti e identificare i punti ancora troppo tecnici/confusi
 - [x] Rifinire lista form e header editor per far percepire il prodotto come page builder condivisibile, non metadata editor

@@ -56,6 +56,7 @@ const OrgAdminBookings = lazy(() => import("./pages/org-admin/OrgAdminBookings")
 const OrgAdminStripeDemoBilling = lazy(() => import("./pages/org-admin/OrgAdminStripeDemoBilling"));
 const OrgAdminSettings = lazy(() => import("./pages/org-admin/OrgAdminSettings"));
 const OrgAdminSharedDocuments = lazy(() => import("./pages/org-admin/OrgAdminSharedDocuments"));
+const OrgAdminAccounting = lazy(() => import("./pages/org-admin/OrgAdminAccounting"));
 
 const Loading = () => (
   <div className="flex justify-center py-16">
@@ -149,7 +150,7 @@ const App = () => {
                 <Route path="comunicazioni" element={<OrgAdminCommunications />} />
                 <Route path="billing" element={<OrgAdminStripeDemoBilling />} />
                 <Route path="forms" element={<Navigate to="/org-admin/comunicazioni?tab=forms" replace />} />
-                <Route path="contabilita" element={<OrgAdminSharedDocuments />} />
+                <Route path="contabilita" element={<OrgAdminAccounting />} />
                 <Route path="associazione" element={<OrgAdminSettings />} />
               </Route>
               <Route path="*" element={<NotFound />} />

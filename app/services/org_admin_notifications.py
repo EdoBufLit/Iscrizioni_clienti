@@ -11,6 +11,7 @@ from app.config import settings
 from app.models import (
     AdminRole,
     AdminUser,
+    AccountingDocument,
     OrgAdminNotification,
     OrgAdminNotificationType,
     Organization,
@@ -197,6 +198,83 @@ def notify_org_admins_about_shared_document(
         organization.id,
         document.id,
         notification_type.value,
+        [admin.id for admin in admins],
+        [email for _, email in recipient_emails],
+        notifications_created,
+        emails_queued,
+    )
+
+    return {
+        "notifications_created": notifications_created,
+        "emails_queued": emails_queued,
+    }
+
+
+def notify_org_admins_about_accounting_document(
+    db: Session,
+    *,
+    organization: Organization,
+    document: AccountingDocument,
+    request: Request,
+) -> dict[str, int]:
+    admins = _list_active_org_admins(db, organization.id)
+    recipient_emails = _unique_org_admin_recipient_emails(admins)
+    href = "/org-admin/contabilita"
+    frontend_base_url = _resolve_frontend_base_url(request)
+    cta_url = f"{frontend_base_url}{href}"
+    title = "Nuovo documento contabile disponibile"
+    body = (
+        f'Il Super Admin ha caricato il documento "{document.title}" nella sezione Contabilita.'
+    )
+    notification_type = OrgAdminNotificationType.DOCUMENT_ACCOUNTING
+
+    notifications_created = _create_notification_rows(
+        db,
+        admins=admins,
+        org_id=organization.id,
+        notification_type=notification_type,
+        title=title,
+        body=body,
+        href=href,
+    )
+
+    subject = f"Nuovo documento contabile per {organization.name}"
+    html_body = _build_email_html(
+        heading="Nuovo documento contabile",
+        title=document.title,
+        body=body,
+        cta_url=cta_url,
+        cta_label="Apri dashboard",
+        organization_name=organization.name,
+    )
+    text_body = f"{title}\n\n{body}\n\nApri la dashboard: {cta_url}"
+
+    emails_queued = 0
+    for admin, email in recipient_emails:
+        enqueue_email(
+            db,
+            email_type=notification_type.value,
+            to_email=email,
+            subject=subject,
+            payload=build_email_payload(
+                text_body=text_body,
+                html_body=html_body,
+                meta={
+                    "admin_id": admin.id,
+                    "org_id": organization.id,
+                    "document_id": document.id,
+                    "href": href,
+                },
+            ),
+            priority=3,
+            dedupe_key=f"{notification_type.value}:accounting:{document.id}:{admin.id}",
+        )
+        emails_queued += 1
+
+    logger.info(
+        "org_admin_accounting_alerts_queued org_id=%s document_id=%s admin_ids=%s recipient_emails=%s notifications=%s emails=%s",
+        organization.id,
+        document.id,
         [admin.id for admin in admins],
         [email for _, email in recipient_emails],
         notifications_created,

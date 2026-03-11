@@ -39,6 +39,10 @@ from app.models import (
     OrganizationSharedDocument,
     OrganizationSharedDocumentAssignment,
     OrgAdminNotification,
+    AccountingCategory,
+    AccountingDocument,
+    AccountingFolder,
+    AccountingShareLink,
     EmailCampaign,
     EmailCampaignRecipient,
     EmailTemplate,
@@ -76,6 +80,12 @@ from app.services.email_templates import (
     normalize_template_channel,
     normalize_template_scope,
     render_template_content,
+)
+from app.services.accounting import (
+    accounting_document_preview_available,
+    build_accounting_file_response,
+    create_accounting_share_link,
+    ensure_accounting_seed_data,
 )
 from app.services.forms import (
     ALLOWED_FORM_FIELD_TYPES,
@@ -379,6 +389,128 @@ def _serialize_org_shared_document(
         "size_bytes": document.size_bytes,
         "download_url": f"/api/org-admin/shared-documents/{document.id}/download",
     }
+
+
+def _serialize_org_admin_accounting_share_link(
+    request: Request,
+    link: AccountingShareLink,
+) -> dict[str, object]:
+    base_url = str(request.base_url).rstrip("/")
+    return {
+        "id": link.id,
+        "url": f"{base_url}/api/public/accounting-share/{link.token}",
+        "expires_at": link.expires_at.isoformat() if link.expires_at else None,
+        "revoked_at": link.revoked_at.isoformat() if link.revoked_at else None,
+        "created_at": link.created_at.isoformat() if link.created_at else None,
+    }
+
+
+def _serialize_org_admin_accounting_document(
+    request: Request,
+    document: AccountingDocument,
+) -> dict[str, object]:
+    preview_available = accounting_document_preview_available(document)
+    active_share_links = [
+        link
+        for link in sorted(
+            document.share_links or [],
+            key=lambda item: (item.created_at or datetime.min),
+            reverse=True,
+        )
+        if link.revoked_at is None
+        and (link.expires_at is None or link.expires_at > datetime.utcnow())
+    ]
+    return {
+        "id": document.id,
+        "title": document.title,
+        "description": document.description,
+        "created_at": document.created_at.isoformat() if document.created_at else None,
+        "updated_at": document.updated_at.isoformat() if document.updated_at else None,
+        "original_filename": document.original_filename,
+        "mime_type": document.mime_type,
+        "file_size": document.file_size,
+        "preview_enabled": bool(document.preview_enabled),
+        "preview_available": preview_available,
+        "is_share_enabled": bool(document.is_share_enabled),
+        "folder": (
+            {
+                "id": document.folder.id,
+                "name": document.folder.name,
+                "slug": document.folder.slug,
+                "year": document.folder.year,
+                "sort_order": document.folder.sort_order,
+            }
+            if document.folder is not None
+            else None
+        ),
+        "category": (
+            {
+                "id": document.category.id,
+                "code": document.category.code,
+                "name": document.category.name,
+                "is_system": bool(document.category.is_system),
+                "sort_order": document.category.sort_order,
+            }
+            if document.category is not None
+            else None
+        ),
+        "download_url": f"/api/org-admin/accounting/documents/{document.id}/download",
+        "preview_url": f"/api/org-admin/accounting/documents/{document.id}/preview"
+        if preview_available
+        else None,
+        "open_url": (
+            f"/api/org-admin/accounting/documents/{document.id}/preview"
+            if preview_available
+            else f"/api/org-admin/accounting/documents/{document.id}/download"
+        ),
+        "share_links": [
+            _serialize_org_admin_accounting_share_link(request, link)
+            for link in active_share_links
+        ],
+    }
+
+
+def _get_org_admin_accounting_document_or_404(
+    db: Session,
+    *,
+    admin: AdminUser,
+    document_id: int,
+) -> AccountingDocument:
+    document = (
+        db.query(AccountingDocument)
+        .options(
+            joinedload(AccountingDocument.folder),
+            joinedload(AccountingDocument.category),
+            joinedload(AccountingDocument.share_links),
+        )
+        .filter(
+            AccountingDocument.id == document_id,
+            AccountingDocument.org_id == admin.org_id,
+        )
+        .first()
+    )
+    if document is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Documento contabile non trovato.",
+        )
+    if (
+        document.folder is None
+        or not bool(document.folder.is_active)
+        or document.category is None
+        or not bool(document.category.is_active)
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="Documento contabile non disponibile.",
+        )
+    return document
+
+
+class CreateAccountingShareLinkBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expires_in_days: Optional[int] = Field(default=None, ge=1, le=365)
 
 
 def _serialize_org_admin_notification(
@@ -1350,6 +1482,307 @@ def download_org_shared_document(
         media_type=document.mime_type or "application/octet-stream",
         content_disposition_type="attachment",
     )
+
+
+@router.get("/accounting/archive")
+def get_org_admin_accounting_archive(
+    request: Request,
+    q: Optional[str] = Query(default=None),
+    folder_id: Optional[int] = Query(default=None),
+    category_id: Optional[int] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if not bool(admin.organization.accounting_enabled):
+        raise HTTPException(status_code=403, detail="Contabilita non abilitata.")
+
+    ensure_accounting_seed_data(db)
+
+    folder_query = (
+        db.query(AccountingFolder)
+        .filter(AccountingFolder.org_id.is_(None), AccountingFolder.is_active.is_(True))
+        .order_by(
+            AccountingFolder.sort_order.asc(),
+            AccountingFolder.year.is_(None).asc(),
+            AccountingFolder.year.desc(),
+            AccountingFolder.name.asc(),
+            AccountingFolder.id.asc(),
+        )
+    )
+    category_query = (
+        db.query(AccountingCategory)
+        .filter(
+            AccountingCategory.org_id.is_(None),
+            AccountingCategory.is_active.is_(True),
+        )
+        .order_by(
+            AccountingCategory.sort_order.asc(),
+            AccountingCategory.name.asc(),
+            AccountingCategory.id.asc(),
+        )
+    )
+    folders = folder_query.all()
+    categories = category_query.all()
+
+    document_query = (
+        db.query(AccountingDocument)
+        .options(
+            joinedload(AccountingDocument.folder),
+            joinedload(AccountingDocument.category),
+            joinedload(AccountingDocument.share_links),
+        )
+        .join(AccountingFolder, AccountingFolder.id == AccountingDocument.folder_id)
+        .join(AccountingCategory, AccountingCategory.id == AccountingDocument.category_id)
+        .filter(
+            AccountingDocument.org_id == admin.org_id,
+            AccountingFolder.is_active.is_(True),
+            AccountingCategory.is_active.is_(True),
+        )
+    )
+    normalized_q = _normalize_optional_text(q)
+    if normalized_q:
+        pattern = f"%{normalized_q}%"
+        document_query = document_query.filter(
+            or_(
+                AccountingDocument.title.ilike(pattern),
+                AccountingDocument.description.ilike(pattern),
+                AccountingDocument.original_filename.ilike(pattern),
+            )
+        )
+    if folder_id is not None:
+        document_query = document_query.filter(AccountingDocument.folder_id == folder_id)
+    if category_id is not None:
+        document_query = document_query.filter(
+            AccountingDocument.category_id == category_id
+        )
+
+    documents = (
+        document_query.order_by(
+            AccountingFolder.sort_order.asc(),
+            AccountingCategory.sort_order.asc(),
+            AccountingDocument.created_at.desc(),
+            AccountingDocument.id.desc(),
+        ).all()
+    )
+
+    grouped: dict[int, dict[str, object]] = {}
+    for document in documents:
+        if document.folder is None or document.category is None:
+            continue
+        folder_bucket = grouped.setdefault(
+            document.folder.id,
+            {
+                "id": document.folder.id,
+                "name": document.folder.name,
+                "slug": document.folder.slug,
+                "year": document.folder.year,
+                "sort_order": document.folder.sort_order,
+                "categories_map": {},
+            },
+        )
+        categories_map = folder_bucket["categories_map"]
+        category_bucket = categories_map.setdefault(
+            document.category.id,
+            {
+                "id": document.category.id,
+                "code": document.category.code,
+                "name": document.category.name,
+                "is_system": bool(document.category.is_system),
+                "sort_order": document.category.sort_order,
+                "documents": [],
+            },
+        )
+        category_bucket["documents"].append(
+            _serialize_org_admin_accounting_document(request, document)
+        )
+
+    folder_items = []
+    for folder in folders:
+        bucket = grouped.get(folder.id)
+        if bucket is None:
+            continue
+        categories_map = bucket.pop("categories_map")
+        category_items = sorted(
+            categories_map.values(),
+            key=lambda item: (item["sort_order"], item["name"], item["id"]),
+        )
+        folder_items.append(
+            {
+                **bucket,
+                "document_count": sum(
+                    len(item["documents"]) for item in category_items
+                ),
+                "categories": category_items,
+            }
+        )
+
+    return {
+        "items": folder_items,
+        "filters": {
+            "folders": [
+                {
+                    "id": folder.id,
+                    "name": folder.name,
+                    "year": folder.year,
+                    "slug": folder.slug,
+                }
+                for folder in folders
+            ],
+            "categories": [
+                {
+                    "id": category.id,
+                    "name": category.name,
+                    "code": category.code,
+                    "is_system": bool(category.is_system),
+                }
+                for category in categories
+            ],
+            "selected_folder_id": folder_id,
+            "selected_category_id": category_id,
+            "query": normalized_q,
+        },
+        "total_documents": len(documents),
+    }
+
+
+@router.get("/accounting/documents/{document_id}/preview")
+def preview_org_admin_accounting_document(
+    document_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if not bool(admin.organization.accounting_enabled):
+        raise HTTPException(status_code=403, detail="Contabilita non abilitata.")
+    document = _get_org_admin_accounting_document_or_404(
+        db,
+        admin=admin,
+        document_id=document_id,
+    )
+    if not accounting_document_preview_available(document):
+        raise HTTPException(
+            status_code=409,
+            detail="Preview web non disponibile per questo file.",
+        )
+    return build_accounting_file_response(
+        document,
+        content_disposition_type="inline",
+    )
+
+
+@router.get("/accounting/documents/{document_id}/download")
+def download_org_admin_accounting_document(
+    document_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if not bool(admin.organization.accounting_enabled):
+        raise HTTPException(status_code=403, detail="Contabilita non abilitata.")
+    document = _get_org_admin_accounting_document_or_404(
+        db,
+        admin=admin,
+        document_id=document_id,
+    )
+    return build_accounting_file_response(
+        document,
+        content_disposition_type="attachment",
+    )
+
+
+@router.post("/accounting/documents/{document_id}/share-links", status_code=201)
+def create_org_admin_accounting_share_link(
+    document_id: int,
+    body: CreateAccountingShareLinkBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if not bool(admin.organization.accounting_enabled):
+        raise HTTPException(status_code=403, detail="Contabilita non abilitata.")
+    document = _get_org_admin_accounting_document_or_404(
+        db,
+        admin=admin,
+        document_id=document_id,
+    )
+    expires_at = None
+    if body.expires_in_days is not None:
+        expires_at = datetime.utcnow() + timedelta(days=body.expires_in_days)
+    link = create_accounting_share_link(
+        db,
+        document=document,
+        created_by_admin_id=admin.id,
+        expires_at=expires_at,
+    )
+    db.commit()
+    db.refresh(link)
+    return {"share_link": _serialize_org_admin_accounting_share_link(request, link)}
+
+
+@router.get("/accounting/documents/{document_id}/share-links")
+def list_org_admin_accounting_share_links(
+    document_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if not bool(admin.organization.accounting_enabled):
+        raise HTTPException(status_code=403, detail="Contabilita non abilitata.")
+    document = _get_org_admin_accounting_document_or_404(
+        db,
+        admin=admin,
+        document_id=document_id,
+    )
+    items = [
+        _serialize_org_admin_accounting_share_link(request, link)
+        for link in sorted(
+            document.share_links or [],
+            key=lambda item: (item.created_at or datetime.min),
+            reverse=True,
+        )
+        if link.revoked_at is None
+        and (link.expires_at is None or link.expires_at > datetime.utcnow())
+    ]
+    return {"items": items, "total": len(items)}
+
+
+@router.post("/accounting/share-links/{share_link_id}/revoke")
+def revoke_org_admin_accounting_share_link(
+    share_link_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if not bool(admin.organization.accounting_enabled):
+        raise HTTPException(status_code=403, detail="Contabilita non abilitata.")
+    share_link = (
+        db.query(AccountingShareLink)
+        .join(AccountingDocument, AccountingDocument.id == AccountingShareLink.document_id)
+        .filter(
+            AccountingShareLink.id == share_link_id,
+            AccountingDocument.org_id == admin.org_id,
+        )
+        .first()
+    )
+    if share_link is None:
+        raise HTTPException(status_code=404, detail="Link di condivisione non trovato.")
+    if share_link.revoked_at is None:
+        share_link.revoked_at = datetime.utcnow()
+        db.add(share_link)
+        db.commit()
+    return {"ok": True, "share_link_id": share_link_id}
 
 
 @router.patch("/organization")

@@ -29,6 +29,10 @@ from app.models import (
     IntegrationApiKey,
     OrganizationSharedDocument,
     OrganizationSharedDocumentAssignment,
+    AccountingCategory,
+    AccountingDocument,
+    AccountingFolder,
+    AccountingShareLink,
 )
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.security import hash_api_key, verify_password
@@ -40,10 +44,27 @@ from app.services.association_delete import delete_association_and_release_range
 from app.services.low_cards_alerts import run_low_cards_alert_job
 from app.services.member_activity import get_member_lifecycle_status, is_member_active
 from app.services.member_maintenance import expire_and_purge_members
-from app.services.org_admin_notifications import notify_org_admins_about_shared_document
+from app.services.org_admin_notifications import (
+    notify_org_admins_about_accounting_document,
+    notify_org_admins_about_shared_document,
+)
 from app.services.statute_upload import (
     enforce_statute_request_size_from_headers,
     save_statute_pdf,
+)
+from app.services.accounting import (
+    DEFAULT_ACCOUNTING_CATEGORY_CODE,
+    accounting_document_preview_available,
+    backfill_legacy_accounting_documents,
+    build_accounting_file_response,
+    create_accounting_share_link,
+    ensure_accounting_seed_data,
+    get_default_accounting_category,
+    get_default_accounting_folder,
+    is_accounting_previewable_mime,
+    resolve_accounting_share_link,
+    save_accounting_upload_file,
+    slugify_accounting_label,
 )
 from app.models_affiliation import AffiliationApplication
 
@@ -387,10 +408,51 @@ class PatchOrganization(BaseModel):
     communications_enabled: Optional[bool] = None
 
 
+class CreateAccountingFolderBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., min_length=1, max_length=120)
+    year: Optional[int] = Field(default=None, ge=2000, le=2200)
+    is_active: bool = True
+    sort_order: Optional[int] = None
+
+
+class UpdateAccountingFolderBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    year: Optional[int] = Field(default=None, ge=2000, le=2200)
+    is_active: Optional[bool] = None
+    sort_order: Optional[int] = None
+
+
+class CreateAccountingCategoryBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., min_length=1, max_length=120)
+    is_active: bool = True
+    sort_order: Optional[int] = None
+
+
+class UpdateAccountingCategoryBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    is_active: Optional[bool] = None
+    sort_order: Optional[int] = None
+
+
 def _normalize_tag_culture(value: Optional[str]) -> Optional[str]:
     if value is None:
         return None
     return value.replace("T.A.G.", "TAG")
+
+
+def _normalize_optional_text(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    return cleaned or None
 
 
 def _serialize_document_target(org: Organization) -> dict[str, object]:
@@ -453,6 +515,239 @@ def _serialize_shared_document(
     if include_recipients:
         payload["recipients"] = recipient_rows
     return payload
+
+
+def _serialize_accounting_folder(
+    folder: AccountingFolder,
+    *,
+    document_count: int = 0,
+) -> dict[str, object]:
+    return {
+        "id": folder.id,
+        "name": folder.name,
+        "slug": folder.slug,
+        "year": folder.year,
+        "sort_order": folder.sort_order,
+        "is_active": bool(folder.is_active),
+        "is_default": bool(folder.is_default),
+        "document_count": int(document_count),
+        "created_at": folder.created_at.isoformat() if folder.created_at else None,
+        "updated_at": folder.updated_at.isoformat() if folder.updated_at else None,
+    }
+
+
+def _serialize_accounting_category(
+    category: AccountingCategory,
+    *,
+    document_count: int = 0,
+) -> dict[str, object]:
+    return {
+        "id": category.id,
+        "code": category.code,
+        "name": category.name,
+        "is_system": bool(category.is_system),
+        "sort_order": category.sort_order,
+        "is_active": bool(category.is_active),
+        "document_count": int(document_count),
+        "created_at": category.created_at.isoformat() if category.created_at else None,
+        "updated_at": category.updated_at.isoformat() if category.updated_at else None,
+    }
+
+
+def _serialize_accounting_share_link(
+    request: Request,
+    link: AccountingShareLink,
+) -> dict[str, object]:
+    base_url = str(request.base_url).rstrip("/")
+    return {
+        "id": link.id,
+        "token": link.token,
+        "url": f"{base_url}/api/public/accounting-share/{link.token}",
+        "expires_at": link.expires_at.isoformat() if link.expires_at else None,
+        "revoked_at": link.revoked_at.isoformat() if link.revoked_at else None,
+        "created_at": link.created_at.isoformat() if link.created_at else None,
+    }
+
+
+def _serialize_accounting_document(
+    request: Request,
+    document: AccountingDocument,
+    *,
+    include_share_links: bool = False,
+) -> dict[str, object]:
+    preview_available = accounting_document_preview_available(document)
+    payload = {
+        "id": document.id,
+        "title": document.title,
+        "description": document.description,
+        "created_at": document.created_at.isoformat() if document.created_at else None,
+        "updated_at": document.updated_at.isoformat() if document.updated_at else None,
+        "original_filename": document.original_filename,
+        "mime_type": document.mime_type,
+        "file_size": document.file_size,
+        "preview_enabled": bool(document.preview_enabled),
+        "preview_available": preview_available,
+        "is_share_enabled": bool(document.is_share_enabled),
+        "legacy_shared_document_id": document.legacy_shared_document_id,
+        "organization": (
+            {
+                "id": document.organization.id,
+                "name": document.organization.name,
+                "slug": document.organization.slug,
+            }
+            if document.organization is not None
+            else None
+        ),
+        "folder": (
+            _serialize_accounting_folder(document.folder)
+            if document.folder is not None
+            else None
+        ),
+        "category": (
+            _serialize_accounting_category(document.category)
+            if document.category is not None
+            else None
+        ),
+        "uploaded_by": (
+            {
+                "id": document.uploaded_by_admin.id,
+                "email": document.uploaded_by_admin.email,
+            }
+            if document.uploaded_by_admin is not None
+            else None
+        ),
+        "download_url": f"/api/super-admin/accounting/documents/{document.id}/download",
+        "preview_url": f"/api/super-admin/accounting/documents/{document.id}/preview"
+        if preview_available
+        else None,
+        "open_url": (
+            f"/api/super-admin/accounting/documents/{document.id}/preview"
+            if preview_available
+            else f"/api/super-admin/accounting/documents/{document.id}/download"
+        ),
+    }
+    if include_share_links:
+        payload["share_links"] = [
+            _serialize_accounting_share_link(request, link)
+            for link in sorted(
+                document.share_links or [],
+                key=lambda item: (item.created_at or datetime.min),
+                reverse=True,
+            )
+        ]
+    return payload
+
+
+def _get_accounting_folder_or_404(db: Session, folder_id: int) -> AccountingFolder:
+    folder = (
+        db.query(AccountingFolder)
+        .filter(AccountingFolder.id == folder_id, AccountingFolder.org_id.is_(None))
+        .first()
+    )
+    if folder is None:
+        raise HTTPException(status_code=404, detail="Cartella contabile non trovata.")
+    return folder
+
+
+def _get_accounting_category_or_404(
+    db: Session, category_id: int
+) -> AccountingCategory:
+    category = (
+        db.query(AccountingCategory)
+        .filter(
+            AccountingCategory.id == category_id,
+            AccountingCategory.org_id.is_(None),
+        )
+        .first()
+    )
+    if category is None:
+        raise HTTPException(status_code=404, detail="Categoria contabile non trovata.")
+    return category
+
+
+def _get_accounting_document_or_404(
+    db: Session,
+    document_id: int,
+) -> AccountingDocument:
+    document = (
+        db.query(AccountingDocument)
+        .options(
+            joinedload(AccountingDocument.organization),
+            joinedload(AccountingDocument.folder),
+            joinedload(AccountingDocument.category),
+            joinedload(AccountingDocument.uploaded_by_admin),
+            joinedload(AccountingDocument.share_links),
+        )
+        .filter(AccountingDocument.id == document_id)
+        .first()
+    )
+    if document is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Documento contabile non trovato.",
+        )
+    return document
+
+
+def _ensure_accounting_enabled_org(db: Session, org_id: int) -> Organization:
+    org = (
+        db.query(Organization)
+        .filter(Organization.id == org_id, Organization.deleted_at.is_(None))
+        .first()
+    )
+    if org is None:
+        raise HTTPException(status_code=404, detail="Associazione non trovata.")
+    if not bool(org.accounting_enabled):
+        raise HTTPException(
+            status_code=422,
+            detail="La Contabilita deve essere attiva per l'associazione destinataria.",
+        )
+    return org
+
+
+def _next_global_sort_order(db: Session, model) -> int:
+    current = (
+        db.query(func.max(model.sort_order)).filter(model.org_id.is_(None)).scalar() or 0
+    )
+    return int(current) + 10
+
+
+def _build_unique_folder_slug(
+    db: Session,
+    *,
+    name: str,
+    folder_id: int | None = None,
+) -> str:
+    base_slug = slugify_accounting_label(name)
+    candidate = base_slug
+    suffix = 2
+    while True:
+        query = db.query(AccountingFolder).filter(AccountingFolder.slug == candidate)
+        if folder_id is not None:
+            query = query.filter(AccountingFolder.id != folder_id)
+        if query.first() is None:
+            return candidate
+        candidate = f"{base_slug}-{suffix}"
+        suffix += 1
+
+
+def _build_unique_category_code(
+    db: Session,
+    *,
+    name: str,
+    category_id: int | None = None,
+) -> str:
+    base_code = f"custom_{slugify_accounting_label(name)}"
+    candidate = base_code
+    suffix = 2
+    while True:
+        query = db.query(AccountingCategory).filter(AccountingCategory.code == candidate)
+        if category_id is not None:
+            query = query.filter(AccountingCategory.id != category_id)
+        if query.first() is None:
+            return candidate
+        candidate = f"{base_code}_{suffix}"
+        suffix += 1
 
 
 async def _save_shared_document_file(upload_file: UploadFile) -> tuple[str, int, str]:
@@ -1655,6 +1950,13 @@ async def create_shared_document(
     db.add(document)
     db.flush()
 
+    accounting_folder = None
+    accounting_category = None
+    if document.kind == "accounting":
+        ensure_accounting_seed_data(db)
+        accounting_folder = get_default_accounting_folder(db)
+        accounting_category = get_default_accounting_category(db)
+
     for org in targets:
         db.add(
             OrganizationSharedDocumentAssignment(
@@ -1662,6 +1964,27 @@ async def create_shared_document(
                 association_id=org.id,
             )
         )
+        if document.kind == "accounting" and accounting_folder and accounting_category:
+            db.add(
+                AccountingDocument(
+                    org_id=org.id,
+                    folder_id=accounting_folder.id,
+                    category_id=accounting_category.id,
+                    title=document.title,
+                    description=document.description,
+                    storage_key=document.rel_path,
+                    original_filename=document.original_filename,
+                    mime_type=document.mime_type,
+                    file_size=document.size_bytes,
+                    sha256=document.sha256,
+                    preview_enabled=is_accounting_previewable_mime(document.mime_type),
+                    is_share_enabled=False,
+                    uploaded_by_admin_id=admin.id,
+                    legacy_shared_document_id=document.id,
+                    created_at=document.created_at,
+                    updated_at=document.created_at,
+                )
+            )
 
     notification_totals = {"notifications_created": 0, "emails_queued": 0}
     for org in targets:
@@ -1790,6 +2113,498 @@ def download_shared_document(
         media_type=document.mime_type or "application/octet-stream",
         content_disposition_type="attachment",
     )
+
+
+@router.get("/accounting/folders")
+def list_accounting_folders(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    ensure_accounting_seed_data(db)
+    folders = (
+        db.query(AccountingFolder)
+        .filter(AccountingFolder.org_id.is_(None))
+        .order_by(
+            AccountingFolder.sort_order.asc(),
+            AccountingFolder.year.is_(None).asc(),
+            AccountingFolder.year.desc(),
+            AccountingFolder.name.asc(),
+            AccountingFolder.id.asc(),
+        )
+        .all()
+    )
+    counts = {
+        folder_id: total
+        for folder_id, total in db.query(
+            AccountingDocument.folder_id,
+            func.count(AccountingDocument.id),
+        )
+        .group_by(AccountingDocument.folder_id)
+        .all()
+    }
+    return {
+        "items": [
+            _serialize_accounting_folder(folder, document_count=counts.get(folder.id, 0))
+            for folder in folders
+        ],
+        "total": len(folders),
+    }
+
+
+@router.post("/accounting/folders", status_code=201)
+def create_accounting_folder(
+    body: CreateAccountingFolderBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+    del admin
+    normalized_name = _normalize_optional_text(body.name)
+    if normalized_name is None:
+        raise HTTPException(status_code=422, detail="Nome cartella obbligatorio.")
+    folder = AccountingFolder(
+        org_id=None,
+        name=normalized_name,
+        slug=_build_unique_folder_slug(db, name=normalized_name),
+        year=body.year,
+        sort_order=body.sort_order
+        if body.sort_order is not None
+        else _next_global_sort_order(db, AccountingFolder),
+        is_active=bool(body.is_active),
+        is_default=False,
+    )
+    db.add(folder)
+    db.commit()
+    db.refresh(folder)
+    return {"folder": _serialize_accounting_folder(folder)}
+
+
+@router.patch("/accounting/folders/{folder_id}")
+def update_accounting_folder(
+    folder_id: int,
+    body: UpdateAccountingFolderBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    folder = _get_accounting_folder_or_404(db, folder_id)
+    payload = body.model_dump(exclude_unset=True)
+    if "name" in payload:
+        normalized_name = _normalize_optional_text(payload["name"])
+        if normalized_name is None:
+            raise HTTPException(status_code=422, detail="Nome cartella obbligatorio.")
+        folder.name = normalized_name
+        folder.slug = _build_unique_folder_slug(
+            db,
+            name=normalized_name,
+            folder_id=folder.id,
+        )
+    if "year" in payload:
+        folder.year = payload["year"]
+    if "is_active" in payload:
+        folder.is_active = bool(payload["is_active"])
+    if "sort_order" in payload and payload["sort_order"] is not None:
+        folder.sort_order = int(payload["sort_order"])
+    db.add(folder)
+    db.commit()
+    db.refresh(folder)
+    return {"folder": _serialize_accounting_folder(folder)}
+
+
+@router.delete("/accounting/folders/{folder_id}")
+def delete_accounting_folder(
+    folder_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    folder = _get_accounting_folder_or_404(db, folder_id)
+    if folder.is_default:
+        raise HTTPException(
+            status_code=409,
+            detail="La cartella di fallback non puo essere eliminata.",
+        )
+    documents_count = (
+        db.query(func.count(AccountingDocument.id))
+        .filter(AccountingDocument.folder_id == folder.id)
+        .scalar()
+        or 0
+    )
+    if documents_count:
+        raise HTTPException(
+            status_code=409,
+            detail="Impossibile eliminare la cartella: contiene documenti.",
+        )
+    db.delete(folder)
+    db.commit()
+    return {"ok": True, "deleted_folder_id": folder_id}
+
+
+@router.get("/accounting/categories")
+def list_accounting_categories(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    ensure_accounting_seed_data(db)
+    categories = (
+        db.query(AccountingCategory)
+        .filter(AccountingCategory.org_id.is_(None))
+        .order_by(
+            AccountingCategory.sort_order.asc(),
+            AccountingCategory.name.asc(),
+            AccountingCategory.id.asc(),
+        )
+        .all()
+    )
+    counts = {
+        category_id: total
+        for category_id, total in db.query(
+            AccountingDocument.category_id,
+            func.count(AccountingDocument.id),
+        )
+        .group_by(AccountingDocument.category_id)
+        .all()
+    }
+    return {
+        "items": [
+            _serialize_accounting_category(
+                category,
+                document_count=counts.get(category.id, 0),
+            )
+            for category in categories
+        ],
+        "total": len(categories),
+    }
+
+
+@router.post("/accounting/categories", status_code=201)
+def create_accounting_category(
+    body: CreateAccountingCategoryBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    normalized_name = _normalize_optional_text(body.name)
+    if normalized_name is None:
+        raise HTTPException(status_code=422, detail="Nome categoria obbligatorio.")
+    category = AccountingCategory(
+        org_id=None,
+        code=_build_unique_category_code(db, name=normalized_name),
+        name=normalized_name,
+        is_system=False,
+        sort_order=body.sort_order
+        if body.sort_order is not None
+        else _next_global_sort_order(db, AccountingCategory),
+        is_active=bool(body.is_active),
+    )
+    db.add(category)
+    db.commit()
+    db.refresh(category)
+    return {"category": _serialize_accounting_category(category)}
+
+
+@router.patch("/accounting/categories/{category_id}")
+def update_accounting_category(
+    category_id: int,
+    body: UpdateAccountingCategoryBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    category = _get_accounting_category_or_404(db, category_id)
+    payload = body.model_dump(exclude_unset=True)
+    if "name" in payload:
+        normalized_name = _normalize_optional_text(payload["name"])
+        if normalized_name is None:
+            raise HTTPException(status_code=422, detail="Nome categoria obbligatorio.")
+        category.name = normalized_name
+        if not category.is_system:
+            category.code = _build_unique_category_code(
+                db,
+                name=normalized_name,
+                category_id=category.id,
+            )
+    if "is_active" in payload:
+        category.is_active = bool(payload["is_active"])
+    if "sort_order" in payload and payload["sort_order"] is not None:
+        category.sort_order = int(payload["sort_order"])
+    db.add(category)
+    db.commit()
+    db.refresh(category)
+    return {"category": _serialize_accounting_category(category)}
+
+
+@router.delete("/accounting/categories/{category_id}")
+def delete_accounting_category(
+    category_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    category = _get_accounting_category_or_404(db, category_id)
+    if category.is_system or category.code == DEFAULT_ACCOUNTING_CATEGORY_CODE:
+        raise HTTPException(
+            status_code=409,
+            detail="La categoria selezionata non puo essere eliminata.",
+        )
+    documents_count = (
+        db.query(func.count(AccountingDocument.id))
+        .filter(AccountingDocument.category_id == category.id)
+        .scalar()
+        or 0
+    )
+    if documents_count:
+        raise HTTPException(
+            status_code=409,
+            detail="Impossibile eliminare la categoria: contiene documenti.",
+        )
+    db.delete(category)
+    db.commit()
+    return {"ok": True, "deleted_category_id": category_id}
+
+
+@router.get("/accounting/documents")
+def list_accounting_documents(
+    request: Request,
+    q: Optional[str] = Query(default=None),
+    org_id: Optional[int] = Query(default=None),
+    folder_id: Optional[int] = Query(default=None),
+    category_id: Optional[int] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    query = (
+        db.query(AccountingDocument)
+        .options(
+            joinedload(AccountingDocument.organization),
+            joinedload(AccountingDocument.folder),
+            joinedload(AccountingDocument.category),
+            joinedload(AccountingDocument.uploaded_by_admin),
+            joinedload(AccountingDocument.share_links),
+        )
+        .join(Organization, Organization.id == AccountingDocument.org_id)
+        .filter(Organization.deleted_at.is_(None))
+    )
+    normalized_q = _normalize_optional_text(q)
+    if normalized_q:
+        pattern = f"%{normalized_q}%"
+        query = query.filter(
+            or_(
+                AccountingDocument.title.ilike(pattern),
+                AccountingDocument.description.ilike(pattern),
+                AccountingDocument.original_filename.ilike(pattern),
+                Organization.name.ilike(pattern),
+            )
+        )
+    if org_id is not None:
+        query = query.filter(AccountingDocument.org_id == org_id)
+    if folder_id is not None:
+        query = query.filter(AccountingDocument.folder_id == folder_id)
+    if category_id is not None:
+        query = query.filter(AccountingDocument.category_id == category_id)
+
+    items = (
+        query.order_by(
+            AccountingDocument.created_at.desc(),
+            AccountingDocument.id.desc(),
+        )
+        .all()
+    )
+    return {
+        "items": [
+            _serialize_accounting_document(request, document, include_share_links=True)
+            for document in items
+        ],
+        "total": len(items),
+    }
+
+
+@router.post("/accounting/documents", status_code=201)
+async def create_accounting_document(
+    request: Request,
+    org_id: int = Form(...),
+    folder_id: int = Form(...),
+    category_id: int = Form(...),
+    title: str = Form(...),
+    description: Optional[str] = Form(None),
+    preview_enabled: bool = Form(True),
+    is_share_enabled: bool = Form(False),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+    organization = _ensure_accounting_enabled_org(db, org_id)
+    folder = _get_accounting_folder_or_404(db, folder_id)
+    category = _get_accounting_category_or_404(db, category_id)
+    normalized_title = _normalize_optional_text(title)
+    if normalized_title is None:
+        raise HTTPException(status_code=422, detail="Titolo obbligatorio.")
+
+    rel_path, size_bytes, sha256 = await save_accounting_upload_file(file)
+    document = AccountingDocument(
+        org_id=organization.id,
+        folder_id=folder.id,
+        category_id=category.id,
+        title=normalized_title,
+        description=_normalize_optional_text(description),
+        storage_key=rel_path,
+        original_filename=file.filename or os.path.basename(rel_path),
+        mime_type=file.content_type,
+        file_size=size_bytes,
+        sha256=sha256,
+        preview_enabled=bool(preview_enabled),
+        is_share_enabled=bool(is_share_enabled),
+        uploaded_by_admin_id=admin.id,
+    )
+    db.add(document)
+    db.flush()
+    notify_org_admins_about_accounting_document(
+        db,
+        organization=organization,
+        document=document,
+        request=request,
+    )
+    db.commit()
+    document = _get_accounting_document_or_404(db, document.id)
+    return {
+        "ok": True,
+        "document": _serialize_accounting_document(
+            request, document, include_share_links=True
+        ),
+    }
+
+
+@router.patch("/accounting/documents/{document_id}")
+async def update_accounting_document(
+    document_id: int,
+    request: Request,
+    org_id: Optional[int] = Form(None),
+    folder_id: Optional[int] = Form(None),
+    category_id: Optional[int] = Form(None),
+    title: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    preview_enabled: Optional[bool] = Form(None),
+    is_share_enabled: Optional[bool] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+    document = _get_accounting_document_or_404(db, document_id)
+    del admin
+    if org_id is not None:
+        organization = _ensure_accounting_enabled_org(db, org_id)
+        document.org_id = organization.id
+    if folder_id is not None:
+        document.folder_id = _get_accounting_folder_or_404(db, folder_id).id
+    if category_id is not None:
+        document.category_id = _get_accounting_category_or_404(db, category_id).id
+    if title is not None:
+        normalized_title = _normalize_optional_text(title)
+        if normalized_title is None:
+            raise HTTPException(status_code=422, detail="Titolo obbligatorio.")
+        document.title = normalized_title
+    if description is not None:
+        document.description = _normalize_optional_text(description)
+    if preview_enabled is not None:
+        document.preview_enabled = bool(preview_enabled)
+    if is_share_enabled is not None:
+        document.is_share_enabled = bool(is_share_enabled)
+    if file is not None:
+        rel_path, size_bytes, sha256 = await save_accounting_upload_file(file)
+        document.storage_key = rel_path
+        document.original_filename = file.filename or os.path.basename(rel_path)
+        document.mime_type = file.content_type
+        document.file_size = size_bytes
+        document.sha256 = sha256
+    db.add(document)
+    db.commit()
+    document = _get_accounting_document_or_404(db, document.id)
+    return {
+        "ok": True,
+        "document": _serialize_accounting_document(
+            request, document, include_share_links=True
+        ),
+    }
+
+
+@router.delete("/accounting/documents/{document_id}")
+def delete_accounting_document(
+    document_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    document = _get_accounting_document_or_404(db, document_id)
+    db.delete(document)
+    db.commit()
+    return {"ok": True, "deleted_document_id": document_id}
+
+
+@router.get("/accounting/documents/{document_id}")
+def get_accounting_document(
+    document_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    document = _get_accounting_document_or_404(db, document_id)
+    return _serialize_accounting_document(request, document, include_share_links=True)
+
+
+@router.get("/accounting/documents/{document_id}/preview")
+def preview_accounting_document(
+    document_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    document = _get_accounting_document_or_404(db, document_id)
+    if not accounting_document_preview_available(document):
+        raise HTTPException(
+            status_code=409,
+            detail="Preview web non disponibile per questo file.",
+        )
+    return build_accounting_file_response(
+        document,
+        content_disposition_type="inline",
+    )
+
+
+@router.get("/accounting/documents/{document_id}/download")
+def download_accounting_document(
+    document_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    document = _get_accounting_document_or_404(db, document_id)
+    return build_accounting_file_response(
+        document,
+        content_disposition_type="attachment",
+    )
+
+
+@router.post("/accounting/share-links/{share_link_id}/revoke")
+def revoke_accounting_share_link(
+    share_link_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    share_link = (
+        db.query(AccountingShareLink)
+        .filter(AccountingShareLink.id == share_link_id)
+        .first()
+    )
+    if share_link is None:
+        raise HTTPException(status_code=404, detail="Link di condivisione non trovato.")
+    if share_link.revoked_at is None:
+        share_link.revoked_at = datetime.utcnow()
+        db.add(share_link)
+        db.commit()
+    return {"ok": True, "share_link_id": share_link_id}
 
 
 @router.post("/organizations/{org_id}/logo")

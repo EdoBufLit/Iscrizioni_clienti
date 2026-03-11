@@ -51,13 +51,14 @@ def upgrade() -> None:
         )
     )
 
-    op.alter_column(
-        "organizations",
-        "require_membership_document",
-        existing_type=sa.Boolean(),
-        nullable=False,
-        server_default=sa.text("false"),
-    )
+    if bind.dialect.name != "sqlite":
+        op.alter_column(
+            "organizations",
+            "require_membership_document",
+            existing_type=sa.Boolean(),
+            nullable=False,
+            server_default=sa.text("false"),
+        )
 
 
 def downgrade() -> None:

@@ -20,6 +20,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     bind = op.get_bind()
+    dialect_name = (bind.dialect.name or "").lower()
     inspector = sa.inspect(bind)
     columns = {col["name"]: col for col in inspector.get_columns("organizations")}
 
@@ -68,13 +69,14 @@ def upgrade() -> None:
         )
     )
 
-    op.alter_column(
-        "organizations",
-        "auto_approve_signup",
-        existing_type=sa.Boolean(),
-        nullable=False,
-        server_default=sa.text("false"),
-    )
+    if dialect_name != "sqlite":
+        op.alter_column(
+            "organizations",
+            "auto_approve_signup",
+            existing_type=sa.Boolean(),
+            nullable=False,
+            server_default=sa.text("false"),
+        )
 
     bind.execute(
         sa.text(

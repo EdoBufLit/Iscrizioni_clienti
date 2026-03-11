@@ -308,6 +308,21 @@ class Organization(Base):
         back_populates="organization",
         foreign_keys="OrganizationSharedDocumentAssignment.association_id",
     )
+    accounting_folders = relationship(
+        "AccountingFolder",
+        back_populates="organization",
+        foreign_keys="AccountingFolder.org_id",
+    )
+    accounting_categories = relationship(
+        "AccountingCategory",
+        back_populates="organization",
+        foreign_keys="AccountingCategory.org_id",
+    )
+    accounting_documents = relationship(
+        "AccountingDocument",
+        back_populates="organization",
+        foreign_keys="AccountingDocument.org_id",
+    )
     email_campaigns = relationship(
         "EmailCampaign",
         back_populates="organization",
@@ -488,6 +503,16 @@ class AdminUser(Base):
         back_populates="uploaded_by_admin",
         foreign_keys="OrganizationSharedDocument.uploaded_by_admin_id",
     )
+    uploaded_accounting_documents = relationship(
+        "AccountingDocument",
+        back_populates="uploaded_by_admin",
+        foreign_keys="AccountingDocument.uploaded_by_admin_id",
+    )
+    created_accounting_share_links = relationship(
+        "AccountingShareLink",
+        back_populates="created_by_admin",
+        foreign_keys="AccountingShareLink.created_by_admin_id",
+    )
     notifications = relationship(
         "OrgAdminNotification",
         back_populates="admin_user",
@@ -570,6 +595,168 @@ class OrganizationSharedDocumentAssignment(Base):
             "association_id",
             name="uq_org_shared_document_assignment",
         ),
+    )
+
+
+class AccountingFolder(Base):
+    __tablename__ = "accounting_folders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    name = Column(String, nullable=False)
+    slug = Column(String, nullable=False, unique=True, index=True)
+    year = Column(Integer, nullable=True, index=True)
+    sort_order = Column(Integer, nullable=False, default=0, server_default="0")
+    is_active = Column(Boolean, nullable=False, default=True, server_default="true")
+    is_default = Column(Boolean, nullable=False, default=False, server_default="false")
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    organization = relationship(
+        "Organization",
+        back_populates="accounting_folders",
+        foreign_keys=[org_id],
+    )
+    documents = relationship(
+        "AccountingDocument",
+        back_populates="folder",
+        foreign_keys="AccountingDocument.folder_id",
+    )
+
+
+class AccountingCategory(Base):
+    __tablename__ = "accounting_categories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    code = Column(String, nullable=False, unique=True, index=True)
+    name = Column(String, nullable=False)
+    is_system = Column(Boolean, nullable=False, default=False, server_default="false")
+    sort_order = Column(Integer, nullable=False, default=0, server_default="0")
+    is_active = Column(Boolean, nullable=False, default=True, server_default="true")
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    organization = relationship(
+        "Organization",
+        back_populates="accounting_categories",
+        foreign_keys=[org_id],
+    )
+    documents = relationship(
+        "AccountingDocument",
+        back_populates="category",
+        foreign_keys="AccountingDocument.category_id",
+    )
+
+
+class AccountingDocument(Base):
+    __tablename__ = "accounting_documents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    folder_id = Column(Integer, ForeignKey("accounting_folders.id"), nullable=False, index=True)
+    category_id = Column(
+        Integer, ForeignKey("accounting_categories.id"), nullable=False, index=True
+    )
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    storage_key = Column(String, nullable=False)
+    original_filename = Column(String, nullable=False)
+    mime_type = Column(String, nullable=True)
+    file_size = Column(Integer, nullable=True)
+    sha256 = Column(String, nullable=True)
+    preview_enabled = Column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    is_share_enabled = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    uploaded_by_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
+    legacy_shared_document_id = Column(
+        Integer,
+        ForeignKey("organization_shared_documents.id"),
+        nullable=True,
+        index=True,
+    )
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    organization = relationship(
+        "Organization",
+        back_populates="accounting_documents",
+        foreign_keys=[org_id],
+    )
+    folder = relationship(
+        "AccountingFolder",
+        back_populates="documents",
+        foreign_keys=[folder_id],
+    )
+    category = relationship(
+        "AccountingCategory",
+        back_populates="documents",
+        foreign_keys=[category_id],
+    )
+    uploaded_by_admin = relationship(
+        "AdminUser",
+        back_populates="uploaded_accounting_documents",
+        foreign_keys=[uploaded_by_admin_id],
+    )
+    legacy_shared_document = relationship(
+        "OrganizationSharedDocument",
+        foreign_keys=[legacy_shared_document_id],
+    )
+    share_links = relationship(
+        "AccountingShareLink",
+        back_populates="document",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "legacy_shared_document_id",
+            "org_id",
+            name="uq_accounting_documents_legacy_shared_org",
+        ),
+    )
+
+
+class AccountingShareLink(Base):
+    __tablename__ = "accounting_share_links"
+
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(
+        Integer, ForeignKey("accounting_documents.id"), nullable=False, index=True
+    )
+    token = Column(String, nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime, nullable=True, index=True)
+    created_by_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
+    revoked_at = Column(DateTime, nullable=True, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    document = relationship(
+        "AccountingDocument",
+        back_populates="share_links",
+        foreign_keys=[document_id],
+    )
+    created_by_admin = relationship(
+        "AdminUser",
+        back_populates="created_accounting_share_links",
+        foreign_keys=[created_by_admin_id],
     )
 
 
