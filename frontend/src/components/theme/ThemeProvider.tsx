@@ -7,8 +7,8 @@ import {
   useState,
 } from "react";
 
-export type ThemePreference = "light" | "dark" | "system";
-export type ResolvedTheme = "light" | "dark";
+export type ThemePreference = "light" | "dark";
+export type ResolvedTheme = ThemePreference;
 
 type ThemeContextValue = {
   theme: ThemePreference;
@@ -23,12 +23,15 @@ const DARK_THEME_COLOR = "#0f1722";
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 const isThemePreference = (value: string | null): value is ThemePreference =>
-  value === "light" || value === "dark" || value === "system";
+  value === "light" || value === "dark";
 
 const getStoredTheme = (): ThemePreference => {
-  if (typeof window === "undefined") return "system";
+  if (typeof window === "undefined") return "light";
   const stored = window.localStorage.getItem(STORAGE_KEY);
-  return isThemePreference(stored) ? stored : "system";
+  if (isThemePreference(stored)) {
+    return stored;
+  }
+  return getSystemTheme();
 };
 
 const getSystemTheme = (): ResolvedTheme => {
@@ -36,15 +39,14 @@ const getSystemTheme = (): ResolvedTheme => {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 };
 
-const resolveTheme = (theme: ThemePreference): ResolvedTheme =>
-  theme === "system" ? getSystemTheme() : theme;
+const resolveTheme = (theme: ThemePreference): ResolvedTheme => theme;
 
 const applyTheme = (theme: ThemePreference) => {
   if (typeof document === "undefined") return;
   const resolvedTheme = resolveTheme(theme);
   const root = document.documentElement;
   root.dataset.theme = resolvedTheme;
-  root.dataset.themePreference = theme;
+  root.dataset.themePreference = resolvedTheme;
   root.classList.toggle("theme-dark", resolvedTheme === "dark");
   root.classList.toggle("theme-light", resolvedTheme === "light");
   root.style.colorScheme = resolvedTheme;
@@ -63,19 +65,6 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(STORAGE_KEY, theme);
     }
-  }, [theme]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const handleChange = () => {
-      if (theme !== "system") return;
-      const nextResolvedTheme = getSystemTheme();
-      setResolvedTheme(nextResolvedTheme);
-      applyTheme("system");
-    };
-    mediaQuery.addEventListener("change", handleChange);
-    return () => mediaQuery.removeEventListener("change", handleChange);
   }, [theme]);
 
   const setTheme = (nextTheme: ThemePreference) => {

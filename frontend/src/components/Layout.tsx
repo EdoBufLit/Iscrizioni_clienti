@@ -60,6 +60,9 @@ const Layout = () => {
       location.pathname.startsWith("/admin"),
     [location.pathname]
   );
+  const isStandaloneAuthRoute =
+    location.pathname === "/org-admin/login" ||
+    location.pathname === "/super-admin/login";
 
   usePublicMotion({ enabled: !isDashboardRoute, key: location.pathname });
 
@@ -256,7 +259,6 @@ const Layout = () => {
                     ))}
                   </nav>
                   <div className="flex shrink-0 items-center gap-3">
-                    <ThemeToggle />
                     {showAffiliazioneCta ? (
                       <NavLink
                         className="inline-flex items-center justify-center h-10 px-5 rounded-xl bg-slate-900 text-white text-sm font-bold shadow-md shadow-slate-900/10 hover:-translate-y-0.5 hover:shadow-lg transition-all"
@@ -284,7 +286,7 @@ const Layout = () => {
                   </div>
                 </div>
 
-                <ThemeToggle className="xl:hidden" />
+                <ThemeToggle />
                 <button
                   className="public-menu-toggle xl:hidden"
                   type="button"
@@ -351,6 +353,12 @@ const Layout = () => {
             </header>
           </>
         )}
+
+        {isStandaloneAuthRoute ? (
+          <div className="fixed right-4 top-4 z-50">
+            <ThemeToggle />
+          </div>
+        ) : null}
 
         <main className={isDashboardRoute ? "" : "public-main"}>
           {!isDashboardRoute ? <InstallAppPrompt hidden={menuOpen} /> : null}

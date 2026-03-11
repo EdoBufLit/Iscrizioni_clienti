@@ -45,23 +45,20 @@
         } catch (error) {
           storedTheme = null;
         }
-        var preference = storedTheme === "light" || storedTheme === "dark" || storedTheme === "system"
+        var preference = storedTheme === "light" || storedTheme === "dark"
           ? storedTheme
-          : "system";
-        var resolved = preference === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : preference === "system"
-            ? "light"
-            : preference;
+          : window.matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark"
+            : "light";
         var root = document.documentElement;
-        root.dataset.theme = resolved;
+        root.dataset.theme = preference;
         root.dataset.themePreference = preference;
-        root.classList.toggle("theme-dark", resolved === "dark");
-        root.classList.toggle("theme-light", resolved === "light");
-        root.style.colorScheme = resolved;
+        root.classList.toggle("theme-dark", preference === "dark");
+        root.classList.toggle("theme-light", preference === "light");
+        root.style.colorScheme = preference;
         var metaTheme = document.querySelector('meta[name="theme-color"]');
         if (metaTheme) {
-          metaTheme.setAttribute("content", resolved === "dark" ? "#0f1722" : "#0f2326");
+          metaTheme.setAttribute("content", preference === "dark" ? "#0f1722" : "#0f2326");
         }
       })();
     </script>

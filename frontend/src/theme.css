@@ -155,64 +155,96 @@ select:focus {
 .theme-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 0.2rem;
-  padding: 0.2rem;
+  justify-content: center;
+  height: 2rem;
+  width: 3.25rem;
+  padding: 0.15rem;
   border-radius: 999px;
   border: 1px solid var(--theme-border);
-  background: color-mix(in srgb, var(--theme-surface-solid) 88%, transparent);
+  background: color-mix(in srgb, var(--theme-surface-solid) 90%, transparent);
   box-shadow: var(--theme-shadow-sm);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-}
-
-.theme-toggle__button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  min-width: 2.25rem;
-  min-height: 2.25rem;
-  border-radius: 999px;
-  padding: 0.5rem 0.7rem;
-  color: var(--theme-text-soft);
   transition:
+    border-color 140ms ease,
     background-color 140ms ease,
-    color 140ms ease,
     transform 140ms ease,
     box-shadow 140ms ease;
 }
 
-.theme-toggle__button:hover {
-  background: var(--theme-hover);
-  color: var(--theme-text);
+.theme-toggle:hover {
+  border-color: var(--theme-border-strong);
+  transform: translateY(-1px);
 }
 
-.theme-toggle__button.is-active {
-  background: linear-gradient(135deg, color-mix(in srgb, var(--theme-brand) 18%, transparent), color-mix(in srgb, var(--theme-accent) 14%, transparent));
-  color: var(--theme-text);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--theme-brand) 26%, transparent);
-}
-
-.theme-toggle__button:focus-visible {
+.theme-toggle:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px var(--theme-focus);
+  box-shadow:
+    var(--theme-shadow-sm),
+    0 0 0 3px var(--theme-focus);
 }
 
-.theme-toggle__icon {
+.theme-toggle__track {
+  position: relative;
+  display: block;
+  height: 100%;
+  width: 100%;
+  border-radius: inherit;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--theme-brand) 10%, transparent), color-mix(in srgb, var(--theme-accent) 12%, transparent));
+}
+
+.theme-toggle__thumb {
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  z-index: 0;
+  height: 1.4rem;
+  width: 1.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--theme-surface-solid) 96%, transparent);
+  box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.45);
+  transition:
+    transform 180ms ease,
+    background-color 180ms ease;
+}
+
+.theme-toggle.is-dark .theme-toggle__thumb {
+  transform: translateX(1.25rem);
+}
+
+.theme-toggle__glyph {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
   display: inline-flex;
-  height: 1rem;
-  width: 1rem;
+  height: 0.85rem;
+  width: 0.85rem;
+  transform: translateY(-50%);
+  color: var(--theme-text-soft);
+  transition: color 160ms ease, opacity 160ms ease;
 }
 
-.theme-toggle__icon svg {
+.theme-toggle__glyph svg {
   height: 100%;
   width: 100%;
 }
 
-.theme-toggle__text {
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+.theme-toggle__glyph--sun {
+  left: 0.4rem;
+  color: #d38b18;
+}
+
+.theme-toggle__glyph--moon {
+  right: 0.4rem;
+  color: #486a8c;
+}
+
+.theme-toggle.is-dark .theme-toggle__glyph--moon {
+  color: var(--theme-brand);
+}
+
+.theme-toggle.is-dark .theme-toggle__glyph--sun {
+  color: var(--theme-text-soft);
 }
 
 .modal-overlay {
@@ -494,16 +526,6 @@ select:focus {
 
 :root[data-theme="dark"] table tbody tr:nth-child(even) {
   background: var(--theme-table-stripe);
-}
-
-@media (max-width: 767px) {
-  .theme-toggle__text {
-    display: none;
-  }
-
-  .theme-toggle__button {
-    padding-inline: 0.65rem;
-  }
 }
 
 @keyframes theme-skeleton-wave {

@@ -126,3 +126,5 @@
 - Un alert "tessere sotto 50" non va basato solo su `remaining < 50`.
 - Se il requisito parla di "scendere sotto soglia", devo introdurre un gating che provi che l'organizzazione sia stata almeno una volta a `>= soglia` nello stesso dominio temporale del job.
 - In pratica: gli org sempre a `0` o comunque sempre sotto soglia non devono ricevere alert iniziali solo perché il valore corrente e basso.
+
+- Se un theme switch viene richiesto come controllo discreto e unico, non duplicarlo tra breakpoint/layout diversi: deve esistere un solo mount per pagina, piccolo, in alto a destra, e il model tema va ridotto ai soli stati realmente richiesti dal cliente.
