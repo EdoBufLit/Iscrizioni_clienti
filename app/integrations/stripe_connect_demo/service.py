@@ -322,12 +322,17 @@ def create_onboarding_link(db: Session, org: Organization) -> dict[str, Any]:
     link = client.v2.core.account_links.create(
         params={
             "account": account_id,
-            "refresh_url": f"{base_url}/org-admin/billing?onboarding=refresh",
-            "return_url": f"{base_url}/org-admin/billing?onboarding=return&accountId={account_id}",
             "use_case": {
                 "type": "account_onboarding",
                 "account_onboarding": {
                     "configurations": ["merchant", "customer"],
+                    # Account Links v2 requires refresh_url / return_url inside
+                    # use_case.account_onboarding. Top-level refresh/return
+                    # fields are rejected by Stripe for v2 account links.
+                    "refresh_url": (
+                        f"{base_url}/api/stripe/connect/account/onboarding-link?refresh=1"
+                    ),
+                    "return_url": f"{base_url}/org-admin/billing?stripe_return=1",
                 },
             },
         }

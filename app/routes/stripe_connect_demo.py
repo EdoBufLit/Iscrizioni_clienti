@@ -4,6 +4,7 @@ import logging
 
 import stripe
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -143,6 +144,26 @@ def org_admin_connected_account_onboarding_link(
         return create_onboarding_link(db, org)
     except Exception as exc:  # pragma: no cover - routed to consistent HTTP error
         _raise_demo_error(exc)
+
+
+@router.get("/api/stripe/connect/account/onboarding-link")
+def org_admin_connected_account_onboarding_link_refresh(
+    request: Request,
+    refresh: int | None = None,
+    db: Session = Depends(get_db),
+):
+    org = _current_org_or_404(request, db)
+    try:
+        payload = create_onboarding_link(db, org)
+    except Exception as exc:  # pragma: no cover - routed to consistent HTTP error
+        _raise_demo_error(exc)
+
+    # Stripe uses refresh_url when an onboarding link expires or the user needs
+    # a fresh hosted flow. We regenerate the link and redirect immediately.
+    target_url = payload.get("url")
+    if not isinstance(target_url, str) or not target_url.strip():
+        raise HTTPException(status_code=502, detail="Stripe did not return a valid onboarding URL.")
+    return RedirectResponse(url=target_url, status_code=307)
 
 
 @router.get("/api/stripe/connect/demo-products")

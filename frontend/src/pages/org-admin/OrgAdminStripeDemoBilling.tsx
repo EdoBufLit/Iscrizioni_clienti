@@ -84,12 +84,13 @@ export default function OrgAdminStripeDemoBilling() {
 
   useEffect(() => {
     const onboardingState = searchParams.get("onboarding");
+    const stripeReturn = searchParams.get("stripe_return");
     const subscriptionSessionId = searchParams.get("session_id");
-    const marker = `${onboardingState ?? ""}:${subscriptionSessionId ?? ""}`;
+    const marker = `${onboardingState ?? ""}:${stripeReturn ?? ""}:${subscriptionSessionId ?? ""}`;
     if (handledSearchAction.current === marker) return;
     handledSearchAction.current = marker;
 
-    if (onboardingState === "return") {
+    if (onboardingState === "return" || stripeReturn === "1") {
       showToast({
         title: "Stripe Demo",
         message: "Onboarding rientrato da Stripe. Ho aggiornato lo stato account in tempo reale.",
