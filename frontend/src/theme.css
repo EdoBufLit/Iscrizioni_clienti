@@ -3,10 +3,14 @@
   --theme-mode: light;
   --theme-bg: #f7f5ef;
   --theme-bg-soft: #fcfbf8;
+  --theme-page-bg: #f4f1ea;
   --theme-surface: rgba(255, 255, 255, 0.88);
   --theme-surface-solid: #ffffff;
   --theme-surface-muted: #f6f3ee;
   --theme-surface-elevated: #ffffff;
+  --theme-surface-1: rgba(255, 255, 255, 0.96);
+  --theme-surface-2: #f8f4ee;
+  --theme-card-bg: rgba(255, 255, 255, 0.98);
   --theme-text: #1b1a16;
   --theme-text-muted: #5c564c;
   --theme-text-soft: #7b7265;
@@ -23,19 +27,29 @@
   --theme-shadow-sm: 0 10px 28px -18px rgba(15, 23, 42, 0.25);
   --theme-shadow-lg: 0 22px 50px -28px rgba(15, 23, 42, 0.32);
   --theme-input-bg: rgba(255, 255, 255, 0.96);
+  --theme-table-bg: rgba(255, 255, 255, 0.98);
+  --theme-table-row: rgba(255, 255, 255, 0.96);
+  --theme-table-row-hover: rgba(15, 61, 58, 0.055);
   --theme-hover: rgba(15, 61, 58, 0.06);
   --theme-hover-strong: rgba(15, 61, 58, 0.11);
   --theme-table-stripe: rgba(15, 61, 58, 0.025);
+  --theme-badge-bg: rgba(15, 61, 58, 0.08);
+  --theme-modal-bg: rgba(255, 255, 255, 0.96);
+  --theme-drawer-bg: rgba(255, 255, 255, 0.96);
 }
 
 :root[data-theme="dark"] {
   --theme-mode: dark;
   --theme-bg: #0d141c;
   --theme-bg-soft: #111b25;
+  --theme-page-bg: #101922;
   --theme-surface: rgba(18, 28, 39, 0.88);
   --theme-surface-solid: #15212d;
   --theme-surface-muted: #101923;
   --theme-surface-elevated: #1a2735;
+  --theme-surface-1: rgba(22, 33, 45, 0.98);
+  --theme-surface-2: rgba(17, 27, 37, 0.98);
+  --theme-card-bg: rgba(24, 36, 49, 0.98);
   --theme-text: #edf3f7;
   --theme-text-muted: #c8d3dc;
   --theme-text-soft: #93a3b2;
@@ -52,9 +66,15 @@
   --theme-shadow-sm: 0 14px 36px -22px rgba(0, 0, 0, 0.75);
   --theme-shadow-lg: 0 28px 60px -32px rgba(0, 0, 0, 0.82);
   --theme-input-bg: rgba(20, 32, 45, 0.96);
+  --theme-table-bg: rgba(17, 27, 37, 0.98);
+  --theme-table-row: rgba(21, 33, 45, 0.98);
+  --theme-table-row-hover: rgba(120, 209, 194, 0.1);
   --theme-hover: rgba(120, 209, 194, 0.08);
   --theme-hover-strong: rgba(120, 209, 194, 0.16);
   --theme-table-stripe: rgba(255, 255, 255, 0.018);
+  --theme-badge-bg: rgba(120, 209, 194, 0.12);
+  --theme-modal-bg: rgba(20, 31, 43, 0.98);
+  --theme-drawer-bg: rgba(17, 26, 36, 0.98);
 }
 
 html,
@@ -93,8 +113,8 @@ body::before {
 
 .app-shell {
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--theme-bg-soft) 96%, transparent), var(--theme-bg)),
-    var(--theme-bg);
+    linear-gradient(180deg, color-mix(in srgb, var(--theme-page-bg) 96%, transparent), var(--theme-bg)),
+    var(--theme-page-bg);
   color: var(--theme-text);
 }
 
@@ -112,13 +132,13 @@ body::before {
 
 .theme-card {
   border: 1px solid var(--theme-border);
-  background: var(--theme-surface-solid);
+  background: var(--theme-card-bg);
   box-shadow: var(--theme-shadow-sm);
 }
 
 .theme-card-muted {
   border: 1px solid var(--theme-border);
-  background: var(--theme-surface-muted);
+  background: var(--theme-surface-2);
 }
 
 .theme-input,
@@ -462,7 +482,7 @@ select:focus {
 
 .modal-panel {
   border-color: var(--theme-border);
-  background: color-mix(in srgb, var(--theme-surface-solid) 94%, transparent);
+  background: var(--theme-modal-bg);
   color: var(--theme-text);
   box-shadow: var(--theme-shadow-lg);
 }
@@ -521,9 +541,9 @@ select:focus {
   background:
     linear-gradient(
       135deg,
-      color-mix(in srgb, var(--theme-surface-solid) 96%, transparent) 0%,
-      color-mix(in srgb, var(--theme-surface) 92%, transparent) 45%,
-      color-mix(in srgb, var(--theme-surface-muted) 94%, transparent) 100%
+      color-mix(in srgb, var(--theme-surface-1) 98%, transparent) 0%,
+      color-mix(in srgb, var(--theme-surface-solid) 94%, transparent) 45%,
+      color-mix(in srgb, var(--theme-surface-2) 98%, transparent) 100%
     );
   box-shadow: var(--theme-shadow-sm);
 }
@@ -534,13 +554,13 @@ select:focus {
 
 .surface:hover {
   border-color: color-mix(in srgb, var(--theme-accent) 34%, var(--theme-border));
-  background: color-mix(in srgb, var(--theme-surface-solid) 96%, transparent);
+  background: color-mix(in srgb, var(--theme-surface-1) 98%, transparent);
   box-shadow: var(--theme-shadow-lg);
 }
 
 .surface-strong {
   border-color: var(--theme-border);
-  background: var(--theme-surface-solid);
+  background: var(--theme-card-bg);
   box-shadow: var(--theme-shadow-sm);
 }
 
@@ -592,7 +612,7 @@ select:focus {
 .mobile-dashboard-nav__shell,
 .mobile-dashboard-sheet__panel {
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--theme-surface-solid) 96%, transparent), color-mix(in srgb, var(--theme-surface-muted) 98%, transparent)),
+    linear-gradient(180deg, color-mix(in srgb, var(--theme-surface-1) 98%, transparent), color-mix(in srgb, var(--theme-surface-2) 99%, transparent)),
     radial-gradient(circle at top, color-mix(in srgb, var(--theme-accent) 14%, transparent), transparent 48%);
   box-shadow: var(--theme-shadow-lg);
 }
@@ -621,13 +641,13 @@ select:focus {
 
 .mobile-dashboard-sheet__close {
   border-color: var(--theme-border);
-  background: color-mix(in srgb, var(--theme-surface-solid) 92%, transparent);
+  background: color-mix(in srgb, var(--theme-drawer-bg) 96%, transparent);
   color: var(--theme-text-muted);
 }
 
 .mobile-dashboard-sheet__action {
   border-color: var(--theme-border);
-  background: color-mix(in srgb, var(--theme-surface-solid) 92%, transparent);
+  background: color-mix(in srgb, var(--theme-drawer-bg) 96%, transparent);
   color: var(--theme-text-muted);
 }
 
@@ -661,24 +681,46 @@ select:focus {
 }
 
 :root[data-theme="dark"] .bg-white,
+:root[data-theme="dark"] .bg-white\/30,
+:root[data-theme="dark"] .bg-white\/40,
+:root[data-theme="dark"] .bg-white\/50,
+:root[data-theme="dark"] .bg-white\/60,
+:root[data-theme="dark"] .bg-white\/70,
+:root[data-theme="dark"] .bg-white\/75,
 :root[data-theme="dark"] .bg-white\/80,
 :root[data-theme="dark"] .bg-white\/85,
 :root[data-theme="dark"] .bg-white\/90,
 :root[data-theme="dark"] .bg-white\/95,
 :root[data-theme="dark"] .bg-neutral-25 {
-  background-color: var(--theme-surface-solid) !important;
+  background-color: var(--theme-surface-1) !important;
 }
 
+:root[data-theme="dark"] .bg-\[\#f8f9fa\],
 :root[data-theme="dark"] .bg-neutral-50,
+:root[data-theme="dark"] .bg-neutral-50\/30,
+:root[data-theme="dark"] .bg-neutral-50\/40,
 :root[data-theme="dark"] .bg-neutral-50\/50,
+:root[data-theme="dark"] .bg-neutral-50\/70,
 :root[data-theme="dark"] .bg-neutral-50\/80,
+:root[data-theme="dark"] .bg-neutral-50\/90,
 :root[data-theme="dark"] .bg-neutral-100,
+:root[data-theme="dark"] .bg-neutral-100\/50,
+:root[data-theme="dark"] .bg-neutral-100\/60,
+:root[data-theme="dark"] .bg-neutral-100\/70,
+:root[data-theme="dark"] .bg-neutral-100\/80,
+:root[data-theme="dark"] .bg-neutral-100\/90,
 :root[data-theme="dark"] .bg-slate-50,
+:root[data-theme="dark"] .bg-slate-100,
+:root[data-theme="dark"] .bg-slate-100\/80,
 :root[data-theme="dark"] .bg-\[\#f8f9fa\]\/50 {
-  background-color: var(--theme-surface-muted) !important;
+  background-color: var(--theme-surface-2) !important;
 }
 
 :root[data-theme="dark"] .border-neutral-100,
+:root[data-theme="dark"] .border-neutral-100\/50,
+:root[data-theme="dark"] .border-neutral-100\/60,
+:root[data-theme="dark"] .border-neutral-100\/70,
+:root[data-theme="dark"] .border-neutral-100\/80,
 :root[data-theme="dark"] .border-neutral-200,
 :root[data-theme="dark"] .border-neutral-200\/50,
 :root[data-theme="dark"] .border-neutral-200\/60,
@@ -686,8 +728,26 @@ select:focus {
 :root[data-theme="dark"] .border-neutral-200\/80,
 :root[data-theme="dark"] .border-neutral-300,
 :root[data-theme="dark"] .border-slate-200,
+:root[data-theme="dark"] .border-white\/50,
+:root[data-theme="dark"] .border-white\/60,
 :root[data-theme="dark"] .border-white\/70 {
   border-color: var(--theme-border) !important;
+}
+
+:root[data-theme="dark"] .divide-neutral-50 > :not([hidden]) ~ :not([hidden]),
+:root[data-theme="dark"] .divide-neutral-100 > :not([hidden]) ~ :not([hidden]),
+:root[data-theme="dark"] .divide-neutral-200 > :not([hidden]) ~ :not([hidden]),
+:root[data-theme="dark"] .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--theme-border) !important;
+}
+
+:root[data-theme="dark"] .ring-neutral-100,
+:root[data-theme="dark"] .ring-neutral-200,
+:root[data-theme="dark"] .ring-neutral-200\/50,
+:root[data-theme="dark"] .ring-neutral-200\/60,
+:root[data-theme="dark"] .ring-neutral-300,
+:root[data-theme="dark"] .ring-slate-200 {
+  --tw-ring-color: var(--theme-border) !important;
 }
 
 :root[data-theme="dark"] .text-neutral-900,
@@ -709,9 +769,11 @@ select:focus {
 }
 
 :root[data-theme="dark"] .hover\:bg-neutral-50:hover,
+:root[data-theme="dark"] .hover\:bg-neutral-100:hover,
 :root[data-theme="dark"] .hover\:bg-white:hover,
-:root[data-theme="dark"] .hover\:bg-slate-50:hover {
-  background-color: var(--theme-surface-elevated) !important;
+:root[data-theme="dark"] .hover\:bg-slate-50:hover,
+:root[data-theme="dark"] .hover\:bg-slate-100:hover {
+  background-color: var(--theme-table-row-hover) !important;
 }
 
 :root[data-theme="dark"] .hover\:text-neutral-900:hover,
@@ -731,6 +793,100 @@ select:focus {
 :root[data-theme="dark"] .shadow-xl,
 :root[data-theme="dark"] .shadow-2xl {
   box-shadow: var(--theme-shadow-sm) !important;
+}
+
+:root[data-theme="dark"] table {
+  color: var(--theme-text);
+}
+
+:root[data-theme="dark"] thead.bg-white\/40,
+:root[data-theme="dark"] thead.bg-neutral-50\/50,
+:root[data-theme="dark"] thead.bg-neutral-50\/80,
+:root[data-theme="dark"] thead.bg-neutral-50\/30 {
+  background-color: color-mix(in srgb, var(--theme-table-bg) 94%, transparent) !important;
+}
+
+:root[data-theme="dark"] tbody.bg-white,
+:root[data-theme="dark"] tbody.bg-neutral-50,
+:root[data-theme="dark"] tbody.bg-neutral-50\/50 {
+  background-color: var(--theme-table-bg) !important;
+}
+
+:root[data-theme="dark"] tr.bg-white\/30,
+:root[data-theme="dark"] tr.bg-white\/40,
+:root[data-theme="dark"] tr.bg-neutral-50\/30,
+:root[data-theme="dark"] tr.bg-neutral-50\/50 {
+  background-color: var(--theme-table-row) !important;
+}
+
+:root[data-theme="dark"] .bg-emerald-50 {
+  background-color: color-mix(in srgb, var(--theme-success) 18%, var(--theme-surface-solid)) !important;
+}
+
+:root[data-theme="dark"] .bg-amber-50 {
+  background-color: color-mix(in srgb, var(--theme-warning) 18%, var(--theme-surface-solid)) !important;
+}
+
+:root[data-theme="dark"] .bg-red-50 {
+  background-color: color-mix(in srgb, var(--theme-danger) 18%, var(--theme-surface-solid)) !important;
+}
+
+:root[data-theme="dark"] .bg-orange-50,
+:root[data-theme="dark"] .bg-yellow-50 {
+  background-color: color-mix(in srgb, var(--theme-warning) 16%, var(--theme-surface-solid)) !important;
+}
+
+:root[data-theme="dark"] .bg-blue-50,
+:root[data-theme="dark"] .bg-sky-50,
+:root[data-theme="dark"] .bg-cyan-50 {
+  background-color: color-mix(in srgb, var(--theme-brand) 18%, var(--theme-surface-solid)) !important;
+}
+
+:root[data-theme="dark"] .border-emerald-200,
+:root[data-theme="dark"] .border-emerald-200\/50,
+:root[data-theme="dark"] .border-emerald-200\/60 {
+  border-color: color-mix(in srgb, var(--theme-success) 34%, var(--theme-border)) !important;
+}
+
+:root[data-theme="dark"] .border-amber-200,
+:root[data-theme="dark"] .border-amber-200\/50,
+:root[data-theme="dark"] .border-amber-200\/60,
+:root[data-theme="dark"] .border-orange-200,
+:root[data-theme="dark"] .border-orange-200\/50 {
+  border-color: color-mix(in srgb, var(--theme-warning) 34%, var(--theme-border)) !important;
+}
+
+:root[data-theme="dark"] .border-red-200,
+:root[data-theme="dark"] .border-red-200\/50,
+:root[data-theme="dark"] .border-red-200\/60 {
+  border-color: color-mix(in srgb, var(--theme-danger) 34%, var(--theme-border)) !important;
+}
+
+:root[data-theme="dark"] .border-blue-200,
+:root[data-theme="dark"] .border-sky-200,
+:root[data-theme="dark"] .border-sky-200\/60,
+:root[data-theme="dark"] .border-cyan-200 {
+  border-color: color-mix(in srgb, var(--theme-brand) 34%, var(--theme-border)) !important;
+}
+
+:root[data-theme="dark"] .text-emerald-700 {
+  color: color-mix(in srgb, var(--theme-success) 78%, white) !important;
+}
+
+:root[data-theme="dark"] .text-amber-700,
+:root[data-theme="dark"] .text-orange-700 {
+  color: color-mix(in srgb, var(--theme-warning) 82%, white) !important;
+}
+
+:root[data-theme="dark"] .text-red-700,
+:root[data-theme="dark"] .text-red-600 {
+  color: color-mix(in srgb, var(--theme-danger) 80%, white) !important;
+}
+
+:root[data-theme="dark"] .text-blue-700,
+:root[data-theme="dark"] .text-sky-700,
+:root[data-theme="dark"] .text-cyan-700 {
+  color: color-mix(in srgb, var(--theme-brand) 82%, white) !important;
 }
 
 :root[data-theme="dark"] table tbody tr:nth-child(even) {
