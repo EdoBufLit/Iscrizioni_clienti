@@ -112,6 +112,7 @@
 - Se introduco route opzionali dietro feature flag lette a import-time (es. demo Stripe), nei test devo impostare il flag in `tests/conftest.py` prima di importare `app.main`; mutare solo `settings` dentro il test non registra retroattivamente i router.
 - Nei sample payment/demo che convivono con flussi Stripe reali già presenti, nomi route, etichette UI e documentazione devono contenere esplicitamente `demo` per impedire ambiguità future con il prodotto reale.
 - Quando aggiungo nuove env applicative per una feature backend opzionale, devo verificare subito l'intera catena deploy: GitHub Secret -> workflow che scrive `.env` -> `docker-compose` runtime. Aggiornare solo codice e docs non basta e il problema emerge solo dopo deploy.
+- Nei cleanup Docker pre-deploy non devo assumere pattern legacy dei nomi container (`_app-...`). Se il deploy usa `COMPOSE_PROJECT_NAME=app`, i nomi reali da intercettare sono `app-...-1`; il filtro del workflow va verificato contro il nome effettivo visto nei log errore.
 ## 2026-03-07 - Email flow verification must prove delivery, not just queueing
 
 - Quando aggiungo un flusso email basato su outbox/worker, non basta verificare che esista una riga in `email_outbox`.

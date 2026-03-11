@@ -245,7 +245,7 @@ jobs:
 
             echo "[deploy] Cleaning stale service containers to avoid name conflicts"
             docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS rm -f -s web email-worker low-cards-worker affiliation-video-worker || true
-            for stale_pattern in "_app-web-1" "_app-email-worker-1" "_app-low-cards-worker-1" "_app-affiliation-video-worker-1"; do
+            for stale_pattern in "^/app-web-1$" "^/app-email-worker-1$" "^/app-low-cards-worker-1$" "^/app-affiliation-video-worker-1$" "app-web-1" "app-email-worker-1" "app-low-cards-worker-1" "app-affiliation-video-worker-1"; do
               STALE_IDS="$(docker ps -aq --filter "name=${stale_pattern}" || true)"
               if [ -n "${STALE_IDS}" ]; then
                 echo "[deploy] Removing stale containers (${stale_pattern}): ${STALE_IDS}"

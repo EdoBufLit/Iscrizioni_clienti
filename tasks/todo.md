@@ -3168,3 +3168,13 @@ pm --prefix frontend run build -> OK
 - Workflow corretto in [.github/workflows/deploy-hetzner.yml](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\.github\workflows\deploy-hetzner.yml): il blocco che genera `.env` sul server ora scrive anche `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_THIN_WEBHOOK_SECRET`, `STRIPE_BILLING_WEBHOOK_SECRET`, `STRIPE_PLATFORM_PRICE_ID`, `STRIPE_REQUIRE_PUBLISHABLE_KEY` e `ENABLE_STRIPE_CONNECT_DEMO`.
 - Runtime corretto in [docker-compose.yml](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\docker-compose.yml): `x-app-env` ora passa anche `STRIPE_THIN_WEBHOOK_SECRET`, `STRIPE_BILLING_WEBHOOK_SECRET`, `STRIPE_PLATFORM_PRICE_ID` e `ENABLE_STRIPE_CONNECT_DEMO` a `web`, `email-worker` e `low-cards-worker`.
 - Verifica eseguita con `rg -n "STRIPE_THIN_WEBHOOK_SECRET|STRIPE_BILLING_WEBHOOK_SECRET|STRIPE_PLATFORM_PRICE_ID|ENABLE_STRIPE_CONNECT_DEMO" .github/workflows/deploy-hetzner.yml docker-compose.yml`.
+
+## Deploy fix for stale container name conflict (Mar 11, 2026)
+- [x] Analizzare il log GitHub Actions che fallisce su `app-email-worker-1 already in use`
+- [x] Correggere il cleanup pre-`up` nel workflow Hetzner senza toccare volumi o database
+- [x] Verificare che il workflow intercetti i nomi container reali prodotti da Compose
+
+## Review (Deploy fix for stale container name conflict - Mar 11, 2026)
+- Root cause: il cleanup cercava pattern legacy `_app-email-worker-1`, ma il nome reale usato da Docker Compose nel deploy era `app-email-worker-1`; il container stale quindi sopravviveva e il successivo `docker compose up -d --remove-orphans` falliva con conflict sul nome.
+- Workflow corretto in [.github/workflows/deploy-hetzner.yml](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\.github\workflows\deploy-hetzner.yml): il loop di cleanup ora cerca e rimuove in modo robusto sia gli exact-name `^/app-...-1$` sia le varianti `app-...-1` per `web`, `email-worker`, `low-cards-worker` e `affiliation-video-worker`.
+- Il fix resta data-safe: non usa `down -v`, non tocca named volumes e non tocca Postgres; rimuove solo container stale che bloccano la recreate.
