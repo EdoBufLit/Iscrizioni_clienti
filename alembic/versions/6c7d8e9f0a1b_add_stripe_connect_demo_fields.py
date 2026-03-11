@@ -100,6 +100,36 @@ def upgrade() -> None:
             sa.Column("processed_at", sa.DateTime(), nullable=False),
             sa.PrimaryKeyConstraint("id"),
         )
+    else:
+        webhook_columns = _column_names("stripe_webhook_events")
+        # Conservative shape repair for tables created earlier via bootstrap.
+        # We only add missing non-destructive columns here; we do not attempt to
+        # recreate primary keys or rewrite existing data.
+        if "event_id" not in webhook_columns:
+            op.add_column(
+                "stripe_webhook_events",
+                sa.Column("event_id", sa.String(), nullable=True),
+            )
+        if "event_type" not in webhook_columns:
+            op.add_column(
+                "stripe_webhook_events",
+                sa.Column("event_type", sa.String(), nullable=True),
+            )
+        if "livemode" not in webhook_columns:
+            op.add_column(
+                "stripe_webhook_events",
+                sa.Column(
+                    "livemode",
+                    sa.Boolean(),
+                    nullable=False,
+                    server_default=sa.text("false"),
+                ),
+            )
+        if "processed_at" not in webhook_columns:
+            op.add_column(
+                "stripe_webhook_events",
+                sa.Column("processed_at", sa.DateTime(), nullable=True),
+            )
 
     webhook_index_names = _index_names("stripe_webhook_events")
     if "ix_stripe_webhook_events_event_id" not in webhook_index_names:
@@ -119,13 +149,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    if _table_exists("stripe_webhook_events"):
-        webhook_index_names = _index_names("stripe_webhook_events")
-        if "ix_stripe_webhook_events_event_type" in webhook_index_names:
-            op.drop_index("ix_stripe_webhook_events_event_type", table_name="stripe_webhook_events")
-        if "ix_stripe_webhook_events_event_id" in webhook_index_names:
-            op.drop_index("ix_stripe_webhook_events_event_id", table_name="stripe_webhook_events")
-        op.drop_table("stripe_webhook_events")
+    # Intentionally non-destructive for stripe_webhook_events.
+    # This table may have been created earlier by bootstrap/create_all paths, so
+    # downgrade must not drop it blindly or remove its indexes without clear
+    # provenance. Keeping the table is safer than risking data loss.
 
     if _has_unique_constraint("organizations", ["stripe_connected_account_id"]):
         try:
