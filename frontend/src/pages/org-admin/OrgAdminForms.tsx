@@ -204,6 +204,22 @@ function decodeBuilderFields(form: AssociationForm | null | undefined): BuilderF
     .map(decodeField);
 }
 
+function upsertAssociationFormField(
+  fields: AssociationFormField[],
+  field: AssociationFormField,
+): AssociationFormField[] {
+  const next = fields.filter((item) => item.id !== field.id && item.field_key !== field.field_key);
+  next.push(field);
+  return next.sort((left, right) => left.sort_order - right.sort_order);
+}
+
+function removeAssociationFormField(
+  fields: AssociationFormField[],
+  fieldId: number,
+): AssociationFormField[] {
+  return fields.filter((item) => item.id !== fieldId);
+}
+
 function buildFieldPayload(draft: ReturnType<typeof emptyFieldDraft>) {
   return {
     field_key: draft.field_key || null,
@@ -767,15 +783,36 @@ export function OrgAdminFormsWorkspace({
     const payload = encodeField(builderField, sortOrder);
 
     try {
+      const response = isNew
+        ? await createOrgAdminFormField(selectedFormId, payload)
+        : await updateOrgAdminFormField(selectedFormId, builderField.id, payload);
+
       if (isNew) {
-        await createOrgAdminFormField(selectedFormId, payload);
-      } else {
-        await updateOrgAdminFormField(selectedFormId, builderField.id, payload);
+        const savedBuilderField = decodeField(response.field);
+        setBuilderDraftFields((current) =>
+          current.map((field) => (field.key === builderField.key ? savedBuilderField : field)),
+        );
       }
-      const detail = await fetchOrgAdminForm(selectedFormId);
-      setSelectedForm(detail.form);
-      setBuilderDraftFields(decodeBuilderFields(detail.form));
-      setForms((current) => current.map((item) => (item.id === detail.form.id ? detail.form : item)));
+
+      setSelectedForm((current) => {
+        if (!current || current.id !== selectedFormId) return current;
+        return {
+          ...current,
+          fields: upsertAssociationFormField(current.fields || [], response.field),
+        };
+      });
+
+      setForms((current) =>
+        current.map((item) =>
+          item.id === selectedFormId
+            ? {
+                ...item,
+                fields: upsertAssociationFormField(item.fields || [], response.field),
+              }
+            : item,
+        ),
+      );
+
     } catch (err) {
       showToast({ tone: "error", title: "Errore salvataggio", message: err instanceof Error ? err.message : "Impossibile salvare il campo" });
     }
@@ -785,10 +822,24 @@ export function OrgAdminFormsWorkspace({
     if (!selectedFormId || locked || id < 0) return;
     try {
       await deleteOrgAdminFormField(selectedFormId, id);
-      const detail = await fetchOrgAdminForm(selectedFormId);
-      setSelectedForm(detail.form);
-      setBuilderDraftFields(decodeBuilderFields(detail.form));
-      setForms((current) => current.map((item) => (item.id === detail.form.id ? detail.form : item)));
+      setBuilderDraftFields((current) => current.filter((field) => field.id !== id));
+      setSelectedForm((current) => {
+        if (!current || current.id !== selectedFormId) return current;
+        return {
+          ...current,
+          fields: removeAssociationFormField(current.fields || [], id),
+        };
+      });
+      setForms((current) =>
+        current.map((item) =>
+          item.id === selectedFormId
+            ? {
+                ...item,
+                fields: removeAssociationFormField(item.fields || [], id),
+              }
+            : item,
+        ),
+      );
     } catch (err) {
       showToast({ tone: "error", title: "Errore eliminazione", message: err instanceof Error ? err.message : "Impossibile eliminare il campo" });
     }

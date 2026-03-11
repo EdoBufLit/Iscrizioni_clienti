@@ -121,6 +121,8 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [lastKnownOverId, setLastKnownOverId] = useState<string | null>(null);
   const lastKnownOverIdRef = useRef<string | null>(null);
+  const pendingFieldSaveRef = useRef<{ field: BuilderField; items: BuilderField[] } | null>(null);
+  const pendingFieldSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const items = fields;
 
   const sensors = useSensors(
@@ -157,6 +159,28 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
     () => items.find((f) => f.key === selectedId) || null,
     [items, selectedId]
   );
+
+  useEffect(() => {
+    return () => {
+      if (pendingFieldSaveTimerRef.current) {
+        clearTimeout(pendingFieldSaveTimerRef.current);
+      }
+    };
+  }, []);
+
+  const scheduleFieldSave = (field: BuilderField, nextItems: BuilderField[]) => {
+    pendingFieldSaveRef.current = { field, items: nextItems };
+    if (pendingFieldSaveTimerRef.current) {
+      clearTimeout(pendingFieldSaveTimerRef.current);
+    }
+    pendingFieldSaveTimerRef.current = setTimeout(() => {
+      const pending = pendingFieldSaveRef.current;
+      pendingFieldSaveRef.current = null;
+      pendingFieldSaveTimerRef.current = null;
+      if (!pending) return;
+      void onSaveField(pending.field, pending.items);
+    }, 350);
+  };
 
   const activeItem = useMemo(() => {
     if (!activeId) return null;
@@ -244,7 +268,7 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
   const handleUpdateSelected = async (updatedField: BuilderField) => {
     const newItems = items.map((f) => (f.key === updatedField.key ? updatedField : f));
     onChange(newItems);
-    await onSaveField(updatedField, newItems);
+    scheduleFieldSave(updatedField, newItems);
   };
 
   const handleDuplicate = async (fieldToDuplicate: BuilderField) => {
@@ -270,6 +294,13 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
   const handleDelete = async (fieldToDelete: BuilderField) => {
     if (selectedId === fieldToDelete.key) {
       setSelectedId(null);
+    }
+    if (pendingFieldSaveRef.current?.field.key === fieldToDelete.key) {
+      pendingFieldSaveRef.current = null;
+      if (pendingFieldSaveTimerRef.current) {
+        clearTimeout(pendingFieldSaveTimerRef.current);
+        pendingFieldSaveTimerRef.current = null;
+      }
     }
     const newItems = items.filter(f => f.key !== fieldToDelete.key);
     onChange(newItems);

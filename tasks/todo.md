@@ -3352,3 +3352,17 @@ pm --prefix frontend run build OK.
 - Fix applicato in `frontend/src/components/forms/builder/FormBuilder.tsx`: il canvas e stato estratto in `BuilderCanvas`, child reale di `DndContext`, cosi `useDroppable` registra correttamente `form-builder-canvas` e il flusso `palette -> canvas` / `canvas -> canvas` usa lo stesso contesto DnD.
 - Verifica browser reale eseguita con Playwright su backend locale `http://127.0.0.1:8010` e DB SQLite isolato `tmp_builder_dnd_e2e.db`: drag di `Testo breve` nel canvas vuoto OK, blocco persistito dopo reload OK, aggiunta secondo blocco `Numero` OK, riordino `Numero -> prima posizione` OK sia in UI sia nel DB.
 - Verifica build finale: `npm --prefix frontend run build` OK.
+
+
+## Org-admin form builder properties stabilization (Mar 11, 2026)
+- [x] Riprodurre i bug reali del pannello proprieta su label, placeholder e opzioni multiple
+- [x] Ridurre i salvataggi aggressivi durante la digitazione per evitare reset e perdita caratteri
+- [x] Rimuovere il refetch totale del form sugli update singoli dei campi esistenti
+- [x] Verificare in browser reale digitazione lunga, reload e persistenza DB delle opzioni
+
+## Review (Org-admin form builder properties stabilization - Mar 11, 2026)
+- Root cause principale: il pannello proprieta salvava al backend a ogni tasto e `handleBuilderSaveField` rifaceva `fetchOrgAdminForm(...)` dopo ogni update. Questo rimetteva nel builder lo stato server precedente mentre l'utente stava ancora scrivendo, causando caratteri persi, label/placeholder che si auto-resettavano e opzioni multiple incoerenti.
+- In `frontend/src/components/forms/builder/FormBuilder.tsx` il salvataggio delle proprieta del campo selezionato e ora debounce-based: il canvas si aggiorna subito nello stato locale, mentre il save backend parte solo dopo una breve pausa di digitazione. In questo modo non c'e piu una request per ogni singolo carattere.
+- In `frontend/src/pages/org-admin/OrgAdminForms.tsx` gli update dei campi esistenti non rifetchano piu l'intero form: la risposta `field` dell'endpoint viene riapplicata solo allo stato necessario. Per i nuovi campi viene sostituito il placeholder locale con il campo persistito; per delete viene aggiornato lo stato locale senza round-trip completo del form.
+- Verifica reale con Playwright su backend locale `http://127.0.0.1:8010` e DB SQLite isolato `tmp_builder_dnd_e2e.db`: label lunga OK, placeholder lungo OK, campo `select` con opzioni multiple OK, reload pagina OK, persistenza DB finale OK (`options_json` salvato con tutte le opzioni).
+- Verifica build finale: `npm --prefix frontend run build` OK.

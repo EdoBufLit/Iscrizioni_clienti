@@ -139,3 +139,6 @@
 
 - Se un target `useDroppable()` vive nello stesso componente che restituisce `DndContext`, il hook legge il contesto sbagliato e il drop puo fallire in modo intermittente o sembrare bloccato in palette: il droppable va sempre montato in un child reale del provider.
 - Se l'utente contesta un fix DnD, non basta la build o la lettura del codice: va riprodotto in browser con sessione reale e verificati almeno inserimento, persistenza dopo reload e reorder successivo prima del commit.
+
+
+- Se un pannello proprieta salva a ogni keypress e poi rifetch-a l'intero form, i campi controllati possono perdere caratteri o resettarsi mentre l'utente digita: per editor builder serve update locale immediato + save debounce, e gli update singoli non devono fare refetch totale del documento.
