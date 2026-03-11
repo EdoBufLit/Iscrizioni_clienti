@@ -4,6 +4,7 @@
   --theme-bg: #f7f5ef;
   --theme-bg-soft: #fcfbf8;
   --theme-page-bg: #f4f1ea;
+  --theme-app-bg: #f1ede6;
   --theme-surface: rgba(255, 255, 255, 0.88);
   --theme-surface-solid: #ffffff;
   --theme-surface-muted: #f6f3ee;
@@ -11,9 +12,13 @@
   --theme-surface-1: rgba(255, 255, 255, 0.96);
   --theme-surface-2: #f8f4ee;
   --theme-card-bg: rgba(255, 255, 255, 0.98);
+  --theme-panel-bg: rgba(255, 255, 255, 0.95);
+  --theme-panel-muted: #f3efe8;
   --theme-text: #1b1a16;
   --theme-text-muted: #5c564c;
   --theme-text-soft: #7b7265;
+  --theme-link: #1e6f67;
+  --theme-link-hover: #0f3d3a;
   --theme-border: rgba(25, 22, 18, 0.12);
   --theme-border-strong: rgba(25, 22, 18, 0.18);
   --theme-brand: #0f3d3a;
@@ -24,6 +29,9 @@
   --theme-warning: #c68a21;
   --theme-focus: rgba(30, 111, 103, 0.22);
   --theme-overlay: rgba(10, 17, 23, 0.58);
+  --theme-hero-overlay:
+    linear-gradient(180deg, rgba(7, 18, 25, 0.12), rgba(7, 18, 25, 0.42)),
+    linear-gradient(160deg, rgba(9, 45, 60, 0.82), rgba(19, 81, 89, 0.6) 52%, rgba(10, 22, 31, 0.86));
   --theme-shadow-sm: 0 10px 28px -18px rgba(15, 23, 42, 0.25);
   --theme-shadow-lg: 0 22px 50px -28px rgba(15, 23, 42, 0.32);
   --theme-input-bg: rgba(255, 255, 255, 0.96);
@@ -43,16 +51,21 @@
   --theme-bg: #0d141c;
   --theme-bg-soft: #111b25;
   --theme-page-bg: #101922;
+  --theme-app-bg: #0f1720;
   --theme-surface: rgba(18, 28, 39, 0.88);
   --theme-surface-solid: #15212d;
   --theme-surface-muted: #101923;
   --theme-surface-elevated: #1a2735;
   --theme-surface-1: rgba(22, 33, 45, 0.98);
-  --theme-surface-2: rgba(17, 27, 37, 0.98);
-  --theme-card-bg: rgba(24, 36, 49, 0.98);
+  --theme-surface-2: rgba(15, 24, 34, 0.98);
+  --theme-card-bg: rgba(23, 35, 48, 0.98);
+  --theme-panel-bg: rgba(20, 31, 43, 0.98);
+  --theme-panel-muted: rgba(16, 25, 35, 0.98);
   --theme-text: #edf3f7;
-  --theme-text-muted: #c8d3dc;
-  --theme-text-soft: #93a3b2;
+  --theme-text-muted: #d1dbe4;
+  --theme-text-soft: #a3b2c0;
+  --theme-link: #8edfd2;
+  --theme-link-hover: #b5efe6;
   --theme-border: rgba(200, 211, 220, 0.16);
   --theme-border-strong: rgba(200, 211, 220, 0.26);
   --theme-brand: #78d1c2;
@@ -63,6 +76,9 @@
   --theme-warning: #f3c25b;
   --theme-focus: rgba(120, 209, 194, 0.25);
   --theme-overlay: rgba(3, 7, 12, 0.72);
+  --theme-hero-overlay:
+    linear-gradient(180deg, rgba(3, 8, 12, 0.22), rgba(3, 8, 12, 0.58)),
+    linear-gradient(160deg, rgba(4, 22, 30, 0.92), rgba(11, 43, 54, 0.76) 52%, rgba(3, 8, 12, 0.94));
   --theme-shadow-sm: 0 14px 36px -22px rgba(0, 0, 0, 0.75);
   --theme-shadow-lg: 0 28px 60px -32px rgba(0, 0, 0, 0.82);
   --theme-input-bg: rgba(20, 32, 45, 0.96);
@@ -79,7 +95,7 @@
 
 html,
 body {
-  background: var(--theme-bg);
+  background: var(--theme-app-bg);
 }
 
 html {
@@ -87,7 +103,7 @@ html {
 }
 
 body {
-  background-color: var(--theme-bg);
+  background-color: var(--theme-app-bg);
   color: var(--theme-text);
   transition:
     background-color 180ms ease,
@@ -113,9 +129,103 @@ body::before {
 
 .app-shell {
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--theme-page-bg) 96%, transparent), var(--theme-bg)),
+    linear-gradient(180deg, color-mix(in srgb, var(--theme-page-bg) 96%, transparent), var(--theme-app-bg)),
     var(--theme-page-bg);
   color: var(--theme-text);
+}
+
+.public-shell,
+.auth-route-main,
+.auth-page {
+  color: var(--theme-text);
+}
+
+.public-shell {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--theme-page-bg) 94%, transparent), var(--theme-app-bg)),
+    var(--theme-page-bg);
+}
+
+.public-shell::before {
+  background:
+    radial-gradient(circle at 6% 8%, color-mix(in srgb, var(--theme-accent) 18%, transparent), transparent 36%),
+    radial-gradient(circle at 92% 12%, color-mix(in srgb, var(--theme-brand) 16%, transparent), transparent 40%),
+    linear-gradient(165deg, var(--theme-page-bg) 0%, color-mix(in srgb, var(--theme-bg-soft) 72%, var(--theme-page-bg)) 45%, var(--theme-app-bg) 100%);
+}
+
+.public-site-glow {
+  background:
+    radial-gradient(circle at 20% 30%, color-mix(in srgb, var(--theme-accent) 22%, transparent), transparent 58%),
+    radial-gradient(circle at 70% 10%, color-mix(in srgb, var(--theme-brand) 22%, transparent), transparent 62%);
+}
+
+.public-shell .section-title {
+  color: color-mix(in srgb, var(--theme-text-soft) 88%, transparent);
+}
+
+.public-shell .section-heading,
+.public-shell .section-subtitle,
+.public-brand-name,
+.public-brand-payoff {
+  color: var(--theme-text);
+}
+
+.public-shell .section-subtitle {
+  color: var(--theme-text-muted);
+}
+
+.public-shell .surface,
+.public-shell .surface-strong {
+  border-color: var(--theme-border);
+  background:
+    linear-gradient(
+      162deg,
+      color-mix(in srgb, var(--theme-surface-1) 98%, transparent) 0%,
+      color-mix(in srgb, var(--theme-panel-bg) 96%, transparent) 62%,
+      color-mix(in srgb, var(--theme-surface-2) 98%, transparent) 100%
+    );
+  box-shadow: var(--theme-shadow-lg);
+}
+
+.public-shell .btn-ghost {
+  border-color: color-mix(in srgb, var(--theme-brand) 36%, var(--theme-border));
+  color: var(--theme-text);
+}
+
+.public-shell .btn-ghost:hover {
+  border-color: color-mix(in srgb, var(--theme-brand) 54%, var(--theme-border-strong));
+}
+
+.public-shell input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.public-shell select,
+.public-shell textarea,
+.link-muted {
+  color: var(--theme-text-muted);
+}
+
+.public-shell input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.public-shell select,
+.public-shell textarea {
+  border-color: var(--theme-border);
+  background: var(--theme-input-bg);
+}
+
+.public-shell input:not([type="checkbox"]):not([type="radio"]):not([type="file"])::placeholder,
+.public-shell textarea::placeholder {
+  color: var(--theme-text-soft);
+}
+
+.link-muted {
+  transition: color 140ms ease;
+}
+
+.link-muted:hover,
+a:not(.btn-primary):not(.btn-ghost):not(.theme-toggle) {
+  color: var(--theme-link);
+}
+
+a:not(.btn-primary):not(.btn-ghost):not(.theme-toggle):hover {
+  color: var(--theme-link-hover);
 }
 
 .app-header {
@@ -279,6 +389,9 @@ select:focus {
   justify-content: center;
   min-height: calc(100dvh - 10rem);
   padding: 7rem 0 2.5rem;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--theme-page-bg) 94%, transparent), color-mix(in srgb, var(--theme-app-bg) 96%, transparent)),
+    var(--theme-page-bg);
 }
 
 .auth-page--standalone {
@@ -310,6 +423,7 @@ select:focus {
       color-mix(in srgb, var(--theme-surface-muted) 96%, transparent) 100%
     );
   box-shadow: var(--theme-shadow-lg);
+  color: var(--theme-text);
 }
 
 .auth-shell::after {
@@ -323,7 +437,7 @@ select:focus {
 .auth-panel {
   position: relative;
   z-index: 1;
-  background: color-mix(in srgb, var(--theme-surface-solid) 94%, transparent);
+  background: color-mix(in srgb, var(--theme-panel-bg) 94%, transparent);
 }
 
 .auth-logo-mark {
@@ -413,7 +527,7 @@ select:focus {
   position: relative;
   overflow: hidden;
   border-left: 1px solid var(--theme-border);
-  background: var(--theme-surface-muted);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--theme-surface-2) 98%, transparent), color-mix(in srgb, var(--theme-panel-muted) 98%, transparent));
 }
 
 .auth-media__image {
@@ -429,9 +543,7 @@ select:focus {
 .auth-media__overlay {
   position: absolute;
   inset: 0;
-  background:
-    linear-gradient(180deg, rgba(7, 18, 25, 0.12), rgba(7, 18, 25, 0.42)),
-    linear-gradient(160deg, rgba(9, 45, 60, 0.82), rgba(19, 81, 89, 0.6) 52%, rgba(10, 22, 31, 0.86));
+  background: var(--theme-hero-overlay);
 }
 
 .auth-media__content {
@@ -463,7 +575,7 @@ select:focus {
 }
 
 :root[data-theme="dark"] .auth-panel {
-  background: color-mix(in srgb, var(--theme-surface-solid) 92%, transparent);
+  background: color-mix(in srgb, var(--theme-panel-bg) 95%, transparent);
 }
 
 :root[data-theme="dark"] .auth-media__image {
@@ -471,9 +583,34 @@ select:focus {
 }
 
 :root[data-theme="dark"] .auth-media__overlay {
+  background: var(--theme-hero-overlay);
+}
+
+:root[data-theme="dark"] .public-shell {
   background:
-    linear-gradient(180deg, rgba(3, 8, 12, 0.22), rgba(3, 8, 12, 0.52)),
-    linear-gradient(160deg, rgba(4, 22, 30, 0.9), rgba(11, 43, 54, 0.74) 52%, rgba(3, 8, 12, 0.92));
+    linear-gradient(180deg, color-mix(in srgb, var(--theme-page-bg) 96%, transparent), var(--theme-app-bg)),
+    var(--theme-page-bg);
+}
+
+:root[data-theme="dark"] .public-shell::before {
+  background:
+    radial-gradient(circle at 6% 8%, rgba(221, 187, 116, 0.1), transparent 36%),
+    radial-gradient(circle at 92% 12%, rgba(120, 209, 194, 0.12), transparent 40%),
+    linear-gradient(165deg, var(--theme-page-bg) 0%, #101a24 48%, var(--theme-app-bg) 100%);
+}
+
+:root[data-theme="dark"] .public-header,
+:root[data-theme="dark"] .public-header.is-shrunk {
+  border-color: var(--theme-border);
+  background: color-mix(in srgb, var(--theme-panel-bg) 90%, transparent);
+  box-shadow: var(--theme-shadow-sm);
+}
+
+:root[data-theme="dark"] .public-nav-pill,
+:root[data-theme="dark"] .public-menu-toggle,
+:root[data-theme="dark"] .public-shell .section-title,
+:root[data-theme="dark"] .link-muted {
+  color: var(--theme-text-muted);
 }
 
 .modal-overlay {
@@ -697,23 +834,36 @@ select:focus {
 
 :root[data-theme="dark"] .bg-\[\#f8f9fa\],
 :root[data-theme="dark"] .bg-neutral-50,
+:root[data-theme="dark"] .bg-neutral-50\/20,
 :root[data-theme="dark"] .bg-neutral-50\/30,
 :root[data-theme="dark"] .bg-neutral-50\/40,
 :root[data-theme="dark"] .bg-neutral-50\/50,
+:root[data-theme="dark"] .bg-neutral-50\/60,
 :root[data-theme="dark"] .bg-neutral-50\/70,
+:root[data-theme="dark"] .bg-neutral-50\/75,
 :root[data-theme="dark"] .bg-neutral-50\/80,
 :root[data-theme="dark"] .bg-neutral-50\/90,
 :root[data-theme="dark"] .bg-neutral-100,
+:root[data-theme="dark"] .bg-neutral-100\/30,
+:root[data-theme="dark"] .bg-neutral-100\/40,
 :root[data-theme="dark"] .bg-neutral-100\/50,
 :root[data-theme="dark"] .bg-neutral-100\/60,
 :root[data-theme="dark"] .bg-neutral-100\/70,
 :root[data-theme="dark"] .bg-neutral-100\/80,
 :root[data-theme="dark"] .bg-neutral-100\/90,
 :root[data-theme="dark"] .bg-slate-50,
+:root[data-theme="dark"] .bg-slate-50\/50,
 :root[data-theme="dark"] .bg-slate-100,
+:root[data-theme="dark"] .bg-slate-100\/50,
 :root[data-theme="dark"] .bg-slate-100\/80,
+:root[data-theme="dark"] .bg-slate-200,
 :root[data-theme="dark"] .bg-\[\#f8f9fa\]\/50 {
   background-color: var(--theme-surface-2) !important;
+}
+
+:root[data-theme="dark"] .bg-slate-900,
+:root[data-theme="dark"] .bg-slate-950 {
+  background-color: color-mix(in srgb, var(--theme-panel-muted) 88%, black) !important;
 }
 
 :root[data-theme="dark"] .border-neutral-100,
@@ -728,6 +878,11 @@ select:focus {
 :root[data-theme="dark"] .border-neutral-200\/80,
 :root[data-theme="dark"] .border-neutral-300,
 :root[data-theme="dark"] .border-slate-200,
+:root[data-theme="dark"] .border-slate-300,
+:root[data-theme="dark"] .border-slate-300\/70,
+:root[data-theme="dark"] .border-slate-400,
+:root[data-theme="dark"] .border-black\/5,
+:root[data-theme="dark"] .border-black\/10,
 :root[data-theme="dark"] .border-white\/50,
 :root[data-theme="dark"] .border-white\/60,
 :root[data-theme="dark"] .border-white\/70 {
@@ -753,7 +908,8 @@ select:focus {
 :root[data-theme="dark"] .text-neutral-900,
 :root[data-theme="dark"] .text-neutral-800,
 :root[data-theme="dark"] .text-slate-900,
-:root[data-theme="dark"] .text-slate-800 {
+:root[data-theme="dark"] .text-slate-800,
+:root[data-theme="dark"] .text-slate-950 {
   color: var(--theme-text) !important;
 }
 
@@ -764,14 +920,26 @@ select:focus {
 :root[data-theme="dark"] .text-neutral-300,
 :root[data-theme="dark"] .text-slate-700,
 :root[data-theme="dark"] .text-slate-600,
-:root[data-theme="dark"] .text-slate-500 {
+:root[data-theme="dark"] .text-slate-500,
+:root[data-theme="dark"] .text-slate-400,
+:root[data-theme="dark"] .text-slate-300 {
   color: var(--theme-text-muted) !important;
 }
 
+:root[data-theme="dark"] .placeholder\:text-neutral-400::placeholder,
+:root[data-theme="dark"] .placeholder\:text-neutral-500::placeholder {
+  color: var(--theme-text-soft) !important;
+}
+
 :root[data-theme="dark"] .hover\:bg-neutral-50:hover,
+:root[data-theme="dark"] .hover\:bg-neutral-50\/50:hover,
+:root[data-theme="dark"] .hover\:bg-neutral-50\/80:hover,
 :root[data-theme="dark"] .hover\:bg-neutral-100:hover,
+:root[data-theme="dark"] .hover\:bg-neutral-100\/50:hover,
 :root[data-theme="dark"] .hover\:bg-white:hover,
+:root[data-theme="dark"] .hover\:bg-white\/50:hover,
 :root[data-theme="dark"] .hover\:bg-slate-50:hover,
+:root[data-theme="dark"] .hover\:bg-slate-50\/50:hover,
 :root[data-theme="dark"] .hover\:bg-slate-100:hover {
   background-color: var(--theme-table-row-hover) !important;
 }
@@ -799,6 +967,11 @@ select:focus {
   color: var(--theme-text);
 }
 
+:root[data-theme="dark"] th,
+:root[data-theme="dark"] td {
+  border-color: var(--theme-border);
+}
+
 :root[data-theme="dark"] thead.bg-white\/40,
 :root[data-theme="dark"] thead.bg-neutral-50\/50,
 :root[data-theme="dark"] thead.bg-neutral-50\/80,
@@ -814,8 +987,12 @@ select:focus {
 
 :root[data-theme="dark"] tr.bg-white\/30,
 :root[data-theme="dark"] tr.bg-white\/40,
+:root[data-theme="dark"] tr.bg-white,
 :root[data-theme="dark"] tr.bg-neutral-50\/30,
-:root[data-theme="dark"] tr.bg-neutral-50\/50 {
+:root[data-theme="dark"] tr.bg-neutral-50\/50,
+:root[data-theme="dark"] tr.bg-neutral-50,
+:root[data-theme="dark"] tr.hover\:bg-neutral-50\/50:hover,
+:root[data-theme="dark"] tr.hover\:bg-neutral-50\/80:hover {
   background-color: var(--theme-table-row) !important;
 }
 
