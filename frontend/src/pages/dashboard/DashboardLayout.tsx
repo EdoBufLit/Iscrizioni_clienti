@@ -5,6 +5,7 @@ import { applySeo } from "../../lib/seo";
 import Skeleton from "../../components/ui/Skeleton";
 import MobileDashboardNav, { type MobileDashboardNavItem } from "../../components/ui/MobileDashboardNav";
 import { OnboardingTour, ReviewGuideButton } from "../../components/onboarding";
+import ThemeToggle from "../../components/theme/ThemeToggle";
 
 export type DashboardContext = {
   user: MemberProfile | null;
@@ -128,9 +129,9 @@ const DashboardLayout = () => {
   );
 
   return (
-    <div className="min-h-screen bg-[#f8f9fa]/50">
+    <div className="app-shell min-h-screen">
       {/* Header band */}
-      <header className="border-b border-slate-200 bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-50 transition-all">
+      <header className="app-header sticky top-0 z-50 transition-all">
         <div className="container-shell flex items-center justify-between h-16 md:h-20">
           <div className="flex items-center gap-6">
             <div className="hidden shrink-0 sm:block">
@@ -192,10 +193,11 @@ const DashboardLayout = () => {
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-4">
+            <ThemeToggle />
             <Link className="link-muted hidden text-sm font-bold tracking-tight sm:block" to="/">
               Sito pubblico
             </Link>
-            <div className="h-4 w-px bg-neutral-200 hidden sm:block" />
+            <div className="app-divider hidden h-4 w-px sm:block" />
             {!loading && user && (
               <button
                 className="btn-ghost !px-4 !py-2 !text-xs font-bold uppercase tracking-wider"

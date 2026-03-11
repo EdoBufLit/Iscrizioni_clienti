@@ -29,9 +29,9 @@ type ToastContextValue = {
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 const toneClassName: Record<ToastTone, string> = {
-  success: "border-emerald-200 bg-emerald-50/95 text-emerald-900",
-  error: "border-red-200 bg-red-50/95 text-red-900",
-  info: "border-neutral-200 bg-white/95 text-neutral-900",
+  success: "toast-panel toast-panel--success",
+  error: "toast-panel toast-panel--error",
+  info: "toast-panel toast-panel--info",
 };
 
 let toastId = 1;
@@ -61,7 +61,7 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
         {items.map((item) => (
           <div
             key={item.id}
-            className={`pointer-events-auto rounded-2xl border px-4 py-3 shadow-2xl backdrop-blur animate-in slide-in-from-right-4 duration-200 ${toneClassName[item.tone]}`}
+            className={`pointer-events-auto border px-4 py-3 animate-in slide-in-from-right-4 duration-200 ${toneClassName[item.tone]}`}
           >
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -72,7 +72,7 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
               </div>
               <button
                 type="button"
-                className="rounded-full p-1 text-current/50 transition hover:bg-black/5 hover:text-current"
+                className="toast-panel__close rounded-full p-1 text-current/60 transition hover:text-current"
                 onClick={() => removeToast(item.id)}
                 aria-label="Chiudi notifica"
               >

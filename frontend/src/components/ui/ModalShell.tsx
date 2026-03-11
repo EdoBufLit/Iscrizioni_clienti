@@ -48,7 +48,7 @@ const ModalShell = ({
 
   return (
     <div
-      className={`fixed inset-0 ${zIndexClassName} flex items-center justify-center bg-neutral-950/70 p-4 backdrop-blur-sm animate-in fade-in duration-200`}
+      className={`modal-overlay fixed inset-0 ${zIndexClassName} flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200`}
       role="dialog"
       aria-modal="true"
       onClick={(event) => {
@@ -67,7 +67,7 @@ const ModalShell = ({
           </div>
           <button
             type="button"
-            className="absolute right-4 top-4 rounded-full p-2 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-900"
+            className="modal-close absolute right-4 top-4 rounded-full p-2 transition"
             onClick={onClose}
             aria-label="Chiudi finestra"
           >

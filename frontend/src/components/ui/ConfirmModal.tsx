@@ -26,7 +26,7 @@ const ConfirmModal = ({
 }: ConfirmModalProps) => {
   const confirmClassName =
     tone === "danger"
-      ? "rounded-xl border border-red-200 bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
+      ? "rounded-xl border border-red-300/60 bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
       : "rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-dark";
 
   return (
@@ -37,7 +37,7 @@ const ConfirmModal = ({
       onClose={onClose}
       sizeClassName="max-w-md"
     >
-      <div className="rounded-xl border border-neutral-200 bg-neutral-50/80 p-4 text-sm text-neutral-600">
+      <div className="theme-card-muted rounded-xl p-4 text-sm text-neutral-600">
         Conferma l'azione solo se vuoi proseguire subito.
       </div>
       <div className="mt-6 flex flex-wrap justify-end gap-3">

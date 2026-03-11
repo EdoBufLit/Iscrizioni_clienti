@@ -3,7 +3,7 @@ type SkeletonProps = {
 };
 
 const Skeleton = ({ className = "" }: SkeletonProps) => (
-  <div className={`animate-pulse rounded bg-neutral-100 ${className}`} />
+  <div className={`skeleton-block rounded ${className}`} />
 );
 
 export default Skeleton;

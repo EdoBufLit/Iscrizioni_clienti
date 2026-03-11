@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
 import { applySeo } from "../../lib/seo";
+import ThemeToggle from "../../components/theme/ThemeToggle";
 
 const NAV_ITEMS = [
   {
@@ -39,31 +40,34 @@ const AdminLayout = () => {
   }, []);
 
   return (
-    <div>
+    <div className="app-shell min-h-screen">
       {/* Header band */}
       <div className="header-band">
         <div className="container-shell py-8">
-          <div className="flex items-start gap-5">
-            <div className="hidden shrink-0 sm:block">
-              <img
-                src={`${import.meta.env.BASE_URL}logo-transparent.png`}
-                alt="ASSO.N.A.M."
-                className="h-12 rounded"
-              />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <h1 className="text-lg font-semibold text-neutral-900">
-                  Amministrazione
-                </h1>
-                <span className="inline-flex items-center rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
-                  Admin
-                </span>
+          <div className="flex items-start justify-between gap-5">
+            <div className="flex items-start gap-5">
+              <div className="hidden shrink-0 sm:block">
+                <img
+                  src={`${import.meta.env.BASE_URL}logo-transparent.png`}
+                  alt="ASSO.N.A.M."
+                  className="h-12 rounded"
+                />
               </div>
-              <p className="mt-1 text-sm text-neutral-500">
-                Gestione associazioni, iscrizioni e pratiche.
-              </p>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <h1 className="text-lg font-semibold text-neutral-900">
+                    Amministrazione
+                  </h1>
+                  <span className="inline-flex items-center rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+                    Admin
+                  </span>
+                </div>
+                <p className="mt-1 text-sm text-neutral-500">
+                  Gestione associazioni, iscrizioni e pratiche.
+                </p>
+              </div>
             </div>
+            <ThemeToggle />
           </div>
         </div>
       </div>

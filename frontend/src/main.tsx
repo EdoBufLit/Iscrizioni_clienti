@@ -4,6 +4,8 @@ import { BrowserRouter } from "react-router-dom";
 import { registerSW } from "virtual:pwa-register";
 import App from "./App";
 import "./index.css";
+import "./theme.css";
+import { ThemeProvider } from "./components/theme/ThemeProvider";
 import { isPerfEnabled } from "./lib/perfConfig";
 
 if (isPerfEnabled() && !(window as Window & { __perfInit?: boolean }).__perfInit) {
@@ -27,8 +29,10 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </ThemeProvider>
   </React.StrictMode>
 );

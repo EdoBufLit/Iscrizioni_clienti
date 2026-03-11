@@ -7,6 +7,8 @@ import { pageVariants } from "./motion/motionPresets";
 import { usePublicMotion } from "./public/usePublicMotion";
 import { PUBLIC_MOTION } from "./public/motionTokens";
 import InstallAppPrompt from "./public/InstallAppPrompt";
+import { useTheme } from "./theme/ThemeProvider";
+import ThemeToggle from "./theme/ThemeToggle";
 import { trackUiEvent } from "../lib/tracking";
 import { useStatePlatformCapabilities } from "../hooks/useStatePlatformCapabilities";
 import { fetchWhoAmI, type WhoAmIResponse } from "../lib/api";
@@ -39,6 +41,7 @@ const Layout = () => {
   const [publicAuth, setPublicAuth] = useState<WhoAmIResponse>({ authenticated: false });
   const close = () => setMenuOpen(false);
   const location = useLocation();
+  const { resolvedTheme } = useTheme();
   const { capabilities, loading: capabilitiesLoading } = useStatePlatformCapabilities();
   const affiliazioneEnabled = capabilities?.affiliazioneEnabled === true;
   const showAffiliazioneCta = !capabilitiesLoading && affiliazioneEnabled;
@@ -98,11 +101,19 @@ const Layout = () => {
     const animateShrinkState = (shrink: boolean) => {
       if (headerShrinkRef.current === shrink) return;
       headerShrinkRef.current = shrink;
+      const rootStyles = window.getComputedStyle(document.documentElement);
+      const surfaceColor = rootStyles.getPropertyValue("--theme-surface").trim() || "rgba(255,255,255,0.84)";
+      const solidSurfaceColor = rootStyles.getPropertyValue("--theme-surface-solid").trim() || "#ffffff";
+      const borderColor = rootStyles.getPropertyValue("--theme-border").trim() || "rgba(17,39,41,0.12)";
+      const compactShadow =
+        resolvedTheme === "dark"
+          ? "0 14px 36px rgba(0, 0, 0, 0.38)"
+          : "0 12px 35px rgba(15, 35, 38, 0.14)";
 
       gsap.to(headerElement, {
-        backgroundColor: shrink ? "rgba(246, 250, 250, 0.94)" : "rgba(242, 246, 247, 0.84)",
-        borderColor: shrink ? "rgba(17, 39, 41, 0.12)" : "rgba(255, 255, 255, 0.5)",
-        boxShadow: shrink ? "0 12px 35px rgba(15, 35, 38, 0.14)" : "0 0 0 rgba(0,0,0,0)",
+        backgroundColor: shrink ? solidSurfaceColor : surfaceColor,
+        borderColor,
+        boxShadow: shrink ? compactShadow : "0 0 0 rgba(0,0,0,0)",
         duration: PUBLIC_MOTION.ui,
         ease: PUBLIC_MOTION.ease,
         overwrite: "auto",
@@ -127,7 +138,7 @@ const Layout = () => {
       gsap.killTweensOf([headerElement, logoElement]);
       headerShrinkRef.current = false;
     };
-  }, [isDashboardRoute]);
+  }, [isDashboardRoute, resolvedTheme]);
 
   useEffect(() => {
     if (isDashboardRoute) return;
@@ -201,7 +212,7 @@ const Layout = () => {
       <div
         className={`relative min-h-screen text-neutral-800${
           isDashboardRoute ? "" : " public-shell"
-        }`}
+        } ${isDashboardRoute ? "app-shell" : ""}`}
       >
         {isDashboardRoute ? (
           <div
@@ -211,7 +222,7 @@ const Layout = () => {
         ) : (
           <>
             <div className="public-site-glow" aria-hidden="true" />
-            <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm transition-all" ref={publicHeaderRef}>
+            <header className="public-header fixed top-0 left-0 right-0 z-50 transition-all" ref={publicHeaderRef}>
               <div className="container-shell public-header-inner">
                 <NavLink className="public-brand" to="/" onClick={close}>
                   <img
@@ -245,6 +256,7 @@ const Layout = () => {
                     ))}
                   </nav>
                   <div className="flex shrink-0 items-center gap-3">
+                    <ThemeToggle />
                     {showAffiliazioneCta ? (
                       <NavLink
                         className="inline-flex items-center justify-center h-10 px-5 rounded-xl bg-slate-900 text-white text-sm font-bold shadow-md shadow-slate-900/10 hover:-translate-y-0.5 hover:shadow-lg transition-all"
@@ -272,6 +284,7 @@ const Layout = () => {
                   </div>
                 </div>
 
+                <ThemeToggle className="xl:hidden" />
                 <button
                   className="public-menu-toggle xl:hidden"
                   type="button"
