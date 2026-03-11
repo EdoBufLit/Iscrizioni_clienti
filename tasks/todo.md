@@ -3293,3 +3293,14 @@ pm --prefix frontend run build OK.
 - [FormBuilder.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\builder\FormBuilder.tsx): rimosso il doppio stato locale dei campi; il componente ora usa direttamente `fields` dal parent, cosi non esiste piu una copia interna che puo divergere o venire sovrascritta. Ho anche aggiunto una collision detection piu robusta (`pointerWithin -> rectIntersection -> closestCenter`) per rendere il canvas droppable in modo piu affidabile anche quando e vuoto o il puntatore rilascia al bordo.
 - Esito del fix: `palette -> canvas` ora crea davvero il blocco nel draft parent, il canvas si aggiorna subito, l'empty state sparisce al primo inserimento, il blocco resta presente dopo i rerender e il reorder interno continua a usare il branch separato `canvas -> canvas`.
 - Verifica eseguita: `npm --prefix frontend run build` OK.
+## Login theme hardening (Mar 11, 2026)
+- [x] Analizzare login page, layout e theme layer per individuare i punti incoerenti light/dark
+- [x] Applicare fix mirati a layout, card, input, testi e switch tema della login
+- [x] Eseguire build frontend e documentare review finale
+
+## Review (Login theme hardening - Mar 11, 2026)
+- Problemi trovati: le login admin continuavano a vivere nel `Layout` pubblico, quindi ereditavano chrome non necessario e un secondo toggle fixed; inoltre login pubblica e login admin usavano ancora molti colori light-only hardcoded su testi, bordi, error state, input e pannello immagine laterale.
+- [Layout.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\Layout.tsx): le route standalone `/org-admin/login` e `/super-admin/login` non renderizzano piu header/footer pubblico o prompt extra, ma mantengono un solo `ThemeToggle` piccolo in alto a destra.
+- [theme.css](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\theme.css): aggiunta una shell auth tematica (`auth-page`, `auth-shell`, `auth-panel`, `auth-input`, `auth-alert`, `auth-media`, ecc.) con token coerenti light/dark per sfondo pagina, card, testi, placeholder, bordi, input, stato errore e immagine laterale.
+- [Login.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\Login.tsx), [OrgAdminLogin.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\OrgAdminLogin.tsx) e [SuperAdminLogin.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\super-admin\SuperAdminLogin.tsx): riallineati a classi semantiche condivise, cosi card, contenuto e pannello visivo hanno contrasto leggibile e coerente in entrambi i temi senza duplicare logiche CSS sparse.
+- Verifica finale: `npm --prefix frontend run build` OK.

@@ -63,6 +63,7 @@ const Layout = () => {
   const isStandaloneAuthRoute =
     location.pathname === "/org-admin/login" ||
     location.pathname === "/super-admin/login";
+  const showPublicChrome = !isDashboardRoute && !isStandaloneAuthRoute;
 
   usePublicMotion({ enabled: !isDashboardRoute, key: location.pathname });
 
@@ -222,7 +223,7 @@ const Layout = () => {
             className="h-0.5 bg-gradient-to-r from-accent via-brand to-ember"
             aria-hidden="true"
           />
-        ) : (
+        ) : showPublicChrome ? (
           <>
             <div className="public-site-glow" aria-hidden="true" />
             <header className="public-header fixed top-0 left-0 right-0 z-50 transition-all" ref={publicHeaderRef}>
@@ -352,7 +353,7 @@ const Layout = () => {
               </div>
             </header>
           </>
-        )}
+        ) : null}
 
         {isStandaloneAuthRoute ? (
           <div className="fixed right-4 top-4 z-50">
@@ -360,8 +361,12 @@ const Layout = () => {
           </div>
         ) : null}
 
-        <main className={isDashboardRoute ? "" : "public-main"}>
-          {!isDashboardRoute ? <InstallAppPrompt hidden={menuOpen} /> : null}
+        <main
+          className={
+            isDashboardRoute ? "" : isStandaloneAuthRoute ? "auth-route-main" : "public-main"
+          }
+        >
+          {showPublicChrome ? <InstallAppPrompt hidden={menuOpen} /> : null}
           {isDashboardRoute ? (
             <Outlet />
           ) : (
@@ -400,7 +405,7 @@ const Layout = () => {
               </div>
             </div>
           </footer>
-        ) : (
+        ) : showPublicChrome ? (
           <footer className="public-footer">
             <div className="container-shell public-footer-grid">
               <div>
@@ -422,7 +427,7 @@ const Layout = () => {
               </div>
             </div>
           </footer>
-        )}
+        ) : null}
       </div>
     </MotionProvider>
   );
