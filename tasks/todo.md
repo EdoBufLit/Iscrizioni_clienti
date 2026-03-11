@@ -3142,3 +3142,29 @@ pm --prefix frontend run build -> OK
 - Prima del rebuild il server esegue solo diagnostica e cleanup sicuro della build cache: `docker system df || true`, `docker builder ls || true`, `docker buildx ls || true`, `docker builder prune -af || true`, `docker buildx prune -af || true`.
 - Il deploy non usa `docker system prune --volumes`, non usa `docker volume prune`, non usa `down -v` e non rimuove alcun volume database.
 - Il rebuild ora è esplicito e pulito: `docker compose ... build --no-cache`, seguito da `docker compose ... up -d --remove-orphans`, mantenendo invariati connessione SSH, env, compose files e logica di health check video-worker.
+
+## Stripe Connect demo integration (Mar 10, 2026)
+- [x] Isolare un package backend `stripe_connect_demo` con config helper, StripeClient dedicato e service commentato
+- [x] Estendere `organizations` con mapping connected account + status subscription e aggiungere tabella webhook idempotency
+- [x] Aggiungere route org-admin, storefront demo e webhook Stripe separate dai flussi Stripe già esistenti
+- [x] Aggiungere UI org-admin `/org-admin/billing`, route storefront demo e wiring capability/nav
+- [x] Documentare env/runtime e verificare build frontend + test backend mirati
+
+## Review (Stripe Connect demo integration - Mar 10, 2026)
+- Backend isolato in `app/integrations/stripe_connect_demo/` con `config.py`, `client.py` e `service.py`: tutte le chiamate Stripe passano da `StripeClient`, la country usa `Organization.country` con fallback `IT`, `BASE_URL` demo usa fallback `https://assonam.it`, e i commenti chiariscono Accounts v2, direct charge e uso di `customer_account`.
+- Persistenza minima: migration [6c7d8e9f0a1b_add_stripe_connect_demo_fields.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\alembic\versions\6c7d8e9f0a1b_add_stripe_connect_demo_fields.py), nuovi campi `organizations.stripe_connected_account_id / stripe_platform_subscription_status / stripe_platform_subscription_id` e tabella `stripe_webhook_events` con unique index su `event_id`.
+- Route nuove: [app/routes/stripe_connect_demo.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\routes\stripe_connect_demo.py) per account status/onboarding/demo-products/platform subscription/storefront checkout e [app/routes/stripe_webhooks.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\routes\stripe_webhooks.py) per thin/billing webhooks con early-return idempotente.
+- Frontend: nuova pagina org-admin [OrgAdminStripeDemoBilling.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\OrgAdminStripeDemoBilling.tsx), nav condizionale in [OrgAdminLayout.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\OrgAdminLayout.tsx), storefront pubblico demo in [StripeDemoStorefrontPage.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\StripeDemoStorefrontPage.tsx) e result page dedicata.
+- Contratti client aggiornati in [frontend/src/lib/api.ts](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\lib\api.ts) e capability runtime estesa con `stripeConnectDemoEnabled`.
+- Documentazione aggiornata in [README.md](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\README.md) e [ENV_REQUIRED.md](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\ENV_REQUIRED.md), marcando sempre `demo` per evitare confusione con il futuro flusso quota associativa reale.
+- Verifiche eseguite: `python -m compileall app init_db.py tests/test_stripe_connect_demo.py`; `python -m pytest -q tests/test_stripe_connect_demo.py`; `npm --prefix frontend run build`.
+
+## Deploy env propagation for Stripe Connect demo (Mar 11, 2026)
+- [x] Verificare che il workflow Hetzner scriva tutte le nuove env Stripe demo nella `.env` remota
+- [x] Verificare che `docker-compose.yml` passi le stesse env ai container backend runtime
+- [x] Correggere i gap di propagazione senza toccare altre secret o servizi
+
+## Review (Deploy env propagation for Stripe Connect demo - Mar 11, 2026)
+- Workflow corretto in [.github/workflows/deploy-hetzner.yml](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\.github\workflows\deploy-hetzner.yml): il blocco che genera `.env` sul server ora scrive anche `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_THIN_WEBHOOK_SECRET`, `STRIPE_BILLING_WEBHOOK_SECRET`, `STRIPE_PLATFORM_PRICE_ID`, `STRIPE_REQUIRE_PUBLISHABLE_KEY` e `ENABLE_STRIPE_CONNECT_DEMO`.
+- Runtime corretto in [docker-compose.yml](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\docker-compose.yml): `x-app-env` ora passa anche `STRIPE_THIN_WEBHOOK_SECRET`, `STRIPE_BILLING_WEBHOOK_SECRET`, `STRIPE_PLATFORM_PRICE_ID` e `ENABLE_STRIPE_CONNECT_DEMO` a `web`, `email-worker` e `low-cards-worker`.
+- Verifica eseguita con `rg -n "STRIPE_THIN_WEBHOOK_SECRET|STRIPE_BILLING_WEBHOOK_SECRET|STRIPE_PLATFORM_PRICE_ID|ENABLE_STRIPE_CONNECT_DEMO" .github/workflows/deploy-hetzner.yml docker-compose.yml`.

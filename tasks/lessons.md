@@ -109,6 +109,9 @@
 - Se un workflow di creazione parte da un draft nuovo, il frontend non deve inizializzarlo in uno stato che il backend rifiuta subito: seed minimo valido o validazione client obbligatoria prima del `POST`, altrimenti il primo click produce 422 evitabili.
 - Se sposto una feature su un nuovo layer dati (es. `rooms` / `room_tables`), devo ripulire tutte le query dai filtri legacy del modello precedente (`deleted_at` o simili): il codice puo compilare ma il primo path runtime specifico esplode con `500`.
 - Se due viste operano sullo stesso oggetto ma con filtri propri (es. agenda prenotazioni e mappa sala 2D), dopo create/select/assign devo sincronizzare esplicitamente il contesto condiviso (`room_id`, data, ora, tavolo): aggiornare solo la lista principale lascia UI secondarie apparentemente "ferme" pur con backend corretto.
+- Se introduco route opzionali dietro feature flag lette a import-time (es. demo Stripe), nei test devo impostare il flag in `tests/conftest.py` prima di importare `app.main`; mutare solo `settings` dentro il test non registra retroattivamente i router.
+- Nei sample payment/demo che convivono con flussi Stripe reali già presenti, nomi route, etichette UI e documentazione devono contenere esplicitamente `demo` per impedire ambiguità future con il prodotto reale.
+- Quando aggiungo nuove env applicative per una feature backend opzionale, devo verificare subito l'intera catena deploy: GitHub Secret -> workflow che scrive `.env` -> `docker-compose` runtime. Aggiornare solo codice e docs non basta e il problema emerge solo dopo deploy.
 ## 2026-03-07 - Email flow verification must prove delivery, not just queueing
 
 - Quando aggiungo un flusso email basato su outbox/worker, non basta verificare che esista una riga in `email_outbox`.
