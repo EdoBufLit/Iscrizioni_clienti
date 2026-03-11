@@ -205,11 +205,11 @@ def init_db():
         )
         EmailCampaignRecipient.__table__.create(bind=engine, checkfirst=True)
 
-    if "email_templates" not in inspect(engine).get_table_names():
-        logger.warning(
-            "email_templates table not found. Creating it idempotently at startup; "
-            "run 'alembic upgrade head' to align schema history."
-        )
+        if "email_templates" not in inspect(engine).get_table_names():
+            logger.warning(
+                "email_templates table not found. Creating it idempotently at startup; "
+                "run 'alembic upgrade head' to align schema history."
+            )
         EmailTemplate.__table__.create(bind=engine, checkfirst=True)
 
     if "forms" not in inspect(engine).get_table_names():
@@ -326,6 +326,7 @@ def init_db():
             _add_column_if_missing(conn, "forms", "booking_requires_manual_confirmation", "INTEGER DEFAULT 1")
             _add_column_if_missing(conn, "forms", "booking_success_message_override", "TEXT")
             _add_column_if_missing(conn, "forms", "booking_notification_enabled", "INTEGER DEFAULT 1")
+            _add_column_if_missing(conn, "forms", "booking_auto_assign_enabled", "INTEGER DEFAULT 0")
             _add_column_if_missing(conn, "forms", "booking_field_mapping", "TEXT")
             _add_column_if_missing(conn, "forms", "notify_admin_on_submit", "INTEGER DEFAULT 1")
             _add_column_if_missing(conn, "forms", "send_user_confirmation", "INTEGER DEFAULT 1")
@@ -368,6 +369,12 @@ def init_db():
                     """
                 )
             )
+        if "email_templates" in table_names:
+            _add_column_if_missing(conn, "email_templates", "design_json", "TEXT")
+            _add_column_if_missing(conn, "email_templates", "linked_form_id", "INTEGER")
+        if "email_campaigns" in table_names:
+            _add_column_if_missing(conn, "email_campaigns", "design_json", "TEXT")
+            _add_column_if_missing(conn, "email_campaigns", "linked_form_id", "INTEGER")
         if "organizations" in table_names:
             _add_column_if_missing(
                 conn, "organizations", "stripe_connected_account_id", "TEXT"

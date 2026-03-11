@@ -5,6 +5,7 @@ import logging
 import time
 
 from app.config import settings
+from app.services.email_campaigns import process_scheduled_campaigns_once
 from app.services.email_outbox import process_outbox_once
 
 logger = logging.getLogger(__name__)
@@ -36,12 +37,18 @@ def main() -> int:
     )
 
     if args.once:
-        stats = {"email": process_outbox_once(limit=args.limit)}
+        stats = {
+            "scheduled_campaigns": process_scheduled_campaigns_once(),
+            "email": process_outbox_once(limit=args.limit),
+        }
         logger.info("email_worker_cycle %s", stats)
         return 0
 
     while True:
-        stats = {"email": process_outbox_once(limit=args.limit)}
+        stats = {
+            "scheduled_campaigns": process_scheduled_campaigns_once(),
+            "email": process_outbox_once(limit=args.limit),
+        }
         logger.info("email_worker_cycle %s", stats)
         sleep_seconds = max(1, int(settings.EMAIL_OUTBOX_POLL_SECONDS))
         if stats["email"]["claimed"] > 0:

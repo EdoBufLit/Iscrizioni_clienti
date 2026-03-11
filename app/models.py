@@ -795,6 +795,8 @@ class EmailTemplate(Base):
     subject = Column(String, nullable=False)
     body_html = Column(Text, nullable=True)
     body_text = Column(Text, nullable=True)
+    design_json = Column(GENERIC_JSON_TYPE, nullable=True)
+    linked_form_id = Column(Integer, ForeignKey("forms.id"), nullable=True, index=True)
     channel = Column(String, nullable=False, default="email", server_default="email", index=True)
     is_active = Column(
         Boolean, nullable=False, default=True, server_default="true", index=True
@@ -818,6 +820,7 @@ class EmailTemplate(Base):
         back_populates="email_templates",
         foreign_keys=[created_by_user_id],
     )
+    linked_form = relationship("Form", foreign_keys=[linked_form_id])
     admin_action_forms = relationship(
         "Form",
         foreign_keys="Form.admin_notification_template_id",
@@ -839,6 +842,8 @@ class EmailCampaign(Base):
     subject = Column(String, nullable=False)
     body_html = Column(Text, nullable=True)
     body_text = Column(Text, nullable=True)
+    design_json = Column(GENERIC_JSON_TYPE, nullable=True)
+    linked_form_id = Column(Integer, ForeignKey("forms.id"), nullable=True, index=True)
     audience_type = Column(String, nullable=False, index=True)
     recipient_mode = Column(
         String, nullable=False, default="all_members", server_default="all_members", index=True
@@ -860,6 +865,7 @@ class EmailCampaign(Base):
         back_populates="email_campaigns",
         foreign_keys=[created_by_user_id],
     )
+    linked_form = relationship("Form", foreign_keys=[linked_form_id])
     recipients = relationship(
         "EmailCampaignRecipient",
         back_populates="campaign",
@@ -953,6 +959,9 @@ class Form(Base):
     booking_success_message_override = Column(Text, nullable=True)
     booking_notification_enabled = Column(
         Boolean, nullable=False, default=True, server_default="true"
+    )
+    booking_auto_assign_enabled = Column(
+        Boolean, nullable=False, default=False, server_default="false"
     )
     booking_field_mapping = Column(GENERIC_JSON_TYPE, nullable=True)
     created_by_user_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True, index=True)

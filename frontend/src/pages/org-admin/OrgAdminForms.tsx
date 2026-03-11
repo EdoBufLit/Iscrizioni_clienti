@@ -149,6 +149,7 @@ function emptyFormDraft() {
     booking_requires_manual_confirmation: true,
     booking_success_message_override: "",
     booking_notification_enabled: true,
+    booking_auto_assign_enabled: false,
     booking_field_mapping: {} as Record<string, string>,
     notify_admin_on_submit: true,
     send_user_confirmation: true,
@@ -356,6 +357,7 @@ export function OrgAdminFormsWorkspace({
       booking_requires_manual_confirmation: Boolean(selectedForm.booking_requires_manual_confirmation),
       booking_success_message_override: selectedForm.booking_success_message_override || "",
       booking_notification_enabled: Boolean(selectedForm.booking_notification_enabled),
+      booking_auto_assign_enabled: Boolean(selectedForm.booking_auto_assign_enabled),
       booking_field_mapping: selectedForm.booking_field_mapping || {},
       notify_admin_on_submit: Boolean(selectedForm.notify_admin_on_submit),
       send_user_confirmation: Boolean(selectedForm.send_user_confirmation),
@@ -574,6 +576,7 @@ export function OrgAdminFormsWorkspace({
         notification_email: formDraft.notification_email || null,
         booking_enabled: bookingEnabled,
         booking_success_message_override: formDraft.booking_success_message_override || null,
+        booking_auto_assign_enabled: formDraft.booking_auto_assign_enabled,
         booking_field_mapping: formDraft.booking_field_mapping || {},
         admin_notification_template_id: formDraft.admin_notification_template_id || null,
         user_confirmation_template_id: formDraft.user_confirmation_template_id || null,
@@ -1239,6 +1242,10 @@ export function OrgAdminFormsWorkspace({
                 <label className="flex items-center gap-2 text-sm text-neutral-700">
                   <input type="checkbox" disabled={locked} checked={formDraft.booking_notification_enabled} onChange={(event) => syncFormDraft("booking_notification_enabled", event.target.checked)} className="rounded border-neutral-300 text-brand" />
                   Invia email di stato booking
+                </label>
+                <label className="flex items-center gap-2 text-sm text-neutral-700">
+                  <input type="checkbox" disabled={locked} checked={formDraft.booking_auto_assign_enabled} onChange={(event) => syncFormDraft("booking_auto_assign_enabled", event.target.checked)} className="rounded border-neutral-300 text-brand" />
+                  Assegna automaticamente il primo tavolo libero compatibile
                 </label>
               </div>
 

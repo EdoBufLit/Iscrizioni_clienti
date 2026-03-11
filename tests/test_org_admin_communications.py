@@ -16,6 +16,7 @@ from app.models import (
     OrgAdminToken,
     Organization,
 )
+from app.services.email_campaigns import process_scheduled_campaigns
 from app.utils import clear_captured_emails, get_captured_emails, hash_token
 
 
@@ -386,6 +387,81 @@ def test_org_admin_campaign_supports_selected_members_and_personalized_delivery(
             "selected.one@example.com",
             "selected.two@example.com",
         }
+    finally:
+        settings.EMAIL_MODE = original_mode
+        settings.MAIL_FROM_DOMAIN = original_domain
+        clear_captured_emails()
+
+
+def test_org_admin_campaign_can_be_scheduled_with_design_and_linked_form(client, db, drain_email_outbox):
+    original_mode = settings.EMAIL_MODE
+    original_domain = settings.MAIL_FROM_DOMAIN
+    settings.EMAIL_MODE = "test"
+    settings.MAIL_FROM_DOMAIN = "notifiche.assonam.it"
+    clear_captured_emails()
+    try:
+        org, admin = _create_org_admin(db, communications_enabled=True)
+        _login_org_admin(client, db, admin.id)
+
+        form_res = client.post(
+            "/api/org-admin/forms",
+            json={
+                "title": "Sondaggio post evento",
+                "public_slug": f"sondaggio-post-evento-{uuid.uuid4().hex[:6]}",
+                "is_active": True,
+                "visibility": "public",
+            },
+        )
+        assert form_res.status_code == 201, form_res.text
+        linked_form = form_res.json()["form"]
+
+        selected_member = _create_member(
+            db,
+            org_id=org.id,
+            email="scheduled.member@example.com",
+            status="active",
+            card_year=datetime.utcnow().year,
+            card_no_seed=9950,
+        )
+
+        scheduled_at = (datetime.utcnow() + timedelta(minutes=30)).replace(microsecond=0)
+        create_res = client.post(
+            "/api/org-admin/communications/campaigns",
+            json={
+                "name": "Survey schedulato",
+                "subject": "Feedback per {{nome_socio}}",
+                "body_text": "Ciao {{nome_socio}}, lascia un feedback.",
+                "audience_type": "active_members",
+                "recipient_mode": "selected_members",
+                "member_ids": [selected_member.id],
+                "scheduled_at": scheduled_at.isoformat(),
+                "linked_form_id": linked_form["id"],
+                "design": {
+                    "accent_color": "#123456",
+                    "cta_label": "Apri il sondaggio",
+                    "cta_note": "Ci aiuta a migliorare il prossimo evento.",
+                },
+            },
+        )
+        assert create_res.status_code == 201, create_res.text
+        campaign = create_res.json()["campaign"]
+        assert campaign["status"] == "scheduled"
+        assert campaign["linked_form"]["id"] == linked_form["id"]
+        assert campaign["design"]["accent_color"] == "#123456"
+
+        stats = process_scheduled_campaigns(db, now=scheduled_at + timedelta(minutes=1))
+        assert stats["processed"] == 1
+        assert stats["queued_recipients"] == 1
+
+        drain_email_outbox()
+        captured = get_captured_emails()
+        assert len(captured) == 1
+        assert "Apri il sondaggio" in captured[0]["body"]
+        assert linked_form["public_path"] in captured[0]["body"]
+
+        detail_res = client.get(f"/api/org-admin/communications/campaigns/{campaign['id']}")
+        assert detail_res.status_code == 200, detail_res.text
+        assert detail_res.json()["campaign"]["status"] == "sent"
     finally:
         settings.EMAIL_MODE = original_mode
         settings.MAIL_FROM_DOMAIN = original_domain

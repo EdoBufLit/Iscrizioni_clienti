@@ -81,7 +81,10 @@ from app.services.email_campaigns import (
 from app.services.email_templates import (
     AVAILABLE_TEMPLATE_VARIABLES,
     EMAIL_TEMPLATE_CHANNEL,
+    decorate_rendered_email,
     build_template_context,
+    build_linked_form_url,
+    normalize_email_design,
     normalize_template_bodies,
     normalize_template_channel,
     normalize_template_scope,
@@ -573,6 +576,9 @@ def _serialize_email_campaign(
         "recipient_count": len(recipients),
         "planned_recipient_count": len(recipients) or selected_member_count,
         "recipient_status_counts": campaign_status_counts(recipients),
+        "design": normalize_email_design(getattr(campaign, "design_json", None)),
+        "linked_form_id": getattr(campaign, "linked_form_id", None),
+        "linked_form": _serialize_form_summary(getattr(campaign, "linked_form", None)),
         "created_by": (
             {
                 "id": campaign.created_by_user.id,
@@ -626,11 +632,34 @@ def _serialize_email_template(
         "is_editable": not bool(template.is_system),
         "is_duplicable": True,
         "scope": "system" if template.is_system else "association",
+        "design": normalize_email_design(getattr(template, "design_json", None)),
+        "linked_form_id": getattr(template, "linked_form_id", None),
+        "linked_form": _serialize_form_summary(getattr(template, "linked_form", None)),
     }
     if include_body:
         payload["body_html"] = template.body_html
         payload["body_text"] = template.body_text
     return payload
+
+
+def _serialize_form_summary(form: AssociationForm | None) -> dict[str, object] | None:
+    if form is None:
+        return None
+    public_path = (
+        f"/forms/{form.organization.slug}/{form.public_slug}"
+        if form.organization is not None and getattr(form.organization, "slug", None)
+        else f"/forms/{form.public_slug}"
+    )
+    return {
+        "id": form.id,
+        "title": form.title,
+        "public_slug": form.public_slug,
+        "public_path": public_path,
+        "public_url": build_linked_form_url(
+            association=form.organization,
+            linked_form=form,
+        ),
+    }
 
 
 def _get_email_template_for_admin(
@@ -668,6 +697,28 @@ def _normalize_template_subject(value: str | None) -> str:
     if normalized is None:
         raise HTTPException(status_code=422, detail="Oggetto template obbligatorio.")
     return normalized
+
+
+def _resolve_optional_linked_form_for_admin(
+    db: Session,
+    *,
+    admin: AdminUser,
+    form_id: int | None,
+) -> AssociationForm | None:
+    if form_id in (None, 0):
+        return None
+    form = (
+        db.query(AssociationForm)
+        .options(joinedload(AssociationForm.organization))
+        .filter(
+            AssociationForm.id == int(form_id),
+            AssociationForm.association_id == admin.org_id,
+        )
+        .first()
+    )
+    if form is None:
+        raise HTTPException(status_code=422, detail="Form collegato non trovato.")
+    return form
 
 
 def _resolve_frontend_base(request: Request) -> str:
@@ -1264,6 +1315,9 @@ class CreateEmailCampaignBody(BaseModel):
     audience_type: str
     recipient_mode: str = Field(default=RECIPIENT_MODE_ALL_MEMBERS, max_length=40)
     member_ids: list[int] = Field(default_factory=list)
+    scheduled_at: Optional[datetime] = None
+    design: Optional[dict[str, object]] = None
+    linked_form_id: Optional[int] = None
 
 
 class CreateEmailTemplateBody(BaseModel):
@@ -1273,6 +1327,8 @@ class CreateEmailTemplateBody(BaseModel):
     body_html: Optional[str] = None
     body_text: Optional[str] = None
     channel: str = Field(default=EMAIL_TEMPLATE_CHANNEL, max_length=40)
+    design: Optional[dict[str, object]] = None
+    linked_form_id: Optional[int] = None
 
 
 class UpdateEmailTemplateBody(BaseModel):
@@ -1283,6 +1339,8 @@ class UpdateEmailTemplateBody(BaseModel):
     body_text: Optional[str] = None
     channel: str = Field(default=EMAIL_TEMPLATE_CHANNEL, max_length=40)
     is_active: Optional[bool] = None
+    design: Optional[dict[str, object]] = None
+    linked_form_id: Optional[int] = None
 
 
 class DuplicateEmailTemplateBody(BaseModel):
@@ -1294,6 +1352,8 @@ class RenderEmailTemplatePreviewBody(BaseModel):
     subject: Optional[str] = None
     body_html: Optional[str] = None
     body_text: Optional[str] = None
+    design: Optional[dict[str, object]] = None
+    linked_form_id: Optional[int] = None
 
 
 class CreateAssociationFormBody(BaseModel):
@@ -1315,6 +1375,7 @@ class CreateAssociationFormBody(BaseModel):
     booking_requires_manual_confirmation: bool = True
     booking_success_message_override: Optional[str] = None
     booking_notification_enabled: bool = True
+    booking_auto_assign_enabled: bool = False
     booking_field_mapping: dict[str, str] = Field(default_factory=dict)
     notify_admin_on_submit: bool = True
     send_user_confirmation: bool = True
@@ -1343,6 +1404,7 @@ class UpdateAssociationFormBody(BaseModel):
     booking_requires_manual_confirmation: bool = True
     booking_success_message_override: Optional[str] = None
     booking_notification_enabled: bool = True
+    booking_auto_assign_enabled: bool = False
     booking_field_mapping: dict[str, str] = Field(default_factory=dict)
     notify_admin_on_submit: bool = True
     send_user_confirmation: bool = True
@@ -1970,6 +2032,9 @@ def list_communication_templates(
     normalized_scope = normalize_template_scope(scope)
     query = (
         db.query(EmailTemplate)
+        .options(
+            joinedload(EmailTemplate.linked_form).joinedload(AssociationForm.organization),
+        )
         .filter(EmailTemplate.channel == EMAIL_TEMPLATE_CHANNEL)
         .order_by(
             EmailTemplate.is_system.desc(),
@@ -2025,6 +2090,12 @@ def create_communication_template(
         subject=_normalize_template_subject(body.subject),
         body_html=body_html,
         body_text=body_text,
+        design_json=normalize_email_design(body.design),
+        linked_form_id=(
+            _resolve_optional_linked_form_for_admin(db, admin=admin, form_id=body.linked_form_id).id
+            if body.linked_form_id
+            else None
+        ),
         channel=normalize_template_channel(body.channel),
         is_active=True,
         created_by_user_id=admin.id,
@@ -2078,6 +2149,12 @@ def preview_communication_template(
     )
     if subject is None:
         raise HTTPException(status_code=422, detail="Oggetto template obbligatorio.")
+    linked_form = (
+        _resolve_optional_linked_form_for_admin(db, admin=admin, form_id=body.linked_form_id)
+        if body.linked_form_id is not None
+        else getattr(template, "linked_form", None)
+    )
+    design = normalize_email_design(body.design if body.design is not None else getattr(template, "design_json", None))
     body_html, body_text = normalize_template_bodies(body_html=body_html, body_text=body_text)
     rendered = render_template_content(
         subject=subject,
@@ -2085,6 +2162,15 @@ def preview_communication_template(
         body_text=body_text,
         association=admin.organization,
         fake=True,
+        extra_context={
+            "titolo_form": linked_form.title if linked_form is not None else "",
+        },
+    )
+    rendered = decorate_rendered_email(
+        rendered,
+        association=admin.organization,
+        design=design,
+        linked_form=linked_form,
     )
     return {
         "preview": {
@@ -2142,6 +2228,12 @@ def update_communication_template(
     template.subject = _normalize_template_subject(body.subject)
     template.body_html = body_html
     template.body_text = body_text
+    template.design_json = normalize_email_design(body.design)
+    template.linked_form_id = (
+        _resolve_optional_linked_form_for_admin(db, admin=admin, form_id=body.linked_form_id).id
+        if body.linked_form_id
+        else None
+    )
     template.channel = normalize_template_channel(body.channel)
     if body.is_active is not None:
         template.is_active = bool(body.is_active)
@@ -2174,6 +2266,8 @@ def duplicate_communication_template(
         subject=template.subject,
         body_html=template.body_html,
         body_text=template.body_text,
+        design_json=normalize_email_design(getattr(template, "design_json", None)),
+        linked_form_id=getattr(template, "linked_form_id", None),
         channel=template.channel,
         is_active=True,
         created_by_user_id=admin.id,
@@ -2306,6 +2400,7 @@ def list_communications_campaigns(
         .options(
             joinedload(EmailCampaign.recipients),
             joinedload(EmailCampaign.created_by_user),
+            joinedload(EmailCampaign.linked_form).joinedload(AssociationForm.organization),
         )
         .filter(EmailCampaign.association_id == admin.org_id)
         .order_by(EmailCampaign.created_at.desc(), EmailCampaign.id.desc())
@@ -2339,6 +2434,13 @@ def create_communications_campaign(
         audience_type=body.audience_type,
         recipient_mode=body.recipient_mode,
         selected_member_ids=body.member_ids,
+        scheduled_at=body.scheduled_at,
+        design=body.design,
+        linked_form=_resolve_optional_linked_form_for_admin(
+            db,
+            admin=admin,
+            form_id=body.linked_form_id,
+        ),
     )
     db.commit()
     campaign = (
@@ -2346,6 +2448,7 @@ def create_communications_campaign(
         .options(
             joinedload(EmailCampaign.recipients),
             joinedload(EmailCampaign.created_by_user),
+            joinedload(EmailCampaign.linked_form).joinedload(AssociationForm.organization),
         )
         .filter(EmailCampaign.id == campaign.id)
         .first()
@@ -2371,6 +2474,7 @@ def get_communications_campaign_detail(
         .options(
             joinedload(EmailCampaign.recipients),
             joinedload(EmailCampaign.created_by_user),
+            joinedload(EmailCampaign.linked_form).joinedload(AssociationForm.organization),
         )
         .filter(
             EmailCampaign.id == campaign_id,
@@ -2459,6 +2563,7 @@ def send_communications_campaign(
         .options(
             joinedload(EmailCampaign.recipients),
             joinedload(EmailCampaign.created_by_user),
+            joinedload(EmailCampaign.linked_form).joinedload(AssociationForm.organization),
         )
         .filter(EmailCampaign.id == campaign.id)
         .first()
@@ -4412,6 +4517,7 @@ def create_association_form(
         booking_requires_manual_confirmation=body.booking_requires_manual_confirmation,
         booking_success_message_override=body.booking_success_message_override,
         booking_notification_enabled=body.booking_notification_enabled,
+        booking_auto_assign_enabled=body.booking_auto_assign_enabled,
         booking_field_mapping=body.booking_field_mapping,
         notify_admin_on_submit=body.notify_admin_on_submit,
         send_user_confirmation=body.send_user_confirmation,
@@ -4473,6 +4579,7 @@ def update_association_form(
         booking_requires_manual_confirmation=body.booking_requires_manual_confirmation,
         booking_success_message_override=body.booking_success_message_override,
         booking_notification_enabled=body.booking_notification_enabled,
+        booking_auto_assign_enabled=body.booking_auto_assign_enabled,
         booking_field_mapping=body.booking_field_mapping,
         notify_admin_on_submit=body.notify_admin_on_submit,
         send_user_confirmation=body.send_user_confirmation,

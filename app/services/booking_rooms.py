@@ -362,6 +362,56 @@ def validate_booking_assignment(
         )
 
 
+def auto_assign_booking_table(
+    db: Session,
+    *,
+    booking: Booking,
+) -> tuple[Room | None, RoomTable | None]:
+    if booking.booking_date is None:
+        return None, None
+
+    rooms = list_rooms_for_org_admin(
+        db,
+        association_id=booking.association_id,
+        include_inactive=False,
+    )
+    required_capacity = max(1, int(booking.party_size or 1))
+
+    for room in rooms:
+        active_by_table = _active_bookings_by_table(
+            db,
+            association_id=booking.association_id,
+            room_id=room.id,
+            focus_date=booking.booking_date,
+            focus_time=booking.booking_time,
+        )
+        ordered_tables = sorted(
+            list(room.tables or []),
+            key=lambda table: (
+                int(table.capacity or 0) < required_capacity,
+                int(table.capacity or 0),
+                table.pos_y,
+                table.pos_x,
+                table.id,
+            ),
+        )
+        for table in ordered_tables:
+            if not bool(table.is_active) or bool(table.is_out_of_service):
+                continue
+            if int(table.capacity or 0) < required_capacity:
+                continue
+            if table.id in active_by_table:
+                continue
+            validate_booking_assignment(
+                db,
+                booking=booking,
+                room=room,
+                table=table,
+            )
+            return room, table
+    return None, None
+
+
 def maybe_record_assignment_event(
     db: Session,
     *,

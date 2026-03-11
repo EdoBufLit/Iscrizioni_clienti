@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models import Booking, BookingEvent, BookingStatus, Form, FormSubmission
 from app.services.booking_rooms import (
+    auto_assign_booking_table,
     maybe_record_assignment_event,
     resolve_assignment_targets,
     validate_booking_assignment,
@@ -298,6 +299,22 @@ def create_booking_from_submission(
     )
     db.add(booking)
     db.flush()
+    if bool(getattr(form, "booking_auto_assign_enabled", False)):
+        resolved_room, resolved_table = auto_assign_booking_table(
+            db,
+            booking=booking,
+        )
+        if resolved_room is not None and resolved_table is not None:
+            booking.room_id = resolved_room.id
+            booking.table_id = resolved_table.id
+            maybe_record_assignment_event(
+                db,
+                booking=booking,
+                created_by_user_id=None,
+                previous_room_id=None,
+                previous_table_id=None,
+            )
+            db.flush()
     _add_booking_event(
         db,
         booking=booking,
@@ -306,6 +323,8 @@ def create_booking_from_submission(
             "form_id": form.id,
             "submission_id": submission.id,
             "status": status,
+            "room_id": booking.room_id,
+            "table_id": booking.table_id,
         },
     )
 

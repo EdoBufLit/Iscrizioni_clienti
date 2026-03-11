@@ -378,6 +378,7 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
         ),
         "booking_success_message_override": getattr(form, "booking_success_message_override", None),
         "booking_notification_enabled": bool(getattr(form, "booking_notification_enabled", True)),
+        "booking_auto_assign_enabled": bool(getattr(form, "booking_auto_assign_enabled", False)),
         "booking_field_mapping": normalize_booking_field_mapping(
             getattr(form, "booking_field_mapping", None) or {}
         ),
@@ -425,6 +426,7 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
                 getattr(form, "booking_requires_manual_confirmation", True)
             ),
             "booking_notification_enabled": bool(getattr(form, "booking_notification_enabled", True)),
+            "booking_auto_assign_enabled": bool(getattr(form, "booking_auto_assign_enabled", False)),
             "booking_field_mapping": normalize_booking_field_mapping(
                 getattr(form, "booking_field_mapping", None) or {}
             ),
@@ -521,6 +523,7 @@ def apply_form_updates(
     booking_requires_manual_confirmation: bool,
     booking_success_message_override: Any,
     booking_notification_enabled: bool,
+    booking_auto_assign_enabled: bool,
     booking_field_mapping: Any,
     notify_admin_on_submit: bool,
     send_user_confirmation: bool,
@@ -556,6 +559,7 @@ def apply_form_updates(
     form.booking_requires_manual_confirmation = bool(booking_requires_manual_confirmation)
     form.booking_success_message_override = _normalize_multiline_text(booking_success_message_override)
     form.booking_notification_enabled = bool(booking_notification_enabled)
+    form.booking_auto_assign_enabled = bool(booking_auto_assign_enabled)
     form.booking_field_mapping = normalize_booking_field_mapping(booking_field_mapping)
     form.notify_admin_on_submit = bool(notify_admin_on_submit)
     form.send_user_confirmation = bool(send_user_confirmation)

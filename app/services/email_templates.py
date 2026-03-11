@@ -84,6 +84,15 @@ AVAILABLE_TEMPLATE_VARIABLES = [
     },
 ]
 
+DEFAULT_EMAIL_DESIGN = {
+    "accent_color": "#0f766e",
+    "logo_url": "",
+    "hero_image_url": "",
+    "cta_label": "",
+    "cta_note": "",
+    "show_association_name": True,
+}
+
 
 def plain_text_to_html(value: str) -> str:
     normalized = value.replace("\r\n", "\n")
@@ -210,6 +219,33 @@ class RenderedTemplateContent:
 def _normalize_text(value: str | None) -> str | None:
     cleaned = str(value or "").strip()
     return cleaned or None
+
+
+def _normalize_color(value: Any) -> str | None:
+    normalized = _normalize_text(value)
+    if normalized is None:
+        return None
+    cleaned = normalized.lower()
+    if re.fullmatch(r"#[0-9a-f]{6}", cleaned) or re.fullmatch(r"#[0-9a-f]{3}", cleaned):
+        return cleaned
+    return None
+
+
+def normalize_email_design(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return dict(DEFAULT_EMAIL_DESIGN)
+    return {
+        "accent_color": _normalize_color(value.get("accent_color")) or DEFAULT_EMAIL_DESIGN["accent_color"],
+        "logo_url": _normalize_text(value.get("logo_url")) or "",
+        "hero_image_url": _normalize_text(value.get("hero_image_url")) or "",
+        "cta_label": (_normalize_text(value.get("cta_label")) or "")[:120],
+        "cta_note": (_normalize_text(value.get("cta_note")) or "")[:240],
+        "show_association_name": bool(
+            DEFAULT_EMAIL_DESIGN["show_association_name"]
+            if value.get("show_association_name") is None
+            else value.get("show_association_name")
+        ),
+    }
 
 
 def html_to_plain_text(value: str) -> str:
@@ -345,6 +381,89 @@ def render_template_content(
         ),
         body_text=render_template_string(body_text, context=context),
         context=context,
+    )
+
+
+def build_linked_form_url(*, association: Any = None, linked_form: Any = None) -> str | None:
+    if linked_form is None:
+        return None
+    org_slug = _normalize_text(getattr(association, "slug", None) if association is not None else None)
+    form_slug = _normalize_text(getattr(linked_form, "public_slug", None))
+    base_url = (settings.FRONTEND_URL or settings.BASE_URL or "").strip().rstrip("/")
+    if not base_url or not form_slug:
+        return None
+    if org_slug:
+        return f"{base_url}/forms/{org_slug}/{form_slug}"
+    return f"{base_url}/forms/{form_slug}"
+
+
+def decorate_rendered_email(
+    rendered: RenderedTemplateContent,
+    *,
+    association: Any = None,
+    design: dict[str, Any] | None = None,
+    linked_form: Any = None,
+) -> RenderedTemplateContent:
+    resolved_design = normalize_email_design(design)
+    accent_color = resolved_design["accent_color"]
+    logo_url = resolved_design["logo_url"] or _normalize_text(getattr(association, "logo_url", None))
+    hero_image_url = resolved_design["hero_image_url"]
+    association_name = _normalize_text(getattr(association, "name", None) if association is not None else None) or "ASSONAM"
+    linked_form_url = build_linked_form_url(association=association, linked_form=linked_form)
+    cta_label = resolved_design["cta_label"] or (
+        f"Apri form: {getattr(linked_form, 'title', '')}".strip(": ")
+        if linked_form is not None
+        else ""
+    )
+    cta_note = resolved_design["cta_note"]
+    body_html = rendered.body_html or plain_text_to_html(rendered.body_text or "")
+    body_text = rendered.body_text or html_to_plain_text(rendered.body_html or "")
+
+    cta_html = ""
+    cta_text = ""
+    if linked_form_url and cta_label:
+      cta_html = (
+          f"<div style=\"margin-top:24px\">"
+          f"<a href=\"{html.escape(linked_form_url, quote=True)}\" "
+          f"style=\"display:inline-block;padding:12px 20px;border-radius:999px;"
+          f"background:{accent_color};color:#ffffff;text-decoration:none;font-weight:700\">"
+          f"{html.escape(cta_label)}</a></div>"
+      )
+      cta_text = f"\n\n{cta_label}: {linked_form_url}"
+    note_html = f"<p style=\"margin:16px 0 0;color:#475569;font-size:14px\">{html.escape(cta_note)}</p>" if cta_note else ""
+    hero_html = (
+        f"<div style=\"height:180px;background:url('{html.escape(hero_image_url, quote=True)}') center/cover no-repeat;"
+        f"border-radius:24px 24px 0 0\"></div>"
+        if hero_image_url
+        else ""
+    )
+    logo_html = (
+        f"<img src=\"{html.escape(logo_url, quote=True)}\" alt=\"{html.escape(association_name)}\" "
+        f"style=\"max-height:44px;max-width:160px;display:block\" />"
+        if logo_url
+        else ""
+    )
+    association_name_html = (
+        f"<div style=\"font-size:18px;font-weight:700;color:#0f172a\">{html.escape(association_name)}</div>"
+        if resolved_design["show_association_name"]
+        else ""
+    )
+    wrapped_html = (
+        "<div style=\"margin:0;padding:24px;background:#f1f5f9;font-family:Inter,Segoe UI,Arial,sans-serif\">"
+        "<div style=\"max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;"
+        "border-radius:24px;overflow:hidden;box-shadow:0 18px 48px rgba(15,23,42,0.08)\">"
+        f"{hero_html}"
+        f"<div style=\"padding:32px\">"
+        f"<div style=\"display:flex;align-items:center;gap:16px;margin-bottom:24px\">{logo_html}{association_name_html}</div>"
+        f"<div style=\"color:#0f172a;font-size:15px;line-height:1.7\">{body_html}</div>"
+        f"{note_html}{cta_html}"
+        "</div></div></div>"
+    )
+    return RenderedTemplateContent(
+        subject=rendered.subject,
+        body_html=wrapped_html,
+        body_text=f"{body_text}{cta_text}".strip(),
+        context=rendered.context,
     )
 
 

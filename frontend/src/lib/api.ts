@@ -686,6 +686,23 @@ export type OrgAdminCampaignRecipientMode =
   | "all_members"
   | "selected_members";
 
+export type OrgAdminEmailDesign = {
+  accent_color: string;
+  logo_url: string;
+  hero_image_url: string;
+  cta_label: string;
+  cta_note: string;
+  show_association_name: boolean;
+};
+
+export type OrgAdminLinkedFormSummary = {
+  id: number;
+  title: string;
+  public_slug: string;
+  public_path: string;
+  public_url: string | null;
+};
+
 export type OrgAdminEmailCampaign = {
   id: number;
   association_id: number;
@@ -703,6 +720,9 @@ export type OrgAdminEmailCampaign = {
   created_at: string | null;
   scheduled_at: string | null;
   sent_at: string | null;
+  design: OrgAdminEmailDesign;
+  linked_form_id: number | null;
+  linked_form: OrgAdminLinkedFormSummary | null;
   recipient_count: number;
   recipient_status_counts: {
     queued: number;
@@ -746,6 +766,9 @@ export type OrgAdminEmailTemplate = {
   is_editable: boolean;
   is_duplicable: boolean;
   scope: "system" | "association";
+  design: OrgAdminEmailDesign;
+  linked_form_id: number | null;
+  linked_form: OrgAdminLinkedFormSummary | null;
 };
 
 export type OrgAdminEmailTemplateVariable = {
@@ -814,6 +837,7 @@ export type AssociationForm = {
   booking_requires_manual_confirmation: boolean;
   booking_success_message_override: string | null;
   booking_notification_enabled: boolean;
+  booking_auto_assign_enabled: boolean;
   booking_field_mapping: Record<string, string>;
   notify_admin_on_submit: boolean;
   send_user_confirmation: boolean;
@@ -1229,6 +1253,9 @@ export async function createOrgAdminEmailCampaign(data: {
   audience_type: OrgAdminCampaignAudienceType;
   recipient_mode?: OrgAdminCampaignRecipientMode;
   member_ids?: number[];
+  scheduled_at?: string | null;
+  design?: Partial<OrgAdminEmailDesign> | null;
+  linked_form_id?: number | null;
 }): Promise<{ ok: boolean; campaign: OrgAdminEmailCampaign }> {
   const res = await fetch("/api/org-admin/communications/campaigns", {
     method: "POST",
@@ -1308,6 +1335,8 @@ export async function createOrgAdminEmailTemplate(data: {
   body_html?: string | null;
   body_text?: string | null;
   channel?: string;
+  design?: Partial<OrgAdminEmailDesign> | null;
+  linked_form_id?: number | null;
 }): Promise<{ ok: boolean; template: OrgAdminEmailTemplate }> {
   const res = await fetch("/api/org-admin/communications/templates", {
     method: "POST",
@@ -1329,6 +1358,8 @@ export async function updateOrgAdminEmailTemplate(
     body_text?: string | null;
     channel?: string;
     is_active?: boolean;
+    design?: Partial<OrgAdminEmailDesign> | null;
+    linked_form_id?: number | null;
   },
 ): Promise<{ ok: boolean; template: OrgAdminEmailTemplate }> {
   const res = await fetch(`/api/org-admin/communications/templates/${templateId}`, {
@@ -1386,6 +1417,7 @@ export async function createOrgAdminForm(data: {
   booking_requires_manual_confirmation?: boolean;
   booking_success_message_override?: string | null;
   booking_notification_enabled?: boolean;
+  booking_auto_assign_enabled?: boolean;
   booking_field_mapping?: Record<string, string>;
   notify_admin_on_submit?: boolean;
   send_user_confirmation?: boolean;
@@ -1432,6 +1464,7 @@ export async function updateOrgAdminForm(
   booking_requires_manual_confirmation?: boolean;
   booking_success_message_override?: string | null;
   booking_notification_enabled?: boolean;
+  booking_auto_assign_enabled?: boolean;
   booking_field_mapping?: Record<string, string>;
   notify_admin_on_submit?: boolean;
   send_user_confirmation?: boolean;
@@ -1909,6 +1942,8 @@ export async function previewOrgAdminEmailTemplate(data: {
   subject?: string | null;
   body_html?: string | null;
   body_text?: string | null;
+  design?: Partial<OrgAdminEmailDesign> | null;
+  linked_form_id?: number | null;
 }): Promise<{
   preview: {
     subject: string;

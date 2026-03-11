@@ -564,3 +564,92 @@ def test_booking_rooms_tables_and_assignment_flow(client, db):
     assert unassign_res.status_code == 200, unassign_res.text
     assert unassign_res.json()["booking"]["room"] is None
     assert unassign_res.json()["booking"]["table"] is None
+
+
+def test_booking_form_can_auto_assign_first_available_table(client, db):
+    org, admin = _create_org_admin(db)
+    _login_org_admin(client, db, admin.id)
+    public_slug = f"prenota-auto-assign-{uuid.uuid4().hex[:6]}"
+
+    room_res = client.post("/api/org-admin/rooms", json={"name": "Sala auto assign", "is_active": True})
+    assert room_res.status_code == 201, room_res.text
+    room_id = room_res.json()["room"]["id"]
+
+    table_res = client.post(
+        f"/api/org-admin/rooms/{room_id}/tables",
+        json={
+            "name": "T-A1",
+            "capacity": 6,
+            "shape": "round",
+            "pos_x": 80,
+            "pos_y": 120,
+            "width": 96,
+            "height": 96,
+            "is_active": True,
+            "is_out_of_service": False,
+        },
+    )
+    assert table_res.status_code == 201, table_res.text
+    table_id = table_res.json()["table"]["id"]
+
+    create_form_res = client.post(
+        "/api/org-admin/forms",
+        json={
+            "title": "Prenotazione auto assign",
+            "public_slug": public_slug,
+            "is_active": True,
+            "visibility": "public",
+            "form_type": "booking",
+            "booking_enabled": True,
+            "booking_auto_assign_enabled": True,
+            "booking_requires_manual_confirmation": False,
+            "booking_field_mapping": {
+                "customer_name": "nome_cliente",
+                "booking_date": "data_prenotazione",
+                "booking_time": "orario_prenotazione",
+                "party_size": "numero_persone",
+            },
+        },
+    )
+    assert create_form_res.status_code == 201, create_form_res.text
+    form_id = create_form_res.json()["form"]["id"]
+
+    for index, field in enumerate(
+        [
+            {"field_type": "short_text", "label": "Nome cliente", "field_key": "nome_cliente"},
+            {"field_type": "date", "label": "Data", "field_key": "data_prenotazione"},
+            {"field_type": "short_text", "label": "Orario", "field_key": "orario_prenotazione"},
+            {"field_type": "number", "label": "Persone", "field_key": "numero_persone"},
+        ]
+    ):
+        field_res = client.post(
+            f"/api/org-admin/forms/{form_id}/fields",
+            json={**field, "is_required": True, "sort_order": index * 10},
+        )
+        assert field_res.status_code == 201, field_res.text
+
+    submit_res = client.post(
+        f"/api/forms/{org.slug}/{public_slug}/submit",
+        json={
+            "nome_cliente": "Auto Assign",
+            "data_prenotazione": "2026-03-27",
+            "orario_prenotazione": "20:00",
+            "numero_persone": 4,
+        },
+    )
+    assert submit_res.status_code == 200, submit_res.text
+    booking = submit_res.json()["booking"]
+    assert booking["status"] == "confirmed"
+
+    verification_db = SessionLocal()
+    try:
+        persisted = verification_db.query(Booking).filter(Booking.id == booking["id"]).first()
+        assert persisted is not None
+        assert persisted.room_id == room_id
+        assert persisted.table_id == table_id
+    finally:
+        verification_db.close()
+
+    map_res = client.get(f"/api/org-admin/rooms/{room_id}/map?date=2026-03-27&time=20:00")
+    assert map_res.status_code == 200, map_res.text
+    assert map_res.json()["tables"][0]["active_booking"]["customer_name"] == "Auto Assign"

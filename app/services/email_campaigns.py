@@ -5,15 +5,20 @@ from datetime import datetime
 import html
 import json
 import re
-from typing import Iterable
+from typing import Any, Iterable
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models import EmailCampaign, EmailCampaignRecipient, Member, Organization
+from app.db import SessionLocal
+from app.models import EmailCampaign, EmailCampaignRecipient, Form, Member, Organization
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
-from app.services.email_templates import render_template_content
+from app.services.email_templates import (
+    decorate_rendered_email,
+    normalize_email_design,
+    render_template_content,
+)
 from app.services.member_activity import get_member_lifecycle_status, is_member_active
 from app.utils import send_email_via_transport_low_level
 
@@ -34,6 +39,7 @@ ALLOWED_RECIPIENT_MODES = {
 }
 
 CAMPAIGN_STATUS_DRAFT = "draft"
+CAMPAIGN_STATUS_SCHEDULED = "scheduled"
 CAMPAIGN_STATUS_SENDING = "sending"
 CAMPAIGN_STATUS_SENT = "sent"
 CAMPAIGN_STATUS_FAILED = "failed"
@@ -97,6 +103,14 @@ def normalize_selected_member_ids(
             detail="Se scegli 'Soci selezionati' devi aggiungere almeno un socio.",
         )
     return normalized_ids
+
+
+def normalize_scheduled_at(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is not None:
+        return value.astimezone().replace(tzinfo=None)
+    return value
 
 
 def serialize_selected_member_ids(member_ids: Iterable[int]) -> str | None:
@@ -317,6 +331,9 @@ def create_campaign_draft(
     audience_type: str,
     recipient_mode: str,
     selected_member_ids: Iterable[int] | None = None,
+    scheduled_at: datetime | None = None,
+    design: dict[str, Any] | None = None,
+    linked_form: Form | None = None,
 ) -> EmailCampaign:
     normalized_subject = _normalize_text(subject)
     if normalized_subject is None:
@@ -341,17 +358,26 @@ def create_campaign_draft(
         body_html=body_html,
         body_text=body_text,
     )
+    normalized_scheduled_at = normalize_scheduled_at(scheduled_at)
+    now = datetime.utcnow()
     campaign = EmailCampaign(
         association_id=organization.id,
         name=_normalize_text(name),
         subject=normalized_subject,
         body_html=normalized_body_html,
         body_text=normalized_body_text,
+        design_json=normalize_email_design(design),
+        linked_form_id=linked_form.id if linked_form is not None else None,
         audience_type=normalized_audience,
         recipient_mode=normalized_recipient_mode,
         selected_member_ids_json=serialize_selected_member_ids(normalized_selected_member_ids),
-        status=CAMPAIGN_STATUS_DRAFT,
+        status=(
+            CAMPAIGN_STATUS_SCHEDULED
+            if normalized_scheduled_at is not None and normalized_scheduled_at > now
+            else CAMPAIGN_STATUS_DRAFT
+        ),
         created_by_user_id=created_by_user_id,
+        scheduled_at=normalized_scheduled_at,
     )
     db.add(campaign)
     db.flush()
@@ -393,10 +419,13 @@ def send_campaign(
     ensure_campaign_is_sendable(organization)
     if campaign.association_id != organization.id:
         raise HTTPException(status_code=404, detail="Campagna non trovata.")
-    if (campaign.status or "").strip().lower() != CAMPAIGN_STATUS_DRAFT:
+    if (campaign.status or "").strip().lower() not in {
+        CAMPAIGN_STATUS_DRAFT,
+        CAMPAIGN_STATUS_SCHEDULED,
+    }:
         raise HTTPException(
             status_code=409,
-            detail="Solo le campagne in bozza possono essere inviate.",
+            detail="Solo le campagne in bozza o programmate possono essere inviate.",
         )
 
     recipients = resolve_campaign_recipients(
@@ -432,6 +461,15 @@ def send_campaign(
             body_text=campaign.body_text,
             association=organization,
             member=recipient.member,
+            extra_context={
+                "titolo_form": campaign.linked_form.title if campaign.linked_form is not None else "",
+            },
+        )
+        rendered_content = decorate_rendered_email(
+            rendered_content,
+            association=organization,
+            design=getattr(campaign, "design_json", None),
+            linked_form=getattr(campaign, "linked_form", None),
         )
         enqueue_email(
             db,
@@ -556,3 +594,60 @@ def campaign_status_counts(recipients: Iterable[EmailCampaignRecipient]) -> dict
         if normalized in counts:
             counts[normalized] += 1
     return counts
+
+
+def process_scheduled_campaigns(
+    db: Session,
+    *,
+    now: datetime | None = None,
+) -> dict[str, int]:
+    current_time = now or datetime.utcnow()
+    due_campaigns = (
+        db.query(EmailCampaign)
+        .filter(
+            EmailCampaign.status == CAMPAIGN_STATUS_SCHEDULED,
+            EmailCampaign.scheduled_at.isnot(None),
+            EmailCampaign.scheduled_at <= current_time,
+        )
+        .order_by(EmailCampaign.scheduled_at.asc(), EmailCampaign.id.asc())
+        .all()
+    )
+    stats = {"processed": 0, "queued_recipients": 0, "failed": 0}
+    for due_campaign in due_campaigns:
+        organization = (
+            db.query(Organization)
+            .filter(Organization.id == due_campaign.association_id)
+            .first()
+        )
+        if organization is None:
+            due_campaign.status = CAMPAIGN_STATUS_FAILED
+            db.commit()
+            stats["failed"] += 1
+            continue
+        try:
+            _campaign, queued = send_campaign(
+                db,
+                campaign=due_campaign,
+                organization=organization,
+            )
+            db.commit()
+            stats["processed"] += 1
+            stats["queued_recipients"] += queued
+        except HTTPException:
+            db.rollback()
+            failed_campaign = (
+                db.query(EmailCampaign).filter(EmailCampaign.id == due_campaign.id).first()
+            )
+            if failed_campaign is not None:
+                failed_campaign.status = CAMPAIGN_STATUS_FAILED
+                db.commit()
+            stats["failed"] += 1
+    return stats
+
+
+def process_scheduled_campaigns_once(*, now: datetime | None = None) -> dict[str, int]:
+    db = SessionLocal()
+    try:
+        return process_scheduled_campaigns(db, now=now)
+    finally:
+        db.close()
