@@ -56,7 +56,7 @@ const PublicFormPage = () => {
       const response = orgSlug
         ? await submitPublicForm(orgSlug, slug, values)
         : await submitPublicForm(slug, values);
-      setSuccessMessage(response.message);
+      setSuccessMessage(response.message || form.success_message || "Richiesta inviata correttamente.");
       setValues(buildInitialValues(form));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invio non riuscito.");
@@ -65,75 +65,83 @@ const PublicFormPage = () => {
     }
   }
 
-  return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.88),_rgba(239,231,220,0.96)_40%,_rgba(225,214,198,1))] px-4 py-6 md:px-8 md:py-10">
-      <div className="mx-auto max-w-6xl">
-        {loading ? (
-          <div className="rounded-[2rem] border border-black/10 bg-white/80 px-6 py-12 text-sm text-neutral-500 shadow-[0_30px_100px_rgba(15,23,42,0.08)]">
-            Caricamento pagina del form...
-          </div>
-        ) : error ? (
-          <div className="rounded-[2rem] border border-red-200 bg-red-50 px-6 py-5 text-sm text-red-700">
-            {error}
-          </div>
-        ) : successMessage && form ? (
-          <div className="space-y-5">
-            <div className="rounded-[2rem] border border-emerald-200 bg-emerald-50 px-6 py-6 text-emerald-900 shadow-[0_24px_80px_rgba(16,185,129,0.12)]">
-              <p className="text-xs font-bold uppercase tracking-[0.24em] text-emerald-700">Invio completato</p>
-              <h1 className="mt-3 font-serif text-4xl leading-none">{form.title}</h1>
-              <p className="mt-4 max-w-2xl text-sm leading-7">{successMessage}</p>
-            </div>
-            <button
-              className="inline-flex rounded-full border border-black/10 bg-white px-5 py-3 text-sm font-semibold text-neutral-800 shadow-sm transition hover:-translate-y-0.5"
-              type="button"
-              onClick={() => setSuccessMessage("")}
-            >
-              Invia una nuova risposta
-            </button>
-          </div>
-        ) : form ? (
-          <div className="space-y-5">
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.75fr)]">
-              <div className="rounded-[2rem] border border-black/10 bg-white/82 px-6 py-5 shadow-[0_24px_80px_rgba(15,23,42,0.06)] backdrop-blur">
-                <p className="text-xs font-bold uppercase tracking-[0.24em] text-neutral-500">Pagina modulo</p>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-neutral-950 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-white">
-                    {form.visibility === "members_only" ? "Solo soci" : "Pubblico"}
-                  </span>
-                  <span className="rounded-full border border-black/10 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-600">
-                    {form.fields.length} campi
-                  </span>
-                  <span className="rounded-full border border-black/10 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-600">
-                    {form.association.name || "Associazione"}
-                  </span>
-                </div>
-                <p className="mt-4 max-w-3xl text-sm leading-7 text-neutral-600">
-                  Stai compilando una vera pagina pubblica dell'associazione. Tutte le risposte vengono registrate nel backoffice e seguono le automazioni configurate dal form.
-                </p>
-              </div>
-              <div className="rounded-[2rem] border border-black/10 bg-[#101826] px-6 py-5 text-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
-                <p className="text-xs font-bold uppercase tracking-[0.24em] text-white/55">Dopo l'invio</p>
-                <div className="mt-4 space-y-3 text-sm text-white/78">
-                  <p>La risposta viene salvata subito nello storico interno dell'associazione.</p>
-                  <p>Se previsto dal workflow, partono anche email di conferma o notifiche alla segreteria.</p>
-                  <p>{form.visibility === "members_only" ? "Questa pagina e pensata per soci autenticati o contesti riservati." : "Questa pagina puo essere condivisa liberamente via sito, email, social o QR."}</p>
-                </div>
-              </div>
-            </div>
-            <FormPublicCanvas
-              form={form}
-              values={values}
-              onValueChange={updateValue}
-              onSubmit={() => void handleSubmit()}
-              submitting={submitting}
-              interactive
-              heroLabel={form.visibility === "members_only" ? "Form riservato ai soci" : "Pagina pubblica"}
-            />
-          </div>
-        ) : null}
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-neutral-50 text-sm text-neutral-500">
+        <div className="flex flex-col items-center gap-3">
+          <svg className="w-8 h-8 animate-spin opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <p>Caricamento pagina...</p>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+        <div className="max-w-md w-full mx-4 rounded-3xl border border-red-200 bg-white p-8 text-center shadow-lg">
+          <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500">
+            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h1 className="text-xl font-bold text-neutral-900 mb-2">Non disponibile</h1>
+          <p className="text-sm text-neutral-600 mb-6">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="w-full py-3 bg-neutral-900 text-white rounded-xl text-sm font-bold shadow-sm hover:bg-neutral-800 transition"
+          >
+            Riprova
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (successMessage && form) {
+    const accentColor = form.accent_color || "#0f766e";
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+        <div className="max-w-xl w-full mx-4 rounded-3xl border border-neutral-200 bg-white p-8 text-center shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)]">
+          <div 
+            className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 text-white shadow-lg"
+            style={{ backgroundColor: accentColor }}
+          >
+            <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-bold text-neutral-900 mb-3">{form.title}</h1>
+          <p className="text-base text-neutral-600 mb-8 max-w-sm mx-auto">{successMessage}</p>
+          <button
+            onClick={() => setSuccessMessage("")}
+            className="w-full sm:w-auto px-8 py-3.5 bg-neutral-100 text-neutral-800 hover:bg-neutral-200 rounded-xl text-sm font-bold transition-colors"
+          >
+            Invia una nuova risposta
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (form) {
+    return (
+      <div className="min-h-screen bg-neutral-50">
+        <FormPublicCanvas
+          form={form}
+          values={values}
+          onValueChange={updateValue}
+          onSubmit={() => void handleSubmit()}
+          submitting={submitting}
+          interactive
+        />
+      </div>
+    );
+  }
+
+  return null;
 };
 
 export default PublicFormPage;

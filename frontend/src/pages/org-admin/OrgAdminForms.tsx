@@ -23,14 +23,17 @@ import {
 import { applySeo } from "../../lib/seo";
 import { useToast } from "../../components/ui/ToastProvider";
 import { useOrgAdmin } from "./OrgAdminLayout";
+import { FormBuilder } from "../../components/forms/builder/FormBuilder";
+import { decodeField, encodeField, type BuilderField } from "../../components/forms/builder/utils";
 import { FormPublicCanvas } from "../../components/forms/FormPublicCanvas";
+import { ImageUpload } from "../../components/forms/builder/ImageUpload";
 
 const inputClass =
   "mt-1 w-full rounded-[1.1rem] border border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-neutral-900/40 focus:ring-2 focus:ring-neutral-900/10";
 const labelClass = "block text-sm font-medium text-neutral-700";
 const studioCardClass = "rounded-[1.85rem] border border-neutral-200 bg-white/92 shadow-[0_24px_80px_rgba(15,23,42,0.06)] backdrop-blur";
 
-type EditorTab = "builder" | "design" | "automations" | "responses" | "share";
+type EditorTab = "builder" | "design" | "settings" | "responses";
 type PageStyleOption = "editorial" | "minimal" | "spotlight";
 type BookingMappingTarget =
   | "customer_name"
@@ -42,11 +45,10 @@ type BookingMappingTarget =
   | "notes";
 
 const editorTabs: Array<{ key: EditorTab; label: string; hint: string }> = [
-  { key: "builder", label: "Campi", hint: "Libreria e canvas" },
-  { key: "design", label: "Aspetto", hint: "Testi e colori" },
-  { key: "automations", label: "Impostazioni", hint: "Notifiche e booking" },
+  { key: "builder", label: "Struttura", hint: "Campi e layout" },
+  { key: "design", label: "Stile", hint: "Testi, colori, immagini" },
+  { key: "settings", label: "Impostazioni", hint: "Notifiche e accesso" },
   { key: "responses", label: "Risposte", hint: "Invii ricevuti" },
-  { key: "share", label: "Condividi", hint: "Link e accesso" },
 ];
 
 const pageStyleOptions: Array<{
@@ -232,6 +234,10 @@ export function OrgAdminFormsWorkspace({
   const [selectedForm, setSelectedForm] = useState<AssociationForm | null>(null);
   const [formDraft, setFormDraft] = useState(emptyFormDraft());
   const [savingForm, setSavingForm] = useState(false);
+
+  const [realPreviewOpen, setRealPreviewOpen] = useState(false);
+  const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
+
   const [deleteArmed, setDeleteArmed] = useState(false);
   const [activeTab, setActiveTab] = useState<EditorTab>("builder");
 
@@ -737,6 +743,64 @@ export function OrgAdminFormsWorkspace({
     }
   }
 
+async function handleBuilderSaveField(builderField: BuilderField) {
+    if (!selectedFormId || locked) return;
+    const isNew = builderField.id < 0;
+    
+    // Trova l'indice attuale per determinare il sort_order
+    const currentFields = selectedForm?.fields || [];
+    const index = currentFields.findIndex(f => f.id === builderField.id);
+    const orderIndex = index >= 0 ? index : currentFields.length;
+    const sortOrder = (orderIndex + 1) * 10;
+    
+    const payload = encodeField(builderField, sortOrder);
+    
+    try {
+      if (isNew) {
+        await createOrgAdminFormField(selectedFormId, payload);
+      } else {
+        await updateOrgAdminFormField(selectedFormId, builderField.id, payload);
+      }
+      const detail = await fetchOrgAdminForm(selectedFormId);
+      setSelectedForm(detail.form);
+      setForms((current) => current.map((item) => (item.id === detail.form.id ? detail.form : item)));
+    } catch (err) {
+      showToast({ tone: "error", title: "Errore salvataggio", message: err instanceof Error ? err.message : "Impossibile salvare il campo" });
+    }
+  }
+
+  async function handleBuilderDeleteField(id: number) {
+    if (!selectedFormId || locked || id < 0) return;
+    try {
+      await deleteOrgAdminFormField(selectedFormId, id);
+      const detail = await fetchOrgAdminForm(selectedFormId);
+      setSelectedForm(detail.form);
+      setForms((current) => current.map((item) => (item.id === detail.form.id ? detail.form : item)));
+    } catch (err) {
+      showToast({ tone: "error", title: "Errore eliminazione", message: err instanceof Error ? err.message : "Impossibile eliminare il campo" });
+    }
+  }
+
+  async function handleBuilderReorder(builderFields: BuilderField[]) {
+    if (!selectedFormId || locked) return;
+    try {
+      await Promise.all(
+        builderFields.map((bf, index) => {
+          if (bf.id < 0) return Promise.resolve(); // Should not happen during reorder of existing
+          const payload = encodeField(bf, (index + 1) * 10);
+          return updateOrgAdminFormField(selectedFormId!, bf.id, payload);
+        })
+      );
+      const detail = await fetchOrgAdminForm(selectedFormId);
+      setSelectedForm(detail.form);
+      setForms((current) => current.map((item) => (item.id === detail.form.id ? detail.form : item)));
+    } catch (err) {
+      showToast({ tone: "error", title: "Errore riordino", message: err instanceof Error ? err.message : "Impossibile riordinare i campi" });
+    }
+  }
+
+  const builderFields = useMemo(() => sortedFields.map(decodeField), [sortedFields]);
+
   function handleCreateNewForm() {
     setSelectedFormId(null);
     setSelectedForm(null);
@@ -770,258 +834,48 @@ export function OrgAdminFormsWorkspace({
   );
 
   const builderTab = (
-    <div className="space-y-6">
-      <div className="grid gap-6 lg:grid-cols-[240px_1fr_320px]">
-        {/* Left: Library */}
-        <div className="space-y-4">
-          <div className="rounded-xl border border-neutral-200 bg-white p-4">
-            <h3 className="text-sm font-semibold text-neutral-900 mb-3">Aggiungi campo</h3>
-            <div className="grid gap-2">
-              {fieldTypeOptions.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  disabled={locked}
-                  onClick={() => startNewField(option.value)}
-                  className="flex items-center gap-3 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-left transition hover:border-neutral-300 hover:bg-neutral-50 disabled:opacity-50"
-                >
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-neutral-100 text-xs font-medium text-neutral-600">
-                    {option.icon}
-                  </span>
-                  <span className="text-sm text-neutral-700">{option.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Center: Canvas */}
-        <div className="space-y-4">
-          <div className="rounded-xl border border-neutral-200 bg-white p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-neutral-900">Canvas form</h3>
-              <span className="text-xs text-neutral-500">{sortedFields.length} campi</span>
-            </div>
-            
-            {!selectedFormId ? (
-              <div className="rounded-lg border border-dashed border-neutral-200 bg-neutral-50 py-8 text-center text-sm text-neutral-500">
-                Salva il form per iniziare.
-              </div>
-            ) : sortedFields.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-neutral-200 bg-neutral-50 py-8 text-center">
-                <p className="text-sm font-medium text-neutral-900">Nessun campo</p>
-                <p className="mt-1 text-xs text-neutral-500">Aggiungi il primo campo dalla libreria.</p>
-              </div>
-            ) : (
-              <div className="grid gap-2">
-                {sortedFields.map((field) => {
-                  const meta = fieldTypeOptions.find((option) => option.value === field.field_type);
-                  const isSelected = editingFieldId === field.id;
-                  return (
-                    <button
-                      key={field.id}
-                      type="button"
-                      draggable={!locked}
-                      disabled={locked}
-                      onDragStart={() => setDraggingFieldId(field.id)}
-                      onDragOver={(event) => event.preventDefault()}
-                      onDrop={(event) => {
-                        event.preventDefault();
-                        void handleFieldDrop(field.id);
-                      }}
-                      onClick={() => handleEditField(field)}
-                      className={`flex items-center justify-between gap-3 rounded-lg border p-3 text-left transition ${
-                        isSelected
-                          ? "border-brand bg-brand/5 ring-1 ring-brand/20"
-                          : "border-neutral-200 bg-white hover:border-neutral-300"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 overflow-hidden">
-                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-neutral-100 text-xs font-medium text-neutral-600">
-                          {meta?.icon || "Aa"}
-                        </span>
-                        <div className="truncate">
-                          <p className="truncate text-sm font-medium text-neutral-900">
-                            {field.label} {field.is_required && <span className="text-red-500">*</span>}
-                          </p>
-                          <p className="truncate text-xs text-neutral-500">{meta?.label}</p>
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 cursor-grab px-1 text-neutral-400 hover:text-neutral-600">
-                        ⋮⋮
-                      </div>
-                    </button>
-                  );
-                })}
-                <div
-                  className="rounded-lg border border-dashed border-neutral-200 bg-neutral-50 py-3 text-center text-xs text-neutral-500"
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    void handleFieldDrop(null);
-                  }}
-                >
-                  {reorderingFields ? "Riordino in corso..." : "Trascina qui per spostare in fondo"}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Right: Field Settings */}
-        <div className="space-y-4">
-          <div className="rounded-xl border border-neutral-200 bg-white p-4">
-            {!editingFieldId && !fieldDraft.field_key && sortedFields.length > 0 ? (
-              <div className="py-8 text-center text-sm text-neutral-500">
-                Seleziona un campo dal canvas per modificarlo.
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-neutral-900">
-                    {editingFieldId ? "Impostazioni campo" : "Nuovo campo"}
-                  </h3>
-                  {editingFieldId && (
-                    <button
-                      type="button"
-                      className="text-xs text-brand hover:underline"
-                      onClick={() => startNewField(fieldDraft.field_type)}
-                    >
-                      Nuovo
-                    </button>
-                  )}
-                </div>
-
-                <form className="space-y-4" onSubmit={(event) => void handleSaveField(event)}>
-                  <label className={labelClass}>
-                    Etichetta
-                    <input
-                      className={inputClass}
-                      disabled={locked}
-                      value={fieldDraft.label}
-                      onChange={(event) => handleFieldLabelChange(event.target.value)}
-                    />
-                  </label>
-
-                  <label className={labelClass}>
-                    Tipo
-                    <select
-                      className={inputClass}
-                      disabled={locked}
-                      value={fieldDraft.field_type}
-                      onChange={(event) => {
-                        const nextType = event.target.value as AssociationFormFieldType;
-                        const defaultDraft = emptyFieldDraft(selectedForm, nextType);
-                        setFieldDraft((current) => ({
-                          ...current,
-                          field_type: nextType,
-                          options_text: defaultDraft.options_text,
-                        }));
-                      }}
-                    >
-                      {fieldTypeOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className={labelClass}>
-                    Placeholder (opzionale)
-                    <input
-                      className={inputClass}
-                      disabled={locked}
-                      value={fieldDraft.placeholder}
-                      onChange={(event) => setFieldDraft((current) => ({ ...current, placeholder: event.target.value }))}
-                    />
-                  </label>
-
-                  {["select", "radio", "checkbox"].includes(fieldDraft.field_type) && (
-                    <label className={labelClass}>
-                      Opzioni (separate da virgola)
-                      <input
-                        className={inputClass}
-                        disabled={locked}
-                        value={fieldDraft.options_text}
-                        onChange={(event) => setFieldDraft((current) => ({ ...current, options_text: event.target.value }))}
-                      />
-                    </label>
-                  )}
-
-                  <label className="flex items-center gap-2 text-sm text-neutral-700">
-                    <input
-                      type="checkbox"
-                      disabled={locked}
-                      checked={fieldDraft.is_required}
-                      onChange={(event) => setFieldDraft((current) => ({ ...current, is_required: event.target.checked }))}
-                      className="rounded border-neutral-300"
-                    />
-                    Campo obbligatorio
-                  </label>
-
-                  <div className="pt-2 flex flex-wrap gap-2">
-                    <button className="btn-primary !py-2 !px-3 !text-xs flex-1" disabled={savingField || !selectedFormId || locked} type="submit">
-                      {savingField ? "..." : editingFieldId ? "Aggiorna" : "Aggiungi"}
-                    </button>
-                    {editingFieldId && (
-                      <button
-                        type="button"
-                        className="btn-ghost !py-2 !px-3 !text-xs !text-red-600 hover:!bg-red-50"
-                        onClick={handleDeleteField}
-                        disabled={locked}
-                      >
-                        {deleteFieldArmed === editingFieldId ? "Conferma" : "Elimina"}
-                      </button>
-                    )}
-                  </div>
-                </form>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Preview Section */}
-      <div className="mt-8">
-        <h3 className="text-sm font-semibold text-neutral-900 mb-4 px-2">Preview pubblica</h3>
-        <div className="rounded-xl border border-neutral-200 bg-white overflow-hidden shadow-sm">
-          <FormPublicCanvas form={previewForm} values={previewValues} heroLabel="Anteprima live" />
-        </div>
-      </div>
+    <div className="h-[calc(100vh-210px)] overflow-hidden">
+      <FormBuilder
+        fields={builderFields}
+        onChange={() => {}} // Local state handled internally by FormBuilder before sync
+        onSaveField={handleBuilderSaveField}
+        onDeleteField={handleBuilderDeleteField}
+        onReorder={handleBuilderReorder}
+        locked={locked || !selectedFormId}
+      />
     </div>
   );
 
   const designTab = (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <div className="space-y-4">
-        <div className="rounded-xl border border-neutral-200 bg-white p-5">
-          <h3 className="text-sm font-semibold text-neutral-900 mb-4">Contenuto pagina</h3>
+    <div className="grid gap-6 lg:grid-cols-[380px_1fr] h-[calc(100vh-280px)]">
+      <div className="space-y-6 overflow-y-auto pr-2 custom-scrollbar pb-10">
+        <div className="rounded-[1.4rem] border border-neutral-200 bg-white p-5 shadow-sm">
+          <h3 className="text-sm font-semibold text-neutral-900 mb-4">Contenuto hero</h3>
           <div className="space-y-4">
             <label className={labelClass}>
-              Titolo
+              Titolo principale
               <input
                 className={inputClass}
                 disabled={locked}
                 value={formDraft.title}
                 onChange={(event) => syncFormDraft("title", event.target.value)}
-                placeholder="Titolo del form"
+                placeholder="Titolo della pagina"
               />
             </label>
             <label className={labelClass}>
               Sottotitolo / descrizione
               <textarea
-                className={`${inputClass} min-h-[100px]`}
+                className={`${inputClass} min-h-[100px] resize-none`}
                 disabled={locked}
                 value={formDraft.description}
                 onChange={(event) => syncFormDraft("description", event.target.value)}
-                placeholder="Breve descrizione o istruzioni..."
+                placeholder="Descrizione o istruzioni..."
               />
             </label>
             <label className={labelClass}>
-              Messaggio post-invio
+              Messaggio di successo
               <textarea
-                className={`${inputClass} min-h-[80px]`}
+                className={`${inputClass} min-h-[80px] resize-none`}
                 disabled={locked}
                 value={formDraft.success_message}
                 onChange={(event) => syncFormDraft("success_message", event.target.value)}
@@ -1031,29 +885,58 @@ export function OrgAdminFormsWorkspace({
           </div>
         </div>
 
-        <div className="rounded-xl border border-neutral-200 bg-white p-5">
-          <h3 className="text-sm font-semibold text-neutral-900 mb-4">Look & feel</h3>
-          <div className="space-y-4">
-            <label className={labelClass}>
-              Colore accento
-              <div className="mt-2 flex items-center gap-3">
+        <div className="rounded-[1.4rem] border border-neutral-200 bg-white p-5 shadow-sm">
+          <h3 className="text-sm font-semibold text-neutral-900 mb-4">Branding e Immagini</h3>
+          <div className="space-y-6">
+            <label className="flex items-center justify-between cursor-pointer group">
+              <span className="text-sm font-medium text-neutral-800">Mostra nome associazione/logo</span>
+              <div className="relative flex items-center justify-center">
                 <input
-                  className="h-10 w-16 cursor-pointer rounded border border-neutral-200 bg-white p-1"
+                  type="checkbox"
+                  disabled={locked}
+                  checked={formDraft.show_logo}
+                  onChange={(event) => syncFormDraft("show_logo", event.target.checked)}
+                  className="peer sr-only"
+                />
+                <div className="w-10 h-6 bg-neutral-200 rounded-full peer-checked:bg-brand transition-colors"></div>
+                <div className="absolute left-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4 shadow-sm"></div>
+              </div>
+            </label>
+
+            <ImageUpload 
+               label="Immagine di sfondo (Cover)"
+               value={formDraft.cover_image_url}
+               onChange={(base64) => syncFormDraft("cover_image_url", base64)}
+               onRemove={() => syncFormDraft("cover_image_url", "")}
+               disabled={locked}
+            />
+          </div>
+        </div>
+
+        <div className="rounded-[1.4rem] border border-neutral-200 bg-white p-5 shadow-sm">
+          <h3 className="text-sm font-semibold text-neutral-900 mb-4">Stile visivo</h3>
+          <div className="space-y-6">
+            <label className={labelClass}>
+              Colore accento principale
+              <div className="mt-2 flex items-center gap-3 p-1 rounded-2xl border border-neutral-200 bg-neutral-50/50">
+                <input
+                  className="h-10 w-16 cursor-pointer rounded-xl border border-neutral-200 bg-white p-1 shadow-sm"
                   type="color"
                   disabled={locked}
                   value={formDraft.accent_color || "#0f766e"}
                   onChange={(event) => syncFormDraft("accent_color", event.target.value)}
                 />
                 <input
-                  className={inputClass}
+                  className="flex-1 bg-transparent border-none text-sm text-neutral-700 outline-none font-medium uppercase tracking-widest px-2"
                   disabled={locked}
-                  value={formDraft.accent_color}
+                  value={formDraft.accent_color || "#0f766e"}
                   onChange={(event) => syncFormDraft("accent_color", event.target.value)}
                 />
               </div>
             </label>
+            
             <label className={labelClass}>
-              Testo bottone invio
+              Testo pulsante di invio
               <input
                 className={inputClass}
                 disabled={locked}
@@ -1061,81 +944,105 @@ export function OrgAdminFormsWorkspace({
                 onChange={(event) => syncFormDraft("submit_button_text", event.target.value)}
               />
             </label>
-            <label className={labelClass}>
-              Cover image URL
-              <input
-                className={inputClass}
-                disabled={locked}
-                value={formDraft.cover_image_url}
-                onChange={(event) => syncFormDraft("cover_image_url", event.target.value)}
-                placeholder="https://..."
-              />
-            </label>
-            <label className="flex items-center gap-2 text-sm text-neutral-700">
-              <input
-                type="checkbox"
-                disabled={locked}
-                checked={formDraft.show_logo}
-                onChange={(event) => syncFormDraft("show_logo", event.target.checked)}
-                className="rounded border-neutral-300"
-              />
-              Mostra logo associazione
-            </label>
+
+            <div>
+              <label className={labelClass}>Layout Pagina</label>
+              <div className="grid gap-2 mt-2">
+                {pageStyleOptions.map((option) => (
+                  <label
+                    key={option.value}
+                    className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors ${
+                      formDraft.page_style === option.value
+                        ? "border-brand bg-brand/5 ring-1 ring-brand/20"
+                        : "border-neutral-200 bg-white hover:bg-neutral-50"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="page_style"
+                      value={option.value}
+                      checked={formDraft.page_style === option.value}
+                      onChange={() => syncFormDraft("page_style", option.value)}
+                      className="border-neutral-300 text-brand focus:ring-brand"
+                      disabled={locked}
+                    />
+                    <div>
+                      <div className="text-sm font-semibold text-neutral-900">{option.label}</div>
+                      <div className="text-[11px] font-medium text-neutral-500 mt-0.5">{option.hint}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="space-y-4">
-        <div className="rounded-xl border border-neutral-200 bg-white p-5">
-          <h3 className="text-sm font-semibold text-neutral-900 mb-4">Layout</h3>
-          <div className="grid gap-3">
-            {pageStyleOptions.map((option) => (
-              <label
-                key={option.value}
-                className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
-                  formDraft.page_style === option.value
-                    ? "border-brand bg-brand/5 ring-1 ring-brand/20"
-                    : "border-neutral-200 hover:bg-neutral-50"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="page_style"
-                  value={option.value}
-                  checked={formDraft.page_style === option.value}
-                  onChange={() => syncFormDraft("page_style", option.value)}
-                  className="mt-1 border-neutral-300 text-brand focus:ring-brand"
-                  disabled={locked}
-                />
-                <div>
-                  <div className="text-sm font-medium text-neutral-900">{option.label}</div>
-                  <div className="text-xs text-neutral-500">{option.hint}</div>
-                </div>
-              </label>
-            ))}
+      <div className="rounded-[1.6rem] border border-neutral-200 bg-neutral-100 overflow-hidden shadow-inner flex flex-col h-full">
+        <div className="bg-white/80 px-4 py-2 border-b border-neutral-200 backdrop-blur-md flex items-center justify-between z-10 shrink-0">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Live Preview</span>
+          <div className="flex gap-1.5">
+             <div className="w-2.5 h-2.5 rounded-full bg-red-400"></div>
+             <div className="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
+             <div className="w-2.5 h-2.5 rounded-full bg-emerald-400"></div>
           </div>
         </div>
-        
-        <div className="rounded-xl border border-neutral-200 bg-white overflow-hidden">
-          <div className="bg-neutral-50 px-4 py-3 border-b border-neutral-200">
-            <h3 className="text-sm font-semibold text-neutral-900">Anteprima</h3>
-          </div>
-          <div className="max-h-[500px] overflow-y-auto bg-neutral-100 p-4">
-            <FormPublicCanvas form={previewForm} values={previewValues} heroLabel="Anteprima" />
-          </div>
+        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+          <FormPublicCanvas form={previewForm} values={previewValues} heroLabel="Anteprima" />
         </div>
       </div>
     </div>
   );
 
   const automationsTab = (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="grid gap-6 lg:grid-cols-[1fr_1fr] h-[calc(100vh-280px)] overflow-y-auto custom-scrollbar pb-10">
       <div className="space-y-6">
-        <div className="rounded-xl border border-neutral-200 bg-white p-5">
+        <div className="rounded-[1.4rem] border border-neutral-200 bg-white p-6 shadow-sm">
+          <h3 className="text-sm font-semibold text-neutral-900 mb-1">Pubblicazione e Accesso</h3>
+          <p className="text-xs text-neutral-500 mb-5">Gestisci la visibilità del form.</p>
+          
+          <div className="space-y-5">
+            <div className="p-4 rounded-xl bg-neutral-50/50 border border-neutral-100">
+               <label className={labelClass}>Link pubblico</label>
+               <div className="flex items-center gap-2 mt-2">
+                 <input className={inputClass} readOnly value={selectedFormUrl || publicUrl || ""} placeholder="Salva per generare il link" />
+                 <button className="btn-secondary whitespace-nowrap !py-2.5" onClick={() => void copyPublicLink(selectedFormUrl || publicUrl)} disabled={!selectedFormUrl && !publicUrl}>Copia</button>
+               </div>
+            </div>
+            
+            <label className={labelClass}>
+              Personalizza parte finale URL (Slug)
+              <input className={inputClass} disabled={locked} value={formDraft.public_slug} onChange={(event) => syncFormDraft("public_slug", derivePublicSlug(event.target.value))} placeholder="es: iscrizione-corso" />
+            </label>
+
+            <div className="pt-2">
+              <label className="flex items-center justify-between cursor-pointer group">
+                <span className="text-sm font-medium text-neutral-800">Pagina pubblica attiva</span>
+                <div className="relative flex items-center justify-center">
+                  <input type="checkbox" disabled={locked} checked={formDraft.is_active} onChange={(event) => syncFormDraft("is_active", event.target.checked)} className="peer sr-only" />
+                  <div className="w-10 h-6 bg-neutral-200 rounded-full peer-checked:bg-emerald-500 transition-colors"></div>
+                  <div className="absolute left-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4 shadow-sm"></div>
+                </div>
+              </label>
+            </div>
+
+            <div>
+               <label className={labelClass}>
+                 Visibilità: Chi può compilare?
+                 <select className={inputClass} disabled={locked} value={formDraft.visibility} onChange={(event) => syncFormDraft("visibility", event.target.value as AssociationFormVisibility)}>
+                   <option value="public">Pubblico (Tutti)</option>
+                   <option value="members_only">Solo soci registrati</option>
+                 </select>
+               </label>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-[1.4rem] border border-neutral-200 bg-white p-6 shadow-sm">
           <h3 className="text-sm font-semibold text-neutral-900 mb-4">Comportamento invio</h3>
           <div className="space-y-4">
             <label className={labelClass}>
-              Destinazione email notifiche (segreteria)
+              Email segreteria per notifiche (opzionale)
               <input
                 className={inputClass}
                 type="email"
@@ -1144,137 +1051,62 @@ export function OrgAdminFormsWorkspace({
                 onChange={(event) => syncFormDraft("notification_email", event.target.value)}
               />
             </label>
-            <div className="space-y-2">
+            <div className="space-y-3 pt-2">
               <label className="flex items-center gap-2 text-sm text-neutral-700">
-                <input
-                  type="checkbox"
-                  disabled={locked}
-                  checked={formDraft.notify_admin_on_submit}
-                  onChange={(event) => syncFormDraft("notify_admin_on_submit", event.target.checked)}
-                  className="rounded border-neutral-300"
-                />
-                Invia notifica admin
+                <input type="checkbox" disabled={locked} checked={formDraft.notify_admin_on_submit} onChange={(event) => syncFormDraft("notify_admin_on_submit", event.target.checked)} className="rounded border-neutral-300 text-brand" />
+                Invia notifica automatica admin
               </label>
               <label className="flex items-center gap-2 text-sm text-neutral-700">
-                <input
-                  type="checkbox"
-                  disabled={locked}
-                  checked={formDraft.send_user_confirmation}
-                  onChange={(event) => syncFormDraft("send_user_confirmation", event.target.checked)}
-                  className="rounded border-neutral-300"
-                />
-                Invia conferma utente
+                <input type="checkbox" disabled={locked} checked={formDraft.send_user_confirmation} onChange={(event) => syncFormDraft("send_user_confirmation", event.target.checked)} className="rounded border-neutral-300 text-brand" />
+                Invia email di conferma all'utente
               </label>
               <label className="flex items-center gap-2 text-sm text-neutral-700">
-                <input
-                  type="checkbox"
-                  disabled={locked}
-                  checked={formDraft.allow_multiple_submissions}
-                  onChange={(event) => syncFormDraft("allow_multiple_submissions", event.target.checked)}
-                  className="rounded border-neutral-300"
-                />
-                Consenti invii multipli
+                <input type="checkbox" disabled={locked} checked={formDraft.allow_multiple_submissions} onChange={(event) => syncFormDraft("allow_multiple_submissions", event.target.checked)} className="rounded border-neutral-300 text-brand" />
+                Consenti invii multipli dallo stesso utente
               </label>
             </div>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-neutral-200 bg-white p-5">
-          <h3 className="text-sm font-semibold text-neutral-900 mb-4">Template email</h3>
-          <div className="space-y-4">
-            <label className={labelClass}>
-              Template notifica admin
-              <select
-                className={inputClass}
-                disabled={locked}
-                value={formDraft.admin_notification_template_id ?? ""}
-                onChange={(event) =>
-                  syncFormDraft("admin_notification_template_id", event.target.value ? Number(event.target.value) : null)
-                }
-              >
-                <option value="">Riepilogo automatico</option>
-                {availableTemplates.filter((item) => item.is_active).map((template) => (
-                  <option key={`admin-${template.id}`} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={labelClass}>
-              Template conferma utente
-              <select
-                className={inputClass}
-                disabled={locked}
-                value={formDraft.user_confirmation_template_id ?? ""}
-                onChange={(event) =>
-                  syncFormDraft("user_confirmation_template_id", event.target.value ? Number(event.target.value) : null)
-                }
-              >
-                <option value="">Conferma automatica</option>
-                {availableTemplates.filter((item) => item.is_active).map((template) => (
-                  <option key={`user-${template.id}`} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
-              </select>
-            </label>
           </div>
         </div>
       </div>
 
       <div className="space-y-6">
-        <div className="rounded-xl border border-neutral-200 bg-white p-5">
+        <div className="rounded-[1.4rem] border border-neutral-200 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-neutral-900">Integrazione Prenotazioni</h3>
-            <label className="flex items-center gap-2 text-sm text-neutral-700">
-              <input
-                type="checkbox"
-                disabled={locked}
-                checked={formDraft.booking_enabled}
-                onChange={(event) => syncFormDraft("booking_enabled", event.target.checked)}
-                className="rounded border-neutral-300"
-              />
-              Abilita
+            <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer group">
+              <div className="relative flex items-center justify-center">
+                <input type="checkbox" disabled={locked} checked={formDraft.booking_enabled} onChange={(event) => syncFormDraft("booking_enabled", event.target.checked)} className="peer sr-only" />
+                <div className="w-10 h-6 bg-neutral-200 rounded-full peer-checked:bg-brand transition-colors"></div>
+                <div className="absolute left-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4 shadow-sm"></div>
+              </div>
             </label>
           </div>
 
           {formDraft.booking_enabled && (
             <div className="space-y-4 pt-4 border-t border-neutral-100">
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <label className="flex items-center gap-2 text-sm text-neutral-700">
-                  <input
-                    type="checkbox"
-                    disabled={locked}
-                    checked={formDraft.booking_requires_manual_confirmation}
-                    onChange={(event) => syncFormDraft("booking_requires_manual_confirmation", event.target.checked)}
-                    className="rounded border-neutral-300"
-                  />
-                  Richiede conferma manuale
+                  <input type="checkbox" disabled={locked} checked={formDraft.booking_requires_manual_confirmation} onChange={(event) => syncFormDraft("booking_requires_manual_confirmation", event.target.checked)} className="rounded border-neutral-300 text-brand" />
+                  Richiede conferma manuale prenotazione
                 </label>
                 <label className="flex items-center gap-2 text-sm text-neutral-700">
-                  <input
-                    type="checkbox"
-                    disabled={locked}
-                    checked={formDraft.booking_notification_enabled}
-                    onChange={(event) => syncFormDraft("booking_notification_enabled", event.target.checked)}
-                    className="rounded border-neutral-300"
-                  />
-                  Invia email di stato
+                  <input type="checkbox" disabled={locked} checked={formDraft.booking_notification_enabled} onChange={(event) => syncFormDraft("booking_notification_enabled", event.target.checked)} className="rounded border-neutral-300 text-brand" />
+                  Invia email di stato booking
                 </label>
               </div>
 
-              <div className="space-y-3">
-                <h4 className="text-xs font-semibold text-neutral-500 uppercase">Mappatura campi</h4>
+              <div className="space-y-3 bg-neutral-50/50 p-4 rounded-xl border border-neutral-100">
+                <h4 className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-3">Mappatura campi (Data, Ora, ecc.)</h4>
                 {bookingMappingTargets.map((target) => (
-                  <div key={target.key} className="flex flex-col sm:flex-row sm:items-center gap-2">
-                    <span className="text-sm text-neutral-600 sm:w-1/3">{target.label}</span>
+                  <div key={target.key} className="flex flex-col xl:flex-row xl:items-center gap-2">
+                    <span className="text-[13px] font-medium text-neutral-700 xl:w-1/3">{target.label}</span>
                     <select
-                      className={`${inputClass} !mt-0 sm:w-2/3`}
+                      className={`${inputClass} !py-2 !mt-0 xl:w-2/3`}
                       disabled={locked || bookingMappingFieldOptions.length === 0}
                       value={formDraft.booking_field_mapping[target.key] || ""}
                       onChange={(event) => syncBookingFieldMapping(target.key, event.target.value)}
                     >
-                      <option value="">Non collegato</option>
+                      <option value="">-- Non collegato --</option>
                       {bookingMappingFieldOptions.map((option) => (
                         <option key={`${target.key}-${option.value}`} value={option.value}>
                           {option.label}
@@ -1286,6 +1118,26 @@ export function OrgAdminFormsWorkspace({
               </div>
             </div>
           )}
+        </div>
+        
+        <div className="rounded-[1.4rem] border border-neutral-200 bg-white p-6 shadow-sm">
+          <h3 className="text-sm font-semibold text-neutral-900 mb-4">Personalizzazione Email (Avanzate)</h3>
+          <div className="space-y-4">
+            <label className={labelClass}>
+              Template notifica admin
+              <select className={inputClass} disabled={locked} value={formDraft.admin_notification_template_id ?? ""} onChange={(event) => syncFormDraft("admin_notification_template_id", event.target.value ? Number(event.target.value) : null)}>
+                <option value="">Riepilogo automatico standard</option>
+                {availableTemplates.filter((item) => item.is_active).map((template) => (<option key={`admin-${template.id}`} value={template.id}>{template.name}</option>))}
+              </select>
+            </label>
+            <label className={labelClass}>
+              Template conferma utente
+              <select className={inputClass} disabled={locked} value={formDraft.user_confirmation_template_id ?? ""} onChange={(event) => syncFormDraft("user_confirmation_template_id", event.target.value ? Number(event.target.value) : null)}>
+                <option value="">Conferma automatica standard</option>
+                {availableTemplates.filter((item) => item.is_active).map((template) => (<option key={`user-${template.id}`} value={template.id}>{template.name}</option>))}
+              </select>
+            </label>
+          </div>
         </div>
       </div>
     </div>
@@ -1382,72 +1234,9 @@ export function OrgAdminFormsWorkspace({
     </div>
   );
 
-  const shareTab = (
-    <div className="max-w-2xl space-y-6">
-      <div className="rounded-xl border border-neutral-200 bg-white p-5">
-        <h3 className="text-sm font-semibold text-neutral-900 mb-4">Link pubblico</h3>
-        
-        <div className="flex items-center gap-2 mb-4">
-          <input
-            className={inputClass}
-            readOnly
-            value={selectedFormUrl || publicUrl || ""}
-            placeholder="Salva per generare il link"
-          />
-          <button
-            className="btn-secondary whitespace-nowrap !py-2.5"
-            onClick={() => void copyPublicLink(selectedFormUrl || publicUrl)}
-            disabled={!selectedFormUrl && !publicUrl}
-          >
-            Copia
-          </button>
-        </div>
-
-        <div className="flex flex-wrap gap-4 pt-4 border-t border-neutral-100">
-          <label className="flex items-center gap-2 text-sm text-neutral-700">
-            <input
-              type="checkbox"
-              disabled={locked}
-              checked={formDraft.is_active}
-              onChange={(event) => syncFormDraft("is_active", event.target.checked)}
-              className="rounded border-neutral-300"
-            />
-            Pagina attiva (online)
-          </label>
-          <label className="flex items-center gap-2 text-sm text-neutral-700">
-            Visibilità:
-            <select
-              className={`${inputClass} !mt-0 !w-auto !py-1`}
-              disabled={locked}
-              value={formDraft.visibility}
-              onChange={(event) => syncFormDraft("visibility", event.target.value as AssociationFormVisibility)}
-            >
-              <option value="public">Tutti</option>
-              <option value="members_only">Solo soci</option>
-            </select>
-          </label>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-neutral-200 bg-white p-5">
-        <h3 className="text-sm font-semibold text-neutral-900 mb-4">Personalizza URL</h3>
-        <label className={labelClass}>
-          Slug (parte finale del link)
-          <input
-            className={inputClass}
-            disabled={locked}
-            value={formDraft.public_slug}
-            onChange={(event) => syncFormDraft("public_slug", derivePublicSlug(event.target.value))}
-            placeholder="es: iscrizione-corso"
-          />
-        </label>
-      </div>
-    </div>
-  );
-
   return (
-    <div className={embedded ? "" : "container-shell py-6"}>
-      <div className={`${embedded ? "space-y-6" : "mx-auto max-w-6xl space-y-6"}`}>
+    <div className={embedded ? "" : (selectedFormId ? "w-full" : "container-shell py-6")}>
+      <div className={`${embedded ? "space-y-6" : (selectedFormId ? "w-full" : "mx-auto max-w-6xl space-y-6")}`}>
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         ) : null}
@@ -1502,81 +1291,150 @@ export function OrgAdminFormsWorkspace({
           </section>
         )}
 
+        
         {(selectedFormId || forms.length === 0) && (
-          <section className={`${studioCardClass} overflow-hidden`}>
-            <div className="border-b border-neutral-200/80 px-5 py-4 bg-neutral-50/50">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3">
-                  <button 
-                    onClick={() => setSelectedFormId(null)}
-                    className="p-2 hover:bg-neutral-200 rounded-lg transition-colors text-neutral-500"
-                    title="Torna alla lista"
-                  >
-                    ←
-                  </button>
-                  <div>
-                    <h2 className="text-xl font-semibold tracking-tight text-neutral-900">
-                      {selectedFormId ? formDraft.title || selectedForm?.title || "Configura form" : "Nuova pagina form"}
+          <section className={`flex flex-col min-h-screen bg-neutral-50`}>
+            {/* Header Moderno */}
+            <div className="sticky top-0 z-50 bg-white border-b border-neutral-200 px-4 md:px-8 py-3 shrink-0 flex flex-col gap-4 md:flex-row md:items-center md:justify-between shadow-sm">
+              <div className="flex items-center gap-4">
+                <button 
+                  onClick={() => setSelectedFormId(null)}
+                  className="w-10 h-10 flex items-center justify-center rounded-full bg-neutral-50 border border-neutral-200 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 transition-colors"
+                  title="Torna alla lista"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                </button>
+                <div>
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-lg font-bold tracking-tight text-neutral-900">
+                      {selectedFormId ? formDraft.title || selectedForm?.title || "Senza titolo" : "Nuova pagina form"}
                     </h2>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${formDraft.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-neutral-100 text-neutral-600'}`}>
-                        {formDraft.is_active ? 'Online' : 'Bozza'}
-                      </span>
-                      {selectedFormUrl || publicUrl ? (
-                        <a href={selectedFormUrl || publicUrl} target="_blank" rel="noreferrer" className="text-xs text-brand hover:underline">
-                          Vedi pagina ↗
-                        </a>
-                      ) : null}
-                    </div>
+                    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest shadow-sm ring-1 ring-inset ${formDraft.is_active ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-amber-200'}`}>
+                      {formDraft.is_active ? 'Pubblicato' : 'Bozza'}
+                    </span>
                   </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {selectedForm ? (
-                    <>
-                      <button className="btn-ghost !px-3 !py-1.5 !text-xs" type="button" onClick={handleToggleActive} disabled={locked}>
-                        {selectedForm.is_active ? "Disattiva" : "Attiva"}
-                      </button>
-                      <button
-                        className="btn-ghost !px-3 !py-1.5 !text-xs !text-red-600 hover:!bg-red-50"
-                        type="button"
-                        onClick={handleDeleteForm}
-                        disabled={locked}
-                      >
-                        {deleteArmed ? "Conferma elimina" : "Elimina"}
-                      </button>
-                    </>
-                  ) : null}
-                  <button className="btn-primary !px-4 !py-1.5" type="button" onClick={() => void handleSaveForm()} disabled={savingForm || locked}>
-                    {savingForm ? "Salvataggio..." : "Salva"}
-                  </button>
+                  {selectedFormUrl && (
+                    <a href={selectedFormUrl} target="_blank" rel="noreferrer" className="text-[11px] font-medium text-brand hover:underline mt-0.5 inline-flex items-center gap-1 opacity-80 hover:opacity-100 transition-opacity">
+                      {selectedFormUrl} <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                    </a>
+                  )}
                 </div>
               </div>
-              <div className="mt-4 flex gap-1 overflow-x-auto no-scrollbar">
+              
+              <div className="flex items-center gap-3">
+                <button className={`btn-ghost !px-4 !py-2 !text-sm ${formDraft.is_active ? '!text-neutral-600' : '!text-emerald-600 hover:!bg-emerald-50'}`} type="button" onClick={() => syncFormDraft('is_active', !formDraft.is_active)} disabled={locked}>
+                  {formDraft.is_active ? "Sospendi (Rendi Bozza)" : "Pubblica Form"}
+                </button>
+                <button 
+                  type="button"
+                  className="btn-secondary !px-4 !py-2 !text-sm" 
+                  onClick={() => setRealPreviewOpen(true)}
+                >
+                  Anteprima reale
+                </button>
+                <button className="btn-primary shadow-lg !px-6 !py-2" type="button" onClick={() => void handleSaveForm()} disabled={savingForm || locked}>
+                  {savingForm ? "Salvataggio..." : "Salva Modifiche"}
+                </button>
+              </div>
+            </div>
+
+            {/* Navigation Tabs */}
+            <div className="border-b border-neutral-200 bg-white px-4 md:px-8 shrink-0 flex items-center justify-between shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] z-40">
+              <div className="flex gap-6 overflow-x-auto no-scrollbar">
                 {editorTabs.map((tab) => (
                   <button
                     key={tab.key}
                     onClick={() => setActiveTab(tab.key)}
-                    className={`px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${
+                    className={`relative py-4 text-sm font-bold transition-colors ${
                       activeTab === tab.key 
-                        ? "border-brand text-brand bg-white" 
-                        : "border-transparent text-neutral-500 hover:bg-neutral-100/50 hover:text-neutral-700"
+                        ? "text-brand" 
+                        : "text-neutral-500 hover:text-neutral-800"
                     }`}
                   >
                     {tab.label}
+                    {activeTab === tab.key && (
+                      <span className="absolute bottom-0 left-0 right-0 h-[3px] bg-brand rounded-t-full"></span>
+                    )}
                   </button>
                 ))}
               </div>
+              {selectedForm && (
+                <button
+                  className="text-xs font-bold text-red-500 hover:text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors"
+                  type="button"
+                  onClick={handleDeleteForm}
+                  disabled={locked}
+                >
+                  {deleteArmed ? "Clicca di nuovo per confermare eliminazione" : "Elimina form"}
+                </button>
+              )}
             </div>
 
-            <div className="p-5">
+            {/* Tab Content */}
+            <div className="flex-1 p-4 md:p-8 overflow-hidden h-full">
+
               {activeTab === "builder" ? builderTab : null}
               {activeTab === "design" ? designTab : null}
-              {activeTab === "automations" ? automationsTab : null}
+              {activeTab === "settings" ? automationsTab : null}
               {activeTab === "responses" ? responsesTab : null}
-              {activeTab === "share" ? shareTab : null}
+              
             </div>
           </section>
         )}
+{/* Real Preview Modal */}
+      {realPreviewOpen && (
+        <div className="fixed inset-0 z-[100] flex flex-col bg-neutral-900/90 backdrop-blur-sm">
+          <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 bg-neutral-950 px-4 md:px-6">
+            <div className="flex items-center gap-4">
+              <button
+                type="button"
+                className="rounded-lg p-2 text-white/70 hover:bg-white/10 hover:text-white transition"
+                onClick={() => setRealPreviewOpen(false)}
+                title="Chiudi anteprima"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <div className="h-4 w-[1px] bg-white/20"></div>
+              <span className="text-xs font-bold uppercase tracking-widest text-white/50">Anteprima Pubblica</span>
+            </div>
+            
+            <div className="flex items-center gap-1 rounded-lg bg-black/50 p-1 ring-1 ring-white/10">
+              <button
+                type="button"
+                onClick={() => setPreviewMode("desktop")}
+                className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${
+                  previewMode === "desktop" ? "bg-white/10 text-white shadow-sm" : "text-white/50 hover:text-white/80"
+                }`}
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                Desktop
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreviewMode("mobile")}
+                className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${
+                  previewMode === "mobile" ? "bg-white/10 text-white shadow-sm" : "text-white/50 hover:text-white/80"
+                }`}
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                Mobile
+              </button>
+            </div>
+            
+            <div className="w-10"></div> {/* Spacer for balance */}
+          </div>
+          
+          <div className="flex-1 overflow-auto p-4 md:p-8 flex justify-center items-start custom-scrollbar">
+            <div 
+               className={`bg-white rounded-[2rem] overflow-hidden shadow-2xl transition-all duration-300 ring-4 ring-white/5 ${previewMode === "mobile" ? "w-[375px] min-h-[812px]" : "w-full max-w-[1440px] min-h-[800px]"}`}
+            >
+              <FormPublicCanvas form={previewForm} values={previewValues} interactive />
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );

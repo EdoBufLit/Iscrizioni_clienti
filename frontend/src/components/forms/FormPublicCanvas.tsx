@@ -1,4 +1,5 @@
 import type { AssociationFormField, PublicAssociationForm } from "../../lib/api";
+import { decodeField } from "./builder/utils";
 
 type FormCanvasForm = Pick<
   PublicAssociationForm,
@@ -25,11 +26,10 @@ type FormPublicCanvasProps = {
   onSubmit?: () => void;
   submitting?: boolean;
   interactive?: boolean;
-  heroLabel?: string;
 };
 
 const baseInputClass =
-  "mt-2 w-full rounded-[1.35rem] border border-black/10 bg-white/95 px-4 py-3 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-neutral-900/50 focus:ring-2 focus:ring-offset-2";
+  "mt-1 w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-brand/40 focus:ring-2 focus:ring-brand/10 shadow-sm";
 
 function getAccentColor(form: FormCanvasForm): string {
   return form.accent_color || "#0f766e";
@@ -39,34 +39,32 @@ function getPageTheme(pageStyle: string | null | undefined) {
   const style = (pageStyle || "editorial").toLowerCase();
   if (style === "minimal") {
     return {
-      shell: "bg-[#fbfaf6]",
-      surface: "border border-black/10 bg-white/92 shadow-[0_32px_120px_rgba(15,23,42,0.08)]",
-      hero: "bg-[radial-gradient(circle_at_top_left,_rgba(15,118,110,0.12),_transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92))]",
-      eyebrow: "text-neutral-500",
-      title: "font-serif text-[clamp(2.2rem,5vw,3.6rem)] leading-[0.92] tracking-tight text-neutral-950",
-      body: "text-neutral-600",
-      card: "border border-black/10 bg-white/90",
+      shell: "bg-white",
+      surface: "bg-white",
+      hero: "bg-neutral-50/50 border-b border-neutral-100",
+      title: "font-sans text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-neutral-900",
+      body: "text-neutral-500",
+      card: "",
     };
   }
   if (style === "spotlight") {
     return {
       shell: "bg-[#0b1120]",
-      surface: "border border-white/10 bg-white/[0.08] shadow-[0_40px_140px_rgba(2,6,23,0.55)] backdrop-blur-xl",
-      hero: "bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.16),_transparent_32%),radial-gradient(circle_at_bottom_right,_rgba(15,118,110,0.36),_transparent_28%),linear-gradient(135deg,#0f172a,#111827)]",
-      eyebrow: "text-white/60",
-      title: "font-serif text-[clamp(2.2rem,5vw,3.8rem)] leading-[0.9] tracking-tight text-white",
-      body: "text-white/74",
-      card: "border border-white/12 bg-white/[0.08]",
+      surface: "bg-[#0b1120] text-white",
+      hero: "bg-gradient-to-br from-white/10 to-transparent border-b border-white/10",
+      title: "font-sans text-3xl sm:text-4xl md:text-5xl font-black tracking-tight text-white",
+      body: "text-white/70",
+      card: "bg-white/5 border border-white/10 rounded-2xl p-6",
     };
   }
+  // Editorial
   return {
-    shell: "bg-[#f5f0e8]",
-    surface: "border border-black/10 bg-white/88 shadow-[0_36px_120px_rgba(68,35,14,0.14)] backdrop-blur-xl",
-    hero: "bg-[radial-gradient(circle_at_top_left,_rgba(15,118,110,0.16),_transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.98),rgba(250,245,238,0.94))]",
-    eyebrow: "text-neutral-500",
-    title: "font-serif text-[clamp(2.4rem,5vw,4rem)] leading-[0.9] tracking-tight text-neutral-950",
-    body: "text-neutral-700",
-    card: "border border-black/10 bg-white/90",
+    shell: "bg-[#FDFBF7]",
+    surface: "bg-[#FDFBF7]",
+    hero: "bg-transparent",
+    title: "font-serif text-3xl sm:text-4xl md:text-5xl font-medium tracking-tight text-neutral-900",
+    body: "text-neutral-600 font-serif",
+    card: "bg-white border border-neutral-200/60 rounded-xl p-6 shadow-sm",
   };
 }
 
@@ -75,84 +73,155 @@ function renderField(props: {
   value: unknown;
   interactive: boolean;
   accentColor: string;
+  theme: any;
   onValueChange?: (fieldKey: string, nextValue: unknown) => void;
 }) {
-  const { field, value, interactive, accentColor, onValueChange } = props;
+  const { field: rawField, value, interactive, accentColor, theme, onValueChange } = props;
   const disabled = !interactive;
-  const commonFocusStyle = interactive ? { focusRingColor: accentColor } : undefined;
-  void commonFocusStyle;
+  
+  // Decode field to get virtual type and metadata (width, hideLabel)
+  const decoded = decodeField(rawField);
+  const containerStyle = decoded.width === "50%" ? { width: "calc(50% - 0.5rem)", display: "inline-block" } : { width: "100%" };
+  
+  // Use spotlight classes if we are in spotlight
+  const isSpotlight = theme.shell.includes("0b1120");
+  const inputClass = isSpotlight 
+    ? "mt-1 w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/40 focus:border-white/40 focus:ring-2 focus:ring-white/10"
+    : baseInputClass;
 
-  if (field.field_type === "long_text") {
+  const labelColor = isSpotlight ? "text-white/90" : "text-neutral-800";
+  const helpColor = isSpotlight ? "text-white/50" : "text-neutral-500";
+
+  // Render Virtual Types
+  if (decoded.type === "section_title") {
     return (
-      <label key={field.id} className="block text-sm font-semibold text-neutral-800">
-        {field.label}
+      <div key={decoded.key} style={containerStyle} className="pt-6 pb-2">
+        <h3 className={`text-xl font-bold ${labelColor} ${theme.title.includes("serif") ? "font-serif" : "font-sans"}`}>
+          {decoded.label}
+        </h3>
+      </div>
+    );
+  }
+  if (decoded.type === "free_text") {
+    return (
+      <div key={decoded.key} style={containerStyle} className="py-2">
+        <p className={`text-[15px] leading-relaxed whitespace-pre-wrap ${helpColor}`}>
+          {decoded.helpText}
+        </p>
+      </div>
+    );
+  }
+  if (decoded.type === "divider") {
+    return <hr key={decoded.key} style={containerStyle} className={`my-6 ${isSpotlight ? "border-white/10" : "border-neutral-200"}`} />;
+  }
+  if (decoded.type === "spacer") {
+    return <div key={decoded.key} style={containerStyle} className="h-10" />;
+  }
+
+  // Render Standard Inputs
+  const renderLabel = () => {
+    if (decoded.hideLabel) return null;
+    return (
+      <span className={`block text-sm font-semibold mb-1 ${labelColor}`}>
+        {decoded.label} {decoded.required && <span className="text-red-500 ml-0.5">*</span>}
+      </span>
+    );
+  };
+
+  const renderHelpText = () => {
+    if (!decoded.helpText) return null;
+    return <span className={`mt-1.5 block text-xs font-medium ${helpColor}`}>{decoded.helpText}</span>;
+  };
+
+  if (decoded.type === "long_text") {
+    return (
+      <label key={decoded.key} style={containerStyle} className="block">
+        {renderLabel()}
         <textarea
-          className={`${baseInputClass} min-h-[132px]`}
-          required={field.is_required}
+          className={`${inputClass} min-h-[120px]`}
+          required={decoded.required}
           disabled={disabled}
-          placeholder={field.placeholder || ""}
+          placeholder={decoded.placeholder}
           value={String(value || "")}
-          onChange={(event) => onValueChange?.(field.field_key, event.target.value)}
+          onChange={(event) => onValueChange?.(decoded.key, event.target.value)}
         />
-        {field.help_text ? <span className="mt-2 block text-xs font-medium text-neutral-500">{field.help_text}</span> : null}
+        {renderHelpText()}
       </label>
     );
   }
 
-  if (field.field_type === "select") {
+  if (decoded.type === "select") {
+    const options = decoded.optionsText.split(",").map((s) => s.trim()).filter(Boolean);
     return (
-      <label key={field.id} className="block text-sm font-semibold text-neutral-800">
-        {field.label}
+      <label key={decoded.key} style={containerStyle} className="block">
+        {renderLabel()}
         <select
-          className={baseInputClass}
-          required={field.is_required}
+          className={inputClass}
+          required={decoded.required}
           disabled={disabled}
           value={String(value || "")}
-          onChange={(event) => onValueChange?.(field.field_key, event.target.value)}
+          onChange={(event) => onValueChange?.(decoded.key, event.target.value)}
         >
           <option value="">Seleziona</option>
-          {field.options.map((option) => (
+          {options.map((option) => (
             <option key={option} value={option}>
               {option}
             </option>
           ))}
         </select>
-        {field.help_text ? <span className="mt-2 block text-xs font-medium text-neutral-500">{field.help_text}</span> : null}
+        {renderHelpText()}
       </label>
     );
   }
 
-  if (field.field_type === "radio") {
+  const optionCardClass = isSpotlight
+    ? "border border-white/10 bg-white/5 text-white/90 hover:bg-white/10"
+    : "border border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300";
+
+  if (decoded.type === "radio") {
+    const options = decoded.optionsText.split(",").map((s) => s.trim()).filter(Boolean);
     return (
-      <fieldset key={field.id} className="rounded-[1.5rem] border border-black/10 bg-white/80 p-4">
-        <legend className="px-1 text-sm font-semibold text-neutral-800">{field.label}</legend>
-        <div className="mt-3 grid gap-2">
-          {field.options.map((option) => (
-            <label key={option} className="flex items-center gap-3 rounded-2xl border border-black/5 bg-white/80 px-3 py-3 text-sm text-neutral-700">
+      <fieldset key={decoded.key} style={containerStyle} className="block">
+        {!decoded.hideLabel && (
+          <legend className={`text-sm font-semibold mb-2 ${labelColor}`}>
+            {decoded.label} {decoded.required && <span className="text-red-500 ml-0.5">*</span>}
+          </legend>
+        )}
+        <div className="grid gap-2">
+          {options.map((option) => (
+            <label key={option} className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition-colors cursor-pointer ${optionCardClass}`}>
               <input
                 type="radio"
-                name={field.field_key}
+                name={decoded.key}
                 disabled={disabled}
                 checked={String(value || "") === option}
-                onChange={() => onValueChange?.(field.field_key, option)}
-                required={field.is_required}
+                onChange={() => onValueChange?.(decoded.key, option)}
+                required={decoded.required}
+                className="w-4 h-4 text-brand bg-transparent"
+                style={!isSpotlight ? { accentColor } : {}}
               />
               {option}
             </label>
           ))}
         </div>
+        {renderHelpText()}
       </fieldset>
     );
   }
 
-  if (field.field_type === "checkbox") {
+  if (decoded.type === "checkbox") {
+    const options = decoded.optionsText.split(",").map((s) => s.trim()).filter(Boolean);
     const selected = Array.isArray(value) ? value.map(String) : [];
     return (
-      <fieldset key={field.id} className="rounded-[1.5rem] border border-black/10 bg-white/80 p-4">
-        <legend className="px-1 text-sm font-semibold text-neutral-800">{field.label}</legend>
-        <div className="mt-3 grid gap-2">
-          {field.options.map((option) => (
-            <label key={option} className="flex items-center gap-3 rounded-2xl border border-black/5 bg-white/80 px-3 py-3 text-sm text-neutral-700">
+      <fieldset key={decoded.key} style={containerStyle} className="block">
+        {!decoded.hideLabel && (
+          <legend className={`text-sm font-semibold mb-2 ${labelColor}`}>
+            {decoded.label} {decoded.required && <span className="text-red-500 ml-0.5">*</span>}
+          </legend>
+        )}
+        <div className="grid gap-2">
+          {options.map((option) => (
+            <label key={option} className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition-colors cursor-pointer ${optionCardClass}`}>
               <input
                 type="checkbox"
                 disabled={disabled}
@@ -161,60 +230,82 @@ function renderField(props: {
                   const next = event.target.checked
                     ? [...selected, option]
                     : selected.filter((item) => item !== option);
-                  onValueChange?.(field.field_key, next);
+                  onValueChange?.(decoded.key, next);
                 }}
+                className="w-4 h-4 rounded text-brand bg-transparent"
+                style={!isSpotlight ? { accentColor } : {}}
               />
               {option}
             </label>
           ))}
         </div>
+        {renderHelpText()}
       </fieldset>
     );
   }
 
-  if (field.field_type === "consent") {
+  if (decoded.type === "consent") {
     return (
-      <label key={field.id} className="flex items-start gap-3 rounded-[1.5rem] border border-black/10 bg-white/82 px-4 py-4 text-sm text-neutral-700">
+      <label key={decoded.key} style={containerStyle} className={`flex items-start gap-3 rounded-xl px-4 py-4 text-sm cursor-pointer transition-colors ${optionCardClass}`}>
         <input
           type="checkbox"
-          className="mt-1"
+          className="mt-1 w-4 h-4 rounded text-brand bg-transparent"
           disabled={disabled}
           checked={Boolean(value)}
-          onChange={(event) => onValueChange?.(field.field_key, event.target.checked)}
-          required={field.is_required}
+          onChange={(event) => onValueChange?.(decoded.key, event.target.checked)}
+          required={decoded.required}
+          style={!isSpotlight ? { accentColor } : {}}
         />
         <span>
-          <span className="font-semibold text-neutral-900">{field.label}</span>
-          {field.help_text ? <span className="mt-1 block text-xs font-medium text-neutral-500">{field.help_text}</span> : null}
+          <span className={`font-semibold ${labelColor}`}>{decoded.label}</span>
+          {decoded.helpText ? <span className={`mt-1 block text-xs font-medium ${helpColor}`}>{decoded.helpText}</span> : null}
         </span>
       </label>
     );
   }
 
+  if (decoded.type === "file_upload") {
+    return (
+      <label key={decoded.key} style={containerStyle} className="block">
+        {renderLabel()}
+        <input
+          className={inputClass}
+          type="file"
+          required={decoded.required}
+          disabled={disabled}
+          onChange={() => {
+            onValueChange?.(decoded.key, "File caricato");
+          }}
+        />
+        {renderHelpText()}
+      </label>
+    );
+  }
+
   const inputType =
-    field.field_type === "email"
+    decoded.type === "email"
       ? "email"
-      : field.field_type === "phone"
+      : decoded.type === "phone"
         ? "tel"
-        : field.field_type === "number"
+        : decoded.type === "number"
           ? "number"
-          : field.field_type === "date"
+          : decoded.type === "date"
             ? "date"
             : "text";
 
   return (
-    <label key={field.id} className="block text-sm font-semibold text-neutral-800">
-      {field.label}
+    <label key={decoded.key} style={containerStyle} className="block">
+      {renderLabel()}
       <input
-        className={baseInputClass}
+        className={inputClass}
         type={inputType}
-        required={field.is_required}
+        required={decoded.required}
         disabled={disabled}
-        placeholder={field.placeholder || ""}
+        placeholder={decoded.placeholder || ""}
         value={String(value || "")}
-        onChange={(event) => onValueChange?.(field.field_key, event.target.value)}
+        onChange={(event) => onValueChange?.(decoded.key, event.target.value)}
       />
-      {field.help_text ? <span className="mt-2 block text-xs font-medium text-neutral-500">{field.help_text}</span> : null}
+      {renderHelpText()}
     </label>
   );
 }
@@ -226,148 +317,94 @@ export function FormPublicCanvas({
   onSubmit,
   submitting = false,
   interactive = false,
-  heroLabel = "Pagina pubblica",
 }: FormPublicCanvasProps) {
   const accentColor = getAccentColor(form);
   const theme = getPageTheme(form.page_style);
   const sortedFields = [...form.fields].sort((left, right) => left.sort_order - right.sort_order);
-  const surfaceStyle = {
-    borderColor: `${accentColor}33`,
-    boxShadow: `0 36px 120px ${accentColor}22`,
-  } as const;
-  const accentStyle = { backgroundColor: accentColor, color: "#ffffff" } as const;
-  const ringStyle = { boxShadow: `0 0 0 4px ${accentColor}22` } as const;
+
+  // Dynamic styles
+  const btnStyle = { backgroundColor: accentColor, color: "#ffffff" };
+  const customFocusStyle = `
+    .form-public-canvas-container input:focus,
+    .form-public-canvas-container select:focus,
+    .form-public-canvas-container textarea:focus {
+      border-color: ${accentColor}88 !important;
+      box-shadow: 0 0 0 3px ${accentColor}22 !important;
+    }
+  `;
 
   return (
-    <div className={`relative overflow-hidden rounded-[2rem] ${theme.shell} p-3 md:p-4`}>
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.35),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(15,23,42,0.08),transparent_34%)]" />
-      <div className={`relative overflow-hidden rounded-[1.8rem] ${theme.surface}`} style={surfaceStyle}>
-        {form.cover_image_url ? (
-          <div
-            className="h-44 w-full bg-cover bg-center md:h-56"
-            style={{ backgroundImage: `linear-gradient(180deg, rgba(15,23,42,0.12), rgba(15,23,42,0.34)), url(${form.cover_image_url})` }}
-          />
-        ) : null}
-        <div className="border-b border-black/5 bg-white/65 px-5 py-3 backdrop-blur md:px-8">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold uppercase tracking-[0.24em] text-white shadow-sm"
-                style={{ backgroundColor: accentColor }}
-              >
-                {(form.association?.name || "AS")
-                  .split(" ")
-                  .slice(0, 2)
-                  .map((item) => item[0] || "")
-                  .join("")
-                  .slice(0, 2)}
-              </div>
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.22em] text-neutral-500">Pagina pubblica</p>
-                <p className="text-sm font-semibold text-neutral-900">{form.association?.name || "Associazione"}</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2 text-[11px] font-bold uppercase tracking-[0.18em]">
-              <span className="rounded-full border border-black/10 bg-white px-3 py-1 text-neutral-600">
-                {interactive ? "Compilazione live" : "Preview studio"}
-              </span>
-              <span className="rounded-full border border-black/10 bg-white px-3 py-1 text-neutral-600">
-                {form.visibility === "members_only" ? "Solo soci" : "Pubblico"}
-              </span>
-            </div>
-          </div>
+    <div className={`form-public-canvas-container w-full min-h-full ${theme.shell} transition-colors duration-300`}>
+      <style>{customFocusStyle}</style>
+      
+      {/* Cover Image */}
+      {form.cover_image_url && (
+        <div className="w-full h-48 md:h-64 relative">
+          <img src={form.cover_image_url} alt="Cover" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/10 to-black/40"></div>
         </div>
-        <div className={`relative px-5 py-6 md:px-8 md:py-8 ${theme.hero}`}>
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="max-w-3xl">
-              <p className={`text-[11px] font-bold uppercase tracking-[0.28em] ${theme.eyebrow}`}>{heroLabel}</p>
-              <h1 className={`mt-3 ${theme.title}`}>{form.title}</h1>
-              {form.description ? (
-                <p className={`mt-4 max-w-2xl text-sm leading-7 md:text-base ${theme.body}`}>{form.description}</p>
-              ) : null}
+      )}
+
+      {/* Hero Section */}
+      <div className={`${theme.hero} px-6 py-10 md:py-16 text-center`}>
+        <div className="max-w-3xl mx-auto flex flex-col items-center">
+          {form.show_logo && form.association?.name && (
+            <div className="mb-6 inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-white text-xl font-bold text-neutral-900 shadow-sm border border-neutral-100">
+               {form.association.name.substring(0, 2).toUpperCase()}
             </div>
-            {form.show_logo ? (
-              <div className="rounded-full border border-white/40 bg-white/80 px-4 py-2 text-xs font-bold uppercase tracking-[0.24em] text-neutral-700 shadow-sm backdrop-blur">
-                {form.association?.name || "ASSONAM"}
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="grid gap-6 px-5 py-6 md:px-8 md:py-8 lg:grid-cols-[minmax(0,1fr)_260px]">
-          <form
-            className="grid gap-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              onSubmit?.();
-            }}
-          >
-            {sortedFields.length === 0 ? (
-              <div className={`rounded-[1.6rem] ${theme.card} px-5 py-8 text-sm text-neutral-500`} style={ringStyle}>
-                Aggiungi i primi campi dal builder per vedere qui la pagina pubblica completa.
-              </div>
-            ) : (
-              sortedFields.map((field) =>
-                renderField({
-                  field,
-                  value: values[field.field_key],
-                  interactive,
-                  accentColor,
-                  onValueChange,
-                }),
-              )
-            )}
-
-            <button
-              className="inline-flex min-h-[54px] items-center justify-center rounded-full px-6 text-sm font-bold tracking-[0.18em] uppercase shadow-lg transition disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={submitting || !interactive}
-              style={accentStyle}
-              type="submit"
-            >
-              {submitting ? "Invio in corso..." : form.submit_button_text || "Invia richiesta"}
-            </button>
-          </form>
-
-          <aside className={`rounded-[1.6rem] ${theme.card} p-4 md:p-5`}>
-            <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-neutral-500">Snapshot pubblico</p>
-            <div className="mt-4 space-y-3 text-sm text-neutral-600">
-              <div className="rounded-2xl border border-black/5 bg-white/70 px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">Stile</p>
-                <p className="mt-1 font-semibold text-neutral-900">{form.page_style || "editorial"}</p>
-              </div>
-              <div className="rounded-2xl border border-black/5 bg-white/70 px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">Campi</p>
-                <p className="mt-1 font-semibold text-neutral-900">{sortedFields.length}</p>
-              </div>
-              <div className="rounded-2xl border border-black/5 bg-white/70 px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">CTA</p>
-                <p className="mt-1 font-semibold text-neutral-900">{form.submit_button_text || "Invia richiesta"}</p>
-              </div>
-              <div className="rounded-2xl border border-black/5 bg-white/70 px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">Esperienza</p>
-                <p className="mt-1 font-semibold text-neutral-900">
-                  {form.show_logo ? "Brand visibile" : "Pagina essenziale"}
-                </p>
-                <p className="mt-2 text-xs leading-5 text-neutral-500">
-                  Layout pensato per sembrare una vera pagina pubblica, non un semplice form embed.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-black/5 bg-white/70 px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">Dopo l'invio</p>
-                <p className="mt-1 text-sm text-neutral-700">
-                  L'utente vede un messaggio di conferma chiaro e l'associazione riceve lo storico nel backoffice.
-                </p>
-              </div>
-            </div>
-          </aside>
-        </div>
-        <div className="border-t border-black/5 bg-white/72 px-5 py-4 md:px-8">
-          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-neutral-500">
-            <p>Esperienza ottimizzata per mobile e desktop.</p>
-            <p>
-              {interactive ? "Compila il modulo e verifica il risultato finale." : "Questa preview rispecchia la pagina pubblica."}
+          )}
+          <h1 className={theme.title}>{form.title}</h1>
+          {form.description && (
+            <p className={`mt-5 text-sm md:text-base max-w-2xl mx-auto leading-relaxed ${theme.body}`}>
+              {form.description}
             </p>
-          </div>
+          )}
+        </div>
+      </div>
+
+      {/* Form Content */}
+      <div className={`max-w-3xl mx-auto px-6 py-8 md:py-12 ${theme.surface}`}>
+        <form
+          className={`flex flex-wrap gap-y-6 gap-x-4 ${theme.card}`}
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSubmit?.();
+          }}
+        >
+          {sortedFields.length === 0 ? (
+            <div className="w-full text-center py-12 text-sm opacity-60">
+              Il form non contiene ancora nessun campo.
+            </div>
+          ) : (
+            sortedFields.map((field) =>
+              renderField({
+                field,
+                value: values[field.field_key],
+                interactive,
+                accentColor,
+                theme,
+                onValueChange,
+              }),
+            )
+          )}
+
+          {sortedFields.length > 0 && (
+            <div className="w-full mt-6 pt-6 border-t border-neutral-200/50 flex justify-center">
+              <button
+                className="w-full sm:w-auto px-8 py-3.5 rounded-xl text-sm font-bold shadow-md transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                disabled={submitting || !interactive}
+                style={btnStyle}
+                type="submit"
+              >
+                {submitting ? "Invio in corso..." : form.submit_button_text || "Invia richiesta"}
+              </button>
+            </div>
+          )}
+        </form>
+        
+        {/* Footer info */}
+        <div className="mt-12 text-center text-xs opacity-50 pb-8">
+           Modulo gestito tramite <strong>ASSONAM</strong>
         </div>
       </div>
     </div>
