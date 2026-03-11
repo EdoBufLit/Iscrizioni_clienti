@@ -198,6 +198,12 @@ function buildPreviewValues(form: AssociationForm | null): Record<string, unknow
   return values;
 }
 
+function decodeBuilderFields(form: AssociationForm | null | undefined): BuilderField[] {
+  return [...(form?.fields || [])]
+    .sort((left, right) => left.sort_order - right.sort_order)
+    .map(decodeField);
+}
+
 function buildFieldPayload(draft: ReturnType<typeof emptyFieldDraft>) {
   return {
     field_key: draft.field_key || null,
@@ -232,6 +238,7 @@ export function OrgAdminFormsWorkspace({
   const [forms, setForms] = useState<AssociationForm[]>([]);
   const [selectedFormId, setSelectedFormId] = useState<number | null>(null);
   const [selectedForm, setSelectedForm] = useState<AssociationForm | null>(null);
+  const [builderDraftFields, setBuilderDraftFields] = useState<BuilderField[]>([]);
   const [formDraft, setFormDraft] = useState(emptyFormDraft());
   const [savingForm, setSavingForm] = useState(false);
 
@@ -277,6 +284,7 @@ export function OrgAdminFormsWorkspace({
   useEffect(() => {
     if (!selectedForm) {
       setFormDraft(emptyFormDraft());
+      setBuilderDraftFields([]);
       setFieldDraft(emptyFieldDraft(null));
       setEditingFieldId(null);
       setFieldKeyManual(false);
@@ -318,6 +326,10 @@ export function OrgAdminFormsWorkspace({
       setFieldKeyManual(false);
     }
     setDeleteArmed(false);
+  }, [selectedForm]);
+
+  useEffect(() => {
+    setBuilderDraftFields(decodeBuilderFields(selectedForm));
   }, [selectedForm]);
 
   useEffect(() => {
@@ -383,9 +395,11 @@ export function OrgAdminFormsWorkspace({
         const detail = await fetchOrgAdminForm(targetId);
         setSelectedFormId(detail.form.id);
         setSelectedForm(detail.form);
+        setBuilderDraftFields(decodeBuilderFields(detail.form));
       } else {
         setSelectedFormId(null);
         setSelectedForm(null);
+        setBuilderDraftFields([]);
         setFormDraft(emptyFormDraft());
       }
     } catch (err) {
@@ -746,15 +760,16 @@ export function OrgAdminFormsWorkspace({
 async function handleBuilderSaveField(builderField: BuilderField) {
     if (!selectedFormId || locked) return;
     const isNew = builderField.id < 0;
-    
-    // Trova l'indice attuale per determinare il sort_order
-    const currentFields = selectedForm?.fields || [];
-    const index = currentFields.findIndex(f => f.id === builderField.id);
+
+    const currentFields = builderDraftFields;
+    const index = currentFields.findIndex(
+      (field) => field.key === builderField.key || (builderField.id > 0 && field.id === builderField.id),
+    );
     const orderIndex = index >= 0 ? index : currentFields.length;
     const sortOrder = (orderIndex + 1) * 10;
-    
+
     const payload = encodeField(builderField, sortOrder);
-    
+
     try {
       if (isNew) {
         await createOrgAdminFormField(selectedFormId, payload);
@@ -763,6 +778,7 @@ async function handleBuilderSaveField(builderField: BuilderField) {
       }
       const detail = await fetchOrgAdminForm(selectedFormId);
       setSelectedForm(detail.form);
+      setBuilderDraftFields(decodeBuilderFields(detail.form));
       setForms((current) => current.map((item) => (item.id === detail.form.id ? detail.form : item)));
     } catch (err) {
       showToast({ tone: "error", title: "Errore salvataggio", message: err instanceof Error ? err.message : "Impossibile salvare il campo" });
@@ -775,6 +791,7 @@ async function handleBuilderSaveField(builderField: BuilderField) {
       await deleteOrgAdminFormField(selectedFormId, id);
       const detail = await fetchOrgAdminForm(selectedFormId);
       setSelectedForm(detail.form);
+      setBuilderDraftFields(decodeBuilderFields(detail.form));
       setForms((current) => current.map((item) => (item.id === detail.form.id ? detail.form : item)));
     } catch (err) {
       showToast({ tone: "error", title: "Errore eliminazione", message: err instanceof Error ? err.message : "Impossibile eliminare il campo" });
@@ -793,13 +810,13 @@ async function handleBuilderSaveField(builderField: BuilderField) {
       );
       const detail = await fetchOrgAdminForm(selectedFormId);
       setSelectedForm(detail.form);
+      setBuilderDraftFields(decodeBuilderFields(detail.form));
       setForms((current) => current.map((item) => (item.id === detail.form.id ? detail.form : item)));
     } catch (err) {
       showToast({ tone: "error", title: "Errore riordino", message: err instanceof Error ? err.message : "Impossibile riordinare i campi" });
     }
   }
 
-  const builderFields = useMemo(() => sortedFields.map(decodeField), [sortedFields]);
   const legacyFieldEditorHandlers = {
     handleDeleteField,
     handleFieldDrop,
@@ -817,6 +834,7 @@ async function handleBuilderSaveField(builderField: BuilderField) {
     setDeleteArmed(false);
     setActiveTab("design");
     setFormDraft(createSeededFormDraft());
+    setBuilderDraftFields([]);
     setFieldDraft(emptyFieldDraft(null));
     setEditingFieldId(null);
     setFieldKeyManual(false);
@@ -844,8 +862,8 @@ async function handleBuilderSaveField(builderField: BuilderField) {
   const builderTab = (
     <div className="h-[calc(100vh-210px)] overflow-hidden">
       <FormBuilder
-        fields={builderFields}
-        onChange={() => {}} // Local state handled internally by FormBuilder before sync
+        fields={builderDraftFields}
+        onChange={setBuilderDraftFields}
         onSaveField={handleBuilderSaveField}
         onDeleteField={handleBuilderDeleteField}
         onReorder={handleBuilderReorder}

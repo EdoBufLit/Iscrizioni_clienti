@@ -128,3 +128,4 @@
 - In pratica: gli org sempre a `0` o comunque sempre sotto soglia non devono ricevere alert iniziali solo perché il valore corrente e basso.
 
 - Se un theme switch viene richiesto come controllo discreto e unico, non duplicarlo tra breakpoint/layout diversi: deve esistere un solo mount per pagina, piccolo, in alto a destra, e il model tema va ridotto ai soli stati realmente richiesti dal cliente.
+- Se un fix DnD sembra corretto ma il parent passa ancora props derivate dal server e ignora `onChange`, il blocco puo apparire e poi sparire al rerender: verificare sempre il flusso completo `drop -> state parent -> refetch` prima di dichiarare risolto il drag & drop.

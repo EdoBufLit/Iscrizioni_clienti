@@ -1,10 +1,13 @@
 import { useState, useMemo, useEffect } from "react";
 import {
+  type CollisionDetection,
   DndContext,
   DragOverlay,
   closestCenter,
   KeyboardSensor,
   PointerSensor,
+  pointerWithin,
+  rectIntersection,
   useDroppable,
   useSensor,
   useSensors,
@@ -45,11 +48,7 @@ type Props = {
 export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onReorder, locked }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [items, setItems] = useState<BuilderField[]>(fields);
-
-  useEffect(() => {
-    setItems(fields);
-  }, [fields]);
+  const items = fields;
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -60,6 +59,25 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
+  );
+
+  useEffect(() => {
+    if (selectedId && !items.some((field) => field.key === selectedId)) {
+      setSelectedId(null);
+    }
+  }, [items, selectedId]);
+
+  const collisionDetection = useMemo<CollisionDetection>(
+    () => (args) => {
+      const pointerHits = pointerWithin(args);
+      if (pointerHits.length > 0) return pointerHits;
+
+      const rectHits = rectIntersection(args);
+      if (rectHits.length > 0) return rectHits;
+
+      return closestCenter(args);
+    },
+    [],
   );
 
   const selectedField = useMemo(
@@ -125,7 +143,6 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
         ...items.slice(insertIndex),
       ];
 
-      setItems(newItems);
       onChange(newItems);
       setSelectedId(newField.key);
       await onSaveField(newField);
@@ -142,7 +159,6 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
       
       if (oldIndex !== -1 && newIndex !== -1) {
         const newItems = arrayMove(items, oldIndex, newIndex);
-        setItems(newItems);
         onChange(newItems);
         await onReorder(newItems);
       }
@@ -151,7 +167,6 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
 
   const handleUpdateSelected = async (updatedField: BuilderField) => {
     const newItems = items.map((f) => (f.key === updatedField.key ? updatedField : f));
-    setItems(newItems);
     onChange(newItems);
     await onSaveField(updatedField);
   };
@@ -171,7 +186,6 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
       ...items.slice(index + 1)
     ];
     
-    setItems(newItems);
     onChange(newItems);
     setSelectedId(newField.key);
     await onSaveField(newField);
@@ -182,7 +196,6 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
       setSelectedId(null);
     }
     const newItems = items.filter(f => f.key !== fieldToDelete.key);
-    setItems(newItems);
     onChange(newItems);
     if (fieldToDelete.id > 0) {
       await onDeleteField(fieldToDelete.id);
@@ -202,7 +215,7 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={collisionDetection}
       onDragStart={handleDragStart}
       onDragCancel={handleDragCancel}
       onDragOver={handleDragOver}

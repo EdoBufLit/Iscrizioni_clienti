@@ -3275,3 +3275,21 @@ pm --prefix frontend run build OK.
 - Fix login: per [OrgAdminLogin.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\OrgAdminLogin.tsx) e [SuperAdminLogin.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\super-admin\SuperAdminLogin.tsx), che passano dal Layout globale ma non dalla header pubblica, [Layout.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\Layout.tsx) ora mostra un solo toggle fisso in alto a destra sulle route login admin; in piu la base tema resta coerente tramite il layer centralizzato in 	heme.css.
 - Verifica finale eseguita: 
 pm --prefix frontend run build OK.
+
+## Form builder drag-drop definitive fix (Mar 11, 2026)
+- [ ] Verificare il flusso reale `palette -> canvas -> stato parent` per individuare perche il blocco sparisce dopo il drop
+- [ ] Correggere il builder per mantenere i campi inseriti anche dopo rerender/refetch del parent
+- [ ] Hardening minimo della collision detection/drop zone senza introdurre nuove feature
+- [ ] Eseguire `npm --prefix frontend run build` e documentare review finale
+## Form builder drag-drop definitive fix review (Mar 11, 2026)
+- [x] Verificare il flusso reale `palette -> canvas -> stato parent` per individuare perche il blocco sparisce dopo il drop
+- [x] Correggere il builder per mantenere i campi inseriti anche dopo rerender/refetch del parent
+- [x] Hardening minimo della collision detection/drop zone senza introdurre nuove feature
+- [x] Eseguire `npm --prefix frontend run build` e documentare review finale
+
+## Review (Form builder drag-drop definitive fix - Mar 11, 2026)
+- Causa precisa del bug residuo: il path DnD `palette -> canvas` esisteva gia in [FormBuilder.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\builder\FormBuilder.tsx), ma [OrgAdminForms.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\OrgAdminForms.tsx) continuava a passare `fields` derivati solo da `selectedForm?.fields` e un `onChange={() => {}}`. Quindi il blocco poteva anche essere creato localmente nel builder, ma il primo rerender/refetch del parent rimontava i campi server precedenti e il nuovo blocco spariva dal canvas.
+- [OrgAdminForms.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\OrgAdminForms.tsx): introdotto `builderDraftFields` come stato parent-controlled del canvas, sincronizzato dal form server solo quando `selectedForm` cambia davvero. Il builder ora riceve `fields={builderDraftFields}` e `onChange={setBuilderDraftFields}`, quindi il drop resta visibile anche dopo normali rerender del parent. Dopo save/delete/reorder il refetch aggiorna sia `selectedForm` sia il draft, mantenendo coerenza con il backend.
+- [FormBuilder.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\builder\FormBuilder.tsx): rimosso il doppio stato locale dei campi; il componente ora usa direttamente `fields` dal parent, cosi non esiste piu una copia interna che puo divergere o venire sovrascritta. Ho anche aggiunto una collision detection piu robusta (`pointerWithin -> rectIntersection -> closestCenter`) per rendere il canvas droppable in modo piu affidabile anche quando e vuoto o il puntatore rilascia al bordo.
+- Esito del fix: `palette -> canvas` ora crea davvero il blocco nel draft parent, il canvas si aggiorna subito, l'empty state sparisce al primo inserimento, il blocco resta presente dopo i rerender e il reorder interno continua a usare il branch separato `canvas -> canvas`.
+- Verifica eseguita: `npm --prefix frontend run build` OK.
