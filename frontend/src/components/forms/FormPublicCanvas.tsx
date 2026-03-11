@@ -351,8 +351,8 @@ export function FormPublicCanvas({
       <div className={`${theme.hero} px-6 py-10 md:py-16 text-center`}>
         <div className="max-w-3xl mx-auto flex flex-col items-center">
           {form.show_logo && form.association?.name && (
-            <div className="mb-6 inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-white text-xl font-bold text-neutral-900 shadow-sm border border-neutral-100">
-               {form.association.name.substring(0, 2).toUpperCase()}
+            <div className="mb-6 inline-flex max-w-full items-center justify-center rounded-2xl border border-neutral-100 bg-white px-5 py-3 text-sm font-semibold text-neutral-900 shadow-sm">
+              <span className="truncate">{form.association.name}</span>
             </div>
           )}
           <h1 className={theme.title}>{form.title}</h1>

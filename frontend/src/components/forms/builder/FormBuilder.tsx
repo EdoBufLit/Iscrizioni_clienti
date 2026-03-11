@@ -120,9 +120,12 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [lastKnownOverId, setLastKnownOverId] = useState<string | null>(null);
+  const [creatingFieldKeys, setCreatingFieldKeys] = useState<string[]>([]);
   const lastKnownOverIdRef = useRef<string | null>(null);
   const pendingFieldSaveRef = useRef<{ field: BuilderField; items: BuilderField[] } | null>(null);
   const pendingFieldSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const creatingFieldKeysRef = useRef<Set<string>>(new Set());
+  const queuedCreateUpdatesRef = useRef<Map<string, BuilderField>>(new Map());
   const items = fields;
 
   const sensors = useSensors(
@@ -167,6 +170,45 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (creatingFieldKeysRef.current.size === 0) {
+      return;
+    }
+
+    let resolvedKey = false;
+
+    for (const key of Array.from(creatingFieldKeysRef.current)) {
+      const persistedField = items.find((field) => field.key === key && field.id > 0);
+      if (!persistedField) {
+        continue;
+      }
+
+      creatingFieldKeysRef.current.delete(key);
+      resolvedKey = true;
+
+      const queuedField = queuedCreateUpdatesRef.current.get(key);
+      queuedCreateUpdatesRef.current.delete(key);
+
+      if (!queuedField) {
+        continue;
+      }
+
+      const mergedField: BuilderField = {
+        ...queuedField,
+        id: persistedField.id,
+        key: persistedField.key,
+        type: persistedField.type,
+      };
+      const nextItems = items.map((field) => (field.key === key ? mergedField : field));
+      onChange(nextItems);
+      scheduleFieldSave(mergedField, nextItems);
+    }
+
+    if (resolvedKey) {
+      setCreatingFieldKeys(Array.from(creatingFieldKeysRef.current));
+    }
+  }, [items, onChange]);
 
   const scheduleFieldSave = (field: BuilderField, nextItems: BuilderField[]) => {
     pendingFieldSaveRef.current = { field, items: nextItems };
@@ -244,6 +286,8 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
         ...items.slice(insertIndex),
       ];
 
+      creatingFieldKeysRef.current.add(newField.key);
+      setCreatingFieldKeys(Array.from(creatingFieldKeysRef.current));
       onChange(newItems);
       setSelectedId(newField.key);
       await onSaveField(newField, newItems);
@@ -268,6 +312,10 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
   const handleUpdateSelected = async (updatedField: BuilderField) => {
     const newItems = items.map((f) => (f.key === updatedField.key ? updatedField : f));
     onChange(newItems);
+    if (creatingFieldKeysRef.current.has(updatedField.key)) {
+      queuedCreateUpdatesRef.current.set(updatedField.key, updatedField);
+      return;
+    }
     scheduleFieldSave(updatedField, newItems);
   };
 
@@ -294,6 +342,11 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
   const handleDelete = async (fieldToDelete: BuilderField) => {
     if (selectedId === fieldToDelete.key) {
       setSelectedId(null);
+    }
+    if (creatingFieldKeysRef.current.has(fieldToDelete.key)) {
+      creatingFieldKeysRef.current.delete(fieldToDelete.key);
+      queuedCreateUpdatesRef.current.delete(fieldToDelete.key);
+      setCreatingFieldKeys(Array.from(creatingFieldKeysRef.current));
     }
     if (pendingFieldSaveRef.current?.field.key === fieldToDelete.key) {
       pendingFieldSaveRef.current = null;
@@ -356,7 +409,7 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
           <PropertiesPanel
             selectedField={selectedField}
             onChange={handleUpdateSelected}
-            locked={locked || false}
+            locked={locked || creatingFieldKeys.includes(selectedId || "")}
           />
         </div>
       </div>

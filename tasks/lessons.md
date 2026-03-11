@@ -142,3 +142,6 @@
 
 
 - Se un pannello proprieta salva a ogni keypress e poi rifetch-a l'intero form, i campi controllati possono perdere caratteri o resettarsi mentre l'utente digita: per editor builder serve update locale immediato + save debounce, e gli update singoli non devono fare refetch totale del documento.
+
+- 2026-03-11: Nel form builder non basta debounciare il save delle proprieta. Per i blocchi appena creati serve distinguere il ciclo create->persisted-id dal ciclo update: se l'utente modifica label/placeholder/opzioni prima che arrivi l'id definitivo, bisogna accodare l'update e flusharlo solo dopo aver sostituito il record temporaneo, altrimenti il frontend ritenta una create e rompe il vincolo unico del field_key.
+- 2026-03-11: Nelle viste studio/lista non usare l'assenza di dati come trigger implicito dell'editor. Serve uno state esplicito lista vs editor, altrimenti back, delete e ingresso nella sezione diventano incoerenti.

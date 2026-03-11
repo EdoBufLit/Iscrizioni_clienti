@@ -3366,3 +3366,11 @@ pm --prefix frontend run build OK.
 - In `frontend/src/pages/org-admin/OrgAdminForms.tsx` gli update dei campi esistenti non rifetchano piu l'intero form: la risposta `field` dell'endpoint viene riapplicata solo allo stato necessario. Per i nuovi campi viene sostituito il placeholder locale con il campo persistito; per delete viene aggiornato lo stato locale senza round-trip completo del form.
 - Verifica reale con Playwright su backend locale `http://127.0.0.1:8010` e DB SQLite isolato `tmp_builder_dnd_e2e.db`: label lunga OK, placeholder lungo OK, campo `select` con opzioni multiple OK, reload pagina OK, persistenza DB finale OK (`options_json` salvato con tutte le opzioni).
 - Verifica build finale: `npm --prefix frontend run build` OK.
+
+- [x] Stabilizzare Pagine e moduli org admin: lista/empty state, back, delete-return, preview campi live e branding preview (2026-03-11)
+- [x] Verifica browser reale su /org-admin/comunicazioni?tab=moduli: empty state, create, drag+edit properties, preview, back, delete (2026-03-11)
+
+Review 2026-03-11
+- Root cause UI/state: la vista moduli apriva l'editor anche senza form, il back non ripuliva lo state editor e l'anteprima leggeva i fields server anziche il draft locale del builder.
+- Root cause builder properties: modificare subito un blocco appena creato poteva lanciare una seconda create con lo stesso field_key prima che arrivasse l'id persistito, causando UNIQUE constraint su form_fields.form_id + field_key.
+- Verificato in browser locale isolato: empty state iniziale, creazione form, drag Testo breve, modifica label/placeholder, drag Menu a tendina, modifica opzioni, preview con nome associazione, ritorno lista, eliminazione e ritorno empty state.

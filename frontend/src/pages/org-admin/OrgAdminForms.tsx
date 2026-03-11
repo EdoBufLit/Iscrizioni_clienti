@@ -183,9 +183,9 @@ function emptyFieldDraft(form?: AssociationForm | null, fieldType: AssociationFo
   };
 }
 
-function buildPreviewValues(form: AssociationForm | null): Record<string, unknown> {
+function buildPreviewValues(fields: AssociationFormField[]): Record<string, unknown> {
   const values: Record<string, unknown> = {};
-  for (const field of form?.fields || []) {
+  for (const field of fields) {
     if (field.field_type === "checkbox") values[field.field_key] = [field.options[0]].filter(Boolean);
     else if (field.field_type === "consent") values[field.field_key] = true;
     else if (field.field_type === "select" || field.field_type === "radio") values[field.field_key] = field.options[0] || "";
@@ -196,6 +196,33 @@ function buildPreviewValues(form: AssociationForm | null): Record<string, unknow
     else values[field.field_key] = "Anteprima contenuto";
   }
   return values;
+}
+
+function builderFieldToPreviewField(
+  field: BuilderField,
+  formId: number,
+  sortOrder: number,
+): AssociationFormField {
+  const payload = encodeField(field, sortOrder);
+  return {
+    id: field.id,
+    form_id: formId,
+    field_key: payload.field_key || field.key,
+    field_type: payload.field_type,
+    label: payload.label,
+    placeholder: payload.placeholder,
+    help_text: payload.help_text,
+    is_required: payload.is_required,
+    sort_order: payload.sort_order,
+    options: (payload.options || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean),
+  };
+}
+
+function buildPreviewFields(fields: BuilderField[], formId: number): AssociationFormField[] {
+  return fields.map((field, index) => builderFieldToPreviewField(field, formId, (index + 1) * 10));
 }
 
 function decodeBuilderFields(form: AssociationForm | null | undefined): BuilderField[] {
@@ -253,6 +280,7 @@ export function OrgAdminFormsWorkspace({
   const [error, setError] = useState("");
   const [forms, setForms] = useState<AssociationForm[]>([]);
   const [selectedFormId, setSelectedFormId] = useState<number | null>(null);
+  const [isCreatingForm, setIsCreatingForm] = useState(false);
   const [selectedForm, setSelectedForm] = useState<AssociationForm | null>(null);
   const [builderDraftFields, setBuilderDraftFields] = useState<BuilderField[]>([]);
   const [formDraft, setFormDraft] = useState(emptyFormDraft());
@@ -290,6 +318,7 @@ export function OrgAdminFormsWorkspace({
     if (locked) {
       setLoading(false);
       setForms([]);
+      setIsCreatingForm(false);
       setSelectedFormId(null);
       setSelectedForm(null);
       return;
@@ -299,7 +328,9 @@ export function OrgAdminFormsWorkspace({
 
   useEffect(() => {
     if (!selectedForm) {
-      setFormDraft(emptyFormDraft());
+      if (!isCreatingForm) {
+        setFormDraft(emptyFormDraft());
+      }
       setBuilderDraftFields([]);
       setFieldDraft(emptyFieldDraft(null));
       setEditingFieldId(null);
@@ -342,7 +373,7 @@ export function OrgAdminFormsWorkspace({
       setFieldKeyManual(false);
     }
     setDeleteArmed(false);
-  }, [selectedForm]);
+  }, [isCreatingForm, selectedForm]);
 
   useEffect(() => {
     if (!selectedFormId || activeTab !== "responses") {
@@ -370,9 +401,14 @@ export function OrgAdminFormsWorkspace({
     if (!path) return "";
     return `${window.location.origin}${path}`;
   }, [publicPath, selectedForm?.public_path]);
+  const isEditorOpen = isCreatingForm || selectedFormId !== null;
+  const previewFields = useMemo(
+    () => buildPreviewFields(builderDraftFields, selectedForm?.id ?? selectedFormId ?? 0),
+    [builderDraftFields, selectedForm?.id, selectedFormId],
+  );
   const sortedFields = useMemo(
-    () => [...(selectedForm?.fields || [])].sort((left, right) => left.sort_order - right.sort_order),
-    [selectedForm?.fields],
+    () => [...previewFields].sort((left, right) => left.sort_order - right.sort_order),
+    [previewFields],
   );
   const bookingMappingFieldOptions = useMemo(
     () =>
@@ -382,7 +418,10 @@ export function OrgAdminFormsWorkspace({
       })),
     [sortedFields],
   );
-  const previewValues = useMemo(() => buildPreviewValues(selectedForm), [selectedForm]);
+  const previewValues = useMemo(
+    () => buildPreviewValues(previewFields),
+    [previewFields],
+  );
   const selectedSubmissionEntries = useMemo(() => {
     const fieldMap = new Map((selectedForm?.fields || []).map((field) => [field.field_key, field.label]));
     return Object.entries(selectedSubmission?.payload_json || {}).map(([key, value]) => ({
@@ -391,6 +430,35 @@ export function OrgAdminFormsWorkspace({
       value,
     }));
   }, [selectedForm?.fields, selectedSubmission?.payload_json]);
+
+  function resetEditorState() {
+    setIsCreatingForm(false);
+    setSelectedFormId(null);
+    setSelectedForm(null);
+    setBuilderDraftFields([]);
+    setFormDraft(emptyFormDraft());
+    setFieldDraft(emptyFieldDraft(null));
+    setEditingFieldId(null);
+    setFieldKeyManual(false);
+    setDeleteArmed(false);
+    setDeleteFieldArmed(null);
+    setSubmissions([]);
+    setSelectedSubmission(null);
+    setActiveTab("builder");
+    setRealPreviewOpen(false);
+  }
+
+  async function openFormEditor(formId: number) {
+    const detail = await fetchOrgAdminForm(formId);
+    setIsCreatingForm(false);
+    setSelectedFormId(detail.form.id);
+    setSelectedForm(detail.form);
+    setBuilderDraftFields(decodeBuilderFields(detail.form));
+    setForms((current) => current.map((item) => (item.id === detail.form.id ? detail.form : item)));
+    setDeleteArmed(false);
+    setActiveTab("builder");
+    return detail.form;
+  }
 
   async function loadForms(nextSelectedId?: number | null) {
     if (locked) {
@@ -402,17 +470,12 @@ export function OrgAdminFormsWorkspace({
     try {
       const response = await fetchOrgAdminForms();
       setForms(response.items);
-      const targetId = nextSelectedId ?? selectedFormId ?? response.items[0]?.id ?? null;
-      if (targetId) {
-        const detail = await fetchOrgAdminForm(targetId);
-        setSelectedFormId(detail.form.id);
-        setSelectedForm(detail.form);
-        setBuilderDraftFields(decodeBuilderFields(detail.form));
-      } else {
-        setSelectedFormId(null);
-        setSelectedForm(null);
-        setBuilderDraftFields([]);
-        setFormDraft(emptyFormDraft());
+      if (typeof nextSelectedId === "number") {
+        await openFormEditor(nextSelectedId);
+      } else if (nextSelectedId === null) {
+        resetEditorState();
+      } else if (!isEditorOpen) {
+        resetEditorState();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore caricamento form.");
@@ -519,6 +582,7 @@ export function OrgAdminFormsWorkspace({
       const response = selectedFormId
         ? await updateOrgAdminForm(selectedFormId, payload)
         : await createOrgAdminForm(payload);
+      setIsCreatingForm(false);
       setSelectedFormId(response.form.id);
       setSelectedForm(response.form);
       showToast({
@@ -579,8 +643,8 @@ export function OrgAdminFormsWorkspace({
         title: "Form eliminato",
         message: "La pagina pubblica è stata rimossa.",
       });
-      setDeleteArmed(false);
-      await loadForms(null);
+      resetEditorState();
+      await loadForms();
     } catch (err) {
       showToast({
         tone: "error",
@@ -790,7 +854,16 @@ export function OrgAdminFormsWorkspace({
       if (isNew) {
         const savedBuilderField = decodeField(response.field);
         setBuilderDraftFields((current) =>
-          current.map((field) => (field.key === builderField.key ? savedBuilderField : field)),
+          current.map((field) =>
+            field.key === builderField.key
+              ? {
+                  ...field,
+                  id: savedBuilderField.id,
+                  key: savedBuilderField.key,
+                  type: savedBuilderField.type,
+                }
+              : field,
+          ),
         );
       }
 
@@ -874,6 +947,7 @@ export function OrgAdminFormsWorkspace({
   void legacyFieldEditorHandlers;
 
   function handleCreateNewForm() {
+    setIsCreatingForm(true);
     setSelectedFormId(null);
     setSelectedForm(null);
     setSubmissions([]);
@@ -898,12 +972,12 @@ export function OrgAdminFormsWorkspace({
       page_style: formDraft.page_style,
       visibility: formDraft.visibility,
       is_active: formDraft.is_active,
-      fields: selectedForm?.fields || [],
+      fields: previewFields,
       association: {
         name: admin?.organization?.name || "Associazione",
       },
     }),
-    [admin?.organization?.name, formDraft, selectedForm?.fields],
+    [admin?.organization?.name, formDraft, previewFields],
   );
 
   const builderTab = (
@@ -1308,8 +1382,8 @@ export function OrgAdminFormsWorkspace({
   );
 
   return (
-    <div className={embedded ? "" : (selectedFormId ? "w-full" : "container-shell py-6")}>
-      <div className={`${embedded ? "space-y-6" : (selectedFormId ? "w-full" : "mx-auto max-w-6xl space-y-6")}`}>
+    <div className={embedded ? "" : (isEditorOpen ? "w-full" : "container-shell py-6")}>
+      <div className={`${embedded ? "space-y-6" : (isEditorOpen ? "w-full" : "mx-auto max-w-6xl space-y-6")}`}>
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         ) : null}
@@ -1320,7 +1394,7 @@ export function OrgAdminFormsWorkspace({
           </div>
         ) : null}
 
-        {!selectedFormId && !loading && !adminLoading && forms.length > 0 && (
+        {!isEditorOpen && !loading && !adminLoading && forms.length > 0 && (
           <section className={`${studioCardClass} overflow-hidden`}>
             <div className="border-b border-neutral-200/80 px-5 py-4">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1339,9 +1413,7 @@ export function OrgAdminFormsWorkspace({
                   <div
                     key={form.id}
                     onClick={() => {
-                      setSelectedFormId(form.id);
-                      setSelectedForm(form);
-                      setBuilderDraftFields(decodeBuilderFields(form));
+                      void openFormEditor(form.id);
                     }}
                     className="group cursor-pointer rounded-xl border border-neutral-200 bg-white p-4 transition hover:border-neutral-300 hover:shadow-sm"
                   >
@@ -1365,14 +1437,28 @@ export function OrgAdminFormsWorkspace({
           </section>
         )}
 
-        
-        {(selectedFormId || forms.length === 0) && (
+        {!isEditorOpen && !loading && !adminLoading && forms.length === 0 && (
+          <section className={`${studioCardClass} px-6 py-10 text-center`}>
+            <div className="mx-auto max-w-xl">
+              <p className="text-xs font-bold uppercase tracking-[0.24em] text-neutral-500">Pagine e moduli</p>
+              <h2 className="mt-3 text-2xl font-semibold tracking-tight text-neutral-900">Nessun form creato</h2>
+              <p className="mt-2 text-sm text-neutral-500">
+                Crea il primo modulo pubblico per raccogliere iscrizioni, richieste o prenotazioni.
+              </p>
+              <button className="btn-primary mt-6" type="button" onClick={handleCreateNewForm} disabled={locked}>
+                Crea un nuovo form
+              </button>
+            </div>
+          </section>
+        )}
+
+        {isEditorOpen && (
           <section className={`flex flex-col min-h-screen bg-neutral-50`}>
             {/* Header Moderno */}
             <div className="sticky top-0 z-50 bg-white border-b border-neutral-200 px-4 md:px-8 py-3 shrink-0 flex flex-col gap-4 md:flex-row md:items-center md:justify-between shadow-sm">
               <div className="flex items-center gap-4">
                 <button 
-                  onClick={() => setSelectedFormId(null)}
+                  onClick={resetEditorState}
                   className="w-10 h-10 flex items-center justify-center rounded-full bg-neutral-50 border border-neutral-200 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 transition-colors"
                   title="Torna alla lista"
                 >
