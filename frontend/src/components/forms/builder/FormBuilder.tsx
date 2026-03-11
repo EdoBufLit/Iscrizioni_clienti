@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   type CollisionDetection,
   DndContext,
@@ -39,7 +39,7 @@ import { PropertiesPanel } from "./PropertiesPanel";
 type Props = {
   fields: BuilderField[];
   onChange: (fields: BuilderField[]) => void;
-  onSaveField: (field: BuilderField) => Promise<void>;
+  onSaveField: (field: BuilderField, nextFields: BuilderField[]) => Promise<void>;
   onDeleteField: (id: number) => Promise<void>;
   onReorder: (fields: BuilderField[]) => Promise<void>;
   locked?: boolean;
@@ -48,6 +48,8 @@ type Props = {
 export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onReorder, locked }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [lastKnownOverId, setLastKnownOverId] = useState<string | null>(null);
+  const lastKnownOverIdRef = useRef<string | null>(null);
   const items = fields;
 
   const sensors = useSensors(
@@ -105,27 +107,38 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
+    setLastKnownOverId(null);
+    lastKnownOverIdRef.current = null;
   };
 
   const handleDragCancel = (_event: DragCancelEvent) => {
     setActiveId(null);
+    setLastKnownOverId(null);
+    lastKnownOverIdRef.current = null;
   };
 
-  const handleDragOver = (_event: DragOverEvent) => {
-    // Only handle visual things if needed, sorting logic is in dragEnd
+  const handleDragOver = (event: DragOverEvent) => {
+    const nextOverId = event.over?.id?.toString() ?? null;
+    if (nextOverId) {
+      lastKnownOverIdRef.current = nextOverId;
+      setLastKnownOverId(nextOverId);
+      return;
+    }
+    setLastKnownOverId(null);
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
+    const resolvedOverId = over?.id?.toString() ?? lastKnownOverIdRef.current;
+    setLastKnownOverId(null);
+    lastKnownOverIdRef.current = null;
 
-    if (!over) return;
+    if (!resolvedOverId) return;
 
     const activeIdStr = active.id.toString();
     const activeSource = active.data.current?.source;
-    const overId = over.id.toString();
 
-    // 1. Drop dalla palette al canvas
     if (activeSource === "palette" || activeIdStr.startsWith("palette-")) {
       const type =
         (active.data.current?.itemType as VirtualFieldType | undefined)
@@ -133,9 +146,9 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
       const label = active.data.current?.label as string | undefined;
       const newField = createFieldFromPaletteItem(type, label);
       const overIndex =
-        overId === FORM_BUILDER_CANVAS_ID
+        resolvedOverId === FORM_BUILDER_CANVAS_ID
           ? items.length
-          : items.findIndex((field) => field.key === overId);
+          : items.findIndex((field) => field.key === resolvedOverId);
       const insertIndex = overIndex >= 0 ? overIndex : items.length;
       const newItems = [
         ...items.slice(0, insertIndex),
@@ -145,18 +158,17 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
 
       onChange(newItems);
       setSelectedId(newField.key);
-      await onSaveField(newField);
+      await onSaveField(newField, newItems);
       return;
     }
 
-    // 2. Riordino interno al canvas
-    if (activeSource === "canvas" && active.id !== over.id) {
+    if (activeSource === "canvas" && active.id.toString() !== resolvedOverId) {
       const oldIndex = items.findIndex((f) => f.key === active.id);
       const newIndex =
-        overId === FORM_BUILDER_CANVAS_ID
+        resolvedOverId === FORM_BUILDER_CANVAS_ID
           ? items.length - 1
-          : items.findIndex((f) => f.key === over.id);
-      
+          : items.findIndex((f) => f.key === resolvedOverId);
+
       if (oldIndex !== -1 && newIndex !== -1) {
         const newItems = arrayMove(items, oldIndex, newIndex);
         onChange(newItems);
@@ -168,7 +180,7 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
   const handleUpdateSelected = async (updatedField: BuilderField) => {
     const newItems = items.map((f) => (f.key === updatedField.key ? updatedField : f));
     onChange(newItems);
-    await onSaveField(updatedField);
+    await onSaveField(updatedField, newItems);
   };
 
   const handleDuplicate = async (fieldToDuplicate: BuilderField) => {
@@ -188,7 +200,7 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
     
     onChange(newItems);
     setSelectedId(newField.key);
-    await onSaveField(newField);
+    await onSaveField(newField, newItems);
   };
 
   const handleDelete = async (fieldToDelete: BuilderField) => {
@@ -211,6 +223,9 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
       },
     }),
   };
+
+  const isCanvasDropTarget =
+    isCanvasOver || lastKnownOverId === FORM_BUILDER_CANVAS_ID || items.some((field) => field.key === lastKnownOverId);
 
   return (
     <DndContext
@@ -240,7 +255,7 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
           <div
             ref={setCanvasNodeRef}
             className={`rounded-3xl border p-6 shadow-inner min-h-[60vh] transition-colors ${
-              isCanvasOver
+              isCanvasDropTarget
                 ? "border-brand bg-brand/5 ring-2 ring-brand/20"
                 : "border-neutral-200 bg-neutral-50/50"
             }`}

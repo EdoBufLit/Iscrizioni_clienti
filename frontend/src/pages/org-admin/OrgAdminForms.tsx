@@ -329,10 +329,6 @@ export function OrgAdminFormsWorkspace({
   }, [selectedForm]);
 
   useEffect(() => {
-    setBuilderDraftFields(decodeBuilderFields(selectedForm));
-  }, [selectedForm]);
-
-  useEffect(() => {
     if (!selectedFormId || activeTab !== "responses") {
       if (!selectedFormId) {
         setSubmissions([]);
@@ -415,6 +411,7 @@ export function OrgAdminFormsWorkspace({
       const response = await fetchOrgAdminFormSubmissions(formId);
       setSubmissions(response.items);
       setSelectedForm(response.form);
+      setBuilderDraftFields(decodeBuilderFields(response.form));
       setForms((current) => current.map((item) => (item.id === response.form.id ? response.form : item)));
       if (response.items.length > 0) {
         const preferredSubmission =
@@ -757,11 +754,10 @@ export function OrgAdminFormsWorkspace({
     }
   }
 
-async function handleBuilderSaveField(builderField: BuilderField) {
+  async function handleBuilderSaveField(builderField: BuilderField, nextBuilderFields: BuilderField[]) {
     if (!selectedFormId || locked) return;
     const isNew = builderField.id < 0;
-
-    const currentFields = builderDraftFields;
+    const currentFields = nextBuilderFields;
     const index = currentFields.findIndex(
       (field) => field.key === builderField.key || (builderField.id > 0 && field.id === builderField.id),
     );
@@ -1294,6 +1290,7 @@ async function handleBuilderSaveField(builderField: BuilderField) {
                     onClick={() => {
                       setSelectedFormId(form.id);
                       setSelectedForm(form);
+                      setBuilderDraftFields(decodeBuilderFields(form));
                     }}
                     className="group cursor-pointer rounded-xl border border-neutral-200 bg-white p-4 transition hover:border-neutral-300 hover:shadow-sm"
                   >
