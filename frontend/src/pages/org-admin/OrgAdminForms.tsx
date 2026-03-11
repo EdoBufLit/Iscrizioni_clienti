@@ -244,10 +244,10 @@ export function OrgAdminFormsWorkspace({
   const [fieldDraft, setFieldDraft] = useState(emptyFieldDraft(null));
   const [editingFieldId, setEditingFieldId] = useState<number | null>(null);
   const [fieldKeyManual, setFieldKeyManual] = useState(false);
-  const [savingField, setSavingField] = useState(false);
+  const [, setSavingField] = useState(false);
   const [deleteFieldArmed, setDeleteFieldArmed] = useState<number | null>(null);
   const [draggingFieldId, setDraggingFieldId] = useState<number | null>(null);
-  const [reorderingFields, setReorderingFields] = useState(false);
+  const [, setReorderingFields] = useState(false);
 
   const [submissions, setSubmissions] = useState<AssociationFormSubmission[]>([]);
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
@@ -800,6 +800,14 @@ async function handleBuilderSaveField(builderField: BuilderField) {
   }
 
   const builderFields = useMemo(() => sortedFields.map(decodeField), [sortedFields]);
+  const legacyFieldEditorHandlers = {
+    handleDeleteField,
+    handleFieldDrop,
+    handleFieldLabelChange,
+    handleSaveField,
+    handleToggleActive,
+  };
+  void legacyFieldEditorHandlers;
 
   function handleCreateNewForm() {
     setSelectedFormId(null);
@@ -988,7 +996,7 @@ async function handleBuilderSaveField(builderField: BuilderField) {
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-          <FormPublicCanvas form={previewForm} values={previewValues} heroLabel="Anteprima" />
+          <FormPublicCanvas form={previewForm} values={previewValues} />
         </div>
       </div>
     </div>

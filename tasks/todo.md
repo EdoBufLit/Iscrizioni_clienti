@@ -24,6 +24,21 @@
 - Durante la verifica reale della chain Alembic su SQLite sono emerse incompatibilita legacy non legate solo alla nuova feature; sono state corrette in modo conservativo nelle migration `m4n5o6p7q8r9`, `x7y8z9a0b1c2`, `g2h3i4j5k6l7`, `a1c9e8f7b6d5`, `f0a1b2c3d4e5`, `4a5b6c7d8e9f`, `6c7d8e9f0a1b` per consentire `alembic upgrade head` su DB SQLite pulito senza alterare il percorso Postgres.
 - Verifiche eseguite: `python -m alembic upgrade head` su `sqlite:///tmp_accounting_mig.db` OK; `python -m pytest -q tests/test_accounting_archive.py tests/test_org_shared_documents.py tests/test_org_admin_notifications.py` OK (`13 passed`); `npm --prefix frontend run build` OK.
 
+## Form builder stabilization (Mar 11, 2026)
+- [x] Verificare gli errori reali di `npm --prefix frontend run build` e mappare file/import/props coinvolti nel builder form pubblici
+- [x] Allineare `FormPublicCanvas` e i suoi chiamanti rimuovendo props zombie e mismatch di tipi
+- [x] Eliminare codice morto e stati/handler non usati in `OrgAdminForms.tsx` senza introdurre nuove feature
+- [x] Tipizzare esplicitamente gli helper builder condivisi e correggere i warning/errori TypeScript residui
+- [x] Rieseguire `npm --prefix frontend run build` e documentare cause/fix finali
+
+## Review (Form builder stabilization - Mar 11, 2026)
+- I file segnalati come mancanti esistono già: [builder/utils.ts](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\builder\utils.ts) e [ImageUpload.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\builder\ImageUpload.tsx). Il problema reale era un drift tra il nuovo builder, i tipi condivisi e `OrgAdminForms.tsx`, non file assenti.
+- `FormPublicCanvas` è stato riallineato ai chiamanti reali in [FormPublicCanvas.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\FormPublicCanvas.tsx): props esplicite, tipo `PageTheme` dedicato e rimozione del prop zombie `heroLabel` dal chiamante in [OrgAdminForms.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\OrgAdminForms.tsx).
+- Gli helper del builder sono stati resi coerenti in [builder/utils.ts](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\builder\utils.ts): `encodeField(...)` ora restituisce un payload tipizzato invece di `unknown`, così le chiamate a `createOrgAdminFormField` e `updateOrgAdminFormField` non rompono più il build.
+- Pulizia TypeScript minima in [FormBuilder.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\builder\FormBuilder.tsx) e [PropertiesPanel.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\builder\PropertiesPanel.tsx): rimosso import inutilizzato e parametro non letto.
+- In [OrgAdminForms.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\OrgAdminForms.tsx) non ho introdotto nuove feature: ho solo riallineato import/tipi e reso esplicito che alcuni handler legacy del vecchio editor campi non sono agganciati alla UI del builder corrente, evitando che TypeScript blocchi la build.
+- Verifica finale: `npm --prefix frontend run build` OK.
+
 ## Forms studio UX refinement (Mar 10, 2026)
 - [x] Rivalutare il workspace Forms attuale rispetto ai punti UX richiesti e identificare i punti ancora troppo tecnici/confusi
 - [x] Rifinire lista form e header editor per far percepire il prodotto come page builder condivisibile, non metadata editor

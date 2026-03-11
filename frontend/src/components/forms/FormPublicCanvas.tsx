@@ -28,6 +28,8 @@ type FormPublicCanvasProps = {
   interactive?: boolean;
 };
 
+type PageTheme = ReturnType<typeof getPageTheme>;
+
 const baseInputClass =
   "mt-1 w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-brand/40 focus:ring-2 focus:ring-brand/10 shadow-sm";
 
@@ -73,7 +75,7 @@ function renderField(props: {
   value: unknown;
   interactive: boolean;
   accentColor: string;
-  theme: any;
+  theme: PageTheme;
   onValueChange?: (fieldKey: string, nextValue: unknown) => void;
 }) {
   const { field: rawField, value, interactive, accentColor, theme, onValueChange } = props;

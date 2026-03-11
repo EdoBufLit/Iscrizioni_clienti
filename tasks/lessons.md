@@ -114,6 +114,7 @@
 - Quando aggiungo nuove env applicative per una feature backend opzionale, devo verificare subito l'intera catena deploy: GitHub Secret -> workflow che scrive `.env` -> `docker-compose` runtime. Aggiornare solo codice e docs non basta e il problema emerge solo dopo deploy.
 - Nei cleanup Docker pre-deploy non devo assumere pattern legacy dei nomi container (`_app-...`). Se il deploy usa `COMPOSE_PROJECT_NAME=app`, i nomi reali da intercettare sono `app-...-1`; il filtro del workflow va verificato contro il nome effettivo visto nei log errore.
 - Se una migration nuova tocca tabelle che il repo può già creare via `create_all()` o bootstrap, il downgrade non deve dropparle alla cieca: va reso conservativo e non distruttivo, lasciando la tabella intatta quando la provenance non è certa.
+- Quando sostituisco un editor esistente con un builder UI, devo rimuovere subito stati/handler legacy non più usati e tipizzare esplicitamente helper condivisi (`props`, payload field, callback) prima di chiudere: altrimenti `npm run build` si rompe per dead code, import drift o ritorni `unknown`.
 ## 2026-03-07 - Email flow verification must prove delivery, not just queueing
 
 - Quando aggiungo un flusso email basato su outbox/worker, non basta verificare che esista una riga in `email_outbox`.
