@@ -30,7 +30,8 @@ export function CanvasItem({
   } = useSortable({
     id: field.key,
     data: {
-      type: "Field",
+      source: "canvas",
+      type: "field",
       field,
     },
   });

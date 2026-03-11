@@ -43,6 +43,30 @@ export const VIRTUAL_TYPE_PREFIXES: Record<string, string> = {
 };
 
 export const META_DELIMITER = "|||META:";
+export const FORM_BUILDER_CANVAS_ID = "form-builder-canvas";
+
+export function createFieldFromPaletteItem(
+  type: VirtualFieldType,
+  label?: string,
+): BuilderField {
+  const paletteItem = PALETTE_ITEMS.find((item) => item.type === type);
+  const resolvedLabel = label || paletteItem?.label || "Nuovo blocco";
+
+  return {
+    id: -Date.now(),
+    type,
+    key: generateFieldKey(type, resolvedLabel),
+    label: resolvedLabel,
+    placeholder: "",
+    helpText: "",
+    required: false,
+    optionsText: ["select", "radio", "checkbox"].includes(type)
+      ? "Opzione 1, Opzione 2"
+      : "",
+    width: "100%",
+    hideLabel: false,
+  };
+}
 
 export function decodeField(apiField: AssociationFormField): BuilderField {
   let virtualType: VirtualFieldType = apiField.field_type;

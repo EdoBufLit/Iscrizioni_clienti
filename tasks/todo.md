@@ -3213,3 +3213,17 @@ pm --prefix frontend run build -> OK
 - Root cause: il cleanup cercava pattern legacy `_app-email-worker-1`, ma il nome reale usato da Docker Compose nel deploy era `app-email-worker-1`; il container stale quindi sopravviveva e il successivo `docker compose up -d --remove-orphans` falliva con conflict sul nome.
 - Workflow corretto in [.github/workflows/deploy-hetzner.yml](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\.github\workflows\deploy-hetzner.yml): il loop di cleanup ora cerca e rimuove in modo robusto sia gli exact-name `^/app-...-1$` sia le varianti `app-...-1` per `web`, `email-worker`, `low-cards-worker` e `affiliation-video-worker`.
 - Il fix resta data-safe: non usa `down -v`, non tocca named volumes e non tocca Postgres; rimuove solo container stale che bloccano la recreate.
+
+## Form builder drag-drop fix (Mar 11, 2026)
+- [x] Analizzare DndContext, palette draggable, canvas droppable e flusso palette -> canvas
+- [x] Correggere la logica di drop/inserimento senza toccare feature non richieste
+- [x] Verificare reorder interno e build frontend
+
+## Review (Form builder drag-drop fix - Mar 11, 2026)
+- Causa precisa: il canvas non era registrato come droppable con id stabile, quindi nel path palette -> canvas `onDragEnd` riceveva spesso `over = null` oppure un target non riconosciuto; di conseguenza la branch di creazione non scattava e il blocco tornava in libreria.
+- [FormBuilder.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\builder\FormBuilder.tsx): aggiunti `useDroppable`, id stabile `form-builder-canvas`, distinzione esplicita `source=palette` vs `source=canvas`, inserimento reale nello state locale al drop, highlight del canvas quando riceve il drag e `pointer-events-none` sull'empty state per non interferire col drop.
+- [PaletteItem.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\builder\PaletteItem.tsx) e [CanvasItem.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\builder\CanvasItem.tsx): payload DnD riallineati con `source` chiaro per distinguere creazione da palette e reorder interno.
+- [utils.ts](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\builder\utils.ts): introdotta factory minima `createFieldFromPaletteItem(...)` e costante condivisa `FORM_BUILDER_CANVAS_ID` per creare un blocco valido senza cambiare il modello dati backend.
+- Esito atteso del fix: il drop palette -> canvas ora crea subito il blocco nello state del builder, lo rende visibile nel canvas, selezionato e pronto per il pannello proprietà; il reorder interno continua a passare dal branch separato `source=canvas`.
+- Verifica eseguita: `npm --prefix frontend run build` OK. Nel workspace attuale non è presente un harness browser/e2e già configurato, quindi la conferma funzionale deriva dal path DnD corretto nel codice e dalla build verde, non da un test UI automatizzato.
+

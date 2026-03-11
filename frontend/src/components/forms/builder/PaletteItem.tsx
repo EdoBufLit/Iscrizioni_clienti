@@ -14,7 +14,8 @@ export function PaletteItem({ item }: Props) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `palette-${item.type}`,
     data: {
-      type: "PaletteItem",
+      source: "palette",
+      type: "palette-item",
       itemType: item.type,
       label: item.label,
     },

@@ -5,11 +5,13 @@ import {
   closestCenter,
   KeyboardSensor,
   PointerSensor,
+  useDroppable,
   useSensor,
   useSensors,
   DragStartEvent,
   DragEndEvent,
   DragOverEvent,
+  DragCancelEvent,
   defaultDropAnimationSideEffects,
 } from "@dnd-kit/core";
 import {
@@ -19,7 +21,14 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 
-import { BuilderField, VirtualFieldType, generateFieldKey, PALETTE_ITEMS } from "./utils";
+import {
+  BuilderField,
+  VirtualFieldType,
+  createFieldFromPaletteItem,
+  FORM_BUILDER_CANVAS_ID,
+  generateFieldKey,
+  PALETTE_ITEMS,
+} from "./utils";
 import { PaletteItem } from "./PaletteItem";
 import { CanvasItem } from "./CanvasItem";
 import { PropertiesPanel } from "./PropertiesPanel";
@@ -57,6 +66,13 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
     () => items.find((f) => f.key === selectedId) || null,
     [items, selectedId]
   );
+  const { isOver: isCanvasOver, setNodeRef: setCanvasNodeRef } = useDroppable({
+    id: FORM_BUILDER_CANVAS_ID,
+    data: {
+      accepts: ["palette", "canvas"],
+      type: "canvas-dropzone",
+    },
+  });
 
   const activeItem = useMemo(() => {
     if (!activeId) return null;
@@ -73,6 +89,10 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
     setActiveId(event.active.id as string);
   };
 
+  const handleDragCancel = (_event: DragCancelEvent) => {
+    setActiveId(null);
+  };
+
   const handleDragOver = (_event: DragOverEvent) => {
     // Only handle visual things if needed, sorting logic is in dragEnd
   };
@@ -84,52 +104,46 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
     if (!over) return;
 
     const activeIdStr = active.id.toString();
+    const activeSource = active.data.current?.source;
+    const overId = over.id.toString();
 
     // 1. Drop dalla palette al canvas
-    if (activeIdStr.startsWith("palette-")) {
-      const type = activeIdStr.replace("palette-", "") as VirtualFieldType;
-      const paletteItem = PALETTE_ITEMS.find(p => p.type === type);
-      
-      if (paletteItem) {
-        const newField: BuilderField = {
-          id: -Date.now(), // Temporary ID
-          type,
-          key: generateFieldKey(type, paletteItem.label),
-          label: paletteItem.label,
-          placeholder: "",
-          helpText: "",
-          required: false,
-          optionsText: ["select", "radio", "checkbox"].includes(type) ? "Opzione 1, Opzione 2" : "",
-          width: "100%",
-          hideLabel: false,
-        };
+    if (activeSource === "palette" || activeIdStr.startsWith("palette-")) {
+      const type =
+        (active.data.current?.itemType as VirtualFieldType | undefined)
+        || (activeIdStr.replace("palette-", "") as VirtualFieldType);
+      const label = active.data.current?.label as string | undefined;
+      const newField = createFieldFromPaletteItem(type, label);
+      const overIndex =
+        overId === FORM_BUILDER_CANVAS_ID
+          ? items.length
+          : items.findIndex((field) => field.key === overId);
+      const insertIndex = overIndex >= 0 ? overIndex : items.length;
+      const newItems = [
+        ...items.slice(0, insertIndex),
+        newField,
+        ...items.slice(insertIndex),
+      ];
 
-        const overIndex = items.findIndex((f) => f.key === over.id);
-        const newIndex = overIndex >= 0 ? overIndex : items.length;
-        
-        const newItems = [
-          ...items.slice(0, newIndex),
-          newField,
-          ...items.slice(newIndex)
-        ];
-        
-        setItems(newItems);
-        setSelectedId(newField.key);
-        
-        // Save immediately
-        await onSaveField(newField);
-      }
+      setItems(newItems);
+      onChange(newItems);
+      setSelectedId(newField.key);
+      await onSaveField(newField);
       return;
     }
 
     // 2. Riordino interno al canvas
-    if (active.id !== over.id) {
+    if (activeSource === "canvas" && active.id !== over.id) {
       const oldIndex = items.findIndex((f) => f.key === active.id);
-      const newIndex = items.findIndex((f) => f.key === over.id);
+      const newIndex =
+        overId === FORM_BUILDER_CANVAS_ID
+          ? items.length - 1
+          : items.findIndex((f) => f.key === over.id);
       
       if (oldIndex !== -1 && newIndex !== -1) {
         const newItems = arrayMove(items, oldIndex, newIndex);
         setItems(newItems);
+        onChange(newItems);
         await onReorder(newItems);
       }
     }
@@ -158,6 +172,7 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
     ];
     
     setItems(newItems);
+    onChange(newItems);
     setSelectedId(newField.key);
     await onSaveField(newField);
   };
@@ -168,6 +183,7 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
     }
     const newItems = items.filter(f => f.key !== fieldToDelete.key);
     setItems(newItems);
+    onChange(newItems);
     if (fieldToDelete.id > 0) {
       await onDeleteField(fieldToDelete.id);
     }
@@ -188,6 +204,7 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
       sensors={sensors}
       collisionDetection={closestCenter}
       onDragStart={handleDragStart}
+      onDragCancel={handleDragCancel}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
@@ -207,14 +224,21 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
 
         {/* Center Column: Canvas */}
         <div className="flex flex-col gap-4">
-          <div className="bg-neutral-50/50 p-6 rounded-3xl border border-neutral-200 shadow-inner min-h-[60vh]">
+          <div
+            ref={setCanvasNodeRef}
+            className={`rounded-3xl border p-6 shadow-inner min-h-[60vh] transition-colors ${
+              isCanvasOver
+                ? "border-brand bg-brand/5 ring-2 ring-brand/20"
+                : "border-neutral-200 bg-neutral-50/50"
+            }`}
+          >
             <SortableContext items={items.map((i) => i.key)} strategy={verticalListSortingStrategy}>
               <div 
                 className="flex flex-wrap gap-4 items-start"
                 onClick={() => setSelectedId(null)}
               >
                 {items.length === 0 ? (
-                  <div className="w-full h-40 flex flex-col items-center justify-center border-2 border-dashed border-neutral-300 rounded-2xl bg-white text-neutral-400">
+                  <div className="pointer-events-none w-full h-40 flex flex-col items-center justify-center border-2 border-dashed border-neutral-300 rounded-2xl bg-white text-neutral-400">
                     <svg className="w-10 h-10 mb-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
                     </svg>
