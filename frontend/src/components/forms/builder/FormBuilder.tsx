@@ -32,8 +32,8 @@ import {
   generateFieldKey,
   PALETTE_ITEMS,
 } from "./utils";
-import { PaletteItem } from "./PaletteItem";
-import { CanvasItem } from "./CanvasItem";
+import { PaletteItem, StaticPaletteItem } from "./PaletteItem";
+import { CanvasItem, StaticCanvasItem } from "./CanvasItem";
 import { PropertiesPanel } from "./PropertiesPanel";
 
 type Props = {
@@ -44,6 +44,77 @@ type Props = {
   onReorder: (fields: BuilderField[]) => Promise<void>;
   locked?: boolean;
 };
+
+type BuilderCanvasProps = {
+  items: BuilderField[];
+  selectedId: string | null;
+  setSelectedId: (id: string | null) => void;
+  handleDelete: (field: BuilderField) => Promise<void>;
+  handleDuplicate: (field: BuilderField) => Promise<void>;
+  lastKnownOverId: string | null;
+};
+
+function BuilderCanvas({
+  items,
+  selectedId,
+  setSelectedId,
+  handleDelete,
+  handleDuplicate,
+  lastKnownOverId,
+}: BuilderCanvasProps) {
+  const { isOver: isCanvasOver, setNodeRef: setCanvasNodeRef } = useDroppable({
+    id: FORM_BUILDER_CANVAS_ID,
+    data: {
+      accepts: ["palette", "canvas"],
+      type: "canvas-dropzone",
+    },
+  });
+
+  const isCanvasDropTarget =
+    isCanvasOver
+    || lastKnownOverId === FORM_BUILDER_CANVAS_ID
+    || items.some((field) => field.key === lastKnownOverId);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div
+        ref={setCanvasNodeRef}
+        className={`rounded-3xl border p-6 shadow-inner min-h-[60vh] transition-colors ${
+          isCanvasDropTarget
+            ? "border-brand bg-brand/5 ring-2 ring-brand/20"
+            : "border-neutral-200 bg-neutral-50/50"
+        }`}
+      >
+        <SortableContext items={items.map((item) => item.key)} strategy={verticalListSortingStrategy}>
+          <div
+            className="flex flex-wrap gap-4 items-start"
+            onClick={() => setSelectedId(null)}
+          >
+            {items.length === 0 ? (
+              <div className="pointer-events-none w-full h-40 flex flex-col items-center justify-center border-2 border-dashed border-neutral-300 rounded-2xl bg-white text-neutral-400">
+                <svg className="w-10 h-10 mb-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                </svg>
+                <p className="text-sm font-medium">Trascina qui un blocco per iniziare</p>
+              </div>
+            ) : (
+              items.map((field) => (
+                <CanvasItem
+                  key={field.key}
+                  field={field}
+                  isSelected={selectedId === field.key}
+                  onSelect={() => setSelectedId(field.key)}
+                  onDelete={() => void handleDelete(field)}
+                  onDuplicate={() => void handleDuplicate(field)}
+                />
+              ))
+            )}
+          </div>
+        </SortableContext>
+      </div>
+    </div>
+  );
+}
 
 export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onReorder, locked }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -86,13 +157,6 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
     () => items.find((f) => f.key === selectedId) || null,
     [items, selectedId]
   );
-  const { isOver: isCanvasOver, setNodeRef: setCanvasNodeRef } = useDroppable({
-    id: FORM_BUILDER_CANVAS_ID,
-    data: {
-      accepts: ["palette", "canvas"],
-      type: "canvas-dropzone",
-    },
-  });
 
   const activeItem = useMemo(() => {
     if (!activeId) return null;
@@ -224,9 +288,6 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
     }),
   };
 
-  const isCanvasDropTarget =
-    isCanvasOver || lastKnownOverId === FORM_BUILDER_CANVAS_ID || items.some((field) => field.key === lastKnownOverId);
-
   return (
     <DndContext
       sensors={sensors}
@@ -250,44 +311,14 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
           </div>
         </div>
 
-        {/* Center Column: Canvas */}
-        <div className="flex flex-col gap-4">
-          <div
-            ref={setCanvasNodeRef}
-            className={`rounded-3xl border p-6 shadow-inner min-h-[60vh] transition-colors ${
-              isCanvasDropTarget
-                ? "border-brand bg-brand/5 ring-2 ring-brand/20"
-                : "border-neutral-200 bg-neutral-50/50"
-            }`}
-          >
-            <SortableContext items={items.map((i) => i.key)} strategy={verticalListSortingStrategy}>
-              <div 
-                className="flex flex-wrap gap-4 items-start"
-                onClick={() => setSelectedId(null)}
-              >
-                {items.length === 0 ? (
-                  <div className="pointer-events-none w-full h-40 flex flex-col items-center justify-center border-2 border-dashed border-neutral-300 rounded-2xl bg-white text-neutral-400">
-                    <svg className="w-10 h-10 mb-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
-                    </svg>
-                    <p className="text-sm font-medium">Trascina qui un blocco per iniziare</p>
-                  </div>
-                ) : (
-                  items.map((field) => (
-                    <CanvasItem
-                      key={field.key}
-                      field={field}
-                      isSelected={selectedId === field.key}
-                      onSelect={() => setSelectedId(field.key)}
-                      onDelete={() => handleDelete(field)}
-                      onDuplicate={() => handleDuplicate(field)}
-                    />
-                  ))
-                )}
-              </div>
-            </SortableContext>
-          </div>
-        </div>
+        <BuilderCanvas
+          items={items}
+          selectedId={selectedId}
+          setSelectedId={setSelectedId}
+          handleDelete={handleDelete}
+          handleDuplicate={handleDuplicate}
+          lastKnownOverId={lastKnownOverId}
+        />
 
         {/* Right Column: Properties */}
         <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm sticky top-6 max-h-[85vh] overflow-y-auto custom-scrollbar">
@@ -301,19 +332,18 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
 
       <DragOverlay dropAnimation={dropAnimation}>
         {activeItem?.type === "palette" ? (
-          <div className="opacity-90 scale-105 shadow-xl ring-2 ring-brand/30 rounded-xl overflow-hidden">
-            <PaletteItem item={activeItem.data as any} />
+          <div className="pointer-events-none opacity-90 scale-105 shadow-xl ring-2 ring-brand/30 rounded-xl overflow-hidden">
+            <StaticPaletteItem item={activeItem.data as any} />
           </div>
         ) : null}
         {activeItem?.type === "field" ? (
-          <div className="opacity-90 scale-105 shadow-2xl">
-            <CanvasItem
+          <div className="pointer-events-none opacity-90 scale-105 shadow-2xl">
+            <StaticCanvasItem
               field={activeItem.data as BuilderField}
               isSelected={true}
               onSelect={() => {}}
               onDelete={() => {}}
               onDuplicate={() => {}}
-              isOverlay
             />
           </div>
         ) : null}

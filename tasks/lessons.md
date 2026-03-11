@@ -135,3 +135,7 @@
 - Se un builder salva subito dopo un drop ottimistico, il callback di persistenza non deve leggere il draft del parent dalla render precedente: bisogna passargli i `nextFields` appena costruiti o il payload verra calcolato su stato stantio.
 - Se il sito pubblico ha un proprio `index.css` con shell e surface hardcoded light-only, la dark mode non si risolve toccando solo card/layout dashboard: bisogna sovrascrivere anche `public-shell`, `public-header`, `section-title/heading` e i controlli form del layer pubblico.
 - Quando la login usa componenti semantici ma vive dentro una shell pubblica separata, verificare sempre entrambi i layer: `auth-*` e `public-shell`. Se uno resta light-only, il risultato finale e una pagina mista con sfondo chiaro e card dark.
+
+
+- Se un target `useDroppable()` vive nello stesso componente che restituisce `DndContext`, il hook legge il contesto sbagliato e il drop puo fallire in modo intermittente o sembrare bloccato in palette: il droppable va sempre montato in un child reale del provider.
+- Se l'utente contesta un fix DnD, non basta la build o la lettura del codice: va riprodotto in browser con sessione reale e verificati almeno inserimento, persistenza dopo reload e reorder successivo prima del commit.

@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { BuilderField } from "./utils";
@@ -9,47 +10,36 @@ type Props = {
   onSelect: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
+};
+
+type CanvasItemFrameProps = Props & {
+  nodeRef?: ReturnType<typeof useSortable>["setNodeRef"];
+  attributes?: ReturnType<typeof useSortable>["attributes"];
+  listeners?: ReturnType<typeof useSortable>["listeners"];
+  style?: CSSProperties;
+  isDragging?: boolean;
   isOverlay?: boolean;
 };
 
-export function CanvasItem({
+function CanvasItemFrame({
   field,
   isSelected,
   onSelect,
   onDelete,
   onDuplicate,
+  nodeRef,
+  attributes,
+  listeners,
+  style,
+  isDragging = false,
   isOverlay,
-}: Props) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
-    id: field.key,
-    data: {
-      source: "canvas",
-      type: "field",
-      field,
-    },
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.3 : 1,
-    zIndex: isDragging ? 10 : 1,
-    width: field.width === "50%" ? "calc(50% - 0.5rem)" : "100%",
-  };
-
+}: CanvasItemFrameProps) {
   const meta = PALETTE_ITEMS.find((i) => i.type === field.type);
 
   if (isDragging && !isOverlay) {
     return (
       <div
-        ref={setNodeRef}
+        ref={nodeRef}
         style={style}
         className="rounded-xl border-2 border-brand border-dashed bg-brand/5 h-20 w-full"
       />
@@ -85,7 +75,7 @@ export function CanvasItem({
 
   return (
     <div
-      ref={setNodeRef}
+      ref={nodeRef}
       style={style}
       className={`group relative flex flex-col rounded-[1.2rem] bg-white transition-all cursor-pointer ${
         isSelected
@@ -146,5 +136,52 @@ export function CanvasItem({
         </div>
       )}
     </div>
+  );
+}
+
+export function StaticCanvasItem(props: Props) {
+  const style: CSSProperties = {
+    opacity: 1,
+    zIndex: 1,
+    width: props.field.width === "50%" ? "calc(50% - 0.5rem)" : "100%",
+  };
+  return <CanvasItemFrame {...props} style={style} isOverlay />;
+}
+
+export function CanvasItem(props: Props) {
+  const { field } = props;
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: field.key,
+    data: {
+      source: "canvas",
+      type: "field",
+      field,
+    },
+  });
+
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.3 : 1,
+    zIndex: isDragging ? 10 : 1,
+    width: field.width === "50%" ? "calc(50% - 0.5rem)" : "100%",
+  };
+
+  return (
+    <CanvasItemFrame
+      {...props}
+      nodeRef={setNodeRef}
+      attributes={attributes}
+      listeners={listeners}
+      style={style}
+      isDragging={isDragging}
+    />
   );
 }

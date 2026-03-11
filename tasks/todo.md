@@ -3340,3 +3340,15 @@ pm --prefix frontend run build OK.
 - Fix login page: il problema non era solo nella card interna, ma nel fatto che la login pubblica vive dentro `public-shell` light-only. Con il nuovo layer, la pagina login eredita ora anche sfondo/scena dark coerente, section title/heading leggibili, shell auth con panel dark leggibile, overlay immagine laterale controllato da token e contrasto corretto su copy, helper text, placeholder, link secondari e CTA.
 - Ambiti coperti: super admin, org admin e socio ereditano il nuovo layer tramite i layout esistenti [SuperAdminLayout.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\super-admin\SuperAdminLayout.tsx), [OrgAdminLayout.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\OrgAdminLayout.tsx) e [DashboardLayout.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\dashboard\DashboardLayout.tsx) senza cambiare markup o introdurre nuove feature. Il focus e stato sui surface interni, non su un redesign.
 - Verifica finale: `npm --prefix frontend run build` OK.
+
+## Org-admin form builder DnD hard fix (Mar 11, 2026)
+- [x] Riprodurre il bug reale del builder form org-admin in browser su ambiente isolato con sessione org-admin valida
+- [x] Verificare il flusso DnD palette -> canvas fino a `over`, update stato parent e chiamate backend
+- [x] Correggere la registrazione del canvas droppable nel provider `DndContext`
+- [x] Rieseguire test reale browser su inserimento, reload e riordino nel canvas
+
+## Review (Definitive org-admin form builder DnD fix - Mar 11, 2026)
+- Root cause reale: il canvas usava `useDroppable()` nello stesso componente che montava `DndContext`, quindi il hook veniva valutato fuori dal provider dnd-kit e il canvas non risultava un target droppable affidabile.
+- Fix applicato in `frontend/src/components/forms/builder/FormBuilder.tsx`: il canvas e stato estratto in `BuilderCanvas`, child reale di `DndContext`, cosi `useDroppable` registra correttamente `form-builder-canvas` e il flusso `palette -> canvas` / `canvas -> canvas` usa lo stesso contesto DnD.
+- Verifica browser reale eseguita con Playwright su backend locale `http://127.0.0.1:8010` e DB SQLite isolato `tmp_builder_dnd_e2e.db`: drag di `Testo breve` nel canvas vuoto OK, blocco persistito dopo reload OK, aggiunta secondo blocco `Numero` OK, riordino `Numero -> prima posizione` OK sia in UI sia nel DB.
+- Verifica build finale: `npm --prefix frontend run build` OK.
