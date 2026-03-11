@@ -211,6 +211,26 @@ Regole operative:
 - I form condividono lo stesso gating del modulo Comunicazioni: se il modulo non e attivo, la sezione resta visibile ma locked con CTA disabilitate.
 - Ogni form puo usare azioni post-submit semplici: `save submission` sempre attivo, `notify admin`, `send user confirmation`, `create internal request` e collegamento a un template admin/user della libreria Comunicazioni.
 
+### Stripe Connect Demo
+
+Il sample Stripe Connect e completamente isolato dai flussi attuali di affiliazione, tessere e future quote associative reali.
+
+- Flag runtime: `ENABLE_STRIPE_CONNECT_DEMO=true`.
+- UI org-admin dedicata: `/org-admin/billing`.
+- Demo storefront pubblico: `/stripe-demo/storefront/{connected_account_id}`.
+- Connected account: mappato direttamente su `organizations.stripe_connected_account_id`.
+- Demo products/storefront: servono solo per mostrare prodotti creati sul connected account e direct charge Checkout con `application_fee_amount`.
+- Subscription piattaforma: resta separata dal demo storefront e usa `customer_account = connected_account_id`.
+- Base URL demo: usa `BASE_URL` se valido, altrimenti fallback a `https://assonam.it`.
+- Country account creation: usa `organizations.country` se valido/mappabile; fallback `IT`.
+
+Webhook demo:
+
+- Thin v2 account events: `POST /api/webhooks/stripe/thin`
+- Billing/subscription events: `POST /api/webhooks/stripe/billing`
+
+Nota importante: i percorsi e le etichette `demo` sono intenzionali per non confondere questo sample con il futuro flusso reale della quota associativa socio ASSONAM.
+
 ## Integration API (Issuer Tessera)
 
 External management systems can issue members directly as active through:

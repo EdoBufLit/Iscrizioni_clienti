@@ -22,6 +22,8 @@ const ReservedAreaRedirect = lazy(() => import("./pages/ReservedAreaRedirect"));
 const InvitoAffiliazioneRedirect = lazy(() => import("./pages/InvitoAffiliazioneRedirect"));
 const PienissimoThankYouPage = lazy(() => import("./pages/PienissimoThankYouPage"));
 const PublicFormPage = lazy(() => import("./pages/PublicFormPage"));
+const StripeDemoStorefrontPage = lazy(() => import("./pages/StripeDemoStorefrontPage"));
+const StripeDemoStorefrontResultPage = lazy(() => import("./pages/StripeDemoStorefrontResultPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const DashboardLayout = lazy(() => import("./pages/dashboard/DashboardLayout"));
@@ -51,6 +53,7 @@ const OrgAdminMemberDetail = lazy(() => import("./pages/org-admin/OrgAdminMember
 const OrgAdminCards = lazy(() => import("./pages/org-admin/OrgAdminCards"));
 const OrgAdminCommunications = lazy(() => import("./pages/org-admin/OrgAdminCommunications"));
 const OrgAdminBookings = lazy(() => import("./pages/org-admin/OrgAdminBookings"));
+const OrgAdminStripeDemoBilling = lazy(() => import("./pages/org-admin/OrgAdminStripeDemoBilling"));
 const OrgAdminSettings = lazy(() => import("./pages/org-admin/OrgAdminSettings"));
 const OrgAdminSharedDocuments = lazy(() => import("./pages/org-admin/OrgAdminSharedDocuments"));
 
@@ -111,6 +114,9 @@ const App = () => {
               <Route path="pienissimo/thank-you/:orgSlug" element={<PienissimoThankYouPage />} />
               <Route path="forms/:orgSlug/:slug" element={<PublicFormPage />} />
               <Route path="forms/:slug" element={<PublicFormPage />} />
+              <Route path="stripe-demo/storefront/success" element={<StripeDemoStorefrontResultPage />} />
+              <Route path="stripe-demo/storefront/cancel" element={<StripeDemoStorefrontResultPage />} />
+              <Route path="stripe-demo/storefront/:accountId" element={<StripeDemoStorefrontPage />} />
               <Route path="auth/verify" element={<MagicLinkVerify />} />
               <Route path="wallet/google/add" element={<WalletGoogleAdd />} />
               <Route path="dashboard" element={<DashboardLayout />}>
@@ -141,6 +147,7 @@ const App = () => {
                 <Route path="prenotazioni" element={<OrgAdminBookings />} />
                 <Route path="documenti" element={<OrgAdminSharedDocuments />} />
                 <Route path="comunicazioni" element={<OrgAdminCommunications />} />
+                <Route path="billing" element={<OrgAdminStripeDemoBilling />} />
                 <Route path="forms" element={<Navigate to="/org-admin/comunicazioni?tab=forms" replace />} />
                 <Route path="contabilita" element={<OrgAdminSharedDocuments />} />
                 <Route path="associazione" element={<OrgAdminSettings />} />

@@ -84,8 +84,12 @@ Stripe is optional. The affiliation flow still works with bank transfer and cash
 | `STRIPE_WEBHOOK_SECRET` | No | _(empty)_ | Stripe webhook signing secret. Required only if card checkout is enabled. |
 | `STRIPE_PRICE_ID` | No | _(empty)_ | Stripe Price ID used by Checkout. Required only if card checkout is enabled. |
 | `STRIPE_PUBLISHABLE_KEY` | No | _(empty)_ | Publishable key (needed only if your frontend directly uses Stripe.js). |
+| `STRIPE_THIN_WEBHOOK_SECRET` | No | _(empty)_ | Stripe signing secret for the thin v2 account-events webhook used by the Stripe Connect demo. |
+| `STRIPE_BILLING_WEBHOOK_SECRET` | No | _(empty)_ | Stripe signing secret for the normal billing/subscription webhook used by the Stripe Connect demo. |
+| `STRIPE_PLATFORM_PRICE_ID` | No | _(empty)_ | Recurring platform Price ID used by the Stripe Connect demo subscription checkout. |
 | `STRIPE_REQUIRE_PUBLISHABLE_KEY` | No | `false` | If `true`, backend marks Stripe configured only when `STRIPE_PUBLISHABLE_KEY` is present. |
 | `STRIPE_AFFILIATION_PRICE_CENTS` | No | `9000` | Informational affiliation amount shown in UI (bonifico/contanti summary). |
+| `ENABLE_STRIPE_CONNECT_DEMO` | No | `false` | Enables the isolated Stripe Connect demo routes, org-admin billing page, demo storefront, and webhook handlers. |
 | `AFFILIATION_VIDEO_ENABLED` | No | `true` | Enables affiliation welcome-video pipeline (enqueue + worker processing + UI states). When `false`, UI shows "Video disattivato". |
 | `AFFILIATION_VIDEO_WORKER_ENABLED` | No | `false` | Enables the optional Remotion affiliation video worker profile at deploy time (`video-worker`). |
 | `AFFILIATION_VIDEO_RENDERER_DIR` | No | `/app/video-renderer/services/welcome-video` | Path to Remotion renderer sources/build inside the container. |

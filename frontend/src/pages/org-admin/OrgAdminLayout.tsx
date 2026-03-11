@@ -13,6 +13,7 @@ import Skeleton from "../../components/ui/Skeleton";
 import MobileDashboardNav, { type MobileDashboardNavItem } from "../../components/ui/MobileDashboardNav";
 import { OnboardingTour, ReviewGuideButton } from "../../components/onboarding";
 import OrgAdminNotificationBell from "./components/OrgAdminNotificationBell";
+import { useStatePlatformCapabilities } from "../../hooks/useStatePlatformCapabilities";
 
 type OrgAdminCtx = {
   admin: OrgAdminProfile | null;
@@ -27,6 +28,7 @@ const OrgAdminLayout = () => {
   const [loading, setLoading] = useState(true);
   const [ver, setVer] = useState<VersionInfo | null>(null);
   const navigate = useNavigate();
+  const { capabilities } = useStatePlatformCapabilities();
 
   useEffect(() => {
     applySeo({ title: "Admin Associazione", description: "Pannello admin associazione ASSO.N.A.M.", noindex: true });
@@ -63,8 +65,15 @@ const OrgAdminLayout = () => {
     if (admin?.organization?.accounting_enabled) {
       items.splice(5, 0, { to: "/org-admin/contabilita", label: "Contabilità", end: false });
     }
+    if (capabilities?.stripeConnectDemoEnabled) {
+      items.splice(items.length - 1, 0, {
+        to: "/org-admin/billing",
+        label: "Stripe Demo",
+        end: false,
+      });
+    }
     return items;
-  }, [admin?.organization?.accounting_enabled]);
+  }, [admin?.organization?.accounting_enabled, capabilities?.stripeConnectDemoEnabled]);
 
   const mobilePrimaryNav = useMemo(
     (): MobileDashboardNavItem[] => [
@@ -92,6 +101,15 @@ const OrgAdminLayout = () => {
         icon: "chart" as const,
       });
     }
+    if (capabilities?.stripeConnectDemoEnabled) {
+      items.splice(items.length - 1, 0, {
+        key: "stripe-demo",
+        label: "Stripe Demo",
+        to: "/org-admin/billing",
+        activeMatch: ["/org-admin/billing"],
+        icon: "chart" as const,
+      });
+    }
     items.push(
       { key: "site", label: "Torna al sito", to: "/", icon: "globe" as const },
       {
@@ -103,7 +121,7 @@ const OrgAdminLayout = () => {
       },
     );
     return items;
-  }, [admin?.organization?.accounting_enabled]);
+  }, [admin?.organization?.accounting_enabled, capabilities?.stripeConnectDemoEnabled]);
 
   return (
     <Ctx.Provider value={{ admin, loading }}>

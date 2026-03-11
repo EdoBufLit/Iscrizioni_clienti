@@ -7,6 +7,7 @@ import {
 const DEFAULT_CAPABILITIES: PlatformCapabilities = {
   affiliazioneEnabled: false,
   stripeEnabled: false,
+  stripeConnectDemoEnabled: false,
   affiliationVideoEnabled: false,
   videoWorkerEnabled: false,
 };
@@ -17,6 +18,7 @@ let inflightCapabilitiesRequest: Promise<PlatformCapabilities> | null = null;
 const normalizeCapabilities = (payload: PlatformCapabilities): PlatformCapabilities => ({
   affiliazioneEnabled: payload.affiliazioneEnabled === true,
   stripeEnabled: payload.stripeEnabled === true,
+  stripeConnectDemoEnabled: payload.stripeConnectDemoEnabled === true,
   affiliationVideoEnabled: payload.affiliationVideoEnabled === true,
   videoWorkerEnabled: payload.videoWorkerEnabled === true,
 });

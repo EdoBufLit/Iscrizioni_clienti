@@ -245,6 +245,7 @@ def api_capabilities():
     return {
         "affiliazioneEnabled": bool(settings.AFFILIAZIONE_ENABLED),
         "stripeEnabled": bool(settings.STRIPE_ENABLED),
+        "stripeConnectDemoEnabled": bool(settings.ENABLE_STRIPE_CONNECT_DEMO),
         "affiliationVideoEnabled": bool(settings.AFFILIATION_VIDEO_ENABLED),
         "videoWorkerEnabled": raw_worker.strip().lower() in {"1", "true", "yes", "on"},
     }

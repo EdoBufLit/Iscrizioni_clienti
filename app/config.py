@@ -135,8 +135,18 @@ class Settings:
     STRIPE_WEBHOOK_SECRET: str | None = _env_optional("STRIPE_WEBHOOK_SECRET")
     STRIPE_PRICE_ID: str | None = _env_optional("STRIPE_PRICE_ID")
     STRIPE_PUBLISHABLE_KEY: str | None = _env_optional("STRIPE_PUBLISHABLE_KEY")
+    STRIPE_THIN_WEBHOOK_SECRET: str | None = _env_optional(
+        "STRIPE_THIN_WEBHOOK_SECRET"
+    )
+    STRIPE_BILLING_WEBHOOK_SECRET: str | None = _env_optional(
+        "STRIPE_BILLING_WEBHOOK_SECRET"
+    )
+    STRIPE_PLATFORM_PRICE_ID: str | None = _env_optional("STRIPE_PLATFORM_PRICE_ID")
     STRIPE_REQUIRE_PUBLISHABLE_KEY: bool = _env_bool(
         "STRIPE_REQUIRE_PUBLISHABLE_KEY", default=False
+    )
+    ENABLE_STRIPE_CONNECT_DEMO: bool = _env_bool(
+        "ENABLE_STRIPE_CONNECT_DEMO", default=False
     )
     STRIPE_AFFILIATION_PRICE_CENTS: int = int(
         os.getenv("STRIPE_AFFILIATION_PRICE_CENTS", "9000")

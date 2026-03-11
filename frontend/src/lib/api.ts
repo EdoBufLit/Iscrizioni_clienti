@@ -71,6 +71,7 @@ export type PlatformStats = {
 export type PlatformCapabilities = {
   affiliazioneEnabled: boolean;
   stripeEnabled: boolean;
+  stripeConnectDemoEnabled?: boolean;
   affiliationVideoEnabled?: boolean;
   videoWorkerEnabled?: boolean;
 };
@@ -640,6 +641,42 @@ export type OrgAdminCommunicationSettings = {
   association_email_sender: NonNullable<OrgAdminOrganizationDetail["association_email_sender"]>;
 };
 
+export type OrgAdminStripeDemoAccountStatus = {
+  id: string | null;
+  display_name: string | null;
+  contact_email: string | null;
+  country: string | null;
+  dashboard: string | null;
+  requirements_status: string | null;
+  card_payments_status: string | null;
+  ready_to_process_payments: boolean;
+  onboarding_complete: boolean;
+  raw: Record<string, unknown>;
+};
+
+export type OrgAdminStripeDemoState = {
+  enabled: boolean;
+  message?: string;
+  publishable_key?: string;
+  base_url?: string;
+  connected_account_id: string | null;
+  subscription_status: string | null;
+  subscription_id: string | null;
+  account: OrgAdminStripeDemoAccountStatus | null;
+};
+
+export type StripeDemoProduct = {
+  id: string;
+  name: string | null;
+  description: string | null;
+  active: boolean;
+  default_price: {
+    id: string | null;
+    unit_amount: number | null;
+    currency: string | null;
+  };
+};
+
 export type OrgAdminCampaignAudienceType =
   | "active_members"
   | "expired_members"
@@ -975,6 +1012,123 @@ export async function patchOrgAdminOrganization(data: {
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento associazione"));
+  return res.json();
+}
+
+export async function fetchOrgAdminStripeDemoState(): Promise<OrgAdminStripeDemoState> {
+  const res = await fetch("/api/org-admin/stripe-demo");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) {
+    return {
+      enabled: false,
+      message: "Stripe Connect demo non attivo in questo ambiente.",
+      connected_account_id: null,
+      subscription_status: null,
+      subscription_id: null,
+      account: null,
+    };
+  }
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento Stripe demo"));
+  return res.json();
+}
+
+export async function createOrgAdminStripeConnectedAccount(): Promise<{
+  created: boolean;
+  connected_account_id: string;
+  account: OrgAdminStripeDemoAccountStatus;
+}> {
+  const res = await fetch("/api/stripe/connect/account", { method: "POST" });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione account Stripe demo"));
+  return res.json();
+}
+
+export async function fetchOrgAdminStripeConnectedAccountStatus(): Promise<{
+  connected_account_id: string | null;
+  account: OrgAdminStripeDemoAccountStatus | null;
+}> {
+  const res = await fetch("/api/stripe/connect/account/status");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento stato account Stripe demo"));
+  return res.json();
+}
+
+export async function createOrgAdminStripeOnboardingLink(): Promise<{
+  url: string;
+  expires_at?: string | null;
+  connected_account_id: string;
+}> {
+  const res = await fetch("/api/stripe/connect/account/onboarding-link", {
+    method: "POST",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione link onboarding Stripe demo"));
+  return res.json();
+}
+
+export async function fetchOrgAdminStripeDemoProducts(): Promise<{ items: StripeDemoProduct[] }> {
+  const res = await fetch("/api/stripe/connect/demo-products");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento prodotti demo Stripe"));
+  return res.json();
+}
+
+export async function createOrgAdminStripeDemoProduct(data: {
+  name: string;
+  description?: string | null;
+  priceInCents: number;
+  currency: string;
+}): Promise<{ product: StripeDemoProduct }> {
+  const res = await fetch("/api/stripe/connect/demo-products", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione prodotto demo Stripe"));
+  return res.json();
+}
+
+export async function createOrgAdminStripePlatformSubscriptionCheckout(): Promise<{
+  url: string;
+  id: string;
+}> {
+  const res = await fetch("/api/stripe/platform-subscription/checkout", {
+    method: "POST",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione checkout subscription demo"));
+  return res.json();
+}
+
+export async function createOrgAdminStripePlatformPortal(): Promise<{
+  url: string;
+  id: string;
+}> {
+  const res = await fetch("/api/stripe/platform-subscription/portal", {
+    method: "POST",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore apertura portale subscription demo"));
+  return res.json();
+}
+
+export async function fetchStripeDemoStorefrontProducts(accountId: string): Promise<{ items: StripeDemoProduct[] }> {
+  const res = await fetch(`/api/stripe/connect-demo/storefront/${encodeURIComponent(accountId)}/products`);
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento storefront demo Stripe"));
+  return res.json();
+}
+
+export async function createStripeDemoStorefrontCheckout(
+  accountId: string,
+  data: { productId: string; quantity: number },
+): Promise<{ url: string; id: string }> {
+  const res = await fetch(`/api/stripe/connect-demo/storefront/${encodeURIComponent(accountId)}/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione checkout storefront demo"));
   return res.json();
 }
 

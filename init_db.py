@@ -39,6 +39,7 @@ from app.models import (
     BookingEvent,
     Room,
     RoomTable,
+    StripeWebhookEvent,
 )
 from app.security import get_password_hash
 from app.config import settings
@@ -224,6 +225,13 @@ def init_db():
         )
         RoomTable.__table__.create(bind=engine, checkfirst=True)
 
+    if "stripe_webhook_events" not in inspect(engine).get_table_names():
+        logger.warning(
+            "stripe_webhook_events table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        StripeWebhookEvent.__table__.create(bind=engine, checkfirst=True)
+
     # Legacy column migrations - DEPRECATED, kept for backwards compatibility
     with engine.begin() as conn:
         table_names = set(inspect(conn).get_table_names())
@@ -323,6 +331,22 @@ def init_db():
                      WHERE booking_enabled IS NULL
                     """
                 )
+            )
+        if "organizations" in table_names:
+            _add_column_if_missing(
+                conn, "organizations", "stripe_connected_account_id", "TEXT"
+            )
+            _add_column_if_missing(
+                conn,
+                "organizations",
+                "stripe_platform_subscription_status",
+                "TEXT",
+            )
+            _add_column_if_missing(
+                conn,
+                "organizations",
+                "stripe_platform_subscription_id",
+                "TEXT",
             )
         if "bookings" in table_names:
             _add_column_if_missing(conn, "bookings", "room_id", "INTEGER")

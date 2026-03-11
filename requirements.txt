@@ -20,3 +20,4 @@ PyJWT
 psycopg2-binary
 openai
 twilio
+stripe

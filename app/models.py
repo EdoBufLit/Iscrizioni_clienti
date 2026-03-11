@@ -268,6 +268,9 @@ class Organization(Base):
     sender_email_local_part = Column(String, nullable=True)
     email_from_name_override = Column(String, nullable=True)
     reply_to_email = Column(String, nullable=True)
+    stripe_connected_account_id = Column(String, nullable=True, unique=True)
+    stripe_platform_subscription_status = Column(String, nullable=True)
+    stripe_platform_subscription_id = Column(String, nullable=True)
     accounting_enabled = Column(
         Boolean, nullable=False, default=False, server_default="false"
     )
@@ -435,6 +438,16 @@ class WhatsAppSession(Base):
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
     )
+
+
+class StripeWebhookEvent(Base):
+    __tablename__ = "stripe_webhook_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_id = Column(String, nullable=False, unique=True, index=True)
+    event_type = Column(String, nullable=False, index=True)
+    livemode = Column(Boolean, nullable=False, default=False, server_default="false")
+    processed_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 
 class RechargeRequest(Base):

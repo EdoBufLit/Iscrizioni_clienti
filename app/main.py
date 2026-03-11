@@ -33,6 +33,8 @@ from app.routes import (
     onboarding,
     org_admin,
     public,
+    stripe_connect_demo,
+    stripe_webhooks,
     super_admin,
     whatsapp,
 )
@@ -279,6 +281,9 @@ app.include_router(onboarding.router)
 app.include_router(integrations.router)
 app.include_router(ingest_pienissimo.router)
 app.include_router(whatsapp.router)
+if settings.ENABLE_STRIPE_CONNECT_DEMO:
+    app.include_router(stripe_connect_demo.router)
+    app.include_router(stripe_webhooks.router)
 
 
 @app.get("/health")
