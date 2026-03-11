@@ -509,6 +509,27 @@ def init_db():
                 """
             )
         )
+        _add_column_if_missing(
+            conn,
+            "email_campaigns",
+            "recipient_mode",
+            "VARCHAR(40) DEFAULT 'all_members'",
+        )
+        _add_column_if_missing(
+            conn,
+            "email_campaigns",
+            "selected_member_ids_json",
+            "TEXT",
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE email_campaigns
+                   SET recipient_mode = 'all_members'
+                 WHERE recipient_mode IS NULL OR trim(recipient_mode) = ''
+                """
+            )
+        )
         _add_column_if_missing(conn, "card_batches", "year", "INTEGER")
         _add_column_if_missing(
             conn, "card_batches", "is_enabled", "BOOLEAN DEFAULT TRUE"

@@ -7,7 +7,7 @@ import random
 import secrets
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, Body, Query
 from fastapi.responses import StreamingResponse, FileResponse
-from sqlalchemy import func, or_, case, and_, select
+from sqlalchemy import func, or_, case, and_, select, cast, String
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timedelta, date
 from typing import Optional
@@ -66,8 +66,14 @@ from app.services.email_sender import (
 )
 from app.services.email_campaigns import (
     ALLOWED_AUDIENCE_TYPES,
+    ALLOWED_RECIPIENT_MODES,
     campaign_status_counts,
     create_campaign_draft,
+    deserialize_selected_member_ids,
+    normalize_recipient_mode,
+    normalize_selected_member_ids,
+    RECIPIENT_MODE_ALL_MEMBERS,
+    RECIPIENT_MODE_SELECTED_MEMBERS,
     resolve_audience_recipients,
     send_test_email_now,
     send_campaign,
@@ -536,17 +542,36 @@ def _serialize_email_campaign(
     include_body: bool = False,
 ) -> dict[str, object]:
     recipients = list(campaign.recipients or [])
+    recipient_mode = normalize_recipient_mode(
+        getattr(campaign, "recipient_mode", None) or RECIPIENT_MODE_ALL_MEMBERS
+    )
+    selected_member_ids = deserialize_selected_member_ids(
+        getattr(campaign, "selected_member_ids_json", None)
+    )
+    selected_member_count = len(selected_member_ids)
+    target_summary = (
+        f"{selected_member_count} socio selezionato"
+        if selected_member_count == 1
+        else f"{selected_member_count} soci selezionati"
+    ) if recipient_mode == RECIPIENT_MODE_SELECTED_MEMBERS else (
+        "Tutti i soci"
+    )
     payload = {
         "id": campaign.id,
         "association_id": campaign.association_id,
         "name": campaign.name,
         "subject": campaign.subject,
         "audience_type": campaign.audience_type,
+        "recipient_mode": recipient_mode,
+        "selected_member_ids": selected_member_ids,
+        "selected_member_count": selected_member_count,
+        "target_summary": target_summary,
         "status": campaign.status,
         "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
         "scheduled_at": campaign.scheduled_at.isoformat() if campaign.scheduled_at else None,
         "sent_at": campaign.sent_at.isoformat() if campaign.sent_at else None,
         "recipient_count": len(recipients),
+        "planned_recipient_count": len(recipients) or selected_member_count,
         "recipient_status_counts": campaign_status_counts(recipients),
         "created_by": (
             {
@@ -1237,6 +1262,8 @@ class CreateEmailCampaignBody(BaseModel):
     body_html: Optional[str] = None
     body_text: Optional[str] = None
     audience_type: str
+    recipient_mode: str = Field(default=RECIPIENT_MODE_ALL_MEMBERS, max_length=40)
+    member_ids: list[int] = Field(default_factory=list)
 
 
 class CreateEmailTemplateBody(BaseModel):
@@ -2213,6 +2240,58 @@ def get_communications_audience_estimate(
     }
 
 
+@router.get("/communications/member-search")
+def search_communications_members(
+    request: Request,
+    q: Optional[str] = Query(default=None),
+    limit: int = Query(default=10, ge=1, le=25),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    _require_active_communications_module(admin.organization)
+    query = (
+        db.query(Member)
+        .filter(
+            Member.org_id == admin.org_id,
+            Member.deleted_at.is_(None),
+        )
+        .order_by(Member.last_name.asc(), Member.first_name.asc(), Member.id.desc())
+    )
+    normalized_query = (q or "").strip()
+    if normalized_query:
+        pattern = f"%{normalized_query}%"
+        query = query.filter(
+            or_(
+                Member.first_name.ilike(pattern),
+                Member.last_name.ilike(pattern),
+                Member.email.ilike(pattern),
+                cast(Member.card_no, String).ilike(pattern),
+            )
+        )
+
+    members = query.limit(limit).all()
+    current_time = datetime.utcnow()
+    return {
+        "items": [
+            {
+                "id": member.id,
+                "name": f"{member.first_name} {member.last_name}".strip() or member.email or f"Socio #{member.id}",
+                "email": member.email,
+                "card_no": member.card_no,
+                "card_number": member.card_no,
+                "status": get_member_lifecycle_status(member, now=current_time),
+                "is_active": is_member_active(member, now=current_time),
+            }
+            for member in members
+        ],
+        "total": len(members),
+        "query": normalized_query,
+    }
+
+
 @router.get("/communications/campaigns")
 def list_communications_campaigns(
     request: Request,
@@ -2258,6 +2337,8 @@ def create_communications_campaign(
         body_html=body.body_html,
         body_text=body.body_text,
         audience_type=body.audience_type,
+        recipient_mode=body.recipient_mode,
+        selected_member_ids=body.member_ids,
     )
     db.commit()
     campaign = (

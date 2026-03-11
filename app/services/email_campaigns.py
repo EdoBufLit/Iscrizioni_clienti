@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 import html
+import json
 import re
 from typing import Iterable
 
@@ -24,6 +25,12 @@ ALLOWED_AUDIENCE_TYPES = {
     AUDIENCE_ALL_ACTIVE,
     AUDIENCE_EXPIRED,
     AUDIENCE_RENEWAL_DUE,
+}
+RECIPIENT_MODE_ALL_MEMBERS = "all_members"
+RECIPIENT_MODE_SELECTED_MEMBERS = "selected_members"
+ALLOWED_RECIPIENT_MODES = {
+    RECIPIENT_MODE_ALL_MEMBERS,
+    RECIPIENT_MODE_SELECTED_MEMBERS,
 }
 
 CAMPAIGN_STATUS_DRAFT = "draft"
@@ -58,6 +65,69 @@ def _normalize_email(value: str | None) -> str | None:
 def _build_recipient_name(member: Member) -> str | None:
     full_name = f"{(member.first_name or '').strip()} {(member.last_name or '').strip()}".strip()
     return full_name or None
+
+
+def normalize_recipient_mode(value: str | None) -> str:
+    normalized = _normalize_text(value)
+    if normalized not in ALLOWED_RECIPIENT_MODES:
+        raise HTTPException(status_code=422, detail="Modalita destinatari non valida.")
+    return normalized
+
+
+def normalize_selected_member_ids(
+    member_ids: Iterable[int] | None,
+    *,
+    recipient_mode: str,
+) -> list[int]:
+    normalized_ids: list[int] = []
+    seen_ids: set[int] = set()
+    for raw_id in member_ids or []:
+        try:
+            member_id = int(raw_id)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="Lista destinatari non valida.")
+        if member_id <= 0 or member_id in seen_ids:
+            continue
+        seen_ids.add(member_id)
+        normalized_ids.append(member_id)
+
+    if recipient_mode == RECIPIENT_MODE_SELECTED_MEMBERS and not normalized_ids:
+        raise HTTPException(
+            status_code=422,
+            detail="Se scegli 'Soci selezionati' devi aggiungere almeno un socio.",
+        )
+    return normalized_ids
+
+
+def serialize_selected_member_ids(member_ids: Iterable[int]) -> str | None:
+    normalized_ids = [int(member_id) for member_id in member_ids if int(member_id) > 0]
+    if not normalized_ids:
+        return None
+    return json.dumps(normalized_ids)
+
+
+def deserialize_selected_member_ids(value: str | None) -> list[int]:
+    normalized = _normalize_text(value)
+    if normalized is None:
+        return []
+    try:
+        parsed = json.loads(normalized)
+    except Exception:
+        return []
+    if not isinstance(parsed, list):
+        return []
+    result: list[int] = []
+    seen_ids: set[int] = set()
+    for raw_id in parsed:
+        try:
+            member_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if member_id <= 0 or member_id in seen_ids:
+            continue
+        seen_ids.add(member_id)
+        result.append(member_id)
+    return result
 
 
 def _plain_text_to_html(value: str) -> str:
@@ -156,6 +226,77 @@ def resolve_audience_recipients(
     return recipients
 
 
+def resolve_selected_member_recipients(
+    db: Session,
+    *,
+    association_id: int,
+    member_ids: Iterable[int],
+) -> list[AudienceRecipient]:
+    normalized_member_ids = normalize_selected_member_ids(
+        member_ids,
+        recipient_mode=RECIPIENT_MODE_SELECTED_MEMBERS,
+    )
+    members = (
+        db.query(Member)
+        .filter(
+            Member.org_id == association_id,
+            Member.deleted_at.is_(None),
+            Member.id.in_(normalized_member_ids),
+        )
+        .order_by(Member.id.desc())
+        .all()
+    )
+    members_by_id = {member.id: member for member in members}
+    missing_ids = [member_id for member_id in normalized_member_ids if member_id not in members_by_id]
+    if missing_ids:
+        raise HTTPException(
+            status_code=422,
+            detail="Uno o piu destinatari selezionati non appartengono alla tua associazione.",
+        )
+
+    recipients: list[AudienceRecipient] = []
+    seen_emails: set[str] = set()
+    for member_id in normalized_member_ids:
+        member = members_by_id[member_id]
+        email = _normalize_email(member.email)
+        if email is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Il socio selezionato #{member.id} non ha un indirizzo email valido.",
+            )
+        if email in seen_emails:
+            continue
+        seen_emails.add(email)
+        recipients.append(
+            AudienceRecipient(
+                member=member,
+                recipient_email=email,
+                recipient_name=_build_recipient_name(member),
+            )
+        )
+    return recipients
+
+
+def resolve_campaign_recipients(
+    db: Session,
+    *,
+    campaign: EmailCampaign,
+    association_id: int,
+) -> list[AudienceRecipient]:
+    recipient_mode = normalize_recipient_mode(getattr(campaign, "recipient_mode", None) or RECIPIENT_MODE_ALL_MEMBERS)
+    if recipient_mode == RECIPIENT_MODE_SELECTED_MEMBERS:
+        return resolve_selected_member_recipients(
+            db,
+            association_id=association_id,
+            member_ids=deserialize_selected_member_ids(campaign.selected_member_ids_json),
+        )
+    return resolve_audience_recipients(
+        db,
+        association_id=association_id,
+        audience_type=campaign.audience_type,
+    )
+
+
 def ensure_campaign_is_sendable(organization: Organization) -> None:
     if not bool(getattr(organization, "communications_enabled", False)):
         raise HTTPException(
@@ -174,6 +315,8 @@ def create_campaign_draft(
     body_html: str | None,
     body_text: str | None,
     audience_type: str,
+    recipient_mode: str,
+    selected_member_ids: Iterable[int] | None = None,
 ) -> EmailCampaign:
     normalized_subject = _normalize_text(subject)
     if normalized_subject is None:
@@ -182,6 +325,17 @@ def create_campaign_draft(
     normalized_audience = _normalize_text(audience_type)
     if normalized_audience not in ALLOWED_AUDIENCE_TYPES:
         raise HTTPException(status_code=422, detail="Audience non valida.")
+    normalized_recipient_mode = normalize_recipient_mode(recipient_mode)
+    normalized_selected_member_ids = normalize_selected_member_ids(
+        selected_member_ids,
+        recipient_mode=normalized_recipient_mode,
+    )
+    if normalized_recipient_mode == RECIPIENT_MODE_SELECTED_MEMBERS:
+        resolve_selected_member_recipients(
+            db,
+            association_id=organization.id,
+            member_ids=normalized_selected_member_ids,
+        )
 
     normalized_body_html, normalized_body_text = normalize_campaign_bodies(
         body_html=body_html,
@@ -194,6 +348,8 @@ def create_campaign_draft(
         body_html=normalized_body_html,
         body_text=normalized_body_text,
         audience_type=normalized_audience,
+        recipient_mode=normalized_recipient_mode,
+        selected_member_ids_json=serialize_selected_member_ids(normalized_selected_member_ids),
         status=CAMPAIGN_STATUS_DRAFT,
         created_by_user_id=created_by_user_id,
     )
@@ -243,10 +399,10 @@ def send_campaign(
             detail="Solo le campagne in bozza possono essere inviate.",
         )
 
-    recipients = resolve_audience_recipients(
+    recipients = resolve_campaign_recipients(
         db,
+        campaign=campaign,
         association_id=organization.id,
-        audience_type=campaign.audience_type,
     )
     if not recipients:
         raise HTTPException(

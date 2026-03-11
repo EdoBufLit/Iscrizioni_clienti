@@ -840,6 +840,10 @@ class EmailCampaign(Base):
     body_html = Column(Text, nullable=True)
     body_text = Column(Text, nullable=True)
     audience_type = Column(String, nullable=False, index=True)
+    recipient_mode = Column(
+        String, nullable=False, default="all_members", server_default="all_members", index=True
+    )
+    selected_member_ids_json = Column(Text, nullable=True)
     status = Column(String, nullable=False, default="draft", server_default="draft", index=True)
     created_by_user_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True, index=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)

@@ -682,6 +682,10 @@ export type OrgAdminCampaignAudienceType =
   | "expired_members"
   | "renewal_due_members";
 
+export type OrgAdminCampaignRecipientMode =
+  | "all_members"
+  | "selected_members";
+
 export type OrgAdminEmailCampaign = {
   id: number;
   association_id: number;
@@ -690,6 +694,11 @@ export type OrgAdminEmailCampaign = {
   body_html?: string | null;
   body_text?: string | null;
   audience_type: OrgAdminCampaignAudienceType;
+  recipient_mode: OrgAdminCampaignRecipientMode;
+  selected_member_ids: number[];
+  selected_member_count: number;
+  target_summary: string;
+  planned_recipient_count: number;
   status: string;
   created_at: string | null;
   scheduled_at: string | null;
@@ -1187,6 +1196,21 @@ export async function fetchOrgAdminCommunicationAudienceEstimate(
   return res.json();
 }
 
+export async function searchOrgAdminCommunicationMembers(input?: {
+  q?: string;
+  limit?: number;
+}): Promise<OrgAdminMembersResponse> {
+  const params = new URLSearchParams();
+  if (input?.q?.trim()) params.set("q", input.q.trim());
+  if (input?.limit) params.set("limit", String(input.limit));
+  const res = await fetch(
+    `/api/org-admin/communications/member-search${params.toString() ? `?${params.toString()}` : ""}`,
+  );
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore ricerca soci"));
+  return res.json();
+}
+
 export async function fetchOrgAdminEmailCampaigns(): Promise<{
   items: OrgAdminEmailCampaign[];
   total: number;
@@ -1203,6 +1227,8 @@ export async function createOrgAdminEmailCampaign(data: {
   body_html?: string | null;
   body_text?: string | null;
   audience_type: OrgAdminCampaignAudienceType;
+  recipient_mode?: OrgAdminCampaignRecipientMode;
+  member_ids?: number[];
 }): Promise<{ ok: boolean; campaign: OrgAdminEmailCampaign }> {
   const res = await fetch("/api/org-admin/communications/campaigns", {
     method: "POST",

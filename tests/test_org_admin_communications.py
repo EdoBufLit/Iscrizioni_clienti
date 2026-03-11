@@ -291,6 +291,155 @@ def test_org_admin_campaign_send_snapshots_recipients_and_updates_history(client
         clear_captured_emails()
 
 
+def test_org_admin_campaign_supports_selected_members_and_personalized_delivery(
+    client,
+    db,
+    drain_email_outbox,
+):
+    original_mode = settings.EMAIL_MODE
+    original_domain = settings.MAIL_FROM_DOMAIN
+    settings.EMAIL_MODE = "test"
+    settings.MAIL_FROM_DOMAIN = "notifiche.assonam.it"
+    clear_captured_emails()
+    try:
+        org, admin = _create_org_admin(db, communications_enabled=True)
+        _login_org_admin(client, db, admin.id)
+
+        base_card = (db.query(func.max(Member.card_no)).filter(Member.org_id == org.id).scalar() or 9100) + 1
+        selected_a = _create_member(
+            db,
+            org_id=org.id,
+            email="selected.one@example.com",
+            status="active",
+            card_year=datetime.utcnow().year,
+            card_no_seed=base_card,
+        )
+        selected_b = _create_member(
+            db,
+            org_id=org.id,
+            email="selected.two@example.com",
+            status="active",
+            card_year=datetime.utcnow().year,
+            card_no_seed=base_card + 1,
+        )
+        _create_member(
+            db,
+            org_id=org.id,
+            email="broadcast.only@example.com",
+            status="active",
+            card_year=datetime.utcnow().year,
+            card_no_seed=base_card + 2,
+        )
+
+        search_res = client.get(f"/api/org-admin/communications/member-search?q={selected_a.card_no}")
+        assert search_res.status_code == 200, search_res.text
+        search_items = search_res.json()["items"]
+        assert any(item["id"] == selected_a.id for item in search_items)
+
+        create_res = client.post(
+            "/api/org-admin/communications/campaigns",
+            json={
+                "name": "Invio mirato",
+                "subject": "Avviso personale per {{nome_socio}}",
+                "body_text": "Ciao {{nome_socio}}, la tua tessera e {{numero_tessera}} per {{nome_associazione}}",
+                "audience_type": "active_members",
+                "recipient_mode": "selected_members",
+                "member_ids": [selected_a.id, selected_b.id],
+            },
+        )
+        assert create_res.status_code == 201, create_res.text
+        campaign = create_res.json()["campaign"]
+        assert campaign["recipient_mode"] == "selected_members"
+        assert campaign["selected_member_count"] == 2
+        assert campaign["selected_member_ids"] == [selected_a.id, selected_b.id]
+        assert campaign["target_summary"] == "2 soci selezionati"
+        assert campaign["planned_recipient_count"] == 2
+        campaign_id = campaign["id"]
+
+        send_res = client.post(f"/api/org-admin/communications/campaigns/{campaign_id}/send")
+        assert send_res.status_code == 200, send_res.text
+        assert send_res.json()["recipient_count"] == 2
+
+        drain_email_outbox()
+        captured = get_captured_emails()
+        assert len(captured) == 2
+        assert {item["to"] for item in captured} == {
+            "selected.one@example.com",
+            "selected.two@example.com",
+        }
+        assert all("Golden Age Club" in item["body"] for item in captured)
+        assert str(base_card) in next(item["body"] for item in captured if item["to"] == "selected.one@example.com")
+        assert str(base_card + 1) in next(item["body"] for item in captured if item["to"] == "selected.two@example.com")
+
+        detail_res = client.get(f"/api/org-admin/communications/campaigns/{campaign_id}")
+        assert detail_res.status_code == 200, detail_res.text
+        detail_campaign = detail_res.json()["campaign"]
+        assert detail_campaign["status"] == "sent"
+        assert detail_campaign["recipient_count"] == 2
+        assert detail_campaign["target_summary"] == "2 soci selezionati"
+
+        recipients_res = client.get(f"/api/org-admin/communications/campaigns/{campaign_id}/recipients")
+        assert recipients_res.status_code == 200, recipients_res.text
+        recipients = recipients_res.json()["items"]
+        assert len(recipients) == 2
+        assert {item["recipient_email"] for item in recipients} == {
+            "selected.one@example.com",
+            "selected.two@example.com",
+        }
+    finally:
+        settings.EMAIL_MODE = original_mode
+        settings.MAIL_FROM_DOMAIN = original_domain
+        clear_captured_emails()
+
+
+def test_org_admin_campaign_selected_members_requires_non_empty_list(client, db):
+    org, admin = _create_org_admin(db, communications_enabled=True)
+    _login_org_admin(client, db, admin.id)
+
+    create_res = client.post(
+        "/api/org-admin/communications/campaigns",
+        json={
+            "name": "Invio vuoto",
+            "subject": "Newsletter",
+            "body_text": "Test",
+            "audience_type": "active_members",
+            "recipient_mode": "selected_members",
+            "member_ids": [],
+        },
+    )
+    assert create_res.status_code == 422, create_res.text
+    assert "almeno un socio" in create_res.json()["detail"].lower()
+
+
+def test_org_admin_campaign_selected_members_must_belong_to_association(client, db):
+    org, admin = _create_org_admin(db, communications_enabled=True)
+    _login_org_admin(client, db, admin.id)
+    other_org, _other_admin = _create_org_admin(db, communications_enabled=True)
+
+    foreign_member = _create_member(
+        db,
+        org_id=other_org.id,
+        email="foreign.member@example.com",
+        status="active",
+        card_year=datetime.utcnow().year,
+        card_no_seed=9801,
+    )
+
+    create_res = client.post(
+        "/api/org-admin/communications/campaigns",
+        json={
+            "name": "Invio non valido",
+            "subject": "Newsletter",
+            "body_text": "Test",
+            "audience_type": "active_members",
+            "recipient_mode": "selected_members",
+            "member_ids": [foreign_member.id],
+        },
+    )
+    assert create_res.status_code == 422, create_res.text
+    assert "destinatari selezionati" in create_res.json()["detail"].lower()
+
+
 def test_org_admin_test_email_surfaces_mailtrap_provider_error(client, db, monkeypatch):
     original_mode = settings.EMAIL_MODE
     original_domain = settings.MAIL_FROM_DOMAIN
