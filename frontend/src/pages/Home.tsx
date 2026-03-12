@@ -6,10 +6,7 @@ import PublicFaqAccordion, {
 } from "../components/public/PublicFaqAccordion";
 import { trackUiEvent } from "../lib/tracking";
 import { applySeo } from "../lib/seo";
-import {
-  fetchPlatformStats,
-  type PlatformStats,
-} from "../lib/api";
+import { type PlatformStats } from "../lib/api";
 import MemberCardPreview from "../components/cards/MemberCardPreview";
 import { useStatePlatformCapabilities } from "../hooks/useStatePlatformCapabilities";
 
@@ -53,6 +50,12 @@ const EMPTY_PLATFORM_STATS: PlatformStats = {
   organizations: 0,
   members: 0,
   cities: 0,
+};
+
+const SHOWCASE_PLATFORM_STATS: PlatformStats = {
+  organizations: 300,
+  members: 9000,
+  cities: 24,
 };
 
 const AFFILIATION_STEPS = [
@@ -187,8 +190,8 @@ const Home = () => {
   const [lowPowerDevice, setLowPowerDevice] = useState(false);
   const [showStickyAffilia, setShowStickyAffilia] = useState(false);
   const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
-  const [platformStats, setPlatformStats] = useState<PlatformStats>(EMPTY_PLATFORM_STATS);
-  const [platformStatsLoaded, setPlatformStatsLoaded] = useState(false);
+  const [platformStats] = useState<PlatformStats>(SHOWCASE_PLATFORM_STATS);
+  const [platformStatsLoaded] = useState(true);
   const [animatedStats, setAnimatedStats] = useState<PlatformStats>(EMPTY_PLATFORM_STATS);
   const [shouldAnimateStats, setShouldAnimateStats] = useState(false);
   const heroRef = useRef<HTMLElement>(null);
@@ -266,32 +269,6 @@ const Home = () => {
       document.body.style.overflow = previousOverflow;
     };
   }, [isDemoModalOpen]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadPlatformStats = async () => {
-      try {
-        const payload = await fetchPlatformStats();
-        if (cancelled) return;
-        setPlatformStats({
-          organizations: Number.isFinite(payload.organizations) ? payload.organizations : 0,
-          members: Number.isFinite(payload.members) ? payload.members : 0,
-          cities: Number.isFinite(payload.cities) ? payload.cities : 0,
-        });
-      } catch {
-        if (cancelled) return;
-        setPlatformStats(EMPTY_PLATFORM_STATS);
-      } finally {
-        if (!cancelled) setPlatformStatsLoaded(true);
-      }
-    };
-
-    void loadPlatformStats();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

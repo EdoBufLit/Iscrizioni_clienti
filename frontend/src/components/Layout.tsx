@@ -305,7 +305,7 @@ const Layout = () => {
                 style={{ display: "none" }}
               >
                 <nav className="container-shell py-4" aria-label="Navigazione principale mobile">
-                  <div className="flex flex-col gap-3 px-6 pb-6 pt-2">
+                  <div className="public-mobile-links flex flex-col gap-3 px-6 pb-6 pt-2">
                     {showAffiliazioneCta ? (
                       <NavLink
                         className="btn-primary !h-12 !w-full !rounded-xl !font-bold"
@@ -324,12 +324,12 @@ const Layout = () => {
                       Diventa Socio
                     </NavLink>
                     
-                    <div className="h-px bg-slate-100 my-2"></div>
+                    <div className="public-mobile-divider my-2"></div>
 
                     {NAV_ITEMS.map((item) => (
                       <NavLink
                         key={item.label}
-                        className="text-lg font-bold text-slate-700 py-2"
+                        className="public-mobile-link py-2 text-lg font-bold"
                         to={item.to}
                         end={item.to === "/"}
                         onClick={close}
@@ -338,10 +338,10 @@ const Layout = () => {
                       </NavLink>
                     ))}
                     
-                    <div className="h-px bg-slate-100 my-2"></div>
+                    <div className="public-mobile-divider my-2"></div>
                     
                     <NavLink
-                      className="text-brand font-bold py-2"
+                      className="public-mobile-access py-2 font-bold"
                       to={publicAccessTarget}
                       onClick={close}
                     >

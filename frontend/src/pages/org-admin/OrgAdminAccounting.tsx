@@ -5,6 +5,7 @@ import {
   useState,
 } from "react";
 import { useNavigate } from "react-router-dom";
+import AccountingDocumentPreviewModal from "../../components/accounting/AccountingDocumentPreviewModal";
 import ModalShell from "../../components/ui/ModalShell";
 import Skeleton from "../../components/ui/Skeleton";
 import { useToast } from "../../components/ui/ToastProvider";
@@ -39,15 +40,6 @@ const formatBytes = (value: number | null | undefined) => {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
-};
-
-const fileKindLabel = (mimeType: string | null) => {
-  if (!mimeType) return "File";
-  if (mimeType === "application/pdf") return "PDF";
-  if (mimeType.startsWith("image/")) return "Immagine";
-  if (mimeType.includes("sheet") || mimeType.includes("excel") || mimeType.includes("csv")) return "Foglio";
-  if (mimeType.includes("word") || mimeType.includes("document")) return "Documento";
-  return mimeType;
 };
 
 const DocumentIcon = ({ mimeType }: { mimeType: string | null }) => {
@@ -478,7 +470,7 @@ const OrgAdminAccounting = () => {
                                           </div>
                                         </td>
                                         <td className="px-5 py-4 align-top text-right">
-                                          <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
+                                          <div className="flex items-center justify-end gap-2 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
                                             {document.preview_available && (
                                               <button
                                                 type="button"
@@ -541,37 +533,15 @@ const OrgAdminAccounting = () => {
         </div>
       )}
 
-      <ModalShell
+      <AccountingDocumentPreviewModal
+        document={previewDocument}
         open={previewDocument !== null}
-        title={previewDocument?.title ?? "Preview documento"}
-        description={
-          previewDocument
-            ? `${previewDocument.original_filename} · ${fileKindLabel(previewDocument.mime_type)}`
-            : undefined
-        }
-        sizeClassName="max-w-5xl"
         onClose={() => setPreviewDocument(null)}
-      >
-        {previewDocument?.preview_url ? (
-          previewDocument.mime_type?.startsWith("image/") ? (
-            <img
-              src={previewDocument.preview_url}
-              alt={previewDocument.title}
-              className="max-h-[72vh] w-full rounded-3xl object-contain bg-neutral-50"
-            />
-          ) : (
-            <iframe
-              src={previewDocument.preview_url}
-              title={previewDocument.title}
-              className="h-[72vh] w-full rounded-3xl border border-neutral-200"
-            />
-          )
-        ) : (
-          <div className="rounded-3xl border border-dashed border-neutral-300 bg-neutral-50 px-6 py-10 text-center text-sm font-medium text-neutral-500">
-            Preview non disponibile per questo documento.
-          </div>
-        )}
-      </ModalShell>
+        onDownload={(document) => handleDownload(document)}
+        onOpenInNewTab={(document) => {
+          window.open(document.open_url, "_blank", "noopener,noreferrer");
+        }}
+      />
 
       <ModalShell
         open={shareDocument !== null}

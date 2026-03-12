@@ -3405,3 +3405,59 @@ pm --prefix frontend run build OK; DATABASE_URL=sqlite:///tmp_messages_forms_mig
 - Il composer ora comunica meglio il workflow: scelta destinatari, caricamento modello, scelta del form collegato, editing contenuto, design e azioni finali sono separati in blocchi piu leggibili; lo stesso vale per la tab Modelli salvati, che ora distingue meglio lista modelli ed editor.
 - Verifica finale: 
 pm --prefix frontend run build OK.
+## Theme contrast hardening public + dashboard (Mar 12, 2026)
+- [ ] Mappare tutti i CTA pubblici "Affilia la tua associazione" e i pattern shared che forzano colori incoerenti tra light/dark
+- [ ] Correggere il layer tema/shared styles per bottoni pubblici, link CTA, footer e FAQ senza introdurre patch isolate per singola pagina
+- [ ] Estendere il compatibility layer dark per surface/card interne dashboard ancora chiare o incoerenti
+- [ ] Eseguire 
+pm --prefix frontend run build e documentare review finale
+## Review (Theme contrast hardening public + dashboard - Mar 12, 2026)
+- Ho normalizzato i CTA pubblici principali su tn-primary / tn-ghost nelle entry point che esponevano il problema di contrasto (Home, navbar/mobile menu del layout pubblico, lista associazioni). In questo modo le CTA non ereditano più il colore link globale di 	heme.css, quindi non finiscono con fondo scuro e testo teal/nero quando devono essere pulsanti.
+- In rontend/src/theme.css ho collegato anche i token --public-* al sistema tema shared e ho aggiunto override tematici per public-footer, public-faq-button, public-faq-icon e public-faq-answer-text. Questo elimina il footer bianco fisso in dark mode e rende leggibile la sezione FAQ/accordion nelle pagine pubbliche.
+- Sempre in rontend/src/theme.css ho esteso il compatibility layer dark per utility usate ancora nelle dashboard e nelle hero card (g-slate-50/70-90, g-slate-100/70-90, g-slate-200/70, nuove varianti order-slate-200/*, order-slate-950/*, divide-slate-200, hover/table wrappers g-slate-*). Lo scopo e coprire i contenitori/card interne che rimanevano chiare o incoerenti senza inseguire patch file-per-file.
+- Verifiche eseguite: 
+pm --prefix frontend run build OK; screenshot locali da build preview con Playwright in 	asks/screenshots/home-light-20260312.png, 	asks/screenshots/home-dark-20260312.png, 	asks/screenshots/home-dark-tall-20260312.png. Nel check visuale homepage dark risultano leggibili FAQ e footer, e le CTA pubbliche non mostrano più il contrasto errato.
+- Dopo il primo check visuale ho corretto anche la hero shell di /associazioni, che restava troppo chiara per via di wrapper/gradient light-only. Verifica aggiuntiva con service worker bloccati: 	asks/screenshots/associazioni-dark-20260312.png mostra ora la sezione introduttiva coerente con la dark mode.
+- Screenshot aggiuntivo confermato: tasks/screenshots/associazioni-dark-20260312.png.
+- [x] Verifica visuale autenticata dark mode completata su 2026-03-12.
+
+### Review update - authenticated visual verification (2026-03-12)
+- 
+pm --prefix frontend run build OK dopo la correzione del layer CSS condiviso (surface, surface-strong, modal-panel, tn-ghost, premium-select).
+- Screenshot autenticati rigenerati e controllati: 	asks/screenshots/super-admin-associazioni-dark-auth-20260312.png, 	asks/screenshots/super-admin-org-admins-dark-auth-20260312.png, 	asks/screenshots/org-admin-dashboard-dark-auth-20260312.png, 	asks/screenshots/org-admin-soci-dark-auth-20260312.png, 	asks/screenshots/org-admin-prenotazioni-dark-auth-20260312.png.
+- Esito: pannelli, filtri, tabelle e card principali ora rispettano la dark mode in super-admin e org-admin; residuo visivo non di tema rilevato solo nel popover onboarding sopra la dashboard org-admin.
+
+## Homepage fake counters (Mar 12, 2026)
+- [x] Individuare il blocco contatori nella homepage pubblica
+- [x] Sostituire i valori reali/runtime con valori showcase statici piu alti
+- [x] Lasciare invariato il contatore delle citta attive
+- [x] Verificare build frontend e diff finale
+
+## Review (Homepage fake counters - Mar 12, 2026)
+- In `frontend/src/pages/Home.tsx` la sezione "La Nostra Rete" non usa piu i contatori runtime del backend.
+- I valori pubblici ora sono statici e marketing-driven: `300+` associazioni affiliate, `9.000+` soci registrati, `24+` citta attive.
+- L'animazione della sezione resta attiva, ma converge sempre ai target showcase richiesti.
+- Verifica eseguita: `npm --prefix frontend run build` OK.
+
+## Accounting preview + workspace UX hardening (Mar 12, 2026)
+- [x] Mappare preview accounting backend/frontend e identificare la causa CSP nelle aree super-admin e org-admin
+- [ ] Correggere le security headers solo per le route preview accounting inline
+- [ ] Introdurre un viewer accounting condiviso e usare un flusso preview coerente tra super-admin e org-admin
+- [ ] Rifinire la UI/UX del workspace accounting super-admin senza cambiare il dominio dati
+- [ ] Verificare con pytest backend accounting e build frontend, poi documentare review finale
+## Review (Accounting preview + workspace UX hardening - Mar 12, 2026)
+- Le preview accounting non falliscono piu per `frame-ancestors 'none'`: in `app/middleware.py` ho mantenuto `DENY` globale ma aperto `SAMEORIGIN` + `frame-ancestors 'self'` solo per le route `/api/super-admin/accounting/documents/{id}/preview` e `/api/org-admin/accounting/documents/{id}/preview`.
+- Ho aggiunto regressione backend in `tests/test_accounting_archive.py`: sia preview org-admin sia super-admin rispondono `200` con header coerenti per embed same-origin.
+- Ho introdotto `frontend/src/components/accounting/AccountingDocumentPreviewModal.tsx` come viewer condiviso per immagini/PDF, con metadata chiari e fallback pulito quando il formato non e previewabile inline.
+- `frontend/src/pages/org-admin/OrgAdminAccounting.tsx` ora usa il modal condiviso e rende i bottoni azione sempre accessibili su touch/mobile, non solo in hover desktop.
+- `frontend/src/pages/super-admin/components/SuperAdminAccountingWorkspace.tsx` e stato rifinito strutturalmente: hero KPI, setup cartelle/categorie piu leggibile, form documento piu chiaro, dettaglio selezione piu utile e tabella archivio con stati preview/share espliciti.
+- Verifiche eseguite: `python -m pytest -q tests/test_accounting_archive.py` OK (`2 passed`); `npm --prefix frontend run build` OK.
+## Mobile public menu dark mode fix (Mar 12, 2026)
+- [x] Identificare il pannello mobile pubblico che restava light-only in dark mode
+- [x] Allineare markup e token CSS del dropdown mobile al sistema tema shared
+- [x] Verificare build frontend finale prima del push
+
+## Review (Mobile public menu dark mode fix - Mar 12, 2026)
+- In `frontend/src/components/Layout.tsx` ho rimosso classi light-only dal menu mobile pubblico e introdotto hook CSS semantici (`public-mobile-link`, `public-mobile-divider`, `public-mobile-access`).
+- In `frontend/src/theme.css` il pannello `public-mobile-panel` usa ora i token del tema shared anche in dark mode, con divider e link coerenti con header/shell pubblica.
+- Verifica eseguita: `npm --prefix frontend run build` OK.

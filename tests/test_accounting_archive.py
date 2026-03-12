@@ -142,6 +142,15 @@ def test_accounting_archive_crud_and_share_link_flow(client, db):
 
     preview_response = client.get(f"/api/org-admin/accounting/documents/{document_id}/preview")
     assert preview_response.status_code == 200, preview_response.text
+    assert preview_response.headers["x-frame-options"] == "SAMEORIGIN"
+    assert "frame-ancestors 'self'" in preview_response.headers["content-security-policy"]
+
+    super_preview_response = client.get(
+        f"/api/super-admin/accounting/documents/{document_id}/preview"
+    )
+    assert super_preview_response.status_code == 200, super_preview_response.text
+    assert super_preview_response.headers["x-frame-options"] == "SAMEORIGIN"
+    assert "frame-ancestors 'self'" in super_preview_response.headers["content-security-policy"]
 
     share_response = client.post(
         f"/api/org-admin/accounting/documents/{document_id}/share-links",

@@ -913,6 +913,37 @@ select:focus {
   box-shadow: var(--theme-shadow-sm);
 }
 
+.public-mobile-panel {
+  border-top: 1px solid var(--theme-border);
+  background: color-mix(in srgb, var(--theme-surface) 96%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.public-mobile-divider {
+  height: 1px;
+  background: var(--theme-border);
+}
+
+.public-mobile-link {
+  color: var(--theme-text);
+  transition: color 180ms ease;
+}
+
+.public-mobile-link:hover {
+  color: var(--theme-brand);
+}
+
+.public-mobile-access {
+  color: var(--theme-brand);
+  transition: color 180ms ease;
+}
+
+.public-mobile-access:hover {
+  color: var(--theme-text);
+}
+
 .public-nav-pill,
 .public-menu-toggle {
   color: var(--theme-text-muted);
@@ -923,6 +954,21 @@ select:focus {
 :root[data-theme="dark"] .public-brand-name,
 :root[data-theme="dark"] .public-brand-payoff {
   color: var(--theme-text);
+}
+
+:root[data-theme="dark"] .public-mobile-panel {
+  background: color-mix(in srgb, var(--theme-panel-bg) 94%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    var(--theme-shadow-lg);
+}
+
+:root[data-theme="dark"] .public-mobile-link {
+  color: var(--theme-text);
+}
+
+:root[data-theme="dark"] .public-mobile-access:hover {
+  color: color-mix(in srgb, var(--theme-brand) 72%, white);
 }
 
 :root[data-theme="dark"] .public-nav-pill.is-active {

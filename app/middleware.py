@@ -1,6 +1,7 @@
 """Security middleware: response headers, request ID, and rate limiting."""
 
 import ipaddress
+import re
 import time
 import uuid
 from collections import defaultdict
@@ -37,8 +38,17 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
+        allow_same_origin_embed = bool(
+            re.match(
+                r"^/api/(super-admin|org-admin)/accounting/documents/\d+/preview$",
+                request.url.path,
+            )
+        )
+        frame_ancestors = "'self'" if allow_same_origin_embed else "'none'"
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Frame-Options"] = (
+            "SAMEORIGIN" if allow_same_origin_embed else "DENY"
+        )
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = (
             "camera=(), microphone=(), geolocation=()"
@@ -48,7 +58,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "base-uri 'self'; "
-            "frame-ancestors 'none'; "
+            f"frame-ancestors {frame_ancestors}; "
             "form-action 'self'; "
             "img-src 'self' data: blob: https:; "
             "font-src 'self' data: https://fonts.gstatic.com; "
