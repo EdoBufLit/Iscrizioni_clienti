@@ -7,7 +7,6 @@ import Home from "./pages/Home";
 import Associazioni from "./pages/Associazioni";
 import { useStatePlatformCapabilities } from "./hooks/useStatePlatformCapabilities";
 
-const LoStudio = lazy(() => import("./pages/LoStudio"));
 const Servizi = lazy(() => import("./pages/Servizi"));
 const Affiliazione = lazy(() => import("./pages/Affiliazione"));
 const AffiliazioneInfo = lazy(() => import("./pages/AffiliazioneInfo"));
@@ -77,7 +76,6 @@ const App = () => {
           <Routes>
             <Route element={<Layout />}>
               <Route index element={<Home />} />
-              <Route path="lo-studio" element={<LoStudio />} />
               <Route path="servizi" element={<Servizi />} />
               <Route
                 path="affiliazione"

@@ -509,7 +509,6 @@ def get_organization_statute(slug: str, db: Session = Depends(get_db)):
 
 _STATIC_PAGES = [
     ("/", "1.0", "weekly"),
-    ("/lo-studio", "0.8", "monthly"),
     ("/servizi", "0.8", "monthly"),
     ("/associazioni", "0.9", "weekly"),
     ("/contatti", "0.7", "monthly"),

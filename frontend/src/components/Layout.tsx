@@ -15,7 +15,6 @@ import { fetchWhoAmI, type WhoAmIResponse } from "../lib/api";
 
 const NAV_ITEMS = [
   { label: "Home", to: "/" },
-  { label: "Lo Studio", to: "/lo-studio" },
   { label: "Servizi", to: "/servizi" },
   { label: "Affiliazioni", to: "/associazioni" },
   { label: "Contatti", to: "/contatti" },

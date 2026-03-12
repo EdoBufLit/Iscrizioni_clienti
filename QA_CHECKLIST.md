@@ -102,7 +102,7 @@ docker compose up -d
 
 ### Public Pages
 - [ ] Home page loads at `/app/` with hero image, alternating section backgrounds
-- [ ] Navigation links work (Lo Studio, Servizi, Associazioni, Contatti)
+- [ ] Navigation links work (Servizi, Associazioni, Contatti)
 - [ ] Mobile navigation menu works
 - [ ] Logo in header links to home
 - [ ] `/app/nonexistent` shows 404 page
