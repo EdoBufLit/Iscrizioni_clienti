@@ -235,7 +235,7 @@ const OrgAdminMembers = () => {
         </div>
       )}
 
-      <div className="surface p-3 sm:p-4">
+      <div className="surface-strong p-3 sm:p-4">
         <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-center">
           <div className="flex-1 min-w-0">
             <DebouncedSearchInput

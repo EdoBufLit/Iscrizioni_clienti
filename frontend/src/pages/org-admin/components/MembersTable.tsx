@@ -77,13 +77,13 @@ const MembersTable = memo(function MembersTable({
 
   return (
     <div
-      className="surface mt-4 overflow-hidden min-h-[360px]"
+      className="surface-strong mt-4 overflow-hidden min-h-[360px]"
       data-tour="admin-members-list"
       data-component="orgadmin-members-table"
     >
       <div className="overflow-x-auto">
         <table className="w-full text-left">
-          <thead className="border-b border-white/60 bg-white/40">
+          <thead className="border-b border-neutral-200/60 bg-slate-50/70">
             <tr>
               <th className={thClass}>Nome</th>
               <th className={thClass}>Email</th>
@@ -136,8 +136,8 @@ const MembersTable = memo(function MembersTable({
                 return (
                   <tr
                     key={m.id}
-                    className={`transition hover:bg-brand/[0.02] ${
-                      i % 2 === 1 ? "bg-white/30" : ""
+                    className={`transition hover:bg-slate-50/70 ${
+                      i % 2 === 1 ? "bg-slate-50/50" : ""
                     }`}
                   >
                     <td className={`${tdClass} font-medium text-neutral-900`}>
@@ -212,10 +212,10 @@ const MembersTable = memo(function MembersTable({
         </table>
       </div>
       {!isLoading && totalPages > 1 && (
-        <div className="flex items-center justify-between border-t border-white/60 px-5 py-4 text-sm text-neutral-600">
+        <div className="flex items-center justify-between border-t border-neutral-200/60 px-5 py-4 text-sm text-neutral-600">
           <button
             type="button"
-            className="rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 transition hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn-ghost !rounded-md !px-3 !py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
             onClick={() => onPageChange(Math.max(1, page - 1))}
             disabled={page <= 1}
           >
@@ -226,7 +226,7 @@ const MembersTable = memo(function MembersTable({
           </span>
           <button
             type="button"
-            className="rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 transition hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn-ghost !rounded-md !px-3 !py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
             onClick={() => onPageChange(Math.min(totalPages, page + 1))}
             disabled={page >= totalPages}
           >

@@ -40,7 +40,7 @@ const sectionTabs: Array<{ key: SectionTab; label: string; hint: string }> = [
 ];
 
 const inputClass =
-  "mt-1 w-full rounded-[1rem] border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none transition focus:border-slate-950/30 focus:ring-2 focus:ring-slate-950/10";
+  "theme-input mt-1 w-full rounded-[1rem] px-3.5 py-2.5 text-sm";
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -185,7 +185,7 @@ function emptyTableDraft(roomId: number | null = null) {
 
 function MetricBox({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-[1.3rem] border border-slate-200 bg-slate-50 px-4 py-4">
+    <div className="theme-card-muted rounded-[1.3rem] px-4 py-4">
       <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">{label}</p>
       <p className="mt-2 text-3xl font-bold text-slate-950">{value}</p>
     </div>
@@ -211,7 +211,7 @@ function Toggle({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className="flex items-center gap-3 rounded-[1rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+    <label className="theme-card-muted flex items-center gap-3 rounded-[1rem] px-4 py-3 text-sm text-slate-700">
       <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
       {label}
     </label>
@@ -757,7 +757,7 @@ export default function OrgAdminBookings() {
   return (
     <div className="container-shell py-8 md:py-10">
       <div className="mx-auto max-w-[92rem] space-y-6">
-        <section className="rounded-[2rem] border border-slate-200 bg-white p-3 shadow-sm">
+        <section className="surface-strong rounded-[2rem] p-3">
           <div className="grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] xl:items-center">
             <div className="grid gap-3 md:grid-cols-4">
               {sectionTabs.map((tab) => (
@@ -768,7 +768,7 @@ export default function OrgAdminBookings() {
                   className={`rounded-[1.6rem] border px-4 py-4 text-left transition ${
                     section === tab.key
                       ? "border-slate-950 bg-slate-950 text-white"
-                      : "border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white"
+                      : "border-slate-200 bg-slate-50/70 text-slate-700 hover:border-slate-300 hover:bg-slate-100/70"
                   }`}
                 >
                   <p className="text-sm font-bold tracking-tight">{tab.label}</p>
@@ -955,7 +955,7 @@ export default function OrgAdminBookings() {
 
         {section === "map" && (
           <section className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_380px]">
-            <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="surface-strong rounded-[2rem] p-6">
               <div className="grid gap-3 md:grid-cols-3">
                 <Field label="Sala">
                   <select className={inputClass} value={selectedRoomId ?? ""} onChange={(event) => setSelectedRoomId(event.target.value ? Number(event.target.value) : null)}>
@@ -988,18 +988,18 @@ export default function OrgAdminBookings() {
               </div>
             </div>
             <aside className="space-y-4">
-              <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="surface-strong rounded-[2rem] p-5">
                 <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">Legenda</p>
                 <div className="mt-4 space-y-3">
                   {["free", "reserved", "occupied", "out_of_service"].map((state) => (
                     <div key={state} className={`rounded-[1rem] border px-3 py-3 text-sm font-semibold ${occupancyTone(state)}`}>{occupancyLabel(state)}</div>
                   ))}
                 </div>
-                <button type="button" onClick={handleMapSave} disabled={saving === "map" || !selectedRoomId} className="mt-4 w-full rounded-[1rem] bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white">
+                <button type="button" onClick={handleMapSave} disabled={saving === "map" || !selectedRoomId} className="btn-primary mt-4 w-full !rounded-[1rem] !px-4 !py-2.5 text-sm font-semibold">
                   Salva posizione tavoli
                 </button>
               </div>
-              <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="surface-strong rounded-[2rem] p-5">
                 <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">Tavolo selezionato</p>
                 {selectedMapTable ? (
                   <div className="mt-4 space-y-2 text-sm text-slate-700">
@@ -1125,11 +1125,11 @@ export default function OrgAdminBookings() {
             />
           </Field>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+          <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
             <button 
               type="button" 
               onClick={() => setIsCreatingManual(false)} 
-              className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              className="btn-ghost !rounded-xl !px-4 !py-2 text-sm font-semibold"
             >
               Annulla
             </button>
@@ -1148,20 +1148,20 @@ export default function OrgAdminBookings() {
 }
 
 function EmptyState({ message }: { message: string }) {
-  return <div className="rounded-[1.6rem] border border-dashed border-slate-200 bg-slate-50 px-5 py-10 text-center text-sm text-slate-500">{message}</div>;
+  return <div className="theme-card-muted rounded-[1.6rem] border-dashed px-5 py-10 text-center text-sm text-slate-500">{message}</div>;
 }
 
 function ActionRow({ primaryLabel, secondaryLabel, onPrimary, onSecondary, busy }: { primaryLabel: string; secondaryLabel: string; onPrimary: () => void; onSecondary: () => void; busy: boolean; }) {
-  return <div className="flex gap-3"><button type="button" onClick={onPrimary} disabled={busy} className="flex-1 rounded-[1rem] bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white">{primaryLabel}</button><button type="button" onClick={onSecondary} disabled={busy} className="rounded-[1rem] border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700">{secondaryLabel}</button></div>;
+  return <div className="flex gap-3"><button type="button" onClick={onPrimary} disabled={busy} className="btn-primary flex-1 !rounded-[1rem] !px-4 !py-2.5 text-sm font-semibold">{primaryLabel}</button><button type="button" onClick={onSecondary} disabled={busy} className="btn-ghost !rounded-[1rem] !px-4 !py-2.5 text-sm font-semibold">{secondaryLabel}</button></div>;
 }
 
 function ManagementShell({ title, subtitle, main, side }: { title: string; subtitle: string; main: React.ReactNode; side: React.ReactNode }) {
-  return <section className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_360px]"><div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">{title}</p><h2 className="mt-2 font-serif text-3xl tracking-tight text-slate-950">{subtitle}</h2><div className="mt-6">{main}</div></div><aside className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">{side}</aside></section>;
+  return <section className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_360px]"><div className="surface-strong rounded-[2rem] p-6"><p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">{title}</p><h2 className="mt-2 font-serif text-3xl tracking-tight text-slate-950">{subtitle}</h2><div className="mt-6">{main}</div></div><aside className="surface-strong rounded-[2rem] p-5">{side}</aside></section>;
 }
 
 function BookingCard({ booking, selected, onSelect, compact = false }: { booking: AssociationBooking; selected: boolean; onSelect: (id: number) => void; compact?: boolean }) {
   return (
-    <button type="button" onClick={() => onSelect(booking.id)} className={`w-full rounded-[1.4rem] border p-4 text-left transition ${selected ? "border-slate-950 bg-slate-950 text-white" : compact ? "border-white bg-white hover:border-slate-300" : "border-slate-200 bg-white hover:border-slate-300 hover:-translate-y-0.5"}`}>
+    <button type="button" onClick={() => onSelect(booking.id)} className={`w-full rounded-[1.4rem] border p-4 text-left transition ${selected ? "border-slate-950 bg-slate-950 text-white" : compact ? "border-slate-200 bg-slate-50/70 hover:border-slate-300 hover:bg-slate-100/70" : "border-slate-200 bg-slate-50/70 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-100/70"}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1170,7 +1170,7 @@ function BookingCard({ booking, selected, onSelect, compact = false }: { booking
           </div>
           <p className={`mt-2 text-sm ${selected ? "text-white/72" : "text-slate-500"}`}>{formatDateTime(booking.booking_date, booking.booking_time)}</p>
         </div>
-        <div className={`rounded-[1rem] px-3 py-2 text-sm ${selected ? "bg-white/8 text-white/82" : "bg-slate-50 text-slate-600"}`}>{booking.party_size || "-"} persone</div>
+        <div className={`rounded-[1rem] px-3 py-2 text-sm ${selected ? "bg-white/8 text-white/82" : "bg-slate-100 text-slate-600"}`}>{booking.party_size || "-"} persone</div>
       </div>
       {!compact && (
         <div className={`mt-4 grid gap-3 md:grid-cols-4 ${selected ? "text-white/80" : "text-slate-600"}`}>
@@ -1226,19 +1226,19 @@ function AgendaSection(props: {
   return (
     <>
       <section className="space-y-6">
-        <div className="rounded-[2.2rem] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(148,163,184,0.16),_transparent_42%),linear-gradient(135deg,_#ffffff_0%,_#f8fafc_48%,_#eef2ff_100%)] p-6 shadow-sm">
+        <div className="surface-strong rounded-[2.2rem] p-6">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.28em] text-slate-500">Calendario prenotazioni</p>
               <div className="mt-3 flex flex-wrap items-center gap-3">
-                <button type="button" onClick={() => props.setAgendaMonth(shiftMonth(props.agendaMonth, -1))} className="rounded-full border border-slate-200 bg-white/90 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950">
+                <button type="button" onClick={() => props.setAgendaMonth(shiftMonth(props.agendaMonth, -1))} className="btn-ghost !rounded-full !px-4 !py-2 text-sm font-semibold">
                   Mese precedente
                 </button>
                 <div>
                   <h2 className="font-serif text-4xl tracking-tight text-slate-950">{formatMonthLabel(props.agendaMonth)}</h2>
                   <p className="mt-1 text-sm text-slate-500">Ogni casella mostra le prenotazioni del giorno. Clicca per aprire il popup operativo.</p>
                 </div>
-                <button type="button" onClick={() => props.setAgendaMonth(shiftMonth(props.agendaMonth, 1))} className="rounded-full border border-slate-200 bg-white/90 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950">
+                <button type="button" onClick={() => props.setAgendaMonth(shiftMonth(props.agendaMonth, 1))} className="btn-ghost !rounded-full !px-4 !py-2 text-sm font-semibold">
                   Mese successivo
                 </button>
               </div>
@@ -1279,7 +1279,7 @@ function AgendaSection(props: {
             <MetricBox label="Servite" value={props.monthOccupancy.completed} />
           </div>
         </div>
-        <div className="rounded-[2.2rem] border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="surface-strong rounded-[2.2rem] p-4">
           <div className="grid grid-cols-7 gap-2 border-b border-slate-200 px-2 pb-3">
             {["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"].map((label) => (
               <div key={label} className="px-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">{label}</div>
@@ -1303,9 +1303,9 @@ function AgendaSection(props: {
                   }}
                   className={`min-h-[11.5rem] rounded-[1.8rem] border p-3 text-left transition ${
                     isSelected
-                      ? "border-slate-950 bg-slate-950 text-white shadow-[0_18px_60px_rgba(15,23,42,0.18)]"
-                      : isCurrentMonth
-                        ? "border-slate-200 bg-[linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(248,250,252,0.96))] hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_18px_45px_rgba(15,23,42,0.08)]"
+                        ? "border-slate-950 bg-slate-950 text-white shadow-[0_18px_60px_rgba(15,23,42,0.18)]"
+                        : isCurrentMonth
+                        ? "border-slate-200 bg-slate-50/70 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-100/70 hover:shadow-[0_18px_45px_rgba(15,23,42,0.08)]"
                         : "border-slate-100 bg-slate-50/70 text-slate-400"
                   }`}
                 >
@@ -1339,7 +1339,7 @@ function AgendaSection(props: {
                               props.setSelectedCalendarDate(dateKey);
                               props.setSelectedBookingId(booking.id);
                             }}
-                            className={`w-full rounded-[1rem] border px-3 py-2 text-left transition ${isSelected ? "border-white/14 bg-white/8 text-white hover:bg-white/12" : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"}`}
+                            className={`w-full rounded-[1rem] border px-3 py-2 text-left transition ${isSelected ? "border-white/14 bg-white/8 text-white hover:bg-white/12" : "border-slate-200 bg-slate-50/70 text-slate-700 hover:border-slate-300 hover:bg-slate-100/70"}`}
                           >
                             <div className="flex items-center justify-between gap-3">
                               <p className="truncate text-sm font-semibold">{booking.customer_name}</p>
@@ -1426,12 +1426,12 @@ function BookingDetailPanel(props: {
   saving: string;
 }) {
   if (!props.selectedBooking) {
-    return <div className="rounded-[1.8rem] border border-dashed border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-500">Seleziona una prenotazione dal popup per vedere dettaglio, stato e assegnazione tavolo.</div>;
+    return <div className="theme-card-muted rounded-[1.8rem] border-dashed px-6 py-12 text-center text-sm text-slate-500">Seleziona una prenotazione dal popup per vedere dettaglio, stato e assegnazione tavolo.</div>;
   }
 
   return (
     <div className="space-y-4">
-      <div className="rounded-[1.8rem] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="surface-strong rounded-[1.8rem] p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500">Prenotazione</p>
@@ -1441,22 +1441,22 @@ function BookingDetailPanel(props: {
           <span className={`rounded-full px-3 py-1 text-xs font-semibold ${toneForStatus(props.selectedBooking.status)}`}>{formatStatusLabel(props.selectedBooking.status)}</span>
         </div>
         <div className="mt-5 grid gap-3 md:grid-cols-2">
-          <div className="rounded-[1.2rem] bg-slate-50 px-4 py-3 text-sm text-slate-700"><p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Quando</p><p className="mt-2 font-semibold text-slate-950">{formatDateTime(props.selectedBooking.booking_date, props.selectedBooking.booking_time)}</p></div>
-          <div className="rounded-[1.2rem] bg-slate-50 px-4 py-3 text-sm text-slate-700"><p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Persone</p><p className="mt-2 font-semibold text-slate-950">{props.selectedBooking.party_size || "-"}</p></div>
-          <div className="rounded-[1.2rem] bg-slate-50 px-4 py-3 text-sm text-slate-700"><p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Form origine</p><p className="mt-2 font-semibold text-slate-950">{props.selectedBooking.source_form?.title || "N/D"}</p></div>
-          <div className="rounded-[1.2rem] bg-slate-50 px-4 py-3 text-sm text-slate-700"><p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Assegnazione attuale</p><p className="mt-2 font-semibold text-slate-950">{props.selectedBooking.room?.name || "Sala da assegnare"} · {props.selectedBooking.table?.name || "Tavolo da assegnare"}</p></div>
+          <div className="theme-card-muted rounded-[1.2rem] px-4 py-3 text-sm text-slate-700"><p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Quando</p><p className="mt-2 font-semibold text-slate-950">{formatDateTime(props.selectedBooking.booking_date, props.selectedBooking.booking_time)}</p></div>
+          <div className="theme-card-muted rounded-[1.2rem] px-4 py-3 text-sm text-slate-700"><p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Persone</p><p className="mt-2 font-semibold text-slate-950">{props.selectedBooking.party_size || "-"}</p></div>
+          <div className="theme-card-muted rounded-[1.2rem] px-4 py-3 text-sm text-slate-700"><p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Form origine</p><p className="mt-2 font-semibold text-slate-950">{props.selectedBooking.source_form?.title || "N/D"}</p></div>
+          <div className="theme-card-muted rounded-[1.2rem] px-4 py-3 text-sm text-slate-700"><p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Assegnazione attuale</p><p className="mt-2 font-semibold text-slate-950">{props.selectedBooking.room?.name || "Sala da assegnare"} · {props.selectedBooking.table?.name || "Tavolo da assegnare"}</p></div>
         </div>
         {props.selectedBooking.notes ? (
-          <div className="mt-4 rounded-[1.2rem] border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700"><p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Note</p><p className="mt-2 leading-6">{props.selectedBooking.notes}</p></div>
+          <div className="theme-card-muted mt-4 rounded-[1.2rem] px-4 py-4 text-sm text-slate-700"><p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Note</p><p className="mt-2 leading-6">{props.selectedBooking.notes}</p></div>
         ) : null}
       </div>
-      <div className="rounded-[1.8rem] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="surface-strong rounded-[1.8rem] p-5">
         <p className="text-sm font-semibold text-slate-900">Stato servizio</p>
         <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
           {bookingStatuses.map((status) => <button key={status} type="button" onClick={() => props.onStatusChange(status)} disabled={props.saving === "booking-status"} className={`rounded-[1rem] px-3 py-2 text-sm font-semibold transition ${props.selectedBooking?.status === status ? "bg-slate-950 text-white" : "border border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300"}`}>{formatStatusLabel(status)}</button>)}
         </div>
       </div>
-      <div className="rounded-[1.8rem] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="surface-strong rounded-[1.8rem] p-5">
         <p className="text-sm font-semibold text-slate-900">Assegna sala e tavolo</p>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <Field label="Sala"><select className={inputClass} value={props.assignmentRoomId} onChange={(event) => props.setAssignmentRoomId(event.target.value ? Number(event.target.value) : "")}><option value="">Seleziona una sala</option>{props.rooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}</select></Field>

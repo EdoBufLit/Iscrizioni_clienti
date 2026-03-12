@@ -154,11 +154,11 @@ const SuperAdminOrgAdmins = () => {
 
       <CreateOrgAdminForm orgs={orgs} onCreate={handleCreate} />
 
-      <div className="surface p-2 sm:p-3">
+      <div className="surface-strong p-2 sm:p-3">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex-1 max-w-md">
             <select
-              className="premium-select w-full !bg-white/50 focus:!bg-white"
+              className="premium-select w-full"
               value={selectedOrg}
               onChange={(e) => setSelectedOrg(e.target.value ? Number(e.target.value) : "")}
             >
@@ -178,7 +178,7 @@ const SuperAdminOrgAdmins = () => {
         </div>
       </div>
 
-      <div className="surface overflow-hidden border-neutral-200/60 shadow-premium-lg" data-component="superadmin-orgadmins-table">
+      <div className="surface-strong overflow-hidden border-neutral-200/60 shadow-premium-lg" data-component="superadmin-orgadmins-table">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>

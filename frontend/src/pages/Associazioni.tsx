@@ -55,9 +55,9 @@ const Associazioni = () => {
   return (
     <section className="py-20 md:py-32 bg-slate-50/50 min-h-screen font-sans" data-reveal="fade-up">
       <div className="container-shell max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white rounded-[2rem] shadow-2xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
+        <div className="surface-strong rounded-[2rem] overflow-hidden">
           
-          <div className="p-8 md:p-12 lg:p-16 border-b border-slate-100 bg-gradient-to-b from-slate-50/80 to-white">
+          <div className="p-8 md:p-12 lg:p-16 border-b border-slate-100 bg-slate-50/80">
             <div className="max-w-3xl">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-brand/10 text-brand mb-6">
                 <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
@@ -78,7 +78,7 @@ const Associazioni = () => {
               </div>
               <input
                 id="search-field"
-                className="block w-full pl-11 pr-4 py-4 rounded-2xl border border-slate-200 bg-white text-base shadow-sm focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all placeholder:text-slate-400 font-medium"
+                className="theme-input block w-full rounded-2xl pl-11 pr-4 py-4 text-base font-medium shadow-sm placeholder:text-slate-400"
                 type="search"
                 placeholder="Inserisci il nome dell'associazione..."
                 value={search}
@@ -131,7 +131,7 @@ const Associazioni = () => {
                 <p className="text-slate-500 font-medium max-w-md mx-auto mb-8">
                   Nessuna associazione corrisponde alla tua ricerca "{search}". Prova a usare termini diversi.
                 </p>
-                <button className="inline-flex items-center justify-center h-12 px-8 rounded-xl bg-white border-2 border-slate-200 text-slate-700 font-bold hover:bg-slate-50 transition-all" onClick={() => setSearch("")}>
+                <button className="btn-ghost !h-12 !rounded-xl !border-2 !px-8 !font-bold" onClick={() => setSearch("")}>
                   Mostra tutte
                 </button>
               </div>
@@ -195,10 +195,10 @@ const Associazioni = () => {
                         )}
 
                         <div className="mt-auto pt-6 flex items-center gap-3">
-                          <Link className="inline-flex items-center justify-center h-10 px-5 rounded-xl bg-slate-900 hover:bg-brand text-white text-sm font-bold shadow-md shadow-slate-900/10 hover:shadow-brand/20 transition-all flex-1" to={`/associazioni/${org.slug}/iscrizione`}>
+                          <Link className="btn-primary !h-10 !flex-1 !rounded-xl !px-5 !text-sm !font-bold" to={`/associazioni/${org.slug}/iscrizione`}>
                             Iscriviti Ora
                           </Link>
-                          <Link className="inline-flex items-center justify-center h-10 px-4 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 text-sm font-bold transition-all" to={`/associazioni/${org.slug}`}>
+                          <Link className="btn-ghost !h-10 !rounded-xl !px-4 !text-sm !font-bold" to={`/associazioni/${org.slug}`}>
                             Dettagli
                           </Link>
                         </div>

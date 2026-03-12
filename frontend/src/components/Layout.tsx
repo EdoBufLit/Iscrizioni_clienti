@@ -262,7 +262,7 @@ const Layout = () => {
                   <div className="flex shrink-0 items-center gap-3">
                     {showAffiliazioneCta ? (
                       <NavLink
-                        className="inline-flex items-center justify-center h-10 px-5 rounded-xl bg-slate-900 text-white text-sm font-bold shadow-md shadow-slate-900/10 hover:-translate-y-0.5 hover:shadow-lg transition-all"
+                        className="btn-primary !h-10 !rounded-xl !px-5 !text-sm !font-bold"
                         to="/affiliazione"
                         onClick={() =>
                           trackUiEvent("click_affiliazione_cta_nav", {
@@ -273,7 +273,7 @@ const Layout = () => {
                         Affilia l'Associazione
                       </NavLink>
                     ) : null}
-                    <NavLink className="inline-flex items-center justify-center h-10 px-5 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all" to="/associazioni">
+                    <NavLink className="btn-ghost !h-10 !rounded-xl !px-5 !text-sm !font-bold" to="/associazioni">
                       Diventa Socio
                     </NavLink>
                     <NavLink
@@ -309,7 +309,7 @@ const Layout = () => {
                   <div className="flex flex-col gap-3 px-6 pb-6 pt-2">
                     {showAffiliazioneCta ? (
                       <NavLink
-                        className="inline-flex items-center justify-center h-12 rounded-xl bg-slate-900 text-white font-bold w-full shadow-md"
+                        className="btn-primary !h-12 !w-full !rounded-xl !font-bold"
                         to="/affiliazione"
                         onClick={() => {
                           trackUiEvent("click_affiliazione_cta_nav", {
@@ -321,7 +321,7 @@ const Layout = () => {
                         Affilia l'Associazione
                       </NavLink>
                     ) : null}
-                    <NavLink className="inline-flex items-center justify-center h-12 rounded-xl bg-white border border-slate-200 text-slate-700 font-bold w-full" to="/associazioni" onClick={close}>
+                    <NavLink className="btn-ghost !h-12 !w-full !rounded-xl !font-bold" to="/associazioni" onClick={close}>
                       Diventa Socio
                     </NavLink>
                     

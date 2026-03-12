@@ -505,14 +505,14 @@ const Home = () => {
             <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4" data-hero-meta>
               {affiliazioneEnabled ? (
                 <Link
-                  className="inline-flex items-center justify-center h-14 px-8 rounded-xl bg-slate-900 text-white font-bold tracking-wide shadow-lg shadow-slate-900/20 hover:-translate-y-0.5 hover:shadow-xl transition-all text-base w-full sm:w-auto"
+                  className="btn-primary !h-14 !w-full !rounded-xl !px-8 !text-base sm:!w-auto"
                   to="/affiliazione"
                   onClick={() => handleAffiliaHeroClick("hero_desktop_primary")}
                 >
                   Affilia la tua Associazione
                 </Link>
               ) : null}
-              <Link className="inline-flex items-center justify-center h-14 px-8 rounded-xl bg-white border-2 border-slate-200 text-slate-700 font-bold hover:bg-slate-50 hover:border-slate-300 transition-all text-base w-full sm:w-auto" to="/associazioni">
+              <Link className="btn-ghost !h-14 !w-full !rounded-xl !border-2 !px-8 !text-base sm:!w-auto" to="/associazioni">
                 Diventa Socio
               </Link>
             </div>
@@ -628,7 +628,7 @@ const Home = () => {
                 >
                   Vedi una demo
                 </button>
-                <Link className="inline-flex items-center justify-center h-12 px-8 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold transition-all" to="/associazioni">
+                <Link className="btn-ghost !h-12 !rounded-xl !px-8" to="/associazioni">
                   Diventa Socio
                 </Link>
               </div>
@@ -686,18 +686,18 @@ const Home = () => {
           <div className="mt-16 flex flex-col sm:flex-row items-center justify-center gap-4">
             {affiliazioneEnabled ? (
               <Link
-                className="inline-flex items-center justify-center h-14 px-8 rounded-xl bg-slate-900 text-white font-bold shadow-lg shadow-slate-900/20 hover:-translate-y-0.5 hover:shadow-xl transition-all"
+                className="btn-primary !h-14 !rounded-xl !px-8"
                 to="/affiliazione"
                 onClick={() => handleAffiliaHeroClick("below_fold_section")}
               >
                 Inizia Affiliazione Ora
               </Link>
             ) : (
-              <Link className="inline-flex items-center justify-center h-14 px-8 rounded-xl bg-slate-900 text-white font-bold shadow-lg" to="/contatti">
+              <Link className="btn-primary !h-14 !rounded-xl !px-8" to="/contatti">
                 Contatta ASSONAM
               </Link>
             )}
-            <Link className="inline-flex items-center justify-center h-14 px-8 rounded-xl bg-white border border-slate-200 text-slate-700 font-bold hover:bg-slate-50 transition-all" to="/affiliazione-info">
+            <Link className="btn-ghost !h-14 !rounded-xl !px-8" to="/affiliazione-info">
               Scopri i dettagli tecnici
             </Link>
           </div>
@@ -711,7 +711,7 @@ const Home = () => {
             <h2 className="text-3xl font-extrabold text-slate-900 mb-4">Domande Frequenti</h2>
             <p className="text-slate-500 text-lg">Tutto quello che devi sapere prima di iniziare.</p>
           </div>
-          <div className="bg-white rounded-3xl p-6 md:p-10 shadow-xl shadow-slate-200/30 border border-slate-100">
+          <div className="surface-strong rounded-3xl p-6 md:p-10">
             <PublicFaqAccordion items={FAQ_ITEMS} />
           </div>
         </div>
@@ -720,7 +720,7 @@ const Home = () => {
       {/* STICKY CTA */}
       <div className={`fixed bottom-6 left-0 right-0 z-50 flex justify-center transition-all duration-300 pointer-events-none ${showStickyAffilia ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
         <Link
-          className="pointer-events-auto inline-flex items-center justify-center h-14 px-10 rounded-full bg-slate-900 text-white text-lg font-bold shadow-2xl shadow-slate-900/30 hover:scale-105 transition-all"
+          className="btn-primary pointer-events-auto !h-14 !rounded-full !px-10 !text-lg hover:!scale-105"
           to="/affiliazione"
           onClick={handleAffiliaStickyClick}
         >
@@ -760,11 +760,11 @@ const Home = () => {
             
             <div className="flex flex-col gap-3">
               {affiliazioneEnabled ? (
-                <Link className="inline-flex justify-center items-center h-12 rounded-xl bg-brand text-white font-bold w-full hover:bg-brand-light transition-colors" to="/affiliazione" onClick={() => setIsDemoModalOpen(false)}>
+                <Link className="btn-primary !h-12 !w-full !rounded-xl" to="/affiliazione" onClick={() => setIsDemoModalOpen(false)}>
                   Affilia l'Associazione
                 </Link>
               ) : null}
-              <Link className="inline-flex justify-center items-center h-12 rounded-xl bg-white border border-slate-200 text-slate-700 font-bold w-full hover:bg-slate-50 transition-colors" to="/affiliazione-info" onClick={() => setIsDemoModalOpen(false)}>
+              <Link className="btn-ghost !h-12 !w-full !rounded-xl" to="/affiliazione-info" onClick={() => setIsDemoModalOpen(false)}>
                 Scopri di più sul sistema
               </Link>
             </div>

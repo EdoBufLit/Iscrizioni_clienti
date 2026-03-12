@@ -260,7 +260,7 @@ const SuperAdminOrganizations = () => {
         </button>
       </div>
 
-      <div className="surface p-2 sm:p-3">
+      <div className="surface-strong p-2 sm:p-3">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center">
           <div className="flex-1 min-w-0 relative">
             <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 group-focus-within:text-brand transition-colors">
@@ -289,7 +289,7 @@ const SuperAdminOrganizations = () => {
                 }
               }}
               placeholder="Cerca per nome, slug o email..."
-              className="w-full rounded-xl border border-neutral-200 bg-white/50 pl-12 pr-12 py-2.5 text-sm font-semibold text-neutral-700 outline-none transition-all focus:border-brand focus:ring-4 focus:ring-brand/5 focus:bg-white"
+              className="theme-input w-full rounded-xl pl-12 pr-12 py-2.5 text-sm font-semibold"
             />
             {searchInput && (
               <button
@@ -337,7 +337,7 @@ const SuperAdminOrganizations = () => {
         </div>
       </div>
 
-      <div className="surface overflow-hidden border-neutral-200/60" data-component="superadmin-orgs-table">
+      <div className="surface-strong overflow-hidden border-neutral-200/60" data-component="superadmin-orgs-table">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>

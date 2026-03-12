@@ -35,7 +35,7 @@ const CreateOrgAdminForm = memo(function CreateOrgAdminForm({
   };
 
   return (
-    <div className="surface mt-8 p-7" data-component="superadmin-orgadmins-create-form">
+    <div className="surface-strong mt-8 p-7" data-component="superadmin-orgadmins-create-form">
       <h3 className="text-sm font-semibold text-neutral-900">
         Nuovo amministratore
       </h3>
@@ -69,7 +69,7 @@ const CreateOrgAdminForm = memo(function CreateOrgAdminForm({
           </label>
           <input
             id="new-admin-email"
-            className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+            className="theme-input mt-1 w-full rounded-md px-3 py-2 text-sm"
             type="email"
             placeholder="admin@associazione.it"
             value={newEmail}
@@ -85,7 +85,7 @@ const CreateOrgAdminForm = memo(function CreateOrgAdminForm({
           </label>
           <select
             id="new-admin-org"
-            className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+            className="theme-select mt-1 w-full rounded-md px-3 py-2 text-sm"
             value={newOrgId}
             onChange={(e) =>
               setNewOrgId(e.target.value ? Number(e.target.value) : "")
@@ -100,7 +100,7 @@ const CreateOrgAdminForm = memo(function CreateOrgAdminForm({
           </select>
         </div>
         <button
-          className="inline-flex shrink-0 items-center justify-center rounded-md bg-brand px-5 py-2 text-sm font-semibold text-white shadow-subtle transition hover:-translate-y-px hover:bg-brand-dark hover:shadow-card active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-subtle"
+          className="btn-primary !rounded-md !px-5 !py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
           type="submit"
           disabled={!newEmail.trim() || newOrgId === "" || creating}
           data-component="superadmin-orgadmins-invite"

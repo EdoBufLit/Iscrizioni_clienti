@@ -52,7 +52,7 @@ const DebouncedSearchInput = memo(function DebouncedSearchInput({
         <path d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
       </svg>
       <input
-        className="w-full rounded-md border border-neutral-200 bg-white py-2 pl-9 pr-3 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20 sm:max-w-xs"
+        className="theme-input w-full rounded-md py-2 pl-9 pr-3 text-sm sm:max-w-xs"
         type="search"
         placeholder="Cerca per nome, cognome, email o CF..."
         value={value}

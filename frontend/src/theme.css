@@ -44,6 +44,15 @@
   --theme-badge-bg: rgba(15, 61, 58, 0.08);
   --theme-modal-bg: rgba(255, 255, 255, 0.96);
   --theme-drawer-bg: rgba(255, 255, 255, 0.96);
+  --public-bg: var(--theme-page-bg);
+  --public-bg-soft: color-mix(in srgb, var(--theme-surface-2) 92%, var(--theme-page-bg));
+  --public-ink: var(--theme-text);
+  --public-muted: var(--theme-text-muted);
+  --public-line: var(--theme-border);
+  --public-brand: #1f5e63;
+  --public-brand-strong: #18484b;
+  --public-accent: #d2b071;
+  --public-card: color-mix(in srgb, var(--theme-surface-1) 94%, transparent);
 }
 
 :root[data-theme="dark"] {
@@ -91,6 +100,15 @@
   --theme-badge-bg: rgba(120, 209, 194, 0.12);
   --theme-modal-bg: rgba(20, 31, 43, 0.98);
   --theme-drawer-bg: rgba(17, 26, 36, 0.98);
+  --public-bg: var(--theme-page-bg);
+  --public-bg-soft: color-mix(in srgb, var(--theme-surface-2) 86%, var(--theme-app-bg));
+  --public-ink: var(--theme-text);
+  --public-muted: var(--theme-text-muted);
+  --public-line: var(--theme-border);
+  --public-brand: var(--theme-brand);
+  --public-brand-strong: var(--theme-brand-strong);
+  --public-accent: var(--theme-accent);
+  --public-card: color-mix(in srgb, var(--theme-panel-bg) 92%, transparent);
 }
 
 html,
@@ -194,6 +212,49 @@ body::before {
 
 .public-shell .btn-ghost:hover {
   border-color: color-mix(in srgb, var(--theme-brand) 54%, var(--theme-border-strong));
+}
+
+.public-footer {
+  border-top-color: var(--theme-border);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--theme-surface-2) 86%, transparent) 0%,
+      color-mix(in srgb, var(--theme-panel-bg) 96%, transparent) 100%
+    );
+}
+
+.public-footer-brand {
+  color: var(--theme-text);
+}
+
+.public-footer-copy,
+.public-footer-side {
+  color: var(--theme-text-muted);
+}
+
+.public-footer-links a,
+.public-footer-side a {
+  color: var(--theme-link);
+}
+
+.public-footer-links a:hover,
+.public-footer-side a:hover {
+  color: var(--theme-link-hover);
+}
+
+.public-faq-button {
+  color: var(--theme-text);
+}
+
+.public-faq-icon {
+  border-color: color-mix(in srgb, var(--theme-brand) 36%, var(--theme-border));
+  color: var(--theme-brand);
+  background: color-mix(in srgb, var(--theme-hover) 86%, transparent);
+}
+
+.public-faq-answer-text {
+  color: var(--theme-text-muted);
 }
 
 .public-shell input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
@@ -706,6 +767,58 @@ select:focus {
   box-shadow: var(--theme-shadow-lg);
 }
 
+:root[data-theme] .surface {
+  border-color: var(--theme-border) !important;
+  background: color-mix(in srgb, var(--theme-surface-1) 98%, transparent) !important;
+  box-shadow: var(--theme-shadow-sm) !important;
+}
+
+:root[data-theme] .surface:hover {
+  border-color: color-mix(in srgb, var(--theme-accent) 34%, var(--theme-border)) !important;
+  background: color-mix(in srgb, var(--theme-surface-1) 98%, transparent) !important;
+  box-shadow: var(--theme-shadow-lg) !important;
+}
+
+:root[data-theme] .surface-strong {
+  border-color: var(--theme-border) !important;
+  background: var(--theme-card-bg) !important;
+  box-shadow: var(--theme-shadow-sm) !important;
+}
+
+:root[data-theme] .surface-strong:hover {
+  border-color: color-mix(in srgb, var(--theme-accent) 36%, var(--theme-border)) !important;
+  box-shadow: var(--theme-shadow-lg) !important;
+}
+
+:root[data-theme] .modal-panel {
+  border-color: var(--theme-border) !important;
+  background: var(--theme-modal-bg) !important;
+  color: var(--theme-text) !important;
+}
+
+:root[data-theme] .btn-ghost {
+  border-color: var(--theme-border) !important;
+  background: color-mix(in srgb, var(--theme-surface-solid) 88%, transparent) !important;
+  color: var(--theme-text-muted) !important;
+}
+
+:root[data-theme] .btn-ghost:hover {
+  border-color: var(--theme-border-strong) !important;
+  background: var(--theme-surface-elevated) !important;
+  color: var(--theme-text) !important;
+}
+
+:root[data-theme] .premium-select {
+  border-color: var(--theme-border) !important;
+  background: var(--theme-input-bg) !important;
+  color: var(--theme-text) !important;
+}
+
+:root[data-theme] .premium-select:hover {
+  border-color: var(--theme-border-strong) !important;
+  background: color-mix(in srgb, var(--theme-input-bg) 94%, var(--theme-hover)) !important;
+}
+
 .btn-ghost {
   border-color: var(--theme-border);
   background: color-mix(in srgb, var(--theme-surface-solid) 88%, transparent);
@@ -853,10 +966,16 @@ select:focus {
 :root[data-theme="dark"] .bg-neutral-100\/90,
 :root[data-theme="dark"] .bg-slate-50,
 :root[data-theme="dark"] .bg-slate-50\/50,
+:root[data-theme="dark"] .bg-slate-50\/70,
+:root[data-theme="dark"] .bg-slate-50\/80,
+:root[data-theme="dark"] .bg-slate-50\/90,
 :root[data-theme="dark"] .bg-slate-100,
 :root[data-theme="dark"] .bg-slate-100\/50,
+:root[data-theme="dark"] .bg-slate-100\/70,
 :root[data-theme="dark"] .bg-slate-100\/80,
+:root[data-theme="dark"] .bg-slate-100\/90,
 :root[data-theme="dark"] .bg-slate-200,
+:root[data-theme="dark"] .bg-slate-200\/70,
 :root[data-theme="dark"] .bg-\[\#f8f9fa\]\/50 {
   background-color: var(--theme-surface-2) !important;
 }
@@ -878,9 +997,16 @@ select:focus {
 :root[data-theme="dark"] .border-neutral-200\/80,
 :root[data-theme="dark"] .border-neutral-300,
 :root[data-theme="dark"] .border-slate-200,
+:root[data-theme="dark"] .border-slate-200\/50,
+:root[data-theme="dark"] .border-slate-200\/60,
+:root[data-theme="dark"] .border-slate-200\/70,
+:root[data-theme="dark"] .border-slate-200\/80,
 :root[data-theme="dark"] .border-slate-300,
 :root[data-theme="dark"] .border-slate-300\/70,
 :root[data-theme="dark"] .border-slate-400,
+:root[data-theme="dark"] .border-slate-950\/10,
+:root[data-theme="dark"] .border-slate-950\/20,
+:root[data-theme="dark"] .border-slate-950\/30,
 :root[data-theme="dark"] .border-black\/5,
 :root[data-theme="dark"] .border-black\/10,
 :root[data-theme="dark"] .border-white\/50,
@@ -892,7 +1018,8 @@ select:focus {
 :root[data-theme="dark"] .divide-neutral-50 > :not([hidden]) ~ :not([hidden]),
 :root[data-theme="dark"] .divide-neutral-100 > :not([hidden]) ~ :not([hidden]),
 :root[data-theme="dark"] .divide-neutral-200 > :not([hidden]) ~ :not([hidden]),
-:root[data-theme="dark"] .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+:root[data-theme="dark"] .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+:root[data-theme="dark"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
   border-color: var(--theme-border) !important;
 }
 
@@ -938,8 +1065,12 @@ select:focus {
 :root[data-theme="dark"] .hover\:bg-neutral-100\/50:hover,
 :root[data-theme="dark"] .hover\:bg-white:hover,
 :root[data-theme="dark"] .hover\:bg-white\/50:hover,
+:root[data-theme="dark"] .hover\:bg-white\/90:hover,
 :root[data-theme="dark"] .hover\:bg-slate-50:hover,
 :root[data-theme="dark"] .hover\:bg-slate-50\/50:hover,
+:root[data-theme="dark"] .hover\:bg-slate-50\/70:hover,
+:root[data-theme="dark"] .hover\:bg-slate-50\/80:hover,
+:root[data-theme="dark"] .hover\:bg-slate-50\/90:hover,
 :root[data-theme="dark"] .hover\:bg-slate-100:hover {
   background-color: var(--theme-table-row-hover) !important;
 }
@@ -975,13 +1106,17 @@ select:focus {
 :root[data-theme="dark"] thead.bg-white\/40,
 :root[data-theme="dark"] thead.bg-neutral-50\/50,
 :root[data-theme="dark"] thead.bg-neutral-50\/80,
-:root[data-theme="dark"] thead.bg-neutral-50\/30 {
+:root[data-theme="dark"] thead.bg-neutral-50\/30,
+:root[data-theme="dark"] thead.bg-slate-50\/70,
+:root[data-theme="dark"] thead.bg-slate-50\/80 {
   background-color: color-mix(in srgb, var(--theme-table-bg) 94%, transparent) !important;
 }
 
 :root[data-theme="dark"] tbody.bg-white,
 :root[data-theme="dark"] tbody.bg-neutral-50,
-:root[data-theme="dark"] tbody.bg-neutral-50\/50 {
+:root[data-theme="dark"] tbody.bg-neutral-50\/50,
+:root[data-theme="dark"] tbody.bg-slate-50,
+:root[data-theme="dark"] tbody.bg-slate-50\/70 {
   background-color: var(--theme-table-bg) !important;
 }
 
@@ -991,8 +1126,12 @@ select:focus {
 :root[data-theme="dark"] tr.bg-neutral-50\/30,
 :root[data-theme="dark"] tr.bg-neutral-50\/50,
 :root[data-theme="dark"] tr.bg-neutral-50,
+:root[data-theme="dark"] tr.bg-slate-50\/70,
+:root[data-theme="dark"] tr.bg-slate-50\/80,
 :root[data-theme="dark"] tr.hover\:bg-neutral-50\/50:hover,
-:root[data-theme="dark"] tr.hover\:bg-neutral-50\/80:hover {
+:root[data-theme="dark"] tr.hover\:bg-neutral-50\/80:hover,
+:root[data-theme="dark"] tr.hover\:bg-slate-50\/70:hover,
+:root[data-theme="dark"] tr.hover\:bg-slate-50\/80:hover {
   background-color: var(--theme-table-row) !important;
 }
 
