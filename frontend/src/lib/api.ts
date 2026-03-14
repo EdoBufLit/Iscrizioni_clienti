@@ -2252,6 +2252,92 @@ export type OrgAdminMemberCreated = {
   email_status?: string;
 };
 
+export type OrgAdminMemberDocument = {
+  id: number;
+  type: string;
+  filename: string;
+  mime_type?: string;
+  size_bytes?: number;
+  download_url?: string;
+  uploaded_at: string;
+  status: string;
+  review_notes?: string;
+  rejection_note?: string | null;
+  reviewed_at?: string;
+  replaces_document_id?: number | null;
+};
+
+export type OrgAdminMemberPayment = {
+  id: number;
+  amount_cents: number;
+  amount: number;
+  method: string;
+  paid_at: string | null;
+  notes?: string | null;
+  created_at?: string | null;
+};
+
+export type OrgAdminMemberActivity = {
+  id: number;
+  action: string;
+  created_at: string | null;
+  actor_admin_id?: number | null;
+  actor_admin_email?: string | null;
+  actor_member_id?: number | null;
+  actor_member_name?: string | null;
+  actor_role?: string | null;
+  entity_type?: string | null;
+  entity_id?: number | null;
+  metadata?: Record<string, unknown> | null;
+};
+
+export type OrgAdminMemberDetail = {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  phone: string | null;
+  birth_date?: string | null;
+  birth_place?: string | null;
+  birth_place_code?: string | null;
+  fiscal_code: string | null;
+  payment_method?: string | null;
+  status: string;
+  workflow_status?: string | null;
+  is_active: boolean;
+  deleted_at?: string | null;
+  card_no?: number | null;
+  card_number?: number | null;
+  card_year?: number | null;
+  card_token?: string | null;
+  card_verification_url?: string | null;
+  joined_at?: string | null;
+  member_type?: string | null;
+  internal_notes?: string | null;
+  is_manual?: boolean;
+  has_access?: boolean;
+  last_access_email_at?: string | null;
+  document_status?: string;
+  documents: OrgAdminMemberDocument[];
+  payments?: OrgAdminMemberPayment[];
+  activities?: OrgAdminMemberActivity[];
+  decision_notes?: string | null;
+  decision_at?: string | null;
+  decision_by_admin_id?: number | null;
+};
+
+export type UpdateOrgAdminMemberProfileInput = {
+  first_name: string;
+  last_name: string;
+  email?: string | null;
+  phone?: string | null;
+  birth_date?: string | null;
+  birth_place?: string | null;
+  birth_place_code?: string | null;
+  fiscal_code?: string | null;
+  internal_notes?: string | null;
+};
+
 export type CardStock = {
   total: number;
   used: number;
@@ -2329,6 +2415,37 @@ export type SuperAdminMemberDetail = {
   } | null;
 };
 
+export type SuperAdminRegistryMember = {
+  id: number;
+  organization_id: number | null;
+  organization_name: string | null;
+  organization_slug: string | null;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  fiscal_code: string | null;
+  status: string;
+  workflow_status?: string | null;
+  is_active: boolean;
+  card_no: number | null;
+  card_year: number | null;
+  joined_at: string | null;
+};
+
+export type SuperAdminMemberRegistryResponse = {
+  items: SuperAdminRegistryMember[];
+  total: number;
+  kpis: {
+    total: number;
+    active: number;
+    pending: number;
+    expired: number;
+    rejected: number;
+  };
+};
+
 export async function superAdminLogin(
   email: string,
   password: string,
@@ -2357,6 +2474,28 @@ export async function fetchSuperAdminMemberDetail(
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (res.status === 404) throw new Error("Socio non trovato");
   if (!res.ok) throw new Error("Errore nel caricamento del socio");
+  return res.json();
+}
+
+export async function fetchSuperAdminMemberRegistry(params?: {
+  orgId?: number;
+  q?: string;
+  status?: string;
+  order?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<SuperAdminMemberRegistryResponse> {
+  const sp = new URLSearchParams();
+  if (params?.orgId != null) sp.set("org_id", String(params.orgId));
+  if (params?.q) sp.set("q", params.q);
+  if (params?.status) sp.set("status", params.status);
+  if (params?.order) sp.set("order", params.order);
+  if (params?.limit != null) sp.set("limit", String(params.limit));
+  if (params?.offset != null) sp.set("offset", String(params.offset));
+  const qs = sp.toString();
+  const res = await fetch(`/api/super-admin/members${qs ? `?${qs}` : ""}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento del libro soci"));
   return res.json();
 }
 
@@ -3982,6 +4121,48 @@ export async function createOrgAdminMember(
     throw new Error(payload?.detail ?? "Dati non validi");
   }
   if (!res.ok) throw new Error("Errore nella creazione del socio");
+  return res.json();
+}
+
+export async function fetchOrgAdminMemberDetail(
+  memberId: number,
+): Promise<OrgAdminMemberDetail> {
+  const res = await fetch(`/api/org-admin/members/${memberId}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Socio non trovato");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento del socio"));
+  return res.json();
+}
+
+export async function updateOrgAdminMemberProfile(
+  memberId: number,
+  payload: UpdateOrgAdminMemberProfileInput,
+): Promise<OrgAdminMemberDetail> {
+  const res = await fetch(`/api/org-admin/members/${memberId}/profile`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Socio non trovato");
+  if (res.status === 409) throw new Error(await parseApiErrorDetail(res, "Operazione bloccata"));
+  if (res.status === 422) throw new Error(await parseApiErrorDetail(res, "Dati anagrafici non validi"));
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore salvataggio anagrafica"));
+  return res.json();
+}
+
+export async function sendOrgAdminMemberCardEmail(
+  memberId: number,
+): Promise<{ ok: boolean; queued: boolean; outbox_id?: string | null }> {
+  const res = await fetch(`/api/org-admin/members/${memberId}/card-email`, {
+    method: "POST",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Socio non trovato");
+  if (res.status === 409 || res.status === 400) {
+    throw new Error(await parseApiErrorDetail(res, "Invio tessera non disponibile"));
+  }
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore invio tessera"));
   return res.json();
 }
 

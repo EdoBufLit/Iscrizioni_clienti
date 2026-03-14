@@ -47,7 +47,7 @@ const SuperAdminLayout = () => {
     { label: "Affiliazioni", path: "/super-admin/affiliazioni" },
     { label: "Documenti", path: "/super-admin/documenti" },
     { label: "Amministratori", path: "/super-admin/org-admins" },
-    { label: "Soci", path: "/super-admin/soci" },
+    { label: "Libro Soci", path: "/super-admin/soci" },
   ];
 
   const mobilePrimaryNav = useMemo(
@@ -62,7 +62,7 @@ const SuperAdminLayout = () => {
   const mobileMoreNav = useMemo(
     (): MobileDashboardNavItem[] => [
       { key: "admins", label: "Amministratori", to: "/super-admin/org-admins", activeMatch: ["/super-admin/org-admins"], icon: "shield" as const },
-      { key: "members", label: "Soci", to: "/super-admin/soci", activeMatch: ["/super-admin/soci"], icon: "users" as const },
+      { key: "members", label: "Libro Soci", to: "/super-admin/soci", activeMatch: ["/super-admin/soci"], icon: "users" as const },
       { key: "site", label: "Torna al sito", to: "/", icon: "globe" as const },
       {
         key: "logout",

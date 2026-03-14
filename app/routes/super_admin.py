@@ -13,7 +13,7 @@ import secrets
 import re
 import math
 
-from sqlalchemy import and_, func, or_, text
+from sqlalchemy import and_, case, cast, func, or_, text, String
 from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 
 from app.db import get_db
@@ -1333,6 +1333,161 @@ def run_low_cards_alerts(
         "ok": True,
         "ran_at": now.isoformat() + "Z",
         **result,
+    }
+
+
+@router.get("/members")
+def super_admin_member_registry(
+    request: Request,
+    org_id: Optional[int] = None,
+    q: Optional[str] = None,
+    status: Optional[str] = None,
+    order: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+
+    current_time = datetime.utcnow()
+    current_year = current_time.year
+    status_filter = (status or "").strip().lower()
+    search_term = (q or "").strip()
+
+    query = db.query(Member).options(joinedload(Member.organization)).filter(
+        Member.deleted_at.is_(None)
+    )
+
+    if org_id is not None:
+        query = query.filter(Member.org_id == org_id)
+
+    if search_term:
+        pattern = f"%{search_term}%"
+        query = query.filter(
+            or_(
+                Member.first_name.ilike(pattern),
+                Member.last_name.ilike(pattern),
+                Member.email.ilike(pattern),
+                Member.fiscal_code.ilike(pattern),
+                cast(Member.card_no, String).ilike(pattern),
+                Member.organization.has(Organization.name.ilike(pattern)),
+            )
+        )
+
+    if status_filter == "active":
+        query = query.filter(
+            Member.status == "active",
+            Member.card_no.isnot(None),
+            Member.card_year.isnot(None),
+            Member.card_year >= current_year,
+        )
+    elif status_filter == "pending":
+        query = query.filter(
+            Member.status.in_(["pending_verification", "pending_docs", "pending_cards"])
+        )
+    elif status_filter == "rejected":
+        query = query.filter(Member.status == "rejected")
+    elif status_filter == "expired":
+        query = query.filter(
+            or_(
+                Member.status == "expired",
+                and_(Member.card_year.isnot(None), Member.card_year < current_year),
+            )
+        )
+
+    total = query.count()
+
+    status_rank = case(
+        (Member.status == "active", 1),
+        (Member.status == "pending_verification", 2),
+        (Member.status == "pending_docs", 3),
+        (Member.status == "pending_cards", 4),
+        (Member.status == "rejected", 5),
+        (Member.status == "expired", 6),
+        else_=9,
+    )
+    sort_key = (order or "joined_at_desc").strip().lower()
+    if sort_key == "card_no_desc":
+        query = query.order_by(Member.card_no.desc().nullslast(), Member.id.desc())
+    elif sort_key == "card_no_asc":
+        query = query.order_by(Member.card_no.asc().nullslast(), Member.id.asc())
+    elif sort_key == "joined_at_asc":
+        query = query.order_by(Member.joined_at.is_(None), Member.joined_at.asc())
+    elif sort_key == "name_asc":
+        query = query.order_by(Member.last_name.asc(), Member.first_name.asc())
+    elif sort_key == "name_desc":
+        query = query.order_by(Member.last_name.desc(), Member.first_name.desc())
+    elif sort_key == "status_asc":
+        query = query.order_by(
+            status_rank.asc(),
+            Member.last_name.asc(),
+            Member.first_name.asc(),
+        )
+    else:
+        query = query.order_by(
+            Member.joined_at.is_(None),
+            Member.joined_at.desc(),
+            Member.id.desc(),
+        )
+
+    members = query.offset(offset).limit(min(limit, 100)).all()
+
+    base_counts_query = db.query(Member).filter(Member.deleted_at.is_(None))
+    if org_id is not None:
+        base_counts_query = base_counts_query.filter(Member.org_id == org_id)
+
+    kpis = {
+        "total": int(base_counts_query.count()),
+        "active": int(
+            base_counts_query.filter(
+                Member.status == "active",
+                Member.card_no.isnot(None),
+                Member.card_year.isnot(None),
+                Member.card_year >= current_year,
+            ).count()
+        ),
+        "pending": int(
+            base_counts_query.filter(
+                Member.status.in_(["pending_verification", "pending_docs", "pending_cards"])
+            ).count()
+        ),
+        "expired": int(
+            base_counts_query.filter(
+                or_(
+                    Member.status == "expired",
+                    and_(Member.card_year.isnot(None), Member.card_year < current_year),
+                )
+            ).count()
+        ),
+        "rejected": int(base_counts_query.filter(Member.status == "rejected").count()),
+    }
+
+    return {
+        "items": [
+            {
+                "id": member.id,
+                "organization_id": member.org_id,
+                "organization_name": member.organization.name if member.organization else None,
+                "organization_slug": member.organization.slug if member.organization else None,
+                "first_name": member.first_name,
+                "last_name": member.last_name,
+                "full_name": f"{member.first_name} {member.last_name}".strip(),
+                "email": member.email,
+                "phone": member.phone,
+                "fiscal_code": member.fiscal_code,
+                "status": get_member_lifecycle_status(member, now=current_time),
+                "workflow_status": member.status.value
+                if hasattr(member.status, "value")
+                else str(member.status),
+                "is_active": is_member_active(member, now=current_time),
+                "card_no": member.card_no,
+                "card_year": member.card_year,
+                "joined_at": member.joined_at.isoformat() if member.joined_at else None,
+            }
+            for member in members
+        ],
+        "total": total,
+        "kpis": kpis,
     }
 
 

@@ -18,7 +18,7 @@ import Skeleton from "../components/ui/Skeleton";
 
 const STEPS = [
   { label: "Dati personali", short: "Dati" },
-  { label: "Documenti e consensi", short: "Consensi" },
+  { label: "Documenti e dichiarazioni", short: "Privacy" },
   { label: "Riepilogo e invio", short: "Conferma" },
 ] as const;
 
@@ -109,7 +109,7 @@ function validateStep2(
   if (requireMembershipDocument && !f.documentoIdentita)
     e.documentoIdentita = "Carica il documento di identità per procedere.";
   if (!f.privacy)
-    e.privacy = "È necessario accettare l'informativa sulla privacy per procedere.";
+    e.privacy = "È necessario dichiarare di aver letto l'informativa privacy per procedere.";
   if (hasStatute && !f.statuto)
     e.statuto = "È necessario accettare lo statuto dell'associazione per procedere.";
   return e;
@@ -751,8 +751,8 @@ const Iscrizione = () => {
                 <div className="mt-7 border-t border-neutral-100 pt-5">
                   <SectionHeader
                     icon="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z"
-                    title="Consensi obbligatori"
-                    description="La tua adesione richiede l'accettazione dei seguenti documenti."
+                    title="Dichiarazioni obbligatorie"
+                    description="Per completare l'adesione devi prendere visione dell'informativa privacy e, se previsto, dello statuto."
                   />
                 </div>
 
@@ -767,8 +767,20 @@ const Iscrizione = () => {
                   <label className={`flex items-start gap-3 rounded-lg border p-4 transition ${errors.privacy ? "border-red-200 bg-red-50/30" : form.privacy ? "border-brand/20 bg-brand/[0.02]" : "border-neutral-100"}`}>
                     <input className="mt-0.5 h-4 w-4 shrink-0 rounded border-neutral-300 text-brand focus:ring-brand/30" type="checkbox" checked={form.privacy} onChange={handleCheck("privacy")} />
                     <div>
-                      <span className="text-sm font-medium leading-6 text-neutral-800">Informativa sulla privacy</span>
-                      <p className="mt-0.5 text-xs leading-5 text-neutral-500">Dichiaro di aver letto e compreso l'informativa sul trattamento dei dati personali ai sensi del GDPR (Regolamento UE 2016/679).</p>
+                      <span className="text-sm font-medium leading-6 text-neutral-800">Presa visione dell'informativa privacy</span>
+                      <p className="mt-0.5 text-xs leading-5 text-neutral-500">
+                        Dichiaro di aver letto l'informativa sul trattamento dei dati personali prima di proseguire.
+                        {" "}
+                        <Link
+                          className="font-medium text-brand hover:underline"
+                          to="/privacy"
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          Apri informativa
+                        </Link>
+                      </p>
                     </div>
                   </label>
                   {errors.privacy && <p className="pl-7 text-xs text-red-600">{errors.privacy}</p>}
@@ -842,10 +854,10 @@ const Iscrizione = () => {
                 </div>
 
                 <div className="mt-4 rounded-lg border border-neutral-100 bg-neutral-25 p-5">
-                  <p className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-400">Documenti e consensi</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-400">Documenti e dichiarazioni</p>
                   <dl className="mt-3 grid gap-x-6 gap-y-3 md:grid-cols-2">
                     <div><dt className="text-xs text-neutral-500">Documento</dt><dd className="mt-0.5 text-sm font-medium text-neutral-800">{form.documentoIdentita?.name ?? (membershipDocumentRequired ? "Non caricato (obbligatorio)" : "Non caricato (facoltativo)")}</dd></div>
-                    <div><dt className="text-xs text-neutral-500">Consensi</dt><dd className="mt-0.5 text-sm font-medium text-emerald-700">{org?.has_statute ? "Privacy e statuto accettati" : "Privacy accettata"}</dd></div>
+                    <div><dt className="text-xs text-neutral-500">Presa visione</dt><dd className="mt-0.5 text-sm font-medium text-emerald-700">{org?.has_statute ? "Informativa privacy letta e statuto accettato" : "Informativa privacy letta"}</dd></div>
                   </dl>
                 </div>
 

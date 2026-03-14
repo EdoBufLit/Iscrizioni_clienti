@@ -3461,3 +3461,35 @@ pm --prefix frontend run build OK dopo la correzione del layer CSS condiviso (su
 - In `frontend/src/components/Layout.tsx` ho rimosso classi light-only dal menu mobile pubblico e introdotto hook CSS semantici (`public-mobile-link`, `public-mobile-divider`, `public-mobile-access`).
 - In `frontend/src/theme.css` il pannello `public-mobile-panel` usa ora i token del tema shared anche in dark mode, con divider e link coerenti con header/shell pubblica.
 - Verifica eseguita: `npm --prefix frontend run build` OK.
+
+## ASSONAM privacy policy hardening (Mar 14, 2026)
+- [x] Mappare la pagina privacy pubblica e il punto del wizard iscrizione che gestisce la presa visione privacy
+- [x] Riscrivere l'informativa con struttura piu completa e specifica per il caso d'uso ASSONAM
+- [x] Mantenere il layout hero + card/sezioni migliorando solo gerarchia tipografica e leggibilita
+- [x] Correggere i testi del wizard per evitare che la privacy sembri basata su un consenso generico
+- [x] Verificare build frontend finale e documentare review
+
+## Review (ASSONAM privacy policy hardening - Mar 14, 2026)
+- In `frontend/src/pages/Privacy.tsx` ho sostituito il testo sintetico con una informativa strutturata in 11 sezioni, mantenendo il layout hero + card e migliorando solo gerarchia, leggibilita e recapiti in evidenza.
+- In `frontend/src/pages/Iscrizione.tsx` ho corretto il lessico del wizard: non parla piu di consenso privacy generico, ma di presa visione dell'informativa; ho aggiunto anche il link `Apri informativa` verso `/privacy` senza modificare la logica del submit.
+- Verifica eseguita: `npm --prefix frontend run build` OK. Non ho eseguito un test browser end-to-end del wizard, ma lo state del form e il payload `accept_privacy` non sono stati modificati.
+
+## ASSONAM libro soci + tessera org admin (Mar 14, 2026)
+- [ ] Mappare endpoint, pagine e servizi esistenti per soci, tessera PDF ed email worker
+- [ ] Implementare update anagrafica socio lato org admin con permessi forti, validazioni server-side e audit dei campi modificati
+- [ ] Implementare azioni org admin per invio tessera via email e download/stampa PDF tessera riusando servizi esistenti
+- [ ] Trasformare la pagina super admin Soci in vero Libro Soci filtrabile per associazione con navigazione al dettaglio
+- [ ] Aggiornare il frontend org admin con UI edit anagrafica e azioni tessera coerenti con il pannello
+- [ ] Aggiornare il frontend super admin con filtro associazione, KPI e tabella navigabile
+- [ ] Aggiungere test mirati backend e verificare build frontend finale
+
+## Review (ASSONAM libro soci + tessera org admin - Mar 14, 2026)
+- In attesa di implementazione e verifiche finali.
+
+## Review (ASSONAM libro soci + tessera org admin - Mar 14, 2026)
+- [x] Mappati endpoint, pagine e servizi esistenti per soci, tessere e super admin.
+- [x] Implementato update anagrafica socio lato org admin con audit, validazioni e scope per associazione.
+- [x] Implementate azioni tessera lato org admin: invio email tramite worker esistente, download PDF e stampa.
+- [x] Trasformata la sezione super admin in Libro Soci filtrabile per associazione con KPI, tabella e dettaglio.
+- [x] Verifiche eseguite: pytest tests/test_org_admin_member_profile_and_card_actions.py tests/test_super_admin_member_registry.py e 
+pm --prefix frontend run build.

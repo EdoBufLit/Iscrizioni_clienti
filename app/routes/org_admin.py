@@ -6,7 +6,7 @@ import os
 import random
 import secrets
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, Body, Query
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse, FileResponse, Response
 from sqlalchemy import func, or_, case, and_, select, cast, String
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timedelta, date
@@ -133,19 +133,32 @@ from app.services.booking_rooms import (
 )
 from app.services.card_allocation import allocate_next_card, release_card_number
 from app.services.card_inventory import compute_org_card_stock
+from app.services.card_pdf import generate_card_pdf_bytes
+from app.services.card_verification import build_card_verification_token
+from app.services.fiscal_code import validate_fiscal_code
 from app.utils import (
     PermanentEmailDeliveryError,
     RetryableEmailDeliveryError,
     generate_token,
     hash_token,
 )
+from app.services.municipalities import (
+    get_municipality_by_code,
+    normalize_municipality_text,
+)
 from app.services.member_activity import (
     get_member_lifecycle_status,
     is_member_active,
     member_active_filters,
 )
-from app.services.member_card_delivery import maybe_send_member_card_ready_email
-from app.services.org_branding import wallet_branding_defaults
+from app.services.member_card_delivery import (
+    maybe_send_member_card_ready_email,
+    queue_member_card_email,
+)
+from app.services.org_branding import (
+    resolve_club_display_name,
+    wallet_branding_defaults,
+)
 from app.services.statute_upload import (
     enforce_statute_request_size_from_headers,
     save_statute_pdf,
@@ -262,6 +275,131 @@ def _validate_optional_email(value: Optional[str], *, field_name: str) -> Option
         raise HTTPException(
             status_code=422,
             detail=f"{field_name} non valida.",
+        ) from exc
+
+
+def _parse_optional_birth_date(value: Optional[str | date]) -> Optional[date]:
+    if value is None or isinstance(value, date):
+        return value
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    try:
+        return date.fromisoformat(cleaned)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail="Data di nascita non valida.",
+        ) from exc
+
+
+def _normalize_member_identity_document_fields(
+    *, birth_place: Optional[str], birth_place_code: Optional[str]
+) -> tuple[Optional[str], Optional[str]]:
+    normalized_name = normalize_municipality_text(birth_place)
+    normalized_code = (birth_place_code or "").strip().upper() or None
+
+    if normalized_name is None and normalized_code is None:
+        return None, None
+    if normalized_name is None or normalized_code is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Comune di nascita non valido. Seleziona un comune valido dall'elenco.",
+        )
+
+    municipality = get_municipality_by_code(normalized_code)
+    if municipality is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Comune di nascita non valido. Seleziona un comune valido dall'elenco.",
+        )
+    if normalize_municipality_text(municipality["name"]) != normalized_name:
+        raise HTTPException(
+            status_code=422,
+            detail="Comune di nascita non valido. Seleziona un comune valido dall'elenco.",
+        )
+
+    return municipality["name"], municipality["code"]
+
+
+def _resolve_org_logo_disk_path(org: Organization | None) -> str | None:
+    if org is None:
+        return None
+    if org.logo_path:
+        candidate = os.path.join(settings.UPLOAD_DIR, org.logo_path)
+        return candidate if os.path.exists(candidate) else None
+    slug = (getattr(org, "slug", None) or "").strip().lower()
+    if slug:
+        static_candidate = os.path.normpath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "static",
+                "card-logos",
+                f"{slug}.png",
+            )
+        )
+        return static_candidate if os.path.exists(static_candidate) else None
+    return None
+
+
+def _resolve_assonam_disk_path() -> str | None:
+    static_dir = (settings.FRONTEND_STATIC_DIR or "").strip()
+    if static_dir:
+        candidate = os.path.join(static_dir, "logo-transparent.png")
+        return candidate if os.path.exists(candidate) else None
+    candidate = os.path.normpath(
+        os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "..",
+            "frontend",
+            "public",
+            "logo-transparent.png",
+        )
+    )
+    return candidate if os.path.exists(candidate) else None
+
+
+def _member_card_pdf_bytes(member: Member, request: Request) -> bytes:
+    if member.card_no is None or member.card_year is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Tessera non disponibile per questo socio.",
+        )
+
+    token = build_card_verification_token(
+        member_id=member.id,
+        org_id=member.org_id,
+        card_number=member.card_no,
+        card_year=member.card_year,
+    )
+    backend_base = (settings.BASE_URL or "").strip().rstrip("/") or str(request.base_url).rstrip("/")
+    verification_url = f"{backend_base}/api/cards/verify/{token}"
+    organization = member.organization
+    if organization is None:
+        raise HTTPException(status_code=404, detail="Associazione non trovata.")
+
+    try:
+        return generate_card_pdf_bytes(
+            member_full_name=f"{(member.first_name or '').strip()} {(member.last_name or '').strip()}".strip() or "Socio",
+            organization_name=organization.name or "ASSONAM",
+            club_display_name=resolve_club_display_name(organization) or organization.name or "ASSONAM",
+            organization_slug=organization.slug,
+            card_number=member.card_no,
+            card_year=member.card_year,
+            card_status="attiva" if is_member_active(member, now=datetime.utcnow()) else "non_attiva",
+            verification_url=verification_url,
+            org_logo_path=_resolve_org_logo_disk_path(organization),
+            assonam_logo_path=_resolve_assonam_disk_path(),
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Member card PDF generation failed for member_id=%s", member.id)
+        raise HTTPException(
+            status_code=500,
+            detail="Errore generazione PDF tessera.",
         ) from exc
 
 
@@ -1017,6 +1155,198 @@ class CreateMemberBody(BaseModel):
     internal_notes: Optional[str] = None
     is_manual: bool = True
     send_access_email: bool = False
+
+
+class UpdateMemberProfileBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    first_name: str = Field(..., min_length=1)
+    last_name: str = Field(..., min_length=1)
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    birth_date: Optional[date] = None
+    birth_place: Optional[str] = None
+    birth_place_code: Optional[str] = None
+    fiscal_code: Optional[str] = None
+    internal_notes: Optional[str] = None
+
+
+def _get_org_admin_member_or_404(
+    *,
+    db: Session,
+    admin: AdminUser,
+    member_id: int,
+    include_deleted: bool = True,
+) -> Member:
+    query = db.query(Member).options(joinedload(Member.organization)).filter(
+        Member.id == member_id,
+        Member.org_id == admin.org_id,
+    )
+    if not include_deleted:
+        query = query.filter(Member.deleted_at.is_(None))
+    member = query.first()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+    return member
+
+
+def _build_org_member_detail_payload(
+    *,
+    db: Session,
+    admin: AdminUser,
+    member: Member,
+    request: Request,
+) -> dict:
+    current_time = datetime.utcnow()
+    last_token = _get_last_access_email_token(db, member.id)
+    last_access_email_at = (
+        last_token.created_at.isoformat()
+        if last_token and last_token.created_at
+        else None
+    )
+    payments = (
+        db.query(MemberPayment)
+        .filter(MemberPayment.member_id == member.id)
+        .order_by(MemberPayment.paid_at.desc(), MemberPayment.id.desc())
+        .limit(5)
+        .all()
+    )
+    doc_ids_sub = select(MemberDocument.id).where(MemberDocument.member_id == member.id)
+    payment_ids_sub = select(MemberPayment.id).where(
+        MemberPayment.member_id == member.id
+    )
+
+    activities = (
+        db.query(OperationLog)
+        .filter(
+            or_(
+                and_(
+                    OperationLog.entity_type == "member",
+                    OperationLog.entity_id == member.id,
+                ),
+                and_(
+                    OperationLog.entity_type == "member_document",
+                    OperationLog.entity_id.in_(doc_ids_sub),
+                ),
+                and_(
+                    OperationLog.entity_type == "member_payment",
+                    OperationLog.entity_id.in_(payment_ids_sub),
+                ),
+            )
+        )
+        .order_by(OperationLog.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    admin_ids = {a.actor_admin_id for a in activities if a.actor_admin_id}
+    admin_emails = {}
+    if admin_ids:
+        admin_rows = (
+            db.query(AdminUser.id, AdminUser.email)
+            .filter(
+                AdminUser.id.in_(admin_ids),
+                or_(
+                    AdminUser.org_id == admin.org_id,
+                    AdminUser.role == AdminRole.SUPER_ADMIN,
+                ),
+            )
+            .all()
+        )
+        admin_emails = {row[0]: row[1] for row in admin_rows}
+    document_status = _document_status_from_statuses(
+        [d.status for d in member.documents]
+    )
+
+    card_token = None
+    card_verification_url = None
+    if member.card_no is not None and member.card_year is not None:
+        card_token = build_card_verification_token(
+            member_id=member.id,
+            org_id=member.org_id,
+            card_number=member.card_no,
+            card_year=member.card_year,
+        )
+        backend_base = (settings.BASE_URL or "").strip().rstrip("/") or str(request.base_url).rstrip("/")
+        card_verification_url = f"{backend_base}/api/cards/verify/{card_token}"
+
+    return {
+        "id": member.id,
+        "first_name": member.first_name,
+        "last_name": member.last_name,
+        "email": member.email,
+        "phone": member.phone,
+        "birth_date": member.birth_date.isoformat() if member.birth_date else None,
+        "birth_place": member.birth_place,
+        "birth_place_code": member.birth_place_code,
+        "fiscal_code": member.fiscal_code,
+        "payment_method": _serialize_member_payment_method(member.payment_method),
+        "status": get_member_lifecycle_status(member, now=current_time),
+        "workflow_status": member.status.value if member.status else None,
+        "is_active": is_member_active(member, now=current_time),
+        "deleted_at": member.deleted_at.isoformat() if member.deleted_at else None,
+        "card_no": member.card_no,
+        "card_number": member.card_no,
+        "card_year": member.card_year,
+        "card_token": card_token,
+        "card_verification_url": card_verification_url,
+        "joined_at": member.joined_at.isoformat() if member.joined_at else None,
+        "member_type": member.member_type,
+        "internal_notes": member.internal_notes,
+        "is_manual": member.is_manual,
+        "has_access": bool(member.password_hash),
+        "last_access_email_at": last_access_email_at,
+        "document_status": document_status,
+        "documents": [
+            {
+                "id": d.id,
+                "type": d.doc_type,
+                "filename": d.original_filename,
+                "mime_type": d.mime_type,
+                "size_bytes": d.size_bytes,
+                "rel_path": d.rel_path,
+                "download_url": f"/api/org-admin/members/{member.id}/documents/{d.id}",
+                "uploaded_at": d.uploaded_at.isoformat(),
+                "status": d.status,
+                "review_notes": d.review_notes,
+                "rejection_note": d.rejection_note,
+                "reviewed_at": d.reviewed_at.isoformat() if d.reviewed_at else None,
+                "reviewed_by_admin_id": d.reviewed_by_admin_id or d.reviewed_by,
+                "replaces_document_id": d.replaces_document_id,
+            }
+            for d in member.documents
+        ],
+        "payments": [
+            {
+                "id": p.id,
+                "amount_cents": p.amount_cents,
+                "amount": round(p.amount_cents / 100, 2),
+                "method": p.method,
+                "paid_at": p.paid_at.isoformat() if p.paid_at else None,
+                "notes": p.notes,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+            }
+            for p in payments
+        ],
+        "activities": [
+            {
+                "id": a.id,
+                "action": a.action,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+                "actor_admin_id": a.actor_admin_id,
+                "actor_admin_email": admin_emails.get(a.actor_admin_id)
+                if a.actor_admin_id
+                else None,
+                "actor_member_id": a.actor_member_id,
+                "actor_member_name": f"{member.first_name} {member.last_name}"
+                if a.actor_member_id == member.id
+                else None,
+                "actor_role": a.actor_role,
+                "entity_type": a.entity_type,
+                "entity_id": a.entity_id,
+                "metadata": a.metadata_json,
+            }
+            for a in activities
+        ],
+    }
 
 
 @auth_router.post("/magic-link")
@@ -3600,151 +3930,229 @@ def get_member_detail(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    member = (
-        db.query(Member)
-        .filter(
-            Member.id == member_id,
-            Member.org_id == admin.org_id,
-        )
-        .first()
+    member = _get_org_admin_member_or_404(
+        db=db,
+        admin=admin,
+        member_id=member_id,
     )
-    if not member:
-        raise HTTPException(status_code=404, detail="Member not found")
-
-    current_time = datetime.utcnow()
-    last_token = _get_last_access_email_token(db, member.id)
-    last_access_email_at = (
-        last_token.created_at.isoformat()
-        if last_token and last_token.created_at
-        else None
-    )
-    payments = (
-        db.query(MemberPayment)
-        .filter(MemberPayment.member_id == member.id)
-        .order_by(MemberPayment.paid_at.desc(), MemberPayment.id.desc())
-        .limit(5)
-        .all()
-    )
-    doc_ids_sub = select(MemberDocument.id).where(MemberDocument.member_id == member.id)
-    payment_ids_sub = select(MemberPayment.id).where(
-        MemberPayment.member_id == member.id
+    return _build_org_member_detail_payload(
+        db=db,
+        admin=admin,
+        member=member,
+        request=request,
     )
 
-    activities = (
-        db.query(OperationLog)
-        .filter(
-            or_(
-                and_(
-                    OperationLog.entity_type == "member",
-                    OperationLog.entity_id == member.id,
-                ),
-                and_(
-                    OperationLog.entity_type == "member_document",
-                    OperationLog.entity_id.in_(doc_ids_sub),
-                ),
-                and_(
-                    OperationLog.entity_type == "member_payment",
-                    OperationLog.entity_id.in_(payment_ids_sub),
-                ),
+
+@router.patch("/members/{member_id}/profile")
+def update_member_profile(
+    request: Request,
+    member_id: int,
+    body: UpdateMemberProfileBody,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    member = _get_org_admin_member_or_404(
+        db=db,
+        admin=admin,
+        member_id=member_id,
+        include_deleted=False,
+    )
+
+    first_name = body.first_name.strip()
+    last_name = body.last_name.strip()
+    if not first_name or not last_name:
+        raise HTTPException(status_code=422, detail="Nome e cognome sono obbligatori.")
+
+    email = _validate_optional_email(body.email, field_name="Email")
+    phone = _normalize_optional_text(body.phone)
+    fiscal_code = _normalize_optional_text(body.fiscal_code)
+    if fiscal_code:
+        fiscal_validation = validate_fiscal_code(fiscal_code=fiscal_code)
+        if not fiscal_validation.is_formally_valid:
+            raise HTTPException(
+                status_code=422,
+                detail="Codice fiscale non valido. Verifica formato e checksum.",
             )
-        )
-        .order_by(OperationLog.created_at.desc())
-        .limit(20)
-        .all()
+        fiscal_code = fiscal_validation.normalized
+
+    birth_date = _parse_optional_birth_date(body.birth_date)
+    birth_place, birth_place_code = _normalize_member_identity_document_fields(
+        birth_place=body.birth_place,
+        birth_place_code=body.birth_place_code,
     )
-    admin_ids = {a.actor_admin_id for a in activities if a.actor_admin_id}
-    admin_emails = {}
-    if admin_ids:
-        admin_rows = (
-            db.query(AdminUser.id, AdminUser.email)
+    internal_notes = _normalize_optional_text(body.internal_notes)
+
+    if email:
+        existing = (
+            db.query(Member)
             .filter(
-                AdminUser.id.in_(admin_ids),
-                or_(
-                    AdminUser.org_id == admin.org_id,
-                    AdminUser.role == AdminRole.SUPER_ADMIN,
-                ),
+                Member.id != member.id,
+                func.lower(Member.email) == email.lower(),
+                Member.org_id == admin.org_id,
+                Member.deleted_at.is_(None),
+                Member.status != MemberStatus.REJECTED,
             )
-            .all()
+            .first()
         )
-        admin_emails = {row[0]: row[1] for row in admin_rows}
-    document_status = _document_status_from_statuses(
-        [d.status for d in member.documents]
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail="Esiste già un socio con questa email per la tua associazione.",
+            )
+
+    changed_fields: list[str] = []
+
+    def apply_change(field_name: str, new_value):
+        current_value = getattr(member, field_name)
+        if current_value != new_value:
+            setattr(member, field_name, new_value)
+            changed_fields.append(field_name)
+
+    apply_change("first_name", first_name)
+    apply_change("last_name", last_name)
+    apply_change("email", email)
+    apply_change("phone", phone)
+    apply_change("birth_date", birth_date)
+    apply_change("birth_place", birth_place)
+    apply_change("birth_place_code", birth_place_code)
+    apply_change("fiscal_code", fiscal_code)
+    apply_change("internal_notes", internal_notes)
+
+    if not changed_fields:
+        return _build_org_member_detail_payload(
+            db=db,
+            admin=admin,
+            member=member,
+            request=request,
+        )
+
+    db.flush()
+    audit.log_operation(
+        db,
+        action="member.update",
+        entity_type="member",
+        entity_id=member.id,
+        actor_admin_id=admin.id,
+        actor_role=AdminRole.ORG_ADMIN.value,
+        metadata={
+            "org_id": admin.org_id,
+            "fields": changed_fields,
+        },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
     )
+    db.commit()
+    db.refresh(member)
+
+    return _build_org_member_detail_payload(
+        db=db,
+        admin=admin,
+        member=member,
+        request=request,
+    )
+
+
+@router.post("/members/{member_id}/card-email")
+def send_member_card_email(
+    request: Request,
+    member_id: int,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    member = _get_org_admin_member_or_404(
+        db=db,
+        admin=admin,
+        member_id=member_id,
+        include_deleted=False,
+    )
+    result = queue_member_card_email(
+        db,
+        request,
+        member.id,
+        require_active=True,
+        require_approved_document=False,
+    )
+
+    if not result.get("queued"):
+        reason = result.get("reason")
+        if reason == "member_email_missing":
+            raise HTTPException(
+                status_code=400,
+                detail="Il socio non ha un'email valida salvata in anagrafica.",
+            )
+        if reason == "card_missing":
+            raise HTTPException(
+                status_code=409,
+                detail="Tessera non disponibile per questo socio.",
+            )
+        if reason == "member_not_active":
+            raise HTTPException(
+                status_code=409,
+                detail="La tessera può essere inviata solo a soci con tessera attiva.",
+            )
+        raise HTTPException(
+            status_code=500,
+            detail="Errore durante la preparazione dell'email tessera.",
+        )
+
+    audit.log_operation(
+        db,
+        action="member.card_email.manual",
+        entity_type="member",
+        entity_id=member.id,
+        actor_admin_id=admin.id,
+        actor_role=AdminRole.ORG_ADMIN.value,
+        metadata={
+            "org_id": admin.org_id,
+            "outbox_id": result.get("outbox_id"),
+        },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
 
     return {
-        "id": member.id,
-        "first_name": member.first_name,
-        "last_name": member.last_name,
-        "email": member.email,
-        "phone": member.phone,
-        "fiscal_code": member.fiscal_code,
-        "payment_method": _serialize_member_payment_method(member.payment_method),
-        "status": get_member_lifecycle_status(member, now=current_time),
-        "workflow_status": member.status.value if member.status else None,
-        "is_active": is_member_active(member, now=current_time),
-        "deleted_at": member.deleted_at.isoformat() if member.deleted_at else None,
-        "card_no": member.card_no,
-        "card_number": member.card_no,
-        "card_year": member.card_year,
-        "joined_at": member.joined_at.isoformat() if member.joined_at else None,
-        "member_type": member.member_type,
-        "internal_notes": member.internal_notes,
-        "is_manual": member.is_manual,
-        "has_access": bool(member.password_hash),
-        "last_access_email_at": last_access_email_at,
-        "document_status": document_status,
-        "documents": [
-            {
-                "id": d.id,
-                "type": d.doc_type,
-                "filename": d.original_filename,
-                "mime_type": d.mime_type,
-                "size_bytes": d.size_bytes,
-                "rel_path": d.rel_path,
-                "download_url": f"/api/org-admin/members/{member.id}/documents/{d.id}",
-                "uploaded_at": d.uploaded_at.isoformat(),
-                "status": d.status,
-                "review_notes": d.review_notes,
-                "rejection_note": d.rejection_note,
-                "reviewed_at": d.reviewed_at.isoformat() if d.reviewed_at else None,
-                "reviewed_by_admin_id": d.reviewed_by_admin_id or d.reviewed_by,
-                "replaces_document_id": d.replaces_document_id,
-            }
-            for d in member.documents
-        ],
-        "payments": [
-            {
-                "id": p.id,
-                "amount_cents": p.amount_cents,
-                "amount": round(p.amount_cents / 100, 2),
-                "method": p.method,
-                "paid_at": p.paid_at.isoformat() if p.paid_at else None,
-                "notes": p.notes,
-                "created_at": p.created_at.isoformat() if p.created_at else None,
-            }
-            for p in payments
-        ],
-        "activities": [
-            {
-                "id": a.id,
-                "action": a.action,
-                "created_at": a.created_at.isoformat() if a.created_at else None,
-                "actor_admin_id": a.actor_admin_id,
-                "actor_admin_email": admin_emails.get(a.actor_admin_id)
-                if a.actor_admin_id
-                else None,
-                "actor_member_id": a.actor_member_id,
-                "actor_member_name": f"{member.first_name} {member.last_name}"
-                if a.actor_member_id == member.id
-                else None,
-                "actor_role": a.actor_role,
-                "entity_type": a.entity_type,
-                "entity_id": a.entity_id,
-                "metadata": a.metadata_json,
-            }
-            for a in activities
-        ],
+        "ok": True,
+        "queued": True,
+        "outbox_id": result.get("outbox_id"),
     }
+
+
+@router.get("/members/{member_id}/card.pdf")
+def download_member_card_pdf(
+    request: Request,
+    member_id: int,
+    disposition: str = Query(default="attachment"),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    member = _get_org_admin_member_or_404(
+        db=db,
+        admin=admin,
+        member_id=member_id,
+        include_deleted=False,
+    )
+    pdf_bytes = _member_card_pdf_bytes(member, request)
+    safe_slug = ((member.organization.slug if member.organization else "assonam") or "assonam").replace("/", "_")
+    filename = f"tessera_{safe_slug}_{member.card_year}_{member.card_no}.pdf"
+    content_disposition = "inline" if disposition == "inline" else "attachment"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'{content_disposition}; filename="{filename}"',
+        },
+    )
 
 
 @router.get("/members/{member_id}/documents/{doc_id}")

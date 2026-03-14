@@ -1,50 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { createManualPayment } from "../../lib/api";
+import {
+  AuthError,
+  createManualPayment,
+  fetchOrgAdminMemberDetail,
+  sendOrgAdminMemberCardEmail,
+  updateOrgAdminMemberProfile,
+  type OrgAdminMemberActivity,
+  type OrgAdminMemberDetail,
+  type OrgAdminMemberDocument,
+  type UpdateOrgAdminMemberProfileInput,
+} from "../../lib/api";
+import { MemberCardPreview } from "../../components/cards/MemberCardPreview";
 import ManualPaymentForm, { type ManualPaymentPayload } from "./components/ManualPaymentForm";
 import MemberDecisionPanel from "./components/MemberDecisionPanel";
 import RejectDocumentModal from "./components/RejectDocumentModal";
+import EditMemberProfileModal from "./components/EditMemberProfileModal";
 import AsyncActionButton, { type AsyncActionState } from "../../components/ui/AsyncActionButton";
 import ConfirmModal from "../../components/ui/ConfirmModal";
 import { useToast } from "../../components/ui/ToastProvider";
-
-interface Document {
-  id: number;
-  type: string;
-  filename: string;
-  mime_type?: string;
-  size_bytes?: number;
-  download_url?: string;
-  uploaded_at: string;
-  status: string;
-  review_notes?: string;
-  rejection_note?: string | null;
-  reviewed_at?: string;
-  replaces_document_id?: number | null;
-}
-
-interface Payment {
-  id: number;
-  amount_cents: number;
-  amount: number;
-  method: string;
-  paid_at: string | null;
-  notes?: string | null;
-}
-
-interface ActivityItem {
-  id: number;
-  action: string;
-  created_at: string | null;
-  actor_admin_id?: number | null;
-  actor_admin_email?: string | null;
-  actor_member_id?: number | null;
-  actor_member_name?: string | null;
-  actor_role?: string | null;
-  entity_type?: string | null;
-  entity_id?: number | null;
-  metadata?: Record<string, unknown> | null;
-}
+import { useOrgAdmin } from "./OrgAdminLayout";
 
 function formatBytes(bytes: number, decimals = 2) {
   if (!+bytes) return '0 Bytes';
@@ -55,41 +30,12 @@ function formatBytes(bytes: number, decimals = 2) {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
 
-interface MemberDetail {
-  id: number;
-  first_name: string;
-  last_name: string;
-  email: string | null;
-  phone: string | null;
-  fiscal_code: string | null;
-  payment_method?: string | null;
-  status: string;
-  workflow_status?: string | null;
-  is_active: boolean;
-  deleted_at?: string | null;
-  card_no?: number;
-  card_number?: number | null;
-  card_year?: number | null;
-  joined_at?: string;
-  member_type?: string | null;
-  internal_notes?: string | null;
-  is_manual?: boolean;
-  has_access?: boolean;
-  last_access_email_at?: string | null;
-  document_status?: string;
-  documents: Document[];
-  payments?: Payment[];
-  activities?: ActivityItem[];
-  decision_notes?: string;
-  decision_at?: string;
-  decision_by_admin_id?: number;
-}
-
 export default function OrgAdminMemberDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const [member, setMember] = useState<MemberDetail | null>(null);
+  const { admin } = useOrgAdmin();
+  const [member, setMember] = useState<OrgAdminMemberDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"details" | "activity">("details");
@@ -97,12 +43,20 @@ export default function OrgAdminMemberDetail() {
   const [sendingAccess, setSendingAccess] = useState(false);
   const [sendAccessMessage, setSendAccessMessage] = useState<string | null>(null);
   const [sendAccessError, setSendAccessError] = useState<string | null>(null);
-  const [rejectingDoc, setRejectingDoc] = useState<Document | null>(null);
+  const [rejectingDoc, setRejectingDoc] = useState<OrgAdminMemberDocument | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [decisionDraft, setDecisionDraft] = useState<{ decision: "approve" | "reject"; notes: string } | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteActionState, setDeleteActionState] = useState<AsyncActionState>("idle");
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [sendingCardEmail, setSendingCardEmail] = useState(false);
+  const [cardEmailMessage, setCardEmailMessage] = useState<string | null>(null);
+  const [cardEmailError, setCardEmailError] = useState<string | null>(null);
+  const [downloadingCard, setDownloadingCard] = useState(false);
+  const [printingCard, setPrintingCard] = useState(false);
   const [decisionActionStates, setDecisionActionStates] = useState<Record<"approve" | "reject", AsyncActionState>>({
     approve: "idle",
     reject: "idle",
@@ -117,9 +71,10 @@ export default function OrgAdminMemberDetail() {
     "member.document.resubmit": "Documento reinviato",
     "member.payment.manual": "Pagamento manuale registrato",
     "member.decision": "Decisione iscrizione",
+    "member.card_email.manual": "Tessera inviata",
   };
 
-  const getActivityMeta = (item: ActivityItem) => {
+  const getActivityMeta = (item: OrgAdminMemberActivity) => {
     const meta = item.metadata ?? {};
     let label = ACTION_LABELS[item.action] ?? item.action;
     let details = "";
@@ -191,6 +146,10 @@ export default function OrgAdminMemberDetail() {
         label = "Iscrizione rigettata";
         tone = "border-red-200 bg-red-50 text-red-700";
       }
+    } else if (item.action === "member.card_email.manual") {
+      category = "Tessera";
+      label = "Tessera inviata via email";
+      tone = "border-blue-200 bg-blue-50 text-blue-700";
     }
 
     return { label, details, category, tone };
@@ -211,16 +170,25 @@ export default function OrgAdminMemberDetail() {
   };
 
   useEffect(() => {
-    fetchMember();
+    void fetchMember();
   }, [id]);
 
   const fetchMember = async () => {
+    if (!id) {
+      setLoading(false);
+      setError("Socio non trovato");
+      return;
+    }
     try {
-      const res = await fetch(`/api/org-admin/members/${id}`);
-      if (!res.ok) throw new Error("Errore nel caricamento del socio");
-      const data = await res.json();
+      setLoading(true);
+      setError(null);
+      const data = await fetchOrgAdminMemberDetail(Number(id));
       setMember(data);
     } catch (err) {
+      if (err instanceof AuthError) {
+        navigate("/org-admin/login", { replace: true });
+        return;
+      }
       setError(err instanceof Error ? err.message : "Errore sconosciuto");
     } finally {
       setLoading(false);
@@ -281,6 +249,133 @@ export default function OrgAdminMemberDetail() {
     }
   };
 
+  const handleProfileSave = async (payload: UpdateOrgAdminMemberProfileInput) => {
+    if (!member) return;
+    setProfileSaving(true);
+    setProfileError(null);
+    try {
+      const updated = await updateOrgAdminMemberProfile(member.id, payload);
+      setMember(updated);
+      setEditModalOpen(false);
+      setActionMessage("Anagrafica aggiornata correttamente.");
+      setActionError(null);
+      showToast({
+        tone: "success",
+        title: "Anagrafica socio",
+        message: "Dati anagrafici aggiornati correttamente.",
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Errore salvataggio anagrafica";
+      setProfileError(message);
+      showToast({ tone: "error", title: "Anagrafica socio", message });
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const handleSendCardEmail = async () => {
+    if (!member) return;
+    setCardEmailMessage(null);
+    setCardEmailError(null);
+    setSendingCardEmail(true);
+    try {
+      await sendOrgAdminMemberCardEmail(member.id);
+      setCardEmailMessage("Invio tessera accodato correttamente.");
+      showToast({
+        tone: "success",
+        title: "Tessera socio",
+        message: "Email tessera accodata correttamente.",
+      });
+      await fetchMember();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Errore invio tessera";
+      setCardEmailError(message);
+      showToast({ tone: "error", title: "Tessera socio", message });
+    } finally {
+      setSendingCardEmail(false);
+    }
+  };
+
+  const downloadCardPdf = async (mode: "download" | "print") => {
+    if (!member) return;
+    const isPrint = mode === "print";
+    const printWindow = isPrint ? window.open("", "_blank", "noopener,noreferrer") : null;
+    if (isPrint && !printWindow) {
+      const message = "Consenti al browser di aprire una nuova finestra per la stampa della tessera.";
+      setCardEmailError(message);
+      showToast({ tone: "error", title: "Tessera socio", message });
+      return;
+    }
+
+    if (isPrint) {
+      setPrintingCard(true);
+    } else {
+      setDownloadingCard(true);
+    }
+    setCardEmailError(null);
+
+    try {
+      const disposition = isPrint ? "inline" : "attachment";
+      const res = await fetch(`/api/org-admin/members/${member.id}/card.pdf?disposition=${disposition}`);
+      if (!res.ok) {
+        let detail = "Errore generazione PDF tessera.";
+        try {
+          const payload = await res.json();
+          detail = payload?.detail ?? detail;
+        } catch {
+          // Ignore non-JSON errors.
+        }
+        throw new Error(detail);
+      }
+
+      const blob = await res.blob();
+      const filename = `tessera-${member.card_number ?? member.card_no ?? member.id}.pdf`;
+      const blobUrl = URL.createObjectURL(blob);
+
+      if (isPrint && printWindow) {
+        printWindow.location.href = blobUrl;
+        window.setTimeout(() => {
+          try {
+            printWindow.focus();
+            printWindow.print();
+          } catch {
+            // The PDF viewer may manage print flow itself.
+          }
+        }, 700);
+        window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+      } else {
+        const anchor = document.createElement("a");
+        anchor.href = blobUrl;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        window.setTimeout(() => {
+          URL.revokeObjectURL(blobUrl);
+          anchor.remove();
+        }, 200);
+      }
+
+      showToast({
+        tone: "success",
+        title: "Tessera socio",
+        message: isPrint ? "PDF tessera aperto in stampa." : "PDF tessera scaricato.",
+      });
+    } catch (err) {
+      if (printWindow) {
+        printWindow.close();
+      }
+      const message = err instanceof Error ? err.message : "Errore PDF tessera";
+      setCardEmailError(message);
+      showToast({ tone: "error", title: "Tessera socio", message });
+    } finally {
+      if (isPrint) {
+        setPrintingCard(false);
+      } else {
+        setDownloadingCard(false);
+      }
+    }
+  };
+
   const handleApprove = async (docId: number) => {
     setReviewingDocId(docId);
     setDocActionState(docId, "loading");
@@ -317,7 +412,7 @@ export default function OrgAdminMemberDetail() {
     }
   };
 
-  const openRejectModal = (doc: Document) => {
+  const openRejectModal = (doc: OrgAdminMemberDocument) => {
     setRejectingDoc(doc);
     setActionError(null);
     setActionMessage(null);
@@ -429,7 +524,7 @@ export default function OrgAdminMemberDetail() {
 
   const [downloadingDocId, setDownloadingDocId] = useState<number | null>(null);
 
-  const handleDownloadDoc = async (doc: Document) => {
+  const handleDownloadDoc = async (doc: OrgAdminMemberDocument) => {
     const url = doc.download_url || `/api/org-admin/documents/${doc.id}`;
     setDownloadingDocId(doc.id);
     try {
@@ -542,6 +637,23 @@ export default function OrgAdminMemberDetail() {
       : member.payment_method === "BONIFICO"
         ? "Bonifico"
         : "-";
+  const birthDateLabel = member.birth_date
+    ? new Date(`${member.birth_date}T00:00:00`).toLocaleDateString("it-IT")
+    : "-";
+  const cardNumber = member.card_number ?? member.card_no ?? null;
+  const canUseCardActions = Boolean(cardNumber && member.card_year);
+  const canSendCardEmail = Boolean(canUseCardActions && member.is_active && member.email);
+  const cardPreviewData = {
+    firstName: member.first_name,
+    lastName: member.last_name,
+    fullName: `${member.first_name} ${member.last_name}`.trim(),
+    organizationName: admin?.organization?.name ?? null,
+    organizationSlug: admin?.organization?.slug ?? null,
+    cardNumber,
+    cardStatus: member.status,
+    cardYear: member.card_year ?? null,
+    verificationUrl: member.card_verification_url ?? null,
+  };
 
   return (
     <div className="space-y-6">
@@ -638,114 +750,233 @@ export default function OrgAdminMemberDetail() {
         </div>
       ) : (
       <>
-      <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-        <div className="grid md:grid-cols-2 gap-6">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.9fr)]">
+        <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-                <h2 className="text-lg font-semibold mb-4">Anagrafica</h2>
-                <dl className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                        <dt className="text-neutral-500">Nome</dt>
-                        <dd className="font-medium">{member.first_name} {member.last_name}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                        <dt className="text-neutral-500">Email</dt>
-                        <dd className="font-medium">{member.email || "-"}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                        <dt className="text-neutral-500">Codice Fiscale</dt>
-                        <dd className="font-medium">{member.fiscal_code || "-"}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                        <dt className="text-neutral-500">Telefono</dt>
-                        <dd className="font-medium">{member.phone || "-"}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                        <dt className="text-neutral-500">Categoria / Tipo</dt>
-                        <dd className="font-medium">{member.member_type || "-"}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                        <dt className="text-neutral-500">Modalita di pagamento</dt>
-                        <dd className="font-medium">{paymentMethodLabel}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                        <dt className="text-neutral-500">Iscrizione manuale</dt>
-                        <dd className="font-medium">{member.is_manual ? "Sì" : "No"}</dd>
-                    </div>
-                </dl>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-neutral-400">
+                Anagrafica socio
+              </p>
+              <h2 className="mt-2 text-xl font-semibold text-neutral-900">
+                {member.first_name} {member.last_name}
+              </h2>
+              <p className="mt-1 text-sm text-neutral-500">
+                Correggi i dati anagrafici del socio senza alterare i riferimenti di sistema.
+              </p>
             </div>
-            <div>
-                <h2 className="text-lg font-semibold mb-4">Stato Iscrizione</h2>
-                <dl className="space-y-2 text-sm">
-                    <div className="flex justify-between items-center">
-                        <dt className="text-neutral-500">Stato</dt>
-                        <dd className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          member.status === "ACTIVE" ? "bg-green-100 text-green-700" :
-                          member.status === "EXPIRED" ? "bg-red-100 text-red-700" :
-                          member.status === "DELETED" ? "bg-slate-200 text-slate-700" :
-                          member.status === "PENDING" ? "bg-amber-100 text-amber-700" :
-                          "bg-neutral-100 text-neutral-700"
-                        }`}>
-                          {member.status === "ACTIVE" ? "Attivo" :
-                           member.status === "EXPIRED" ? "Scaduto" :
-                           member.status === "DELETED" ? "Eliminato" :
-                           member.status === "PENDING" ? "In attesa" : member.status}
-                        </dd>
-                    </div>
-                    <div className="flex justify-between">
-                        <dt className="text-neutral-500">Tessera N.</dt>
-                        <dd className="font-mono font-medium">
-                          {member.card_number ?? member.card_no ?? "Non assegnata"}
-                          {member.card_year ? ` / ${member.card_year}` : ""}
-                        </dd>
-                    </div>
-                    <div className="flex justify-between">
-                        <dt className="text-neutral-500">Data Iscrizione</dt>
-                        <dd className="font-medium">
-                            {member.joined_at ? new Date(member.joined_at).toLocaleDateString() : "-"}
-                        </dd>
-                    </div>
-                </dl>
-                <div className="mt-5 rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Accesso</p>
-                            <p className="text-sm text-neutral-700">
-                                {member.has_access ? "Accesso attivo" : "Accesso non attivo"}
-                            </p>
-                            {!member.is_active && (
-                                <p className="mt-1 text-xs text-red-600">
-                                    Account non attivo: invio accesso disabilitato.
-                                </p>
-                            )}
-                            {lastAccessLabel && (
-                                <p className="mt-1 text-xs text-neutral-500">
-                                    Ultimo invio: {lastAccessLabel}
-                                </p>
-                            )}
-                        </div>
-                        <button
-                            type="button"
-                            onClick={handleSendAccess}
-                            disabled={sendingAccess || member.has_access || !member.email || !member.is_active}
-                            className="btn-primary"
-                            data-tour="admin-send-access"
-                        >
-                            {sendingAccess ? "Invio..." : "Invia accesso"}
-                        </button>
-                    </div>
-                    {sendAccessError && (
-                        <p className="mt-2 text-xs text-red-600">{sendAccessError}</p>
-                    )}
-                    {sendAccessMessage && (
-                        <p className="mt-2 text-xs text-emerald-600">{sendAccessMessage}</p>
-                    )}
-                    {!member.email && (
-                        <p className="mt-2 text-xs text-neutral-500">
-                            Inserisci un'email per inviare l'accesso.
-                        </p>
-                    )}
+            <button
+              type="button"
+              onClick={() => {
+                setProfileError(null);
+                setEditModalOpen(true);
+              }}
+              className="btn-ghost !px-4 !py-2 text-xs font-bold uppercase tracking-[0.18em]"
+            >
+              Modifica anagrafica
+            </button>
+          </div>
+
+          <div className="mt-6 grid gap-5 md:grid-cols-2">
+            <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-5">
+              <h3 className="text-sm font-semibold text-neutral-900">Dati principali</h3>
+              <dl className="mt-4 space-y-3 text-sm">
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="text-neutral-500">Nome completo</dt>
+                  <dd className="text-right font-medium text-neutral-900">
+                    {member.first_name} {member.last_name}
+                  </dd>
                 </div>
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="text-neutral-500">Email</dt>
+                  <dd className="text-right font-medium text-neutral-900">{member.email || "-"}</dd>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="text-neutral-500">Telefono</dt>
+                  <dd className="text-right font-medium text-neutral-900">{member.phone || "-"}</dd>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="text-neutral-500">Codice fiscale</dt>
+                  <dd className="text-right font-mono text-[13px] font-medium text-neutral-900">
+                    {member.fiscal_code || "-"}
+                  </dd>
+                </div>
+              </dl>
             </div>
+
+            <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-5">
+              <h3 className="text-sm font-semibold text-neutral-900">Dati associativi</h3>
+              <dl className="mt-4 space-y-3 text-sm">
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="text-neutral-500">Data di nascita</dt>
+                  <dd className="text-right font-medium text-neutral-900">{birthDateLabel}</dd>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="text-neutral-500">Luogo di nascita</dt>
+                  <dd className="text-right font-medium text-neutral-900">{member.birth_place || "-"}</dd>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="text-neutral-500">Categoria / Tipo</dt>
+                  <dd className="text-right font-medium text-neutral-900">{member.member_type || "-"}</dd>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="text-neutral-500">Modalita di pagamento</dt>
+                  <dd className="text-right font-medium text-neutral-900">{paymentMethodLabel}</dd>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="text-neutral-500">Iscrizione manuale</dt>
+                  <dd className="text-right font-medium text-neutral-900">{member.is_manual ? "Si" : "No"}</dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+
+          <div className="mt-6 rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500">
+                  Accesso area riservata
+                </p>
+                <p className="mt-1 text-sm text-neutral-700">
+                  {member.has_access ? "Account attivo e credenziali gia presenti." : "Accesso non ancora attivato."}
+                </p>
+                {!member.is_active && (
+                  <p className="mt-1 text-xs text-red-600">
+                    Il socio non e attivo: l'invio credenziali resta disabilitato.
+                  </p>
+                )}
+                {lastAccessLabel && (
+                  <p className="mt-1 text-xs text-neutral-500">Ultimo invio accesso: {lastAccessLabel}</p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={handleSendAccess}
+                disabled={sendingAccess || member.has_access || !member.email || !member.is_active}
+                className="btn-primary"
+                data-tour="admin-send-access"
+              >
+                {sendingAccess ? "Invio..." : "Invia accesso"}
+              </button>
+            </div>
+            {sendAccessError && <p className="mt-2 text-xs text-red-600">{sendAccessError}</p>}
+            {sendAccessMessage && <p className="mt-2 text-xs text-emerald-600">{sendAccessMessage}</p>}
+            {!member.email && (
+              <p className="mt-2 text-xs text-neutral-500">Inserisci un'email per inviare le credenziali.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div className="overflow-hidden rounded-[28px] border border-neutral-200 bg-[radial-gradient(circle_at_top,rgba(166,124,82,0.10),transparent_35%),linear-gradient(180deg,#ffffff_0%,#faf7f2_100%)] p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-neutral-400">
+                  Tessera socio
+                </p>
+                <h2 className="mt-2 text-lg font-semibold text-neutral-900">Tessera digitale e PDF</h2>
+                <p className="mt-1 text-sm text-neutral-500">
+                  Invia la tessera via email, scarica il PDF o apri il flusso di stampa.
+                </p>
+              </div>
+              <span
+                className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                  member.is_active
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-amber-200 bg-amber-50 text-amber-700"
+                }`}
+              >
+                {member.is_active ? "Socio attivo" : "Socio non attivo"}
+              </span>
+            </div>
+
+            <div className="mt-5">
+              <MemberCardPreview cardData={cardPreviewData} className="max-w-[420px]" />
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              <button
+                type="button"
+                onClick={handleSendCardEmail}
+                disabled={sendingCardEmail || !canSendCardEmail}
+                className="btn-primary !justify-center disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {sendingCardEmail ? "Invio..." : "Invia tessera via email"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void downloadCardPdf("download")}
+                disabled={downloadingCard || !canUseCardActions}
+                className="btn-ghost !justify-center disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {downloadingCard ? "Preparazione..." : "Scarica PDF tessera"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void downloadCardPdf("print")}
+                disabled={printingCard || !canUseCardActions}
+                className="btn-ghost !justify-center disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {printingCard ? "Apertura..." : "Stampa tessera"}
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-3 rounded-2xl border border-neutral-200 bg-white/80 p-4 text-sm text-neutral-700 sm:grid-cols-2">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">Numero tessera</p>
+                <p className="mt-1 font-mono text-base font-semibold text-neutral-900">
+                  {cardNumber ?? "Non assegnata"}
+                  {member.card_year ? ` / ${member.card_year}` : ""}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">Data iscrizione</p>
+                <p className="mt-1 font-medium text-neutral-900">
+                  {member.joined_at ? new Date(member.joined_at).toLocaleDateString("it-IT") : "-"}
+                </p>
+              </div>
+            </div>
+
+            {cardEmailError && <p className="mt-3 text-xs text-red-600">{cardEmailError}</p>}
+            {cardEmailMessage && <p className="mt-3 text-xs text-emerald-600">{cardEmailMessage}</p>}
+            {!canUseCardActions && (
+              <p className="mt-3 text-xs text-neutral-500">
+                Le azioni PDF sono disponibili quando la tessera ha numero e anno assegnati.
+              </p>
+            )}
+            {canUseCardActions && !member.email && (
+              <p className="mt-3 text-xs text-neutral-500">
+                Per inviare la tessera via email e necessario salvare un indirizzo email valido.
+              </p>
+            )}
+            {canUseCardActions && member.card_verification_url && (
+              <a
+                href={member.card_verification_url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-4 inline-flex text-xs font-semibold uppercase tracking-[0.18em] text-brand hover:text-brand/80"
+              >
+                Apri verifica tessera
+              </a>
+            )}
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-5">
+            <h3 className="text-sm font-semibold text-neutral-900">Stato iscrizione</h3>
+            <dl className="mt-4 space-y-3 text-sm">
+              <div className="flex items-start justify-between gap-4">
+                <dt className="text-neutral-500">Stato operativo</dt>
+                <dd className="font-medium text-neutral-900">{member.status || "-"}</dd>
+              </div>
+              <div className="flex items-start justify-between gap-4">
+                <dt className="text-neutral-500">Workflow</dt>
+                <dd className="font-medium text-neutral-900">{workflowStatus || "-"}</dd>
+              </div>
+              <div className="flex items-start justify-between gap-4">
+                <dt className="text-neutral-500">Documenti</dt>
+                <dd className="font-medium text-neutral-900">{documentStatus}</dd>
+              </div>
+            </dl>
+          </div>
         </div>
       </div>
 
@@ -753,6 +984,20 @@ export default function OrgAdminMemberDetail() {
         payments={member.payments}
         paymentMethodLabel={paymentMethodLabel}
         onSubmit={handleManualPayment}
+      />
+
+      <EditMemberProfileModal
+        open={editModalOpen}
+        member={member}
+        saving={profileSaving}
+        error={profileError}
+        onClose={() => {
+          if (!profileSaving) {
+            setEditModalOpen(false);
+            setProfileError(null);
+          }
+        }}
+        onSubmit={handleProfileSave}
       />
 
       {rejectingDoc && (
@@ -909,8 +1154,8 @@ export default function OrgAdminMemberDetail() {
 
       <MemberDecisionPanel
         status={workflowStatus || member.status}
-        decisionAt={member.decision_at}
-        initialNotes={member.decision_notes}
+        decisionAt={member.decision_at ?? undefined}
+        initialNotes={member.decision_notes ?? undefined}
         isSubmitting={isSubmittingDecision}
         approveState={decisionActionStates.approve}
         rejectState={decisionActionStates.reject}
@@ -967,3 +1212,4 @@ export default function OrgAdminMemberDetail() {
     </div>
   );
 }
+

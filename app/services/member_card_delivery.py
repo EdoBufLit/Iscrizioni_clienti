@@ -17,6 +17,7 @@ from app.services.email_sender import build_sender_payload
 from app.services.member_activity import is_member_active
 from app.services.org_branding import (
     resolve_assonam_logo_url,
+    resolve_card_email_subject,
     resolve_card_logo_url,
     resolve_club_display_name,
 )
@@ -106,6 +107,10 @@ def _enqueue_member_card_ready_email(
     org: Organization,
     backend_base_url: str,
     frontend_base_url: str,
+    email_type: str = "member_card_ready",
+    dedupe_key: str | None = None,
+    header_title: str = "La tua tessera ASSO.N.A.M. è pronta",
+    header_subtitle: str = "Il tuo documento è stato verificato e la tua tessera socio è ora disponibile.",
 ) -> str | None:
     if not member.email:
         return None
@@ -186,8 +191,8 @@ def _enqueue_member_card_ready_email(
         assonam_logo_url=assonam_logo_url,
         organization_logo_url=organization_logo_url,
         card_image_cid=card_image_cid,
-        header_title="La tua tessera ASSO.N.A.M. è pronta",
-        header_subtitle="Il tuo documento è stato verificato e la tua tessera socio è ora disponibile.",
+        header_title=header_title,
+        header_subtitle=header_subtitle,
         access_email_hint=member.email,
         google_wallet_add_url=wallet_add_url,
         card_view_url=card_view_url,
@@ -207,12 +212,13 @@ def _enqueue_member_card_ready_email(
     )
     return enqueue_email(
         db,
-        email_type="member_card_ready",
+        email_type=email_type,
         to_email=member.email,
-        subject="La tua tessera ASSO.N.A.M. è pronta",
+        subject=resolve_card_email_subject(org),
         payload=payload,
         priority=5,
-        dedupe_key=f"member_card_ready:{member.id}:{member.card_year}:{member.card_no}",
+        dedupe_key=dedupe_key
+        or f"member_card_ready:{member.id}:{member.card_year}:{member.card_no}",
     )
 
 
@@ -288,6 +294,82 @@ def maybe_send_member_card_ready_email(db: Session, request: Request, member_id:
             member.id,
             member.org_id,
         )
+        return {"sent": False, "queued": False, "reason": "email_enqueue_failed"}
+
+    db.commit()
+    return {"sent": False, "queued": True, "reason": "queued", "outbox_id": outbox_id}
+
+
+def queue_member_card_email(
+    db: Session,
+    request: Request,
+    member_id: int,
+    *,
+    require_active: bool = True,
+    require_approved_document: bool = False,
+    email_type: str = "member_card_manual_send",
+    dedupe_key_prefix: str = "member_card_manual_send",
+) -> dict[str, object]:
+    member_query = db.query(Member).filter(Member.id == member_id)
+    try:
+        member_query = member_query.with_for_update()
+    except Exception:
+        pass
+
+    member = member_query.first()
+    if not member:
+        return {"sent": False, "queued": False, "reason": "member_not_found"}
+
+    org = member.organization
+    if not org:
+        return {"sent": False, "queued": False, "reason": "organization_missing"}
+
+    if require_active and not is_member_active(member, now=datetime.utcnow()):
+        return {"sent": False, "queued": False, "reason": "member_not_active"}
+
+    if not member.email:
+        return {"sent": False, "queued": False, "reason": "member_email_missing"}
+
+    if member.card_no is None or member.card_year is None:
+        return {"sent": False, "queued": False, "reason": "card_missing"}
+
+    if require_approved_document:
+        has_approved_doc = (
+            db.query(MemberDocument.id)
+            .filter(
+                MemberDocument.member_id == member.id,
+                MemberDocument.status == DocStatus.APPROVED.value,
+            )
+            .first()
+            is not None
+        )
+        if not has_approved_doc:
+            return {"sent": False, "queued": False, "reason": "no_approved_documents"}
+
+    backend_base_url = _build_backend_base_url(request)
+    frontend_base_url = _build_frontend_base_url(request)
+
+    try:
+        outbox_id = _enqueue_member_card_ready_email(
+            db=db,
+            member=member,
+            org=org,
+            backend_base_url=backend_base_url,
+            frontend_base_url=frontend_base_url,
+            email_type=email_type,
+            dedupe_key=f"{dedupe_key_prefix}:{member.id}:{member.card_year}:{member.card_no}",
+            header_title="La tua tessera ASSO.N.A.M. è disponibile",
+            header_subtitle="Ti inviamo di nuovo il riepilogo della tua tessera socio e i link utili per consultarla o scaricarla.",
+        )
+    except Exception:
+        logger.exception(
+            "Failed to enqueue manual member card email for member_id=%s org_id=%s",
+            member.id,
+            member.org_id,
+        )
+        return {"sent": False, "queued": False, "reason": "email_enqueue_failed"}
+
+    if not outbox_id:
         return {"sent": False, "queued": False, "reason": "email_enqueue_failed"}
 
     db.commit()
