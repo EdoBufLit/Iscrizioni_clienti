@@ -416,6 +416,7 @@ const Iscrizione = () => {
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [confirmReady, setConfirmReady] = useState(step !== STEPS.length);
   const [userEditedCF, setUserEditedCF] = useState(false);
   const [municipalitySuggestions, setMunicipalitySuggestions] = useState<MunicipalitySearchItem[]>([]);
   const [municipalityLoading, setMunicipalityLoading] = useState(false);
@@ -440,6 +441,20 @@ const Iscrizione = () => {
       noindex: true,
     });
   }, [org, slug]);
+
+  useEffect(() => {
+    if (step !== STEPS.length) {
+      setConfirmReady(true);
+      return;
+    }
+
+    setConfirmReady(false);
+    const timeoutId = window.setTimeout(() => {
+      setConfirmReady(true);
+    }, shouldReduceMotion ? 80 : 320);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [shouldReduceMotion, step]);
 
   useEffect(() => {
     const query = form.comuneNascita.trim();
@@ -652,8 +667,7 @@ const Iscrizione = () => {
     moveToStep(Math.max(step - 1, 1), -1);
   };
 
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault();
+  const submitMembership = async () => {
     if (submitting) return;
 
     if (membershipDocumentRequired && !form.documentoIdentita) {
@@ -725,6 +739,12 @@ const Iscrizione = () => {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    if (step !== STEPS.length || !confirmReady) return;
+    void submitMembership();
   };
 
   const progress = ((step - 1) / (STEPS.length - 1)) * 100;
@@ -1347,10 +1367,18 @@ const Iscrizione = () => {
               ) : (
                 <button
                   className={`${primaryActionClass} min-w-[240px] disabled:cursor-not-allowed disabled:opacity-70`}
-                  type="submit"
-                  disabled={submitting}
+                  type="button"
+                  disabled={submitting || !confirmReady}
+                  onClick={() => {
+                    if (!confirmReady) return;
+                    void submitMembership();
+                  }}
                 >
-                  {submitting ? "Invio in corso..." : "Conferma iscrizione"}
+                  {submitting
+                    ? "Invio in corso..."
+                    : confirmReady
+                      ? "Conferma iscrizione"
+                      : "Preparo conferma..."}
                   {!submitting ? iconFor("m9 18 6-6-6-6", "h-5 w-5") : null}
                 </button>
               )}
