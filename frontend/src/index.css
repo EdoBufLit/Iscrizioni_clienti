@@ -2317,3 +2317,86 @@ body.dashboard-perf-mode .btn-ghost:hover {
     opacity: 1 !important;
   }
 }
+
+.signup-wizard-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.signup-wizard-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 6%, rgba(99, 102, 241, 0.08), transparent 22rem),
+    radial-gradient(circle at 12% 20%, rgba(148, 163, 184, 0.12), transparent 24rem),
+    radial-gradient(circle at 88% 26%, rgba(129, 140, 248, 0.08), transparent 26rem);
+}
+
+.signup-wizard-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 2rem;
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.94));
+  box-shadow:
+    0 34px 80px -54px rgba(79, 70, 229, 0.24),
+    0 26px 54px -46px rgba(15, 23, 42, 0.2);
+}
+
+.signup-wizard-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.7), transparent 30%);
+}
+
+.signup-wizard-primary {
+  color: #fff;
+  background: linear-gradient(135deg, #5b4cf4 0%, #4f46e5 52%, #4338ca 100%);
+  box-shadow:
+    0 22px 45px -30px rgba(79, 70, 229, 0.72),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    filter 180ms ease;
+}
+
+.signup-wizard-primary:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.03);
+  box-shadow:
+    0 28px 55px -28px rgba(79, 70, 229, 0.74),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.signup-wizard-primary:focus-visible,
+.signup-wizard-secondary:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 4px rgba(99, 102, 241, 0.14),
+    0 0 0 1px rgba(99, 102, 241, 0.2);
+}
+
+.signup-wizard-secondary {
+  color: #475569;
+  border: 1px solid rgba(203, 213, 225, 0.95);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 25px -24px rgba(15, 23, 42, 0.55);
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease,
+    color 180ms ease;
+}
+
+.signup-wizard-secondary:hover {
+  transform: translateY(-1px);
+  border-color: rgba(165, 180, 252, 0.9);
+  background: rgba(238, 242, 255, 0.88);
+  color: #312e81;
+}
