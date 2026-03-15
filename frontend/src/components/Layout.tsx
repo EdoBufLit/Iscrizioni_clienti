@@ -288,13 +288,19 @@ const Layout = () => {
 
                 <ThemeToggle />
                 <button
-                  className="public-menu-toggle xl:hidden"
+                  className={`public-menu-toggle xl:hidden${menuOpen ? " is-open" : ""}`}
                   type="button"
                   aria-expanded={menuOpen}
                   aria-controls="mobile-nav-public"
+                  aria-label={menuOpen ? "Chiudi menu" : "Apri menu"}
                   onClick={() => setMenuOpen((open) => !open)}
                 >
-                  {menuOpen ? "Chiudi" : "Menu"}
+                  <span className="public-menu-toggle__icon" aria-hidden="true">
+                    <span className="public-menu-toggle__line public-menu-toggle__line--top" />
+                    <span className="public-menu-toggle__line public-menu-toggle__line--middle" />
+                    <span className="public-menu-toggle__line public-menu-toggle__line--bottom" />
+                  </span>
+                  <span className="sr-only">{menuOpen ? "Chiudi menu" : "Apri menu"}</span>
                 </button>
               </div>
 

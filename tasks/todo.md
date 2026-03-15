@@ -3493,3 +3493,19 @@ pm --prefix frontend run build OK dopo la correzione del layer CSS condiviso (su
 - [x] Trasformata la sezione super admin in Libro Soci filtrabile per associazione con KPI, tabella e dettaglio.
 - [x] Verifiche eseguite: pytest tests/test_org_admin_member_profile_and_card_actions.py tests/test_super_admin_member_registry.py e 
 pm --prefix frontend run build.
+
+## Mobile menu premium + wizard dark mode signup (Mar 15, 2026)
+- [x] Mappare il trigger menu mobile pubblico e i layer CSS che oggi mostrano il testo "Menu"
+- [x] Sostituire il trigger testuale con un'icona premium coerente con il brand e leggibile in light/dark mode
+- [x] Correggere le surface e gli accenti del wizard iscrizione in dark mode senza regressioni in light mode
+- [x] Eseguire `npm --prefix frontend run build` e documentare la review finale
+
+## Review (Mobile menu premium + wizard dark mode signup - Mar 15, 2026)
+- In `frontend/src/components/Layout.tsx` il trigger mobile pubblico non mostra piu il testo "Menu": ora usa un bottone iconico con tre linee animate che si trasformano in close state, mantenendo invariata la logica di apertura/chiusura e migliorando l'accessibilita con `aria-label` dinamico.
+- In `frontend/src/index.css` ho rifinito la geometria del trigger mobile con una shell compatta, highlight blu/oro coerente con il brand e transizioni leggere, cosi il controllo resta piu premium su light e dark mode senza occupare spazio inutile in header mobile.
+- In `frontend/src/index.css` ho spostato il wizard iscrizione su variabili CSS semantiche (`signup-wizard-*`) per card, glow di sfondo, focus ring e secondary actions, evitando di lasciare la card principale forzata bianca in dark mode.
+- In `frontend/src/theme.css` ho aggiunto i valori dark specifici del wizard e override mirati per accenti `indigo/rose/amber`, badge, feedback e ring, cosi le superfici e gli stati del flusso iscrizione restano coerenti con la dark mode mantenendo il look attuale in light mode.
+- Verifica eseguita: `npm --prefix frontend run build` OK.
+
+- Smoke visuale mobile completato su 2026-03-15 con server locale `vite preview` e screenshot reali in `tasks/screenshots/smoke-home-menu-light-mobile-20260315.png`, `tasks/screenshots/smoke-home-menu-dark-mobile-20260315-rerun.png`, `tasks/screenshots/smoke-signup-wizard-light-mobile-20260315.png`, `tasks/screenshots/smoke-signup-wizard-dark-mobile-20260315.png`.
+- Esito smoke: menu mobile premium leggibile in light e dark mode; wizard iscrizione coerente in dark mode con stepper, card e campi finalmente allineati al tema scuro. Il primo capture dark del menu mostrava solo parte del pannello per timing di animazione, ricontrollato con secondo capture confermato.
