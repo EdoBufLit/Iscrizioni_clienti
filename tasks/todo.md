@@ -3521,3 +3521,15 @@ pm --prefix frontend run build.
 - Ho riarmonizzato gli spazi della navbar aumentando leggermente il respiro tra link di navigazione, CTA principale e accesso, senza cambiare comportamento, routing o tracking della CTA affiliazione.
 - Verifica eseguita: npm --prefix frontend run build OK.
 
+## Public navbar right-alignment experiment (Mar 16, 2026)
+- [x] Rileggere il markup della navbar pubblica desktop/mobile e definire il riassetto minimo
+- [x] Rimuovere la CTA Affilia l'Associazione dalla navbar pubblica e dal menu mobile
+- [x] Spostare Login e theme toggle all'estrema destra della navbar desktop, mantenendo il mobile stabile
+- [x] Eseguire npm --prefix frontend run build e documentare la review finale
+
+## Review (Public navbar right-alignment experiment - Mar 16, 2026)
+- In frontend/src/components/Layout.tsx ho rimosso del tutto la CTA Affilia l'Associazione dalla navbar pubblica desktop e dal pannello mobile, lasciando in homepage le CTA dedicate al funnel di affiliazione.
+- La navbar desktop ora usa una struttura piu pulita: navigazione principale centrata e cluster destro con Login e ThemeToggle allineati all'estremita destra.
+- Su mobile ho mantenuto il pattern gia stabile con ThemeToggle accanto all'hamburger e Login dentro il pannello, cosi la gerarchia resta leggibile senza comprimere l'header.
+- Pulizia tecnica inclusa: eliminati anche hook/import non piu usati legati alla CTA navbar affiliazione.
+- Verifica eseguita: npm --prefix frontend run build OK.

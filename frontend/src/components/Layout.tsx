@@ -9,8 +9,6 @@ import { PUBLIC_MOTION } from "./public/motionTokens";
 import InstallAppPrompt from "./public/InstallAppPrompt";
 import { useTheme } from "./theme/ThemeProvider";
 import ThemeToggle from "./theme/ThemeToggle";
-import { trackUiEvent } from "../lib/tracking";
-import { useStatePlatformCapabilities } from "../hooks/useStatePlatformCapabilities";
 import { fetchWhoAmI, type WhoAmIResponse } from "../lib/api";
 
 const NAV_ITEMS = [
@@ -41,9 +39,6 @@ const Layout = () => {
   const close = () => setMenuOpen(false);
   const location = useLocation();
   const { resolvedTheme } = useTheme();
-  const { capabilities, loading: capabilitiesLoading } = useStatePlatformCapabilities();
-  const affiliazioneEnabled = capabilities?.affiliazioneEnabled === true;
-  const showAffiliazioneCta = !capabilitiesLoading && affiliazioneEnabled;
 
   const publicHeaderRef = useRef<HTMLElement>(null);
   const logoRef = useRef<HTMLImageElement>(null);
@@ -242,7 +237,7 @@ const Layout = () => {
                   </span>
                 </NavLink>
 
-                <div className="hidden flex-1 items-center justify-end xl:flex xl:gap-4">
+                <div className="hidden flex-1 items-center xl:flex">
                   <nav
                     className="flex min-w-0 flex-1 items-center justify-center gap-2 xl:gap-3 2xl:gap-4"
                     aria-label="Navigazione principale"
@@ -258,20 +253,7 @@ const Layout = () => {
                       </NavLink>
                     ))}
                   </nav>
-                  <div className="flex shrink-0 items-center gap-4">
-                    {showAffiliazioneCta ? (
-                      <NavLink
-                        className="btn-primary !h-10 !rounded-xl !px-5 !text-sm !font-bold"
-                        to="/affiliazione"
-                        onClick={() =>
-                          trackUiEvent("click_affiliazione_cta_nav", {
-                            placement: "desktop_nav",
-                          })
-                        }
-                      >
-                        Affilia l'Associazione
-                      </NavLink>
-                    ) : null}
+                  <div className="ml-6 flex shrink-0 items-center gap-3 2xl:gap-4">
                     <NavLink
                       className="text-sm font-bold text-slate-500 transition-colors hover:text-brand"
                       to={publicAccessTarget}
@@ -280,25 +262,28 @@ const Layout = () => {
                     >
                       {publicAccessLabel}
                     </NavLink>
+                    <ThemeToggle />
                   </div>
                 </div>
 
-                <ThemeToggle />
-                <button
-                  className={`public-menu-toggle xl:hidden${menuOpen ? " is-open" : ""}`}
-                  type="button"
-                  aria-expanded={menuOpen}
-                  aria-controls="mobile-nav-public"
-                  aria-label={menuOpen ? "Chiudi menu" : "Apri menu"}
-                  onClick={() => setMenuOpen((open) => !open)}
-                >
-                  <span className="public-menu-toggle__icon" aria-hidden="true">
-                    <span className="public-menu-toggle__line public-menu-toggle__line--top" />
-                    <span className="public-menu-toggle__line public-menu-toggle__line--middle" />
-                    <span className="public-menu-toggle__line public-menu-toggle__line--bottom" />
-                  </span>
-                  <span className="sr-only">{menuOpen ? "Chiudi menu" : "Apri menu"}</span>
-                </button>
+                <div className="ml-auto flex items-center gap-2 xl:hidden">
+                  <ThemeToggle />
+                  <button
+                    className={`public-menu-toggle${menuOpen ? " is-open" : ""}`}
+                    type="button"
+                    aria-expanded={menuOpen}
+                    aria-controls="mobile-nav-public"
+                    aria-label={menuOpen ? "Chiudi menu" : "Apri menu"}
+                    onClick={() => setMenuOpen((open) => !open)}
+                  >
+                    <span className="public-menu-toggle__icon" aria-hidden="true">
+                      <span className="public-menu-toggle__line public-menu-toggle__line--top" />
+                      <span className="public-menu-toggle__line public-menu-toggle__line--middle" />
+                      <span className="public-menu-toggle__line public-menu-toggle__line--bottom" />
+                    </span>
+                    <span className="sr-only">{menuOpen ? "Chiudi menu" : "Apri menu"}</span>
+                  </button>
+                </div>
               </div>
 
               <div
@@ -309,23 +294,6 @@ const Layout = () => {
               >
                 <nav className="container-shell py-4" aria-label="Navigazione principale mobile">
                   <div className="public-mobile-links flex flex-col gap-3 px-6 pb-6 pt-2">
-                    {showAffiliazioneCta ? (
-                      <NavLink
-                        className="btn-primary !h-12 !w-full !rounded-xl !font-bold"
-                        to="/affiliazione"
-                        onClick={() => {
-                          trackUiEvent("click_affiliazione_cta_nav", {
-                            placement: "mobile_menu",
-                          });
-                          close();
-                        }}
-                      >
-                        Affilia l'Associazione
-                      </NavLink>
-                    ) : null}
-
-                    <div className="public-mobile-divider my-2"></div>
-
                     {NAV_ITEMS.map((item) => (
                       <NavLink
                         key={item.label}
