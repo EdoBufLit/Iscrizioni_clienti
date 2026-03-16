@@ -3509,3 +3509,15 @@ pm --prefix frontend run build.
 
 - Smoke visuale mobile completato su 2026-03-15 con server locale `vite preview` e screenshot reali in `tasks/screenshots/smoke-home-menu-light-mobile-20260315.png`, `tasks/screenshots/smoke-home-menu-dark-mobile-20260315-rerun.png`, `tasks/screenshots/smoke-signup-wizard-light-mobile-20260315.png`, `tasks/screenshots/smoke-signup-wizard-dark-mobile-20260315.png`.
 - Esito smoke: menu mobile premium leggibile in light e dark mode; wizard iscrizione coerente in dark mode con stepper, card e campi finalmente allineati al tema scuro. Il primo capture dark del menu mostrava solo parte del pannello per timing di animazione, ricontrollato con secondo capture confermato.
+## Public CTA cleanup navbar + homepage (Mar 16, 2026)
+- [x] Mappare tutte le occorrenze del bottone pubblico Diventa Socio in navbar e homepage
+- [x] Rimuovere il bottone Diventa Socio dalla navbar desktop/mobile senza toccare le rotte pubbliche
+- [x] Ricentrare la CTA Affilia la tua Associazione nella hero homepage e armonizzare gli spazi della navbar
+- [x] Eseguire npm --prefix frontend run build e documentare la review finale
+
+## Review (Public CTA cleanup navbar + homepage - Mar 16, 2026)
+- In frontend/src/components/Layout.tsx ho rimosso il bottone pubblico Diventa Socio sia dalla navbar desktop sia dal menu mobile, lasciando invariati NAV_ITEMS, link principali e accesso area riservata.
+- In frontend/src/pages/Home.tsx la hero mostra ora una sola CTA Affilia la tua Associazione, centrata e full-width sul blocco dedicato; ho eliminato anche il secondo bottone Diventa Socio dalla sezione demo tessera per allineare tutta la homepage alla richiesta.
+- Ho riarmonizzato gli spazi della navbar aumentando leggermente il respiro tra link di navigazione, CTA principale e accesso, senza cambiare comportamento, routing o tracking della CTA affiliazione.
+- Verifica eseguita: npm --prefix frontend run build OK.
+

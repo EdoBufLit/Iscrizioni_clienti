@@ -242,9 +242,9 @@ const Layout = () => {
                   </span>
                 </NavLink>
 
-                <div className="hidden flex-1 items-center justify-end xl:flex xl:gap-3">
+                <div className="hidden flex-1 items-center justify-end xl:flex xl:gap-4">
                   <nav
-                    className="flex min-w-0 flex-1 items-center justify-center gap-1.5 2xl:gap-2"
+                    className="flex min-w-0 flex-1 items-center justify-center gap-2 xl:gap-3 2xl:gap-4"
                     aria-label="Navigazione principale"
                   >
                     {NAV_ITEMS.map((item) => (
@@ -258,7 +258,7 @@ const Layout = () => {
                       </NavLink>
                     ))}
                   </nav>
-                  <div className="flex shrink-0 items-center gap-3">
+                  <div className="flex shrink-0 items-center gap-4">
                     {showAffiliazioneCta ? (
                       <NavLink
                         className="btn-primary !h-10 !rounded-xl !px-5 !text-sm !font-bold"
@@ -272,11 +272,8 @@ const Layout = () => {
                         Affilia l'Associazione
                       </NavLink>
                     ) : null}
-                    <NavLink className="btn-ghost !h-10 !rounded-xl !px-5 !text-sm !font-bold" to="/associazioni">
-                      Diventa Socio
-                    </NavLink>
                     <NavLink
-                      className="text-sm font-bold text-slate-500 hover:text-brand transition-colors ml-2"
+                      className="text-sm font-bold text-slate-500 transition-colors hover:text-brand"
                       to={publicAccessTarget}
                       onMouseEnter={!publicAuth.authenticated ? prefetchDashboard : undefined}
                       onFocus={!publicAuth.authenticated ? prefetchDashboard : undefined}
@@ -326,10 +323,7 @@ const Layout = () => {
                         Affilia l'Associazione
                       </NavLink>
                     ) : null}
-                    <NavLink className="btn-ghost !h-12 !w-full !rounded-xl !font-bold" to="/associazioni" onClick={close}>
-                      Diventa Socio
-                    </NavLink>
-                    
+
                     <div className="public-mobile-divider my-2"></div>
 
                     {NAV_ITEMS.map((item) => (

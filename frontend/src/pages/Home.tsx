@@ -479,19 +479,16 @@ const Home = () => {
               </div>
             </div>
 
-            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4" data-hero-meta>
+            <div className="mt-10 mx-auto flex max-w-md flex-col items-center justify-center gap-4" data-hero-meta>
               {affiliazioneEnabled ? (
                 <Link
-                  className="btn-primary !h-14 !w-full !rounded-xl !px-8 !text-base sm:!w-auto"
+                  className="btn-primary !h-14 !w-full !rounded-xl !px-8 !text-base"
                   to="/affiliazione"
                   onClick={() => handleAffiliaHeroClick("hero_desktop_primary")}
                 >
                   Affilia la tua Associazione
                 </Link>
               ) : null}
-              <Link className="btn-ghost !h-14 !w-full !rounded-xl !border-2 !px-8 !text-base sm:!w-auto" to="/associazioni">
-                Diventa Socio
-              </Link>
             </div>
             <div className="mt-4" data-hero-meta>
                <Link className="text-sm font-semibold text-slate-500 hover:text-brand underline underline-offset-4" to="/area-riservata">
@@ -605,9 +602,6 @@ const Home = () => {
                 >
                   Vedi una demo
                 </button>
-                <Link className="btn-ghost !h-12 !rounded-xl !px-8" to="/associazioni">
-                  Diventa Socio
-                </Link>
               </div>
             </div>
 
