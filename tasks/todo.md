@@ -1,3 +1,22 @@
+- [x] Analizzare il video reference `Baton_Draft_02_Final.mp4` e fissare i pattern da replicare (durata ~50s, demo UI orizzontale, gradient teal, zoom lenti, cursor, CTA finale)
+- [x] Definire 3 varianti ASSONAM focalizzate su procedura guidata per ads Google/Meta con copy e scene distinti ma stesso linguaggio visivo
+- [x] Preparare/riusare screenshot e asset ASSONAM utili al walkthrough, scartando quelli non adatti o corrotti
+- [x] Rifare la composition Remotion in `marketing/remotion-ads` per un demo video 16:9 stile Baton con scene sequenziate, transizioni morbide, device frame e CTA finale
+- [x] Selezionare o generare una music bed/SFX adatti e collegarli alle varianti mantenendo il render robusto anche senza audio opzionale
+- [x] Renderizzare 3 MP4 finali, verificare esito reale dei file prodotti e documentare review finale
+
+## Review (ASSONAM guided demo ads - Mar 17, 2026)
+- Video reference analizzato con `ffprobe` e contact sheet: pattern chiave replicati nel nuovo template Remotion sono durata ~49-50s, layout orizzontale 16:9, UI su superfici bianche, gradient teal/cream, zoom lenti, piccoli card overlay, movimento cursore e chiusura con CTA pulita.
+- Nuovi asset dati introdotti in `marketing/remotion-ads/data/assonam-demo-variants.json` con 3 storie distinte ma coerenti: `guidedMember`, `guidedAffiliation`, `guidedOperations`.
+- Nuova composition `AssonamGuidedDemo` collegata al `Root` Remotion con 3 composition dedicate (`GuidedDemo-*`), durata `1470` frame a `30fps`, output `1920x1080`.
+- Gli screenshot ASSONAM riusati nel walkthrough sono stati selezionati tra quelli gia presenti in `marketing/remotion-ads/public/screenshots`; `screen1.png` non e stato usato perche corrotto/errato (mostrava un errore runtime).
+- Audio/SFX: mantenuta la bed `public/audio/music/corporate_bed.mp3` con loop su tutta la timeline e cue sonori leggeri (`transition_whoosh`, `ui_click`, `success_chime`) per restare robusti in render headless senza dipendere da nuova generazione remota.
+- Render finali prodotti con successo:
+- `marketing/remotion-ads/out/assonam_guided_member.mp4` (`49.05s`, `19.6 MB`)
+- `marketing/remotion-ads/out/assonam_guided_affiliation.mp4` (`49.05s`, `20.0 MB`)
+- `marketing/remotion-ads/out/assonam_guided_operations.mp4` (`49.05s`, `20.6 MB`)
+- Verifiche eseguite: `npx tsc --noEmit` OK; `npx remotion compositions src/index.ts` OK; render reali delle 3 varianti OK; contact sheet di controllo sul file `assonam_guided_member.mp4` OK.
+
 - [x] Profilare pipeline renderer video post-affiliazione e individuare i colli di bottiglia reali
 - [x] Aggiungere timing logs dettagliati backend/renderer per queue, bundle, render, encode e finalize
 - [x] Implementare riuso persistente del bundle/composition probe e ridurre overhead per job
@@ -5,13 +24,13 @@
 - [x] Eseguire benchmark comparativi + test mirati e documentare l'impatto
 
 ## Accounting refactor super admin + org admin (Mar 11, 2026)
-- [x] Analizzare il modulo Contabilit� corrente (`organization_shared_documents` + toggle `accounting_enabled`) e definire il perimetro compatibile del refactor
+- [x] Analizzare il modulo Contabilità corrente (`organization_shared_documents` + toggle `accounting_enabled`) e definire il perimetro compatibile del refactor
 - [x] Introdurre il nuovo dominio dati `accounting_folders`, `accounting_categories`, `accounting_documents`, `accounting_share_links` con modelli SQLAlchemy coerenti e relazioni robuste
 - [x] Creare migration Alembic con backfill dei documenti contabili esistenti verso cartella/categoria di fallback senza rompere storage, auth o toggle attuale
 - [x] Aggiornare bootstrap/init path dev per tabelle nuove e seed/backfill idempotente minimo richiesto
 - [x] Implementare API FastAPI per cartelle, categorie, documenti contabili, preview web, download sicuro e link di condivisione revocabili
-- [x] Mantenere compatibilita del modulo documenti generali esistente e del toggle Contabilit� lato organizzazione
-- [x] Rifare la UX org admin Contabilit� con archivio a cartelle/categorie/documenti, filtri, ricerca, preview e azioni rapide
+- [x] Mantenere compatibilita del modulo documenti generali esistente e del toggle Contabilità lato organizzazione
+- [x] Rifare la UX org admin Contabilità con archivio a cartelle/categorie/documenti, filtri, ricerca, preview e azioni rapide
 - [x] Creare/migliorare la UX super admin per gestione cartelle, categorie e upload/modifica documenti contabili
 - [x] Eseguire test/build/verifiche mirate e documentare la review finale
 
@@ -20,7 +39,7 @@
 - Compatibilita legacy preservata: gli upload contabili che passano ancora dalla route super-admin legacy vengono specchiati anche nel nuovo archivio; i documenti contabili legacy gia assegnati vengono backfillati in cartella fallback `Archivio` e categoria fallback `Generale` per ogni organizzazione.
 - Backend completato con CRUD cartelle/categorie/documenti, preview inline sicura, download autenticato, grouping/filtering per org admin e link di condivisione revocabili con token ed expiry opzionale.
 - Frontend org admin rifatto con archivio accordion `cartella -> categoria -> documenti`, ricerca, filtri, preview PDF/immagini, azioni rapide `Apri`, `Scarica`, `Preview`, `Condividi` e fallback pulito per file non previewabili.
-- Frontend super admin esteso con workspace dedicato Contabilit� dentro Documenti, comprensivo di gestione cartelle/categorie, upload/edit documento, preview e revoca link condivisi, senza rimuovere il workspace documenti generali.
+- Frontend super admin esteso con workspace dedicato Contabilità dentro Documenti, comprensivo di gestione cartelle/categorie, upload/edit documento, preview e revoca link condivisi, senza rimuovere il workspace documenti generali.
 - Durante la verifica reale della chain Alembic su SQLite sono emerse incompatibilita legacy non legate solo alla nuova feature; sono state corrette in modo conservativo nelle migration `m4n5o6p7q8r9`, `x7y8z9a0b1c2`, `g2h3i4j5k6l7`, `a1c9e8f7b6d5`, `f0a1b2c3d4e5`, `4a5b6c7d8e9f`, `6c7d8e9f0a1b` per consentire `alembic upgrade head` su DB SQLite pulito senza alterare il percorso Postgres.
 - Verifiche eseguite: `python -m alembic upgrade head` su `sqlite:///tmp_accounting_mig.db` OK; `python -m pytest -q tests/test_accounting_archive.py tests/test_org_shared_documents.py tests/test_org_admin_notifications.py` OK (`13 passed`); `npm --prefix frontend run build` OK.
 
@@ -32,9 +51,9 @@
 - [x] Rieseguire `npm --prefix frontend run build` e documentare cause/fix finali
 
 ## Review (Form builder stabilization - Mar 11, 2026)
-- I file segnalati come mancanti esistono gi�: [builder/utils.ts](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\builder\utils.ts) e [ImageUpload.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\builder\ImageUpload.tsx). Il problema reale era un drift tra il nuovo builder, i tipi condivisi e `OrgAdminForms.tsx`, non file assenti.
-- `FormPublicCanvas` � stato riallineato ai chiamanti reali in [FormPublicCanvas.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\FormPublicCanvas.tsx): props esplicite, tipo `PageTheme` dedicato e rimozione del prop zombie `heroLabel` dal chiamante in [OrgAdminForms.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\OrgAdminForms.tsx).
-- Gli helper del builder sono stati resi coerenti in [builder/utils.ts](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\builder\utils.ts): `encodeField(...)` ora restituisce un payload tipizzato invece di `unknown`, cos� le chiamate a `createOrgAdminFormField` e `updateOrgAdminFormField` non rompono pi� il build.
+- I file segnalati come mancanti esistono già: [builder/utils.ts](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\builder\utils.ts) e [ImageUpload.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\builder\ImageUpload.tsx). Il problema reale era un drift tra il nuovo builder, i tipi condivisi e `OrgAdminForms.tsx`, non file assenti.
+- `FormPublicCanvas` è stato riallineato ai chiamanti reali in [FormPublicCanvas.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\FormPublicCanvas.tsx): props esplicite, tipo `PageTheme` dedicato e rimozione del prop zombie `heroLabel` dal chiamante in [OrgAdminForms.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\OrgAdminForms.tsx).
+- Gli helper del builder sono stati resi coerenti in [builder/utils.ts](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\builder\utils.ts): `encodeField(...)` ora restituisce un payload tipizzato invece di `unknown`, così le chiamate a `createOrgAdminFormField` e `updateOrgAdminFormField` non rompono più il build.
 - Pulizia TypeScript minima in [FormBuilder.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\builder\FormBuilder.tsx) e [PropertiesPanel.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\builder\PropertiesPanel.tsx): rimosso import inutilizzato e parametro non letto.
 - In [OrgAdminForms.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\OrgAdminForms.tsx) non ho introdotto nuove feature: ho solo riallineato import/tipi e reso esplicito che alcuni handler legacy del vecchio editor campi non sono agganciati alla UI del builder corrente, evitando che TypeScript blocchi la build.
 - Verifica finale: `npm --prefix frontend run build` OK.
@@ -42,17 +61,17 @@
 ## Forms studio UX refinement (Mar 10, 2026)
 - [x] Rivalutare il workspace Forms attuale rispetto ai punti UX richiesti e identificare i punti ancora troppo tecnici/confusi
 - [x] Rifinire lista form e header editor per far percepire il prodotto come page builder condivisibile, non metadata editor
-- [x] Rendere Builder, Design, Risposte e Condividi pi� visuali con migliore gerarchia e link pubblico prominente
+- [x] Rendere Builder, Design, Risposte e Condividi più visuali con migliore gerarchia e link pubblico prominente
 - [x] Migliorare micro-copy, quick actions ed empty states senza rimuovere funzionalita esistenti
 - [x] Eseguire build frontend e aggiornare review/lesson
 
 ## Review (Forms studio UX refinement - Mar 10, 2026)
-- Direzione visuale ricavata dallo skill `ui-ux-pro-max`: premium light shell con forte contrasto, URL pubblico trattato come asset primario e tab editor con gerarchia pi� esplicita.
-- `OrgAdminForms.tsx`: la library dei form ora comunica meglio che ogni card � una pagina condivisibile, con descrizione, URL visibile e quick actions esplicite (`Modifica`, `Preview`, `Copia link`, `Duplica`, `Apri`) senza nesting di button invalidi.
+- Direzione visuale ricavata dallo skill `ui-ux-pro-max`: premium light shell con forte contrasto, URL pubblico trattato come asset primario e tab editor con gerarchia più esplicita.
+- `OrgAdminForms.tsx`: la library dei form ora comunica meglio che ogni card è una pagina condivisibile, con descrizione, URL visibile e quick actions esplicite (`Modifica`, `Preview`, `Copia link`, `Duplica`, `Apri`) senza nesting di button invalidi.
 - Header editor rifatto come cockpit: link pubblico in evidenza subito sopra i tab, badge di stato, contatori chiave e micro-summary dei blocchi `Builder`, `Automazioni`, `Risposte`.
-- Navigazione tab migliorata: da pill minimali a card-tab con label + hint, cos� la separazione tra `Builder`, `Design`, `Automazioni`, `Risposte`, `Condividi` � percepibile anche visivamente.
+- Navigazione tab migliorata: da pill minimali a card-tab con label + hint, così la separazione tra `Builder`, `Design`, `Automazioni`, `Risposte`, `Condividi` è percepibile anche visivamente.
 - `Condividi` ora sembra un launch panel e non un dettaglio nascosto: URL grande in hero scuro, CTA immediate e stato online/bozza + pubblico/solo soci visibili al primo sguardo.
-- `FormPublicCanvas.tsx`: la preview e la pagina pubblica risultano pi� �pagina reale� grazie a top bar brandizzata, snapshot laterale pi� utile e footer contestuale, mantenendo invariato il motore campi.
+- `FormPublicCanvas.tsx`: la preview e la pagina pubblica risultano più “pagina reale” grazie a top bar brandizzata, snapshot laterale più utile e footer contestuale, mantenendo invariato il motore campi.
 - Verifica: `npm --prefix frontend run build` OK.
 
 ## Review (Ottimizzazione renderer video affiliazione - Mar 06, 2026)
@@ -99,6 +118,18 @@
   - `frontend/src/components/cards/MemberCardPreview.tsx`
   - `app/email_templates/member_card_email.py`
   - `app/routes/public.py` (download HTML)
+
+---
+
+## Numbering scopes hybrid (Mar 17, 2026)
+- [ ] Aggiungere schema additivo `numbering_scopes` + colonne nullable su organizations/card_batches/members con migration Alembic idempotente
+- [ ] Estendere bootstrap/repair locale (`init_db.py`) per dev/test SQLite esistenti senza introdurre path distruttivi
+- [ ] Aggiornare modelli SQLAlchemy e introdurre helper/backend service per scope, stato first-use e audit metadata
+- [ ] Rendere `allocate_next_card` e `release_card_number` scope-aware con fallback legacy invariato quando `organizations.numbering_scope_id` e `NULL`
+- [ ] Rendere scope-aware i flussi Super Admin di range/lotti e aggiungere endpoint GET/PATCH configurazione numerazione organizzazione
+- [ ] Estendere creazione/modifica organizzazione Super Admin con default `Condivisa ASSONAM`, warning storico e conferma esplicita UI
+- [ ] Aggiungere test backend mirati per allocator scoped, first-use safety, fallback legacy e API admin numbering
+- [ ] Eseguire verifiche mirate (pytest/backend + build frontend) e documentare review finale con audit query read-only consigliate
 - Nome associazione sulla tessera ora usa `club_display_name` (non `organization_name`) in email/download
 - Test: `python -m pytest tests/test_member_card_verification.py tests/test_integration_issue_member.py::test_issue_member_captures_html_email_with_verification_url -q` -> 7 passed
 - Build: `npm --prefix frontend run build` -> OK
@@ -117,7 +148,7 @@
 - Test: `python -m pytest tests/test_member_card_verification.py -q` -> 6 passed
 - Build: `npm --prefix frontend run build` -> OK
 ---
-- [x] Individuare perch� il logo ASSONAM non viene renderizzato nella mail tessera inviata da flusso API/thank-you
+- [x] Individuare perché il logo ASSONAM non viene renderizzato nella mail tessera inviata da flusso API/thank-you
 - [x] Correggere URL logo nel template email integrazione usando asset compatibile client mail
 - [x] Aggiungere regressione test su HTML email per evitare ritorno a SVG non compatibile
 - [x] Eseguire test mirati integrazione/ingest e documentare risultato
@@ -125,7 +156,7 @@
 ## Review (Fix logo mail tessera API - Feb 19, 2026)
 - `python -m pytest tests/test_integration_issue_member.py::test_issue_member_captures_html_email_with_verification_url -q` -> 1 passed
 - `python -m pytest tests/test_ingest_pienissimo.py::test_ingest_retry_100x_is_idempotent_and_sends_email_once -q` -> 1 passed
-- Fix applicato in `app/services/integration_issuer.py`: `logo_url` ora usa `frontend_base/logo-transparent.png` (PNG, pi� compatibile in email)
+- Fix applicato in `app/services/integration_issuer.py`: `logo_url` ora usa `frontend_base/logo-transparent.png` (PNG, più compatibile in email)
 
 ---
 - [x] Riprodurre errore 500 creazione integration key da super admin e identificare causa
@@ -190,7 +221,7 @@
 
 ## Review (Integration keys super-admin only - Feb 17, 2026)
 - python -m pytest tests/test_org_admin_integration_keys.py tests/test_integration_issue_member.py -> 8 passed
-- Verifica funzionale: endpoint /api/org-admin/integrations/keys* non pi� registrati; GET/POST/PATCH/DELETE su path rimossi rispondono 404 (fallback API)
+- Verifica funzionale: endpoint /api/org-admin/integrations/keys* non più registrati; GET/POST/PATCH/DELETE su path rimossi rispondono 404 (fallback API)
 - /api/integrations/members/issue invariato su header X-ASSONAM-API-KEY, con update last_used_at/last_used_ip/last_used_user_agent su chiave attiva
 
 ---
@@ -227,9 +258,9 @@
 - `python -m pytest tests/test_org_admin_member_filters.py` OK (warnings about datetime.utcnow deprecation)
 - `npm run build` (frontend) OK (org-admin soci filters)
 - `python -m pytest tests/test_org_admin_member_activity.py` OK (warnings about datetime.utcnow deprecation)
-- `npm run build` (frontend) OK (attivitÃƒÆ’Ã‚Â  socio + reset filtri)
+- `npm run build` (frontend) OK (attivitÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â  socio + reset filtri)
 - `python -m alembic upgrade head` OK (actor_member_id)
-- `npm run build` (frontend) OK (legenda attivitÃƒÂ )
+- `npm run build` (frontend) OK (legenda attivitÃƒÆ’Ã‚Â )
 - `npm run build` (frontend) OK (INP + font + hero contrast)
 ---
 ## INP + Hero Logo (Feb 02, 2026)
@@ -275,7 +306,7 @@
 - [x] Add modal-based rejection flow with required note and inline status updates
 - [x] Render document status badges + actions with error handling
 - [x] Show document chain when replacements exist
-- [x] Add dashboard counters for Ã¢â‚¬Å“da rivedereÃ¢â‚¬Â and Ã¢â‚¬Å“rigettatiÃ¢â‚¬Â
+- [x] Add dashboard counters for ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œda rivedereÃƒÂ¢Ã¢â€šÂ¬Ã‚Â and ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œrigettatiÃƒÂ¢Ã¢â€šÂ¬Ã‚Â
 - [x] Update review section with how to test locally
 ---
 ## Socio Dashboard Documenti (Feb 02, 2026)
@@ -302,7 +333,7 @@
 - [x] Add tests for filters + permissions
 - [x] Update review section with local test steps
 ---
-## Audit Log & AttivitÃƒÆ’Ã‚Â  Socio (Feb 02, 2026)
+## Audit Log & AttivitÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â  Socio (Feb 02, 2026)
 - [x] Add actor_member_id to audit logs and migrate schema
 - [x] Log sensitive actions for member create/update/access/doc review/resubmit/payment
 - [x] Surface recent activity in org-admin member detail (tab)
@@ -438,7 +469,7 @@ const result = await apiPost<Result>("/api/users", { name: "John" });
 - able member_payments already exists`
 - `no such column: deleted_at`
 ### Causa
-Il database era fuori sync con Alembic perchÃƒÂ©:
+Il database era fuori sync con Alembic perchÃƒÆ’Ã‚Â©:
 1. `init_db.py` usa `Base.metadata.create_all()` che crea tabelle bypassando Alembic
 2. Alcune migrazioni aggiungono colonne che potrebbero non esistere nel DB attuale
 3. Il DB locale potrebbe essere stato creato prima che le migrazioni fossero definite
@@ -447,10 +478,10 @@ Rese idempotenti le migrazioni problematiche:
 **`a1b2c3d4e5f6_add_member_payments.py`:**
 - Aggiunto check `_table_exists()` prima di `create_table`
 - Aggiunto check `_index_exists()` prima di `create_index`
-- Se la tabella esiste giÃƒÂ , la migrazione passa senza errori
+- Se la tabella esiste giÃƒÆ’Ã‚Â , la migrazione passa senza errori
 **`d3e4f5g6h7i8_add_performance_indexes.py`:**
 - Aggiunto `_safe_create_index()` che verifica:
-  - L'indice non esiste giÃƒÂ 
+  - L'indice non esiste giÃƒÆ’Ã‚Â 
   - Tutte le colonne referenziate esistono
 - Se le condizioni non sono soddisfatte, skip silenzioso
 ### Come Evitare in Futuro
@@ -628,7 +659,7 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 ## Spec (Dashboard socio - Fix flip tessera no specchio + logo fisso - Feb 07, 2026)
 - Obiettivo: correggere il flip 3D della tessera socio evitando qualsiasi testo specchiato durante/after rotate.
 - Vincoli UX: retro minimal (solo QR grande + dati essenziali), logo ASSONAM sempre fisso/non ruotato come overlay.
-- Accessibilit�: flip via click + Enter/Space, aria-label chiara, no text selection durante animazione.
+- Accessibilitï¿½: flip via click + Enter/Space, aria-label chiara, no text selection durante animazione.
 - Impatto: patch limitata a `MemberCardPreview` e CSS dedicato in `frontend/src/index.css`.
 ## Plan (Dashboard socio - Fix flip tessera)
 - [x] Rifattorizzare markup in struttura flip standard (`wrapper`/`inner`/`front`/`back`) con facce assolute e backface hidden.
@@ -700,7 +731,7 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 ### Frontend: robots.txt
 - `frontend/public/robots.txt`: Allow /, Disallow private routes, Sitemap reference
 ### Backend: sitemap.xml endpoint
-- `app/routes/public.py`: GET /sitemap.xml — static pages + active organizations from DB
+- `app/routes/public.py`: GET /sitemap.xml â€” static pages + active organizations from DB
 ### Frontend: Privacy page
 - `frontend/src/pages/Privacy.tsx`: GDPR-compliant privacy policy
 - Route added in App.tsx: `/privacy`
@@ -770,15 +801,15 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 ## Plan (Hero Particle Logo ASSONAM da SVG)
 - [x] Generare asset SVG dedicato del logo ASSONAM e usarlo come sorgente particellare.
 - [x] Implementare parser SVG (`SVGLoader`) e campionamento path in punti per `THREE.Points`.
-- [x] Riprogettare hero composition (copy a sinistra, logo a destra, overlay leggibilità).
+- [x] Riprogettare hero composition (copy a sinistra, logo a destra, overlay leggibilitÃ ).
 - [x] Limitare movimento a micro breathing/parallax e ridurre costi su mobile/low-power.
 - [x] Eseguire build e produrre screenshot desktop/mobile.
 ## Review (Hero Particle Logo ASSONAM da SVG)
 - [x] Asset sorgente creato: `frontend/public/logo-assonam-particle.svg`.
 - [x] Particle logo implementato in `PublicHeroThree.client.tsx` con `SVGLoader` + `PointsMaterial` (niente mesh casuali).
 - [x] Hero aggiornata con composizione copy-left/logo-right e fallback statico logo su low-power/no WebGL.
-- [x] Rimossa qualsiasi immagine underlay quando WebGL è attivo: in modalità WebGL il logo è solo `THREE.Points`.
-- [x] Sampling SVG reso più pulito con path vettoriali da contorni (no texture/no scanline overlay).
+- [x] Rimossa qualsiasi immagine underlay quando WebGL Ã¨ attivo: in modalitÃ  WebGL il logo Ã¨ solo `THREE.Points`.
+- [x] Sampling SVG reso piÃ¹ pulito con path vettoriali da contorni (no texture/no scanline overlay).
 - [x] Build frontend verificata: `npm.cmd run build` OK.
 - [x] Screenshot generati:
   - asks/screenshots/hero-desktop.png`
@@ -900,15 +931,15 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] F. Doc download: fetch+blob with error handling instead of `<a href>` nav
 - [x] G. Tests: 6 pytest tests all passing (statute-optional, inactive, all-orgs, request-id)
 ### Files Modified
-- `frontend/src/components/ErrorBoundary.tsx` � Full navigation, error logging
-- `frontend/src/lib/api.ts` � `joinOrganization` + `registerMember` error detail
-- `frontend/src/pages/Iscrizione.tsx` � Real error messages, non-blocking registration
-- `frontend/src/pages/org-admin/OrgAdminMemberDetail.tsx` � Fetch-based doc download
-- `app/routes/join.py` � Conditional statute, is_active check, request_id in errors
-- `app/middleware.py` � `RequestIdMiddleware` + `get_request_id`
-- `app/main.py` � Register `RequestIdMiddleware`
+- `frontend/src/components/ErrorBoundary.tsx` — Full navigation, error logging
+- `frontend/src/lib/api.ts` — `joinOrganization` + `registerMember` error detail
+- `frontend/src/pages/Iscrizione.tsx` — Real error messages, non-blocking registration
+- `frontend/src/pages/org-admin/OrgAdminMemberDetail.tsx` — Fetch-based doc download
+- `app/routes/join.py` — Conditional statute, is_active check, request_id in errors
+- `app/middleware.py` — `RequestIdMiddleware` + `get_request_id`
+- `app/main.py` — Register `RequestIdMiddleware`
 ### Files Created
-- ests/test_signup_fixes.py` � 6 tests covering all fixes
+- ests/test_signup_fixes.py` — 6 tests covering all fixes
 ### Deploy Notes
 - No DB migration needed
 - No new env vars
@@ -933,9 +964,9 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 ---
 ## Spec (Integrazione Issuer Tessera API - Feb 17, 2026)
 - Obiettivo: aggiungere endpoint sicuro per emissione socio attivo via gestionale esterno (es. Pienissimo), con idempotenza, assegnazione tessera da lotto, email HTML tessera + magic link accesso area riservata.
-- Vincoli: non alterare il flusso signup standard (resta pending/approvazione), usare API key scoped per associazione, evitare duplicati su retry (`external_customer_id`), mantenere compatibilit� codice esistente.
+- Vincoli: non alterare il flusso signup standard (resta pending/approvazione), usare API key scoped per associazione, evitare duplicati su retry (`external_customer_id`), mantenere compatibilità codice esistente.
 ## Plan (Integrazione Issuer Tessera API)
-- [x] Estendere modelli (`Member` + `IntegrationApiKey`) e retro-compatibilit� init DB.
+- [x] Estendere modelli (`Member` + `IntegrationApiKey`) e retro-compatibilità init DB.
 - [x] Aggiungere migrazione Alembic per nuovi campi, nuova tabella e vincolo univoco idempotenza.
 - [x] Implementare sicurezza integrazione (hash API key + dependency con scope e tracciamento `last_used_*`).
 - [x] Implementare endpoint `POST /api/integrations/members/issue` con idempotenza, attivazione socio e card verification URL.
@@ -952,19 +983,19 @@ python -m alembic current       # d3e4f5g6h7i8 (head)
 - [x] Email multipart HTML implementata (`send_email_html`) con template tessera, QR `qrserver` e CTA magic-link.
 - [x] Audit DB `integration_issue_member` registrato in `operation_logs`.
 - [x] Test eseguiti: `python -m pytest tests\\test_integration_issue_member.py tests\\test_email_flows.py tests\\test_card_assignment.py` -> **22 passed**.
-- [x] Nota migrazioni legacy: `python -m alembic upgrade head` resta bloccato da una migration storica preesistente (`5f60c30665a2`, table `member_documents` gi� esistente), non da questa implementazione.
+- [x] Nota migrazioni legacy: `python -m alembic upgrade head` resta bloccato da una migration storica preesistente (`5f60c30665a2`, table `member_documents` già esistente), non da questa implementazione.
 ---
 ## Spec (Hotfix Alembic 5f60 Idempotenza - Feb 17, 2026)
-- Obiettivo: rendere idempotente la migration storica `5f60c30665a2` (`member_documents`) per evitare crash su `alembic upgrade head` quando la tabella esiste gi�.
-- Vincoli: usare SQLAlchemy inspector (`sa.inspect(op.get_bind())`), saltare creazione tabella/indici/constraint se gi� presenti.
+- Obiettivo: rendere idempotente la migration storica `5f60c30665a2` (`member_documents`) per evitare crash su `alembic upgrade head` quando la tabella esiste già.
+- Vincoli: usare SQLAlchemy inspector (`sa.inspect(op.get_bind())`), saltare creazione tabella/indici/constraint se già presenti.
 ## Plan (Hotfix Alembic 5f60 Idempotenza)
 - [x] Aggiornare `upgrade()` con check esistenza tabella `member_documents`.
 - [x] Proteggere creazione indice della migration con check `index exists`.
 - [x] Rendere `downgrade()` safe (drop solo se tabella/indice esistono).
-- [x] Verificare `alembic upgrade head` su DB vuoto e su DB con tabella gi� presente.
+- [x] Verificare `alembic upgrade head` su DB vuoto e su DB con tabella già presente.
 ## Review (Hotfix Alembic 5f60 Idempotenza)
 - [x] Modificata migration `alembic/versions/5f60c30665a2_add_member_documents_table.py` con helper `_table_exists` e `_index_exists`.
-- [x] `upgrade()` ora ritorna subito se `member_documents` � gi� presente.
+- [x] `upgrade()` ora ritorna subito se `member_documents` è già presente.
 - [x] `downgrade()` ora evita drop su oggetti mancanti.
 - [x] Validazione eseguita:
   - `DATABASE_URL=sqlite:///tmp_alembic_empty.db python -m alembic upgrade head` -> OK.
@@ -1071,7 +1102,7 @@ pm --prefix frontend run build -> OK
 - [ ] Introdurre utility centrale `is_member_active` / `is_card_active` (+ reason code) e riusarla in auth + card status.
 - [ ] Hardening auth member (`/api/auth/login`, `/member/auth`, `get_current_member`, whoami): negare accesso/token a account non attivo con 403 coerente.
 - [ ] Rifattorizzare `GET /api/cards/verify/{token}` con content negotiation HTML/JSON, pagina mobile-readable e motivo non attiva.
-- [ ] Allineare soft-delete socio e query/liste admin affinch� tessera eliminata non risulti mai attiva.
+- [ ] Allineare soft-delete socio e query/liste admin affinché tessera eliminata non risulti mai attiva.
 - [ ] Aggiornare/aggiungere test regressione (QR verify JSON+HTML, delete->non attiva, login negato, lista attivi esclusa) ed eseguire test mirati.
 ## Review (Fix coerenza socio/tessera/accesso/QR)
 ## Execution Update (Fix coerenza socio/tessera/accesso/QR - Feb 19, 2026)
@@ -1242,13 +1273,13 @@ pm --prefix frontend run build -> OK
 
 ## Review (Cleanup soci eliminati multi-associazione - Feb 19, 2026)
 - `python -m pytest tests/test_deleted_member_cleanup_multiorg.py tests/test_signup_fixes.py tests/test_member_active_state_regression.py -q` -> **10 passed**
-- Esito: i soci soft-deleted legacy vengono bonificati (globale + runtime), la ri-iscrizione per associazione non lascia conflitti residui, e i conflitti legacy non esplodono pi� in 500 nel submit iscrizione.
+- Esito: i soci soft-deleted legacy vengono bonificati (globale + runtime), la ri-iscrizione per associazione non lascia conflitti residui, e i conflitti legacy non esplodono più in 500 nel submit iscrizione.
 
 
 
 
 - [x] Esteso fix con hard purge fisico dei soci `deleted_at` (cleanup FK) in `app/services/member_cleanup.py`, invocato in startup (`init_db.py`) e pre-check join/register.
-- [x] Verifica locale purge on-demand: `purged_deleted_members=0` (DB locale gi� pulito).
+- [x] Verifica locale purge on-demand: `purged_deleted_members=0` (DB locale già pulito).
 - `python -m pytest tests/test_deleted_member_cleanup_multiorg.py tests/test_signup_fixes.py tests/test_member_active_state_regression.py -q` -> **10 passed** (post hard-purge update).
 
 ---
@@ -1345,7 +1376,7 @@ pm --prefix frontend run build -> OK
 
 ---
 ## Spec (Allocazione tessere multi-lotto annuale + concurrency-safe - Feb 21, 2026)
-- Obiettivo: supportare pi� lotti attivi nello stesso anno per associazione e garantire emissione continua senza blocco quando un lotto termina.
+- Obiettivo: supportare più lotti attivi nello stesso anno per associazione e garantire emissione continua senza blocco quando un lotto termina.
 - Vincoli: funzione unica `allocate_next_card(org_id, year)` con lock transazionale, fallback automatico tra lotti disponibili, errore chiaro `card_range_exhausted` (409), integrazione su flussi manuali + ingest Pienissimo.
 
 ## Plan (Allocazione tessere multi-lotto annuale + concurrency-safe)
@@ -1359,7 +1390,7 @@ pm --prefix frontend run build -> OK
 
 ## Review (Allocazione tessere multi-lotto annuale + concurrency-safe - Feb 21, 2026)
 - Nuovo servizio: `app/services/card_allocation.py` con lock transazionale (`pg_advisory_xact_lock` su PostgreSQL, `BEGIN IMMEDIATE` su SQLite), filtro lotti per `org_id/year/released_at`, fallback automatico e logging `batch_exhausted_fallback` + `card_allocated`.
-- Compatibilit�: wrapper legacy `app/services/card.py` ora delega a `allocate_next_card(...)`.
+- Compatibilità: wrapper legacy `app/services/card.py` ora delega a `allocate_next_card(...)`.
 - Emissione aggiornata nei flussi: `app/routes/join.py`, `app/routes/org_admin.py`, `app/routes/admin.py`, `app/services/integration_issuer.py`.
 - Supporto anno lotto: `CardBatch.year` in `app/models.py`, migrazione `alembic/versions/n5o6p7q8r9s0_add_card_batch_year.py`, fallback bootstrap in `init_db.py`.
 - KPI/sommari lotti super-admin: `app/routes/super_admin.py` usa conteggi reali su membri per `assigned/remaining` (non `next_no-start_no`) e supporta `year` nei payload lotto.
@@ -1430,7 +1461,7 @@ pm --prefix frontend run build -> OK
 - `npm --prefix frontend run build` -> **OK**
 - `python -m alembic upgrade head` -> **OK** (migrazione `p6q7r8s9t0u1`)
 - `python -m pytest tests\\test_member_documents_dashboard.py::test_member_can_fetch_and_download_organization_statute tests\\test_signup_fixes.py::test_web_register_sets_signup_source_assonam_form tests\\test_document_workflow.py::test_document_approval_sends_card_email_once_for_active_member tests\\test_ingest_pienissimo.py::test_ingest_retry_100x_is_idempotent_and_sends_email_once tests\\test_integration_issue_member.py::test_issue_member_captures_html_email_with_verification_url -q` -> **5 passed**
-- Nota compatibilit� locale/test DB: aggiunto fallback bootstrap in `init_db.py` per colonna `members.card_delivered_at` e normalizzazione `signup_source` su schema legacy non ancora migrato.
+- Nota compatibilità locale/test DB: aggiunto fallback bootstrap in `init_db.py` per colonna `members.card_delivered_at` e normalizzazione `signup_source` su schema legacy non ancora migrato.
 
 ---
 ## Spec (Google Wallet Android per tessera socio + credenziali sicure - Feb 23, 2026)
@@ -1466,21 +1497,21 @@ pm --prefix frontend run build -> OK
   - `npm --prefix frontend run build` -> **OK**
 - Nota operativa: non ho usato il file JSON reale indicato nel prompt (`C:\\Users\\edoar\\Downloads\\...json`); va spostato in `secrets/` o montato come secret in produzione per evitare leak/commit accidentali.
 - Live test (credenziali reali + issuer `3388000000023089481`): endpoint `POST /api/me/wallet/google/save-link` verificato in locale su DB temporaneo -> **200 OK**, `classId` e `objectId` persistiti, save URL generato.
-- Fix runtime emerso dal live test: Google Wallet rifiutava `logo.sourceUri` con URL locale (`http://localhost:8000/...`) in create object (400). Aggiornato `app/services/google_wallet.py` per omettere il logo quando l'URL non � pubblico/raggiungibile (localhost/127.0.0.1).
+- Fix runtime emerso dal live test: Google Wallet rifiutava `logo.sourceUri` con URL locale (`http://localhost:8000/...`) in create object (400). Aggiornato `app/services/google_wallet.py` per omettere il logo quando l'URL non è pubblico/raggiungibile (localhost/127.0.0.1).
 
 ---
 ## Spec (Email tessera pronta + CTA Wallet handoff + statuto + badge Pienissimo + test - Feb 23, 2026)
 - Obiettivo: completare il flusso end-to-end post-verifica socio con email aggiornata (accesso area riservata + CTA Google Wallet Android + link tessera/statuto), aggiungere pagina frontend `/wallet/google/add`, mantenere/finire statuto area socio e fix badge Pienissimo, con test minimi backend.
 - Vincoli: riuso endpoint `/api/me/wallet/google/save-link` e flussi auth/magic-link esistenti; nessuna nuova auth; nessun secret nei commit; nessuna regressione su dashboard/documenti/admin.
-- Nota: campo origine iscrizione `signup_source` e statuto area socio sono gi� presenti da task precedenti, quindi questo task completa alias/coverage/test e rifiniture UI/email.
+- Nota: campo origine iscrizione `signup_source` e statuto area socio sono già presenti da task precedenti, quindi questo task completa alias/coverage/test e rifiniture UI/email.
 
 ## Plan (Email tessera pronta + CTA Wallet handoff + statuto + badge Pienissimo + test)
-- [ ] Ricognizione finale dei punti gi� implementati vs gap (email template/call-site, route wallet handoff, alias statuto, test coverage).
+- [ ] Ricognizione finale dei punti già implementati vs gap (email template/call-site, route wallet handoff, alias statuto, test coverage).
 - [ ] Backend: arricchire email tessera pronta (CTA wallet handoff, area riservata, vedi tessera, statuto) e allineare copy "email"; riusare trigger idempotente esistente.
 - [ ] Backend: aggiungere alias endpoint sicuro `GET /api/me/documents/statute` (download) e, se necessario, rifinire source admin (`signup_source=admin`).
 - [ ] Frontend: nuova pagina pubblica `/wallet/google/add` con auto-redirect se autenticato, CTA login/magic-link se non autenticato, messaggi UX chiari; registrare route in `App.tsx`.
 - [ ] Test: aggiornare/aggiungere pytest per email content + alias statuto + esposizione `signup_source` in lista org-admin + mantenere save-link mock test; build frontend e pytest mirati.
-- [ ] Commit ordinati + preparazione descrizione PR (se il push/PR remoto non � disponibile, produrre testo PR pronto).
+- [ ] Commit ordinati + preparazione descrizione PR (se il push/PR remoto non è disponibile, produrre testo PR pronto).
 
 ## Review (Email tessera pronta + CTA Wallet handoff + statuto + badge Pienissimo + test - Feb 23, 2026)
 - [ ] Da compilare a fine implementazione.
@@ -1488,8 +1519,8 @@ pm --prefix frontend run build -> OK
 - Email essera pronta`: template `app/email_templates/member_card_email.py` esteso con CTA `Aggiungi a Google Wallet (Android)`, link area riservata, `Vedi la tua tessera`, `Scarica lo statuto`, copy aggiornato con "email" e nota iPhone.
 - Trigger idempotente riusato (`card_delivered_at`) senza nuovi campi DB; call-site aggiornati in `app/services/member_card_delivery.py` e `app/services/integration_issuer.py` per passare URL frontend/handoff.
 - Nuova pagina frontend pubblica `frontend/src/pages/WalletGoogleAdd.tsx` + route `/wallet/google/add` in `frontend/src/App.tsx`: auto-call `POST /api/me/wallet/google/save-link`, redirect a Google Wallet se auth, altrimenti CTA login + invio magic-link via `/api/auth/login` (password vuota).
-- Backend statuto: alias download sicuro `GET /api/me/documents/statute` aggiunto in `app/routes/member.py` (riusa il controllo org del socio gi� esistente).
-- Origine iscrizione admin: `create_org_member` ora imposta `signup_source='admin'` (`SignupSource.ADMIN`) in `app/routes/org_admin.py`; nessuna migration nuova richiesta perch� il campo `signup_source` esiste gi� e la colonna � TEXT.
+- Backend statuto: alias download sicuro `GET /api/me/documents/statute` aggiunto in `app/routes/member.py` (riusa il controllo org del socio già esistente).
+- Origine iscrizione admin: `create_org_member` ora imposta `signup_source='admin'` (`SignupSource.ADMIN`) in `app/routes/org_admin.py`; nessuna migration nuova richiesta perché il campo `signup_source` esiste già e la colonna è TEXT.
 - Test backend aggiornati/aggiunti:
   - contenuto email post-verifica include CTA Wallet + link documenti/statuto + copy "email"
   - email integrazione include CTA Wallet handoff
@@ -1497,7 +1528,7 @@ pm --prefix frontend run build -> OK
   - scoping statuto per sessione/org (A vede A, B vede B)
   - org-admin manual create => `signup_source=admin`
   - lista org-admin espone `signup_source` (admin/pienissimo/web)
-- FE test automatici non aggiunti: nel progetto non � presente setup Vitest/Playwright; verificata build Vite/TS invece.
+- FE test automatici non aggiunti: nel progetto non è presente setup Vitest/Playwright; verificata build Vite/TS invece.
 - Comandi eseguiti:
   - `python -m py_compile app\\email_templates\\member_card_email.py app\\services\\member_card_delivery.py app\\services\\integration_issuer.py app\\routes\\member.py app\\routes\\org_admin.py app\\models.py` -> **OK**
   - `npm --prefix frontend run build` -> **OK**
@@ -1595,7 +1626,7 @@ pm --prefix frontend run build -> OK
 ---
 ## Spec (Safe production migration SQLite -> PostgreSQL with rollback - Feb 25, 2026)
 - Obiettivo: aggiungere supporto PostgreSQL via Docker Compose mantenendo SQLite come fallback immediato tramite `DATABASE_URL`, senza cancellare file dati e senza migrazioni distruttive automatiche.
-- Vincoli: compatibilit� runtime con SQLite e Postgres, documentare backup/pgloader/rollback/verifica, nessun `DROP` automatico, nessuna rimozione supporto SQLite.
+- Vincoli: compatibilità runtime con SQLite e Postgres, documentare backup/pgloader/rollback/verifica, nessun `DROP` automatico, nessuna rimozione supporto SQLite.
 
 ## Plan (Safe production migration SQLite -> PostgreSQL with rollback)
 - [ ] Ricognizione config DB/SQLAlchemy/Alembic e Docker Compose per identificare punti SQLite-specifici che romperebbero Postgres.
@@ -1825,7 +1856,7 @@ pm --prefix frontend run build -> OK
 ## Review Update (Remotion pipeline optimization: instant base video + async personalized render - Mar 05, 2026)
 - Base video pre-renderizzato disponibile in `frontend/public/videos/welcome_base.mp4` (template `base`, testo finale: `REGISTRATION RECEIVED` + `ASSOCIATION CONNECTING TO NETWORK`).
 - Frontend `/affiliazione` ora mostra immediatamente il video base fullscreen dopo submit e sovrappone il nome associazione via overlay HTML stile HUD (`Orbitron`), senza attendere il render personalizzato.
-- Overlay post-video mostra pannello finale con copy richiesto: `Richiesta ricevuta` + `La tua affiliazione � ora in revisione.` e CTA `Torna alla homepage`.
+- Overlay post-video mostra pannello finale con copy richiesto: `Richiesta ricevuta` + `La tua affiliazione è ora in revisione.` e CTA `Torna alla homepage`.
 - Pipeline backend render personalizzato resa non bloccante: su submit si enqueua il job; rimosso trigger sync render dal submit endpoint.
 - Worker render personalizzato ottimizzato: output stabile `data/videos/welcome/{application_id}.mp4`; skip automatico se file gia presente; URL servito via `/generated-videos/welcome/{application_id}.mp4`.
 - RenderHud ottimizzato: transcode finale 1280x720 @ 24fps, CRF 23, preset `veryfast`; se NVENC disponibile usa `h264_nvenc` preset `p5`, con fallback automatico a `libx264`.
@@ -1843,7 +1874,7 @@ pm --prefix frontend run build -> OK
 - Obiettivo: aumentare conversione del wizard `/affiliazione` introducendo schermata iniziale chiara pre-compilazione e progress bar step-by-step semplificata.
 - Requisiti: intro con titolo/sottotitolo, checklist documenti, testo salvataggio bozza, trust badges, CTA `Inizia Affiliazione` che avvia step 1.
 - Requisiti wizard: progress bar top con 5 step (`Associazione`, `Cariche`, `Documenti`, `Pagamento`, `Invio`) con highlight step corrente.
-- Vincoli: mobile first, layout leggibile, nessuna regressione del flusso submit/video gi� implementato.
+- Vincoli: mobile first, layout leggibile, nessuna regressione del flusso submit/video già implementato.
 
 ## Plan (Affiliazione wizard UX conversion intro screen + progress bar)
 - [x] Aggiungere stato intro screen nel page component e CTA `Inizia Affiliazione` che attiva il wizard.
@@ -1944,7 +1975,7 @@ pm --prefix frontend run build -> OK
 - Wizard: se presente `ref`, mostrare `Invito da {organization_name}` e agganciare il referrer alla bozza.
 - Stato referral: `pending` su draft, `approved` su approvazione super-admin, `rewarded` dopo spin wheel.
 - Org Admin dashboard: card con link referral, azioni copy/share e statistiche (`Inviti inviati`, `Associazioni affiliate`, `Bonus ottenuti`).
-- Reward wheel: spin solo su referral `approved`, premio chiaro con timing di erogazione, tracciamento e visibilit� per super admin.
+- Reward wheel: spin solo su referral `approved`, premio chiaro con timing di erogazione, tracciamento e visibilità per super admin.
 - Vincolo: nessuna regressione sui flussi esistenti di wizard/pagamenti/approvazione.
 
 ## Plan (Association referral system + reward wheel)
@@ -1998,7 +2029,7 @@ pm --prefix frontend run build -> OK
 
 ## Review Update (Stripe optional + feature flags + graceful degradation affiliazione - Mar 05, 2026)
 - Backend config (`app/config.py`): introdotti `AFFILIAZIONE_ENABLED`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`, `STRIPE_PUBLISHABLE_KEY`, helper `is_stripe_configured()` e property `STRIPE_ENABLED` (computed, no crash).
-- Startup safety (`app/main.py`): warning esplicito quando Stripe � disabilitato; nessun raise per env mancanti.
+- Startup safety (`app/main.py`): warning esplicito quando Stripe è disabilitato; nessun raise per env mancanti.
 - Feature flag backend affiliazione: public router affiliazione ora gated via dependency `ensure_public_affiliation_enabled` (`404` coerente quando flag off), admin/super-admin invariati.
 - Stripe hardening (`app/routes/affiliation.py`):
 - checkout Stripe ritorna `503` con messaggio `Stripe non configurato. Usa Bonifico o Contanti.` quando disabled;
@@ -2012,8 +2043,8 @@ pm --prefix frontend run build -> OK
 - route `/affiliazione` e `/invito/:slug` redirect a home quando flag off (`App.tsx`).
 - Wizard pagamento (`frontend/src/pages/Affiliazione.tsx`):
 - fetch capabilities (`/api/capabilities`);
-- opzione Stripe disabilitata con copy `Carta (Stripe) � presto disponibile`;
-- default automatico a Bonifico quando Stripe non � disponibile;
+- opzione Stripe disabilitata con copy `Carta (Stripe) — presto disponibile`;
+- default automatico a Bonifico quando Stripe non è disponibile;
 - auto-switch da Stripe a Bonifico su bozze legacy con toast `Pagamento con carta non disponibile al momento. Abbiamo selezionato Bonifico.`;
 - nota informativa: `Puoi completare l'invio e pagare con bonifico o contanti. Attivazione dopo verifica.`.
 - Deploy/docs:
@@ -2032,7 +2063,7 @@ pm --prefix frontend run build -> OK
 - Vincolo: path Dockerfile referenziato in compose deve esistere in repo checkout del server.
 - Strategia: usare compose profile `video-worker` (default off) + flag env `AFFILIATION_VIDEO_WORKER_ENABLED` per abilitazione esplicita.
 - Workflow CI/CD: aggiungere sanity check `test -f Dockerfile.affiliation-video-worker` per fallire presto con errore chiaro.
-- Documentazione: aggiornare README/ENV con nuova flag e modalit� di attivazione worker.
+- Documentazione: aggiornare README/ENV con nuova flag e modalità di attivazione worker.
 
 ## Plan (Fix deploy failure missing Dockerfile.affiliation-video-worker)
 - [x] Verificare presenza Dockerfile worker e path attuale in `docker-compose.yml`.
@@ -2053,7 +2084,7 @@ pm --prefix frontend run build -> OK
 - Workflow deploy Hetzner aggiornato (`.github/workflows/deploy-hetzner.yml`):
 - step `actions/checkout` + sanity check `test -f Dockerfile.affiliation-video-worker`;
 - `.env` runtime include `AFFILIATION_VIDEO_WORKER_ENABLED`;
-- profile `video-worker` abilitato solo se secret/flag � `true`.
+- profile `video-worker` abilitato solo se secret/flag è `true`.
 - Deploy safety: con flag false il comando standard `docker compose up -d --build` non include il worker profile, quindi il deploy non viene bloccato dal worker opzionale.
 - Documentazione aggiornata:
 - `ENV_REQUIRED.md` con variabile `AFFILIATION_VIDEO_WORKER_ENABLED`;
@@ -2393,7 +2424,7 @@ pm --prefix frontend run build -> OK
 - Aggiunto cleanup pre-`up`:
   - `docker compose ... rm -f -s web email-worker low-cards-worker affiliation-video-worker || true`
   - rimozione container stale per pattern nome (`_app-web-1`, `_app-email-worker-1`, `_app-low-cards-worker-1`, `_app-affiliation-video-worker-1`).
-- Effetto atteso: niente pi� collisioni `container name ... already in use` in fase Recreate/Up.
+- Effetto atteso: niente più collisioni `container name ... already in use` in fase Recreate/Up.
 
 ## Spec (Fix Remotion 404 welcome_hud_audio.wav - Mar 05, 2026)
 - Obiettivo: evitare crash render HUD quando Remotion non trova `welcome_hud_audio.wav` su static server (`/public/...` 404).
@@ -2560,19 +2591,19 @@ pm --prefix frontend run build -> OK
 ## Review (Security hardening end-to-end - Mar 06, 2026)
 - Backend hardening completato:
   - `app/main.py` ora blocca startup non-local con `SECRET_KEY` insicuro e sostituisce il mount generico `/uploads` con un allowlist pubblico;
-  - `app/bootstrap.py` non crea pi� un super-admin con credenziali di default fuori ambiente locale;
+  - `app/bootstrap.py` non crea più un super-admin con credenziali di default fuori ambiente locale;
   - `app/middleware.py` accetta `X-Forwarded-For` solo da peer trusted (loopback/private), riducendo spoofing su rate limit e audit;
   - `app/routes/admin.py` e `app/routes/super_admin.py` limitano i login a `SUPER_ADMIN` attivi e non cancellati;
-  - `app/routes/whatsapp.py` valida la firma Twilio quando `TWILIO_AUTH_TOKEN` � configurato.
+  - `app/routes/whatsapp.py` valida la firma Twilio quando `TWILIO_AUTH_TOKEN` è configurato.
 - Esposizione file/token ridotta senza rompere i flussi esistenti:
-  - nuovo handler `app/public_uploads.py` consente solo asset pubblici gi� necessari (`/uploads/org/<id>/wallet/*` e `/uploads/affiliation-videos/*`);
-  - `app/routes/affiliation.py` non restituisce pi� `public_token`/`resume_url` nelle view super-admin e introduce `payment_config.reference_code`;
+  - nuovo handler `app/public_uploads.py` consente solo asset pubblici già necessari (`/uploads/org/<id>/wallet/*` e `/uploads/affiliation-videos/*`);
+  - `app/routes/affiliation.py` non restituisce più `public_token`/`resume_url` nelle view super-admin e introduce `payment_config.reference_code`;
   - `frontend/src/pages/Affiliazione.tsx` mostra il riferimento pagamento al posto del token completo;
-  - `frontend/src/pages/super-admin/SuperAdminAffiliations.tsx` non mostra pi� il token pubblico.
+  - `frontend/src/pages/super-admin/SuperAdminAffiliations.tsx` non mostra più il token pubblico.
 - Sweep frontend:
   - nessuna chiave API/Twilio/OpenAI/Google Wallet hardcodata o mostrata nel bundle sorgente `frontend/src`;
   - restano solo token funzionali nei flussi URL-based necessari (magic link, resume draft, card verification);
-  - resta visibile la raw integration key one-time nel pannello super-admin dedicato, perch� fa parte del flusso intenzionale di provisioning privilegiato e non di esposizione accidentale.
+  - resta visibile la raw integration key one-time nel pannello super-admin dedicato, perché fa parte del flusso intenzionale di provisioning privilegiato e non di esposizione accidentale.
 - Verifiche eseguite:
   - `python -m pytest -q tests/test_security_hardening_audit.py tests/test_affiliation_flow.py` -> `18 passed`
   - `npm --prefix frontend run build` -> OK
@@ -2602,7 +2633,7 @@ pm --prefix frontend run build -> OK
   - API ingest/Pienissimo che restituisce `card_verification_token`, `card_download_url` e payload thank-you -> OK (`tests/test_ingest_pienissimo.py`);
   - route SPA `/pienissimo/thank-you/:orgSlug` -> OK (`tests/test_spa_static_files.py`);
   - bot WhatsApp e parsing form/json -> OK (`tests/test_whatsapp_bot.py`);
-  - blocco richieste WhatsApp con firma invalida quando Twilio auth token � configurato -> OK (`tests/test_security_hardening_audit.py::test_whatsapp_webhook_rejects_invalid_signature_when_configured`).
+  - blocco richieste WhatsApp con firma invalida quando Twilio auth token è configurato -> OK (`tests/test_security_hardening_audit.py::test_whatsapp_webhook_rejects_invalid_signature_when_configured`).
 - Limiti residui:
   - nessun test live contro Twilio reale o browser manuale sulla pagina thank-you; la verifica resta comunque buona lato backend + route SPA + test funzionali esistenti.
 
@@ -2675,30 +2706,30 @@ pm --prefix frontend run build -> OK
 - Sostituiti i tweak incrementali in `rem` con widening percentuale diretto del contenitore (`120%` con compensazione simmetrica), lasciando invariati tessera e contenuto interno.
 
 ## Review Addendum (Dashboard shell width correction - Mar 06, 2026)
-- Il widening sul solo wrapper figlio non era percepibile perch� il vero vincolo era il `main` del dashboard.
+- Il widening sul solo wrapper figlio non era percepibile perché il vero vincolo era il `main` del dashboard.
 - Corretto il punto giusto: il shell del dashboard member ora e piu largo (`max-w-[90rem]`) e la sezione tessera torna a larghezza normale, cosi il box risulta davvero piu ampio a schermo senza hack di overflow.
 
 ## Review Addendum (Dashboard shell width correction v2 - Mar 06, 2026)
 - Il valore `90rem` restava ancora insufficiente rispetto allo spazio richiesto dalla sezione tessera.
 - Il shell del dashboard member e stato ampliato ulteriormente a `max-w-[100rem]`, mantenendo invariati contenuto interno e card.
 
-## Spec (Super Admin / Org Admin documenti e contabilit� - Mar 06, 2026)
+## Spec (Super Admin / Org Admin documenti e contabilità - Mar 06, 2026)
 - Obiettivo: introdurre il modulo documenti condivisi tra Super Admin e Org Admin con separazione `general` / `accounting`, senza notifiche o email automatiche in questa fase.
 - Scope:
   - flag persistente `accounting_enabled` sull'associazione;
-  - upload documento master + assegnazioni a una/molte/tutte associazioni o sole associazioni con contabilit� attiva;
+  - upload documento master + assegnazioni a una/molte/tutte associazioni o sole associazioni con contabilità attiva;
   - archivio invii lato Super Admin;
-  - tab `Documenti` e `Contabilit�` lato Org Admin con filtri coerenti col flag e con i permessi;
+  - tab `Documenti` e `Contabilità` lato Org Admin con filtri coerenti col flag e con i permessi;
   - migrazioni, permessi backend, API frontend e UI base coerente con le dashboard esistenti.
 
-## Plan (Super Admin / Org Admin documenti e contabilit� - Mar 06, 2026)
-- [x] Mappare modelli, storage file, route Super Admin / Org Admin e pattern gi� esistenti per documenti/upload.
+## Plan (Super Admin / Org Admin documenti e contabilità - Mar 06, 2026)
+- [x] Mappare modelli, storage file, route Super Admin / Org Admin e pattern già esistenti per documenti/upload.
 - [x] Aggiungere schema DB + migrazione per `accounting_enabled`, documenti master e assegnazioni.
 - [x] Implementare endpoint/backend con validazione permessi e destinatari accounting.
 - [x] Integrare frontend Super Admin e Org Admin con tab, form upload e liste documenti.
 - [x] Verificare con test/build mirati e documentare l'esito.
 
-## Review (Super Admin / Org Admin documenti e contabilit� - Mar 06, 2026)
+## Review (Super Admin / Org Admin documenti e contabilità - Mar 06, 2026)
 - Backend:
   - aggiunto `organizations.accounting_enabled` con default `false`;
   - introdotte le tabelle `organization_shared_documents` e `organization_shared_document_assignments`;
@@ -2708,8 +2739,8 @@ pm --prefix frontend run build -> OK
   - bootstrap dev/test reso resiliente su DB SQLite legacy tramite `init_db.py` (nuova colonna + nuove tabelle idempotenti).
 - Frontend:
   - nuova sezione `Documenti` nel Super Admin con form upload + archivio invii;
-  - toggle `Contabilit� attiva` nel modal gestione associazione Super Admin;
-  - nuove tab Org Admin `Documenti` e `Contabilit�` con gating sul flag `accounting_enabled`;
+  - toggle `Contabilità attiva` nel modal gestione associazione Super Admin;
+  - nuove tab Org Admin `Documenti` e `Contabilità` con gating sul flag `accounting_enabled`;
   - navbar Org Admin resa dinamica senza toccare i flussi auth esistenti.
 - Verifiche:
   - `python -m pytest -q tests/test_org_shared_documents.py` -> `4 passed`
@@ -2726,7 +2757,7 @@ pm --prefix frontend run build -> OK
 - Scope:
   - campanellina notifiche in header Org Admin con badge unread e pannello lista;
   - notifiche per documento `general`, documento `accounting` e alert tessere < 50;
-  - persistenza DB notifiche con mark-as-read e routing verso `Documenti`, `Contabilit�`, `Tessere`;
+  - persistenza DB notifiche con mark-as-read e routing verso `Documenti`, `Contabilità`, `Tessere`;
   - invio email asincrono a tutti gli Org Admin attivi dell'associazione;
   - anti-duplicazione robusta del low-stock con reset quando si torna sopra soglia.
 
@@ -2791,7 +2822,7 @@ pm --prefix frontend run build -> OK
   - desktop invariato con sidebar attuale.
 - Dashboard Org Admin:
   - bottom nav mobile con `Panoramica`, `Soci`, `Tessere`, `Documenti`, `Altro`;
-  - nello sheet `Altro`: `Inviti`, `Associazione`, `Contabilit�` solo se abilitata, `Rivedi guida`, `Torna al sito`, `Esci`;
+  - nello sheet `Altro`: `Inviti`, `Associazione`, `Contabilità` solo se abilitata, `Rivedi guida`, `Torna al sito`, `Esci`;
   - top nav desktop mantenuta e nascosta sotto `md`.
 - Dashboard Super Admin:
   - bottom nav mobile con `Associazioni`, `Affiliazioni`, `Documenti`, `Altro`;
@@ -2811,12 +2842,12 @@ pm --prefix frontend run build -> OK
 ## Review Addendum (Low-cards threshold crossing rule - Mar 07, 2026)
 - Root cause: il job low-cards considerava solo `remaining < 50`, quindi inviava alert anche alle associazioni che non avevano mai avuto almeno 50 tessere disponibili e risultavano da subito a `0` o comunque sotto soglia.
 - Fix:
-  - introdotto in [card_inventory.py](/C:/Users/edoar/OneDrive/Desktop/CODE/iscrizioni%20clienti/Iscrizioni_clienti/app/services/card_inventory.py) un helper bulk `get_total_cards_by_org(...)` per leggere la capacit� totale provisionata dell'anno corrente;
-  - il job in [low_cards_alerts.py](/C:/Users/edoar/OneDrive/Desktop/CODE/iscrizioni%20clienti/Iscrizioni_clienti/app/services/low_cards_alerts.py) ora scarta gli org con `total_capacity < 50`, quindi l'alert parte solo se l'associazione � stata davvero almeno a soglia e poi � scesa sotto;
-  - mantenuto il reset gi� introdotto quando si torna sopra soglia, cos� il nuovo invio pu� ripartire solo dopo un nuovo attraversamento reale.
+  - introdotto in [card_inventory.py](/C:/Users/edoar/OneDrive/Desktop/CODE/iscrizioni%20clienti/Iscrizioni_clienti/app/services/card_inventory.py) un helper bulk `get_total_cards_by_org(...)` per leggere la capacità totale provisionata dell'anno corrente;
+  - il job in [low_cards_alerts.py](/C:/Users/edoar/OneDrive/Desktop/CODE/iscrizioni%20clienti/Iscrizioni_clienti/app/services/low_cards_alerts.py) ora scarta gli org con `total_capacity < 50`, quindi l'alert parte solo se l'associazione è stata davvero almeno a soglia e poi è scesa sotto;
+  - mantenuto il reset già introdotto quando si torna sopra soglia, così il nuovo invio può ripartire solo dopo un nuovo attraversamento reale.
 - Test aggiornati:
   - i casi low-cards che devono alertare ora usano batch iniziali `>= 50`;
-  - aggiunta regressione esplicita per gli org sempre sotto soglia, che non devono creare n� notifiche n� email.
+  - aggiunta regressione esplicita per gli org sempre sotto soglia, che non devono creare né notifiche né email.
 - Verifiche:
   - `python -m pytest -q tests/test_low_cards_alert_job.py tests/test_org_admin_notifications.py tests/test_low_cards_scheduler.py tests/test_email_worker_low_cards_isolation.py` -> `17 passed`
   - `python -m py_compile app/services/card_inventory.py app/services/low_cards_alerts.py` -> OK
@@ -2861,9 +2892,9 @@ pm --prefix frontend run build -> OK
   - grep sui path dashboard `frontend/src/pages/super-admin`, `frontend/src/pages/org-admin`, `frontend/src/pages/dashboard` -> nessun `window.confirm`, `window.prompt`, `window.alert`, `location.reload`
 
 ## Review Addendum (Residual frontend reload/navigation cleanup - Mar 07, 2026)
-- `frontend/src/components/onboarding/ReviewGuideButton.tsx` non usa pi� `window.location.reload()`: dopo il reset backend/localStorage emette l'evento frontend `assonam:onboarding-reset`.
-- `frontend/src/components/onboarding/OnboardingTour.tsx` ascolta quell'evento e riavvia Joyride in-place, senza buttare gi� tutta la pagina.
-- `frontend/src/components/ErrorBoundary.tsx` non usa pi� reload o hard navigation alla home: ora resetta internamente lo stato di errore, remounta il subtree figli e, sul comando `Torna alla home`, usa `history.pushState + popstate` per tornare alla root in SPA.
+- `frontend/src/components/onboarding/ReviewGuideButton.tsx` non usa più `window.location.reload()`: dopo il reset backend/localStorage emette l'evento frontend `assonam:onboarding-reset`.
+- `frontend/src/components/onboarding/OnboardingTour.tsx` ascolta quell'evento e riavvia Joyride in-place, senza buttare giù tutta la pagina.
+- `frontend/src/components/ErrorBoundary.tsx` non usa più reload o hard navigation alla home: ora resetta internamente lo stato di errore, remounta il subtree figli e, sul comando `Torna alla home`, usa `history.pushState + popstate` per tornare alla root in SPA.
 - Verifica:
   - `npm --prefix frontend run build` -> OK
   - grep frontend globale: nessun `window.confirm`, `window.prompt`, `window.alert`, `window.location.reload`, `location.reload`; restano solo navigazioni intenzionali via `window.location.href/assign` su flussi wallet/join esterni.
@@ -2875,7 +2906,7 @@ pm --prefix frontend run build -> OK
   - manifest brandizzato ASSONAM con icone adeguate;
   - service worker conservativo con auto-update e caching limitato agli asset statici;
   - prompt/banner installazione leggero, dismissibile e non ripetitivo;
-  - nessun impatto ai flussi auth/dashboard oltre all'installabilit�.
+  - nessun impatto ai flussi auth/dashboard oltre all'installabilità.
 
 ## Plan (Installable PWA + install prompt - Mar 07, 2026)
 - [x] Ispezionare entrypoint frontend, layout pubblico e asset esistenti per agganciare PWA e prompt senza toccare le dashboard.
@@ -2891,13 +2922,13 @@ pm --prefix frontend run build -> OK
   - nessuna cache runtime dedicata a API autenticate, dashboard o sessioni.
 - Registrazione service worker:
   - `frontend/src/main.tsx` registra il SW solo in produzione e forza un check update al bootstrap.
-- Metadati / installabilit�:
+- Metadati / installabilità:
   - `frontend/index.html` aggiunge `theme-color`, apple touch icon e capability meta per mobile web app;
-  - aggiunte icone PWA dedicate in `frontend/public/` (`192`, `512`, `maskable`, `apple-touch-icon`) riusando il brand gi� presente.
+  - aggiunte icone PWA dedicate in `frontend/public/` (`192`, `512`, `maskable`, `apple-touch-icon`) riusando il brand già presente.
 - Prompt installazione:
   - nuovo componente `frontend/src/components/public/InstallAppPrompt.tsx`;
   - mostrato solo nel layout pubblico tramite `frontend/src/components/Layout.tsx`, quindi non invade le dashboard;
-  - usa `beforeinstallprompt` quando disponibile, fallback leggero su iOS Safari, dismiss persistente in `localStorage`, auto-hide se l'app � gi� installata.
+  - usa `beforeinstallprompt` quando disponibile, fallback leggero su iOS Safari, dismiss persistente in `localStorage`, auto-hide se l'app è già installata.
 - Verifiche:
   - `npm --prefix frontend run build` -> OK
   - output build generato: `frontend/dist/manifest.webmanifest`, `frontend/dist/sw.js`
@@ -3147,23 +3178,23 @@ pm --prefix frontend run build -> OK
 - Root cause: la route `POST /api/org-admin/bookings` usava un filtro legacy su `Room.deleted_at` e `RoomTable.deleted_at`, ma il layer `rooms/room_tables` non espone quei campi; il primo tentativo di prenotazione manuale con sala/tavolo generava quindi un `500`.
 - `app/routes/org_admin.py`: rimossa la dipendenza da `deleted_at` e allineata la validazione al modello reale (`association_id`, `room_id`); aggiunta anche la guardia esplicita `table_id` senza `room_id` con `400` chiaro.
 - `tests/test_forms_module.py`: nuovo test end-to-end per la creazione manuale da org-admin agenda, inclusa creazione sala/tavolo, `POST /api/org-admin/bookings` e verifica presenza della prenotazione nella lista agenda.
-- Verifica aggiuntiva confermata: il flusso automatico `form pubblico booking-enabled -> submission -> booking -> agenda org-admin` continua a funzionare ed � coperto dai test `test_booking_enabled_form_creates_booking_and_exposes_agenda` e `test_booking_rooms_tables_and_assignment_flow`.
+- Verifica aggiuntiva confermata: il flusso automatico `form pubblico booking-enabled -> submission -> booking -> agenda org-admin` continua a funzionare ed è coperto dai test `test_booking_enabled_form_creates_booking_and_exposes_agenda` e `test_booking_rooms_tables_and_assignment_flow`.
 - `frontend/src/pages/org-admin/OrgAdminBookings.tsx`: agenda, dettaglio booking e Mappa sala ora condividono lo stesso contesto (`room_id`, `booking_date`, `booking_time`, `table_id`); quando creo, seleziono o assegno una prenotazione, la mappa si sposta sulla sala corretta e evidenzia subito il tavolo collegato.
 - Verifica eseguita: `python -m pytest -q tests/test_forms_module.py -k "manual_booking_from_agenda or booking_rooms_tables_and_assignment_flow or booking_enabled_form_creates_booking_and_exposes_agenda"`.
 
 ## Public membership document requirement toggle (Mar 10, 2026)
 - [x] Individuare model/config associazione, endpoint super-admin e flow pubblico iscrizione socio
-- [x] Aggiungere flag per-associazione retrocompatibile con default `false` e propagarlo negli endpoint gi� esistenti
-- [x] Validare lato backend il documento nel submit pubblico solo quando il flag � attivo
+- [x] Aggiungere flag per-associazione retrocompatibile con default `false` e propagarlo negli endpoint già esistenti
+- [x] Validare lato backend il documento nel submit pubblico solo quando il flag è attivo
 - [x] Aggiornare UI super-admin e pagina pubblica iscrizione con messaggi/toggle coerenti
 - [x] Eseguire test/build mirati e documentare review finale
 
 ## Review (Public membership document requirement toggle - Mar 10, 2026)
-- `organizations`: aggiunto il flag `require_membership_document` con default `false` in [app/models.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\models.py) e migration dedicata [4a5b6c7d8e9f_add_require_membership_document_flag.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\alembic\versions\4a5b6c7d8e9f_add_require_membership_document_flag.py), pi� repair path SQLite in `init_db.py` e `app/scripts/repair_sqlite.py`.
-- Super admin: il flag � serializzato e patchabile negli endpoint gi� esistenti in [app/routes/super_admin.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\routes\super_admin.py); la UI lo espone nel modal associazione in [OrganizationManageModal.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\super-admin\components\OrganizationManageModal.tsx) con toggle e helper text dedicati.
-- Pubblico: [app/routes/public.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\routes\public.py) include il nuovo flag nella response `/api/organizations/{slug}`, cos� [Iscrizione.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\Iscrizione.tsx) pu� aggiornare copy, badge, label e blocco inline del passaggio 2 senza cambiare il flow quando il flag � spento.
-- Backend submit: [app/routes/join.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\routes\join.py) ora impone il documento solo se `require_membership_document=true`; se esiste gi� una submission pendente con documento identity, la resubmission resta valida anche senza ricaricarlo.
-- Retrocompatibilit� confermata: con toggle disattivo il documento resta facoltativo e il submit continua a funzionare come prima; il comportamento � coperto dai test `test_join_submit_without_identity_document_ok` e `test_join_submit_requires_identity_document_when_org_flag_enabled`.
+- `organizations`: aggiunto il flag `require_membership_document` con default `false` in [app/models.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\models.py) e migration dedicata [4a5b6c7d8e9f_add_require_membership_document_flag.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\alembic\versions\4a5b6c7d8e9f_add_require_membership_document_flag.py), più repair path SQLite in `init_db.py` e `app/scripts/repair_sqlite.py`.
+- Super admin: il flag è serializzato e patchabile negli endpoint già esistenti in [app/routes/super_admin.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\routes\super_admin.py); la UI lo espone nel modal associazione in [OrganizationManageModal.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\super-admin\components\OrganizationManageModal.tsx) con toggle e helper text dedicati.
+- Pubblico: [app/routes/public.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\routes\public.py) include il nuovo flag nella response `/api/organizations/{slug}`, così [Iscrizione.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\Iscrizione.tsx) può aggiornare copy, badge, label e blocco inline del passaggio 2 senza cambiare il flow quando il flag è spento.
+- Backend submit: [app/routes/join.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\routes\join.py) ora impone il documento solo se `require_membership_document=true`; se esiste già una submission pendente con documento identity, la resubmission resta valida anche senza ricaricarlo.
+- Retrocompatibilità confermata: con toggle disattivo il documento resta facoltativo e il submit continua a funzionare come prima; il comportamento è coperto dai test `test_join_submit_without_identity_document_ok` e `test_join_submit_requires_identity_document_when_org_flag_enabled`.
 - Verifiche eseguite: `python -m pytest -q tests/test_optional_identity_document.py tests/test_org_admin_communications.py`; `npm --prefix frontend run build`.
 
 ## Deploy workflow hardening for Docker builder snapshot failures (Mar 10, 2026)
@@ -3176,12 +3207,12 @@ pm --prefix frontend run build -> OK
 - Workflow modificato: [.github/workflows/deploy-hetzner.yml](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\.github\workflows\deploy-hetzner.yml).
 - Prima del rebuild il server esegue solo diagnostica e cleanup sicuro della build cache: `docker system df || true`, `docker builder ls || true`, `docker buildx ls || true`, `docker builder prune -af || true`, `docker buildx prune -af || true`.
 - Il deploy non usa `docker system prune --volumes`, non usa `docker volume prune`, non usa `down -v` e non rimuove alcun volume database.
-- Il rebuild ora � esplicito e pulito: `docker compose ... build --no-cache`, seguito da `docker compose ... up -d --remove-orphans`, mantenendo invariati connessione SSH, env, compose files e logica di health check video-worker.
+- Il rebuild ora è esplicito e pulito: `docker compose ... build --no-cache`, seguito da `docker compose ... up -d --remove-orphans`, mantenendo invariati connessione SSH, env, compose files e logica di health check video-worker.
 
 ## Stripe Connect demo integration (Mar 10, 2026)
 - [x] Isolare un package backend `stripe_connect_demo` con config helper, StripeClient dedicato e service commentato
 - [x] Estendere `organizations` con mapping connected account + status subscription e aggiungere tabella webhook idempotency
-- [x] Aggiungere route org-admin, storefront demo e webhook Stripe separate dai flussi Stripe gi� esistenti
+- [x] Aggiungere route org-admin, storefront demo e webhook Stripe separate dai flussi Stripe già esistenti
 - [x] Aggiungere UI org-admin `/org-admin/billing`, route storefront demo e wiring capability/nav
 - [x] Documentare env/runtime e verificare build frontend + test backend mirati
 
@@ -3224,8 +3255,8 @@ pm --prefix frontend run build -> OK
 - [FormBuilder.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\builder\FormBuilder.tsx): aggiunti `useDroppable`, id stabile `form-builder-canvas`, distinzione esplicita `source=palette` vs `source=canvas`, inserimento reale nello state locale al drop, highlight del canvas quando riceve il drag e `pointer-events-none` sull'empty state per non interferire col drop.
 - [PaletteItem.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\builder\PaletteItem.tsx) e [CanvasItem.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\builder\CanvasItem.tsx): payload DnD riallineati con `source` chiaro per distinguere creazione da palette e reorder interno.
 - [utils.ts](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\components\forms\builder\utils.ts): introdotta factory minima `createFieldFromPaletteItem(...)` e costante condivisa `FORM_BUILDER_CANVAS_ID` per creare un blocco valido senza cambiare il modello dati backend.
-- Esito atteso del fix: il drop palette -> canvas ora crea subito il blocco nello state del builder, lo rende visibile nel canvas, selezionato e pronto per il pannello propriet�; il reorder interno continua a passare dal branch separato `source=canvas`.
-- Verifica eseguita: `npm --prefix frontend run build` OK. Nel workspace attuale non � presente un harness browser/e2e gi� configurato, quindi la conferma funzionale deriva dal path DnD corretto nel codice e dalla build verde, non da un test UI automatizzato.
+- Esito atteso del fix: il drop palette -> canvas ora crea subito il blocco nello state del builder, lo rende visibile nel canvas, selezionato e pronto per il pannello proprietà; il reorder interno continua a passare dal branch separato `source=canvas`.
+- Verifica eseguita: `npm --prefix frontend run build` OK. Nel workspace attuale non è presente un harness browser/e2e già configurato, quindi la conferma funzionale deriva dal path DnD corretto nel codice e dalla build verde, non da un test UI automatizzato.
 
 
 ## Communications selected recipients (Mar 11, 2026)
@@ -3412,11 +3443,11 @@ pm --prefix frontend run build OK.
 - [ ] Eseguire 
 pm --prefix frontend run build e documentare review finale
 ## Review (Theme contrast hardening public + dashboard - Mar 12, 2026)
-- Ho normalizzato i CTA pubblici principali su tn-primary / tn-ghost nelle entry point che esponevano il problema di contrasto (Home, navbar/mobile menu del layout pubblico, lista associazioni). In questo modo le CTA non ereditano pi� il colore link globale di 	heme.css, quindi non finiscono con fondo scuro e testo teal/nero quando devono essere pulsanti.
+- Ho normalizzato i CTA pubblici principali su tn-primary / tn-ghost nelle entry point che esponevano il problema di contrasto (Home, navbar/mobile menu del layout pubblico, lista associazioni). In questo modo le CTA non ereditano più il colore link globale di 	heme.css, quindi non finiscono con fondo scuro e testo teal/nero quando devono essere pulsanti.
 - In rontend/src/theme.css ho collegato anche i token --public-* al sistema tema shared e ho aggiunto override tematici per public-footer, public-faq-button, public-faq-icon e public-faq-answer-text. Questo elimina il footer bianco fisso in dark mode e rende leggibile la sezione FAQ/accordion nelle pagine pubbliche.
 - Sempre in rontend/src/theme.css ho esteso il compatibility layer dark per utility usate ancora nelle dashboard e nelle hero card (g-slate-50/70-90, g-slate-100/70-90, g-slate-200/70, nuove varianti order-slate-200/*, order-slate-950/*, divide-slate-200, hover/table wrappers g-slate-*). Lo scopo e coprire i contenitori/card interne che rimanevano chiare o incoerenti senza inseguire patch file-per-file.
 - Verifiche eseguite: 
-pm --prefix frontend run build OK; screenshot locali da build preview con Playwright in 	asks/screenshots/home-light-20260312.png, 	asks/screenshots/home-dark-20260312.png, 	asks/screenshots/home-dark-tall-20260312.png. Nel check visuale homepage dark risultano leggibili FAQ e footer, e le CTA pubbliche non mostrano pi� il contrasto errato.
+pm --prefix frontend run build OK; screenshot locali da build preview con Playwright in 	asks/screenshots/home-light-20260312.png, 	asks/screenshots/home-dark-20260312.png, 	asks/screenshots/home-dark-tall-20260312.png. Nel check visuale homepage dark risultano leggibili FAQ e footer, e le CTA pubbliche non mostrano più il contrasto errato.
 - Dopo il primo check visuale ho corretto anche la hero shell di /associazioni, che restava troppo chiara per via di wrapper/gradient light-only. Verifica aggiuntiva con service worker bloccati: 	asks/screenshots/associazioni-dark-20260312.png mostra ora la sezione introduttiva coerente con la dark mode.
 - Screenshot aggiuntivo confermato: tasks/screenshots/associazioni-dark-20260312.png.
 - [x] Verifica visuale autenticata dark mode completata su 2026-03-12.
@@ -3533,3 +3564,22 @@ pm --prefix frontend run build.
 - Su mobile ho mantenuto il pattern gia stabile con ThemeToggle accanto all'hamburger e Login dentro il pannello, cosi la gerarchia resta leggibile senza comprimere l'header.
 - Pulizia tecnica inclusa: eliminati anche hook/import non piu usati legati alla CTA navbar affiliazione.
 - Verifica eseguita: npm --prefix frontend run build OK.
+
+## Numbering scopes hybrid (Mar 17, 2026)
+- [x] Mappare allocator tessere, gestione lotti super admin e punti di creazione tessera esistenti
+- [x] Introdurre schema additivo `numbering_scopes` + nuovi FK nullable e seed idempotente `ASSONAM_CENTRAL`
+- [x] Implementare backend scope-aware con fallback legacy obbligatorio quando `organizations.numbering_scope_id` e `NULL`
+- [x] Introdurre regole first-use/post-use e endpoint super admin `GET/PATCH /organizations/{id}/numbering`
+- [x] Rendere i lotti super admin scope-aware mantenendo compatibilita con batch legacy non scoped
+- [x] Estendere UI Super Admin per configurazione numerazione in create org e organization setup modal
+- [x] Aggiungere test backend mirati per shared/dedicated, fallback legacy, free-editable e sensitive changes
+- [x] Verificare con pytest mirato e build frontend finale
+
+## Review (Numbering scopes hybrid - Mar 17, 2026)
+- Ho aggiunto la migration additiva `alembic/versions/o1p2q3r4s5t6_add_numbering_scopes.py`, i nuovi modelli/relazioni in `app/models.py` e il service `app/services/numbering_scopes.py`; la migration crea `numbering_scopes`, aggiunge i FK nullable su `organizations`, `card_batches`, `members` e seeda solo `ASSONAM_CENTRAL` senza auto-mappare org storiche.
+- In `app/services/card_allocation.py` l’entrypoint `allocate_next_card(db, org_id, year)` e rimasto invariato: se `organization.numbering_scope_id` e `NULL` usa il ramo legacy identico; se presente usa il ramo scope-aware con lock per scope, occupazione su `members.numbering_scope_id` e guardia extra sul vecchio vincolo `uix_org_card`.
+- Ho aggiornato i callsite che assegnano la tessera (`app/routes/admin.py`, `app/routes/join.py`, `app/routes/org_admin.py`, `app/services/integration_issuer.py`) per valorizzare `members.numbering_scope_id` sulle nuove emissioni; i cleanup che liberano tessere azzerano anche il nuovo campo.
+- In `app/routes/super_admin.py` ho aggiunto gli endpoint di configurazione numerazione, la lettura dello stato `is_freely_editable` / `is_sensitive`, l’audit `org.numbering_scope.updated`, il backfill batch solo quando il mapping e deterministico e i lotti scope-aware con fallback batch legacy non scoped dove serve per la backward compatibility.
+- In `frontend/src/pages/super-admin/components/OrganizationManageModal.tsx` il Super Admin vede ora la sezione “Numerazione tessere”, il default `Condivisa ASSONAM` in create org, lo stato “Modificabile liberamente” vs “Configurazione sensibile”, il warning storico e la conferma esplicita prima del cambio modalita.
+- Ho esteso anche i path di bootstrap/riparazione SQLite in `init_db.py`, `app/scripts/repair_sqlite.py` e `tests/conftest.py` per evitare drift sugli ambienti dev/test che non passano subito da Alembic.
+- Verifiche eseguite: `python -m pytest -q tests/test_card_assignment.py tests/test_super_admin_numbering_scopes.py tests/test_super_admin_card_lot_management.py` OK (`16 passed`); `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK.

@@ -43,6 +43,7 @@ def purge_deleted_member_identifiers(member: Member) -> bool:
         "card_no",
         "card_year",
         "batch_id",
+        "numbering_scope_id",
         "external_customer_id",
         "signup_ip",
         "signup_user_agent",

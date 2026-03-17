@@ -4342,6 +4342,7 @@ def member_decision(
                 member.card_no = allocation.card_no
                 member.batch_id = allocation.batch_id
                 member.card_year = allocation.year
+                member.numbering_scope_id = allocation.numbering_scope_id
             except HTTPException as exc:
                 if exc.status_code == 409:
                     # Manual admin approval must activate member even if cards are exhausted.
@@ -4454,6 +4455,7 @@ def create_manual_payment(
                 member.card_no = allocation.card_no
                 member.batch_id = allocation.batch_id
                 member.card_year = allocation.year
+                member.numbering_scope_id = allocation.numbering_scope_id
                 card_assigned = True
             except HTTPException as exc:
                 if exc.status_code == 409:
@@ -4566,6 +4568,7 @@ def delete_member(
     member.card_no = None
     member.card_year = None
     member.batch_id = None
+    member.numbering_scope_id = None
     member.external_customer_id = None
     if not member.decision_notes:
         member.decision_notes = "Disattivato da amministratore"

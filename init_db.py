@@ -20,6 +20,7 @@ from app.db import Base, SessionLocal, engine
 import app.models
 from app.models import (
     Organization,
+    NumberingScope,
     AdminUser,
     AdminRole,
     AffiliationApplication,
@@ -47,6 +48,7 @@ from app.models import (
 )
 from app.security import get_password_hash
 from app.config import settings
+from app.services.numbering_scopes import ensure_assonam_central_scope
 from app.services.affiliation_identity import sync_affiliation_identity_fields
 from app.services.member_cleanup import (
     cleanup_deleted_member_traces,
@@ -148,6 +150,13 @@ def init_db():
             "run 'alembic upgrade head' to align schema history."
         )
         RechargeRequest.__table__.create(bind=engine, checkfirst=True)
+
+    if "numbering_scopes" not in inspect(engine).get_table_names():
+        logger.warning(
+            "numbering_scopes table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        NumberingScope.__table__.create(bind=engine, checkfirst=True)
 
     if "organization_shared_documents" not in inspect(engine).get_table_names():
         logger.warning(
@@ -311,6 +320,12 @@ def init_db():
         _add_column_if_missing(conn, "members", "google_wallet_last_error", "TEXT")
         _add_column_if_missing(
             conn, "members", "google_wallet_last_synced_at", "DATETIME"
+        )
+        _add_column_if_missing(
+            conn,
+            "members",
+            "numbering_scope_id",
+            "INTEGER REFERENCES numbering_scopes(id)",
         )
         _add_column_if_missing(conn, "referrals", "wheel_result", "TEXT")
         _add_column_if_missing(conn, "referrals", "wheel_spun_at", "DATETIME")
@@ -498,6 +513,12 @@ def init_db():
         _add_column_if_missing(
             conn, "organizations", "last_low_cards_alert_at", "DATETIME"
         )
+        _add_column_if_missing(
+            conn,
+            "organizations",
+            "numbering_scope_id",
+            "INTEGER REFERENCES numbering_scopes(id)",
+        )
         conn.execute(
             text(
                 """
@@ -543,6 +564,12 @@ def init_db():
         )
         _add_column_if_missing(conn, "card_batches", "notes", "TEXT")
         _add_column_if_missing(conn, "card_batches", "released_at", "DATETIME")
+        _add_column_if_missing(
+            conn,
+            "card_batches",
+            "numbering_scope_id",
+            "INTEGER REFERENCES numbering_scopes(id)",
+        )
         conn.execute(
             text(
                 """
@@ -727,6 +754,8 @@ def init_db():
                 purged_deleted_members,
             )
         # ── Seed organization ──────────────────────────────────────
+        central_scope = ensure_assonam_central_scope(db)
+        db.commit()
         org = (
             db.query(Organization).filter(Organization.slug == "my-association").first()
         )
@@ -741,12 +770,17 @@ def init_db():
                 country="Italy",
                 description="Associazione di prova",
                 is_active=True,
+                numbering_scope_id=central_scope.id,
             )
             db.add(org)
             db.commit()
             db.refresh(org)
             logger.info("Organization '%s' created with slug '%s'.", org.name, org.slug)
         else:
+            if org.numbering_scope_id is None:
+                org.numbering_scope_id = central_scope.id
+                db.commit()
+                db.refresh(org)
             logger.info("Organization already exists.")
 
         # ── Seed super admin (Removed in favor of app/bootstrap.py) ─
@@ -775,6 +809,7 @@ def init_db():
             logger.info("Creating seed card batch...")
             batch = CardBatch(
                 org_id=org.id,
+                numbering_scope_id=org.numbering_scope_id,
                 year=datetime.utcnow().year,
                 start_no=100,
                 end_no=200,

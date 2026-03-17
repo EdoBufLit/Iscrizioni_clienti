@@ -1,7 +1,9 @@
 import { FormEvent, memo, useEffect, useState } from "react";
 import {
   createSuperAdminOrganization,
+  fetchOrganizationNumberingConfig,
   patchSuperAdminOrganization,
+  patchOrganizationNumberingConfig,
   setOrganizationCardRange,
   addOrgCardBatch,
   patchOrgCardLot,
@@ -11,6 +13,7 @@ import {
   uploadSuperAdminStatute,
   type SuperAdminOrganization,
   type OrgBatch,
+  type OrganizationNumberingConfig,
 } from "../../../lib/api";
 import ConfirmModal from "../../../components/ui/ConfirmModal";
 
@@ -39,6 +42,7 @@ type ModalFormData = {
   auto_approve_signup: boolean;
   require_membership_document: boolean;
   accounting_enabled: boolean;
+  numbering_mode: "shared_assonam" | "dedicated";
   from_no: string;
   to_no: string;
 };
@@ -65,6 +69,7 @@ const createInitialFormData = (): ModalFormData => ({
   auto_approve_signup: false,
   require_membership_document: false,
   accounting_enabled: false,
+  numbering_mode: "shared_assonam",
   from_no: "",
   to_no: "",
 });
@@ -123,6 +128,16 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
   const [deleteBatchConfirmation, setDeleteBatchConfirmation] = useState("");
   const [batchActionSubmitting, setBatchActionSubmitting] = useState(false);
   const [batchActionError, setBatchActionError] = useState("");
+  const [numberingConfig, setNumberingConfig] = useState<OrganizationNumberingConfig | null>(null);
+  const [loadingNumbering, setLoadingNumbering] = useState(false);
+  const [numberingConfirmOpen, setNumberingConfirmOpen] = useState(false);
+  const currentBrandingNumberingMode =
+    numberingConfig?.numbering_mode === "dedicated" ? "dedicated" : "shared_assonam";
+  const numberingModeChanged =
+    modalType === "branding" &&
+    selectedOrg !== null &&
+    numberingConfig !== null &&
+    formData.numbering_mode !== currentBrandingNumberingMode;
 
   const normalizeOptionalString = (value: string): string | null => {
     const normalized = value.trim();
@@ -196,6 +211,9 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
     setDeleteBatchConfirmation("");
     setBatchActionSubmitting(false);
     setBatchActionError("");
+    setNumberingConfig(null);
+    setLoadingNumbering(false);
+    setNumberingConfirmOpen(false);
   }, [open, modalType, selectedOrg?.id]);
 
   useEffect(() => {
@@ -213,7 +231,39 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
       auto_approve_signup: Boolean(selectedOrg.auto_approve_signup),
       require_membership_document: Boolean(selectedOrg.require_membership_document),
       accounting_enabled: Boolean(selectedOrg.accounting_enabled),
+      numbering_mode:
+        selectedOrg.numbering_mode === "dedicated" ? "dedicated" : "shared_assonam",
     }));
+  }, [open, modalType, selectedOrg]);
+
+  useEffect(() => {
+    if (!open || !selectedOrg || modalType !== "branding") {
+      return;
+    }
+    let active = true;
+    setLoadingNumbering(true);
+    fetchOrganizationNumberingConfig(selectedOrg.id)
+      .then((result) => {
+        if (!active) return;
+        setNumberingConfig(result);
+        setFormData((prev) => ({
+          ...prev,
+          numbering_mode:
+            result.numbering_mode === "dedicated" ? "dedicated" : "shared_assonam",
+        }));
+      })
+      .catch((err) => {
+        if (!active) return;
+        setSubmitError(err instanceof Error ? err.message : "Errore caricamento numerazione");
+      })
+      .finally(() => {
+        if (!active) return;
+        setLoadingNumbering(false);
+      });
+
+    return () => {
+      active = false;
+    };
   }, [open, modalType, selectedOrg]);
 
   useEffect(() => {
@@ -246,7 +296,13 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
   }, [open, modalType, selectedOrg]);
 
   useEffect(() => {
-    if (!open && !editingBatch && !deleteBatchTarget && !maintenanceConfirmOpen) {
+    if (
+      !open &&
+      !editingBatch &&
+      !deleteBatchTarget &&
+      !maintenanceConfirmOpen &&
+      !numberingConfirmOpen
+    ) {
       return;
     }
 
@@ -266,19 +322,32 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
         setMaintenanceConfirmOpen(false);
         return;
       }
+      if (numberingConfirmOpen && !submitting) {
+        setNumberingConfirmOpen(false);
+        return;
+      }
       onClose();
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [deleteBatchTarget, editingBatch, maintenanceConfirmOpen, maintenanceRunning, onClose, open]);
+  }, [
+    deleteBatchTarget,
+    editingBatch,
+    maintenanceConfirmOpen,
+    maintenanceRunning,
+    numberingConfirmOpen,
+    onClose,
+    open,
+    submitting,
+  ]);
 
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault();
+  const saveOrganizationChanges = async () => {
     if (submitting) return;
 
     setSubmitting(true);
     setSubmitError("");
+    setNumberingConfirmOpen(false);
 
     try {
       if (modalType === "create") {
@@ -296,6 +365,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
           auto_approve_signup: formData.auto_approve_signup,
           require_membership_document: formData.require_membership_document,
           accounting_enabled: formData.accounting_enabled,
+          numbering_mode: formData.numbering_mode,
         };
         const newOrg = await createSuperAdminOrganization(payload);
         if (statuteFile && newOrg.id) {
@@ -329,14 +399,45 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
           require_membership_document: formData.require_membership_document,
           accounting_enabled: formData.accounting_enabled,
         });
+        if (formData.numbering_mode !== currentBrandingNumberingMode) {
+          const result = await patchOrganizationNumberingConfig(selectedOrg.id, formData.numbering_mode);
+          setNumberingConfig({
+            organization_id: result.organization_id,
+            organization_name: result.organization_name,
+            numbering_mode: result.numbering_mode,
+            numbering_scope_id: result.numbering_scope_id,
+            numbering_scope_name: result.numbering_scope_name,
+            numbering_scope_type: result.numbering_scope_type,
+            numbering_scope_prefix: result.numbering_scope_prefix,
+            numbering_scope_description: result.numbering_scope_description,
+            numbering_scope_is_system: result.numbering_scope_is_system,
+            is_freely_editable: result.is_freely_editable,
+            is_sensitive: result.is_sensitive,
+            members_with_cards: result.members_with_cards,
+            total_batches: result.total_batches,
+            real_used_batches: result.real_used_batches,
+            batches_with_linked_members: result.batches_with_linked_members,
+            warning_message: result.warning_message,
+          });
+        }
       }
 
       onSaved();
+      onClose();
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Errore operazione");
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (numberingModeChanged) {
+      setNumberingConfirmOpen(true);
+      return;
+    }
+    await saveOrganizationChanges();
   };
 
   const handleRunMaintenance = () => {
@@ -582,6 +683,61 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                     setFormData((prev) => ({ ...prev, description_short: e.target.value }))
                   }
                 />
+              </div>
+
+              <div className="rounded-xl border border-brand/15 bg-brand/5 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-brand">
+                      Numerazione tessere
+                    </p>
+                    <p className="mt-1 text-sm text-neutral-600">
+                      Default iniziale: Condivisa ASSONAM. Il Super Admin puo modificarla prima del primo uso reale.
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                    Default ASSONAM
+                  </span>
+                </div>
+                <div className="mt-4 grid gap-3">
+                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-200 bg-white p-3">
+                    <input
+                      type="radio"
+                      name="numbering_mode_create"
+                      className="mt-1 text-brand focus:ring-brand"
+                      checked={formData.numbering_mode === "shared_assonam"}
+                      onChange={() =>
+                        setFormData((prev) => ({ ...prev, numbering_mode: "shared_assonam" }))
+                      }
+                    />
+                    <div>
+                      <div className="text-sm font-semibold text-neutral-900">Condivisa ASSONAM</div>
+                      <p className="mt-1 text-xs leading-5 text-neutral-500">
+                        Usa il pool centrale condiviso ASSONAM_CENTRAL insieme alle affiliate configurate nello stesso scope.
+                      </p>
+                    </div>
+                  </label>
+                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-200 bg-white p-3">
+                    <input
+                      type="radio"
+                      name="numbering_mode_create"
+                      className="mt-1 text-brand focus:ring-brand"
+                      checked={formData.numbering_mode === "dedicated"}
+                      onChange={() =>
+                        setFormData((prev) => ({ ...prev, numbering_mode: "dedicated" }))
+                      }
+                    />
+                    <div>
+                      <div className="text-sm font-semibold text-neutral-900">Dedicata</div>
+                      <p className="mt-1 text-xs leading-5 text-neutral-500">
+                        Crea uno scope dedicato riservato all'organizzazione, senza conflitti con il pool centrale ASSONAM.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+                <p className="mt-3 text-xs text-neutral-500">
+                  Le tessere gia emesse non verranno mai rinumerate. Questa impostazione controlla solo le future assegnazioni.
+                </p>
               </div>
 
               <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
@@ -957,6 +1113,129 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                 <p className="mt-1 text-xs text-neutral-500">
                   Se vuoto, viene usato il logo ufficiale associazione (se presente).
                 </p>
+              </div>
+              <div className="rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-neutral-600">
+                      Numerazione tessere
+                    </p>
+                    <p className="mt-1 text-sm text-neutral-600">
+                      Configurazione visibile solo al Super Admin. Le tessere gia emesse non verranno modificate.
+                    </p>
+                  </div>
+                  {loadingNumbering ? (
+                    <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-neutral-500">
+                      Caricamento...
+                    </span>
+                  ) : (
+                    <span
+                      className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                        numberingConfig?.is_freely_editable
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : "border-amber-200 bg-amber-50 text-amber-700"
+                      }`}
+                    >
+                      {numberingConfig?.is_freely_editable
+                        ? "Modificabile liberamente"
+                        : "Configurazione sensibile"}
+                    </span>
+                  )}
+                </div>
+
+                {loadingNumbering ? (
+                  <p className="mt-4 text-sm text-neutral-500">Recupero configurazione numerazione...</p>
+                ) : (
+                  <>
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <div className="rounded-xl border border-white/80 bg-white p-3 shadow-sm">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">
+                          Scope attuale
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-neutral-900">
+                          {numberingConfig?.numbering_scope_name ?? "Legacy / non configurato"}
+                        </p>
+                        <p className="mt-1 text-xs text-neutral-500">
+                          Tipo: {numberingConfig?.numbering_scope_type ?? "legacy"}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-white/80 bg-white p-3 shadow-sm">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">
+                          Prefisso visuale
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-neutral-900">
+                          {numberingConfig?.numbering_scope_prefix ?? "Nessun prefisso"}
+                        </p>
+                        <p className="mt-1 text-xs text-neutral-500">
+                          {numberingConfig?.numbering_scope_description ?? "Nessuna descrizione configurata."}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-2">
+                      <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-200 bg-white p-3">
+                        <input
+                          type="radio"
+                          name="numbering_mode_branding"
+                          className="mt-1 text-brand focus:ring-brand"
+                          checked={formData.numbering_mode === "shared_assonam"}
+                          onChange={() =>
+                            setFormData((prev) => ({ ...prev, numbering_mode: "shared_assonam" }))
+                          }
+                        />
+                        <div>
+                          <div className="text-sm font-semibold text-neutral-900">Condivisa ASSONAM</div>
+                          <p className="mt-1 text-xs leading-5 text-neutral-500">
+                            Questa organizzazione usa la numerazione centrale condivisa del circuito ASSONAM.
+                          </p>
+                        </div>
+                      </label>
+                      <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-200 bg-white p-3">
+                        <input
+                          type="radio"
+                          name="numbering_mode_branding"
+                          className="mt-1 text-brand focus:ring-brand"
+                          checked={formData.numbering_mode === "dedicated"}
+                          onChange={() =>
+                            setFormData((prev) => ({ ...prev, numbering_mode: "dedicated" }))
+                          }
+                        />
+                        <div>
+                          <div className="text-sm font-semibold text-neutral-900">Dedicata</div>
+                          <p className="mt-1 text-xs leading-5 text-neutral-500">
+                            Questa organizzazione usa una numerazione indipendente riservata.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+
+                    <div className="mt-4 grid gap-2 text-xs text-neutral-500 md:grid-cols-3">
+                      <div className="rounded-xl border border-white/80 bg-white px-3 py-2">
+                        Tessere emesse: <span className="font-semibold text-neutral-800">{numberingConfig?.members_with_cards ?? 0}</span>
+                      </div>
+                      <div className="rounded-xl border border-white/80 bg-white px-3 py-2">
+                        Lotti totali: <span className="font-semibold text-neutral-800">{numberingConfig?.total_batches ?? 0}</span>
+                      </div>
+                      <div className="rounded-xl border border-white/80 bg-white px-3 py-2">
+                        Lotti usati: <span className="font-semibold text-neutral-800">{numberingConfig?.real_used_batches ?? 0}</span>
+                      </div>
+                    </div>
+
+                    {(numberingConfig?.warning_message || numberingModeChanged) && (
+                      <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                        <p className="text-sm font-semibold text-amber-800">Attenzione</p>
+                        <p className="mt-1 text-sm leading-6 text-amber-700">
+                          {numberingConfig?.warning_message ??
+                            "Questa modifica influira solo sulle future tessere. Le tessere gia esistenti non verranno modificate."}
+                        </p>
+                      </div>
+                    )}
+
+                    <p className="mt-4 text-xs text-neutral-500">
+                      Le tessere gia emesse non verranno modificate. I cambiamenti post-storico valgono solo per le future assegnazioni.
+                    </p>
+                  </>
+                )}
               </div>
               <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-neutral-600">
@@ -1334,6 +1613,24 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
           }
         }}
         onConfirm={confirmRunMaintenance}
+      />
+      <ConfirmModal
+        open={numberingConfirmOpen}
+        title="Conferma modifica numerazione"
+        description={
+          numberingConfig?.is_sensitive
+            ? "Questa organizzazione ha gia storico o lotti usati. Il cambio influira solo sulle future tessere."
+            : "La configurazione e ancora libera. Conferma il cambio della modalita di numerazione."
+        }
+        confirmLabel="Conferma modifica"
+        tone={numberingConfig?.is_sensitive ? "danger" : "brand"}
+        confirmState={submitting ? "loading" : "idle"}
+        onClose={() => {
+          if (!submitting) {
+            setNumberingConfirmOpen(false);
+          }
+        }}
+        onConfirm={saveOrganizationChanges}
       />
     </>
   );

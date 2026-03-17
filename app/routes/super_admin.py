@@ -66,6 +66,13 @@ from app.services.accounting import (
     save_accounting_upload_file,
     slugify_accounting_label,
 )
+from app.services.numbering_scopes import (
+    NUMBERING_MODE_SHARED_ASSONAM,
+    get_numbering_mode,
+    get_numbering_usage_state,
+    get_target_scope_for_mode,
+    serialize_numbering_config,
+)
 from app.models_affiliation import AffiliationApplication
 
 import logging
@@ -112,6 +119,7 @@ _ORGANIZATION_SORT_FIELDS = {
     "city": Organization.city,
     "updated_at": Organization.updated_at,
 }
+_NUMBERING_SCOPE_UNSET = object()
 
 
 def _require_super_admin(request: Request, db: Session) -> AdminUser:
@@ -198,6 +206,7 @@ def _serialize_organization_row(
     affiliation_application_id: Optional[int] = None,
     affiliation_status: Optional[str] = None,
 ):
+    numbering_scope = getattr(org, "numbering_scope", None)
     return {
         "id": org.id,
         "name": org.name,
@@ -226,6 +235,10 @@ def _serialize_organization_row(
         "communications_enabled": bool(org.communications_enabled),
         "card_min": card_min,
         "card_max": card_max,
+        "numbering_mode": get_numbering_mode(org),
+        "numbering_scope_id": getattr(org, "numbering_scope_id", None),
+        "numbering_scope_name": getattr(numbering_scope, "name", None),
+        "numbering_scope_type": getattr(numbering_scope, "scope_type", None),
         "affiliation_application_id": affiliation_application_id,
         "affiliation_status": affiliation_status,
     }
@@ -278,6 +291,7 @@ def _list_organizations_payload(
                 latest_affiliation_alias.id.label("affiliation_application_id"),
                 latest_affiliation_alias.status.label("affiliation_status"),
             )
+            .options(joinedload(Organization.numbering_scope))
             .outerjoin(
                 card_ranges_subquery, card_ranges_subquery.c.org_id == Organization.id
             )
@@ -319,6 +333,7 @@ def _list_organizations_payload(
                 card_ranges_subquery.c.card_min,
                 card_ranges_subquery.c.card_max,
             )
+            .options(joinedload(Organization.numbering_scope))
             .outerjoin(
                 card_ranges_subquery, card_ranges_subquery.c.org_id == Organization.id
             )
@@ -382,6 +397,7 @@ class CreateOrganization(BaseModel):
     auto_approve_signup: bool = False
     require_membership_document: bool = False
     accounting_enabled: bool = False
+    numbering_mode: Optional[Literal["shared_assonam", "dedicated"]] = None
 
 
 class PatchOrganization(BaseModel):
@@ -406,6 +422,10 @@ class PatchOrganization(BaseModel):
     require_membership_document: Optional[bool] = None
     accounting_enabled: Optional[bool] = None
     communications_enabled: Optional[bool] = None
+
+
+class PatchOrganizationNumbering(BaseModel):
+    numbering_mode: Literal["shared_assonam", "dedicated"]
 
 
 class CreateAccountingFolderBody(BaseModel):
@@ -1857,6 +1877,13 @@ def create_organization(
         created_by_admin_id=admin.id,
     )
     db.add(org)
+    db.flush()
+    target_scope = get_target_scope_for_mode(
+        db,
+        org=org,
+        numbering_mode=body.numbering_mode or NUMBERING_MODE_SHARED_ASSONAM,
+    )
+    org.numbering_scope_id = target_scope.id
     db.commit()
     db.refresh(org)
 
@@ -1874,7 +1901,11 @@ def create_organization(
     db.commit()
     db.refresh(org)
 
-    return org
+    return _serialize_organization_row(
+        org,
+        card_min=None,
+        card_max=None,
+    )
 
 
 def _delete_association_handler(
@@ -1963,7 +1994,12 @@ def get_organization(
     db: Session = Depends(get_db),
 ):
     _require_super_admin(request, db)
-    org = db.query(Organization).filter(Organization.id == org_id).first()
+    org = (
+        db.query(Organization)
+        .options(joinedload(Organization.numbering_scope))
+        .filter(Organization.id == org_id)
+        .first()
+    )
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
@@ -2043,7 +2079,122 @@ def update_organization(
     db.commit()
     db.refresh(org)
 
-    return org
+    card_range = (
+        db.query(
+            func.min(CardBatch.start_no).label("card_min"),
+            func.max(CardBatch.end_no).label("card_max"),
+        )
+        .filter(CardBatch.org_id == org_id, CardBatch.released_at.is_(None))
+        .first()
+    )
+
+    return _serialize_organization_row(
+        org,
+        card_min=(card_range.card_min if card_range else None),
+        card_max=(card_range.card_max if card_range else None),
+    )
+
+
+@router.get("/organizations/{org_id}/numbering")
+def get_organization_numbering_configuration(
+    request: Request,
+    org_id: int,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    org = (
+        db.query(Organization)
+        .options(joinedload(Organization.numbering_scope))
+        .filter(Organization.id == org_id)
+        .first()
+    )
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    return {
+        "organization_id": org.id,
+        "organization_name": org.name,
+        **serialize_numbering_config(db, org),
+    }
+
+
+@router.patch("/organizations/{org_id}/numbering")
+def patch_organization_numbering_configuration(
+    request: Request,
+    org_id: int,
+    body: PatchOrganizationNumbering,
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+    org = (
+        db.query(Organization)
+        .options(joinedload(Organization.numbering_scope))
+        .filter(Organization.id == org_id)
+        .first()
+    )
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    state_before = get_numbering_usage_state(db, org)
+    old_scope = org.numbering_scope
+    target_scope = get_target_scope_for_mode(
+        db,
+        org=org,
+        numbering_mode=body.numbering_mode,
+    )
+
+    batch_backfill_count = 0
+    if org.numbering_scope_id != target_scope.id:
+        org.numbering_scope_id = target_scope.id
+
+    if state_before.is_freely_editable:
+        batches = (
+            db.query(CardBatch)
+            .filter(
+                CardBatch.org_id == org.id,
+                CardBatch.released_at.is_(None),
+            )
+            .all()
+        )
+        for batch in batches:
+            if batch.numbering_scope_id != target_scope.id:
+                batch.numbering_scope_id = target_scope.id
+                batch_backfill_count += 1
+
+    db.flush()
+    db.refresh(org)
+
+    audit.log_operation(
+        db,
+        action="org.numbering_scope.updated",
+        entity_type="organization",
+        entity_id=org.id,
+        actor_admin_id=admin.id,
+        actor_role="super_admin",
+        metadata={
+            "organization_id": org.id,
+            "old_scope_id": getattr(old_scope, "id", None),
+            "old_scope_name": getattr(old_scope, "name", None),
+            "new_scope_id": target_scope.id,
+            "new_scope_name": target_scope.name,
+            "numbering_mode": body.numbering_mode,
+            "is_freely_editable": state_before.is_freely_editable,
+            "is_sensitive": state_before.is_sensitive,
+            "batch_backfill_count": batch_backfill_count,
+        },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    db.refresh(org)
+
+    return {
+        "ok": True,
+        "organization_id": org.id,
+        "organization_name": org.name,
+        "batch_backfill_count": batch_backfill_count,
+        **serialize_numbering_config(db, org),
+    }
 
 
 @router.get("/documents/targets")
@@ -2889,23 +3040,39 @@ class PatchCardLot(BaseModel):
 
 
 def check_card_overlap(
-    db: Session, start_no: int, end_no: int, exclude_batch_id: Optional[int] = None
+    db: Session,
+    start_no: int,
+    end_no: int,
+    *,
+    org: Organization,
+    exclude_batch_id: Optional[int] = None,
+    domain_scope_id: object = _NUMBERING_SCOPE_UNSET,
 ):
     """
-    Check if the given range [start_no, end_no] overlaps with any existing CardBatch globally.
-    Returns the conflicting batch if found, else None.
-    Overlap logic: NOT (new_end < old_start OR new_start > old_end)
-    Equivalent to: (new_end >= old_start) AND (new_start <= old_end)
+    Check if the given range [start_no, end_no] overlaps within the current numbering domain.
+
+    Legacy orgs (no numbering_scope_id) keep the old global-legacy behavior but only
+    against other legacy/unconfigured batches. Scoped orgs check overlap only inside
+    their current scope.
     """
     query = db.query(CardBatch).filter(
         CardBatch.released_at.is_(None),
         CardBatch.start_no <= end_no,
         CardBatch.end_no >= start_no,
     )
+    effective_scope_id = (
+        org.numbering_scope_id
+        if domain_scope_id is _NUMBERING_SCOPE_UNSET
+        else domain_scope_id
+    )
+    if effective_scope_id is None:
+        query = query.filter(CardBatch.numbering_scope_id.is_(None))
+    else:
+        query = query.filter(CardBatch.numbering_scope_id == effective_scope_id)
     if exclude_batch_id is not None:
         query = query.filter(CardBatch.id != exclude_batch_id)
 
-    return query.first()
+    return query.order_by(CardBatch.start_no.asc(), CardBatch.id.asc()).first()
 
 
 def _resolve_batch_year(raw_year: Optional[int]) -> int:
@@ -2918,16 +3085,26 @@ def _resolve_batch_year(raw_year: Optional[int]) -> int:
 
 
 def _count_assigned_cards_for_batch(db: Session, batch: CardBatch) -> int:
+    range_filter = and_(
+        Member.deleted_at.is_(None),
+        Member.card_year == batch.year,
+        Member.card_no.isnot(None),
+        Member.card_no >= batch.start_no,
+        Member.card_no <= batch.end_no,
+    )
+    if batch.numbering_scope_id is not None:
+        range_filter = and_(
+            range_filter,
+            or_(
+                Member.numbering_scope_id == batch.numbering_scope_id,
+                Member.batch_id == batch.id,
+            ),
+        )
+    else:
+        range_filter = and_(range_filter, Member.org_id == batch.org_id)
     return int(
         db.query(func.count(func.distinct(Member.card_no)))
-        .filter(
-            Member.org_id == batch.org_id,
-            Member.deleted_at.is_(None),
-            Member.card_year == batch.year,
-            Member.card_no.isnot(None),
-            Member.card_no >= batch.start_no,
-            Member.card_no <= batch.end_no,
-        )
+        .filter(range_filter)
         .scalar()
         or 0
     )
@@ -2935,20 +3112,35 @@ def _count_assigned_cards_for_batch(db: Session, batch: CardBatch) -> int:
 
 def _count_linked_members_for_batch(db: Session, batch: CardBatch) -> int:
     range_filter = and_(
+        Member.deleted_at.is_(None),
         Member.card_year == batch.year,
         Member.card_no.isnot(None),
         Member.card_no >= batch.start_no,
         Member.card_no <= batch.end_no,
     )
-    return int(
-        db.query(func.count(func.distinct(Member.id)))
-        .filter(
+    if batch.numbering_scope_id is not None:
+        range_filter = and_(
+            range_filter,
+            or_(
+                Member.numbering_scope_id == batch.numbering_scope_id,
+                Member.batch_id == batch.id,
+            ),
+        )
+        member_filter = or_(
+            Member.batch_id == batch.id,
+            range_filter,
+        )
+    else:
+        member_filter = and_(
             Member.org_id == batch.org_id,
             or_(
                 Member.batch_id == batch.id,
                 range_filter,
             ),
         )
+    return int(
+        db.query(func.count(func.distinct(Member.id)))
+        .filter(member_filter)
         .scalar()
         or 0
     )
@@ -2989,6 +3181,8 @@ def _serialize_batch_usage(db: Session, batch: CardBatch) -> dict[str, object]:
     assigned = _count_assigned_cards_for_batch(db, batch)
     linked_members = _count_linked_members_for_batch(db, batch)
     remaining = max(total - assigned, 0)
+    numbering_scope = getattr(batch, "numbering_scope", None)
+    owner_org = getattr(batch, "organization", None)
     return {
         "id": batch.id,
         "start_no": batch.start_no,
@@ -3005,6 +3199,12 @@ def _serialize_batch_usage(db: Session, batch: CardBatch) -> dict[str, object]:
         "linked_members": linked_members,
         "range_editable": linked_members == 0,
         "deletable": assigned == 0 and linked_members == 0,
+        "numbering_scope_id": batch.numbering_scope_id,
+        "numbering_scope_name": getattr(numbering_scope, "name", None),
+        "numbering_scope_type": getattr(numbering_scope, "scope_type", None),
+        "owner_org_id": getattr(owner_org, "id", batch.org_id),
+        "owner_org_name": getattr(owner_org, "name", None),
+        "is_legacy_fallback_batch": batch.numbering_scope_id is None,
     }
 
 
@@ -3020,19 +3220,36 @@ def _get_organization_and_batch_or_404(
     org_id: int,
     lot_id: int,
 ) -> tuple[Organization, CardBatch]:
-    org = db.query(Organization).filter(Organization.id == org_id).first()
+    org = (
+        db.query(Organization)
+        .options(joinedload(Organization.numbering_scope))
+        .filter(Organization.id == org_id)
+        .first()
+    )
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    batch = (
+    batch_query = (
         db.query(CardBatch)
+        .options(joinedload(CardBatch.organization), joinedload(CardBatch.numbering_scope))
         .filter(
             CardBatch.id == lot_id,
-            CardBatch.org_id == org_id,
             CardBatch.released_at.is_(None),
         )
-        .first()
     )
+    if org.numbering_scope_id is None:
+        batch_query = batch_query.filter(CardBatch.org_id == org_id)
+    else:
+        batch_query = batch_query.filter(
+            or_(
+                CardBatch.numbering_scope_id == org.numbering_scope_id,
+                and_(
+                    CardBatch.org_id == org.id,
+                    CardBatch.numbering_scope_id.is_(None),
+                ),
+            )
+        )
+    batch = batch_query.first()
     if not batch:
         raise HTTPException(status_code=404, detail="Lotto tessere non trovato")
 
@@ -3097,7 +3314,7 @@ def set_initial_card_range(
         )
 
     # Check global overlap
-    conflict = check_card_overlap(db, body.from_no, body.to_no)
+    conflict = check_card_overlap(db, body.from_no, body.to_no, org=org)
     if conflict:
         # Fetch conflicting org name
         conflicting_org = (
@@ -3113,6 +3330,7 @@ def set_initial_card_range(
 
     batch = CardBatch(
         org_id=org_id,
+        numbering_scope_id=org.numbering_scope_id,
         year=batch_year,
         start_no=body.from_no,
         end_no=body.to_no,
@@ -3177,7 +3395,7 @@ def add_card_batch(
         raise HTTPException(status_code=404, detail="Organization not found")
 
     # Check global overlap (across all organizations)
-    conflict = check_card_overlap(db, body.from_no, body.to_no)
+    conflict = check_card_overlap(db, body.from_no, body.to_no, org=org)
     if conflict:
         conflicting_org = (
             db.query(Organization).filter(Organization.id == conflict.org_id).first()
@@ -3192,6 +3410,7 @@ def add_card_batch(
 
     batch = CardBatch(
         org_id=org_id,
+        numbering_scope_id=org.numbering_scope_id,
         year=batch_year,
         start_no=body.from_no,
         end_no=body.to_no,
@@ -3223,10 +3442,23 @@ def add_card_batch(
     db.commit()
 
     # Return updated stock summary
+    if org.numbering_scope_id is None:
+        batch_filters = [CardBatch.org_id == org_id]
+    else:
+        batch_filters = [
+            or_(
+                CardBatch.numbering_scope_id == org.numbering_scope_id,
+                and_(
+                    CardBatch.org_id == org_id,
+                    CardBatch.numbering_scope_id.is_(None),
+                ),
+            )
+        ]
     batches = (
         db.query(CardBatch)
+        .options(joinedload(CardBatch.organization), joinedload(CardBatch.numbering_scope))
         .filter(
-            CardBatch.org_id == org_id,
+            *batch_filters,
             CardBatch.year == batch_year,
             CardBatch.released_at.is_(None),
         )
@@ -3262,18 +3494,36 @@ def get_org_batches(
     target_year = _resolve_batch_year(year if year is not None else now.year)
     next_reset = datetime(target_year + 1, 1, 1)
 
-    org = db.query(Organization).filter(Organization.id == org_id).first()
+    org = (
+        db.query(Organization)
+        .options(joinedload(Organization.numbering_scope))
+        .filter(Organization.id == org_id)
+        .first()
+    )
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
+    if org.numbering_scope_id is None:
+        batch_filters = [CardBatch.org_id == org_id]
+    else:
+        batch_filters = [
+            or_(
+                CardBatch.numbering_scope_id == org.numbering_scope_id,
+                and_(
+                    CardBatch.org_id == org.id,
+                    CardBatch.numbering_scope_id.is_(None),
+                ),
+            )
+        ]
     batches = (
         db.query(CardBatch)
+        .options(joinedload(CardBatch.organization), joinedload(CardBatch.numbering_scope))
         .filter(
-            CardBatch.org_id == org_id,
+            *batch_filters,
             CardBatch.year == target_year,
             CardBatch.released_at.is_(None),
         )
-        .order_by(CardBatch.start_no)
+        .order_by(CardBatch.start_no, CardBatch.id.asc())
         .all()
     )
     serialized_batches = [_serialize_batch_usage(db, b) for b in batches]
@@ -3285,6 +3535,7 @@ def get_org_batches(
         "batches": serialized_batches,
         "current_year": target_year,
         "next_reset_at": next_reset.isoformat() + "Z",
+        "numbering": serialize_numbering_config(db, org),
         "summary": {
             "total": summary_total,
             "assigned": summary_assigned,
@@ -3346,7 +3597,9 @@ def patch_org_card_lot(
             db,
             requested_start,
             requested_end,
+            org=org,
             exclude_batch_id=batch.id,
+            domain_scope_id=batch.numbering_scope_id,
         )
         if conflict:
             conflicting_org = (

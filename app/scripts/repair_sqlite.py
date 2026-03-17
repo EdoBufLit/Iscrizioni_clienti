@@ -27,6 +27,24 @@ def repair_db():
         # 1. Ensure Tables Exist (Basic check, usually they exist if app ran once)
         # We assume they exist or we can't repair columns.
 
+        ensure_table(
+            cursor,
+            "numbering_scopes",
+            """
+            CREATE TABLE numbering_scopes (
+                id INTEGER PRIMARY KEY,
+                name VARCHAR NOT NULL UNIQUE,
+                scope_type VARCHAR NOT NULL,
+                prefix VARCHAR,
+                description TEXT,
+                is_system BOOLEAN NOT NULL DEFAULT 0,
+                owner_org_id INTEGER REFERENCES organizations(id),
+                created_at DATETIME,
+                updated_at DATETIME
+            )
+            """,
+        )
+
         # 2. Check/Add Columns for 'organizations'
         # Extended details columns might be missing in broken migrations
         org_columns = [
@@ -52,6 +70,7 @@ def repair_db():
             ("statute_pdf_path", "VARCHAR"),
             ("statute_updated_at", "DATETIME"),
             ("privacy_version", "VARCHAR"),
+            ("numbering_scope_id", "INTEGER REFERENCES numbering_scopes(id)"),
         ]
         ensure_columns(cursor, "organizations", org_columns)
 
@@ -62,8 +81,14 @@ def repair_db():
             ("decision_notes", "TEXT"),
             ("deleted_at", "DATETIME"),
             ("deleted_by_admin_id", "INTEGER REFERENCES admin_users(id)"),
+            ("numbering_scope_id", "INTEGER REFERENCES numbering_scopes(id)"),
         ]
         ensure_columns(cursor, "members", member_columns)
+
+        batch_columns = [
+            ("numbering_scope_id", "INTEGER REFERENCES numbering_scopes(id)"),
+        ]
+        ensure_columns(cursor, "card_batches", batch_columns)
 
         # 4. Check/Add Columns for 'member_documents'
         doc_columns = [
@@ -129,6 +154,17 @@ def ensure_columns(cursor, table_name, columns):
                 cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_type}")
             except Exception as e:
                 print(f"  Failed to add column {col_name}: {e}")
+
+
+def ensure_table(cursor, table_name, create_sql):
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+        (table_name,),
+    )
+    if cursor.fetchone():
+        return
+    print(f"Creating missing table: {table_name}")
+    cursor.execute(create_sql)
 
 if __name__ == "__main__":
     repair_db()

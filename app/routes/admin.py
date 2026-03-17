@@ -171,6 +171,7 @@ def assign_card_manual(request: Request, member_id: int, db: Session = Depends(g
             member.card_no = allocation.card_no
             member.batch_id = allocation.batch_id
             member.card_year = allocation.year
+            member.numbering_scope_id = allocation.numbering_scope_id
             if member.status == MemberStatus.PENDING_CARDS:
                 member.status = MemberStatus.ACTIVE
                 if not member.joined_at:

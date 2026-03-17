@@ -30,6 +30,11 @@ from app.main import app
 from app.models import EmailOutbox
 from app.services.email_outbox import drain_outbox_for_tests
 from app.utils import clear_captured_emails
+from init_db import init_db
+
+
+# Direct SessionLocal-based tests need the schema repaired before the TestClient lifespan runs.
+init_db()
 
 
 @pytest.fixture(scope="session")

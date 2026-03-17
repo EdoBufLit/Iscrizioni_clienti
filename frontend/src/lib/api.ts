@@ -2545,6 +2545,10 @@ export type SuperAdminOrganization = {
   communications_enabled?: boolean;
   card_min: number | null;
   card_max: number | null;
+  numbering_mode?: "shared_assonam" | "dedicated" | "legacy";
+  numbering_scope_id?: number | null;
+  numbering_scope_name?: string | null;
+  numbering_scope_type?: string | null;
   affiliation_application_id?: number | null;
   affiliation_status?: string | null;
 };
@@ -3774,6 +3778,7 @@ export async function createSuperAdminOrganization(data: {
   auto_approve_signup?: boolean;
   require_membership_document?: boolean;
   accounting_enabled?: boolean;
+  numbering_mode?: "shared_assonam" | "dedicated";
 }): Promise<SuperAdminOrganization> {
   const res = await fetch("/api/super-admin/organizations", {
     method: "POST",
@@ -3977,12 +3982,38 @@ export type OrgBatch = {
   linked_members: number;
   range_editable: boolean;
   deletable: boolean;
+  numbering_scope_id?: number | null;
+  numbering_scope_name?: string | null;
+  numbering_scope_type?: string | null;
+  owner_org_id?: number | null;
+  owner_org_name?: string | null;
+  is_legacy_fallback_batch?: boolean;
+};
+
+export type OrganizationNumberingConfig = {
+  organization_id: number;
+  organization_name: string;
+  numbering_mode: "shared_assonam" | "dedicated" | "legacy";
+  numbering_scope_id: number | null;
+  numbering_scope_name: string | null;
+  numbering_scope_type: string | null;
+  numbering_scope_prefix: string | null;
+  numbering_scope_description: string | null;
+  numbering_scope_is_system: boolean;
+  is_freely_editable: boolean;
+  is_sensitive: boolean;
+  members_with_cards: number;
+  total_batches: number;
+  real_used_batches: number;
+  batches_with_linked_members: number;
+  warning_message: string | null;
 };
 
 export type OrgBatchesResult = {
   current_year: number;
   next_reset_at: string;
   batches: OrgBatch[];
+  numbering?: Omit<OrganizationNumberingConfig, "organization_id" | "organization_name">;
   summary: {
     total: number;
     assigned: number;
@@ -4121,6 +4152,36 @@ export async function createOrgAdminMember(
     throw new Error(payload?.detail ?? "Dati non validi");
   }
   if (!res.ok) throw new Error("Errore nella creazione del socio");
+  return res.json();
+}
+
+export async function fetchOrganizationNumberingConfig(
+  orgId: number,
+): Promise<OrganizationNumberingConfig> {
+  const res = await fetch(`/api/super-admin/organizations/${orgId}/numbering`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Organizzazione non trovata");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento numerazione"));
+  return res.json();
+}
+
+export async function patchOrganizationNumberingConfig(
+  orgId: number,
+  numberingMode: "shared_assonam" | "dedicated",
+): Promise<{
+  ok: boolean;
+  organization_id: number;
+  organization_name: string;
+  batch_backfill_count: number;
+} & Omit<OrganizationNumberingConfig, "organization_id" | "organization_name">> {
+  const res = await fetch(`/api/super-admin/organizations/${orgId}/numbering`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ numbering_mode: numberingMode }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Organizzazione non trovata");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento numerazione"));
   return res.json();
 }
 

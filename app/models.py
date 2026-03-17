@@ -144,6 +144,11 @@ class SignupSource(str, enum.Enum):
     ADMIN = "admin"
 
 
+class NumberingScopeType(str, enum.Enum):
+    SHARED = "shared"
+    DEDICATED = "dedicated"
+
+
 class AffiliationApplicationStatus(str, enum.Enum):
     DRAFT = "draft"
     UNDER_REVIEW = "under_review"
@@ -277,11 +282,19 @@ class Organization(Base):
     is_active = Column(Boolean, default=True)
     last_low_cards_alert_at = Column(DateTime, nullable=True)
     deleted_at = Column(DateTime, nullable=True)
+    numbering_scope_id = Column(
+        Integer, ForeignKey("numbering_scopes.id"), nullable=True, index=True
+    )
 
     created_by_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    numbering_scope = relationship(
+        "NumberingScope",
+        back_populates="organizations",
+        foreign_keys=[numbering_scope_id],
+    )
     members = relationship("Member", back_populates="organization")
     batches = relationship("CardBatch", back_populates="organization")
     integration_api_keys = relationship(
@@ -368,6 +381,53 @@ class Organization(Base):
         back_populates="organization",
         foreign_keys="RoomTable.association_id",
         cascade="all, delete-orphan",
+    )
+    managed_numbering_scopes = relationship(
+        "NumberingScope",
+        back_populates="owner_organization",
+        foreign_keys="NumberingScope.owner_org_id",
+    )
+
+
+class NumberingScope(Base):
+    __tablename__ = "numbering_scopes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, unique=True, index=True)
+    scope_type = Column(String, nullable=False, index=True)
+    prefix = Column(String, nullable=True)
+    description = Column(Text, nullable=True)
+    is_system = Column(
+        Boolean, nullable=False, default=False, server_default=sa.false(), index=True
+    )
+    owner_org_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    organizations = relationship(
+        "Organization",
+        back_populates="numbering_scope",
+        foreign_keys="Organization.numbering_scope_id",
+    )
+    owner_organization = relationship(
+        "Organization",
+        back_populates="managed_numbering_scopes",
+        foreign_keys=[owner_org_id],
+    )
+    batches = relationship(
+        "CardBatch",
+        back_populates="numbering_scope",
+        foreign_keys="CardBatch.numbering_scope_id",
+    )
+    members = relationship(
+        "Member",
+        back_populates="numbering_scope",
+        foreign_keys="Member.numbering_scope_id",
     )
 
 
@@ -1227,6 +1287,9 @@ class CardBatch(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     org_id = Column(Integer, ForeignKey("organizations.id"))
+    numbering_scope_id = Column(
+        Integer, ForeignKey("numbering_scopes.id"), nullable=True, index=True
+    )
     year = Column(Integer, nullable=False, default=lambda: datetime.utcnow().year)
     start_no = Column(Integer)
     end_no = Column(Integer)
@@ -1237,6 +1300,11 @@ class CardBatch(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     organization = relationship("Organization", back_populates="batches")
+    numbering_scope = relationship(
+        "NumberingScope",
+        back_populates="batches",
+        foreign_keys=[numbering_scope_id],
+    )
 
 
 class Member(Base):
@@ -1260,6 +1328,9 @@ class Member(Base):
     card_no = Column(Integer, nullable=True)
     card_year = Column(Integer, nullable=True)
     batch_id = Column(Integer, ForeignKey("card_batches.id"), nullable=True)
+    numbering_scope_id = Column(
+        Integer, ForeignKey("numbering_scopes.id"), nullable=True, index=True
+    )
     card_email_sent_at = Column(DateTime, nullable=True)
     card_delivered_at = Column(DateTime, nullable=True)
     google_wallet_class_id = Column(String, nullable=True)
@@ -1297,6 +1368,11 @@ class Member(Base):
     deleted_by_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
 
     organization = relationship("Organization", back_populates="members")
+    numbering_scope = relationship(
+        "NumberingScope",
+        back_populates="members",
+        foreign_keys=[numbering_scope_id],
+    )
     documents = relationship("MemberDocument", back_populates="member")
     payments = relationship("MemberPayment", back_populates="member")
     tokens = relationship("Token", back_populates="member")

@@ -235,6 +235,7 @@ def _cleanup_deleted_conflicts(
         member.card_no = None
         member.card_year = None
         member.batch_id = None
+        member.numbering_scope_id = None
         member.signup_ip = None
         member.signup_user_agent = None
     db.commit()
@@ -423,6 +424,7 @@ def issue_member_from_integration(
         member.card_no = allocation.card_no
         member.batch_id = allocation.batch_id
         member.card_year = allocation.year
+        member.numbering_scope_id = allocation.numbering_scope_id
         member.card_email_sent_at = None
         member.card_delivered_at = None
         issued_new_card = True
