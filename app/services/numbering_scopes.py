@@ -56,11 +56,7 @@ def get_numbering_mode(org: Organization | None) -> str:
 
 
 def ensure_assonam_central_scope(db: Session) -> NumberingScope:
-    scope = (
-        db.query(NumberingScope)
-        .filter(NumberingScope.name == ASSONAM_CENTRAL_SCOPE_NAME)
-        .first()
-    )
+    scope = get_assonam_central_scope(db)
     if scope:
         return scope
 
@@ -72,6 +68,15 @@ def ensure_assonam_central_scope(db: Session) -> NumberingScope:
     )
     db.add(scope)
     db.flush()
+    return scope
+
+
+def get_assonam_central_scope(db: Session) -> NumberingScope | None:
+    scope = (
+        db.query(NumberingScope)
+        .filter(NumberingScope.name == ASSONAM_CENTRAL_SCOPE_NAME)
+        .first()
+    )
     return scope
 
 

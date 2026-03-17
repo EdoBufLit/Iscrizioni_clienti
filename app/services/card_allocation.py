@@ -83,10 +83,11 @@ def _ordered_legacy_batches_query(org_id: int, year: int):
     )
 
 
-def _ordered_scope_batches_query(scope_id: int, year: int):
+def _ordered_org_scoped_batches_query(org_id: int, scope_id: int, year: int):
     return (
         select(CardBatch)
         .where(
+            CardBatch.org_id == org_id,
             CardBatch.numbering_scope_id == scope_id,
             CardBatch.year == year,
             CardBatch.is_enabled.is_(True),
@@ -253,7 +254,7 @@ def _allocate_next_card_scoped(db: Session, org: Organization, year: int) -> Car
     )
 
     scoped_batches = db.execute(
-        _ordered_scope_batches_query(org.numbering_scope_id, year)
+        _ordered_org_scoped_batches_query(org.id, org.numbering_scope_id, year)
     ).scalars().all()
     if scoped_batches:
         return _assign_from_batches(
@@ -303,15 +304,7 @@ def release_card_number(
     batch: CardBatch | None = None
     if batch_id is not None:
         filters = [CardBatch.id == batch_id, CardBatch.released_at.is_(None)]
-        if org_scope_id is not None:
-            filters.append(
-                or_(
-                    CardBatch.org_id == org_id,
-                    CardBatch.numbering_scope_id == org_scope_id,
-                )
-            )
-        else:
-            filters.append(CardBatch.org_id == org_id)
+        filters.append(CardBatch.org_id == org_id)
         if year is not None and year > 0:
             batch = db.query(CardBatch).filter(*filters, CardBatch.year == year).first()
         if batch is None:
@@ -319,19 +312,11 @@ def release_card_number(
 
     if batch is None:
         range_filters = [
+            CardBatch.org_id == org_id,
             CardBatch.released_at.is_(None),
             CardBatch.start_no <= card_no,
             CardBatch.end_no >= card_no,
         ]
-        if org_scope_id is not None:
-            range_filters.append(
-                or_(
-                    CardBatch.numbering_scope_id == org_scope_id,
-                    CardBatch.org_id == org_id,
-                )
-            )
-        else:
-            range_filters.append(CardBatch.org_id == org_id)
         if year is not None and year > 0:
             batch = (
                 db.query(CardBatch)

@@ -7,7 +7,7 @@ import pytest
 
 from app.db import SessionLocal
 from app.models import CardBatch, Member, MemberStatus, NumberingScope, OperationLog, Organization
-from app.services.card_allocation import allocate_next_card
+from app.services.card_allocation import allocate_next_card, release_card_number
 from app.services.numbering_scopes import ensure_assonam_central_scope, ensure_dedicated_scope
 
 
@@ -111,7 +111,7 @@ def test_allocate_uses_legacy_branch_when_scope_is_missing(db):
     assert second.numbering_scope_id is None
 
 
-def test_allocate_shared_scope_uses_common_sequence_across_orgs(db):
+def test_allocate_shared_scope_uses_only_batches_of_the_emitting_org(db):
     year = datetime.utcnow().year
     central_scope = ensure_assonam_central_scope(db)
     db.commit()
@@ -126,6 +126,14 @@ def test_allocate_shared_scope_uses_common_sequence_across_orgs(db):
         start_no=1,
         end_no=10,
     )
+    _create_batch(
+        db,
+        org_id=tag.id,
+        numbering_scope_id=central_scope.id,
+        year=year,
+        start_no=100,
+        end_no=110,
+    )
 
     first = allocate_next_card(db, golden_age.id, year)
     db.commit()
@@ -133,9 +141,10 @@ def test_allocate_shared_scope_uses_common_sequence_across_orgs(db):
     db.commit()
 
     assert first.card_no == 1
-    assert second.card_no == 2
+    assert second.card_no == 100
     assert first.numbering_scope_id == central_scope.id
     assert second.numbering_scope_id == central_scope.id
+    assert first.batch_id != second.batch_id
 
 
 def test_allocate_dedicated_scope_starts_from_own_sequence(db):
@@ -188,6 +197,89 @@ def test_scoped_allocator_skips_numbers_already_used_in_same_org(db):
     db.commit()
 
     assert allocation.card_no == 2
+
+
+def test_scoped_allocator_progresses_only_to_next_batch_of_same_org(db):
+    year = datetime.utcnow().year
+    central_scope = ensure_assonam_central_scope(db)
+    db.commit()
+
+    golden_age = _create_org(db, "numbering-shared-progress-ga", numbering_scope_id=central_scope.id)
+    tag = _create_org(db, "numbering-shared-progress-tag", numbering_scope_id=central_scope.id)
+    _create_batch(
+        db,
+        org_id=golden_age.id,
+        numbering_scope_id=central_scope.id,
+        year=year,
+        start_no=1,
+        end_no=10,
+    )
+    _create_batch(
+        db,
+        org_id=tag.id,
+        numbering_scope_id=central_scope.id,
+        year=year,
+        start_no=100,
+        end_no=101,
+    )
+    _create_batch(
+        db,
+        org_id=tag.id,
+        numbering_scope_id=central_scope.id,
+        year=year,
+        start_no=200,
+        end_no=201,
+    )
+
+    first = allocate_next_card(db, tag.id, year)
+    db.commit()
+    second = allocate_next_card(db, tag.id, year)
+    db.commit()
+    third = allocate_next_card(db, tag.id, year)
+    db.commit()
+
+    assert [first.card_no, second.card_no, third.card_no] == [100, 101, 200]
+
+
+def test_release_card_number_never_rewinds_batch_of_other_org_in_same_scope(db):
+    year = datetime.utcnow().year
+    central_scope = ensure_assonam_central_scope(db)
+    db.commit()
+
+    golden_age = _create_org(db, "numbering-shared-release-ga", numbering_scope_id=central_scope.id)
+    tag = _create_org(db, "numbering-shared-release-tag", numbering_scope_id=central_scope.id)
+    golden_batch = _create_batch(
+        db,
+        org_id=golden_age.id,
+        numbering_scope_id=central_scope.id,
+        year=year,
+        start_no=1,
+        end_no=10,
+        next_no=5,
+    )
+    _create_batch(
+        db,
+        org_id=tag.id,
+        numbering_scope_id=central_scope.id,
+        year=year,
+        start_no=100,
+        end_no=110,
+        next_no=105,
+    )
+
+    release_card_number(
+        db,
+        org_id=tag.id,
+        year=year,
+        card_no=3,
+        batch_id=golden_batch.id,
+    )
+    db.commit()
+    db.expire_all()
+
+    refreshed_batch = db.query(CardBatch).filter(CardBatch.id == golden_batch.id).first()
+    assert refreshed_batch is not None
+    assert refreshed_batch.next_no == 5
 
 
 def test_patch_numbering_free_editable_reuses_dedicated_scope_and_backfills_unused_batches(client, db):
@@ -302,6 +394,39 @@ def test_patch_numbering_sensitive_change_preserves_historical_members(client, d
     assert refreshed_member.numbering_scope_id == central_scope.id
     assert refreshed_batch.numbering_scope_id == central_scope.id
     assert refreshed_org.numbering_scope_id != central_scope.id
+
+
+def test_super_admin_batches_listing_stays_scoped_to_selected_org(client, db):
+    _login_super_admin(client)
+    year = datetime.utcnow().year
+    central_scope = ensure_assonam_central_scope(db)
+    db.commit()
+
+    golden_age = _create_org(db, "numbering-batches-ga", numbering_scope_id=central_scope.id)
+    tag = _create_org(db, "numbering-batches-tag", numbering_scope_id=central_scope.id)
+    ga_batch = _create_batch(
+        db,
+        org_id=golden_age.id,
+        numbering_scope_id=central_scope.id,
+        year=year,
+        start_no=1000,
+        end_no=1010,
+    )
+    _create_batch(
+        db,
+        org_id=tag.id,
+        numbering_scope_id=central_scope.id,
+        year=year,
+        start_no=2000,
+        end_no=2010,
+    )
+
+    response = client.get(f"/api/super-admin/organizations/{golden_age.id}/batches", params={"year": year})
+    assert response.status_code == 200, response.text
+    payload = response.json()
+
+    assert [item["id"] for item in payload["batches"]] == [ga_batch.id]
+    assert payload["summary"]["total"] == 11
 
 
 def test_create_organization_defaults_to_shared_assonam(client, db):

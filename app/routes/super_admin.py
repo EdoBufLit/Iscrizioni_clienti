@@ -3234,21 +3234,10 @@ def _get_organization_and_batch_or_404(
         .options(joinedload(CardBatch.organization), joinedload(CardBatch.numbering_scope))
         .filter(
             CardBatch.id == lot_id,
+            CardBatch.org_id == org_id,
             CardBatch.released_at.is_(None),
         )
     )
-    if org.numbering_scope_id is None:
-        batch_query = batch_query.filter(CardBatch.org_id == org_id)
-    else:
-        batch_query = batch_query.filter(
-            or_(
-                CardBatch.numbering_scope_id == org.numbering_scope_id,
-                and_(
-                    CardBatch.org_id == org.id,
-                    CardBatch.numbering_scope_id.is_(None),
-                ),
-            )
-        )
     batch = batch_query.first()
     if not batch:
         raise HTTPException(status_code=404, detail="Lotto tessere non trovato")
@@ -3442,23 +3431,11 @@ def add_card_batch(
     db.commit()
 
     # Return updated stock summary
-    if org.numbering_scope_id is None:
-        batch_filters = [CardBatch.org_id == org_id]
-    else:
-        batch_filters = [
-            or_(
-                CardBatch.numbering_scope_id == org.numbering_scope_id,
-                and_(
-                    CardBatch.org_id == org_id,
-                    CardBatch.numbering_scope_id.is_(None),
-                ),
-            )
-        ]
     batches = (
         db.query(CardBatch)
         .options(joinedload(CardBatch.organization), joinedload(CardBatch.numbering_scope))
         .filter(
-            *batch_filters,
+            CardBatch.org_id == org_id,
             CardBatch.year == batch_year,
             CardBatch.released_at.is_(None),
         )
@@ -3503,23 +3480,11 @@ def get_org_batches(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    if org.numbering_scope_id is None:
-        batch_filters = [CardBatch.org_id == org_id]
-    else:
-        batch_filters = [
-            or_(
-                CardBatch.numbering_scope_id == org.numbering_scope_id,
-                and_(
-                    CardBatch.org_id == org.id,
-                    CardBatch.numbering_scope_id.is_(None),
-                ),
-            )
-        ]
     batches = (
         db.query(CardBatch)
         .options(joinedload(CardBatch.organization), joinedload(CardBatch.numbering_scope))
         .filter(
-            *batch_filters,
+            CardBatch.org_id == org_id,
             CardBatch.year == target_year,
             CardBatch.released_at.is_(None),
         )
