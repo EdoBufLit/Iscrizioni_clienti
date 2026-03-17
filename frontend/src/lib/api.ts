@@ -686,12 +686,31 @@ export type OrgAdminCampaignRecipientMode =
   | "all_members"
   | "selected_members";
 
+export type OrgAdminEmailCtaKind =
+  | "none"
+  | "form"
+  | "document"
+  | "renewal"
+  | "custom";
+
+export type OrgAdminEmailLayoutKey =
+  | "essential"
+  | "institutional"
+  | "invitation"
+  | "renewal";
+
 export type OrgAdminEmailDesign = {
   accent_color: string;
+  button_color: string;
+  hide_logo: boolean;
   logo_url: string;
   hero_image_url: string;
+  email_title: string;
   cta_label: string;
   cta_note: string;
+  cta_kind: OrgAdminEmailCtaKind;
+  cta_url: string;
+  layout_key: OrgAdminEmailLayoutKey;
   show_association_name: boolean;
 };
 

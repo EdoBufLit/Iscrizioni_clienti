@@ -1505,6 +1505,41 @@ export function OrgAdminFormsWorkspace({
               </div>
             </div>
 
+            {selectedFormId && (
+              <div className="border-b border-neutral-200 bg-white px-4 md:px-8 py-4">
+                <div className="rounded-[1.5rem] border border-neutral-200 bg-neutral-50 px-5 py-4">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Comunicazioni collegate</p>
+                      <p className="mt-2 text-sm font-semibold text-neutral-900">Usa questo modulo in una campagna</p>
+                      <p className="mt-1 text-sm text-neutral-500">Rafforza il collegamento mentale tra form pubblico e invito email: il pulsante nell’email aprirà questa pagina nel browser.</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <a className="btn-primary !px-4 !py-2 !text-sm" href={`/org-admin/communications?tab=campagne&intent=form_invite&formId=${selectedFormId}`}>
+                        Crea invito email
+                      </a>
+                      <button
+                        type="button"
+                        className="btn-secondary !px-4 !py-2 !text-sm"
+                        onClick={() => {
+                          if (!selectedFormUrl) return;
+                          navigator.clipboard.writeText(selectedFormUrl);
+                          showToast({ title: "Link copiato", message: "Il link pubblico del modulo è stato copiato negli appunti.", tone: "success" });
+                        }}
+                      >
+                        Copia link pubblico
+                      </button>
+                      {selectedFormUrl && (
+                        <a className="btn-secondary !px-4 !py-2 !text-sm" href={selectedFormUrl} target="_blank" rel="noreferrer">
+                          Anteprima pagina pubblica
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Navigation Tabs */}
             <div className="border-b border-neutral-200 bg-white px-4 md:px-8 shrink-0 flex items-center justify-between shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] z-40">
               <div className="flex gap-6 overflow-x-auto no-scrollbar">
