@@ -159,4 +159,8 @@
 
 - Se il cliente distingue esplicitamente tra ambiente locale e server reale, non devo mai presentare un dry-run o un report locale come se valesse per produzione: prima dichiarare il contesto effettivo, poi eseguire audit sul server solo con accesso esplicito.
 - Se sto lavorando a un refactor UI/UX end-to-end, prima di fare push devo sempre controllare `git status` sui file del flusso e pubblicare tutto il set necessario; non posso fermarmi all'ultimo hotfix o alla sola passata di verifica browser.
+- Prima di pushare backend che entra nel path di startup (`app.main`, route importate, workers), devo eseguire `python -m py_compile` su tutti i file backend toccati, non su un sottoinsieme.
+- Se la produzione deploya da un branch diverso da quello su cui sto lavorando, un hotfix urgente va portato anche sul branch deployato (`feat/**` nel nostro caso), non basta committarlo sul branch `codex/*`.
+- Dopo un refactor UI con tanto microcopy, devo sempre fare uno scan esplicito anti-mojibake sui file toccati prima di chiudere (`rg "Ã|Â|â"` o equivalente), perche build verde non garantisce testo leggibile.
+- Se uso replace automatici su file TSX grandi, devo evitare sostituzioni interpolate con stringhe/template in PowerShell: per blocchi React e piu sicuro usare replace per marker stabili o patch mirate e poi rilanciare subito `typecheck`.
 

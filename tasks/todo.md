@@ -1,3 +1,27 @@
+- [x] Verificare live il workspace Comunicazioni su overview, campagne, composer e invii/statistiche
+- [x] Correggere gli ultimi residui visivi/encoding emersi nella Panoramica
+- [x] Eseguire typecheck/build frontend dopo i fix
+- [x] Salvare evidenze screenshot desktop/mobile e preparare push del pacchetto Comunicazioni
+
+## Review (Communications live verification + push - Mar 18, 2026)
+- Fix visivo finale in [CommunicationsOverview.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\components\communications\CommunicationsOverview.tsx): freccia quick action convertita in `->` e separatore stato mittente convertito in `/` per eliminare ogni rischio di resa incoerente lato browser.
+- Verifica browser live eseguita su server locale `http://127.0.0.1:8010` con sessione org-admin reale firmata come middleware applicativo, coprendo:
+- overview Comunicazioni
+- lista Campagne
+- composer dedicato `Nuova campagna`
+- `Invii e statistiche` in vista lista
+- dettaglio invio con preview reale
+- composer mobile step 1
+- Controllo anti-mojibake eseguito sul testo renderizzato delle viste verificate: nessun residuo `â`, `Â`, `Ã`, `�`.
+- Evidenze salvate in:
+- `tasks/screenshots/communications-overview-desktop-live-20260318.png`
+- `tasks/screenshots/communications-campaigns-list-desktop-live-20260318.png`
+- `tasks/screenshots/communications-composer-step1-desktop-live-20260318.png`
+- `tasks/screenshots/communications-deliveries-list-desktop-live-20260318.png`
+- `tasks/screenshots/communications-deliveries-detail-desktop-live-20260318.png`
+- `tasks/screenshots/communications-composer-step1-mobile-live-20260318.png`
+- Verifiche tecniche: `npm --prefix frontend run typecheck` OK, `npm --prefix frontend run build` OK, smoke browser Playwright custom OK.
+
 - [x] Analizzare il video reference `Baton_Draft_02_Final.mp4` e fissare i pattern da replicare (durata ~50s, demo UI orizzontale, gradient teal, zoom lenti, cursor, CTA finale)
 - [x] Definire 3 varianti ASSONAM focalizzate su procedura guidata per ads Google/Meta con copy e scene distinti ma stesso linguaggio visivo
 - [x] Preparare/riusare screenshot e asset ASSONAM utili al walkthrough, scartando quelli non adatti o corrotti
@@ -3689,3 +3713,30 @@ pm --prefix frontend run build.
 - `communications-composer-preview-mobile-20260318.png`
 - `communications-composer-stepper-mobile-20260318.png`
 - Verifiche eseguite: `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK; `python -m py_compile app/middleware.py` OK; `node tasks/tmp/communications-smoke.js` OK.
+
+## Production incident triage (Mar 18, 2026)
+- [x] Identificare host e branch realmente deployati su ASSONAM
+- [x] Accedere al server via SSH root e ispezionare stato container/log
+- [x] Individuare la causa del `502`
+- [x] Applicare hotfix minimo sicuro e ripristinare i servizi
+- [x] Portare la fix anche sul branch deployato per evitare regressione al prossimo deploy
+
+## Review (Production incident triage - Mar 18, 2026)
+- Host di produzione verificato via SSH: `157.90.31.105`, app in `/opt/assonam/app`, branch deployato `feat/redesign-landing-wizard`, commit attivo prima del fix `f4bc23c`.
+- Causa del `502`: `app-web-1` e `app-email-worker-1` erano in restart loop per `SyntaxError: f-string expression part cannot include a backslash` in `app/services/email_templates.py` durante l'import di startup.
+- Hotfix applicato sostituendo l'f-string annidata nel blocco firma con una variabile intermedia `signature_role_html`; verifica locale eseguita con `python -m py_compile app/services/email_templates.py app/services/email_campaigns.py app/routes/org_admin.py app/main.py`.
+- Ripristino produzione eseguito via SSH: file corretto sincronizzato su server, rebuild `docker compose up -d --build web email-worker low-cards-worker`, health check locale `http://127.0.0.1:8000/health` OK e health esterno `https://assonam.it/health` OK.
+- Stato finale verificato: `app-web-1`, `app-email-worker-1` e `app-low-cards-worker-1` up/healthy; resta nei log un warning separato in `init_db.py` su `COALESCE types boolean and integer cannot be matched` per `forms`, ma non blocca lo startup e non e la causa del `502`.
+- La fix e stata anche pushata sul branch realmente deployato con commit `128643f`, cosi il prossimo deploy non reintroduce il crash.
+
+## Communications cleanup pass (Mar 18, 2026)
+- [x] Semplificare `Invii e statistiche` eliminando la convivenza stabile tra lista, dettaglio e preview
+- [x] Ripulire i simboli corrotti nel composer nuova campagna e nei copy di supporto
+- [x] Verificare che il file `MessagesHub.tsx` torni compilabile dopo il refactor
+
+## Review (Communications cleanup pass - Mar 18, 2026)
+- `frontend/src/pages/org-admin/components/communications/MessagesHub.tsx` ora mostra `Invii e statistiche` come flusso piu pulito: lista focalizzata con filtri di stato e dettaglio separato, invece della vecchia schermata mista con elenco, metriche, dettaglio e preview insieme.
+- Le card degli invii sono state rese piu sintetiche e orientate all'azione: informazioni essenziali nel listato, dettaglio completo solo dopo click, preview reale confinata nella vista dettaglio.
+- Il composer campagna e stato ripulito dai simboli corrotti visibili negli step, soprattutto nelle CTA, nello stepper e nelle azioni finali.
+- Durante la correzione e stato necessario riparare anche alcuni duplicati/escape introdotti dai replace automatici nel file principale; il risultato finale e di nuovo valido a livello TSX.
+- Verifiche eseguite: `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK.
