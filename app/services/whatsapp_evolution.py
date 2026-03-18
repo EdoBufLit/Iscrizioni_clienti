@@ -48,6 +48,15 @@ class EvolutionSendTextResult:
     raw: dict[str, Any]
 
 
+@dataclass(frozen=True)
+class EvolutionInstanceRecord:
+    instance_name: str
+    connection_status: str | None
+    disconnection_reason_code: int | None
+    disconnection_object: str | None
+    raw: dict[str, Any]
+
+
 def build_evolution_instance_name(org_id: int) -> str:
     return f"assonam-org-{int(org_id)}"
 
@@ -163,6 +172,39 @@ def _extract_profile_name(payload: Any) -> str | None:
     return None
 
 
+def _parse_instance_record(payload: Any) -> EvolutionInstanceRecord | None:
+    if not isinstance(payload, dict):
+        return None
+    name = payload.get("name")
+    if not isinstance(name, str) or not name.strip():
+        return None
+    reason_code = payload.get("disconnectionReasonCode")
+    if not isinstance(reason_code, int):
+        reason_code = None
+    disconnection_object = payload.get("disconnectionObject")
+    if not isinstance(disconnection_object, str):
+        disconnection_object = None
+    connection_status = payload.get("connectionStatus")
+    if not isinstance(connection_status, str):
+        connection_status = None
+    return EvolutionInstanceRecord(
+        instance_name=name.strip(),
+        connection_status=connection_status.strip().lower() if connection_status else None,
+        disconnection_reason_code=reason_code,
+        disconnection_object=disconnection_object,
+        raw=payload,
+    )
+
+
+def _instance_requires_recreate(record: EvolutionInstanceRecord | None) -> bool:
+    if record is None:
+        return False
+    if record.disconnection_reason_code != 401:
+        return False
+    detail = (record.disconnection_object or "").lower()
+    return "device_removed" in detail or "conflict" in detail
+
+
 def _extract_phone_number(payload: Any) -> str | None:
     if not isinstance(payload, dict):
         return None
@@ -255,8 +297,17 @@ class EvolutionLiteClient:
         except EvolutionApiError as exc:
             if "already" not in str(exc).lower() and "exist" not in str(exc).lower():
                 raise
-            self.set_webhook(instance_name)
-            return {"instance": {"instanceName": instance_name}}
+            record = self.fetch_instance(instance_name)
+            if _instance_requires_recreate(record):
+                self.delete_instance(instance_name)
+                payload = self._request(
+                    "POST",
+                    f"{EVOLUTION_INSTANCE_PREFIX}/create",
+                    json=body,
+                )
+            else:
+                self.set_webhook(instance_name)
+                return {"instance": {"instanceName": instance_name}}
         self.set_webhook(instance_name)
         return payload
 
@@ -304,6 +355,28 @@ class EvolutionLiteClient:
             f"{EVOLUTION_INSTANCE_PREFIX}/logout/{instance_name}",
         )
 
+    def delete_instance(self, instance_name: str) -> dict[str, Any]:
+        return self._request(
+            "DELETE",
+            f"{EVOLUTION_INSTANCE_PREFIX}/delete/{instance_name}",
+        )
+
+    def fetch_instance(self, instance_name: str) -> EvolutionInstanceRecord | None:
+        payload = self._request(
+            "GET",
+            f"{EVOLUTION_INSTANCE_PREFIX}/fetchInstances",
+        )
+        for item in payload.get("instances", []) if isinstance(payload, dict) else []:
+            record = _parse_instance_record(item)
+            if record and record.instance_name == instance_name:
+                return record
+        if isinstance(payload, list):
+            for item in payload:
+                record = _parse_instance_record(item)
+                if record and record.instance_name == instance_name:
+                    return record
+        return None
+
     def send_text(self, instance_name: str, *, number: str, text: str) -> EvolutionSendTextResult:
         payload = self._request(
             "POST",
@@ -326,7 +399,7 @@ class EvolutionLiteClient:
         path: str,
         *,
         json: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+    ) -> Any:
         if not self.base_url:
             raise EvolutionApiError("EVOLUTION_API_BASE_URL non configurato.")
         if not self.api_key:
@@ -355,7 +428,7 @@ class EvolutionLiteClient:
             detail = _extract_error_detail(parsed)
             message = detail or f"Evolution API error ({response.status_code})"
             raise EvolutionApiError(message)
-        if not isinstance(parsed, dict):
+        if not isinstance(parsed, (dict, list)):
             logger.warning("evolution_api_unexpected_payload path=%s type=%s", path, type(parsed).__name__)
             return {}
         return parsed

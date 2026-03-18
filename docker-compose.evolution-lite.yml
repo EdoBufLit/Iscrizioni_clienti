@@ -6,7 +6,7 @@ services:
     entrypoint:
       - /bin/bash
       - -lc
-      - export DATABASE_URL="$${DATABASE_CONNECTION_URI:-}"; export SERVER_TYPE="$${SERVER_TYPE:-http}"; export DATABASE_SAVE_DATA_INSTANCE="$${DATABASE_SAVE_DATA_INSTANCE:-true}"; . ./Docker/scripts/deploy_database.sh && npm run start:prod
+      - export DATABASE_URL="$${DATABASE_CONNECTION_URI:-}"; export SERVER_TYPE="$${SERVER_TYPE:-http}"; export DATABASE_SAVE_DATA_INSTANCE="$${DATABASE_SAVE_DATA_INSTANCE:-true}"; export CACHE_REDIS_ENABLED="$${CACHE_REDIS_ENABLED:-false}"; export CONFIG_SESSION_PHONE_VERSION="$${CONFIG_SESSION_PHONE_VERSION:-2.3000.1015901307}"; . ./Docker/scripts/deploy_database.sh && npm run start:prod
     depends_on:
       - db
     env_file:

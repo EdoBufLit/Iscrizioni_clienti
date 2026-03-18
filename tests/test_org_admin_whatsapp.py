@@ -502,5 +502,63 @@ def test_ensure_instance_treats_already_in_use_as_idempotent(monkeypatch):
     assert payload == {"instance": {"instanceName": "assonam-org-7"}}
     assert requests_seen == [
         ("POST", "http://evolution-api:8080/instance/create"),
+        ("GET", "http://evolution-api:8080/instance/fetchInstances"),
+        ("POST", "http://evolution-api:8080/webhook/set/assonam-org-7"),
+    ]
+
+
+def test_ensure_instance_recreates_device_removed_session(monkeypatch):
+    requests_seen: list[tuple[str, str]] = []
+
+    class DummyResponse:
+        def __init__(self, status_code: int, payload):
+            self.status_code = status_code
+            self.ok = status_code < 400
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    create_calls = {"count": 0}
+
+    def fake_request(method, url, json=None, headers=None, timeout=None):
+        requests_seen.append((method, url))
+        if url.endswith("/instance/create"):
+            create_calls["count"] += 1
+            if create_calls["count"] == 1:
+                return DummyResponse(
+                    403,
+                    {
+                        "status": 403,
+                        "error": "Forbidden",
+                        "response": {"message": ['This name "assonam-org-7" is already in use.']},
+                    },
+                )
+            return DummyResponse(200, {"instance": {"instanceName": "assonam-org-7"}})
+        if url.endswith("/instance/fetchInstances"):
+            return DummyResponse(
+                200,
+                [
+                    {
+                        "name": "assonam-org-7",
+                        "connectionStatus": "connecting",
+                        "disconnectionReasonCode": 401,
+                        "disconnectionObject": '{"error":{"output":{"payload":{"message":"Stream Errored (conflict)"}}},"data":{"content":[{"tag":"conflict","attrs":{"type":"device_removed"}}]}}',
+                    }
+                ],
+            )
+        return DummyResponse(200, {"ok": True})
+
+    monkeypatch.setattr("app.services.whatsapp_evolution.requests.request", fake_request)
+
+    client = EvolutionLiteClient(base_url="http://evolution-api:8080", api_key="test-key")
+    payload = client.ensure_instance(org_id=7)
+
+    assert payload == {"instance": {"instanceName": "assonam-org-7"}}
+    assert requests_seen == [
+        ("POST", "http://evolution-api:8080/instance/create"),
+        ("GET", "http://evolution-api:8080/instance/fetchInstances"),
+        ("DELETE", "http://evolution-api:8080/instance/delete/assonam-org-7"),
+        ("POST", "http://evolution-api:8080/instance/create"),
         ("POST", "http://evolution-api:8080/webhook/set/assonam-org-7"),
     ]
