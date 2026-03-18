@@ -1,0 +1,791 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+import hashlib
+import json
+import logging
+import uuid
+from typing import Any
+
+from sqlalchemy.orm import Session
+
+from app.models import (
+    Organization,
+    WhatsAppChat,
+    WhatsAppConnection,
+    WhatsAppMessage,
+)
+from app.services.whatsapp_evolution import (
+    EvolutionConnectionSnapshot,
+    EvolutionSendTextResult,
+    build_evolution_instance_name,
+    normalize_phone,
+    resolve_connection_status,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def utcnow() -> datetime:
+    return datetime.utcnow()
+
+
+def get_or_create_connection(db: Session, org: Organization) -> WhatsAppConnection:
+    connection = (
+        db.query(WhatsAppConnection)
+        .filter(WhatsAppConnection.org_id == org.id)
+        .first()
+    )
+    if connection is not None:
+        expected_name = build_evolution_instance_name(org.id)
+        if connection.instance_name != expected_name:
+            connection.instance_name = expected_name
+        return connection
+
+    connection = WhatsAppConnection(
+        org_id=org.id,
+        instance_name=build_evolution_instance_name(org.id),
+        status="not_connected",
+    )
+    db.add(connection)
+    db.flush()
+    return connection
+
+
+def get_connection_by_instance_name(
+    db: Session,
+    *,
+    instance_name: str,
+) -> WhatsAppConnection | None:
+    return (
+        db.query(WhatsAppConnection)
+        .filter(WhatsAppConnection.instance_name == instance_name)
+        .first()
+    )
+
+
+def apply_connection_snapshot(
+    connection: WhatsAppConnection,
+    snapshot: EvolutionConnectionSnapshot,
+    *,
+    event_time: datetime | None = None,
+) -> None:
+    connection.status = snapshot.status
+    connection.phone_number = snapshot.phone_number or connection.phone_number
+    connection.profile_name = snapshot.profile_name or connection.profile_name
+    connection.last_error = snapshot.last_error
+    connection.last_event_at = event_time or utcnow()
+
+    if snapshot.status == "connected":
+        connection.connected_at = connection.connected_at or snapshot.connected_at or utcnow()
+        connection.qr_code = None
+    elif snapshot.qr_code:
+        connection.qr_code = snapshot.qr_code
+    elif snapshot.status == "not_connected":
+        connection.qr_code = None
+
+
+def serialize_connection(connection: WhatsAppConnection | None) -> dict[str, Any]:
+    if connection is None:
+        return {
+            "status": "not_connected",
+            "phone_number": None,
+            "profile_name": None,
+            "has_qr": False,
+            "qr_code": None,
+            "last_error": None,
+            "updated_at": None,
+        }
+    return {
+        "status": connection.status or "not_connected",
+        "phone_number": connection.phone_number,
+        "profile_name": connection.profile_name,
+        "has_qr": bool(connection.qr_code),
+        "qr_code": connection.qr_code,
+        "last_error": connection.last_error,
+        "updated_at": connection.updated_at.isoformat() if connection.updated_at else None,
+    }
+
+
+def serialize_chat(chat: WhatsAppChat) -> dict[str, Any]:
+    return {
+        "id": chat.id,
+        "display_name": chat.display_name or normalize_phone(chat.external_chat_id) or chat.external_chat_id,
+        "external_chat_id": chat.external_chat_id,
+        "last_message_text": chat.last_message_text,
+        "last_message_at": chat.last_message_at.isoformat() if chat.last_message_at else None,
+        "unread_count": int(chat.unread_count or 0),
+    }
+
+
+def serialize_message(message: WhatsAppMessage) -> dict[str, Any]:
+    return {
+        "id": message.id,
+        "external_message_id": message.external_message_id,
+        "direction": message.direction,
+        "status": message.status,
+        "sender_phone": message.sender_phone,
+        "recipient_phone": message.recipient_phone,
+        "text_body": message.text_body,
+        "sent_at": message.sent_at.isoformat() if message.sent_at else None,
+        "delivered_at": message.delivered_at.isoformat() if message.delivered_at else None,
+        "read_at": message.read_at.isoformat() if message.read_at else None,
+        "failed_at": message.failed_at.isoformat() if message.failed_at else None,
+        "created_at": message.created_at.isoformat() if message.created_at else None,
+        "updated_at": message.updated_at.isoformat() if message.updated_at else None,
+    }
+
+
+def list_chats_for_connection(db: Session, *, connection: WhatsAppConnection) -> list[WhatsAppChat]:
+    return (
+        db.query(WhatsAppChat)
+        .filter(WhatsAppChat.connection_id == connection.id)
+        .order_by(WhatsAppChat.last_message_at.desc(), WhatsAppChat.id.desc())
+        .all()
+    )
+
+
+def get_chat_for_connection(
+    db: Session,
+    *,
+    connection: WhatsAppConnection,
+    chat_id: int,
+) -> WhatsAppChat | None:
+    return (
+        db.query(WhatsAppChat)
+        .filter(
+            WhatsAppChat.id == chat_id,
+            WhatsAppChat.connection_id == connection.id,
+            WhatsAppChat.org_id == connection.org_id,
+        )
+        .first()
+    )
+
+
+def get_messages_for_chat(
+    db: Session,
+    *,
+    chat: WhatsAppChat,
+    mark_as_read: bool = True,
+) -> list[WhatsAppMessage]:
+    messages = (
+        db.query(WhatsAppMessage)
+        .filter(WhatsAppMessage.chat_id == chat.id)
+        .order_by(WhatsAppMessage.created_at.asc(), WhatsAppMessage.id.asc())
+        .all()
+    )
+    if mark_as_read and int(chat.unread_count or 0) > 0:
+        chat.unread_count = 0
+    return messages
+
+
+def create_pending_outbound_message(
+    db: Session,
+    *,
+    connection: WhatsAppConnection,
+    chat: WhatsAppChat,
+    text_body: str,
+) -> WhatsAppMessage:
+    recipient_phone = normalize_phone(chat.external_chat_id)
+    message = WhatsAppMessage(
+        org_id=connection.org_id,
+        connection_id=connection.id,
+        chat_id=chat.id,
+        dedupe_key=f"pending-send:{uuid.uuid4().hex}",
+        direction="outbound",
+        status="pending",
+        sender_phone=connection.phone_number,
+        recipient_phone=recipient_phone,
+        text_body=text_body,
+        sent_at=utcnow(),
+    )
+    db.add(message)
+    db.flush()
+    _touch_chat(
+        chat,
+        text_body=text_body,
+        message_at=message.sent_at or utcnow(),
+        increment_unread=False,
+    )
+    return message
+
+
+def finalize_outbound_send(
+    pending_message: WhatsAppMessage,
+    send_result: EvolutionSendTextResult,
+) -> None:
+    external_message_id = send_result.external_message_id
+    if external_message_id:
+        pending_message.external_message_id = external_message_id
+        pending_message.dedupe_key = _build_message_dedupe_key(
+            instance_name=None,
+            external_message_id=external_message_id,
+            payload=None,
+        )
+    pending_message.status = _normalize_message_status(send_result.status)
+    pending_message.failed_at = None
+
+
+def mark_outbound_message_failed(
+    pending_message: WhatsAppMessage,
+    *,
+    error_message: str,
+) -> None:
+    pending_message.status = "failed"
+    pending_message.failed_at = utcnow()
+    if error_message and not pending_message.text_body:
+        pending_message.text_body = ""
+
+
+def ingest_evolution_webhook(
+    db: Session,
+    *,
+    payload: dict[str, Any],
+) -> None:
+    event_name = str(payload.get("event") or "").strip().lower()
+    instance_name = str(payload.get("instance") or "").strip()
+    if not event_name or not instance_name:
+        return
+
+    connection = get_connection_by_instance_name(db, instance_name=instance_name)
+    if connection is None:
+        logger.warning("whatsapp_evolution_unknown_instance instance=%s event=%s", instance_name, event_name)
+        return
+
+    event_time = _parse_datetime(payload.get("date_time")) or utcnow()
+    data = payload.get("data")
+    if event_name == "qrcode.updated":
+        _apply_qr_update(connection, data, event_time=event_time)
+        return
+    if event_name == "connection.update":
+        _apply_connection_update(connection, data, event_time=event_time)
+        return
+    if event_name in {"messages.upsert", "send.message"}:
+        _ingest_message_batch(
+            db,
+            connection=connection,
+            event_name=event_name,
+            data=data,
+            event_time=event_time,
+        )
+        return
+    if event_name == "messages.update":
+        _apply_message_updates(
+            db,
+            connection=connection,
+            data=data,
+            event_time=event_time,
+        )
+
+
+def _apply_qr_update(
+    connection: WhatsAppConnection,
+    data: Any,
+    *,
+    event_time: datetime,
+) -> None:
+    qr_code = _extract_qr_code(data)
+    connection.qr_code = qr_code
+    connection.last_error = None
+    connection.last_event_at = event_time
+    connection.status = resolve_connection_status("connecting", has_qr=bool(qr_code))
+
+
+def _apply_connection_update(
+    connection: WhatsAppConnection,
+    data: Any,
+    *,
+    event_time: datetime,
+) -> None:
+    raw_state = _extract_connection_state(data)
+    profile_name = _extract_profile_name(data)
+    phone_number = _extract_phone_number(data)
+    last_error = _extract_connection_error(data)
+    next_status = resolve_connection_status(raw_state, has_qr=bool(connection.qr_code), last_error=last_error)
+    connection.status = next_status
+    connection.profile_name = profile_name or connection.profile_name
+    connection.phone_number = phone_number or connection.phone_number
+    connection.last_error = last_error
+    connection.last_event_at = event_time
+    if next_status == "connected":
+        connection.connected_at = connection.connected_at or event_time
+        connection.qr_code = None
+    elif next_status == "not_connected":
+        connection.qr_code = None
+
+
+def _ingest_message_batch(
+    db: Session,
+    *,
+    connection: WhatsAppConnection,
+    event_name: str,
+    data: Any,
+    event_time: datetime,
+) -> None:
+    for message_payload in _extract_message_envelopes(data):
+        message_context = _build_message_context(
+            connection=connection,
+            payload=message_payload,
+            event_name=event_name,
+            fallback_time=event_time,
+        )
+        if message_context is None:
+            continue
+        chat = _get_or_create_chat(
+            db,
+            connection=connection,
+            external_chat_id=message_context["external_chat_id"],
+            display_name=message_context["display_name"],
+        )
+        existing = _find_existing_message(
+            db,
+            connection=connection,
+            external_message_id=message_context["external_message_id"],
+            dedupe_key=message_context["dedupe_key"],
+        )
+        is_new = existing is None
+        message = existing or WhatsAppMessage(
+            org_id=connection.org_id,
+            connection_id=connection.id,
+            chat_id=chat.id,
+            dedupe_key=message_context["dedupe_key"],
+            direction=message_context["direction"],
+            status=message_context["status"],
+            created_at=message_context["created_at"],
+        )
+        if is_new:
+            db.add(message)
+
+        message.chat_id = chat.id
+        message.external_message_id = message_context["external_message_id"]
+        message.sender_phone = message_context["sender_phone"]
+        message.recipient_phone = message_context["recipient_phone"]
+        message.direction = message_context["direction"]
+        message.status = message_context["status"]
+        message.text_body = message_context["text_body"]
+        message.sent_at = message_context["created_at"]
+        if message.status == "delivered":
+            message.delivered_at = message.delivered_at or message_context["created_at"]
+        if message.status == "read":
+            message.read_at = message.read_at or message_context["created_at"]
+            message.delivered_at = message.delivered_at or message_context["created_at"]
+        if message.status == "failed":
+            message.failed_at = message.failed_at or message_context["created_at"]
+
+        _touch_chat(
+            chat,
+            text_body=message.text_body,
+            message_at=message.sent_at or event_time,
+            increment_unread=is_new and message.direction == "inbound",
+        )
+
+
+def _apply_message_updates(
+    db: Session,
+    *,
+    connection: WhatsAppConnection,
+    data: Any,
+    event_time: datetime,
+) -> None:
+    for update_payload in _extract_message_envelopes(data):
+        external_message_id = _extract_external_message_id(update_payload)
+        if external_message_id is None:
+            continue
+        message = (
+            db.query(WhatsAppMessage)
+            .filter(
+                WhatsAppMessage.connection_id == connection.id,
+                WhatsAppMessage.external_message_id == external_message_id,
+            )
+            .first()
+        )
+        if message is None:
+            continue
+        next_status = _normalize_message_status(_extract_update_status(update_payload))
+        message.status = next_status
+        if next_status == "delivered":
+            message.delivered_at = message.delivered_at or event_time
+        elif next_status == "read":
+            message.delivered_at = message.delivered_at or event_time
+            message.read_at = message.read_at or event_time
+        elif next_status == "failed":
+            message.failed_at = message.failed_at or event_time
+
+
+def _find_existing_message(
+    db: Session,
+    *,
+    connection: WhatsAppConnection,
+    external_message_id: str | None,
+    dedupe_key: str,
+) -> WhatsAppMessage | None:
+    if external_message_id:
+        message = (
+            db.query(WhatsAppMessage)
+            .filter(
+                WhatsAppMessage.connection_id == connection.id,
+                WhatsAppMessage.external_message_id == external_message_id,
+            )
+            .first()
+        )
+        if message is not None:
+            return message
+    return (
+        db.query(WhatsAppMessage)
+        .filter(WhatsAppMessage.dedupe_key == dedupe_key)
+        .first()
+    )
+
+
+def _get_or_create_chat(
+    db: Session,
+    *,
+    connection: WhatsAppConnection,
+    external_chat_id: str,
+    display_name: str | None,
+) -> WhatsAppChat:
+    chat = (
+        db.query(WhatsAppChat)
+        .filter(
+            WhatsAppChat.connection_id == connection.id,
+            WhatsAppChat.external_chat_id == external_chat_id,
+        )
+        .first()
+    )
+    if chat is None:
+        chat = WhatsAppChat(
+            org_id=connection.org_id,
+            connection_id=connection.id,
+            external_chat_id=external_chat_id,
+            display_name=display_name,
+        )
+        db.add(chat)
+        db.flush()
+        return chat
+    if display_name and not chat.display_name:
+        chat.display_name = display_name
+    return chat
+
+
+def _touch_chat(
+    chat: WhatsAppChat,
+    *,
+    text_body: str | None,
+    message_at: datetime,
+    increment_unread: bool,
+) -> None:
+    chat.last_message_text = text_body
+    chat.last_message_at = message_at
+    if increment_unread:
+        chat.unread_count = int(chat.unread_count or 0) + 1
+
+
+def _build_message_context(
+    *,
+    connection: WhatsAppConnection,
+    payload: dict[str, Any],
+    event_name: str,
+    fallback_time: datetime,
+) -> dict[str, Any] | None:
+    external_chat_id = _extract_chat_id(payload)
+    if not external_chat_id or external_chat_id.endswith("@g.us"):
+        return None
+
+    external_message_id = _extract_external_message_id(payload)
+    dedupe_key = _build_message_dedupe_key(
+        instance_name=connection.instance_name,
+        external_message_id=external_message_id,
+        payload=payload,
+    )
+    direction = "outbound" if _is_outbound_message(payload, event_name=event_name) else "inbound"
+    remote_phone = normalize_phone(external_chat_id)
+    sender_phone = connection.phone_number if direction == "outbound" else _extract_sender_phone(payload) or remote_phone
+    recipient_phone = remote_phone if direction == "outbound" else connection.phone_number
+    text_body = _extract_text_body(payload)
+    created_at = _extract_message_timestamp(payload) or fallback_time
+    display_name = _extract_display_name(payload) or remote_phone or external_chat_id
+    status = _normalize_message_status(_extract_update_status(payload))
+    if event_name == "send.message" and status == "pending":
+        status = "sent"
+    return {
+        "external_chat_id": external_chat_id,
+        "external_message_id": external_message_id,
+        "dedupe_key": dedupe_key,
+        "direction": direction,
+        "sender_phone": sender_phone,
+        "recipient_phone": recipient_phone,
+        "text_body": text_body,
+        "created_at": created_at,
+        "display_name": display_name,
+        "status": status,
+    }
+
+
+def _extract_message_envelopes(data: Any) -> list[dict[str, Any]]:
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    if not isinstance(data, dict):
+        return []
+    for key in ("messages", "items", "updates"):
+        value = data.get(key)
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+    if any(key in data for key in ("key", "message", "id", "messageId", "status")):
+        return [data]
+    return []
+
+
+def _extract_chat_id(payload: dict[str, Any]) -> str | None:
+    key = payload.get("key")
+    if isinstance(key, dict):
+        remote_jid = key.get("remoteJid")
+        if isinstance(remote_jid, str) and remote_jid.strip():
+            return remote_jid.strip()
+    for candidate in (payload.get("remoteJid"), payload.get("jid"), payload.get("chatId")):
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    return None
+
+
+def _extract_external_message_id(payload: dict[str, Any]) -> str | None:
+    key = payload.get("key")
+    if isinstance(key, dict):
+        key_id = key.get("id")
+        if isinstance(key_id, str) and key_id.strip():
+            return key_id.strip()
+    for candidate in (payload.get("id"), payload.get("messageId"), payload.get("message_id")):
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    return None
+
+
+def _extract_sender_phone(payload: dict[str, Any]) -> str | None:
+    key = payload.get("key")
+    if isinstance(key, dict):
+        for candidate in (key.get("participant"), key.get("remoteJid")):
+            normalized = normalize_phone(candidate if isinstance(candidate, str) else None)
+            if normalized:
+                return normalized
+    for candidate in (payload.get("participant"), payload.get("sender"), payload.get("from")):
+        normalized = normalize_phone(candidate if isinstance(candidate, str) else None)
+        if normalized:
+            return normalized
+    return None
+
+
+def _extract_display_name(payload: dict[str, Any]) -> str | None:
+    for candidate in (
+        payload.get("pushName"),
+        payload.get("notifyName"),
+        payload.get("profileName"),
+        payload.get("senderName"),
+    ):
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    return None
+
+
+def _extract_text_body(payload: dict[str, Any]) -> str | None:
+    for candidate in (payload.get("text"), payload.get("body")):
+        if isinstance(candidate, str):
+            cleaned = candidate.strip()
+            if cleaned:
+                return cleaned
+    message = payload.get("message")
+    if isinstance(message, dict):
+        conversation = message.get("conversation")
+        if isinstance(conversation, str) and conversation.strip():
+            return conversation.strip()
+        extended = message.get("extendedTextMessage")
+        if isinstance(extended, dict):
+            text_value = extended.get("text")
+            if isinstance(text_value, str) and text_value.strip():
+                return text_value.strip()
+    return None
+
+
+def _extract_message_timestamp(payload: dict[str, Any]) -> datetime | None:
+    for candidate in (
+        payload.get("messageTimestamp"),
+        payload.get("timestamp"),
+        payload.get("message_timestamp"),
+    ):
+        parsed = _timestamp_to_datetime(candidate)
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _timestamp_to_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=None)
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return None
+        parsed = _parse_datetime(value)
+        if parsed is not None:
+            return parsed
+        if value.isdigit():
+            value = int(value)
+    if isinstance(value, (int, float)):
+        timestamp = float(value)
+        if timestamp > 10_000_000_000:
+            timestamp = timestamp / 1000.0
+        return datetime.fromtimestamp(timestamp, tz=timezone.utc).replace(tzinfo=None)
+    return None
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=None)
+    if not isinstance(value, str):
+        return None
+    raw = value.strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
+def _is_outbound_message(payload: dict[str, Any], *, event_name: str) -> bool:
+    if event_name == "send.message":
+        return True
+    key = payload.get("key")
+    if isinstance(key, dict):
+        return bool(key.get("fromMe"))
+    return bool(payload.get("fromMe"))
+
+
+def _extract_qr_code(data: Any) -> str | None:
+    if isinstance(data, dict):
+        for candidate in (
+            data.get("qrcode"),
+            data.get("qrCode"),
+            data.get("base64"),
+            data.get("code"),
+            data.get("pairingCode"),
+        ):
+            if isinstance(candidate, dict):
+                nested = _extract_qr_code(candidate)
+                if nested:
+                    return nested
+            elif isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+    elif isinstance(data, str) and data.strip():
+        return data.strip()
+    return None
+
+
+def _extract_connection_state(data: Any) -> str | None:
+    if not isinstance(data, dict):
+        return None
+    for candidate in (data.get("state"), data.get("status"), data.get("connection")):
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    instance = data.get("instance")
+    if isinstance(instance, dict):
+        return _extract_connection_state(instance)
+    return None
+
+
+def _extract_profile_name(data: Any) -> str | None:
+    if not isinstance(data, dict):
+        return None
+    for candidate in (
+        data.get("profileName"),
+        data.get("pushName"),
+        data.get("name"),
+    ):
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    instance = data.get("instance")
+    if isinstance(instance, dict):
+        return _extract_profile_name(instance)
+    return None
+
+
+def _extract_phone_number(data: Any) -> str | None:
+    if not isinstance(data, dict):
+        return None
+    for candidate in (data.get("number"), data.get("wuid"), data.get("ownerJid")):
+        normalized = normalize_phone(candidate if isinstance(candidate, str) else None)
+        if normalized:
+            return normalized
+    instance = data.get("instance")
+    if isinstance(instance, dict):
+        return _extract_phone_number(instance)
+    return None
+
+
+def _extract_connection_error(data: Any) -> str | None:
+    if not isinstance(data, dict):
+        return None
+    for candidate in (data.get("message"), data.get("error")):
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    last_disconnect = data.get("lastDisconnect")
+    if isinstance(last_disconnect, dict):
+        error = last_disconnect.get("error")
+        if isinstance(error, dict):
+            output = error.get("output")
+            if isinstance(output, dict):
+                payload = output.get("payload")
+                if isinstance(payload, dict):
+                    message = payload.get("message")
+                    if isinstance(message, str) and message.strip():
+                        return message.strip()
+    return None
+
+
+def _extract_update_status(payload: dict[str, Any]) -> Any:
+    update = payload.get("update")
+    if isinstance(update, dict):
+        if "status" in update:
+            return update.get("status")
+    if "status" in payload:
+        return payload.get("status")
+    return None
+
+
+def _normalize_message_status(value: Any) -> str:
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"pending", "queued"}:
+            return "pending"
+        if normalized in {"sent", "server_ack", "delivery_ack", "ack"}:
+            return "sent"
+        if normalized in {"delivered"}:
+            return "delivered"
+        if normalized in {"read", "played"}:
+            return "read"
+        if normalized in {"failed", "error"}:
+            return "failed"
+    if isinstance(value, (int, float)):
+        status_code = int(value)
+        if status_code <= 0:
+            return "pending"
+        if status_code in {1, 2}:
+            return "sent"
+        if status_code == 3:
+            return "delivered"
+        if status_code >= 4:
+            return "read"
+    return "pending"
+
+
+def _build_message_dedupe_key(
+    *,
+    instance_name: str | None,
+    external_message_id: str | None,
+    payload: dict[str, Any] | None,
+) -> str:
+    if external_message_id:
+        prefix = instance_name or "instance"
+        return f"message:{prefix}:{external_message_id}"
+    serialized = json.dumps(payload or {}, sort_keys=True, default=str, ensure_ascii=True)
+    digest = hashlib.sha1(serialized.encode("utf-8")).hexdigest()
+    prefix = instance_name or "instance"
+    return f"message:{prefix}:hash:{digest}"

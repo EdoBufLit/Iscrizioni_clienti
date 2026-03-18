@@ -8,6 +8,7 @@ import { CommunicationsOverview } from "./components/communications/Communicatio
 import { MessagesHub } from "./components/communications/MessagesHub";
 import { PublicFormsHub } from "./components/communications/PublicFormsHub";
 import { EmailSendingSettings } from "./components/communications/EmailSendingSettings";
+import { WhatsAppHub } from "./components/communications/WhatsAppHub";
 
 type TabKey =
   | "panoramica"
@@ -15,6 +16,7 @@ type TabKey =
   | "modelli"
   | "moduli"
   | "invii"
+  | "whatsapp"
   | "impostazioni";
 
 type LaunchIntent =
@@ -35,6 +37,7 @@ const tabDefinitions: Array<{ key: TabKey; label: string; hint: string }> = [
   { key: "modelli", label: "Modelli", hint: "Libreria riusabile email." },
   { key: "moduli", label: "Form pubblici", hint: "Pagine e moduli collegabili." },
   { key: "invii", label: "Invii e statistiche", hint: "Bozze, programmate, inviate, fallite." },
+  { key: "whatsapp", label: "WhatsApp", hint: "Inbox sperimentale via Evolution Lite." },
   { key: "impostazioni", label: "Impostazioni email", hint: "Mittente, reply-to e branding." },
 ];
 
@@ -45,7 +48,7 @@ function normalizeTab(value: string | null | undefined): TabKey {
   if (normalized === "pagine-e-moduli") return "moduli";
   if (normalized === "invio-email") return "impostazioni";
   if (normalized === "invii-statistiche") return "invii";
-  if (normalized === "panoramica" || normalized === "campagne" || normalized === "modelli" || normalized === "moduli" || normalized === "invii" || normalized === "impostazioni") {
+  if (normalized === "panoramica" || normalized === "campagne" || normalized === "modelli" || normalized === "moduli" || normalized === "invii" || normalized === "whatsapp" || normalized === "impostazioni") {
     return normalized;
   }
   return "panoramica";
@@ -73,6 +76,7 @@ export default function OrgAdminCommunications() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [communicationsLocked, setCommunicationsLocked] = useState(true);
+  const [whatsappEnabled, setWhatsappEnabled] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>(normalizeTab(searchParams.get("tab")));
 
   const launchIntent = useMemo(
@@ -111,10 +115,16 @@ export default function OrgAdminCommunications() {
 
     fetchOrgAdminCommunicationSettings()
       .then((settings) => {
-        if (!cancelled) setCommunicationsLocked(!settings.communications_enabled);
+        if (!cancelled) {
+          setCommunicationsLocked(!settings.communications_enabled);
+          setWhatsappEnabled(Boolean(settings.whatsapp_evolution_enabled));
+        }
       })
       .catch(() => {
-        if (!cancelled) setCommunicationsLocked(true);
+        if (!cancelled) {
+          setCommunicationsLocked(true);
+          setWhatsappEnabled(false);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -131,6 +141,12 @@ export default function OrgAdminCommunications() {
       setActiveTab(nextTab);
     }
   }, [activeTab, searchParams]);
+
+  useEffect(() => {
+    if (!whatsappEnabled && activeTab === "whatsapp") {
+      updateQuery("panoramica");
+    }
+  }, [activeTab, whatsappEnabled]);
 
   function updateQuery(nextTab: TabKey, extras?: Record<string, string | number | null | undefined>) {
     const nextParams = new URLSearchParams(searchParams);
@@ -161,6 +177,8 @@ export default function OrgAdminCommunications() {
       </div>
     );
   }
+
+  const visibleTabs = tabDefinitions.filter((tab) => tab.key !== "whatsapp" || whatsappEnabled);
 
   if (composerActive) {
     return (
@@ -209,8 +227,8 @@ export default function OrgAdminCommunications() {
         )}
 
         <div className="px-4 pt-6 md:px-8">
-          <div className="grid gap-2 border-b border-neutral-200 pb-4 md:grid-cols-3 xl:grid-cols-6">
-            {tabDefinitions.map((tab) => (
+          <div className="grid gap-2 border-b border-neutral-200 pb-4 md:grid-cols-3 xl:grid-cols-7">
+            {visibleTabs.map((tab) => (
               <button
                 key={tab.key}
                 type="button"
@@ -287,6 +305,9 @@ export default function OrgAdminCommunications() {
               launchTemplateId={launchTemplateId}
               onConsumeLaunch={consumeLaunchParams}
             />
+          )}
+          {activeTab === "whatsapp" && whatsappEnabled && (
+            <WhatsAppHub communicationsLocked={communicationsLocked} />
           )}
           {activeTab === "impostazioni" && (
             <EmailSendingSettings communicationsLocked={communicationsLocked} />

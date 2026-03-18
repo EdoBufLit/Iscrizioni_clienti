@@ -1,3 +1,17 @@
+- [x] Aggiungere persistenza WhatsApp org-scoped con migration Alembic (`WhatsAppConnection`, `WhatsAppChat`, `WhatsAppMessage`)
+- [x] Implementare client Evolution Lite, service layer di sync e webhook interno ASSONAM
+- [x] Esporre API org-admin `Comunicazioni > WhatsApp` per connection state, connect/qr/disconnect, chat list, thread e send text
+- [x] Integrare la tab WhatsApp nella UI org-admin Comunicazioni con inbox a 2 colonne e composer testuale
+- [x] Predisporre il service futuro per candidati invio WhatsApp da form submission senza attivare automazioni globali
+- [x] Coprire il flusso con test backend mirati, verifiche frontend e review finale
+
+## Review (WhatsApp Evolution Lite org-admin integration - Mar 18, 2026)
+- Implementati modelli `WhatsAppConnection`, `WhatsAppChat`, `WhatsAppMessage` con migration Alembic dedicata e bootstrap idempotente in `init_db.py`.
+- Aggiunti client Evolution Lite, webhook interno Docker-only, sync locale di stato/QR/chat/thread e deduplica minima lato ASSONAM.
+- Esposte API org-admin sotto `/api/org-admin/communications/whatsapp` per connection, connect, QR, disconnect, chat list, thread e invio testo.
+- Integrata la tab `Comunicazioni > WhatsApp` con badge sperimentale, stato connessione, QR, inbox a 2 colonne, polling QR e composer testuale.
+- Preparato il service passivo `prepare_form_submission_whatsapp_candidate(...)` e agganciato in modo non attivo al submit pubblico solo come predisposizione futura.
+- Verifiche eseguite: `python -m alembic upgrade head`, `pytest tests/test_org_admin_whatsapp.py -q`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
 - [x] Analizzare workflow `deploy-hetzner`, compose Docker, catena env/secrets e configurazione Postgres effettiva per l'integrazione Evolution API Lite
 - [x] Aggiungere Evolution API Lite come servizio Docker separato con sole env minime richieste e collegamento al Postgres esistente su DB `evolution`
 - [x] Estendere workflow/file di deploy per propagare le nuove env ASSONAM/Evolution senza introdurre variabili superflue

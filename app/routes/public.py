@@ -37,6 +37,9 @@ from app.services.forms import (
     serialize_submission,
     validate_form_submission_payload,
 )
+from app.services.whatsapp_automation import (
+    prepare_form_submission_whatsapp_candidate,
+)
 from app.services.member_activity import (
     MEMBER_INACTIVE_REASON_DELETED,
     MEMBER_INACTIVE_REASON_NOT_APPROVED,
@@ -376,6 +379,14 @@ def _submit_public_form(
         submission=submission,
         validated_submission=validated_submission,
     )
+    _future_whatsapp_candidate = prepare_form_submission_whatsapp_candidate(
+        form=form,
+        submission=submission,
+        member=member,
+        booking=booking,
+    )
+    # Passive hook only: candidate resolution is prepared here for future automations,
+    # but no WhatsApp message is sent and no global form toggle is introduced in v1.
     enqueue_submission_notifications(
         db,
         form=form,

@@ -382,6 +382,25 @@ class Organization(Base):
         foreign_keys="RoomTable.association_id",
         cascade="all, delete-orphan",
     )
+    whatsapp_connection = relationship(
+        "WhatsAppConnection",
+        back_populates="organization",
+        foreign_keys="WhatsAppConnection.org_id",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    whatsapp_chats = relationship(
+        "WhatsAppChat",
+        back_populates="organization",
+        foreign_keys="WhatsAppChat.org_id",
+        cascade="all, delete-orphan",
+    )
+    whatsapp_messages = relationship(
+        "WhatsAppMessage",
+        back_populates="organization",
+        foreign_keys="WhatsAppMessage.org_id",
+        cascade="all, delete-orphan",
+    )
     managed_numbering_scopes = relationship(
         "NumberingScope",
         back_populates="owner_organization",
@@ -512,6 +531,138 @@ class WhatsAppSession(Base):
         nullable=False,
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
+    )
+
+
+class WhatsAppConnection(Base):
+    __tablename__ = "whatsapp_connections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, unique=True, index=True)
+    instance_name = Column(String, nullable=False, unique=True, index=True)
+    status = Column(String, nullable=False, default="not_connected", server_default="not_connected", index=True)
+    phone_number = Column(String, nullable=True)
+    profile_name = Column(String, nullable=True)
+    qr_code = Column(Text, nullable=True)
+    last_error = Column(Text, nullable=True)
+    connected_at = Column(DateTime, nullable=True)
+    last_event_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    organization = relationship(
+        "Organization",
+        back_populates="whatsapp_connection",
+        foreign_keys=[org_id],
+    )
+    chats = relationship(
+        "WhatsAppChat",
+        back_populates="connection",
+        foreign_keys="WhatsAppChat.connection_id",
+        cascade="all, delete-orphan",
+    )
+    messages = relationship(
+        "WhatsAppMessage",
+        back_populates="connection",
+        foreign_keys="WhatsAppMessage.connection_id",
+        cascade="all, delete-orphan",
+    )
+
+
+class WhatsAppChat(Base):
+    __tablename__ = "whatsapp_chats"
+
+    id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    connection_id = Column(Integer, ForeignKey("whatsapp_connections.id"), nullable=False, index=True)
+    external_chat_id = Column(String, nullable=False, index=True)
+    display_name = Column(String, nullable=True)
+    last_message_text = Column(Text, nullable=True)
+    last_message_at = Column(DateTime, nullable=True, index=True)
+    unread_count = Column(Integer, nullable=False, default=0, server_default="0")
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    organization = relationship(
+        "Organization",
+        back_populates="whatsapp_chats",
+        foreign_keys=[org_id],
+    )
+    connection = relationship(
+        "WhatsAppConnection",
+        back_populates="chats",
+        foreign_keys=[connection_id],
+    )
+    messages = relationship(
+        "WhatsAppMessage",
+        back_populates="chat",
+        foreign_keys="WhatsAppMessage.chat_id",
+        cascade="all, delete-orphan",
+        order_by="WhatsAppMessage.created_at.asc(), WhatsAppMessage.id.asc()",
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "connection_id",
+            "external_chat_id",
+            name="uq_whatsapp_chats_connection_external_chat",
+        ),
+        Index(
+            "ix_whatsapp_chats_connection_last_message_at",
+            "connection_id",
+            "last_message_at",
+        ),
+    )
+
+
+class WhatsAppMessage(Base):
+    __tablename__ = "whatsapp_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    connection_id = Column(Integer, ForeignKey("whatsapp_connections.id"), nullable=False, index=True)
+    chat_id = Column(Integer, ForeignKey("whatsapp_chats.id"), nullable=False, index=True)
+    external_message_id = Column(String, nullable=True, index=True)
+    dedupe_key = Column(String, nullable=False, unique=True, index=True)
+    direction = Column(String, nullable=False, index=True)
+    status = Column(String, nullable=False, default="pending", server_default="pending", index=True)
+    sender_phone = Column(String, nullable=True)
+    recipient_phone = Column(String, nullable=True)
+    text_body = Column(Text, nullable=True)
+    sent_at = Column(DateTime, nullable=True)
+    delivered_at = Column(DateTime, nullable=True)
+    read_at = Column(DateTime, nullable=True)
+    failed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    organization = relationship(
+        "Organization",
+        back_populates="whatsapp_messages",
+        foreign_keys=[org_id],
+    )
+    connection = relationship(
+        "WhatsAppConnection",
+        back_populates="messages",
+        foreign_keys=[connection_id],
+    )
+    chat = relationship(
+        "WhatsAppChat",
+        back_populates="messages",
+        foreign_keys=[chat_id],
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_whatsapp_messages_chat_created_at",
+            "chat_id",
+            "created_at",
+        ),
+        Index(
+            "ix_whatsapp_messages_connection_external_message",
+            "connection_id",
+            "external_message_id",
+        ),
     )
 
 
