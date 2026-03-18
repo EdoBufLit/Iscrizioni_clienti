@@ -166,6 +166,7 @@
 - [x] Riprodurre il failure runtime del pulsante `Connetti` e verificare risposta/log del backend
 - [x] Correggere il client Evolution Lite usando i prefissi route reali dell'upstream (`/instance`, `/message`, `/webhook`)
 - [x] Coprire la regressione con test mirato sulle URL chiamate dal client
+- [x] Derivare nel container Evolution Lite il flag interno minimo necessario per inizializzare l'auth state e spostare il pairing sulla chiamata `connect`
 - [ ] Pushare la fix sul branch che attiva il deploy GitHub Actions
 - [ ] Verificare deploy e smoke test live del connect su Hetzner
 

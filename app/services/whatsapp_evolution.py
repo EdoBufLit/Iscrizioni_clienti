@@ -215,7 +215,7 @@ class EvolutionLiteClient:
         instance_name = build_evolution_instance_name(org_id)
         body = {
             "instanceName": instance_name,
-            "qrcode": True,
+            "qrcode": False,
             "integration": "WHATSAPP-BAILEYS",
             "webhook": {
                 "enabled": True,

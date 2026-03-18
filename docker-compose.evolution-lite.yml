@@ -6,7 +6,7 @@ services:
     entrypoint:
       - /bin/bash
       - -lc
-      - export DATABASE_URL="$${DATABASE_CONNECTION_URI:-}"; export SERVER_TYPE="$${SERVER_TYPE:-http}"; . ./Docker/scripts/deploy_database.sh && npm run start:prod
+      - export DATABASE_URL="$${DATABASE_CONNECTION_URI:-}"; export SERVER_TYPE="$${SERVER_TYPE:-http}"; export DATABASE_SAVE_DATA_INSTANCE="$${DATABASE_SAVE_DATA_INSTANCE:-true}"; . ./Docker/scripts/deploy_database.sh && npm run start:prod
     depends_on:
       - db
     env_file:

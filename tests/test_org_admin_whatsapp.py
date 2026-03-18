@@ -336,7 +336,7 @@ def test_internal_webhook_syncs_connection_messages_and_dedupes(client, db):
 
 
 def test_evolution_client_uses_lite_namespaced_paths(monkeypatch):
-    captured: list[tuple[str, str]] = []
+    captured: list[tuple[str, str, object | None]] = []
 
     class DummyResponse:
         def __init__(self, payload: dict[str, object] | None = None):
@@ -348,7 +348,7 @@ def test_evolution_client_uses_lite_namespaced_paths(monkeypatch):
             return self._payload
 
     def fake_request(method, url, json=None, headers=None, timeout=None):
-        captured.append((method, url))
+        captured.append((method, url, json))
         return DummyResponse({"instance": {"state": "close"}})
 
     monkeypatch.setattr("app.services.whatsapp_evolution.requests.request", fake_request)
@@ -363,12 +363,76 @@ def test_evolution_client_uses_lite_namespaced_paths(monkeypatch):
     client.send_text("assonam-org-7", number="+393331234567", text="ciao")
 
     assert captured == [
-        ("POST", "http://evolution-api:8080/instance/create"),
-        ("POST", "http://evolution-api:8080/webhook/set/assonam-org-7"),
-        ("POST", "http://evolution-api:8080/webhook/set/assonam-org-7"),
-        ("GET", "http://evolution-api:8080/instance/connect/assonam-org-7"),
-        ("GET", "http://evolution-api:8080/instance/connectionState/assonam-org-7"),
-        ("GET", "http://evolution-api:8080/instance/connect/assonam-org-7"),
-        ("DELETE", "http://evolution-api:8080/instance/logout/assonam-org-7"),
-        ("POST", "http://evolution-api:8080/message/sendText/assonam-org-7"),
+        (
+            "POST",
+            "http://evolution-api:8080/instance/create",
+            {
+                "instanceName": "assonam-org-7",
+                "qrcode": False,
+                "integration": "WHATSAPP-BAILEYS",
+                "webhook": {
+                    "enabled": True,
+                    "url": "http://web:8000/api/internal/whatsapp/evolution",
+                    "headers": {"X-Evolution-ApiKey": "test-key"},
+                    "events": [
+                        "QRCODE_UPDATED",
+                        "CONNECTION_UPDATE",
+                        "MESSAGES_UPSERT",
+                        "MESSAGES_UPDATE",
+                        "SEND_MESSAGE",
+                    ],
+                    "byEvents": False,
+                    "base64": False,
+                },
+            },
+        ),
+        (
+            "POST",
+            "http://evolution-api:8080/webhook/set/assonam-org-7",
+            {
+                "webhook": {
+                    "enabled": True,
+                    "url": "http://web:8000/api/internal/whatsapp/evolution",
+                    "headers": {"X-Evolution-ApiKey": "test-key"},
+                    "events": [
+                        "QRCODE_UPDATED",
+                        "CONNECTION_UPDATE",
+                        "MESSAGES_UPSERT",
+                        "MESSAGES_UPDATE",
+                        "SEND_MESSAGE",
+                    ],
+                    "byEvents": False,
+                    "base64": False,
+                }
+            },
+        ),
+        (
+            "POST",
+            "http://evolution-api:8080/webhook/set/assonam-org-7",
+            {
+                "webhook": {
+                    "enabled": True,
+                    "url": "http://web:8000/api/internal/whatsapp/evolution",
+                    "headers": {"X-Evolution-ApiKey": "test-key"},
+                    "events": [
+                        "QRCODE_UPDATED",
+                        "CONNECTION_UPDATE",
+                        "MESSAGES_UPSERT",
+                        "MESSAGES_UPDATE",
+                        "SEND_MESSAGE",
+                    ],
+                    "byEvents": False,
+                    "base64": False,
+                }
+            },
+        ),
+        ("GET", "http://evolution-api:8080/instance/connect/assonam-org-7", None),
+        ("GET", "http://evolution-api:8080/instance/connectionState/assonam-org-7", None),
+        ("GET", "http://evolution-api:8080/instance/connect/assonam-org-7", None),
+        ("DELETE", "http://evolution-api:8080/instance/logout/assonam-org-7", None),
+        (
+            "POST",
+            "http://evolution-api:8080/message/sendText/assonam-org-7",
+            {"number": "+393331234567", "text": "ciao"},
+        ),
     ]
