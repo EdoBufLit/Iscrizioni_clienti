@@ -168,8 +168,15 @@
 - [x] Coprire la regressione con test mirato sulle URL chiamate dal client
 - [x] Derivare nel container Evolution Lite il flag interno minimo necessario per inizializzare l'auth state e spostare il pairing sulla chiamata `connect`
 - [x] Rendere idempotente il retry di `Connetti` quando l'istanza Evolution esiste gia e il payload upstream risponde `already in use` dentro un `403 Forbidden`
-- [ ] Pushare la fix sul branch che attiva il deploy GitHub Actions
-- [ ] Verificare deploy e smoke test live del connect su Hetzner
+- [x] Pushare la fix sul branch che attiva il deploy GitHub Actions
+- [x] Verificare deploy e smoke test live del connect su Hetzner
+
+## Review (WhatsApp connect runtime fix - Mar 18, 2026)
+- Root cause finale del retry failure: Evolution Lite rispondeva `403 Forbidden` con il vero dettaglio annidato (`This name "assonam-org-2" is already in use.`), ma il client ASSONAM estraeva solo il campo top-level `error`, quindi `ensure_instance()` non riconosceva il caso idempotente e il pulsante `Connetti` falliva al secondo click.
+- Hotfix applicato in `app/services/whatsapp_evolution.py`: parsing difensivo del dettaglio annidato (`message` / `response` / `detail` / `error`) e riuso del fallback gia presente per trattare correttamente i casi `already exists / already in use`.
+- Regressione coperta in `tests/test_org_admin_whatsapp.py` con test dedicato sul payload `403` di Evolution Lite.
+- Push effettuato sul branch di deploy `feat/redesign-landing-wizard` con commit live `d10da99`.
+- Verifica reale su Hetzner completata per l'org `Golden Filippini Qualificati SRLS`: `GET /connection` -> `qr_required`, `POST /connect` -> `200 OK`, `GET /qr` -> `200 OK`, QR ancora presente e nessun `502`.
 
 ---
 - [x] Limitare watermark/logo e naming speciale alla sola org `oasi-2`
