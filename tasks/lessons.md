@@ -163,4 +163,5 @@
 - Se la produzione deploya da un branch diverso da quello su cui sto lavorando, un hotfix urgente va portato anche sul branch deployato (`feat/**` nel nostro caso), non basta committarlo sul branch `codex/*`.
 - Dopo un refactor UI con tanto microcopy, devo sempre fare uno scan esplicito anti-mojibake sui file toccati prima di chiudere (`rg "Ã|Â|â"` o equivalente), perche build verde non garantisce testo leggibile.
 - Se uso replace automatici su file TSX grandi, devo evitare sostituzioni interpolate con stringhe/template in PowerShell: per blocchi React e piu sicuro usare replace per marker stabili o patch mirate e poi rilanciare subito `typecheck`.
+- Se un "tema visivo" serve solo a cambiare stile, la sua label non deve mai finire nell'HTML finale inviato ai soci: theme metadata e contenuto email vanno tenuti separati nel renderer.
 

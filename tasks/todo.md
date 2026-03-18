@@ -1,3 +1,14 @@
+- [x] Verificare se la label del tema visivo entra davvero nell'email finale
+- [x] Rimuovere dal renderer email i badge "Comunicazione moderna / Invito evento / ..."
+- [x] Verificare il render HTML finale su tutti i layout email
+
+## Review (Theme badge removal in email render - Mar 18, 2026)
+- Root cause confermata in [email_templates.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\services\email_templates.py): il renderer backend aggiungeva un `badge_html` con label di layout (`Comunicazione moderna`, `Invito evento`, `Promemoria rinnovo`, ecc.), quindi la scritta compariva davvero sia nella preview sia nell'email inviata ai soci.
+- Fix applicato alla radice: rimosso il badge dal renderer HTML finale mantenendo solo gli stili del tema (sfondi, bordi, colori CTA e blocchi contenuto).
+- Verifica eseguita su tutti i layout `modern`, `institutional`, `elegant`, `event`, `reminder`: nessuna delle label di tema compare piu nell'HTML prodotto.
+- Verifica browser live aggiuntiva sul composer `Nuova campagna` step `Aspetto`: l'iframe `Email preview` non contiene piu nessuno dei badge rimossi; evidenza salvata in `tasks/screenshots/communications-composer-no-theme-badge-20260318.png`.
+- Check tecnici: `python -m py_compile app/services/email_templates.py` OK; smoke Python sul renderer `decorate_rendered_email(...)` OK (`EMAIL_BADGE_REMOVED_OK`).
+
 - [x] Verificare live il workspace Comunicazioni su overview, campagne, composer e invii/statistiche
 - [x] Correggere gli ultimi residui visivi/encoding emersi nella Panoramica
 - [x] Eseguire typecheck/build frontend dopo i fix
