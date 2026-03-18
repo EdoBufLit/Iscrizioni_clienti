@@ -12,6 +12,7 @@ from app.services.whatsapp_evolution import EvolutionLiteClient
 from app.services.whatsapp_evolution import (
     EvolutionConnectionSnapshot,
     EvolutionSendTextResult,
+    parse_connection_snapshot,
 )
 from app.services.whatsapp_sync import apply_connection_snapshot, get_or_create_connection
 from app.utils import hash_token
@@ -467,6 +468,21 @@ def test_apply_connection_snapshot_preserves_existing_qr():
 
     assert connection.status == "qr_required"
     assert connection.qr_code == "existing-qr"
+
+
+def test_parse_connection_snapshot_handles_top_level_qr_payload():
+    snapshot = parse_connection_snapshot(
+        {
+            "count": 0,
+            "base64": "data:image/png;base64,test-qr",
+            "code": "qr-code",
+            "pairingCode": None,
+        }
+    )
+
+    assert snapshot.raw_state == "connecting"
+    assert snapshot.status == "qr_required"
+    assert snapshot.qr_code == "data:image/png;base64,test-qr"
 
 
 def test_ensure_instance_treats_already_in_use_as_idempotent(monkeypatch):

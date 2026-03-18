@@ -227,7 +227,15 @@ def _extract_phone_number(payload: Any) -> str | None:
 def parse_connection_snapshot(payload: Any) -> EvolutionConnectionSnapshot:
     raw = payload if isinstance(payload, dict) else {}
     instance = raw.get("instance") if isinstance(raw.get("instance"), dict) else {}
-    qrcode = _normalize_qr_payload(raw.get("qrcode") or instance.get("qrcode"))
+    qrcode = _normalize_qr_payload(
+        raw.get("qrcode")
+        or instance.get("qrcode")
+        or {
+            "base64": raw.get("base64"),
+            "code": raw.get("code"),
+            "pairingCode": raw.get("pairingCode"),
+        }
+    )
     raw_state = ""
     for candidate in (
         instance.get("state"),
@@ -239,6 +247,8 @@ def parse_connection_snapshot(payload: Any) -> EvolutionConnectionSnapshot:
         if isinstance(candidate, str) and candidate.strip():
             raw_state = candidate.strip()
             break
+    if not raw_state and "count" in raw:
+        raw_state = "connecting"
     last_error = None
     error_value = raw.get("error")
     if isinstance(error_value, str) and error_value.strip():
