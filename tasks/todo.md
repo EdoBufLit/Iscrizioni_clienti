@@ -1,3 +1,12 @@
+
+## Review (WhatsApp Web-like layout + contact import pass - Mar 18, 2026)
+- UI WhatsApp rifatta con canvas dark a due colonne, sidebar chat-first, ricerca, filtri rapidi, header thread e composer in basso per avvicinare molto di piu il comportamento percepito a WhatsApp Web.
+- Sidebar ora fonde chat locali ASSONAM e contatti importati da Evolution Lite, cosi i contatti gia noti possono comparire anche prima del primo messaggio locale.
+- Backend esteso per sync contatti -> chat stub locali e per apertura thread da contatto/numero senza invio immediato, mantenendo ASSONAM come source of truth applicativa.
+- Client Evolution aggiornato per richiedere anche webhook `contacts/chats` e per paginare i contatti oltre la prima pagina, invece di fermarsi ai primi 100 record.
+- Overlay Docker Evolution Lite aggiornato con flag interni di persistenza `contacts/chats/messages/historic`, senza introdurre nuove env esterne oltre al setup minimo gia fissato.
+- Verifiche locali eseguite: `python -m py_compile app/routes/whatsapp_evolution.py app/services/whatsapp_evolution.py app/services/whatsapp_sync.py`, `pytest tests/test_org_admin_whatsapp.py -q`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
+
 - [x] Verificare perché l'inbound WhatsApp non entra ancora in modo affidabile dopo la connessione live
 - [x] Mappare gli endpoint Evolution Lite disponibili per lista chat e cronologia recente importabile
 - [x] Estendere backend WhatsApp con sync iniziale chat + finestra cronologica recente senza perdere ASSONAM come source of truth

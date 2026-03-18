@@ -16,6 +16,7 @@ from app.models import (
     WhatsAppMessage,
 )
 from app.services.whatsapp_evolution import (
+    EvolutionContact,
     EvolutionConnectionSnapshot,
     EvolutionSendTextResult,
     build_evolution_instance_name,
@@ -192,6 +193,30 @@ def get_or_create_chat_for_number(
     )
 
 
+def sync_contacts_into_chats(
+    db: Session,
+    *,
+    connection: WhatsAppConnection,
+    contacts: list[EvolutionContact],
+) -> list[WhatsAppChat]:
+    synced: list[WhatsAppChat] = []
+    for contact in contacts:
+        external_chat_id = (contact.remote_jid or "").strip()
+        if not external_chat_id or external_chat_id.endswith("@g.us"):
+            continue
+        display_name = contact.display_name or contact.phone_number or external_chat_id
+        chat = _get_or_create_chat(
+            db,
+            connection=connection,
+            external_chat_id=external_chat_id,
+            display_name=display_name,
+        )
+        if display_name and chat.display_name != display_name:
+            chat.display_name = display_name
+        synced.append(chat)
+    return synced
+
+
 def get_messages_for_chat(
     db: Session,
     *,
@@ -305,6 +330,20 @@ def ingest_evolution_webhook(
             connection=connection,
             data=data,
             event_time=event_time,
+        )
+        return
+    if event_name in {"contacts.set", "contacts.upsert", "contacts.update"}:
+        _ingest_contact_batch(
+            db,
+            connection=connection,
+            data=data,
+        )
+        return
+    if event_name in {"chats.set", "chats.upsert", "chats.update"}:
+        _ingest_chat_batch(
+            db,
+            connection=connection,
+            data=data,
         )
 
 
@@ -442,6 +481,62 @@ def _apply_message_updates(
             message.failed_at = message.failed_at or event_time
 
 
+def _ingest_contact_batch(
+    db: Session,
+    *,
+    connection: WhatsAppConnection,
+    data: Any,
+) -> None:
+    contacts: list[EvolutionContact] = []
+    for payload in _extract_contact_envelopes(data):
+        remote_jid = payload.get("remoteJid")
+        if not isinstance(remote_jid, str) or not remote_jid.strip():
+            continue
+        contacts.append(
+            EvolutionContact(
+                remote_jid=remote_jid.strip(),
+                display_name=_extract_display_name(payload) or normalize_phone(remote_jid) or remote_jid.strip(),
+                phone_number=normalize_phone(remote_jid),
+                profile_pic_url=payload.get("profilePicUrl") if isinstance(payload.get("profilePicUrl"), str) else None,
+                created_at=_parse_datetime(payload.get("createdAt")),
+                updated_at=_parse_datetime(payload.get("updatedAt")),
+                raw=payload,
+            )
+        )
+    if contacts:
+        sync_contacts_into_chats(db, connection=connection, contacts=contacts)
+
+
+def _ingest_chat_batch(
+    db: Session,
+    *,
+    connection: WhatsAppConnection,
+    data: Any,
+) -> None:
+    for payload in _extract_chat_envelopes(data):
+        external_chat_id = _extract_chat_id(payload)
+        if not external_chat_id or external_chat_id.endswith("@g.us"):
+            continue
+        display_name = _extract_display_name(payload)
+        if not display_name:
+            name = payload.get("name")
+            if isinstance(name, str) and name.strip():
+                display_name = name.strip()
+        chat = _get_or_create_chat(
+            db,
+            connection=connection,
+            external_chat_id=external_chat_id,
+            display_name=display_name or normalize_phone(external_chat_id) or external_chat_id,
+        )
+        unread_messages = payload.get("unreadMessages")
+        if isinstance(unread_messages, int) and unread_messages >= 0:
+            chat.unread_count = unread_messages
+        if isinstance(payload.get("updatedAt"), str):
+            parsed_updated_at = _parse_datetime(payload.get("updatedAt"))
+            if parsed_updated_at is not None:
+                chat.updated_at = parsed_updated_at
+
+
 def _find_existing_message(
     db: Session,
     *,
@@ -561,6 +656,34 @@ def _extract_message_envelopes(data: Any) -> list[dict[str, Any]]:
         if isinstance(value, list):
             return [item for item in value if isinstance(item, dict)]
     if any(key in data for key in ("key", "message", "id", "messageId", "status")):
+        return [data]
+    return []
+
+
+def _extract_contact_envelopes(data: Any) -> list[dict[str, Any]]:
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    if not isinstance(data, dict):
+        return []
+    for key in ("contacts", "items"):
+        value = data.get(key)
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+    if "remoteJid" in data:
+        return [data]
+    return []
+
+
+def _extract_chat_envelopes(data: Any) -> list[dict[str, Any]]:
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    if not isinstance(data, dict):
+        return []
+    for key in ("chats", "items"):
+        value = data.get(key)
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+    if any(key in data for key in ("remoteJid", "jid", "chatId", "name")):
         return [data]
     return []
 

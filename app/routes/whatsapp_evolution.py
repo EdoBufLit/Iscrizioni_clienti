@@ -30,6 +30,7 @@ from app.services.whatsapp_sync import (
     serialize_chat,
     serialize_connection,
     serialize_message,
+    sync_contacts_into_chats,
 )
 
 logger = logging.getLogger(__name__)
@@ -223,6 +224,8 @@ def list_whatsapp_contacts(
         contacts = client.list_contacts(connection.instance_name)
     except EvolutionApiError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    sync_contacts_into_chats(db, connection=connection, contacts=contacts)
+    db.commit()
     items = [_serialize_contact(contact) for contact in contacts]
     return {"items": items, "total": len(items)}
 

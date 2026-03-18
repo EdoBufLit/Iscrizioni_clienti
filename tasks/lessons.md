@@ -174,3 +174,5 @@
 
 
 - Se una inbox dipende da webhook asincroni, il frontend non puo limitarsi al polling della fase QR: deve refreshare anche in stato `connected` e non leggere state stale per contatti/chat, altrimenti i messaggi ricevuti sembrano sparire pur essendo gia nel DB locale.
+
+- Se l'utente chiede una capability "come WhatsApp Web", non basta rendere possibile l'invio: bisogna allineare anche il mental model della UI (sidebar chat-first, ricerca, thread sempre visibile, composer fisso) oppure la feature resta percepita come incompleta.

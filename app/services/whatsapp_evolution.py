@@ -21,6 +21,12 @@ EVOLUTION_WEBHOOK_EVENTS = [
     "MESSAGES_UPSERT",
     "MESSAGES_UPDATE",
     "SEND_MESSAGE",
+    "CONTACTS_SET",
+    "CONTACTS_UPSERT",
+    "CONTACTS_UPDATE",
+    "CHATS_SET",
+    "CHATS_UPSERT",
+    "CHATS_UPDATE",
 ]
 EVOLUTION_INTERNAL_WEBHOOK_URL = "http://web:8000/api/internal/whatsapp/evolution"
 
@@ -472,19 +478,40 @@ class EvolutionLiteClient:
         instance_name: str,
         *,
         page: int = 1,
-        limit: int = 100,
+        limit: int = 250,
+        max_pages: int = 20,
     ) -> list[EvolutionContact]:
-        payload = self._request(
-            "POST",
-            f"/chat/findContacts/{instance_name}",
-            json={"page": int(page), "limit": int(limit)},
-        )
-        items = payload if isinstance(payload, list) else []
         contacts: list[EvolutionContact] = []
-        for item in items:
-            contact = _parse_contact(item)
-            if contact is not None:
+        seen_remote_jids: set[str] = set()
+        current_page = max(1, int(page))
+        page_limit = max(1, int(limit))
+        for _ in range(max(1, int(max_pages))):
+            payload = self._request(
+                "POST",
+                f"/chat/findContacts/{instance_name}",
+                json={"page": current_page, "limit": page_limit},
+            )
+            items = payload if isinstance(payload, list) else []
+            if not items:
+                break
+            page_added = 0
+            for item in items:
+                contact = _parse_contact(item)
+                if contact is None or contact.remote_jid in seen_remote_jids:
+                    continue
+                seen_remote_jids.add(contact.remote_jid)
                 contacts.append(contact)
+                page_added += 1
+            if len(items) < page_limit or page_added == 0:
+                break
+            current_page += 1
+        contacts.sort(
+            key=lambda contact: (
+                contact.updated_at or contact.created_at or datetime.min,
+                (contact.display_name or contact.phone_number or contact.remote_jid).lower(),
+            ),
+            reverse=True,
+        )
         return contacts
 
     def send_text(self, instance_name: str, *, number: str, text: str) -> EvolutionSendTextResult:

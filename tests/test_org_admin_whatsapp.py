@@ -12,6 +12,7 @@ from app.services.whatsapp_evolution import EvolutionLiteClient
 from app.services.whatsapp_evolution import (
     EvolutionConnectionSnapshot,
     EvolutionContact,
+    EVOLUTION_WEBHOOK_EVENTS,
     EvolutionSendTextResult,
     parse_connection_snapshot,
 )
@@ -437,13 +438,7 @@ def test_evolution_client_uses_lite_namespaced_paths(monkeypatch):
                     "enabled": True,
                     "url": "http://web:8000/api/internal/whatsapp/evolution",
                     "headers": {"X-Evolution-ApiKey": "test-key"},
-                    "events": [
-                        "QRCODE_UPDATED",
-                        "CONNECTION_UPDATE",
-                        "MESSAGES_UPSERT",
-                        "MESSAGES_UPDATE",
-                        "SEND_MESSAGE",
-                    ],
+                    "events": EVOLUTION_WEBHOOK_EVENTS,
                     "byEvents": False,
                     "base64": False,
                 },
@@ -457,13 +452,7 @@ def test_evolution_client_uses_lite_namespaced_paths(monkeypatch):
                     "enabled": True,
                     "url": "http://web:8000/api/internal/whatsapp/evolution",
                     "headers": {"X-Evolution-ApiKey": "test-key"},
-                    "events": [
-                        "QRCODE_UPDATED",
-                        "CONNECTION_UPDATE",
-                        "MESSAGES_UPSERT",
-                        "MESSAGES_UPDATE",
-                        "SEND_MESSAGE",
-                    ],
+                    "events": EVOLUTION_WEBHOOK_EVENTS,
                     "byEvents": False,
                     "base64": False,
                 }
@@ -492,13 +481,7 @@ def test_evolution_client_uses_lite_namespaced_paths(monkeypatch):
                     "enabled": True,
                     "url": "http://web:8000/api/internal/whatsapp/evolution",
                     "headers": {"X-Evolution-ApiKey": "test-key"},
-                    "events": [
-                        "QRCODE_UPDATED",
-                        "CONNECTION_UPDATE",
-                        "MESSAGES_UPSERT",
-                        "MESSAGES_UPDATE",
-                        "SEND_MESSAGE",
-                    ],
+                    "events": EVOLUTION_WEBHOOK_EVENTS,
                     "byEvents": False,
                     "base64": False,
                 }
