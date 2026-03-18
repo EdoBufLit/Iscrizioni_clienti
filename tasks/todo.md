@@ -1,3 +1,34 @@
+- [x] Analizzare workflow `deploy-hetzner`, compose Docker, catena env/secrets e configurazione Postgres effettiva per l'integrazione Evolution API Lite
+- [x] Aggiungere Evolution API Lite come servizio Docker separato con sole env minime richieste e collegamento al Postgres esistente su DB `evolution`
+- [x] Estendere workflow/file di deploy per propagare le nuove env ASSONAM/Evolution senza introdurre variabili superflue
+- [x] Aggiornare il backend ASSONAM con le sole env applicative richieste (`ENABLE_WHATSAPP_EVOLUTION`, `EVOLUTION_API_BASE_URL`, `EVOLUTION_API_KEY`)
+- [x] Documentare setup, secret manuali, coerenza valori e procedura di verifica in `docs/whatsapp-evolution-lite-setup.md`
+- [x] Eseguire intervento su Hetzner: creare DB `evolution` se assente, deployare, verificare stato/log/health di Evolution Lite e correggere eventuali errori
+
+## Review (Evolution API Lite integration - Mar 18, 2026)
+- Workflow individuato in `.github/workflows/deploy-hetzner.yml`; stack Docker esistente confermato su `docker-compose.yml` + `docker-compose.prod.yml`, con runtime server in `/opt/assonam/app` su Hetzner `157.90.31.105`.
+- Aggiunto overlay dedicato `docker-compose.evolution-lite.yml` che introduce il solo servizio `evolution-api` basato su `atendai/evolution-api-lite:latest`, collegato al Postgres esistente tramite DB separato `evolution`, senza Redis, senza subdominio e senza env esterne extra oltre alle 5 richieste.
+- Per compatibilita con l'immagine ufficiale Lite ho mantenuto il file env esterno minimale e derivato solo internamente, via `entrypoint`, i valori runtime che l'immagine si aspetta davvero all'avvio (`DATABASE_URL` da `DATABASE_CONNECTION_URI` e `SERVER_TYPE=http`).
+- Backend ASSONAM aggiornato in modo additivo con sole 3 env applicative richieste: `ENABLE_WHATSAPP_EVOLUTION`, `EVOLUTION_API_BASE_URL`, `EVOLUTION_API_KEY`.
+- Workflow deploy aggiornato per: renderizzare `secrets/evolution-api-lite.env`, creare/verificare il DB `evolution`, includere l'overlay Evolution solo quando abilitato, e verificare sia health container sia reachability interna `/` e `/verify-creds`.
+- Intervento server eseguito: DB `evolution` confermato presente, `.env` runtime ASSONAM aggiornato, `secrets/evolution-api-lite.env` generato, overlay deployato e container `app-evolution-api-1` portato a stato `healthy`.
+- Debug effettivo completato su server: primo crash per `DATABASE_PROVIDER` mancante nello shell env dell'immagine, secondo per `DATABASE_URL` non esportato, terzo per `SERVER_TYPE` sovrascritto a `undefined` in modalita Docker. Risolto tutto senza ampliare la superficie env richiesta.
+- Verifiche finali reali eseguite su Hetzner:
+- `docker inspect app-evolution-api-1` -> `running healthy 0`
+- `GET http://evolution-api:8080/` dal container `web` -> `200`
+- `POST http://evolution-api:8080/verify-creds` dal container `web` con `EVOLUTION_API_KEY` -> `200` / `Credentials are valid`
+
+- [x] Verificare se la label del tema visivo entra davvero nell'email finale
+- [x] Rimuovere dal renderer email i badge "Comunicazione moderna / Invito evento / ..."
+- [x] Verificare il render HTML finale su tutti i layout email
+
+## Review (Theme badge removal in email render - Mar 18, 2026)
+- Root cause confermata in [email_templates.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\services\email_templates.py): il renderer backend aggiungeva un `badge_html` con label di layout (`Comunicazione moderna`, `Invito evento`, `Promemoria rinnovo`, ecc.), quindi la scritta compariva davvero sia nella preview sia nell'email inviata ai soci.
+- Fix applicato alla radice: rimosso il badge dal renderer HTML finale mantenendo solo gli stili del tema (sfondi, bordi, colori CTA e blocchi contenuto).
+- Verifica eseguita su tutti i layout `modern`, `institutional`, `elegant`, `event`, `reminder`: nessuna delle label di tema compare piu nell'HTML prodotto.
+- Verifica browser live aggiuntiva sul composer `Nuova campagna` step `Aspetto`: l'iframe `Email preview` non contiene piu nessuno dei badge rimossi; evidenza salvata in `tasks/screenshots/communications-composer-no-theme-badge-20260318.png`.
+- Check tecnici: `python -m py_compile app/services/email_templates.py` OK; smoke Python sul renderer `decorate_rendered_email(...)` OK (`EMAIL_BADGE_REMOVED_OK`).
+
 - [x] Verificare live il workspace Comunicazioni su overview, campagne, composer e invii/statistiche
 - [x] Correggere gli ultimi residui visivi/encoding emersi nella Panoramica
 - [x] Eseguire typecheck/build frontend dopo i fix

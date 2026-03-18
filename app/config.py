@@ -125,6 +125,12 @@ class Settings:
     TWILIO_WHATSAPP_FROM: str = os.getenv("TWILIO_WHATSAPP_FROM", "")
     TWILIO_SMS_FROM: str = os.getenv("TWILIO_SMS_FROM", "")
     ADMIN_PHONE_E164: str = os.getenv("ADMIN_PHONE_E164", "")
+    ENABLE_WHATSAPP_EVOLUTION: bool = _env_bool("ENABLE_WHATSAPP_EVOLUTION", default=False)
+    EVOLUTION_API_BASE_URL: str = os.getenv(
+        "EVOLUTION_API_BASE_URL",
+        "http://evolution-api:8080",
+    )
+    EVOLUTION_API_KEY: str = os.getenv("EVOLUTION_API_KEY", "")
     LOW_CARDS_ALERT_JOB_INTERVAL_SECONDS: int = int(
         os.getenv("LOW_CARDS_ALERT_JOB_INTERVAL_SECONDS", "300")
     )
@@ -224,3 +230,9 @@ logger = logging.getLogger(__name__)
 
 if settings.SMTP_HOST and not settings.FRONTEND_URL:
     logger.error("FRONTEND_URL is not set! Magic links will fallback to BASE_URL/app but might be incorrect.")
+
+if settings.ENABLE_WHATSAPP_EVOLUTION and not settings.EVOLUTION_API_KEY:
+    logger.warning(
+        "ENABLE_WHATSAPP_EVOLUTION=true but EVOLUTION_API_KEY is empty. "
+        "Evolution calls will not authenticate correctly."
+    )

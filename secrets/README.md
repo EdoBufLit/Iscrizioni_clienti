@@ -7,6 +7,16 @@ Google Wallet service account JSON:
 - Recommended local path (repo root): `secrets/google-wallet-sa.json`
 - This file must never be committed to git.
 
+Evolution API Lite runtime env:
+- Example filename: `evolution-api-lite.env`
+- Recommended server path (repo root): `secrets/evolution-api-lite.env`
+- This file is generated at deploy time and must contain only:
+- `SERVER_PORT`
+- `SERVER_URL`
+- `DATABASE_PROVIDER`
+- `DATABASE_CONNECTION_URI`
+- `AUTHENTICATION_API_KEY`
+
 Runtime configuration (preferred):
 - Set `GOOGLE_APPLICATION_CREDENTIALS` to the absolute/container path of the JSON file.
 
