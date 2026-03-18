@@ -8,6 +8,7 @@ import pytest
 from app.config import settings
 from app.db import SessionLocal
 from app.models import AdminRole, AdminUser, OrgAdminToken, Organization, WhatsAppChat
+from app.services.whatsapp_evolution import EvolutionLiteClient
 from app.services.whatsapp_evolution import (
     EvolutionConnectionSnapshot,
     EvolutionSendTextResult,
@@ -118,10 +119,11 @@ def test_whatsapp_connect_send_and_disconnect(client, db, monkeypatch):
         assert instance_name == f"assonam-org-{org.id}"
         assert "39333" in number
         assert text == "Ciao dal test"
+        external_id = f"wamid-outbound-{org.id}"
         return EvolutionSendTextResult(
-            external_message_id="wamid-outbound-1",
+            external_message_id=external_id,
             status="sent",
-            raw={"id": "wamid-outbound-1", "status": "sent"},
+            raw={"id": external_id, "status": "sent"},
         )
 
     def fake_logout(self, instance_name: str):
@@ -170,7 +172,7 @@ def test_whatsapp_connect_send_and_disconnect(client, db, monkeypatch):
     assert send_res.status_code == 200, send_res.text
     send_payload = send_res.json()["message"]
     assert send_payload["direction"] == "outbound"
-    assert send_payload["external_message_id"] == "wamid-outbound-1"
+    assert send_payload["external_message_id"] == f"wamid-outbound-{org.id}"
     assert send_payload["status"] == "sent"
 
     other_org, _other_admin = _create_org_admin(db, communications_enabled=True)
@@ -331,3 +333,42 @@ def test_internal_webhook_syncs_connection_messages_and_dedupes(client, db):
     chats_res_after_read = client.get("/api/org-admin/communications/whatsapp/chats")
     assert chats_res_after_read.status_code == 200, chats_res_after_read.text
     assert chats_res_after_read.json()["items"][0]["unread_count"] == 0
+
+
+def test_evolution_client_uses_lite_namespaced_paths(monkeypatch):
+    captured: list[tuple[str, str]] = []
+
+    class DummyResponse:
+        def __init__(self, payload: dict[str, object] | None = None):
+            self.ok = True
+            self.status_code = 200
+            self._payload = payload or {}
+
+        def json(self):
+            return self._payload
+
+    def fake_request(method, url, json=None, headers=None, timeout=None):
+        captured.append((method, url))
+        return DummyResponse({"instance": {"state": "close"}})
+
+    monkeypatch.setattr("app.services.whatsapp_evolution.requests.request", fake_request)
+
+    client = EvolutionLiteClient(base_url="http://evolution-api:8080", api_key="test-key")
+    client.ensure_instance(org_id=7)
+    client.set_webhook("assonam-org-7")
+    client.connect("assonam-org-7")
+    client.get_connection_state("assonam-org-7")
+    client.get_qr("assonam-org-7")
+    client.logout("assonam-org-7")
+    client.send_text("assonam-org-7", number="+393331234567", text="ciao")
+
+    assert captured == [
+        ("POST", "http://evolution-api:8080/instance/create"),
+        ("POST", "http://evolution-api:8080/webhook/set/assonam-org-7"),
+        ("POST", "http://evolution-api:8080/webhook/set/assonam-org-7"),
+        ("GET", "http://evolution-api:8080/instance/connect/assonam-org-7"),
+        ("GET", "http://evolution-api:8080/instance/connectionState/assonam-org-7"),
+        ("GET", "http://evolution-api:8080/instance/connect/assonam-org-7"),
+        ("DELETE", "http://evolution-api:8080/instance/logout/assonam-org-7"),
+        ("POST", "http://evolution-api:8080/message/sendText/assonam-org-7"),
+    ]
