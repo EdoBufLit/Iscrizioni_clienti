@@ -1,3 +1,18 @@
+- [x] Verificare perché l'inbound WhatsApp non entra ancora in modo affidabile dopo la connessione live
+- [x] Mappare gli endpoint Evolution Lite disponibili per lista chat e cronologia recente importabile
+- [x] Estendere backend WhatsApp con sync iniziale chat + finestra cronologica recente senza perdere ASSONAM come source of truth
+- [x] Rifinire la UI inbox per comportamento più vicino a WhatsApp Web, con refresh chat/thread e meno input manuale
+- [ ] Verificare su server reale e pushare la passata "WhatsApp Web-like"
+
+## Review (WhatsApp Web-like inbox pass - Mar 18, 2026)
+- Verifica live completata: i webhook inbound da Evolution Lite arrivano correttamente ad ASSONAM (`messages.upsert` / `send.message` 200), quindi il gap principale non era il trasporto ma l'inbox locale/UX.
+- Root cause frontend corretta in `WhatsAppHub.tsx`: il polling era attivo solo in fase QR e `loadContacts()` leggeva uno state `connection` stale, quindi una sessione gia connessa poteva sembrare vuota anche con risposte gia sincronizzate nel DB locale.
+- Inbox resa piu vicina a un uso chat reale: mentre `connected`, la UI ora refresha periodicamente stato connessione, lista chat e thread selezionato; i contatti recenti vengono ricaricati subito e poi in polling dedicato.
+- Backend esteso con route `POST /api/org-admin/communications/whatsapp/draft-chat` per creare/riusare un thread locale senza invio immediato, cosi l'utente puo aprire una chat da numero o da contatto e poi scrivere dal composer principale.
+- UI aggiornata con CTA `Apri chat` e selezione diretta dei `Contatti recenti`: il click su un contatto ora apre o seleziona il thread locale invece di limitarsi a precompilare i campi.
+- Limite upstream esplicitato dal test reale: `Evolution Lite` nel setup minimale attuale non espone in modo affidabile una vera importazione storica stile WhatsApp Web; `findChats` e rotto upstream e il DB `evolution` non sta persistendo `Chat`/`Message`, quindi la vista completa resta best-effort sui thread osservati da ASSONAM + contatti recenti.
+- Verifiche locali eseguite: `python -m py_compile app/routes/whatsapp_evolution.py app/services/whatsapp_evolution.py app/services/whatsapp_sync.py`, `pytest tests/test_org_admin_whatsapp.py -q`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
+
 - [x] Aggiungere un path org-admin per avviare una nuova chat WhatsApp verso numero diretto quando l'inbox locale è ancora vuota
 - [x] Rendere la UI WhatsApp utilizzabile anche senza chat pregresse sincronizzate, con form minima `numero + testo`
 - [x] Verificare backend/frontend e pushare la correzione sul branch di deploy
@@ -3540,8 +3555,10 @@ pm --prefix frontend run build OK.
 pm --prefix frontend run build e documentare review finale
 ## Review (Theme contrast hardening public + dashboard - Mar 12, 2026)
 - Ho normalizzato i CTA pubblici principali su tn-primary / tn-ghost nelle entry point che esponevano il problema di contrasto (Home, navbar/mobile menu del layout pubblico, lista associazioni). In questo modo le CTA non ereditano più il colore link globale di 	heme.css, quindi non finiscono con fondo scuro e testo teal/nero quando devono essere pulsanti.
-- In rontend/src/theme.css ho collegato anche i token --public-* al sistema tema shared e ho aggiunto override tematici per public-footer, public-faq-button, public-faq-icon e public-faq-answer-text. Questo elimina il footer bianco fisso in dark mode e rende leggibile la sezione FAQ/accordion nelle pagine pubbliche.
-- Sempre in rontend/src/theme.css ho esteso il compatibility layer dark per utility usate ancora nelle dashboard e nelle hero card (g-slate-50/70-90, g-slate-100/70-90, g-slate-200/70, nuove varianti order-slate-200/*, order-slate-950/*, divide-slate-200, hover/table wrappers g-slate-*). Lo scopo e coprire i contenitori/card interne che rimanevano chiare o incoerenti senza inseguire patch file-per-file.
+- In 
+rontend/src/theme.css ho collegato anche i token --public-* al sistema tema shared e ho aggiunto override tematici per public-footer, public-faq-button, public-faq-icon e public-faq-answer-text. Questo elimina il footer bianco fisso in dark mode e rende leggibile la sezione FAQ/accordion nelle pagine pubbliche.
+- Sempre in 
+rontend/src/theme.css ho esteso il compatibility layer dark per utility usate ancora nelle dashboard e nelle hero card (g-slate-50/70-90, g-slate-100/70-90, g-slate-200/70, nuove varianti order-slate-200/*, order-slate-950/*, divide-slate-200, hover/table wrappers g-slate-*). Lo scopo e coprire i contenitori/card interne che rimanevano chiare o incoerenti senza inseguire patch file-per-file.
 - Verifiche eseguite: 
 pm --prefix frontend run build OK; screenshot locali da build preview con Playwright in 	asks/screenshots/home-light-20260312.png, 	asks/screenshots/home-dark-20260312.png, 	asks/screenshots/home-dark-tall-20260312.png. Nel check visuale homepage dark risultano leggibili FAQ e footer, e le CTA pubbliche non mostrano più il contrasto errato.
 - Dopo il primo check visuale ho corretto anche la hero shell di /associazioni, che restava troppo chiara per via di wrapper/gradient light-only. Verifica aggiuntiva con service worker bloccati: 	asks/screenshots/associazioni-dark-20260312.png mostra ora la sezione introduttiva coerente con la dark mode.

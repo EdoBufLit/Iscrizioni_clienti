@@ -57,6 +57,17 @@ class EvolutionInstanceRecord:
     raw: dict[str, Any]
 
 
+@dataclass(frozen=True)
+class EvolutionContact:
+    remote_jid: str
+    display_name: str | None
+    phone_number: str | None
+    profile_pic_url: str | None
+    created_at: datetime | None
+    updated_at: datetime | None
+    raw: dict[str, Any]
+
+
 def build_evolution_instance_name(org_id: int) -> str:
     return f"assonam-org-{int(org_id)}"
 
@@ -224,6 +235,45 @@ def _extract_phone_number(payload: Any) -> str | None:
     return None
 
 
+def _parse_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=None)
+    if not isinstance(value, str):
+        return None
+    raw = value.strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
+def _parse_contact(payload: Any) -> EvolutionContact | None:
+    if not isinstance(payload, dict):
+        return None
+    remote_jid = payload.get("remoteJid")
+    if not isinstance(remote_jid, str) or not remote_jid.strip():
+        return None
+    display_name = None
+    for candidate in (payload.get("pushName"), payload.get("profileName"), payload.get("name")):
+        if isinstance(candidate, str) and candidate.strip():
+            display_name = candidate.strip()
+            break
+    profile_pic_url = payload.get("profilePicUrl")
+    if not isinstance(profile_pic_url, str) or not profile_pic_url.strip():
+        profile_pic_url = None
+    return EvolutionContact(
+        remote_jid=remote_jid.strip(),
+        display_name=display_name,
+        phone_number=normalize_phone(remote_jid),
+        profile_pic_url=profile_pic_url,
+        created_at=_parse_datetime(payload.get("createdAt")),
+        updated_at=_parse_datetime(payload.get("updatedAt")),
+        raw=payload,
+    )
+
+
 def parse_connection_snapshot(payload: Any) -> EvolutionConnectionSnapshot:
     raw = payload if isinstance(payload, dict) else {}
     instance = raw.get("instance") if isinstance(raw.get("instance"), dict) else {}
@@ -317,8 +367,10 @@ class EvolutionLiteClient:
                 )
             else:
                 self.set_webhook(instance_name)
+                self.ensure_runtime_settings(instance_name)
                 return {"instance": {"instanceName": instance_name}}
         self.set_webhook(instance_name)
+        self.ensure_runtime_settings(instance_name)
         return payload
 
     def set_webhook(self, instance_name: str) -> dict[str, Any]:
@@ -339,6 +391,7 @@ class EvolutionLiteClient:
         )
 
     def connect(self, instance_name: str) -> EvolutionConnectionSnapshot:
+        self.ensure_runtime_settings(instance_name)
         payload = self._request(
             "GET",
             f"{EVOLUTION_INSTANCE_PREFIX}/connect/{instance_name}",
@@ -386,6 +439,53 @@ class EvolutionLiteClient:
                 if record and record.instance_name == instance_name:
                     return record
         return None
+
+    def get_settings(self, instance_name: str) -> dict[str, Any]:
+        payload = self._request(
+            "GET",
+            f"/settings/find/{instance_name}",
+        )
+        return payload if isinstance(payload, dict) else {}
+
+    def ensure_runtime_settings(self, instance_name: str) -> dict[str, Any]:
+        current = self.get_settings(instance_name)
+        desired = {
+            "rejectCall": bool(current.get("rejectCall", False)),
+            "msgCall": current.get("msgCall") if isinstance(current.get("msgCall"), str) else "",
+            "groupsIgnore": bool(current.get("groupsIgnore", False)),
+            "alwaysOnline": bool(current.get("alwaysOnline", False)),
+            "readMessages": bool(current.get("readMessages", False)),
+            "readStatus": bool(current.get("readStatus", False)),
+            "syncFullHistory": True,
+            "wavoipToken": current.get("wavoipToken") if isinstance(current.get("wavoipToken"), str) else "",
+        }
+        if all(current.get(key) == value for key, value in desired.items()):
+            return {"settings": {"instanceName": instance_name, "settings": desired}}
+        return self._request(
+            "POST",
+            f"/settings/set/{instance_name}",
+            json=desired,
+        )
+
+    def list_contacts(
+        self,
+        instance_name: str,
+        *,
+        page: int = 1,
+        limit: int = 100,
+    ) -> list[EvolutionContact]:
+        payload = self._request(
+            "POST",
+            f"/chat/findContacts/{instance_name}",
+            json={"page": int(page), "limit": int(limit)},
+        )
+        items = payload if isinstance(payload, list) else []
+        contacts: list[EvolutionContact] = []
+        for item in items:
+            contact = _parse_contact(item)
+            if contact is not None:
+                contacts.append(contact)
+        return contacts
 
     def send_text(self, instance_name: str, *, number: str, text: str) -> EvolutionSendTextResult:
         payload = self._request(

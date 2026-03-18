@@ -11,6 +11,7 @@ from app.models import AdminRole, AdminUser, OrgAdminToken, Organization, WhatsA
 from app.services.whatsapp_evolution import EvolutionLiteClient
 from app.services.whatsapp_evolution import (
     EvolutionConnectionSnapshot,
+    EvolutionContact,
     EvolutionSendTextResult,
     parse_connection_snapshot,
 )
@@ -208,6 +209,49 @@ def test_whatsapp_connect_send_and_disconnect(client, db, monkeypatch):
     assert disconnect_res.json()["connection"]["status"] == "not_connected"
 
 
+def test_whatsapp_contacts_and_draft_chat(client, db, monkeypatch):
+    org, admin = _create_org_admin(db, communications_enabled=True)
+    _login_org_admin(client, db, admin.id)
+    connection = get_or_create_connection(db, org)
+    connection.status = "connected"
+    connection.phone_number = "+393404244452"
+    db.commit()
+
+    monkeypatch.setattr(
+        "app.routes.whatsapp_evolution.EvolutionLiteClient.list_contacts",
+        lambda self, instance_name: [
+            EvolutionContact(
+                remote_jid="393331234567@s.whatsapp.net",
+                display_name="Mario Rossi",
+                phone_number="+393331234567",
+                profile_pic_url=None,
+                created_at=None,
+                updated_at=datetime(2026, 3, 18, 21, 35, 0),
+                raw={},
+            )
+        ],
+    )
+
+    contacts_res = client.get("/api/org-admin/communications/whatsapp/contacts")
+    assert contacts_res.status_code == 200, contacts_res.text
+    contacts_payload = contacts_res.json()
+    assert contacts_payload["total"] == 1
+    assert contacts_payload["items"][0]["display_name"] == "Mario Rossi"
+
+    draft_res = client.post(
+        "/api/org-admin/communications/whatsapp/draft-chat",
+        json={"number": "+39 333 1234567", "display_name": "Mario Rossi"},
+    )
+    assert draft_res.status_code == 200, draft_res.text
+    draft_payload = draft_res.json()["chat"]
+    assert draft_payload["display_name"] == "Mario Rossi"
+    assert draft_payload["external_chat_id"] == "393331234567@s.whatsapp.net"
+
+    messages_res = client.get(f"/api/org-admin/communications/whatsapp/chats/{draft_payload['id']}/messages")
+    assert messages_res.status_code == 200, messages_res.text
+    assert messages_res.json()["total"] == 0
+
+
 def test_internal_webhook_syncs_connection_messages_and_dedupes(client, db):
     org, admin = _create_org_admin(db, communications_enabled=True)
     _login_org_admin(client, db, admin.id)
@@ -350,6 +394,7 @@ def test_internal_webhook_syncs_connection_messages_and_dedupes(client, db):
 
 def test_evolution_client_uses_lite_namespaced_paths(monkeypatch):
     captured: list[tuple[str, str, object | None]] = []
+    settings_by_instance: dict[str, dict[str, object]] = {}
 
     class DummyResponse:
         def __init__(self, payload: dict[str, object] | None = None):
@@ -362,6 +407,11 @@ def test_evolution_client_uses_lite_namespaced_paths(monkeypatch):
 
     def fake_request(method, url, json=None, headers=None, timeout=None):
         captured.append((method, url, json))
+        if url.endswith("/settings/find/assonam-org-7"):
+            return DummyResponse(settings_by_instance.get("assonam-org-7", {}))
+        if url.endswith("/settings/set/assonam-org-7"):
+            settings_by_instance["assonam-org-7"] = dict(json or {})
+            return DummyResponse({"settings": {"instanceName": "assonam-org-7", "settings": json or {}}})
         return DummyResponse({"instance": {"state": "close"}})
 
     monkeypatch.setattr("app.services.whatsapp_evolution.requests.request", fake_request)
@@ -419,6 +469,21 @@ def test_evolution_client_uses_lite_namespaced_paths(monkeypatch):
                 }
             },
         ),
+        ("GET", "http://evolution-api:8080/settings/find/assonam-org-7", None),
+        (
+            "POST",
+            "http://evolution-api:8080/settings/set/assonam-org-7",
+            {
+                "rejectCall": False,
+                "msgCall": "",
+                "groupsIgnore": False,
+                "alwaysOnline": False,
+                "readMessages": False,
+                "readStatus": False,
+                "syncFullHistory": True,
+                "wavoipToken": "",
+            },
+        ),
         (
             "POST",
             "http://evolution-api:8080/webhook/set/assonam-org-7",
@@ -439,6 +504,7 @@ def test_evolution_client_uses_lite_namespaced_paths(monkeypatch):
                 }
             },
         ),
+        ("GET", "http://evolution-api:8080/settings/find/assonam-org-7", None),
         ("GET", "http://evolution-api:8080/instance/connect/assonam-org-7", None),
         ("GET", "http://evolution-api:8080/instance/connectionState/assonam-org-7", None),
         ("GET", "http://evolution-api:8080/instance/connect/assonam-org-7", None),
@@ -499,6 +565,7 @@ def test_parse_connection_snapshot_handles_top_level_qr_payload():
 
 def test_ensure_instance_treats_already_in_use_as_idempotent(monkeypatch):
     requests_seen: list[tuple[str, str]] = []
+    settings_calls: list[tuple[str, str]] = []
 
     class DummyResponse:
         def __init__(self, status_code: int, payload: dict[str, object]):
@@ -532,6 +599,8 @@ def test_ensure_instance_treats_already_in_use_as_idempotent(monkeypatch):
         ("POST", "http://evolution-api:8080/instance/create"),
         ("GET", "http://evolution-api:8080/instance/fetchInstances"),
         ("POST", "http://evolution-api:8080/webhook/set/assonam-org-7"),
+        ("GET", "http://evolution-api:8080/settings/find/assonam-org-7"),
+        ("POST", "http://evolution-api:8080/settings/set/assonam-org-7"),
     ]
 
 
@@ -589,4 +658,6 @@ def test_ensure_instance_recreates_device_removed_session(monkeypatch):
         ("DELETE", "http://evolution-api:8080/instance/delete/assonam-org-7"),
         ("POST", "http://evolution-api:8080/instance/create"),
         ("POST", "http://evolution-api:8080/webhook/set/assonam-org-7"),
+        ("GET", "http://evolution-api:8080/settings/find/assonam-org-7"),
+        ("POST", "http://evolution-api:8080/settings/set/assonam-org-7"),
     ]

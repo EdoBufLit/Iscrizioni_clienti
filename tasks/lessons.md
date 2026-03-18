@@ -172,3 +172,5 @@
 - Se uso replace automatici su file TSX grandi, devo evitare sostituzioni interpolate con stringhe/template in PowerShell: per blocchi React e piu sicuro usare replace per marker stabili o patch mirate e poi rilanciare subito `typecheck`.
 - Se un "tema visivo" serve solo a cambiare stile, la sua label non deve mai finire nell'HTML finale inviato ai soci: theme metadata e contenuto email vanno tenuti separati nel renderer.
 
+
+- Se una inbox dipende da webhook asincroni, il frontend non puo limitarsi al polling della fase QR: deve refreshare anche in stato `connected` e non leggere state stale per contatti/chat, altrimenti i messaggi ricevuti sembrano sparire pur essendo gia nel DB locale.

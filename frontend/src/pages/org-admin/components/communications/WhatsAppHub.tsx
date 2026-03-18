@@ -5,11 +5,14 @@ import {
   disconnectOrgAdminWhatsApp,
   fetchOrgAdminWhatsAppChats,
   fetchOrgAdminWhatsAppConnection,
+  fetchOrgAdminWhatsAppContacts,
   fetchOrgAdminWhatsAppMessages,
   fetchOrgAdminWhatsAppQr,
+  openOrgAdminWhatsAppDraftChat,
   sendOrgAdminWhatsAppMessage,
   startOrgAdminWhatsAppChat,
   type OrgAdminWhatsAppChat,
+  type OrgAdminWhatsAppContact,
   type OrgAdminWhatsAppConnection,
   type OrgAdminWhatsAppMessage,
 } from "../../../../lib/api";
@@ -70,6 +73,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
   const [threadLoading, setThreadLoading] = useState(false);
   const [connection, setConnection] = useState<OrgAdminWhatsAppConnection>(emptyConnection());
   const [chats, setChats] = useState<OrgAdminWhatsAppChat[]>([]);
+  const [contacts, setContacts] = useState<OrgAdminWhatsAppContact[]>([]);
   const [messages, setMessages] = useState<OrgAdminWhatsAppMessage[]>([]);
   const [selectedChatId, setSelectedChatId] = useState<number | null>(null);
   const [composerText, setComposerText] = useState("");
@@ -95,8 +99,21 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
     return response.items;
   }
 
-  async function loadMessages(chatId: number) {
-    setThreadLoading(true);
+  async function loadContacts(options?: { connected?: boolean }) {
+    const isConnected = options?.connected ?? connection.status === "connected";
+    if (!isConnected) {
+      setContacts([]);
+      return [];
+    }
+    const response = await fetchOrgAdminWhatsAppContacts();
+    setContacts(response.items);
+    return response.items;
+  }
+
+  async function loadMessages(chatId: number, options?: { silent?: boolean }) {
+    if (!options?.silent) {
+      setThreadLoading(true);
+    }
     try {
       const response = await fetchOrgAdminWhatsAppMessages(chatId);
       setMessages(response.items);
@@ -104,7 +121,9 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
         prev.map((chat) => (chat.id === response.chat.id ? { ...chat, ...response.chat, unread_count: 0 } : chat)),
       );
     } finally {
-      setThreadLoading(false);
+      if (!options?.silent) {
+        setThreadLoading(false);
+      }
     }
   }
 
@@ -112,6 +131,11 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
     setError(null);
     try {
       const [nextConnection, nextChats] = await Promise.all([loadConnection(), loadChats()]);
+      if (nextConnection.status === "connected") {
+        await loadContacts({ connected: true });
+      } else {
+        setContacts([]);
+      }
       if (nextConnection.status === "qr_required" && !nextConnection.has_qr) {
         await loadConnection({ preferQr: true });
       }
@@ -168,6 +192,31 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
     return () => window.clearInterval(interval);
   }, [connection.status]);
 
+  useEffect(() => {
+    if (connection.status !== "connected") {
+      return undefined;
+    }
+    const interval = window.setInterval(() => {
+      void loadConnection().catch(() => undefined);
+      void loadChats().catch(() => undefined);
+      if (selectedChatId) {
+        void loadMessages(selectedChatId, { silent: true }).catch(() => undefined);
+      }
+    }, 4000);
+    return () => window.clearInterval(interval);
+  }, [connection.status, selectedChatId]);
+
+  useEffect(() => {
+    if (connection.status !== "connected") {
+      return undefined;
+    }
+    void loadContacts({ connected: true }).catch(() => undefined);
+    const interval = window.setInterval(() => {
+      void loadContacts({ connected: true }).catch(() => undefined);
+    }, 15000);
+    return () => window.clearInterval(interval);
+  }, [connection.status]);
+
   async function handleConnect() {
     setBusy("connect");
     setError(null);
@@ -179,6 +228,9 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
         setConnection(qrState);
       }
       await loadChats();
+      if (response.connection.status === "connected") {
+        await loadContacts({ connected: true });
+      }
       showToast({
         title: "WhatsApp",
         message: "Connessione avviata. Scansiona il QR se richiesto.",
@@ -199,6 +251,8 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
     try {
       const response = await disconnectOrgAdminWhatsApp();
       setConnection(response.connection);
+      setContacts([]);
+      setMessages([]);
       showToast({
         title: "WhatsApp",
         message: "Connessione disconnessa.",
@@ -263,6 +317,50 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
       showToast({ title: "WhatsApp", message, tone: "error" });
     } finally {
       setBusy("");
+    }
+  }
+
+  async function handleOpenDraftChat(input: { number: string; displayName?: string | null }) {
+    const trimmedNumber = input.number.trim();
+    if (!trimmedNumber) {
+      return;
+    }
+    setBusy("open-chat");
+    setError(null);
+    try {
+      const response = await openOrgAdminWhatsAppDraftChat({
+        number: trimmedNumber,
+        display_name: input.displayName?.trim() || undefined,
+      });
+      const nextChats = await loadChats();
+      const nextChatId = nextChats.find((chat) => chat.id === response.chat.id)?.id ?? response.chat.id;
+      setSelectedChatId(nextChatId);
+      await loadMessages(nextChatId);
+      showToast({
+        title: "WhatsApp",
+        message: "Chat pronta. Puoi scrivere dal composer principale.",
+        tone: "success",
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Errore apertura chat WhatsApp.";
+      setError(message);
+      showToast({ title: "WhatsApp", message, tone: "error" });
+    } finally {
+      setBusy("");
+    }
+  }
+
+  function handleSelectContact(contact: OrgAdminWhatsAppContact) {
+    const existingChat = chats.find((chat) => chat.external_chat_id === contact.remote_jid);
+    setNewChatNumber(contact.phone_number ?? "");
+    setNewChatName(contact.display_name);
+    if (existingChat) {
+      setSelectedChatId(existingChat.id);
+      void loadMessages(existingChat.id);
+      return;
+    }
+    if (contact.phone_number) {
+      void handleOpenDraftChat({ number: contact.phone_number, displayName: contact.display_name });
     }
   }
 
@@ -348,7 +446,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
               <div>
                 <p className="text-sm font-semibold text-amber-900">Scansiona il QR dal telefono associativo</p>
                 <p className="mt-1 text-sm text-amber-800">
-                  Il polling resta attivo solo in questa fase. Se il QR scade, usa di nuovo “Connetti”.
+                  Il polling resta attivo solo in questa fase. Se il QR scade, usa di nuovo "Connetti".
                 </p>
               </div>
               {connection.qr_code && connection.qr_code.startsWith("data:image") ? (
@@ -382,7 +480,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-neutral-900">Nuova chat</p>
-                  <p className="mt-1 text-xs text-neutral-500">Invia il primo messaggio a un numero diretto e ASSONAM creerà il thread locale.</p>
+                  <p className="mt-1 text-xs text-neutral-500">Apri la chat da un numero o da un contatto recente, poi rispondi dal composer principale.</p>
                 </div>
                 <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-neutral-500">
                   Solo testo
@@ -396,7 +494,12 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
                   onChange={(event) => setNewChatNumber(event.target.value)}
                   placeholder="+39 340 1234567"
                   className="w-full rounded-[1rem] border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-800 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10 disabled:cursor-not-allowed disabled:bg-neutral-100"
-                  disabled={communicationsLocked || connection.status !== "connected" || busy === "start-chat"}
+                  disabled={
+                    communicationsLocked ||
+                    connection.status !== "connected" ||
+                    busy === "open-chat" ||
+                    busy === "start-chat"
+                  }
                 />
                 <input
                   type="text"
@@ -404,7 +507,12 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
                   onChange={(event) => setNewChatName(event.target.value)}
                   placeholder="Nome contatto opzionale"
                   className="w-full rounded-[1rem] border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-800 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10 disabled:cursor-not-allowed disabled:bg-neutral-100"
-                  disabled={communicationsLocked || connection.status !== "connected" || busy === "start-chat"}
+                  disabled={
+                    communicationsLocked ||
+                    connection.status !== "connected" ||
+                    busy === "open-chat" ||
+                    busy === "start-chat"
+                  }
                 />
                 <textarea
                   value={newChatText}
@@ -419,8 +527,32 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
                         : "Connetti prima WhatsApp per iniziare una chat."
                   }
                   className="w-full rounded-[1rem] border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-800 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10 disabled:cursor-not-allowed disabled:bg-neutral-100"
-                  disabled={communicationsLocked || connection.status !== "connected" || busy === "start-chat"}
+                  disabled={
+                    communicationsLocked ||
+                    connection.status !== "connected" ||
+                    busy === "open-chat" ||
+                    busy === "start-chat"
+                  }
                 />
+                <button
+                  type="button"
+                  className="w-full rounded-[1rem] border border-neutral-200 bg-white px-4 py-3 text-sm font-semibold text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={
+                    communicationsLocked ||
+                    connection.status !== "connected" ||
+                    !newChatNumber.trim() ||
+                    busy === "open-chat" ||
+                    busy === "start-chat"
+                  }
+                  onClick={() =>
+                    void handleOpenDraftChat({
+                      number: newChatNumber,
+                      displayName: newChatName,
+                    })
+                  }
+                >
+                  Apri chat
+                </button>
                 <button
                   type="button"
                   className="w-full rounded-[1rem] border border-brand bg-brand px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
@@ -429,6 +561,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
                     connection.status !== "connected" ||
                     !newChatNumber.trim() ||
                     !newChatText.trim() ||
+                    busy === "open-chat" ||
                     busy === "start-chat"
                   }
                   onClick={() => void handleStartChat()}
@@ -438,10 +571,51 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
               </div>
             </div>
           </div>
+          <div className="border-b border-neutral-200 p-3">
+            <div className="rounded-[1.3rem] border border-neutral-200 bg-white px-4 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-neutral-900">Contatti recenti</p>
+                  <p className="mt-1 text-xs text-neutral-500">
+                    Recuperati da Evolution Lite per evitare inserimento manuale completo.
+                  </p>
+                </div>
+                <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-1 text-[11px] font-semibold text-neutral-500">
+                  {contacts.length}
+                </span>
+              </div>
+              <div className="mt-4 max-h-48 space-y-2 overflow-y-auto">
+                {contacts.length === 0 ? (
+                  <div className="rounded-[1rem] border border-dashed border-neutral-200 px-3 py-4 text-xs text-neutral-500">
+                    Nessun contatto disponibile ancora. Dopo la riconnessione o i primi scambi, Evolution popolerà questa lista.
+                  </div>
+                ) : (
+                  contacts.map((contact) => (
+                    <button
+                      key={contact.remote_jid}
+                      type="button"
+                      className="flex w-full items-center justify-between gap-3 rounded-[1rem] border border-neutral-200 px-3 py-3 text-left transition hover:border-neutral-300 hover:bg-neutral-50"
+                      onClick={() => handleSelectContact(contact)}
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-neutral-900">{contact.display_name}</p>
+                        <p className="mt-1 truncate text-xs text-neutral-500">
+                          {contact.phone_number ?? contact.remote_jid}
+                        </p>
+                      </div>
+                      <span className="text-[11px] text-neutral-400">
+                        {contact.updated_at ? formatDateTime(contact.updated_at) : ""}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
           <div className="max-h-[32rem] overflow-y-auto p-3">
             {chats.length === 0 ? (
               <div className="rounded-[1.3rem] border border-dashed border-neutral-200 px-4 py-6 text-sm text-neutral-500">
-                Nessuna chat sincronizzata per ora. Invia un primo messaggio dal box qui sopra.
+                Nessuna chat sincronizzata per ora. Apri una chat dai contatti recenti oppure creane una dal box qui sopra.
               </div>
             ) : (
               <div className="space-y-2">

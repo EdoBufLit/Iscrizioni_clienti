@@ -11,6 +11,7 @@ from app.db import get_db
 from app.models import AdminRole, AdminUser, WhatsAppConnection
 from app.services.whatsapp_evolution import (
     EvolutionApiError,
+    EvolutionContact,
     EvolutionLiteClient,
     normalize_phone,
 )
@@ -49,6 +50,23 @@ class StartWhatsAppChatBody(BaseModel):
     number: str = Field(..., min_length=5, max_length=64)
     text: str = Field(..., min_length=1, max_length=4096)
     display_name: str | None = Field(default=None, max_length=255)
+
+
+class OpenWhatsAppChatBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    number: str = Field(..., min_length=5, max_length=64)
+    display_name: str | None = Field(default=None, max_length=255)
+
+
+def _serialize_contact(contact: EvolutionContact) -> dict[str, str | None]:
+    return {
+        "remote_jid": contact.remote_jid,
+        "display_name": contact.display_name or contact.phone_number or contact.remote_jid,
+        "phone_number": contact.phone_number,
+        "profile_pic_url": contact.profile_pic_url,
+        "updated_at": contact.updated_at.isoformat() if contact.updated_at else None,
+    }
 
 
 def _get_current_org_admin(request: Request, db: Session) -> AdminUser | None:
@@ -190,6 +208,25 @@ def list_whatsapp_chats(
     return {"items": items, "total": len(items)}
 
 
+@router.get("/contacts")
+def list_whatsapp_contacts(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _require_whatsapp_feature_enabled()
+    admin = _require_org_admin_access(request, db)
+    connection = _get_existing_connection(db, org_id=admin.organization.id)
+    if connection is None or connection.status != "connected":
+        return {"items": [], "total": 0}
+    client = EvolutionLiteClient()
+    try:
+        contacts = client.list_contacts(connection.instance_name)
+    except EvolutionApiError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    items = [_serialize_contact(contact) for contact in contacts]
+    return {"items": items, "total": len(items)}
+
+
 @router.get("/chats/{chat_id}/messages")
 def list_whatsapp_messages(
     chat_id: int,
@@ -211,6 +248,40 @@ def list_whatsapp_messages(
         "items": items,
         "total": len(items),
     }
+
+
+@router.post("/draft-chat")
+def open_whatsapp_chat(
+    body: OpenWhatsAppChatBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _require_whatsapp_feature_enabled()
+    admin = _require_org_admin_access(request, db)
+    connection = _get_existing_connection(db, org_id=admin.organization.id)
+    if connection is None:
+        raise HTTPException(status_code=409, detail="Connessione WhatsApp non configurata.")
+    if connection.status != "connected":
+        raise HTTPException(status_code=409, detail="WhatsApp non connesso.")
+
+    normalized_number = normalize_phone(body.number)
+    if not normalized_number:
+        raise HTTPException(status_code=400, detail="Numero WhatsApp non valido.")
+
+    try:
+        chat = get_or_create_chat_for_number(
+            db,
+            connection=connection,
+            number=normalized_number,
+            display_name=body.display_name,
+        )
+        db.commit()
+        db.refresh(chat)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {"ok": True, "chat": serialize_chat(chat)}
 
 
 @router.post("/chats/{chat_id}/messages")
