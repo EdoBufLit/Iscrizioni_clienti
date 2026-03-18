@@ -8,6 +8,7 @@ import {
   fetchOrgAdminWhatsAppMessages,
   fetchOrgAdminWhatsAppQr,
   sendOrgAdminWhatsAppMessage,
+  startOrgAdminWhatsAppChat,
   type OrgAdminWhatsAppChat,
   type OrgAdminWhatsAppConnection,
   type OrgAdminWhatsAppMessage,
@@ -72,6 +73,9 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
   const [messages, setMessages] = useState<OrgAdminWhatsAppMessage[]>([]);
   const [selectedChatId, setSelectedChatId] = useState<number | null>(null);
   const [composerText, setComposerText] = useState("");
+  const [newChatNumber, setNewChatNumber] = useState("");
+  const [newChatName, setNewChatName] = useState("");
+  const [newChatText, setNewChatText] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const selectedChat = useMemo(
@@ -229,6 +233,39 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
     }
   }
 
+  async function handleStartChat() {
+    if (!newChatNumber.trim() || !newChatText.trim()) {
+      return;
+    }
+    setBusy("start-chat");
+    setError(null);
+    try {
+      const response = await startOrgAdminWhatsAppChat({
+        number: newChatNumber.trim(),
+        text: newChatText.trim(),
+        display_name: newChatName.trim() || undefined,
+      });
+      const nextChats = await loadChats();
+      const nextChatId = nextChats.find((chat) => chat.id === response.chat.id)?.id ?? response.chat.id;
+      setSelectedChatId(nextChatId);
+      await loadMessages(nextChatId);
+      setNewChatNumber("");
+      setNewChatName("");
+      setNewChatText("");
+      showToast({
+        title: "WhatsApp",
+        message: "Prima conversazione avviata con successo.",
+        tone: "success",
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Errore avvio nuova chat WhatsApp.";
+      setError(message);
+      showToast({ title: "WhatsApp", message, tone: "error" });
+    } finally {
+      setBusy("");
+    }
+  }
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -338,12 +375,73 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
         <div className="rounded-[1.75rem] border border-neutral-200 bg-white shadow-sm">
           <div className="border-b border-neutral-200 px-5 py-4">
             <p className="text-sm font-semibold text-neutral-900">Chat monitorate</p>
-            <p className="mt-1 text-xs text-neutral-500">Sono visibili solo le conversazioni osservate da ASSONAM via webhook.</p>
+            <p className="mt-1 text-xs text-neutral-500">Puoi avviare una nuova conversazione oppure leggere quelle sincronizzate via webhook.</p>
           </div>
-          <div className="max-h-[42rem] overflow-y-auto p-3">
+          <div className="border-b border-neutral-200 p-3">
+            <div className="rounded-[1.3rem] border border-neutral-200 bg-neutral-50 px-4 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-neutral-900">Nuova chat</p>
+                  <p className="mt-1 text-xs text-neutral-500">Invia il primo messaggio a un numero diretto e ASSONAM creerà il thread locale.</p>
+                </div>
+                <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-neutral-500">
+                  Solo testo
+                </span>
+              </div>
+              <div className="mt-4 space-y-3">
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  value={newChatNumber}
+                  onChange={(event) => setNewChatNumber(event.target.value)}
+                  placeholder="+39 340 1234567"
+                  className="w-full rounded-[1rem] border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-800 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10 disabled:cursor-not-allowed disabled:bg-neutral-100"
+                  disabled={communicationsLocked || connection.status !== "connected" || busy === "start-chat"}
+                />
+                <input
+                  type="text"
+                  value={newChatName}
+                  onChange={(event) => setNewChatName(event.target.value)}
+                  placeholder="Nome contatto opzionale"
+                  className="w-full rounded-[1rem] border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-800 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10 disabled:cursor-not-allowed disabled:bg-neutral-100"
+                  disabled={communicationsLocked || connection.status !== "connected" || busy === "start-chat"}
+                />
+                <textarea
+                  value={newChatText}
+                  onChange={(event) => setNewChatText(event.target.value)}
+                  rows={3}
+                  maxLength={4096}
+                  placeholder={
+                    communicationsLocked
+                      ? "Modulo Comunicazioni non attivo."
+                      : connection.status === "connected"
+                        ? "Scrivi il primo messaggio di testo..."
+                        : "Connetti prima WhatsApp per iniziare una chat."
+                  }
+                  className="w-full rounded-[1rem] border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-800 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10 disabled:cursor-not-allowed disabled:bg-neutral-100"
+                  disabled={communicationsLocked || connection.status !== "connected" || busy === "start-chat"}
+                />
+                <button
+                  type="button"
+                  className="w-full rounded-[1rem] border border-brand bg-brand px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={
+                    communicationsLocked ||
+                    connection.status !== "connected" ||
+                    !newChatNumber.trim() ||
+                    !newChatText.trim() ||
+                    busy === "start-chat"
+                  }
+                  onClick={() => void handleStartChat()}
+                >
+                  Avvia conversazione
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="max-h-[32rem] overflow-y-auto p-3">
             {chats.length === 0 ? (
               <div className="rounded-[1.3rem] border border-dashed border-neutral-200 px-4 py-6 text-sm text-neutral-500">
-                Nessuna chat sincronizzata per ora.
+                Nessuna chat sincronizzata per ora. Invia un primo messaggio dal box qui sopra.
               </div>
             ) : (
               <div className="space-y-2">
@@ -396,7 +494,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
                 </div>
               ) : !selectedChat ? (
                 <div className="rounded-[1.4rem] border border-dashed border-neutral-200 px-5 py-8 text-sm text-neutral-500">
-                  Seleziona una conversazione dalla colonna sinistra.
+                  Seleziona una conversazione dalla colonna sinistra oppure avviane una nuova.
                 </div>
               ) : messages.length === 0 ? (
                 <div className="rounded-[1.4rem] border border-dashed border-neutral-200 px-5 py-8 text-sm text-neutral-500">
@@ -436,7 +534,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
                       ? "Modulo Comunicazioni non attivo."
                       : selectedChat
                         ? "Scrivi un messaggio di testo..."
-                        : "Seleziona prima una chat."
+                        : "Apri o crea prima una chat."
                   }
                   className="w-full rounded-[1.2rem] border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-800 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10 disabled:cursor-not-allowed disabled:bg-neutral-50"
                   disabled={!selectedChat || communicationsLocked || connection.status !== "connected"}

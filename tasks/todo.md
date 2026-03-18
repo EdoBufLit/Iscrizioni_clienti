@@ -1,3 +1,7 @@
+- [x] Aggiungere un path org-admin per avviare una nuova chat WhatsApp verso numero diretto quando l'inbox locale è ancora vuota
+- [x] Rendere la UI WhatsApp utilizzabile anche senza chat pregresse sincronizzate, con form minima `numero + testo`
+- [x] Verificare backend/frontend e pushare la correzione sul branch di deploy
+
 - [x] Aggiungere persistenza WhatsApp org-scoped con migration Alembic (`WhatsAppConnection`, `WhatsAppChat`, `WhatsAppMessage`)
 - [x] Implementare client Evolution Lite, service layer di sync e webhook interno ASSONAM
 - [x] Esporre API org-admin `Comunicazioni > WhatsApp` per connection state, connect/qr/disconnect, chat list, thread e send text
@@ -12,6 +16,13 @@
 - Integrata la tab `Comunicazioni > WhatsApp` con badge sperimentale, stato connessione, QR, inbox a 2 colonne, polling QR e composer testuale.
 - Preparato il service passivo `prepare_form_submission_whatsapp_candidate(...)` e agganciato in modo non attivo al submit pubblico solo come predisposizione futura.
 - Verifiche eseguite: `python -m alembic upgrade head`, `pytest tests/test_org_admin_whatsapp.py -q`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
+
+## Review (WhatsApp first chat usability fix - Mar 18, 2026)
+- Root cause confermata nel test reale: con connessione già attiva, la UI mostrava solo chat osservate via webhook e il composer richiedeva una chat selezionata, quindi il primo invio outbound era impossibile.
+- Backend esteso con route org-admin `POST /api/org-admin/communications/whatsapp/outbound` che crea/riusa una chat locale da numero, salva il messaggio outbound e invia subito via Evolution Lite.
+- Service layer aggiornato con helper per derivare `external_chat_id` da numero e creare in modo idempotente la prima chat locale senza attendere webhook inbound.
+- UI WhatsApp aggiornata con pannello `Nuova chat` nella colonna sinistra (`numero`, `nome contatto opzionale`, `testo`) che avvia la conversazione, seleziona il thread creato e mantiene poi il composer classico per le risposte.
+- Verifiche eseguite: `python -m py_compile app/routes/whatsapp_evolution.py app/services/whatsapp_sync.py app/services/whatsapp_evolution.py`, `pytest tests/test_org_admin_whatsapp.py -q`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
 - [x] Analizzare workflow `deploy-hetzner`, compose Docker, catena env/secrets e configurazione Postgres effettiva per l'integrazione Evolution API Lite
 - [x] Aggiungere Evolution API Lite come servizio Docker separato con sole env minime richieste e collegamento al Postgres esistente su DB `evolution`
 - [x] Estendere workflow/file di deploy per propagare le nuove env ASSONAM/Evolution senza introdurre variabili superflue

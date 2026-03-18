@@ -98,6 +98,8 @@ def test_whatsapp_module_locked_returns_403(client, db):
 def test_whatsapp_connect_send_and_disconnect(client, db, monkeypatch):
     org, admin = _create_org_admin(db, communications_enabled=True)
     _login_org_admin(client, db, admin.id)
+    outbound_texts: list[str] = []
+    send_counter = {"value": 0}
 
     def fake_ensure_instance(self, *, org_id: int):
         assert org_id == org.id
@@ -119,8 +121,9 @@ def test_whatsapp_connect_send_and_disconnect(client, db, monkeypatch):
     def fake_send_text(self, instance_name: str, *, number: str, text: str):
         assert instance_name == f"assonam-org-{org.id}"
         assert "39333" in number
-        assert text == "Ciao dal test"
-        external_id = f"wamid-outbound-{org.id}"
+        outbound_texts.append(text)
+        send_counter["value"] += 1
+        external_id = f"wamid-outbound-{org.id}-{send_counter['value']}"
         return EvolutionSendTextResult(
             external_message_id=external_id,
             status="sent",
@@ -156,25 +159,34 @@ def test_whatsapp_connect_send_and_disconnect(client, db, monkeypatch):
 
     connection = get_or_create_connection(db, org)
     connection.status = "connected"
-    chat = WhatsAppChat(
-        org_id=org.id,
-        connection_id=connection.id,
-        external_chat_id="393331234567@s.whatsapp.net",
-        display_name="Mario Rossi",
-    )
-    db.add(chat)
     db.commit()
-    db.refresh(chat)
+
+    outbound_res = client.post(
+        "/api/org-admin/communications/whatsapp/outbound",
+        json={
+            "number": "+39 333 1234567",
+            "display_name": "Mario Rossi",
+            "text": "Primo contatto dal test",
+        },
+    )
+    assert outbound_res.status_code == 200, outbound_res.text
+    outbound_payload = outbound_res.json()
+    assert outbound_payload["chat"]["display_name"] == "Mario Rossi"
+    assert outbound_payload["chat"]["external_chat_id"] == "393331234567@s.whatsapp.net"
+    assert outbound_payload["message"]["direction"] == "outbound"
+    assert outbound_payload["message"]["status"] == "sent"
+    chat_id = outbound_payload["chat"]["id"]
 
     send_res = client.post(
-        f"/api/org-admin/communications/whatsapp/chats/{chat.id}/messages",
+        f"/api/org-admin/communications/whatsapp/chats/{chat_id}/messages",
         json={"text": "Ciao dal test"},
     )
     assert send_res.status_code == 200, send_res.text
     send_payload = send_res.json()["message"]
     assert send_payload["direction"] == "outbound"
-    assert send_payload["external_message_id"] == f"wamid-outbound-{org.id}"
+    assert send_payload["external_message_id"] == f"wamid-outbound-{org.id}-2"
     assert send_payload["status"] == "sent"
+    assert outbound_texts == ["Primo contatto dal test", "Ciao dal test"]
 
     other_org, _other_admin = _create_org_admin(db, communications_enabled=True)
     other_connection = get_or_create_connection(db, other_org)

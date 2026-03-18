@@ -16,6 +16,7 @@ from app.services.whatsapp_evolution import (
 )
 from app.services.whatsapp_sync import (
     apply_connection_snapshot,
+    get_or_create_chat_for_number,
     create_pending_outbound_message,
     finalize_outbound_send,
     get_chat_for_connection,
@@ -40,6 +41,14 @@ class SendWhatsAppMessageBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     text: str = Field(..., min_length=1, max_length=4096)
+
+
+class StartWhatsAppChatBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    number: str = Field(..., min_length=5, max_length=64)
+    text: str = Field(..., min_length=1, max_length=4096)
+    display_name: str | None = Field(default=None, max_length=255)
 
 
 def _get_current_org_admin(request: Request, db: Session) -> AdminUser | None:
@@ -245,6 +254,64 @@ def send_whatsapp_message(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return {"ok": True, "message": serialize_message(pending_message)}
+
+
+@router.post("/outbound")
+def start_whatsapp_chat(
+    body: StartWhatsAppChatBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _require_whatsapp_feature_enabled()
+    admin = _require_org_admin_access(request, db)
+    connection = _get_existing_connection(db, org_id=admin.organization.id)
+    if connection is None:
+        raise HTTPException(status_code=409, detail="Connessione WhatsApp non configurata.")
+    if connection.status != "connected":
+        raise HTTPException(status_code=409, detail="WhatsApp non connesso.")
+
+    text = body.text.strip()
+    normalized_number = normalize_phone(body.number)
+    if not normalized_number:
+        raise HTTPException(status_code=400, detail="Numero WhatsApp non valido.")
+
+    try:
+        chat = get_or_create_chat_for_number(
+            db,
+            connection=connection,
+            number=normalized_number,
+            display_name=body.display_name,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    pending_message = create_pending_outbound_message(
+        db,
+        connection=connection,
+        chat=chat,
+        text_body=text,
+    )
+    client = EvolutionLiteClient()
+    try:
+        send_result = client.send_text(
+            connection.instance_name,
+            number=normalized_number,
+            text=text,
+        )
+        finalize_outbound_send(pending_message, send_result)
+        db.commit()
+        db.refresh(chat)
+        db.refresh(pending_message)
+    except EvolutionApiError as exc:
+        mark_outbound_message_failed(pending_message, error_message=str(exc))
+        db.commit()
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {
+        "ok": True,
+        "chat": serialize_chat(chat),
+        "message": serialize_message(pending_message),
+    }
 
 
 @internal_router.post("/evolution")

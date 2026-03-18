@@ -683,6 +683,12 @@ export type OrgAdminWhatsAppMessage = {
   updated_at: string | null;
 };
 
+export type OrgAdminWhatsAppOutboundInput = {
+  number: string;
+  text: string;
+  display_name?: string | null;
+};
+
 export type OrgAdminStripeDemoAccountStatus = {
   id: string | null;
   display_name: string | null;
@@ -1365,6 +1371,23 @@ export async function sendOrgAdminWhatsAppMessage(
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore invio messaggio WhatsApp"));
+  return res.json();
+}
+
+export async function startOrgAdminWhatsAppChat(
+  input: OrgAdminWhatsAppOutboundInput,
+): Promise<{
+  ok: boolean;
+  chat: OrgAdminWhatsAppChat;
+  message: OrgAdminWhatsAppMessage;
+}> {
+  const res = await fetch("/api/org-admin/communications/whatsapp/outbound", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore avvio nuova chat WhatsApp"));
   return res.json();
 }
 

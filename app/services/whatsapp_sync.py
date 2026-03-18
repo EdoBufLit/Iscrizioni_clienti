@@ -168,6 +168,30 @@ def get_chat_for_connection(
     )
 
 
+def build_external_chat_id_for_number(number: str) -> str:
+    normalized = normalize_phone(number)
+    if not normalized:
+        raise ValueError("Numero WhatsApp non valido.")
+    return f"{normalized.lstrip('+')}@s.whatsapp.net"
+
+
+def get_or_create_chat_for_number(
+    db: Session,
+    *,
+    connection: WhatsAppConnection,
+    number: str,
+    display_name: str | None = None,
+) -> WhatsAppChat:
+    external_chat_id = build_external_chat_id_for_number(number)
+    fallback_name = normalize_phone(number) or external_chat_id
+    return _get_or_create_chat(
+        db,
+        connection=connection,
+        external_chat_id=external_chat_id,
+        display_name=(display_name or "").strip() or fallback_name,
+    )
+
+
 def get_messages_for_chat(
     db: Session,
     *,
