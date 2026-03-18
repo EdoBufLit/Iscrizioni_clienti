@@ -629,10 +629,15 @@ def decorate_rendered_email(
         if event_details
         else ""
     )
+    signature_role_html = (
+        f"<div style=\"color:#64748b\">{html.escape(signature_role)}</div>"
+        if signature_role
+        else ""
+    )
     signature_html = (
         f"<div style=\"margin:28px 0 0;color:#0f172a;font-size:15px;line-height:1.6\">"
         f"<div style=\"font-weight:700\">{html.escape(signature_name)}</div>"
-        f"{f'<div style=\"color:#64748b\">{html.escape(signature_role)}</div>' if signature_role else ''}"
+        f"{signature_role_html}"
         "</div>"
         if signature_name
         else ""
