@@ -467,3 +467,40 @@ def test_apply_connection_snapshot_preserves_existing_qr():
 
     assert connection.status == "qr_required"
     assert connection.qr_code == "existing-qr"
+
+
+def test_ensure_instance_treats_already_in_use_as_idempotent(monkeypatch):
+    requests_seen: list[tuple[str, str]] = []
+
+    class DummyResponse:
+        def __init__(self, status_code: int, payload: dict[str, object]):
+            self.status_code = status_code
+            self.ok = status_code < 400
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    def fake_request(method, url, json=None, headers=None, timeout=None):
+        requests_seen.append((method, url))
+        if url.endswith("/instance/create"):
+            return DummyResponse(
+                403,
+                {
+                    "status": 403,
+                    "error": "Forbidden",
+                    "response": {"message": ['This name "assonam-org-7" is already in use.']},
+                },
+            )
+        return DummyResponse(200, {"ok": True})
+
+    monkeypatch.setattr("app.services.whatsapp_evolution.requests.request", fake_request)
+
+    client = EvolutionLiteClient(base_url="http://evolution-api:8080", api_key="test-key")
+    payload = client.ensure_instance(org_id=7)
+
+    assert payload == {"instance": {"instanceName": "assonam-org-7"}}
+    assert requests_seen == [
+        ("POST", "http://evolution-api:8080/instance/create"),
+        ("POST", "http://evolution-api:8080/webhook/set/assonam-org-7"),
+    ]

@@ -167,6 +167,7 @@
 - [x] Correggere il client Evolution Lite usando i prefissi route reali dell'upstream (`/instance`, `/message`, `/webhook`)
 - [x] Coprire la regressione con test mirato sulle URL chiamate dal client
 - [x] Derivare nel container Evolution Lite il flag interno minimo necessario per inizializzare l'auth state e spostare il pairing sulla chiamata `connect`
+- [x] Rendere idempotente il retry di `Connetti` quando l'istanza Evolution esiste gia e il payload upstream risponde `already in use` dentro un `403 Forbidden`
 - [ ] Pushare la fix sul branch che attiva il deploy GitHub Actions
 - [ ] Verificare deploy e smoke test live del connect su Hetzner
 

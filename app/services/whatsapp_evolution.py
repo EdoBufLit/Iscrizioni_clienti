@@ -126,6 +126,26 @@ def _extract_message_id(payload: Any) -> str | None:
     return None
 
 
+def _extract_error_detail(payload: Any) -> str | None:
+    if isinstance(payload, str):
+        cleaned = payload.strip()
+        return cleaned or None
+    if isinstance(payload, list):
+        for item in payload:
+            detail = _extract_error_detail(item)
+            if detail:
+                return detail
+        return None
+    if not isinstance(payload, dict):
+        return None
+
+    for key in ("message", "response", "detail", "error"):
+        detail = _extract_error_detail(payload.get(key))
+        if detail:
+            return detail
+    return None
+
+
 def _extract_profile_name(payload: Any) -> str | None:
     if not isinstance(payload, dict):
         return None
@@ -332,10 +352,8 @@ class EvolutionLiteClient:
         except ValueError:
             parsed = {}
         if not response.ok:
-            detail = None
-            if isinstance(parsed, dict):
-                detail = parsed.get("message") or parsed.get("error") or parsed.get("response")
-            message = str(detail).strip() if detail else f"Evolution API error ({response.status_code})"
+            detail = _extract_error_detail(parsed)
+            message = detail or f"Evolution API error ({response.status_code})"
             raise EvolutionApiError(message)
         if not isinstance(parsed, dict):
             logger.warning("evolution_api_unexpected_payload path=%s type=%s", path, type(parsed).__name__)
