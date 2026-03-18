@@ -166,11 +166,15 @@ jobs:
                 echo "::error::ENABLE_WHATSAPP_EVOLUTION=true but EVOLUTION_API_KEY secret is empty"
                 exit 1
               fi
+              mkdir -p secrets
+              rm -f secrets/evolution-api-lite.env
+              EVOLUTION_ENV_TMP="$(mktemp secrets/evolution-api-lite.env.tmp.XXXXXX)"
               python3 scripts/render_evolution_lite_env.py \
                 --database-url "$DATABASE_URL" \
                 --auth-api-key "$EVOLUTION_API_KEY" \
-                --output "secrets/evolution-api-lite.env"
-              chmod 600 secrets/evolution-api-lite.env
+                --output "$EVOLUTION_ENV_TMP"
+              chmod 600 "$EVOLUTION_ENV_TMP"
+              mv "$EVOLUTION_ENV_TMP" secrets/evolution-api-lite.env
               EVOLUTION_COMPOSE_FILES="-f docker-compose.evolution-lite.yml"
               COMPOSE_FILES="$COMPOSE_FILES $EVOLUTION_COMPOSE_FILES"
             else
