@@ -40,6 +40,7 @@ type PreviewView = "desktop" | "mobile" | "text" | "mock";
 type LogoMode = "association" | "upload" | "none";
 type HeaderMode = "none" | "form" | "upload";
 type DeliveryFilter = "sent" | "scheduled" | "draft" | "failed";
+type DeliveryView = "list" | "detail";
 type CampaignView = "list" | "detail" | "composer";
 type CampaignShellMode = "list" | "composer";
 
@@ -151,7 +152,7 @@ const communicationTypes: Array<{
     value: "form_invite",
     title: "Invito a compilare un modulo",
     description: "Email con CTA chiara verso un modulo pubblico.",
-    icon: "â–£",
+    icon: "FM",
     preset: {
       communication_type: "form_invite",
       recipient_mode: "all_members",
@@ -163,14 +164,14 @@ const communicationTypes: Array<{
     value: "general",
     title: "Comunicazione generale",
     description: "Messaggio editoriale semplice, senza builder tecnico.",
-    icon: "âœ¦",
+    icon: "CG",
     preset: { communication_type: "general", recipient_mode: "all_members", audience_type: "active_members", design: { ...defaultDesign, layout_key: "institutional", font_preset: "classic" } },
   },
   {
     value: "renewal",
     title: "Reminder rinnovo",
     description: "Promemoria con CTA orientata al rinnovo.",
-    icon: "â†»",
+    icon: "RR",
     preset: {
       communication_type: "renewal",
       recipient_mode: "all_members",
@@ -182,14 +183,14 @@ const communicationTypes: Array<{
     value: "custom",
     title: "Messaggio personalizzato",
     description: "Base flessibile per comunicazioni particolari o one-shot.",
-    icon: "â—Œ",
+    icon: "MP",
     preset: { communication_type: "custom", recipient_mode: "selected_members", audience_type: "active_members", design: { ...defaultDesign, layout_key: "modern" } },
   },
   {
     value: "survey",
     title: "Sondaggio / feedback",
     description: "Invito leggero a raccogliere risposte o opinioni.",
-    icon: "â˜°",
+    icon: "SF",
     preset: {
       communication_type: "survey",
       recipient_mode: "all_members",
@@ -201,28 +202,28 @@ const communicationTypes: Array<{
 
 const layoutPresets: Array<{ key: OrgAdminEmailLayoutKey; title: string; description: string; accent: string; button: string; preview: string }> = [
   { key: "institutional", title: "Istituzionale", description: "Sobrio e affidabile per comunicazioni ufficiali.", accent: "#334155", button: "#334155", preview: "bg-[linear-gradient(180deg,#eef2ff_0%,#ffffff_100%)]" },
-  { key: "modern", title: "Moderno", description: "Pulito, arioso e più editoriale.", accent: "#0f766e", button: "#0f766e", preview: "bg-[linear-gradient(180deg,#f3f7f9_0%,#ffffff_100%)]" },
+  { key: "modern", title: "Moderno", description: "Pulito, arioso e piu editoriale.", accent: "#0f766e", button: "#0f766e", preview: "bg-[linear-gradient(180deg,#f3f7f9_0%,#ffffff_100%)]" },
   { key: "elegant", title: "Elegante", description: "Raffinato, caldo, con tono premium.", accent: "#8a5a24", button: "#8a5a24", preview: "bg-[linear-gradient(180deg,#faf7f2_0%,#fffdf9_100%)]" },
-  { key: "event", title: "Evento", description: "Più visuale, con CTA in evidenza.", accent: "#c2410c", button: "#c2410c", preview: "bg-[linear-gradient(180deg,#fff7ed_0%,#ffffff_100%)]" },
+  { key: "event", title: "Evento", description: "Piu visuale, con CTA in evidenza.", accent: "#c2410c", button: "#c2410c", preview: "bg-[linear-gradient(180deg,#fff7ed_0%,#ffffff_100%)]" },
   { key: "reminder", title: "Reminder", description: "Diretto e forte per rinnovi o scadenze.", accent: "#1d4ed8", button: "#1d4ed8", preview: "bg-[linear-gradient(180deg,#eff6ff_0%,#ffffff_100%)]" },
 ];
 
 const fontPresets: Array<{ key: OrgAdminEmailDesign["font_preset"]; title: string; sample: string }> = [
   { key: "modern_sans", title: "Moderno", sample: "Titoli puliti e lettura immediata" },
-  { key: "editorial", title: "Editoriale", sample: "Più elegante e narrativo" },
+  { key: "editorial", title: "Editoriale", sample: "Piu elegante e narrativo" },
   { key: "classic", title: "Classico", sample: "Bilanciato e istituzionale" },
 ];
 
 const ctaStylePresets: Array<{ key: OrgAdminEmailDesign["cta_style"]; title: string; description: string }> = [
   { key: "solid", title: "Pieno", description: "CTA netta e diretta" },
-  { key: "soft", title: "Soft", description: "Più morbida e rassicurante" },
-  { key: "outline", title: "Outline", description: "Più discreta e pulita" },
-  { key: "shadow", title: "Rilievo", description: "Più forte e promozionale" },
+  { key: "soft", title: "Soft", description: "Piu morbida e rassicurante" },
+  { key: "outline", title: "Outline", description: "Piu discreta e pulita" },
+  { key: "shadow", title: "Rilievo", description: "Piu forte e promozionale" },
 ];
 
 const templateStarterOptions: Array<{ name: string; category: string; description: string; typeLabel: string; preset: Partial<TemplateEditorState> }> = [
   { name: "Invito a modulo", category: "forms", description: "Perfetto per portare il socio su un modulo pubblico tramite pulsante.", typeLabel: "Invito modulo", preset: { subject: "Ti chiediamo un minuto per completare {{titolo_form}}", body: "Ciao {{nome_socio}}.\n\nAbbiamo preparato un modulo dedicato a {{titolo_form}}.\nUsa il pulsante qui sotto per aprirlo nel browser e completarlo in pochi minuti.", design: { ...defaultDesign, layout_key: "event", cta_kind: "form", cta_label: "Apri il modulo", cta_note: "Il modulo si apre fuori dall'email, in una pagina pubblica dedicata.", cta_style: "shadow" } } },
-  { name: "Reminder rinnovo", category: "renewal", description: "Microcopy già orientata al rinnovo con CTA esplicita.", typeLabel: "Reminder", preset: { subject: "Rinnovo in scadenza per {{nome_socio}}", body: "Ciao {{nome_socio}}.\n\nLa tua quota associativa per {{nome_associazione}} scade il {{data_scadenza}}.\nPer continuare a usare i servizi associativi puoi completare il rinnovo online.", design: { ...defaultDesign, layout_key: "reminder", cta_kind: "renewal", cta_label: "Rinnova ora", cta_note: "Il link ti porta direttamente alla pagina di rinnovo.", cta_style: "shadow" } } },
+  { name: "Reminder rinnovo", category: "renewal", description: "Microcopy gia orientata al rinnovo con CTA esplicita.", typeLabel: "Reminder", preset: { subject: "Rinnovo in scadenza per {{nome_socio}}", body: "Ciao {{nome_socio}}.\n\nLa tua quota associativa per {{nome_associazione}} scade il {{data_scadenza}}.\nPer continuare a usare i servizi associativi puoi completare il rinnovo online.", design: { ...defaultDesign, layout_key: "reminder", cta_kind: "renewal", cta_label: "Rinnova ora", cta_note: "Il link ti porta direttamente alla pagina di rinnovo.", cta_style: "shadow" } } },
   { name: "Comunicazione standard", category: "announcements", description: "Template semplice per aggiornamenti e comunicazioni generali.", typeLabel: "Standard", preset: { subject: "Aggiornamento da {{nome_associazione}}", body: "Ciao {{nome_socio}}.\n\nCon questa email vogliamo condividere un aggiornamento importante relativo a {{nome_associazione}}.\nDi seguito trovi tutti i dettagli principali.", design: { ...defaultDesign, layout_key: "institutional", font_preset: "classic" } } },
   { name: "Convocazione evento", category: "events", description: "Per eventi, assemblee o appuntamenti associativi.", typeLabel: "Evento", preset: { subject: "Convocazione evento {{nome_associazione}}", body: "Ciao {{nome_socio}}.\n\nSei invitato a un appuntamento importante di {{nome_associazione}}.\nNella mail puoi inserire dettagli, data, luogo e informazioni operative.", design: { ...defaultDesign, layout_key: "event", event_details: "Data:\nLuogo:\nOrario:\nIndicazioni operative:", cta_style: "shadow" } } },
   { name: "Sondaggio", category: "feedback", description: "Template per chiedere opinioni, feedback o valutazioni.", typeLabel: "Feedback", preset: { subject: "Ci aiuti con un feedback?", body: "Ciao {{nome_socio}}.\n\nCi farebbe piacere ricevere il tuo parere.\nApri il modulo e compila il breve sondaggio.", design: { ...defaultDesign, layout_key: "event", cta_kind: "form", cta_label: "Compila il sondaggio", cta_note: "Il sondaggio si apre in una pagina esterna nel browser.", cta_style: "soft" } } },
@@ -354,7 +355,7 @@ function AudienceSelector(props: {
         {([
           { key: "all_members", title: "Tutti i soci attivi", description: "Usa il segmento definito sotto per filtrare automaticamente." },
           { key: "segment", title: "Segmento specifico", description: "Scegli un gruppo leggibile: attivi, scaduti o rinnovo in scadenza." },
-          { key: "selected_members", title: "Soci selezionati manualmente", description: "Ricerca uno o piÃ¹ soci e costruisci una lista manuale." },
+          { key: "selected_members", title: "Soci selezionati manualmente", description: "Ricerca uno o piu soci e costruisci una lista manuale." },
         ] as Array<{ key: string; title: string; description: string }>).map((option) => {
           const active = option.key === "selected_members" ? value === "selected_members" : value === "all_members";
           return (
@@ -395,7 +396,7 @@ function AudienceSelector(props: {
               <button key={member.id} type="button" className="flex w-full items-start justify-between gap-4 border-b border-neutral-100 px-4 py-3 text-left transition last:border-b-0 hover:bg-neutral-50" onClick={() => onAddMember(member)}>
                 <div>
                   <p className="text-sm font-semibold text-neutral-900">{member.name}</p>
-                  <p className="mt-1 text-xs text-neutral-500">{[member.email || "Email non disponibile", member.card_number ? `Tessera ${member.card_number}` : null].filter(Boolean).join(" Â· ")}</p>
+                  <p className="mt-1 text-xs text-neutral-500">{[member.email || "Email non disponibile", member.card_number ? `Tessera ${member.card_number}` : null].filter(Boolean).join(" · ")}</p>
                 </div>
                 <span className="text-xs font-semibold text-brand">Aggiungi</span>
               </button>
@@ -405,7 +406,7 @@ function AudienceSelector(props: {
             {selectedMembers.map((member) => (
               <span key={member.id} className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-sm text-neutral-700">
                 <span>{member.name}</span>
-                <button type="button" className="text-neutral-400 hover:text-neutral-700" onClick={() => onRemoveMember(member.id)}>Ã—</button>
+                <button type="button" className="text-neutral-400 hover:text-neutral-700" onClick={() => onRemoveMember(member.id)}>x</button>
               </span>
             ))}
           </div>
@@ -493,15 +494,15 @@ function CTAActionSelector(props: {
             </select>
           </label>
           <div className="rounded-[1.2rem] border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-            Il modulo non viene mostrato dentro lâ€™email. Nella mail comparirÃ  un pulsante che apre la pagina pubblica del modulo nel browser.
+            Il modulo non viene mostrato dentro l'email. Nella mail comparira un pulsante che apre la pagina pubblica del modulo nel browser.
           </div>
           <div className="rounded-[1.2rem] border border-neutral-200 bg-white p-4">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Diagramma rapido</p>
             <div className="mt-3 flex items-center gap-3 text-sm font-semibold text-neutral-700">
               <span className="rounded-full bg-neutral-100 px-3 py-2">Email</span>
-              <span>â†’</span>
+              <span>-&gt;</span>
               <span className="rounded-full bg-neutral-100 px-3 py-2">Pulsante</span>
-              <span>â†’</span>
+              <span>-&gt;</span>
               <span className="rounded-full bg-neutral-100 px-3 py-2">Modulo pubblico</span>
             </div>
           </div>
@@ -517,7 +518,7 @@ function CTAActionSelector(props: {
 
       {value === "renewal" && (
         <div className="rounded-[1.2rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Il pulsante userÃ  il link rinnovo personalizzato disponibile per ogni socio.
+          Il pulsante usera il link rinnovo personalizzato disponibile per ogni socio.
         </div>
       )}
 
@@ -525,8 +526,8 @@ function CTAActionSelector(props: {
         <div className="grid gap-4 md:grid-cols-2">
           <label className={labelClass}>
             Testo del pulsante
-            <input ref={registerField("cta_label")} className={inputClass} value={ctaLabel} onFocus={() => onFocusField("Testo del pulsante")} onChange={(event) => onLabelChange(event.target.value)} placeholder="Ãˆ lâ€™azione principale che il destinatario vedrÃ  nellâ€™email." />
-            <span className="mt-2 block text-xs text-neutral-500">Ãˆ lâ€™azione principale che il destinatario vedrÃ  nellâ€™email.</span>
+            <input ref={registerField("cta_label")} className={inputClass} value={ctaLabel} onFocus={() => onFocusField("Testo del pulsante")} onChange={(event) => onLabelChange(event.target.value)} placeholder="E l'azione principale che il destinatario vedra nell'email." />
+            <span className="mt-2 block text-xs text-neutral-500">E l'azione principale che il destinatario vedra nell'email.</span>
           </label>
           <label className={labelClass}>
             Testo sotto il pulsante
@@ -547,7 +548,6 @@ function CTAActionSelector(props: {
     </div>
   );
 }
-
 function EmailAppearancePanel(props: { draft: CampaignComposerState | TemplateEditorState; linkedForm: AssociationForm | null; onDesignChange: (next: OrgAdminEmailDesign) => void; onLogoModeChange: (next: LogoMode) => void; onHeaderModeChange: (next: HeaderMode) => void }) {
   const { draft, linkedForm, onDesignChange, onLogoModeChange, onHeaderModeChange } = props;
   function patchDesign(next: Partial<OrgAdminEmailDesign>) {
@@ -751,7 +751,7 @@ function EmailPreview(props: { loading: boolean; preview: PreviewState | null; v
             <Skeleton className="h-[28rem] w-full rounded-[1.4rem]" />
           </div>
         ) : !preview ? (
-          <div className="rounded-[1.4rem] border border-dashed border-neutral-200 bg-neutral-50 px-6 py-10 text-center text-sm text-neutral-500">Completa i campi principali per generare lâ€™anteprima.</div>
+          <div className="rounded-[1.4rem] border border-dashed border-neutral-200 bg-neutral-50 px-6 py-10 text-center text-sm text-neutral-500">Completa i campi principali per generare l'anteprima.</div>
         ) : view === "text" ? (
           <div className="rounded-[1.4rem] border border-neutral-200 bg-neutral-50 p-5">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Oggetto</p>
@@ -810,16 +810,15 @@ function SendOptionsPanel(props: { scheduledAt: string; saveAsTemplate: boolean;
   return (
     <div className="space-y-5">
       <div className="grid gap-4 md:grid-cols-3">
-        <button type="button" className="rounded-[1.4rem] border border-neutral-200 bg-white px-5 py-4 text-left hover:bg-neutral-50" onClick={onSendNow} disabled={disabled}><p className="text-sm font-semibold text-neutral-900">Invia subito</p><p className="mt-1 text-xs text-neutral-500">Accoda subito la campagna allâ€™invio.</p></button>
+        <button type="button" className="rounded-[1.4rem] border border-neutral-200 bg-white px-5 py-4 text-left hover:bg-neutral-50" onClick={onSendNow} disabled={disabled}><p className="text-sm font-semibold text-neutral-900">Invia subito</p><p className="mt-1 text-xs text-neutral-500">Accoda subito la campagna all'invio.</p></button>
         <button type="button" className="rounded-[1.4rem] border border-neutral-200 bg-white px-5 py-4 text-left hover:bg-neutral-50" onClick={onSchedule} disabled={disabled}><p className="text-sm font-semibold text-neutral-900">Programma invio</p><p className="mt-1 text-xs text-neutral-500">Usa data e ora di invio per schedulare.</p></button>
-        <button type="button" className="rounded-[1.4rem] border border-neutral-200 bg-white px-5 py-4 text-left hover:bg-neutral-50" onClick={onSaveDraft} disabled={disabled}><p className="text-sm font-semibold text-neutral-900">Salva bozza</p><p className="mt-1 text-xs text-neutral-500">Mantieni la campagna nellâ€™elenco bozze.</p></button>
+        <button type="button" className="rounded-[1.4rem] border border-neutral-200 bg-white px-5 py-4 text-left hover:bg-neutral-50" onClick={onSaveDraft} disabled={disabled}><p className="text-sm font-semibold text-neutral-900">Salva bozza</p><p className="mt-1 text-xs text-neutral-500">Mantieni la campagna nell'elenco bozze.</p></button>
       </div>
       <label className={labelClass}>Data e ora di invio<input type="datetime-local" className={inputClass} value={scheduledAt} onChange={(event) => onScheduledAtChange(event.target.value)} /></label>
       <label className="flex items-center gap-3 rounded-[1.2rem] border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700"><input type="checkbox" className="rounded border-neutral-300 text-brand" checked={saveAsTemplate} onChange={(event) => onSaveAsTemplateChange(event.target.checked)} /><span>Salva come modello</span></label>
     </div>
   );
 }
-
 function TemplateCard(props: { template: OrgAdminEmailTemplate; onUse: () => void; onEdit: () => void; onDuplicate: () => void; onDelete: () => void }) {
   const { template, onUse, onEdit, onDuplicate, onDelete } = props;
   return (
@@ -854,7 +853,7 @@ function TemplateCard(props: { template: OrgAdminEmailTemplate; onUse: () => voi
 function DeliveryStatusCard(props: { campaign: OrgAdminEmailCampaign; active: boolean; onClick: () => void; onDuplicate: () => void; onReuseAsTemplate: () => void; onPreview: () => void }) {
   const { campaign, active, onClick, onDuplicate, onReuseAsTemplate, onPreview } = props;
   return (
-    <div className={`rounded-[1.6rem] border p-5 shadow-sm transition ${active ? "border-brand bg-brand/[0.03]" : "border-neutral-200 bg-white"}`}>
+    <div className={`rounded-[1.6rem] border p-5 shadow-sm transition ${active ? "border-brand bg-brand/[0.03]" : "border-neutral-200 bg-white hover:border-neutral-300"}`}>
       <button type="button" className="w-full text-left" onClick={onClick}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -863,27 +862,36 @@ function DeliveryStatusCard(props: { campaign: OrgAdminEmailCampaign; active: bo
           </div>
           <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-neutral-700">{statusLabel(campaign.status)}</span>
         </div>
-        <div className="mt-4 grid gap-3 text-sm text-neutral-600 md:grid-cols-3">
-          <p><span className="font-medium text-neutral-900">Tema:</span> {getLayoutLabel(campaign.design.layout_key)}</p>
-          <p><span className="font-medium text-neutral-900">Destinatari:</span> {campaign.recipient_count || campaign.planned_recipient_count}</p>
-          <p><span className="font-medium text-neutral-900">Data invio:</span> {formatDateTime(campaign.sent_at || campaign.scheduled_at || campaign.created_at)}</p>
-        </div>
-        <div className="mt-2 grid gap-3 text-sm text-neutral-600 md:grid-cols-3">
-          <p><span className="font-medium text-neutral-900">Metriche:</span> Inviate {campaign.recipient_status_counts.sent} Â· Fallite {campaign.recipient_status_counts.failed}</p>
-          <p><span className="font-medium text-neutral-900">Modulo collegato:</span> {campaign.linked_form ? "SÃ¬" : "No"}</p>
-          <p><span className="font-medium text-neutral-900">CTA:</span> {getCtaLabel(campaign.design.cta_kind)}</p>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="rounded-[1.15rem] border border-neutral-200 bg-neutral-50 px-3.5 py-3">
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-500">Invio</p>
+            <p className="mt-2 text-sm font-semibold text-neutral-900">{formatDateTime(campaign.sent_at || campaign.scheduled_at || campaign.created_at)}</p>
+          </div>
+          <div className="rounded-[1.15rem] border border-neutral-200 bg-neutral-50 px-3.5 py-3">
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-500">Destinatari</p>
+            <p className="mt-2 text-sm font-semibold text-neutral-900">{campaign.recipient_count || campaign.planned_recipient_count}</p>
+          </div>
+          <div className="rounded-[1.15rem] border border-neutral-200 bg-neutral-50 px-3.5 py-3">
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-500">Tema</p>
+            <p className="mt-2 text-sm font-semibold text-neutral-900">{getLayoutLabel(campaign.design.layout_key)}</p>
+          </div>
         </div>
       </button>
-      <div className="mt-5 flex flex-wrap gap-2">
-        <button type="button" className="btn-secondary !px-4 !py-2 !text-sm" onClick={onClick}>Apri</button>
-        <button type="button" className="btn-secondary !px-4 !py-2 !text-sm" onClick={onDuplicate}>Duplica</button>
-        <button type="button" className="btn-secondary !px-4 !py-2 !text-sm" onClick={onReuseAsTemplate}>Riusa come modello</button>
-        <button type="button" className="btn-secondary !px-4 !py-2 !text-sm" onClick={onPreview}>Visualizza anteprima</button>
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-neutral-100 pt-4">
+        <div className="flex flex-wrap gap-2 text-xs text-neutral-500">
+          <span>Inviate {campaign.recipient_status_counts.sent}</span>
+          <span>Fallite {campaign.recipient_status_counts.failed}</span>
+          <span>Modulo {campaign.linked_form ? "Si" : "No"}</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="btn-secondary !px-4 !py-2 !text-sm" onClick={onDuplicate}>Duplica</button>
+          <button type="button" className="btn-secondary !px-4 !py-2 !text-sm" onClick={onReuseAsTemplate}>Riusa come modello</button>
+          <button type="button" className="btn-primary !px-4 !py-2 !text-sm" onClick={onPreview}>Apri dettaglio</button>
+        </div>
       </div>
     </div>
   );
 }
-
 function CampaignWizardStepper(props: { currentStep: number }) {
   const { currentStep } = props;
   const progress = wizardSteps.length <= 1 ? 0 : (currentStep / (wizardSteps.length - 1)) * 100;
@@ -924,7 +932,7 @@ function CampaignWizardStepper(props: { currentStep: number }) {
                         : "border-neutral-200 bg-white text-neutral-400"
                     }`}
                   >
-                    {completed ? "✓" : index + 1}
+                    {completed ? "OK" : index + 1}
                   </span>
                   <span className={`mt-2 text-[11px] font-semibold leading-4 ${completed || active ? "text-neutral-900" : "text-neutral-400"}`}>
                     {step.shortTitle}
@@ -960,7 +968,7 @@ function CampaignWizardStepper(props: { currentStep: number }) {
                       : "border-neutral-200 bg-white text-neutral-400"
                   }`}
                 >
-                  {completed ? "✓" : index + 1}
+                  {completed ? "OK" : index + 1}
                 </span>
                 <span className={`mt-3 text-xs font-semibold uppercase tracking-[0.14em] ${completed || active ? "text-neutral-900" : "text-neutral-400"}`}>
                   {index + 1}
@@ -976,7 +984,6 @@ function CampaignWizardStepper(props: { currentStep: number }) {
     </div>
   );
 }
-
 export function MessagesHub({
   section,
   communicationsLocked,
@@ -1018,6 +1025,7 @@ export function MessagesHub({
   const [savingCampaign, setSavingCampaign] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [deliveryFilter, setDeliveryFilter] = useState<DeliveryFilter>("sent");
+  const [deliveryView, setDeliveryView] = useState<DeliveryView>("list");
 
   const activeForms = useMemo(() => forms.filter((form) => form.is_active), [forms]);
   const activeTemplates = useMemo(() => templates.filter((template) => template.is_active), [templates]);
@@ -1082,6 +1090,16 @@ export function MessagesHub({
   }, [section]);
 
   useEffect(() => {
+    if (section !== "deliveries") {
+      setDeliveryView("list");
+    }
+  }, [section]);
+
+  useEffect(() => {
+    setDeliveryView("list");
+  }, [deliveryFilter]);
+
+  useEffect(() => {
     if (dedicatedCampaignComposer) {
       setCampaignView("composer");
       return;
@@ -1141,7 +1159,7 @@ export function MessagesHub({
 
   useEffect(() => {
     if (!selectedCampaign) return;
-    const shouldPreview = section === "deliveries" || (section === "campaigns" && campaignView === "detail");
+    const shouldPreview = (section === "deliveries" && deliveryView === "detail") || (section === "campaigns" && campaignView === "detail");
     if (!shouldPreview) return;
     setDeliveryPreviewLoading(true);
     previewOrgAdminEmailTemplate({
@@ -1153,7 +1171,7 @@ export function MessagesHub({
     }).then((data) => {
       setDeliveryPreview({ ...data.preview, fake_context: data.fake_context });
     }).catch(() => setDeliveryPreview(null)).finally(() => setDeliveryPreviewLoading(false));
-  }, [section, selectedCampaign, campaignView]);
+  }, [section, selectedCampaign, campaignView, deliveryView]);
 
   useEffect(() => {
     if (!dedicatedCampaignComposer || loading || !editingCampaignId) return;
@@ -1291,7 +1309,7 @@ export function MessagesHub({
 
   async function saveCampaign(action: "draft" | "scheduled" | "send") {
     if (!campaignDraft.subject.trim()) {
-      showToast({ title: "Oggetto email mancante", message: "Compila lâ€™oggetto email prima di proseguire.", tone: "error" });
+      showToast({ title: "Oggetto email mancante", message: "Compila l'oggetto email prima di proseguire.", tone: "error" });
       return;
     }
     if (!campaignDraft.body.trim()) {
@@ -1362,7 +1380,7 @@ export function MessagesHub({
         : action === "scheduled"
           ? (editingExistingCampaign ? "Campagna aggiornata e programmata" : "Campagna programmata")
           : (editingExistingCampaign ? "Campagna aggiornata" : "Bozza salvata");
-      showToast({ title: successTitle, message: action === "send" ? "La campagna Ã¨ stata accodata correttamente." : "Operazione completata.", tone: "success" });
+      showToast({ title: successTitle, message: action === "send" ? "La campagna e stata accodata correttamente." : "Operazione completata.", tone: "success" });
     } catch (err) {
       handleLoadError(err, "Errore durante il salvataggio della campagna.");
     } finally {
@@ -1380,7 +1398,7 @@ export function MessagesHub({
       const payload = { name: templateEditor.name.trim(), category: templateEditor.category.trim() || null, subject: templateEditor.subject.trim(), body_text: templateEditor.body.trim(), linked_form_id: templateEditor.design.cta_kind === "form" ? templateEditor.linked_form_id : null, design: templateEditor.design, is_active: templateEditor.is_active };
       const result = templateEditor.id ? await updateOrgAdminEmailTemplate(templateEditor.id, payload) : await createOrgAdminEmailTemplate(payload);
       await refreshTemplates(result.template.id);
-      showToast({ title: templateEditor.id ? "Modello aggiornato" : "Modello creato", message: "Il modello Ã¨ pronto per essere riusato nelle campagne.", tone: "success" });
+      showToast({ title: templateEditor.id ? "Modello aggiornato" : "Modello creato", message: "Il modello e pronto per essere riusato nelle campagne.", tone: "success" });
     } catch (err) {
       handleLoadError(err, "Errore durante il salvataggio del modello.");
     } finally {
@@ -1392,7 +1410,7 @@ export function MessagesHub({
     try {
       const result = await duplicateOrgAdminEmailTemplate(template.id, `${template.name} (copia)`);
       await refreshTemplates(result.template.id);
-      showToast({ title: "Modello duplicato", message: "La copia Ã¨ pronta per essere personalizzata.", tone: "success" });
+      showToast({ title: "Modello duplicato", message: "La copia e pronta per essere personalizzata.", tone: "success" });
     } catch (err) {
       handleLoadError(err, "Impossibile duplicare il modello.");
     }
@@ -1404,7 +1422,7 @@ export function MessagesHub({
       await archiveOrgAdminEmailTemplate(template.id);
       await refreshTemplates();
       if (templateEditor.id === template.id) setTemplateEditor(createEmptyTemplateForm());
-      showToast({ title: "Modello archiviato", message: "Il modello non sarÃ  piÃ¹ mostrato tra quelli attivi.", tone: "success" });
+      showToast({ title: "Modello archiviato", message: "Il modello non sara piu mostrato tra quelli attivi.", tone: "success" });
     } catch (err) {
       handleLoadError(err, "Impossibile eliminare il modello.");
     }
@@ -1414,7 +1432,7 @@ export function MessagesHub({
     try {
       const created = await createOrgAdminEmailCampaign({ name: `${campaign.name || campaign.subject} (copia)`, subject: campaign.subject, body_text: campaign.body_text || htmlToPlainText(campaign.body_html), audience_type: campaign.audience_type, recipient_mode: campaign.recipient_mode, member_ids: campaign.selected_member_ids || [], linked_form_id: campaign.design.cta_kind === "form" ? campaign.linked_form_id : null, design: campaign.design });
       await refreshCampaigns(created.campaign.id);
-      showToast({ title: "Campagna duplicata", message: "Ãˆ stata creata una nuova bozza duplicata.", tone: "success" });
+      showToast({ title: "Campagna duplicata", message: "E stata creata una nuova bozza duplicata.", tone: "success" });
     } catch (err) {
       handleLoadError(err, "Impossibile duplicare la campagna.");
     }
@@ -1424,7 +1442,7 @@ export function MessagesHub({
     try {
       await createOrgAdminEmailTemplate({ name: campaign.name || campaign.subject, category: campaign.design.cta_kind === "renewal" ? "renewal" : "campaign", subject: campaign.subject, body_text: campaign.body_text || htmlToPlainText(campaign.body_html), linked_form_id: campaign.design.cta_kind === "form" ? campaign.linked_form_id : null, design: campaign.design });
       await refreshTemplates();
-      showToast({ title: "Modello creato", message: "La campagna Ã¨ stata salvata come modello.", tone: "success" });
+      showToast({ title: "Modello creato", message: "La campagna e stata salvata come modello.", tone: "success" });
     } catch (err) {
       handleLoadError(err, "Impossibile creare il modello dalla campagna.");
     }
@@ -1475,7 +1493,7 @@ export function MessagesHub({
                   onUse={() => {
                     const design = normalizeDesign(template.design);
                     setCampaignDraft({ ...createEmptyCampaignForm(), selected_template_id: template.id, subject: template.subject, body: template.body_text || htmlToPlainText(template.body_html), linked_form_id: template.linked_form_id, design, communication_type: design.cta_kind === "renewal" ? "renewal" : design.cta_kind === "form" ? "form_invite" : "general", logo_mode: resolveLogoMode(design), header_mode: resolveHeaderMode(design, activeForms.find((form) => form.id === template.linked_form_id) || null) });
-                    showToast({ title: "Modello applicato", message: "Il modello Ã¨ stato caricato nel composer campagne.", tone: "success" });
+                    showToast({ title: "Modello applicato", message: "Il modello e stato caricato nel composer campagne.", tone: "success" });
                   }}
                   onEdit={() => void fetchOrgAdminEmailTemplate(template.id).then(({ template: fullTemplate }) => refreshTemplates(fullTemplate.id)).catch((err) => handleLoadError(err, "Impossibile aprire il modello."))}
                   onDuplicate={() => void handleDuplicateTemplate(template)}
@@ -1519,7 +1537,7 @@ export function MessagesHub({
                 {templateEditor.id != null && <button type="button" className="btn-secondary" onClick={() => void handleDuplicateTemplate(templates.find((item) => item.id === templateEditor.id)!)}>Duplica</button>}
                 {templateEditor.id != null && !templateEditor.is_system && <button type="button" className="btn-secondary" onClick={() => void handleArchiveTemplate(templates.find((item) => item.id === templateEditor.id)!)}>Elimina</button>}
               </div>
-              {templateEditor.is_system ? <p className="mt-3 text-sm text-neutral-500">Questo Ã¨ un modello di sistema: duplicalo prima di modificarlo.</p> : null}
+              {templateEditor.is_system ? <p className="mt-3 text-sm text-neutral-500">Questo e un modello di sistema: duplicalo prima di modificarlo.</p> : null}
             </div>
           </section>
         </div>
@@ -1528,54 +1546,101 @@ export function MessagesHub({
   }
 
   if (section === "deliveries") {
-    return (
-      <div className="space-y-6">
-        <section className="grid gap-4 rounded-[2rem] border border-neutral-200 bg-[linear-gradient(135deg,#ffffff_0%,#f8fafc_45%,#eef6ff_100%)] p-6 shadow-sm lg:grid-cols-[1.05fr_0.95fr]">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand">Invii e statistiche</p>
-            <h2 className="mt-3 text-2xl font-bold tracking-tight text-neutral-900">Separa la gestione contenuti dal controllo di stato delle campagne</h2>
-            <p className="mt-3 max-w-2xl text-sm leading-7 text-neutral-600">Qui trovi inviate, programmate, bozze e fallite nello stesso elenco, con azioni rapide per duplicare, riusare come modello e verificare lâ€™anteprima finale.</p>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {([{ key: "sent", label: "Inviate", value: campaigns.filter((item) => deliveryBucket(item.status) === "sent").length }, { key: "scheduled", label: "Programmate", value: campaigns.filter((item) => deliveryBucket(item.status) === "scheduled").length }, { key: "draft", label: "Bozze", value: campaigns.filter((item) => deliveryBucket(item.status) === "draft").length }, { key: "failed", label: "Fallite", value: campaigns.filter((item) => deliveryBucket(item.status) === "failed").length }] as Array<{ key: DeliveryFilter; label: string; value: number }>).map((item) => (
-              <button key={item.key} type="button" className={`${baseButtonClass} ${deliveryFilter === item.key ? "border-brand bg-brand/5 text-brand" : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50"}`} onClick={() => setDeliveryFilter(item.key)}><p className="text-sm font-semibold">{item.label}</p><p className="mt-2 text-3xl font-bold text-neutral-900">{item.value}</p></button>
-            ))}
-          </div>
-        </section>
+    const deliveryCounts = [
+      { key: "sent", label: "Inviate", value: campaigns.filter((item) => deliveryBucket(item.status) === "sent").length },
+      { key: "scheduled", label: "Programmate", value: campaigns.filter((item) => deliveryBucket(item.status) === "scheduled").length },
+      { key: "draft", label: "Bozze", value: campaigns.filter((item) => deliveryBucket(item.status) === "draft").length },
+      { key: "failed", label: "Fallite", value: campaigns.filter((item) => deliveryBucket(item.status) === "failed").length },
+    ] as Array<{ key: DeliveryFilter; label: string; value: number }>;
 
-        <div className="grid gap-6 xl:grid-cols-[1.02fr_0.98fr]">
-          <section className="space-y-4">
-            {filteredCampaigns.length === 0 ? <div className="rounded-[1.6rem] border border-dashed border-neutral-200 bg-neutral-50 px-6 py-10 text-center text-sm text-neutral-500">Nessuna campagna in questo stato.</div> : filteredCampaigns.map((campaign) => <DeliveryStatusCard key={campaign.id} campaign={campaign} active={selectedCampaignId === campaign.id} onClick={() => setSelectedCampaignId(campaign.id)} onDuplicate={() => void duplicateCampaign(campaign)} onReuseAsTemplate={() => void reuseCampaignAsTemplate(campaign)} onPreview={() => setSelectedCampaignId(campaign.id)} />)}
-          </section>
+    if (deliveryView === "detail") {
+      return (
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <button type="button" className="btn-secondary" onClick={() => setDeliveryView("list")}>Torna all'elenco</button>
+            <button type="button" className="btn-primary" onClick={openNewCampaignComposer}>Nuova campagna</button>
+          </div>
 
-          <section className="space-y-5">
-            <div className={panelClass}>
-              {selectedCampaign ? (
-                <>
+          {selectedCampaign ? (
+            <div className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
+              <section className="space-y-5">
+                <div className={panelClass}>
                   <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Dettaglio campagna</p><h3 className="mt-2 text-xl font-semibold text-neutral-900">{selectedCampaign.name || selectedCampaign.subject}</h3><p className="mt-2 text-sm text-neutral-500">{selectedCampaign.subject}</p></div>
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Invii e statistiche</p>
+                      <h2 className="mt-2 text-2xl font-bold tracking-tight text-neutral-900">{selectedCampaign.name || selectedCampaign.subject}</h2>
+                      <p className="mt-2 text-sm text-neutral-500">{selectedCampaign.subject}</p>
+                    </div>
                     <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-neutral-700">{statusLabel(selectedCampaign.status)}</span>
                   </div>
+
                   <div className="mt-5 grid gap-4 md:grid-cols-2">
                     <div className="rounded-[1.2rem] border border-neutral-200 bg-neutral-50 p-4"><p className="text-xs font-bold uppercase tracking-[0.16em] text-neutral-500">Destinatari</p><p className="mt-2 text-lg font-semibold text-neutral-900">{selectedCampaign.recipient_count || selectedCampaign.planned_recipient_count}</p><p className="mt-1 text-sm text-neutral-500">{selectedCampaign.target_summary}</p></div>
-                    <div className="rounded-[1.2rem] border border-neutral-200 bg-neutral-50 p-4"><p className="text-xs font-bold uppercase tracking-[0.16em] text-neutral-500">Modulo collegato</p><p className="mt-2 text-lg font-semibold text-neutral-900">{selectedCampaign.linked_form?.title || "No"}</p><p className="mt-1 text-sm text-neutral-500">{selectedCampaign.linked_form ? "La CTA punta a un modulo pubblico." : "Nessun modulo collegato."}</p></div>
+                    <div className="rounded-[1.2rem] border border-neutral-200 bg-neutral-50 p-4"><p className="text-xs font-bold uppercase tracking-[0.16em] text-neutral-500">Invio</p><p className="mt-2 text-lg font-semibold text-neutral-900">{formatDateTime(selectedCampaign.sent_at || selectedCampaign.scheduled_at || selectedCampaign.created_at)}</p><p className="mt-1 text-sm text-neutral-500">Inviate {selectedCampaign.recipient_status_counts.sent} · Fallite {selectedCampaign.recipient_status_counts.failed}</p></div>
+                    <div className="rounded-[1.2rem] border border-neutral-200 bg-neutral-50 p-4"><p className="text-xs font-bold uppercase tracking-[0.16em] text-neutral-500">Modulo collegato</p><p className="mt-2 text-lg font-semibold text-neutral-900">{selectedCampaign.linked_form?.title || "Nessuno"}</p><p className="mt-1 text-sm text-neutral-500">{selectedCampaign.linked_form ? "La CTA apre un modulo pubblico nel browser." : "Nessun modulo collegato."}</p></div>
+                    <div className="rounded-[1.2rem] border border-neutral-200 bg-neutral-50 p-4"><p className="text-xs font-bold uppercase tracking-[0.16em] text-neutral-500">Aspetto</p><p className="mt-2 text-lg font-semibold text-neutral-900">{getLayoutLabel(selectedCampaign.design.layout_key)}</p><p className="mt-1 text-sm text-neutral-500">{getCtaLabel(selectedCampaign.design.cta_kind)}</p></div>
                   </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {["draft", "scheduled"].includes(String(selectedCampaign.status || "").toLowerCase()) && <button type="button" className="btn-primary !text-sm" disabled={communicationsLocked} onClick={() => void sendOrgAdminEmailCampaign(selectedCampaign.id).then(() => refreshCampaigns(selectedCampaign.id)).catch((err) => handleLoadError(err, "Errore durante l'invio campagna."))}>Invia ora</button>}
+
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    {["draft", "scheduled"].includes(String(selectedCampaign.status || "").toLowerCase()) ? <button type="button" className="btn-primary !text-sm" disabled={communicationsLocked} onClick={() => void sendOrgAdminEmailCampaign(selectedCampaign.id).then(() => refreshCampaigns(selectedCampaign.id)).catch((err) => handleLoadError(err, "Errore durante l'invio campagna."))}>Invia ora</button> : null}
                     <button type="button" className="btn-secondary !text-sm" onClick={() => openCampaignComposerFromCampaign(selectedCampaign)}>Apri come nuova bozza</button>
                     <button type="button" className="btn-secondary !text-sm" onClick={() => void duplicateCampaign(selectedCampaign)}>Duplica</button>
                     <button type="button" className="btn-secondary !text-sm" onClick={() => void reuseCampaignAsTemplate(selectedCampaign)}>Riusa come modello</button>
                   </div>
-                </>
-              ) : <div className="rounded-[1.6rem] border border-dashed border-neutral-200 bg-neutral-50 px-6 py-10 text-center text-sm text-neutral-500">Seleziona una campagna dallâ€™elenco per vedere dettaglio, metriche e anteprima finale.</div>}
+                </div>
+              </section>
+
+              <aside className="xl:sticky xl:top-6 self-start">
+                <EmailPreview loading={deliveryPreviewLoading} preview={deliveryPreview} view={previewView} onViewChange={setPreviewView} />
+              </aside>
             </div>
-            <EmailPreview loading={deliveryPreviewLoading} preview={deliveryPreview} view={previewView} onViewChange={setPreviewView} />
-          </section>
+          ) : (
+            <div className={`${panelClass} text-sm text-neutral-500`}>Campagna non trovata.</div>
+          )}
         </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        <section className="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-neutral-500">Invii e statistiche</p>
+              <h2 className="mt-2 text-2xl font-bold tracking-tight text-neutral-900">Controlla stato e risultati senza entrare nel composer</h2>
+            </div>
+            <button type="button" className="btn-primary" onClick={openNewCampaignComposer}>Nuova campagna</button>
+          </div>
+          <div className="mt-5 flex flex-wrap gap-3">
+            {deliveryCounts.map((item) => (
+              <button key={item.key} type="button" className={`min-w-[10rem] rounded-[1.4rem] border px-4 py-3 text-left transition ${deliveryFilter === item.key ? "border-brand bg-brand/5 text-brand" : "border-neutral-200 bg-neutral-50 text-neutral-700 hover:border-neutral-300 hover:bg-white"}`} onClick={() => setDeliveryFilter(item.key)}>
+                <p className="text-sm font-semibold">{item.label}</p>
+                <p className="mt-2 text-2xl font-bold text-neutral-900">{item.value}</p>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          {filteredCampaigns.length === 0 ? (
+            <div className="rounded-[1.6rem] border border-dashed border-neutral-200 bg-neutral-50 px-6 py-10 text-center text-sm text-neutral-500">Nessuna campagna in questo stato.</div>
+          ) : (
+            filteredCampaigns.map((campaign) => (
+              <DeliveryStatusCard
+                key={campaign.id}
+                campaign={campaign}
+                active={selectedCampaignId === campaign.id}
+                onClick={() => { setSelectedCampaignId(campaign.id); setDeliveryView("detail"); }}
+                onDuplicate={() => void duplicateCampaign(campaign)}
+                onReuseAsTemplate={() => void reuseCampaignAsTemplate(campaign)}
+                onPreview={() => { setSelectedCampaignId(campaign.id); setDeliveryView("detail"); }}
+              />
+            ))
+          )}
+        </section>
       </div>
     );
   }
-
   const currentStep = wizardSteps[wizardStep];
 
   if (campaignView === "detail") {

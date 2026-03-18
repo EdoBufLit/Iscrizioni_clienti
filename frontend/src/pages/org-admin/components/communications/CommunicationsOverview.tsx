@@ -39,7 +39,7 @@ function QuickActionCard(props: {
     >
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm font-semibold text-neutral-900">{title}</p>
-        <span className="text-lg text-neutral-500">→</span>
+        <span className="text-lg text-neutral-500">-&gt;</span>
       </div>
     </button>
   );
@@ -170,7 +170,7 @@ export function CommunicationsOverview({
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Stato invio email</p>
               <p className="mt-2 text-sm font-semibold text-neutral-900 break-all">{senderInfo.fromHeader}</p>
               <p className="mt-1 text-xs text-neutral-500">
-                Reply-to: {senderInfo.replyTo || "Usa il mittente"} · Stato dominio: {senderInfo.domainLabel}
+                Reply-to: {senderInfo.replyTo || "Usa il mittente"} / Stato dominio: {senderInfo.domainLabel}
               </p>
             </div>
             <button type="button" className="btn-secondary !text-sm" onClick={() => onTabChange("impostazioni")}>
