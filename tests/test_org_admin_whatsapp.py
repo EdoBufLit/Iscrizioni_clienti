@@ -13,7 +13,7 @@ from app.services.whatsapp_evolution import (
     EvolutionConnectionSnapshot,
     EvolutionSendTextResult,
 )
-from app.services.whatsapp_sync import get_or_create_connection
+from app.services.whatsapp_sync import apply_connection_snapshot, get_or_create_connection
 from app.utils import hash_token
 
 
@@ -436,3 +436,34 @@ def test_evolution_client_uses_lite_namespaced_paths(monkeypatch):
             {"number": "+393331234567", "text": "ciao"},
         ),
     ]
+
+
+def test_apply_connection_snapshot_preserves_existing_qr():
+    connection = type(
+        "ConnectionStub",
+        (),
+        {
+            "status": "not_connected",
+            "phone_number": None,
+            "profile_name": None,
+            "last_error": None,
+            "last_event_at": None,
+            "connected_at": None,
+            "qr_code": "existing-qr",
+        },
+    )()
+    snapshot = EvolutionConnectionSnapshot(
+        raw_state="close",
+        status="not_connected",
+        qr_code=None,
+        phone_number=None,
+        profile_name=None,
+        last_error=None,
+        connected_at=None,
+        raw={},
+    )
+
+    apply_connection_snapshot(connection, snapshot)
+
+    assert connection.status == "qr_required"
+    assert connection.qr_code == "existing-qr"

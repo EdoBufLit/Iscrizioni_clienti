@@ -104,6 +104,8 @@ def connect_whatsapp(
     _require_whatsapp_feature_enabled()
     admin = _require_org_admin_access(request, db)
     connection = get_or_create_connection(db, admin.organization)
+    db.commit()
+    db.refresh(connection)
     client = EvolutionLiteClient()
     try:
         client.ensure_instance(org_id=admin.organization.id)
@@ -112,6 +114,7 @@ def connect_whatsapp(
         db.rollback()
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    db.refresh(connection)
     apply_connection_snapshot(connection, snapshot)
     db.commit()
     db.refresh(connection)

@@ -70,18 +70,24 @@ def apply_connection_snapshot(
     *,
     event_time: datetime | None = None,
 ) -> None:
-    connection.status = snapshot.status
+    effective_qr_code = snapshot.qr_code or connection.qr_code
+    next_status = resolve_connection_status(
+        snapshot.raw_state,
+        has_qr=bool(effective_qr_code),
+        last_error=snapshot.last_error,
+    )
+    connection.status = next_status
     connection.phone_number = snapshot.phone_number or connection.phone_number
     connection.profile_name = snapshot.profile_name or connection.profile_name
     connection.last_error = snapshot.last_error
     connection.last_event_at = event_time or utcnow()
 
-    if snapshot.status == "connected":
+    if next_status == "connected":
         connection.connected_at = connection.connected_at or snapshot.connected_at or utcnow()
         connection.qr_code = None
-    elif snapshot.qr_code:
-        connection.qr_code = snapshot.qr_code
-    elif snapshot.status == "not_connected":
+    elif effective_qr_code:
+        connection.qr_code = effective_qr_code
+    elif next_status == "not_connected":
         connection.qr_code = None
 
 
