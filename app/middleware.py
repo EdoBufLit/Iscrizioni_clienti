@@ -118,16 +118,21 @@ class SessionCsrfMiddleware(BaseHTTPMiddleware):
         )
 
         if requires_check:
+            allowed_origins = set(_CSRF_ALLOWED_ORIGINS)
+            if settings.IS_LOCAL_ENV:
+                request_base_origin = _normalize_origin(str(request.base_url))
+                if request_base_origin:
+                    allowed_origins.add(request_base_origin)
             origin = _normalize_origin(request.headers.get("origin"))
             referer = _normalize_origin(request.headers.get("referer"))
 
-            if origin and origin not in _CSRF_ALLOWED_ORIGINS:
+            if origin and origin not in allowed_origins:
                 return JSONResponse(
                     status_code=403,
                     content={"detail": "CSRF blocked (origin mismatch)"},
                 )
 
-            if not origin and referer and referer not in _CSRF_ALLOWED_ORIGINS:
+            if not origin and referer and referer not in allowed_origins:
                 return JSONResponse(
                     status_code=403,
                     content={"detail": "CSRF blocked (referer mismatch)"},
