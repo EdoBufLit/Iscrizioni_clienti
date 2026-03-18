@@ -163,6 +163,13 @@
 - Fix in `init_db.py`: aggiunta auto-riparazione colonne branding su `organizations` prima delle query modello
 - Smoke check: `python -m uvicorn app.main:app --host 127.0.0.1 --port 8099 --log-level debug` avvia correttamente (errore solo su porta gia in uso locale)
 
+## WhatsApp connect runtime fix (Mar 18, 2026)
+- [x] Riprodurre il failure runtime del pulsante `Connetti` e verificare risposta/log del backend
+- [x] Correggere il client Evolution Lite usando i prefissi route reali dell'upstream (`/instance`, `/message`, `/webhook`)
+- [x] Coprire la regressione con test mirato sulle URL chiamate dal client
+- [ ] Pushare la fix sul branch che attiva il deploy GitHub Actions
+- [ ] Verificare deploy e smoke test live del connect su Hetzner
+
 ---
 - [x] Limitare watermark/logo e naming speciale alla sola org `oasi-2`
 - [x] Mantenere comportamento standard per le altre org

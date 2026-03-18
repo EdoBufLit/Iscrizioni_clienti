@@ -11,6 +11,10 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+EVOLUTION_INSTANCE_PREFIX = "/instance"
+EVOLUTION_MESSAGE_PREFIX = "/message"
+EVOLUTION_WEBHOOK_PREFIX = "/webhook"
+
 EVOLUTION_WEBHOOK_EVENTS = [
     "QRCODE_UPDATED",
     "CONNECTION_UPDATE",
@@ -223,7 +227,11 @@ class EvolutionLiteClient:
             },
         }
         try:
-            payload = self._request("POST", "/create", json=body)
+            payload = self._request(
+                "POST",
+                f"{EVOLUTION_INSTANCE_PREFIX}/create",
+                json=body,
+            )
         except EvolutionApiError as exc:
             if "already" not in str(exc).lower() and "exist" not in str(exc).lower():
                 raise
@@ -243,27 +251,43 @@ class EvolutionLiteClient:
                 "base64": False,
             }
         }
-        return self._request("POST", f"/webhook/set/{instance_name}", json=body)
+        return self._request(
+            "POST",
+            f"{EVOLUTION_WEBHOOK_PREFIX}/set/{instance_name}",
+            json=body,
+        )
 
     def connect(self, instance_name: str) -> EvolutionConnectionSnapshot:
-        payload = self._request("GET", f"/connect/{instance_name}")
+        payload = self._request(
+            "GET",
+            f"{EVOLUTION_INSTANCE_PREFIX}/connect/{instance_name}",
+        )
         return parse_connection_snapshot(payload)
 
     def get_connection_state(self, instance_name: str) -> EvolutionConnectionSnapshot:
-        payload = self._request("GET", f"/connectionState/{instance_name}")
+        payload = self._request(
+            "GET",
+            f"{EVOLUTION_INSTANCE_PREFIX}/connectionState/{instance_name}",
+        )
         return parse_connection_snapshot(payload)
 
     def get_qr(self, instance_name: str) -> EvolutionConnectionSnapshot:
-        payload = self._request("GET", f"/connect/{instance_name}")
+        payload = self._request(
+            "GET",
+            f"{EVOLUTION_INSTANCE_PREFIX}/connect/{instance_name}",
+        )
         return parse_connection_snapshot(payload)
 
     def logout(self, instance_name: str) -> dict[str, Any]:
-        return self._request("DELETE", f"/logout/{instance_name}")
+        return self._request(
+            "DELETE",
+            f"{EVOLUTION_INSTANCE_PREFIX}/logout/{instance_name}",
+        )
 
     def send_text(self, instance_name: str, *, number: str, text: str) -> EvolutionSendTextResult:
         payload = self._request(
             "POST",
-            f"/sendText/{instance_name}",
+            f"{EVOLUTION_MESSAGE_PREFIX}/sendText/{instance_name}",
             json={"number": normalize_phone(number) or number, "text": text},
         )
         external_message_id = _extract_message_id(payload)

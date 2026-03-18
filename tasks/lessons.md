@@ -1,5 +1,7 @@
 ﻿# Lessons
 
+- Se una fix operativa viene fatta manualmente sul server durante un deploy, la stessa correzione va portata subito anche nel workflow GitHub/idempotent deploy path; altrimenti il deploy successivo ricade nello stesso errore.
+- Nei deploy non interattivi non usare meta-comandi `psql` come `\gexec` dentro `psql -c`; fare invece check esplicito in shell/SQL semplice e poi `CREATE DATABASE` condizionale.
 - When a user reports runtime errors, add defensive guards around optional/unknown values and make the logger safe-by-default.
 - If a logo needs true background removal, create a transparent asset instead of relying on blend modes.
 - When onboarding spans multiple internal routes, persist in-progress state (run + stepIndex) per role and add bounded retries for TARGET_NOT_FOUND to avoid tour interruption on tab/route changes.
@@ -76,6 +78,7 @@
 - Per Twilio Studio Flow via SDK Python, `executions.create()` richiede sempre `to` e `from_` top-level: i `parameters` servono solo come variabili del Flow e non sostituiscono gli argomenti obbligatori della create.
 - Nei custom `RequestValidationError` handler FastAPI, non serializzare mai direttamente `exc.errors()` senza `jsonable_encoder`: il payload puo includere `bytes` (es. body form-urlencoded) e trasformare un 422 atteso in un 500.
 - I webhook Twilio arrivano spesso come `application/x-www-form-urlencoded`: non modellare la route come body JSON obbligatorio, ma fare parsing esplicito di `request.form()` con campi opzionali ed `extra="allow"` per evitare 422/500 e retry aggressivi.
+- Quando si integra un servizio esterno da codice e si dispone del source upstream, validare sempre anche i prefissi completi delle route (`/instance/...`, `/message/...`, ecc.), non solo i nomi degli handler: un namespace mancante passa i test mockati ma rompe subito il runtime con 404/502.
 - Per i low-cards alert Twilio Studio, usare `organizations.whatsapp_e164` come sorgente canonica del destinatario e passare lo stesso valore sia come `to` top-level sia come `parameters.to`, altrimenti il Flow puo creare execution invalide o fallire con `missing to/from_`.
 - Se una feature opzionale dipende da moduli/modelli non garantiti, non importarla mai top-level in `app.main`: usare import lazy condizionato da feature flag e fallback che mantiene il servizio up.
 - Se una route opzionale usa modelli non garantiti, isolare i modelli in un modulo fallback dedicato e importarlo dalla route/service per evitare ImportError in produzione.
