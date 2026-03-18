@@ -3631,3 +3631,61 @@ pm --prefix frontend run build.
 - Compromesso esplicito: `Invia anteprima a me` e presente come UI/hook ma non esegue ancora l'invio reale; mostra un TODO backend chiaro per un endpoint dedicato alla preview della campagna corrente.
 - Compromesso tecnico: gli upload immagine guidati lato email riusano il pattern `base64` gia usato nel form builder. Funziona per preview e payload attuale, ma per massima compatibilita email production-grade conviene introdurre un upload asset dedicato e URL pubblici serviti dal backend.
 - Verifiche eseguite: `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK; `python -m py_compile app/services/email_templates.py app/routes/org_admin.py` OK.
+## Communications simplification pass (Mar 18, 2026)
+- [x] Ridurre `Panoramica` a titolo compatto, 3 metriche e 3 quick actions, eliminando hero e box ridondanti
+- [x] Separare `Campagne` in viste distinte lista vs dettaglio/composer, evitando compresenza di elenco, wizard e preview
+- [x] Rendere il composer una vista dedicata con editor principale e preview live sticky laterale
+- [x] Rafforzare la personalizzazione email con temi visivi, preset font, hero image guidata, blocchi opzionali e stili CTA distinti
+- [x] Aggiornare preview/rendering in modo che rifletta davvero le nuove scelte visuali senza rompere il payload backend esistente
+- [x] Eseguire verifiche frontend/backend mirate e documentare review + TODO residui
+
+## Review (Communications simplification pass - Mar 18, 2026)
+- `Panoramica` e stata ridotta a una schermata compatta: titolo piccolo, 3 metriche, 3 quick actions e stato invio email sintetico senza hero esteso o card narrative ridondanti.
+- `Campagne` ora ha tre stati distinti nello stesso route workspace senza rompere la IA esistente: elenco principale focalizzato sull'azione, dettaglio dedicato con preview separata e composer immersivo con editor a sinistra + preview sticky a destra.
+- Il composer non mostra piu elenco, dettaglio rapido e preview nello stesso canvas: ogni task ha una sola vista dominante, con back esplicito verso elenco o dettaglio.
+- La personalizzazione email e stata resa piu concreta con temi `Istituzionale`, `Moderno`, `Elegante`, `Evento`, `Reminder`, preset font, stili CTA, gestione hero image guidata e blocchi opzionali reali (`immagine`, `box evidenza`, `dettagli evento`, `firma`, `nota finale`).
+- Il renderer backend email ora supporta in modo additivo i nuovi campi `font_preset`, `cta_style`, `secondary_image_url`, `highlight_*`, `event_details`, `signature_*`, `final_note`, mantenendo compatibilita con i layout storici tramite mapping `essential -> modern`, `invitation -> event`, `renewal -> reminder`.
+- Verifiche eseguite: `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK; `python -m py_compile app/services/email_templates.py app/routes/org_admin.py` OK.
+
+## Dedicated campaign flow shell (Mar 18, 2026)
+- [x] Riesaminare il flusso iscrizione soci esistente e fissare i pattern UX da riusare per il composer campagne
+- [x] Separare davvero lista campagne e composer a livello di shell/query routing, mantenendo `Campagne` come elenco puro
+- [x] Creare una vista dedicata per nuova/modifica campagna con stepper centrato e canvas principale focalizzato
+- [x] Ridurre il composer a una procedura guidata centrata, mostrando la preview in modo prominente solo negli step finali
+- [x] Allineare overview/form pubblici e gli entry point rapidi per aprire direttamente la nuova vista composer
+- [x] Eseguire typecheck/build/py_compile e documentare review, compromessi e TODO residui
+
+## Review (Dedicated campaign flow shell - Mar 18, 2026)
+- `frontend/src/pages/org-admin/OrgAdminCommunications.tsx` ora separa davvero le shell: la vista standard mantiene tab + lista, mentre `tab=campagne&mode=create|edit` apre un composer dedicato, senza tab, senza blocchi laterali e senza convivenza con l'elenco.
+- `frontend/src/pages/org-admin/components/communications/MessagesHub.tsx` continua a riusare la logica esistente, ma il ramo campagne in lista e stato ridotto a elenco + ricerca + CTA `Nuova campagna`; il composer e stato riallestito come flusso centrato con stepper esplicito in alto e preview prominente solo negli step `Aspetto`, `Anteprima` e `Invio`.
+- Il riferimento UX al flusso iscrizione soci e stato tradotto in: shell centrata, progressione visiva chiara, una sola card principale per step e azioni di avanzamento/ritorno coerenti.
+- Gli entry point rapidi ora aprono direttamente la vista dedicata del composer: quick actions della panoramica e CTA `Crea invito email` dal dettaglio modulo pubblico.
+- Ho chiuso anche il gap funzionale lato backend con update additivo della campagna: `app/services/email_campaigns.py`, `app/routes/org_admin.py` e `frontend/src/lib/api.ts` supportano ora `PUT /communications/campaigns/{id}`, cosi il flusso `Modifica campagna` aggiorna la bozza o la programmata esistente invece di creare sempre una nuova copia.
+- Compromesso residuo: il composer dedicato resta nello stesso componente `MessagesHub` per limitare il refactor e preservare compatibilita; la separazione e a livello di shell/route query e UX, non ancora come file dedicato autonomo.
+- TODO residuo: `Invia anteprima a me` mostra ancora il gancio UI ma richiede un endpoint backend dedicato per l'invio reale della preview al mittente autenticato.
+- Verifiche eseguite: `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK; `python -m py_compile app/services/email_templates.py app/services/email_campaigns.py app/routes/org_admin.py` OK.
+
+## Communications browser smoke verification (Mar 18, 2026)
+- [x] Verificare la disponibilita di strumenti browser locali e il percorso piu affidabile per uno smoke test visuale
+- [x] Avviare frontend/backend locali o riusare server gia attivi per la verifica Comunicazioni
+- [x] Eseguire smoke desktop sulle schermate Campagne, composer dedicato e overview
+- [x] Eseguire smoke mobile sulle stesse schermate e verificare stepper, leggibilita e CTA
+- [x] Salvare evidenze e documentare eventuali problemi o limiti residui
+
+## Review (Communications browser smoke verification - Mar 18, 2026)
+- Verifica browser reale eseguita in locale su `http://127.0.0.1:8010` con Playwright headless e sessione org-admin autenticata tramite magic link temporaneo, sia desktop sia mobile.
+- Durante il primo smoke la preview live del composer falliva localmente per `403 CSRF blocked (origin mismatch)` quando il frontend chiamava `/api/org-admin/communications/templates/preview` da `127.0.0.1:8010`; fix applicato in `app/middleware.py` aggiungendo l'origine runtime `request.base_url` alla allowlist locale CSRF.
+- La preview email e stata poi verificata con contenuto reale compilato nel wizard: oggetto, titolo, body, CTA custom e iframe renderer visibile negli step `Aspetto` e `Anteprima`.
+- Desktop: overview compatta, lista campagne pulita e composer dedicato leggibile; la preview laterale/finale risulta coerente con il contenuto inserito e non convive piu con la lista.
+- Mobile: il primo smoke ha evidenziato un problema UX reale nello stepper, con label sovrapposte e step attivo non chiaramente visibile; il componente `CampaignWizardStepper` e stato corretto con rail mobile dedicato, label corte e auto-scroll verso lo step corrente.
+- Evidenze salvate in `tasks/screenshots/`:
+- `communications-overview-desktop-20260318.png`
+- `communications-campaigns-list-desktop-20260318.png`
+- `communications-composer-appearance-desktop-20260318.png`
+- `communications-composer-preview-desktop-20260318.png`
+- `communications-overview-mobile-20260318.png`
+- `communications-campaigns-list-mobile-20260318.png`
+- `communications-composer-appearance-mobile-20260318.png`
+- `communications-composer-preview-mobile-20260318.png`
+- `communications-composer-stepper-mobile-20260318.png`
+- Verifiche eseguite: `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK; `python -m py_compile app/middleware.py` OK; `node tasks/tmp/communications-smoke.js` OK.
