@@ -1,3 +1,38 @@
+- [x] Aggiungere persistenza WhatsApp org-scoped con migration Alembic (`WhatsAppConnection`, `WhatsAppChat`, `WhatsAppMessage`)
+- [x] Implementare client Evolution Lite, service layer di sync e webhook interno ASSONAM
+- [x] Esporre API org-admin `Comunicazioni > WhatsApp` per connection state, connect/qr/disconnect, chat list, thread e send text
+- [x] Integrare la tab WhatsApp nella UI org-admin Comunicazioni con inbox a 2 colonne e composer testuale
+- [x] Predisporre il service futuro per candidati invio WhatsApp da form submission senza attivare automazioni globali
+- [x] Coprire il flusso con test backend mirati, verifiche frontend e review finale
+
+## Review (WhatsApp Evolution Lite org-admin integration - Mar 18, 2026)
+- Implementati modelli `WhatsAppConnection`, `WhatsAppChat`, `WhatsAppMessage` con migration Alembic dedicata e bootstrap idempotente in `init_db.py`.
+- Aggiunti client Evolution Lite, webhook interno Docker-only, sync locale di stato/QR/chat/thread e deduplica minima lato ASSONAM.
+- Esposte API org-admin sotto `/api/org-admin/communications/whatsapp` per connection, connect, QR, disconnect, chat list, thread e invio testo.
+- Integrata la tab `Comunicazioni > WhatsApp` con badge sperimentale, stato connessione, QR, inbox a 2 colonne, polling QR e composer testuale.
+- Preparato il service passivo `prepare_form_submission_whatsapp_candidate(...)` e agganciato in modo non attivo al submit pubblico solo come predisposizione futura.
+- Verifiche eseguite: `python -m alembic upgrade head`, `pytest tests/test_org_admin_whatsapp.py -q`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
+
+- [x] Analizzare workflow `deploy-hetzner`, compose Docker, catena env/secrets e configurazione Postgres effettiva per l'integrazione Evolution API Lite
+- [x] Aggiungere Evolution API Lite come servizio Docker separato con sole env minime richieste e collegamento al Postgres esistente su DB `evolution`
+- [x] Estendere workflow/file di deploy per propagare le nuove env ASSONAM/Evolution senza introdurre variabili superflue
+- [x] Aggiornare il backend ASSONAM con le sole env applicative richieste (`ENABLE_WHATSAPP_EVOLUTION`, `EVOLUTION_API_BASE_URL`, `EVOLUTION_API_KEY`)
+- [x] Documentare setup, secret manuali, coerenza valori e procedura di verifica in `docs/whatsapp-evolution-lite-setup.md`
+- [x] Eseguire intervento su Hetzner: creare DB `evolution` se assente, deployare, verificare stato/log/health di Evolution Lite e correggere eventuali errori
+
+## Review (Evolution API Lite integration - Mar 18, 2026)
+- Workflow individuato in `.github/workflows/deploy-hetzner.yml`; stack Docker esistente confermato su `docker-compose.yml` + `docker-compose.prod.yml`, con runtime server in `/opt/assonam/app` su Hetzner `157.90.31.105`.
+- Aggiunto overlay dedicato `docker-compose.evolution-lite.yml` che introduce il solo servizio `evolution-api` basato su `atendai/evolution-api-lite:latest`, collegato al Postgres esistente tramite DB separato `evolution`, senza Redis, senza subdominio e senza env esterne extra oltre alle 5 richieste.
+- Per compatibilita con l'immagine ufficiale Lite ho mantenuto il file env esterno minimale e derivato solo internamente, via `entrypoint`, i valori runtime che l'immagine si aspetta davvero all'avvio (`DATABASE_URL` da `DATABASE_CONNECTION_URI` e `SERVER_TYPE=http`).
+- Backend ASSONAM aggiornato in modo additivo con sole 3 env applicative richieste: `ENABLE_WHATSAPP_EVOLUTION`, `EVOLUTION_API_BASE_URL`, `EVOLUTION_API_KEY`.
+- Workflow deploy aggiornato per: renderizzare `secrets/evolution-api-lite.env`, creare/verificare il DB `evolution`, includere l'overlay Evolution solo quando abilitato, e verificare sia health container sia reachability interna `/` e `/verify-creds`.
+- Intervento server eseguito: DB `evolution` confermato presente, `.env` runtime ASSONAM aggiornato, `secrets/evolution-api-lite.env` generato, overlay deployato e container `app-evolution-api-1` portato a stato `healthy`.
+- Debug effettivo completato su server: primo crash per `DATABASE_PROVIDER` mancante nello shell env dell'immagine, secondo per `DATABASE_URL` non esportato, terzo per `SERVER_TYPE` sovrascritto a `undefined` in modalita Docker. Risolto tutto senza ampliare la superficie env richiesta.
+- Verifiche finali reali eseguite su Hetzner:
+- `docker inspect app-evolution-api-1` -> `running healthy 0`
+- `GET http://evolution-api:8080/` dal container `web` -> `200`
+- `POST http://evolution-api:8080/verify-creds` dal container `web` con `EVOLUTION_API_KEY` -> `200` / `Credentials are valid`
+
 - [x] Verificare se la label del tema visivo entra davvero nell'email finale
 - [x] Rimuovere dal renderer email i badge "Comunicazione moderna / Invito evento / ..."
 - [x] Verificare il render HTML finale su tutti i layout email

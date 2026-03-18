@@ -37,6 +37,7 @@ from app.routes import (
     stripe_webhooks,
     super_admin,
     whatsapp,
+    whatsapp_evolution,
 )
 from app.schema_validation import validate_schema
 from app.spa import SPAStaticFiles
@@ -281,6 +282,8 @@ app.include_router(onboarding.router)
 app.include_router(integrations.router)
 app.include_router(ingest_pienissimo.router)
 app.include_router(whatsapp.router)
+app.include_router(whatsapp_evolution.router)
+app.include_router(whatsapp_evolution.internal_router)
 if settings.ENABLE_STRIPE_CONNECT_DEMO:
     app.include_router(stripe_connect_demo.router)
     app.include_router(stripe_webhooks.router)

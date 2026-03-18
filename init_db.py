@@ -27,6 +27,9 @@ from app.models import (
     CardBatch,
     EmailOutbox,
     WhatsAppSession,
+    WhatsAppConnection,
+    WhatsAppChat,
+    WhatsAppMessage,
     RechargeRequest,
     OrganizationSharedDocument,
     OrganizationSharedDocumentAssignment,
@@ -143,6 +146,27 @@ def init_db():
             "run 'alembic upgrade head' to align schema history."
         )
         WhatsAppSession.__table__.create(bind=engine, checkfirst=True)
+
+    if "whatsapp_connections" not in inspect(engine).get_table_names():
+        logger.warning(
+            "whatsapp_connections table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        WhatsAppConnection.__table__.create(bind=engine, checkfirst=True)
+
+    if "whatsapp_chats" not in inspect(engine).get_table_names():
+        logger.warning(
+            "whatsapp_chats table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        WhatsAppChat.__table__.create(bind=engine, checkfirst=True)
+
+    if "whatsapp_messages" not in inspect(engine).get_table_names():
+        logger.warning(
+            "whatsapp_messages table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        WhatsAppMessage.__table__.create(bind=engine, checkfirst=True)
 
     if "recharge_requests" not in inspect(engine).get_table_names():
         logger.warning(

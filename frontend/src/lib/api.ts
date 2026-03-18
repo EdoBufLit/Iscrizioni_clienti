@@ -633,12 +633,54 @@ export type OrgAdminOrganizationDetail = {
 
 export type OrgAdminCommunicationSettings = {
   communications_enabled: boolean;
+  whatsapp_evolution_enabled: boolean;
   sender_email_local_part: string | null;
   email_from_name_override: string | null;
   reply_to_email: string | null;
   mail_from_domain: string | null;
   system_email_sender: NonNullable<OrgAdminOrganizationDetail["system_email_sender"]>;
   association_email_sender: NonNullable<OrgAdminOrganizationDetail["association_email_sender"]>;
+};
+
+export type OrgAdminWhatsAppConnectionStatus =
+  | "not_connected"
+  | "qr_required"
+  | "connected"
+  | "error";
+
+export type OrgAdminWhatsAppConnection = {
+  status: OrgAdminWhatsAppConnectionStatus;
+  phone_number: string | null;
+  profile_name: string | null;
+  has_qr: boolean;
+  qr_code: string | null;
+  last_error: string | null;
+  updated_at: string | null;
+};
+
+export type OrgAdminWhatsAppChat = {
+  id: number;
+  display_name: string;
+  external_chat_id: string;
+  last_message_text: string | null;
+  last_message_at: string | null;
+  unread_count: number;
+};
+
+export type OrgAdminWhatsAppMessage = {
+  id: number;
+  external_message_id: string | null;
+  direction: "inbound" | "outbound" | string;
+  status: string;
+  sender_phone: string | null;
+  recipient_phone: string | null;
+  text_body: string | null;
+  sent_at: string | null;
+  delivered_at: string | null;
+  read_at: string | null;
+  failed_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 };
 
 export type OrgAdminStripeDemoAccountStatus = {
@@ -1245,6 +1287,84 @@ export async function sendOrgAdminCommunicationTestEmail(
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore invio email di test"));
+  return res.json();
+}
+
+export async function fetchOrgAdminWhatsAppConnection(): Promise<OrgAdminWhatsAppConnection> {
+  const res = await fetch("/api/org-admin/communications/whatsapp/connection");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento stato WhatsApp"));
+  return res.json();
+}
+
+export async function connectOrgAdminWhatsApp(): Promise<{
+  ok: boolean;
+  connection: OrgAdminWhatsAppConnection;
+}> {
+  const res = await fetch("/api/org-admin/communications/whatsapp/connect", {
+    method: "POST",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore avvio connessione WhatsApp"));
+  return res.json();
+}
+
+export async function fetchOrgAdminWhatsAppQr(): Promise<OrgAdminWhatsAppConnection> {
+  const res = await fetch("/api/org-admin/communications/whatsapp/qr");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento QR WhatsApp"));
+  return res.json();
+}
+
+export async function disconnectOrgAdminWhatsApp(): Promise<{
+  ok: boolean;
+  connection: OrgAdminWhatsAppConnection;
+}> {
+  const res = await fetch("/api/org-admin/communications/whatsapp/disconnect", {
+    method: "POST",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore disconnessione WhatsApp"));
+  return res.json();
+}
+
+export async function fetchOrgAdminWhatsAppChats(): Promise<{
+  items: OrgAdminWhatsAppChat[];
+  total: number;
+}> {
+  const res = await fetch("/api/org-admin/communications/whatsapp/chats");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento chat WhatsApp"));
+  return res.json();
+}
+
+export async function fetchOrgAdminWhatsAppMessages(
+  chatId: number,
+): Promise<{
+  chat: OrgAdminWhatsAppChat;
+  items: OrgAdminWhatsAppMessage[];
+  total: number;
+}> {
+  const res = await fetch(`/api/org-admin/communications/whatsapp/chats/${chatId}/messages`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento messaggi WhatsApp"));
+  return res.json();
+}
+
+export async function sendOrgAdminWhatsAppMessage(
+  chatId: number,
+  text: string,
+): Promise<{
+  ok: boolean;
+  message: OrgAdminWhatsAppMessage;
+}> {
+  const res = await fetch(`/api/org-admin/communications/whatsapp/chats/${chatId}/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore invio messaggio WhatsApp"));
   return res.json();
 }
 

@@ -465,6 +465,7 @@ def _serialize_org_admin_communications_settings(
     association_sender = resolve_email_sender(mode="association", association=org)
     return {
         "communications_enabled": bool(org.communications_enabled),
+        "whatsapp_evolution_enabled": bool(settings.ENABLE_WHATSAPP_EVOLUTION),
         "sender_email_local_part": org.sender_email_local_part,
         "email_from_name_override": org.email_from_name_override,
         "reply_to_email": org.reply_to_email,
