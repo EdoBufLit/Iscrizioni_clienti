@@ -697,7 +697,22 @@ export type OrgAdminEmailLayoutKey =
   | "essential"
   | "institutional"
   | "invitation"
-  | "renewal";
+  | "renewal"
+  | "modern"
+  | "elegant"
+  | "event"
+  | "reminder";
+
+export type OrgAdminEmailFontPreset =
+  | "modern_sans"
+  | "editorial"
+  | "classic";
+
+export type OrgAdminEmailCtaStyle =
+  | "solid"
+  | "soft"
+  | "outline"
+  | "shadow";
 
 export type OrgAdminEmailDesign = {
   accent_color: string;
@@ -712,6 +727,15 @@ export type OrgAdminEmailDesign = {
   cta_url: string;
   layout_key: OrgAdminEmailLayoutKey;
   show_association_name: boolean;
+  font_preset: OrgAdminEmailFontPreset;
+  cta_style: OrgAdminEmailCtaStyle;
+  secondary_image_url: string;
+  highlight_title: string;
+  highlight_body: string;
+  event_details: string;
+  signature_name: string;
+  signature_role: string;
+  final_note: string;
 };
 
 export type OrgAdminLinkedFormSummary = {
@@ -1283,6 +1307,31 @@ export async function createOrgAdminEmailCampaign(data: {
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione campagna"));
+  return res.json();
+}
+
+export async function updateOrgAdminEmailCampaign(
+  campaignId: number,
+  data: {
+    name?: string | null;
+    subject: string;
+    body_html?: string | null;
+    body_text?: string | null;
+    audience_type: OrgAdminCampaignAudienceType;
+    recipient_mode?: OrgAdminCampaignRecipientMode;
+    member_ids?: number[];
+    scheduled_at?: string | null;
+    design?: Partial<OrgAdminEmailDesign> | null;
+    linked_form_id?: number | null;
+  },
+): Promise<{ ok: boolean; campaign: OrgAdminEmailCampaign }> {
+  const res = await fetch(`/api/org-admin/communications/campaigns/${campaignId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento campagna"));
   return res.json();
 }
 

@@ -95,8 +95,17 @@ DEFAULT_EMAIL_DESIGN = {
     "cta_note": "",
     "cta_kind": "none",
     "cta_url": "",
-    "layout_key": "essential",
+    "layout_key": "modern",
     "show_association_name": True,
+    "font_preset": "modern_sans",
+    "cta_style": "solid",
+    "secondary_image_url": "",
+    "highlight_title": "",
+    "highlight_body": "",
+    "event_details": "",
+    "signature_name": "",
+    "signature_role": "",
+    "final_note": "",
 }
 
 
@@ -244,8 +253,19 @@ def normalize_email_design(value: Any) -> dict[str, Any]:
     if cta_kind not in {"none", "form", "document", "renewal", "custom"}:
         cta_kind = DEFAULT_EMAIL_DESIGN["cta_kind"]
     layout_key = (_normalize_text(value.get("layout_key")) or DEFAULT_EMAIL_DESIGN["layout_key"]).lower()
-    if layout_key not in {"essential", "institutional", "invitation", "renewal"}:
+    layout_key = {
+        "essential": "modern",
+        "invitation": "event",
+        "renewal": "reminder",
+    }.get(layout_key, layout_key)
+    if layout_key not in {"institutional", "modern", "elegant", "event", "reminder"}:
         layout_key = DEFAULT_EMAIL_DESIGN["layout_key"]
+    font_preset = (_normalize_text(value.get("font_preset")) or DEFAULT_EMAIL_DESIGN["font_preset"]).lower()
+    if font_preset not in {"modern_sans", "editorial", "classic"}:
+        font_preset = DEFAULT_EMAIL_DESIGN["font_preset"]
+    cta_style = (_normalize_text(value.get("cta_style")) or DEFAULT_EMAIL_DESIGN["cta_style"]).lower()
+    if cta_style not in {"solid", "soft", "outline", "shadow"}:
+        cta_style = DEFAULT_EMAIL_DESIGN["cta_style"]
     return {
         "accent_color": _normalize_color(value.get("accent_color")) or DEFAULT_EMAIL_DESIGN["accent_color"],
         "button_color": _normalize_color(value.get("button_color")) or _normalize_color(value.get("accent_color")) or DEFAULT_EMAIL_DESIGN["button_color"],
@@ -263,6 +283,15 @@ def normalize_email_design(value: Any) -> dict[str, Any]:
             if value.get("show_association_name") is None
             else value.get("show_association_name")
         ),
+        "font_preset": font_preset,
+        "cta_style": cta_style,
+        "secondary_image_url": _normalize_text(value.get("secondary_image_url")) or "",
+        "highlight_title": (_normalize_text(value.get("highlight_title")) or "")[:180],
+        "highlight_body": (_normalize_text(value.get("highlight_body")) or "")[:1000],
+        "event_details": (_normalize_text(value.get("event_details")) or "")[:1400],
+        "signature_name": (_normalize_text(value.get("signature_name")) or "")[:120],
+        "signature_role": (_normalize_text(value.get("signature_role")) or "")[:180],
+        "final_note": (_normalize_text(value.get("final_note")) or "")[:500],
     }
 
 
@@ -429,6 +458,8 @@ def decorate_rendered_email(
     hero_image_url = resolved_design["hero_image_url"]
     email_title = resolved_design["email_title"]
     layout_key = resolved_design["layout_key"]
+    font_preset = resolved_design["font_preset"]
+    cta_style = resolved_design["cta_style"]
     association_name = _normalize_text(getattr(association, "name", None) if association is not None else None) or "ASSONAM"
     linked_form_url = build_linked_form_url(association=association, linked_form=linked_form)
     cta_kind = resolved_design["cta_kind"]
@@ -463,15 +494,6 @@ def decorate_rendered_email(
 
     cta_html = ""
     cta_text = ""
-    if cta_url and cta_label:
-      cta_html = (
-          f"<div style=\"margin-top:24px\">"
-          f"<a href=\"{html.escape(cta_url, quote=True)}\" "
-          f"style=\"display:inline-block;padding:12px 20px;border-radius:999px;"
-          f"background:{button_color};color:#ffffff;text-decoration:none;font-weight:700\">"
-          f"{html.escape(cta_label)}</a></div>"
-      )
-      cta_text = f"\n\n{cta_label}: {cta_url}"
     note_html = f"<p style=\"margin:16px 0 0;color:#475569;font-size:14px\">{html.escape(cta_note)}</p>" if cta_note else ""
     hero_html = (
         f"<div style=\"height:180px;background:url('{html.escape(hero_image_url, quote=True)}') center/cover no-repeat;"
@@ -491,13 +513,13 @@ def decorate_rendered_email(
         else ""
     )
     layout_styles = {
-        "essential": {
+        "modern": {
             "outer_bg": "#f3f7f9",
             "card_bg": "#ffffff",
             "border": "#dce7ec",
             "badge_bg": "#ecfeff",
             "badge_fg": accent_color,
-            "badge_label": "Campagna email",
+            "badge_label": "Comunicazione moderna",
         },
         "institutional": {
             "outer_bg": "#eef2ff",
@@ -507,15 +529,23 @@ def decorate_rendered_email(
             "badge_fg": "#334155",
             "badge_label": "Comunicazione ufficiale",
         },
-        "invitation": {
+        "elegant": {
+            "outer_bg": "#faf7f2",
+            "card_bg": "#fffdf9",
+            "border": "#e7dcc8",
+            "badge_bg": "#f4ead8",
+            "badge_fg": "#8a5a24",
+            "badge_label": "Messaggio elegante",
+        },
+        "event": {
             "outer_bg": "#fff7ed",
             "card_bg": "#ffffff",
             "border": "#fed7aa",
             "badge_bg": "#ffedd5",
             "badge_fg": "#c2410c",
-            "badge_label": "Invito",
+            "badge_label": "Invito evento",
         },
-        "renewal": {
+        "reminder": {
             "outer_bg": "#eff6ff",
             "card_bg": "#ffffff",
             "border": "#bfdbfe",
@@ -529,12 +559,87 @@ def decorate_rendered_email(
         "border": "#dce7ec",
         "badge_bg": "#ecfeff",
         "badge_fg": accent_color,
-        "badge_label": "Campagna email",
+        "badge_label": "Comunicazione email",
+    })
+    cta_style_map = {
+        "solid": f"display:inline-block;padding:12px 20px;border-radius:999px;background:{button_color};color:#ffffff;text-decoration:none;font-weight:700",
+        "soft": f"display:inline-block;padding:12px 20px;border-radius:999px;background:{layout_styles['badge_bg']};color:{button_color};text-decoration:none;font-weight:700;border:1px solid {button_color}22",
+        "outline": f"display:inline-block;padding:12px 20px;border-radius:999px;background:#ffffff;color:{button_color};text-decoration:none;font-weight:700;border:1px solid {button_color}",
+        "shadow": f"display:inline-block;padding:12px 20px;border-radius:999px;background:{button_color};color:#ffffff;text-decoration:none;font-weight:700;box-shadow:0 12px 28px {button_color}33",
+    }
+    if cta_url and cta_label:
+        cta_html = (
+            f"<div style=\"margin-top:24px\">"
+            f"<a href=\"{html.escape(cta_url, quote=True)}\" "
+            f"style=\"{cta_style_map.get(cta_style, cta_style_map['solid'])}\">"
+            f"{html.escape(cta_label)}</a></div>"
+        )
+        cta_text = f"\n\n{cta_label}: {cta_url}"
+    font_styles = {
+        "modern_sans": {
+            "outer": "'Aptos','Segoe UI',Arial,sans-serif",
+            "title": "'Aptos','Segoe UI',Arial,sans-serif",
+            "body_size": "15px",
+        },
+        "editorial": {
+            "outer": "Georgia,'Times New Roman',serif",
+            "title": "Georgia,'Times New Roman',serif",
+            "body_size": "16px",
+        },
+        "classic": {
+            "outer": "'Trebuchet MS','Verdana',Arial,sans-serif",
+            "title": "'Trebuchet MS','Verdana',Arial,sans-serif",
+            "body_size": "15px",
+        },
+    }.get(font_preset, {
+        "outer": "'Aptos','Segoe UI',Arial,sans-serif",
+        "title": "'Aptos','Segoe UI',Arial,sans-serif",
+        "body_size": "15px",
     })
     title_html = (
-        f"<h1 style=\"margin:0 0 18px;font-size:30px;line-height:1.15;color:#0f172a;font-weight:800\">"
+        f"<h1 style=\"margin:0 0 18px;font-size:30px;line-height:1.15;color:#0f172a;font-weight:800;font-family:{font_styles['title']}\">"
         f"{html.escape(email_title)}</h1>"
         if email_title
+        else ""
+    )
+    secondary_image_url = resolved_design["secondary_image_url"]
+    highlight_title = resolved_design["highlight_title"]
+    highlight_body = resolved_design["highlight_body"]
+    event_details = resolved_design["event_details"]
+    signature_name = resolved_design["signature_name"]
+    signature_role = resolved_design["signature_role"]
+    final_note = resolved_design["final_note"]
+    secondary_image_html = (
+        f"<div style=\"margin:0 0 24px\"><img src=\"{html.escape(secondary_image_url, quote=True)}\" alt=\"Visual\" "
+        "style=\"width:100%;display:block;border-radius:18px\" /></div>"
+        if secondary_image_url
+        else ""
+    )
+    highlight_html = (
+        f"<div style=\"margin:0 0 24px;padding:18px 20px;border-radius:18px;background:{layout_styles['badge_bg']};border:1px solid {layout_styles['border']}\">"
+        f"<div style=\"font-size:16px;font-weight:800;color:#0f172a;margin-bottom:8px\">{html.escape(highlight_title or 'In evidenza')}</div>"
+        f"<div style=\"color:#334155;font-size:14px;line-height:1.7\">{html.escape(highlight_body)}</div></div>"
+        if highlight_body
+        else ""
+    )
+    event_html = (
+        f"<div style=\"margin:0 0 24px;padding:18px 20px;border-radius:18px;background:#ffffff;border:1px dashed {layout_styles['border']}\">"
+        f"<div style=\"font-size:12px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:{layout_styles['badge_fg']};margin-bottom:10px\">Dettagli evento</div>"
+        f"<div style=\"color:#0f172a;font-size:14px;line-height:1.75;white-space:pre-line\">{html.escape(event_details)}</div></div>"
+        if event_details
+        else ""
+    )
+    signature_html = (
+        f"<div style=\"margin:28px 0 0;color:#0f172a;font-size:15px;line-height:1.6\">"
+        f"<div style=\"font-weight:700\">{html.escape(signature_name)}</div>"
+        f"{f'<div style=\"color:#64748b\">{html.escape(signature_role)}</div>' if signature_role else ''}"
+        "</div>"
+        if signature_name
+        else ""
+    )
+    final_note_html = (
+        f"<div style=\"margin-top:24px;padding-top:18px;border-top:1px solid {layout_styles['border']};color:#64748b;font-size:13px;line-height:1.7\">{html.escape(final_note)}</div>"
+        if final_note
         else ""
     )
     badge_html = (
@@ -544,15 +649,16 @@ def decorate_rendered_email(
         f"{html.escape(layout_styles['badge_label'])}</div>"
     )
     wrapped_html = (
-        f"<div style=\"margin:0;padding:24px;background:{layout_styles['outer_bg']};font-family:Georgia,'Times New Roman',serif\">"
+        f"<div style=\"margin:0;padding:24px;background:{layout_styles['outer_bg']};font-family:{font_styles['outer']}\">"
         f"<div style=\"max-width:640px;margin:0 auto;background:{layout_styles['card_bg']};border:1px solid {layout_styles['border']};"
         "border-radius:24px;overflow:hidden;box-shadow:0 18px 48px rgba(15,23,42,0.08)\">"
         f"{hero_html}"
         f"<div style=\"padding:32px\">"
         f"<div style=\"display:flex;align-items:center;gap:16px;margin-bottom:24px\">{logo_html}{association_name_html}</div>"
         f"{badge_html}{title_html}"
-        f"<div style=\"color:#0f172a;font-size:15px;line-height:1.7\">{body_html}</div>"
-        f"{note_html}{cta_html}"
+        f"{secondary_image_html}{highlight_html}{event_html}"
+        f"<div style=\"color:#0f172a;font-size:{font_styles['body_size']};line-height:1.7\">{body_html}</div>"
+        f"{note_html}{cta_html}{signature_html}{final_note_html}"
         "</div></div></div>"
     )
     return RenderedTemplateContent(
