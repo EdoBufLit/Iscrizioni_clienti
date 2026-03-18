@@ -384,6 +384,78 @@ def create_campaign_draft(
     return campaign
 
 
+def update_campaign_draft(
+    db: Session,
+    *,
+    campaign: EmailCampaign,
+    organization: Organization,
+    name: str | None,
+    subject: str,
+    body_html: str | None,
+    body_text: str | None,
+    audience_type: str,
+    recipient_mode: str,
+    selected_member_ids: Iterable[int] | None = None,
+    scheduled_at: datetime | None = None,
+    design: dict[str, Any] | None = None,
+    linked_form: Form | None = None,
+) -> EmailCampaign:
+    if campaign.association_id != organization.id:
+        raise HTTPException(status_code=404, detail="Campagna non trovata.")
+
+    current_status = (campaign.status or "").strip().lower()
+    if current_status not in {CAMPAIGN_STATUS_DRAFT, CAMPAIGN_STATUS_SCHEDULED}:
+        raise HTTPException(
+            status_code=409,
+            detail="Solo le campagne in bozza o programmate possono essere modificate.",
+        )
+
+    normalized_subject = _normalize_text(subject)
+    if normalized_subject is None:
+        raise HTTPException(status_code=422, detail="Oggetto campagna obbligatorio.")
+
+    normalized_audience = _normalize_text(audience_type)
+    if normalized_audience not in ALLOWED_AUDIENCE_TYPES:
+        raise HTTPException(status_code=422, detail="Audience non valida.")
+
+    normalized_recipient_mode = normalize_recipient_mode(recipient_mode)
+    normalized_selected_member_ids = normalize_selected_member_ids(
+        selected_member_ids,
+        recipient_mode=normalized_recipient_mode,
+    )
+    if normalized_recipient_mode == RECIPIENT_MODE_SELECTED_MEMBERS:
+        resolve_selected_member_recipients(
+            db,
+            association_id=organization.id,
+            member_ids=normalized_selected_member_ids,
+        )
+
+    normalized_body_html, normalized_body_text = normalize_campaign_bodies(
+        body_html=body_html,
+        body_text=body_text,
+    )
+    normalized_scheduled_at = normalize_scheduled_at(scheduled_at)
+    now = datetime.utcnow()
+
+    campaign.name = _normalize_text(name)
+    campaign.subject = normalized_subject
+    campaign.body_html = normalized_body_html
+    campaign.body_text = normalized_body_text
+    campaign.design_json = normalize_email_design(design)
+    campaign.linked_form_id = linked_form.id if linked_form is not None else None
+    campaign.audience_type = normalized_audience
+    campaign.recipient_mode = normalized_recipient_mode
+    campaign.selected_member_ids_json = serialize_selected_member_ids(normalized_selected_member_ids)
+    campaign.status = (
+        CAMPAIGN_STATUS_SCHEDULED
+        if normalized_scheduled_at is not None and normalized_scheduled_at > now
+        else CAMPAIGN_STATUS_DRAFT
+    )
+    campaign.scheduled_at = normalized_scheduled_at
+    db.flush()
+    return campaign
+
+
 def send_test_email_now(
     *,
     organization: Organization,

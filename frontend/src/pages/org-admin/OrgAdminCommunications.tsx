@@ -25,11 +25,13 @@ type LaunchIntent =
   | "survey"
   | null;
 
+type CampaignMode = "list" | "create" | "edit";
+
 const COMMUNICATIONS_LOCKED_MESSAGE = "Modulo Comunicazioni non attivo. Contatta ASSONAM per abilitarlo.";
 
 const tabDefinitions: Array<{ key: TabKey; label: string; hint: string }> = [
   { key: "panoramica", label: "Panoramica", hint: "Azioni rapide, KPI e stato invio." },
-  { key: "campagne", label: "Campagne", hint: "Composer guidato e lista campagne." },
+  { key: "campagne", label: "Campagne", hint: "Elenco, ricerca e accesso al composer dedicato." },
   { key: "modelli", label: "Modelli", hint: "Libreria riusabile email." },
   { key: "moduli", label: "Form pubblici", hint: "Pagine e moduli collegabili." },
   { key: "invii", label: "Invii e statistiche", hint: "Bozze, programmate, inviate, fallite." },
@@ -59,6 +61,14 @@ function normalizeIntent(value: string | null | undefined): LaunchIntent {
   return null;
 }
 
+function normalizeCampaignMode(value: string | null | undefined, hasLaunchParams: boolean): CampaignMode {
+  const normalized = (value || "").trim().toLowerCase();
+  if (normalized === "create" || normalized === "new") return "create";
+  if (normalized === "edit" || normalized === "composer") return "edit";
+  if (hasLaunchParams) return "create";
+  return "list";
+}
+
 export default function OrgAdminCommunications() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
@@ -77,6 +87,15 @@ export default function OrgAdminCommunications() {
     const raw = Number(searchParams.get("templateId") || 0);
     return Number.isFinite(raw) && raw > 0 ? raw : null;
   }, [searchParams]);
+  const launchCampaignId = useMemo(() => {
+    const raw = Number(searchParams.get("campaignId") || 0);
+    return Number.isFinite(raw) && raw > 0 ? raw : null;
+  }, [searchParams]);
+  const campaignMode = useMemo(
+    () => normalizeCampaignMode(searchParams.get("mode"), Boolean(launchIntent || launchFormId || launchTemplateId)),
+    [launchFormId, launchIntent, launchTemplateId, searchParams],
+  );
+  const composerActive = activeTab === "campagne" && campaignMode !== "list";
 
   useEffect(() => {
     applySeo({
@@ -143,6 +162,38 @@ export default function OrgAdminCommunications() {
     );
   }
 
+  if (composerActive) {
+    return (
+      <div className="container-shell py-8">
+        {communicationsLocked && (
+          <div className="mb-6 rounded-[1.75rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-700">Modulo non attivo</p>
+            <p className="mt-1">{COMMUNICATIONS_LOCKED_MESSAGE}</p>
+          </div>
+        )}
+        <MessagesHub
+          section="campaigns"
+          communicationsLocked={communicationsLocked}
+          launchIntent={launchIntent}
+          launchFormId={launchFormId}
+          launchTemplateId={launchTemplateId}
+          onConsumeLaunch={consumeLaunchParams}
+          campaignMode="composer"
+          editingCampaignId={campaignMode === "edit" ? launchCampaignId : null}
+          onCloseCampaignComposer={() =>
+            updateQuery("campagne", {
+              mode: null,
+              campaignId: null,
+              intent: null,
+              formId: null,
+              templateId: null,
+            })
+          }
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="container-shell py-8 space-y-6">
       <section className="surface overflow-hidden">
@@ -182,7 +233,7 @@ export default function OrgAdminCommunications() {
             <CommunicationsOverview
               communicationsLocked={communicationsLocked}
               onTabChange={(tab) => updateQuery(tab)}
-              onQuickAction={(intent) => updateQuery("campagne", { intent })}
+              onQuickAction={(intent) => updateQuery("campagne", { mode: "create", intent })}
             />
           )}
           {activeTab === "campagne" && (
@@ -193,6 +244,25 @@ export default function OrgAdminCommunications() {
               launchFormId={launchFormId}
               launchTemplateId={launchTemplateId}
               onConsumeLaunch={consumeLaunchParams}
+              campaignMode="list"
+              onCreateCampaign={() =>
+                updateQuery("campagne", {
+                  mode: "create",
+                  intent: null,
+                  formId: null,
+                  templateId: null,
+                  campaignId: null,
+                })
+              }
+              onEditCampaign={(campaignId) =>
+                updateQuery("campagne", {
+                  mode: "edit",
+                  campaignId,
+                  intent: null,
+                  formId: null,
+                  templateId: null,
+                })
+              }
             />
           )}
           {activeTab === "modelli" && (

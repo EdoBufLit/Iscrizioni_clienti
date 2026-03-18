@@ -1515,7 +1515,7 @@ export function OrgAdminFormsWorkspace({
                       <p className="mt-1 text-sm text-neutral-500">Rafforza il collegamento mentale tra form pubblico e invito email: il pulsante nell’email aprirà questa pagina nel browser.</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <a className="btn-primary !px-4 !py-2 !text-sm" href={`/org-admin/communications?tab=campagne&intent=form_invite&formId=${selectedFormId}`}>
+                      <a className="btn-primary !px-4 !py-2 !text-sm" href={`/org-admin/communications?tab=campagne&mode=create&intent=form_invite&formId=${selectedFormId}`}>
                         Crea invito email
                       </a>
                       <button

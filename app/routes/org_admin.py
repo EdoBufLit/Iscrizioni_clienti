@@ -77,6 +77,7 @@ from app.services.email_campaigns import (
     resolve_audience_recipients,
     send_test_email_now,
     send_campaign,
+    update_campaign_draft,
 )
 from app.services.email_templates import (
     AVAILABLE_TEMPLATE_VARIABLES,
@@ -2816,6 +2817,65 @@ def get_communications_campaign_detail(
         raise HTTPException(status_code=404, detail="Campagna non trovata.")
 
     return {
+        "campaign": _serialize_email_campaign(campaign, include_body=True),
+    }
+
+
+@router.put("/communications/campaigns/{campaign_id}")
+def update_communications_campaign(
+    request: Request,
+    campaign_id: int,
+    body: CreateEmailCampaignBody,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    _require_active_communications_module(admin.organization)
+    campaign = (
+        db.query(EmailCampaign)
+        .filter(
+            EmailCampaign.id == campaign_id,
+            EmailCampaign.association_id == admin.org_id,
+        )
+        .first()
+    )
+    if campaign is None:
+        raise HTTPException(status_code=404, detail="Campagna non trovata.")
+
+    campaign = update_campaign_draft(
+        db,
+        campaign=campaign,
+        organization=admin.organization,
+        name=body.name,
+        subject=body.subject,
+        body_html=body.body_html,
+        body_text=body.body_text,
+        audience_type=body.audience_type,
+        recipient_mode=body.recipient_mode,
+        selected_member_ids=body.member_ids,
+        scheduled_at=body.scheduled_at,
+        design=body.design,
+        linked_form=_resolve_optional_linked_form_for_admin(
+            db,
+            admin=admin,
+            form_id=body.linked_form_id,
+        ),
+    )
+    db.commit()
+    campaign = (
+        db.query(EmailCampaign)
+        .options(
+            joinedload(EmailCampaign.recipients),
+            joinedload(EmailCampaign.created_by_user),
+            joinedload(EmailCampaign.linked_form).joinedload(AssociationForm.organization),
+        )
+        .filter(EmailCampaign.id == campaign.id)
+        .first()
+    )
+    return {
+        "ok": True,
         "campaign": _serialize_email_campaign(campaign, include_body=True),
     }
 
