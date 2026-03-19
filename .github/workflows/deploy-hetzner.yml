@@ -311,6 +311,11 @@ jobs:
 
             ensure_evolution_database
 
+            echo "[deploy] Running Alembic migrations on Postgres"
+            docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS up -d db
+            wait_for_postgres
+            docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS run --rm --build web alembic upgrade head
+
             echo "[deploy] Cleaning stale service containers to avoid name conflicts"
             docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS rm -f -s web email-worker low-cards-worker affiliation-video-worker evolution-api || true
             for stale_pattern in "^/app-web-1$" "^/app-email-worker-1$" "^/app-low-cards-worker-1$" "^/app-affiliation-video-worker-1$" "^/app-evolution-api-1$" "app-web-1" "app-email-worker-1" "app-low-cards-worker-1" "app-affiliation-video-worker-1" "app-evolution-api-1"; do
