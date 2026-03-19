@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { applySeo } from "../../lib/seo";
 import { fetchOrgAdminCommunicationSettings } from "../../lib/api";
@@ -8,103 +8,98 @@ import { CommunicationsOverview } from "./components/communications/Communicatio
 import { MessagesHub } from "./components/communications/MessagesHub";
 import { PublicFormsHub } from "./components/communications/PublicFormsHub";
 import { EmailSendingSettings } from "./components/communications/EmailSendingSettings";
-import { WhatsAppHub } from "./components/communications/WhatsAppHub";
+import { WhatsAppAutomationsHub } from "./components/communications/WhatsAppAutomationsHub";
 
-type TabKey =
-  | "panoramica"
-  | "campagne"
-  | "modelli"
-  | "moduli"
-  | "invii"
-  | "whatsapp"
-  | "impostazioni";
-
-type LaunchIntent =
-  | "form_invite"
-  | "general"
-  | "renewal"
-  | "custom"
-  | "survey"
-  | null;
-
-type CampaignMode = "list" | "create" | "edit";
+type TabKey = "panoramica" | "messaggi" | "whatsapp" | "moduli" | "impostazioni";
 
 const COMMUNICATIONS_LOCKED_MESSAGE = "Modulo Comunicazioni non attivo. Contatta ASSONAM per abilitarlo.";
 
-const tabDefinitions: Array<{ key: TabKey; label: string; hint: string }> = [
-  { key: "panoramica", label: "Panoramica", hint: "Azioni rapide, KPI e stato invio." },
-  { key: "campagne", label: "Campagne", hint: "Elenco, ricerca e accesso al composer dedicato." },
-  { key: "modelli", label: "Modelli", hint: "Libreria riusabile email." },
-  { key: "moduli", label: "Form pubblici", hint: "Pagine e moduli collegabili." },
-  { key: "invii", label: "Invii e statistiche", hint: "Bozze, programmate, inviate, fallite." },
-  { key: "whatsapp", label: "WhatsApp", hint: "Inbox sperimentale via Evolution Lite." },
-  { key: "impostazioni", label: "Impostazioni email", hint: "Mittente, reply-to e branding." },
+const communicationsTabs: Array<{
+  key: TabKey;
+  label: string;
+  subtitle: string;
+  icon: ReactNode;
+}> = [
+  {
+    key: "messaggi",
+    label: "Modelli",
+    subtitle: "Libreria riusabile email.",
+    icon: (
+      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M7 3.75h7.5L20.25 9.5v10.75A1.5 1.5 0 0118.75 21h-11.5A1.5 1.5 0 015.75 19.5v-14A1.75 1.75 0 017.5 3.75z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M14 3.75V9.5h5.75" />
+      </svg>
+    ),
+  },
+  {
+    key: "moduli",
+    label: "Form pubblici",
+    subtitle: "Pagine e moduli collegabili.",
+    icon: (
+      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+        <rect x="3.75" y="4.75" width="16.5" height="14.5" rx="2.25" />
+        <path strokeLinecap="round" d="M8 9.25h8M8 13h8M8 16.75h5" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 2.75v4M16.5 2.75v4" />
+      </svg>
+    ),
+  },
+  {
+    key: "panoramica",
+    label: "Invii e statistiche",
+    subtitle: "Bozze, programmate, inviate, fallite.",
+    icon: (
+      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 4.75L10.5 14.5" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 4.75L14.25 20.25l-3.75-6-6-3.75 15.75-5.75z" />
+      </svg>
+    ),
+  },
+  {
+    key: "whatsapp",
+    label: "WhatsApp",
+    subtitle: "Automazioni e regole collegate ai form.",
+    icon: (
+      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 20.25a8.2 8.2 0 004.15-1.12l3.85.87-.96-3.68A8.25 8.25 0 1012 20.25z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.4 8.8c.15-.33.31-.34.47-.35h.4c.14 0 .33.05.51.44.19.39.64 1.56.69 1.67.05.11.09.24.02.39-.07.15-.1.24-.2.36-.1.12-.21.27-.3.36-.1.1-.21.2-.09.4.12.2.54.89 1.16 1.44.8.71 1.48.93 1.68 1.03.2.1.32.08.44-.05.12-.13.51-.6.65-.8.14-.2.27-.17.46-.1.19.07 1.19.56 1.39.66.2.1.33.15.38.24.05.09.05.53-.12 1.04-.17.51-1 .99-1.39 1.05-.36.05-.82.08-1.33-.08-.31-.1-.71-.23-1.21-.45-2.14-.93-3.54-3.11-3.65-3.26-.1-.15-.87-1.15-.87-2.2 0-1.05.55-1.56.74-1.78z" />
+      </svg>
+    ),
+  },
+  {
+    key: "impostazioni",
+    label: "Impostazioni email",
+    subtitle: "Mittente, reply-to e branding.",
+    icon: (
+      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+        <rect x="3.75" y="6" width="16.5" height="12" rx="2.25" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 7l7.05 5.1a.75.75 0 00.9 0L19.5 7" />
+      </svg>
+    ),
+  },
 ];
 
 function normalizeTab(value: string | null | undefined): TabKey {
   const normalized = (value || "").trim().toLowerCase();
-  if (normalized === "messaggi") return "campagne";
-  if (normalized === "form-pubblici") return "moduli";
-  if (normalized === "pagine-e-moduli") return "moduli";
-  if (normalized === "invio-email") return "impostazioni";
-  if (normalized === "invii-statistiche") return "invii";
-  if (normalized === "panoramica" || normalized === "campagne" || normalized === "modelli" || normalized === "moduli" || normalized === "invii" || normalized === "whatsapp" || normalized === "impostazioni") {
-    return normalized;
-  }
-  return "panoramica";
-}
-
-function normalizeIntent(value: string | null | undefined): LaunchIntent {
-  const normalized = (value || "").trim().toLowerCase();
-  if (normalized === "invite" || normalized === "form_invite") return "form_invite";
-  if (normalized === "general" || normalized === "general_communication") return "general";
-  if (normalized === "renewal" || normalized === "renewal_reminder") return "renewal";
-  if (normalized === "custom" || normalized === "personalized") return "custom";
-  if (normalized === "survey" || normalized === "feedback") return "survey";
-  return null;
-}
-
-function normalizeCampaignMode(value: string | null | undefined, hasLaunchParams: boolean): CampaignMode {
-  const normalized = (value || "").trim().toLowerCase();
-  if (normalized === "create" || normalized === "new") return "create";
-  if (normalized === "edit" || normalized === "composer") return "edit";
-  if (hasLaunchParams) return "create";
-  return "list";
+  if (normalized === "campagne" || normalized === "modelli") return "messaggi";
+  if (normalized === "moduli" || normalized === "form-pubblici" || normalized === "pagine-e-moduli") return "moduli";
+  if (normalized === "invii" || normalized === "invii-statistiche" || normalized === "panoramica") return "panoramica";
+  if (normalized === "impostazioni" || normalized === "invio-email") return "impostazioni";
+  if (normalized === "whatsapp") return "whatsapp";
+  if (normalized === "messaggi") return "messaggi";
+  return "messaggi";
 }
 
 export default function OrgAdminCommunications() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<TabKey>(normalizeTab(searchParams.get("tab")));
   const [loading, setLoading] = useState(true);
   const [communicationsLocked, setCommunicationsLocked] = useState(true);
   const [whatsappEnabled, setWhatsappEnabled] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabKey>(normalizeTab(searchParams.get("tab")));
-
-  const launchIntent = useMemo(
-    () => normalizeIntent(searchParams.get("intent")),
-    [searchParams],
-  );
-  const launchFormId = useMemo(() => {
-    const raw = Number(searchParams.get("formId") || 0);
-    return Number.isFinite(raw) && raw > 0 ? raw : null;
-  }, [searchParams]);
-  const launchTemplateId = useMemo(() => {
-    const raw = Number(searchParams.get("templateId") || 0);
-    return Number.isFinite(raw) && raw > 0 ? raw : null;
-  }, [searchParams]);
-  const launchCampaignId = useMemo(() => {
-    const raw = Number(searchParams.get("campaignId") || 0);
-    return Number.isFinite(raw) && raw > 0 ? raw : null;
-  }, [searchParams]);
-  const campaignMode = useMemo(
-    () => normalizeCampaignMode(searchParams.get("mode"), Boolean(launchIntent || launchFormId || launchTemplateId)),
-    [launchFormId, launchIntent, launchTemplateId, searchParams],
-  );
-  const composerActive = activeTab === "campagne" && campaignMode !== "list";
 
   useEffect(() => {
     applySeo({
       title: "Comunicazioni Associazione",
-      description: "Invia email ai soci, raccogli risposte con form pubblici e gestisci campagne in modo guidato.",
+      description: "Invia email ai soci, collega form pubblici e gestisci automazioni WhatsApp in modo guidato.",
       noindex: true,
     });
   }, []);
@@ -135,182 +130,124 @@ export default function OrgAdminCommunications() {
     };
   }, []);
 
+  const selectTab = (tab: TabKey) => {
+    setActiveTab(tab);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("tab", tab);
+    setSearchParams(nextParams, { replace: true });
+  };
+
   useEffect(() => {
-    const nextTab = normalizeTab(searchParams.get("tab"));
-    if (nextTab !== activeTab) {
-      setActiveTab(nextTab);
+    const next = normalizeTab(searchParams.get("tab"));
+    if (next !== activeTab) {
+      setActiveTab(next);
     }
   }, [activeTab, searchParams]);
 
   useEffect(() => {
     if (!whatsappEnabled && activeTab === "whatsapp") {
-      updateQuery("panoramica");
+      selectTab("messaggi");
     }
   }, [activeTab, whatsappEnabled]);
-
-  function updateQuery(nextTab: TabKey, extras?: Record<string, string | number | null | undefined>) {
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.set("tab", nextTab);
-    if (extras) {
-      Object.entries(extras).forEach(([key, value]) => {
-        if (value === null || value === undefined || value === "") nextParams.delete(key);
-        else nextParams.set(key, String(value));
-      });
-    }
-    setSearchParams(nextParams, { replace: true });
-    setActiveTab(nextTab);
-  }
-
-  function consumeLaunchParams() {
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.delete("intent");
-    nextParams.delete("formId");
-    nextParams.delete("templateId");
-    setSearchParams(nextParams, { replace: true });
-  }
 
   if (loading) {
     return (
       <div className="container-shell py-8 space-y-5">
         <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-96 w-full rounded-[1.25rem]" />
-      </div>
-    );
-  }
-
-  const visibleTabs = tabDefinitions.filter((tab) => tab.key !== "whatsapp" || whatsappEnabled);
-
-  if (composerActive) {
-    return (
-      <div className="container-shell py-8">
-        {communicationsLocked && (
-          <div className="mb-6 rounded-[1.75rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-700">Modulo non attivo</p>
-            <p className="mt-1">{COMMUNICATIONS_LOCKED_MESSAGE}</p>
-          </div>
-        )}
-        <MessagesHub
-          section="campaigns"
-          communicationsLocked={communicationsLocked}
-          launchIntent={launchIntent}
-          launchFormId={launchFormId}
-          launchTemplateId={launchTemplateId}
-          onConsumeLaunch={consumeLaunchParams}
-          campaignMode="composer"
-          editingCampaignId={campaignMode === "edit" ? launchCampaignId : null}
-          onCloseCampaignComposer={() =>
-            updateQuery("campagne", {
-              mode: null,
-              campaignId: null,
-              intent: null,
-              formId: null,
-              templateId: null,
-            })
-          }
-        />
+        <Skeleton className="h-96 w-full rounded-[2rem]" />
       </div>
     );
   }
 
   return (
-    <div className="container-shell py-8 md:py-10 space-y-8">
-      {communicationsLocked && (
-        <div className="rounded-[1.25rem] bg-amber-50/50 p-5 text-sm text-amber-900 ring-1 ring-inset ring-amber-500/20">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-700">Modulo bloccato</p>
-              <p className="mt-1 font-medium">{COMMUNICATIONS_LOCKED_MESSAGE}</p>
+    <div className="container-shell py-8 space-y-6">
+      <section className="surface overflow-hidden">
+        {communicationsLocked && (
+          <div className="mx-6 mt-6 rounded-[1.75rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900 md:mx-8">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-700">Modulo non attivo</p>
+                <p className="mt-1">{COMMUNICATIONS_LOCKED_MESSAGE}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="px-4 pt-6 md:px-8">
+          <div className="overflow-hidden rounded-[1.7rem] border border-[#e4ded0] bg-[#f6f2e8] shadow-[0_12px_30px_rgba(15,23,42,0.06)]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5">
+              {communicationsTabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  className={`group flex min-h-[92px] items-start gap-3 border-b border-[#e8e1d3] px-5 py-5 text-left transition sm:min-h-[100px] xl:border-b-0 xl:border-r xl:last:border-r-0 ${
+                    activeTab === tab.key
+                      ? "bg-white text-neutral-950 shadow-[inset_0_-2px_0_0_#17494a]"
+                      : "bg-transparent text-[#31484a] hover:bg-white/70"
+                  }`}
+                  onClick={() => selectTab(tab.key)}
+                >
+                  <span
+                    className={`mt-0.5 shrink-0 transition ${
+                      activeTab === tab.key ? "text-[#173f42]" : "text-[#274f52]/90 group-hover:text-[#173f42]"
+                    }`}
+                  >
+                    {tab.icon}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[17px] font-semibold leading-5">{tab.label}</span>
+                    <span className="mt-1.5 block text-[11px] font-bold uppercase tracking-[0.08em] text-[#8a948d]">
+                      {tab.subtitle}
+                    </span>
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
         </div>
-      )}
 
-      {/* Modern, horizontal, scrollable tab navigation without heavy borders */}
-      <nav className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-2 scrollbar-hide md:mx-0 md:px-0">
-        {visibleTabs.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            className={`whitespace-nowrap rounded-full px-5 py-3 text-sm font-medium transition-all flex flex-col items-start ${
-              activeTab === tab.key
-                ? "bg-slate-900 text-white shadow-sm"
-                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-            }`}
-            onClick={() => updateQuery(tab.key)}
-          >
-            <span className="block">{tab.label}</span>
-            <span className={`block mt-0.5 text-[10px] uppercase tracking-wider ${activeTab === tab.key ? "text-white/60" : "text-slate-400"}`}>{tab.hint}</span>
-          </button>
-        ))}
-      </nav>
-
-      <main className="min-h-[60vh]">
-        {activeTab === "panoramica" && (
-          <CommunicationsOverview
-            communicationsLocked={communicationsLocked}
-            onTabChange={(tab) => updateQuery(tab)}
-            onQuickAction={(intent) => updateQuery("campagne", { mode: "create", intent })}
-          />
-        )}
-        {activeTab === "campagne" && (
-          <MessagesHub
-            section="campaigns"
-            communicationsLocked={communicationsLocked}
-            launchIntent={launchIntent}
-            launchFormId={launchFormId}
-            launchTemplateId={launchTemplateId}
-            onConsumeLaunch={consumeLaunchParams}
-            campaignMode="list"
-            onCreateCampaign={() =>
-              updateQuery("campagne", {
-                mode: "create",
-                intent: null,
-                formId: null,
-                templateId: null,
-                campaignId: null,
-              })
-            }
-            onEditCampaign={(campaignId) =>
-              updateQuery("campagne", {
-                mode: "edit",
-                campaignId,
-                intent: null,
-                formId: null,
-                templateId: null,
-              })
-            }
-          />
-        )}
-        {activeTab === "modelli" && (
-          <MessagesHub
-            section="templates"
-            communicationsLocked={communicationsLocked}
-            launchIntent={launchIntent}
-            launchFormId={launchFormId}
-            launchTemplateId={launchTemplateId}
-            onConsumeLaunch={consumeLaunchParams}
-          />
-        )}
-        {activeTab === "moduli" && (
-          <PublicFormsHub locked={communicationsLocked} />
-        )}
-        {activeTab === "invii" && (
-          <MessagesHub
-            section="deliveries"
-            communicationsLocked={communicationsLocked}
-            launchIntent={launchIntent}
-            launchFormId={launchFormId}
-            launchTemplateId={launchTemplateId}
-            onConsumeLaunch={consumeLaunchParams}
-          />
-        )}
-        {activeTab === "whatsapp" && whatsappEnabled && (
-          <WhatsAppHub communicationsLocked={communicationsLocked} />
-        )}
-        {activeTab === "impostazioni" && (
-          <EmailSendingSettings communicationsLocked={communicationsLocked} />
-        )}
-      </main>
+        <div className="px-6 py-8 md:px-8">
+          {activeTab === "panoramica" && (
+            <CommunicationsOverview
+              communicationsLocked={communicationsLocked}
+              onQuickAction={() => selectTab("messaggi")}
+              onTabChange={(tab) => {
+                if (tab === "campagne" || tab === "modelli") {
+                  selectTab("messaggi");
+                  return;
+                }
+                if (tab === "moduli") {
+                  selectTab("moduli");
+                  return;
+                }
+                if (tab === "impostazioni") {
+                  selectTab("impostazioni");
+                  return;
+                }
+                selectTab("panoramica");
+              }}
+            />
+          )}
+          {activeTab === "messaggi" && (
+            <MessagesHub communicationsLocked={communicationsLocked} />
+          )}
+          {activeTab === "whatsapp" && (
+            whatsappEnabled ? (
+              <WhatsAppAutomationsHub communicationsLocked={communicationsLocked} />
+            ) : (
+              <div className="rounded-[1.75rem] border border-dashed border-neutral-300 bg-neutral-50 px-6 py-10 text-sm text-neutral-600">
+                WhatsApp non è ancora attivo per questa associazione. Quando la connessione sarà disponibile, qui vedrai le automazioni collegate ai form pubblici.
+              </div>
+            )
+          )}
+          {activeTab === "moduli" && (
+            <PublicFormsHub locked={communicationsLocked} />
+          )}
+          {activeTab === "impostazioni" && (
+            <EmailSendingSettings communicationsLocked={communicationsLocked} />
+          )}
+        </div>
+      </section>
     </div>
   );
 }

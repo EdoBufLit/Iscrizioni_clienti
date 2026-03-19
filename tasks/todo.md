@@ -1,4 +1,3 @@
-
 ## Plan (Comunicazioni live verification + push + deploy - Mar 19, 2026)
 - [ ] Chiudere il rebase del refactor Comunicazioni e dell'hotfix barra top integrando i conflitti con `origin/feat/redesign-landing-wizard`
 - [ ] Rieseguire build frontend e test backend mirati per confermare che entrambe le passate siano stabili
@@ -6,155 +5,36 @@
 - [ ] Pushare entrambi i cambi sul branch di deploy
 - [ ] Allineare Hetzner, eseguire eventuale migration Alembic e fare smoke check finale server-side
 
-## Plan (WhatsApp Web polish + deploy speedup - Mar 19, 2026)
-- [x] Rifinire la UI WhatsApp per sembrare piu vicina a WhatsApp Web nei punti ancora deboli: nomi fallback, barra ricerca/azioni, meta thread e quick-open
-- [x] Rendere il payload locale piu utile alla UI dove serve senza introdurre overengineering
-- [x] Ridurre il tempo deploy eliminando build duplicate, `--no-cache` forzato e prune aggressivo della cache Docker
-- [x] Verificare con test/typecheck e, se stabile, pushare sul branch di deploy
-- [x] Riallineare Hetzner e misurare l'impatto reale del nuovo path di deploy
+- [x] Analizzare la barra superiore di `Comunicazioni` e il riferimento visuale allegato per allineare struttura e gerarchia
+- [x] Rifare la sub-navigation di `Comunicazioni` come barra fissa non scrollabile con colonne, icone e microcopy
+- [x] Verificare il build frontend e documentare la review finale
 
-## Review (WhatsApp Web polish + deploy speedup - Mar 19, 2026)
-- La UI WhatsApp in [WhatsAppHub.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti__evolution_push\frontend\src\pages\org-admin\components\communications\WhatsAppHub.tsx) e stata rifinita nei punti che la facevano sembrare ancora troppo “tooling”: ricerca con icona corretta, quick-open da search anche con sidebar piena, badge riepilogo `thread/contatti/profilo`, header thread piu pulito e fallback label che convertono JID/numero in un display piu umano.
-- L'endpoint backend `GET /api/org-admin/communications/whatsapp/chats` ora sincronizza anche i contatti Evolution prima della lista chat, cosi la sidebar ha piu chance di mostrare subito nomi/avatar leggibili dove il provider li espone.
-- Il deploy e stato snellito in [.github/workflows/deploy-hetzner.yml](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti__evolution_push\.github\workflows\deploy-hetzner.yml): niente `docker builder prune`, niente `buildx prune`, niente `--no-cache`, niente doppia build di `web` per Alembic + runtime.
-- Il runtime Python condiviso (`web`, `email-worker`, `low-cards-worker`) ora usa la stessa image locale `assonam/app-runtime:local` in [docker-compose.yml](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti__evolution_push\docker-compose.yml), quindi il server builda una volta e riusa l'immagine per i worker invece di ricompilarla piu volte.
-- Verifiche locali eseguite: `python -m py_compile app/routes/whatsapp_evolution.py`, `pytest tests/test_org_admin_whatsapp.py -q`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
+## Review (Comunicazioni top bar refinement - Mar 19, 2026)
+- La sub-navigation interna di `Comunicazioni` in [OrgAdminCommunications.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\OrgAdminCommunications.tsx) non usa piu pill tonde o scrolling orizzontale: ora e una strip fissa a colonne con icona, titolo e sottotitolo, coerente con il riferimento allegato.
+- Ho rimosso la semantica generica dei vecchi tab e introdotto etichette piu editoriali e leggibili nella barra: `Modelli`, `Form pubblici`, `Invii e statistiche`, `WhatsApp`, `Impostazioni email`.
+- La gerarchia visuale e piu pulita: contenitore unico chiaro, divisori verticali, stato attivo su superficie bianca con accento inferiore, hover discreto sugli altri elementi.
+- Il layout resta responsive ma non diventa una barra a scorrimento: su desktop si dispone in 5 colonne, su viewport piu stretti va a griglia.
+- Verifica: `npm --prefix frontend run build` OK.
 
-## Plan (Evolution Lite custom patch for chats/history - Mar 19, 2026)
-- [x] Ispezionare l'upstream ufficiale Evolution API Lite sui path `contacts/chats/messages` e riprodurre la root cause di `findChats` / persistenza storica insufficiente
-- [x] Definire una patch minima mantenibile e costruire una nostra immagine Docker custom derivata da Lite
-- [x] Integrare l'immagine custom nello stack/deploy ASSONAM senza allargare inutilmente la superficie env
-- [x] Deployare su Hetzner, verificare DB `evolution`, stato container, endpoint utili e comportamento live
-- [x] Documentare esito reale, limiti residui e impatto sulla UX tipo WhatsApp Web
+- [x] Mappare e rifinire l'architettura UI di `Comunicazioni` per separare chiaramente library/lista e editing full-page di `Modelli` e `Campagne`
+- [x] Rifattorizzare `MessagesHub` in editor dedicati a tutta larghezza, senza sidebar stretta con scroll interno, mantenendo API e logica esistenti
+- [x] Introdurre il concetto esplicito di `Automazioni WhatsApp` con builder leggibile, summary in linguaggio naturale e collegamento form/template/numero
+- [x] Esporre le automazioni collegate dentro il dettaglio/configurazione di ciascun form con stati ON/OFF e azioni di configurazione
+- [x] Aggiornare copy e microcopy per chiarire origine trigger, destinatario, sorgente numero e template WhatsApp
+- [x] Eseguire verifiche mirate backend/frontend e documentare review finale con eventuali migration richieste e checklist QA manuale
 
-## Review (Evolution Lite custom patch for chats/history - Mar 19, 2026)
-- Root cause upstream confermata sul repo Lite `d6131d7`: `findChats` legge dal DB ma `messages.upsert/messages.update` non garantiscono la creazione delle righe `Chat`, quindi sul live avevamo `Message > 0` e `Chat = 0`.
-- Ho introdotto una custom image Docker `assonam/evolution-api-lite:custom` costruita da `docker/evolution-lite/Dockerfile`, che clona/pinna l'upstream Lite, applica una patch minima tramite `scripts/patch_evolution_lite.js` e ricompila l'immagine senza allargare la superficie env esterna.
-- Patch upstream applicata in due punti: `channel.service.ts` ora backfilla le `Chat` a partire dai `Message` esistenti e restituisce `findChats` con alias corretti; `whatsapp.baileys.service.ts` ora chiama `ensureChatRecord(...)` durante `messages.upsert/messages.update`, cosi le chat future vengono persistite subito.
-- L'overlay [docker-compose.evolution-lite.yml](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti__evolution_push\docker-compose.evolution-lite.yml) usa ora la custom image con `build:` server-side, mantenendo le sole env esterne gia fissate e derivando internamente solo i flag runtime necessari di Evolution Lite.
-- Verifica live su Hetzner completata dopo deploy della custom image: `app-evolution-api-1` `running healthy 0`, `POST /chat/findChats/assonam-org-2` ritorna 4 chat reali, e il DB `evolution` e passato da `Chat=0` a `Chat=4` mantenendo `Message=23`.
-- Verifica live lato ASSONAM completata: per `Golden Filippini Qualificati SRLS` (`org_id=2`) `/api/org-admin/communications/whatsapp/chats` ora restituisce 5 thread locali e `/api/org-admin/communications/whatsapp/chats/{chat_id}/messages` restituisce cronologia reale (nel check live, 10 messaggi sul primo thread).
-- Limite residuo reale: la parita completa con WhatsApp Web non esiste ancora. La patch sblocca chat e storico recente osservabile, ma i `Contact.pushName` che arrivano da Lite restano spesso vuoti e la profondita storica dipende da cio che Baileys/Evolution riescono davvero a sincronizzare nella sessione, quindi i nomi contatto e l'import completo totale non sono ancora garantiti come nel client ufficiale.
-
-## Plan (WhatsApp auto-messages on form submissions - Mar 19, 2026)
-- [x] Mappare submit pubblico, CRUD forms e workspace org-admin per scegliere il punto corretto di configurazione
-- [x] Decidere il posizionamento prodotto: automazioni WhatsApp per-form dentro `Form pubblici`, non nelle campagne bulk
-- [x] Estendere schema/API forms con configurazione WhatsApp automatica sperimentale e template personalizzabili
-- [x] Collegare il trigger al submit pubblico usando il service WhatsApp esistente e mantenendo ASSONAM come source of truth
-- [x] Aggiornare la UI org-admin del form con setup, anteprima variabili e toggle per l'automazione
-- [ ] Verificare con test backend, typecheck/build frontend, push e deploy live su Hetzner
-
-## Review (WhatsApp auto-messages on form submissions - Mar 19, 2026)
-- La configurazione degli auto-messaggi WhatsApp e stata messa nel tab `Impostazioni` del singolo form, non nelle campagne bulk, perche il trigger reale e il submit del modulo e non un invio massivo.
-- Il modello `forms` ora salva due soli campi additivi: toggle sperimentale `whatsapp_auto_reply_enabled` e template `whatsapp_auto_reply_template`, con migration Alembic dedicata e repair idempotente in `init_db.py`.
-- Il submit pubblico ora prova ad inviare un messaggio WhatsApp automatico solo se la feature flag `ENABLE_WHATSAPP_EVOLUTION` e attiva, l'associazione ha una connessione Evolution gia `connected` e il numero viene risolto da form -> booking -> socio.
-- Il renderer template WhatsApp usa sia variabili curate (`{{nome_contatto}}`, `{{titolo_form}}`, `{{data_prenotazione}}`, ecc.) sia direttamente le `field_key` del form, cosi i copy restano personalizzabili senza introdurre un sistema template separato.
-- L'invio riusa la pipeline locale ASSONAM (`chat` + `message` nel DB) e non rende il submit fragile: eventuali errori WhatsApp vengono loggati senza far fallire la submission del form.
-- UI aggiornata in `Form pubblici` con card `WhatsApp automatico`, toggle, textarea template, caricamento rapido del template base e chips per inserire variabili sistema/campi del form.
-- Verifiche locali eseguite: `python -m py_compile app/services/whatsapp_automation.py app/services/forms.py app/routes/public.py app/routes/org_admin.py app/models.py init_db.py`, `pytest tests/test_forms_module.py -q`, `pytest tests/test_org_admin_whatsapp.py -q`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `python -m alembic upgrade head`.
-
-## Review (WhatsApp Web-like layout + contact import pass - Mar 18, 2026)
-- UI WhatsApp rifatta con canvas dark a due colonne, sidebar chat-first, ricerca, filtri rapidi, header thread e composer in basso per avvicinare molto di piu il comportamento percepito a WhatsApp Web.
-- Sidebar ora fonde chat locali ASSONAM e contatti importati da Evolution Lite, cosi i contatti gia noti possono comparire anche prima del primo messaggio locale.
-- Backend esteso per sync contatti -> chat stub locali e per apertura thread da contatto/numero senza invio immediato, mantenendo ASSONAM come source of truth applicativa.
-- Client Evolution aggiornato per richiedere anche webhook `contacts/chats` e per paginare i contatti oltre la prima pagina, invece di fermarsi ai primi 100 record.
-- Overlay Docker Evolution Lite aggiornato con flag interni di persistenza `contacts/chats/messages/historic`, senza introdurre nuove env esterne oltre al setup minimo gia fissato.
-- Verifiche locali eseguite: `python -m py_compile app/routes/whatsapp_evolution.py app/services/whatsapp_evolution.py app/services/whatsapp_sync.py`, `pytest tests/test_org_admin_whatsapp.py -q`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
-
-- [x] Verificare perché l'inbound WhatsApp non entra ancora in modo affidabile dopo la connessione live
-- [x] Mappare gli endpoint Evolution Lite disponibili per lista chat e cronologia recente importabile
-- [x] Estendere backend WhatsApp con sync iniziale chat + finestra cronologica recente senza perdere ASSONAM come source of truth
-- [x] Rifinire la UI inbox per comportamento più vicino a WhatsApp Web, con refresh chat/thread e meno input manuale
-- [ ] Verificare su server reale e pushare la passata "WhatsApp Web-like"
-
-## Review (WhatsApp Web-like inbox pass - Mar 18, 2026)
-- Verifica live completata: i webhook inbound da Evolution Lite arrivano correttamente ad ASSONAM (`messages.upsert` / `send.message` 200), quindi il gap principale non era il trasporto ma l'inbox locale/UX.
-- Root cause frontend corretta in `WhatsAppHub.tsx`: il polling era attivo solo in fase QR e `loadContacts()` leggeva uno state `connection` stale, quindi una sessione gia connessa poteva sembrare vuota anche con risposte gia sincronizzate nel DB locale.
-- Inbox resa piu vicina a un uso chat reale: mentre `connected`, la UI ora refresha periodicamente stato connessione, lista chat e thread selezionato; i contatti recenti vengono ricaricati subito e poi in polling dedicato.
-- Backend esteso con route `POST /api/org-admin/communications/whatsapp/draft-chat` per creare/riusare un thread locale senza invio immediato, cosi l'utente puo aprire una chat da numero o da contatto e poi scrivere dal composer principale.
-- UI aggiornata con CTA `Apri chat` e selezione diretta dei `Contatti recenti`: il click su un contatto ora apre o seleziona il thread locale invece di limitarsi a precompilare i campi.
-- Limite upstream esplicitato dal test reale: `Evolution Lite` nel setup minimale attuale non espone in modo affidabile una vera importazione storica stile WhatsApp Web; `findChats` e rotto upstream e il DB `evolution` non sta persistendo `Chat`/`Message`, quindi la vista completa resta best-effort sui thread osservati da ASSONAM + contatti recenti.
-- Verifiche locali eseguite: `python -m py_compile app/routes/whatsapp_evolution.py app/services/whatsapp_evolution.py app/services/whatsapp_sync.py`, `pytest tests/test_org_admin_whatsapp.py -q`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
-
-- [x] Aggiungere un path org-admin per avviare una nuova chat WhatsApp verso numero diretto quando l'inbox locale è ancora vuota
-- [x] Rendere la UI WhatsApp utilizzabile anche senza chat pregresse sincronizzate, con form minima `numero + testo`
-- [x] Verificare backend/frontend e pushare la correzione sul branch di deploy
-
-- [x] Aggiungere persistenza WhatsApp org-scoped con migration Alembic (`WhatsAppConnection`, `WhatsAppChat`, `WhatsAppMessage`)
-- [x] Implementare client Evolution Lite, service layer di sync e webhook interno ASSONAM
-- [x] Esporre API org-admin `Comunicazioni > WhatsApp` per connection state, connect/qr/disconnect, chat list, thread e send text
-- [x] Integrare la tab WhatsApp nella UI org-admin Comunicazioni con inbox a 2 colonne e composer testuale
-- [x] Predisporre il service futuro per candidati invio WhatsApp da form submission senza attivare automazioni globali
-- [x] Coprire il flusso con test backend mirati, verifiche frontend e review finale
-
-## Review (WhatsApp Evolution Lite org-admin integration - Mar 18, 2026)
-- Implementati modelli `WhatsAppConnection`, `WhatsAppChat`, `WhatsAppMessage` con migration Alembic dedicata e bootstrap idempotente in `init_db.py`.
-- Aggiunti client Evolution Lite, webhook interno Docker-only, sync locale di stato/QR/chat/thread e deduplica minima lato ASSONAM.
-- Esposte API org-admin sotto `/api/org-admin/communications/whatsapp` per connection, connect, QR, disconnect, chat list, thread e invio testo.
-- Integrata la tab `Comunicazioni > WhatsApp` con badge sperimentale, stato connessione, QR, inbox a 2 colonne, polling QR e composer testuale.
-- Preparato il service passivo `prepare_form_submission_whatsapp_candidate(...)` e agganciato in modo non attivo al submit pubblico solo come predisposizione futura.
-- Verifiche eseguite: `python -m alembic upgrade head`, `pytest tests/test_org_admin_whatsapp.py -q`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
-
-## Review (WhatsApp first chat usability fix - Mar 18, 2026)
-- Root cause confermata nel test reale: con connessione già attiva, la UI mostrava solo chat osservate via webhook e il composer richiedeva una chat selezionata, quindi il primo invio outbound era impossibile.
-- Backend esteso con route org-admin `POST /api/org-admin/communications/whatsapp/outbound` che crea/riusa una chat locale da numero, salva il messaggio outbound e invia subito via Evolution Lite.
-- Service layer aggiornato con helper per derivare `external_chat_id` da numero e creare in modo idempotente la prima chat locale senza attendere webhook inbound.
-- UI WhatsApp aggiornata con pannello `Nuova chat` nella colonna sinistra (`numero`, `nome contatto opzionale`, `testo`) che avvia la conversazione, seleziona il thread creato e mantiene poi il composer classico per le risposte.
-- Verifiche eseguite: `python -m py_compile app/routes/whatsapp_evolution.py app/services/whatsapp_sync.py app/services/whatsapp_evolution.py`, `pytest tests/test_org_admin_whatsapp.py -q`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
-- [x] Analizzare workflow `deploy-hetzner`, compose Docker, catena env/secrets e configurazione Postgres effettiva per l'integrazione Evolution API Lite
-- [x] Aggiungere Evolution API Lite come servizio Docker separato con sole env minime richieste e collegamento al Postgres esistente su DB `evolution`
-- [x] Estendere workflow/file di deploy per propagare le nuove env ASSONAM/Evolution senza introdurre variabili superflue
-- [x] Aggiornare il backend ASSONAM con le sole env applicative richieste (`ENABLE_WHATSAPP_EVOLUTION`, `EVOLUTION_API_BASE_URL`, `EVOLUTION_API_KEY`)
-- [x] Documentare setup, secret manuali, coerenza valori e procedura di verifica in `docs/whatsapp-evolution-lite-setup.md`
-- [x] Eseguire intervento su Hetzner: creare DB `evolution` se assente, deployare, verificare stato/log/health di Evolution Lite e correggere eventuali errori
-
-## Review (Evolution API Lite integration - Mar 18, 2026)
-- Workflow individuato in `.github/workflows/deploy-hetzner.yml`; stack Docker esistente confermato su `docker-compose.yml` + `docker-compose.prod.yml`, con runtime server in `/opt/assonam/app` su Hetzner `157.90.31.105`.
-- Aggiunto overlay dedicato `docker-compose.evolution-lite.yml` che introduce il solo servizio `evolution-api` basato su `atendai/evolution-api-lite:latest`, collegato al Postgres esistente tramite DB separato `evolution`, senza Redis, senza subdominio e senza env esterne extra oltre alle 5 richieste.
-- Per compatibilita con l'immagine ufficiale Lite ho mantenuto il file env esterno minimale e derivato solo internamente, via `entrypoint`, i valori runtime che l'immagine si aspetta davvero all'avvio (`DATABASE_URL` da `DATABASE_CONNECTION_URI` e `SERVER_TYPE=http`).
-- Backend ASSONAM aggiornato in modo additivo con sole 3 env applicative richieste: `ENABLE_WHATSAPP_EVOLUTION`, `EVOLUTION_API_BASE_URL`, `EVOLUTION_API_KEY`.
-- Workflow deploy aggiornato per: renderizzare `secrets/evolution-api-lite.env`, creare/verificare il DB `evolution`, includere l'overlay Evolution solo quando abilitato, e verificare sia health container sia reachability interna `/` e `/verify-creds`.
-- Intervento server eseguito: DB `evolution` confermato presente, `.env` runtime ASSONAM aggiornato, `secrets/evolution-api-lite.env` generato, overlay deployato e container `app-evolution-api-1` portato a stato `healthy`.
-- Debug effettivo completato su server: primo crash per `DATABASE_PROVIDER` mancante nello shell env dell'immagine, secondo per `DATABASE_URL` non esportato, terzo per `SERVER_TYPE` sovrascritto a `undefined` in modalita Docker. Risolto tutto senza ampliare la superficie env richiesta.
-- Verifiche finali reali eseguite su Hetzner:
-- `docker inspect app-evolution-api-1` -> `running healthy 0`
-- `GET http://evolution-api:8080/` dal container `web` -> `200`
-- `POST http://evolution-api:8080/verify-creds` dal container `web` con `EVOLUTION_API_KEY` -> `200` / `Credentials are valid`
-
-- [x] Verificare se la label del tema visivo entra davvero nell'email finale
-- [x] Rimuovere dal renderer email i badge "Comunicazione moderna / Invito evento / ..."
-- [x] Verificare il render HTML finale su tutti i layout email
-
-## Review (Theme badge removal in email render - Mar 18, 2026)
-- Root cause confermata in [email_templates.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\services\email_templates.py): il renderer backend aggiungeva un `badge_html` con label di layout (`Comunicazione moderna`, `Invito evento`, `Promemoria rinnovo`, ecc.), quindi la scritta compariva davvero sia nella preview sia nell'email inviata ai soci.
-- Fix applicato alla radice: rimosso il badge dal renderer HTML finale mantenendo solo gli stili del tema (sfondi, bordi, colori CTA e blocchi contenuto).
-- Verifica eseguita su tutti i layout `modern`, `institutional`, `elegant`, `event`, `reminder`: nessuna delle label di tema compare piu nell'HTML prodotto.
-- Verifica browser live aggiuntiva sul composer `Nuova campagna` step `Aspetto`: l'iframe `Email preview` non contiene piu nessuno dei badge rimossi; evidenza salvata in `tasks/screenshots/communications-composer-no-theme-badge-20260318.png`.
-- Check tecnici: `python -m py_compile app/services/email_templates.py` OK; smoke Python sul renderer `decorate_rendered_email(...)` OK (`EMAIL_BADGE_REMOVED_OK`).
-
-- [x] Verificare live il workspace Comunicazioni su overview, campagne, composer e invii/statistiche
-- [x] Correggere gli ultimi residui visivi/encoding emersi nella Panoramica
-- [x] Eseguire typecheck/build frontend dopo i fix
-- [x] Salvare evidenze screenshot desktop/mobile e preparare push del pacchetto Comunicazioni
-
-## Review (Communications live verification + push - Mar 18, 2026)
-- Fix visivo finale in [CommunicationsOverview.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\components\communications\CommunicationsOverview.tsx): freccia quick action convertita in `->` e separatore stato mittente convertito in `/` per eliminare ogni rischio di resa incoerente lato browser.
-- Verifica browser live eseguita su server locale `http://127.0.0.1:8010` con sessione org-admin reale firmata come middleware applicativo, coprendo:
-- overview Comunicazioni
-- lista Campagne
-- composer dedicato `Nuova campagna`
-- `Invii e statistiche` in vista lista
-- dettaglio invio con preview reale
-- composer mobile step 1
-- Controllo anti-mojibake eseguito sul testo renderizzato delle viste verificate: nessun residuo `â`, `Â`, `Ã`, `�`.
-- Evidenze salvate in:
-- `tasks/screenshots/communications-overview-desktop-live-20260318.png`
-- `tasks/screenshots/communications-campaigns-list-desktop-live-20260318.png`
-- `tasks/screenshots/communications-composer-step1-desktop-live-20260318.png`
-- `tasks/screenshots/communications-deliveries-list-desktop-live-20260318.png`
-- `tasks/screenshots/communications-deliveries-detail-desktop-live-20260318.png`
-- `tasks/screenshots/communications-composer-step1-mobile-live-20260318.png`
-- Verifiche tecniche: `npm --prefix frontend run typecheck` OK, `npm --prefix frontend run build` OK, smoke browser Playwright custom OK.
+## Review (ASSONAM Comunicazioni + WhatsApp automation UX - Mar 19, 2026)
+- `Comunicazioni` ora separa chiaramente library e editing: `Campagne` e `Modelli` restano in vista lista, mentre l'editing avviene in un workspace full-page dedicato con header operativo, colonne ampie, sezioni grandi e senza sidebar stretta con scroll interno.
+- `MessagesHub` e il rendering email sono stati estesi in modo incrementale, mantenendo storage e logica esistenti ma aggiungendo preset visuali, branding esplicito, blocchi opzionali, CTA/linking piu leggibili e anteprima integrata nel flusso.
+- Nuova sezione `WhatsApp > Automazioni` con builder leggibile, copy esplicita su origine/evento/destinatario/numero/template e riassunto naturale della regola.
+- I form pubblici ora espongono `Automazioni collegate` nel dettaglio/configurazione con card ON/OFF per email, WhatsApp, admin notification e reminder, oltre alla relazione WhatsApp descritta in linguaggio naturale.
+- Backend introdotto in modo minimale con nuova tabella `whatsapp_automations`, endpoints CRUD dedicati e serializzazione delle automazioni dentro il payload Forms senza rompere le API esistenti di template/campagne.
+- Migration richiesta: applicare `alembic/versions/c7d8e9f0a1b2_add_whatsapp_automations.py`.
+- Verifiche eseguite: `npm --prefix frontend run build` OK; `python -m pytest -q tests/test_org_admin_communications.py tests/test_forms_module.py` OK (`23 passed`).
+- QA manuale suggerita:
+- Aprire `Comunicazioni > Modelli` e `Comunicazioni > Campagne`, entrare in modifica e verificare che tutto l'editing principale avvenga nel flusso pagina senza pannelli stretti scrollabili.
+- Creare/modificare una automazione WhatsApp, cambiare form/trigger/sorgente numero e controllare aggiornamento del riassunto naturale e del filtro per form.
+- Aprire un form pubblico in `Comunicazioni > Moduli` e verificare la presenza di `Automazioni collegate`, stati ON/OFF e deep-link verso `tab=whatsapp`.
 
 - [x] Analizzare il video reference `Baton_Draft_02_Final.mp4` e fissare i pattern da replicare (durata ~50s, demo UI orizzontale, gradient teal, zoom lenti, cursor, CTA finale)
 - [x] Definire 3 varianti ASSONAM focalizzate su procedura guidata per ads Google/Meta con copy e scene distinti ma stesso linguaggio visivo
@@ -250,22 +130,6 @@
 - Root cause probabile: DB senza colonne branding (`club_display_name`, `card_email_subject`, `card_logo_url`) + startup strict con `SKIP_CREATE_ALL=1`
 - Fix in `init_db.py`: aggiunta auto-riparazione colonne branding su `organizations` prima delle query modello
 - Smoke check: `python -m uvicorn app.main:app --host 127.0.0.1 --port 8099 --log-level debug` avvia correttamente (errore solo su porta gia in uso locale)
-
-## WhatsApp connect runtime fix (Mar 18, 2026)
-- [x] Riprodurre il failure runtime del pulsante `Connetti` e verificare risposta/log del backend
-- [x] Correggere il client Evolution Lite usando i prefissi route reali dell'upstream (`/instance`, `/message`, `/webhook`)
-- [x] Coprire la regressione con test mirato sulle URL chiamate dal client
-- [x] Derivare nel container Evolution Lite il flag interno minimo necessario per inizializzare l'auth state e spostare il pairing sulla chiamata `connect`
-- [x] Rendere idempotente il retry di `Connetti` quando l'istanza Evolution esiste gia e il payload upstream risponde `already in use` dentro un `403 Forbidden`
-- [x] Pushare la fix sul branch che attiva il deploy GitHub Actions
-- [x] Verificare deploy e smoke test live del connect su Hetzner
-
-## Review (WhatsApp connect runtime fix - Mar 18, 2026)
-- Root cause finale del retry failure: Evolution Lite rispondeva `403 Forbidden` con il vero dettaglio annidato (`This name "assonam-org-2" is already in use.`), ma il client ASSONAM estraeva solo il campo top-level `error`, quindi `ensure_instance()` non riconosceva il caso idempotente e il pulsante `Connetti` falliva al secondo click.
-- Hotfix applicato in `app/services/whatsapp_evolution.py`: parsing difensivo del dettaglio annidato (`message` / `response` / `detail` / `error`) e riuso del fallback gia presente per trattare correttamente i casi `already exists / already in use`.
-- Regressione coperta in `tests/test_org_admin_whatsapp.py` con test dedicato sul payload `403` di Evolution Lite.
-- Push effettuato sul branch di deploy `feat/redesign-landing-wizard` con commit live `d10da99`.
-- Verifica reale su Hetzner completata per l'org `Golden Filippini Qualificati SRLS`: `GET /connection` -> `qr_required`, `POST /connect` -> `200 OK`, `GET /qr` -> `200 OK`, QR ancora presente e nessun `502`.
 
 ---
 - [x] Limitare watermark/logo e naming speciale alla sola org `oasi-2`
@@ -3618,10 +3482,8 @@ pm --prefix frontend run build OK.
 pm --prefix frontend run build e documentare review finale
 ## Review (Theme contrast hardening public + dashboard - Mar 12, 2026)
 - Ho normalizzato i CTA pubblici principali su tn-primary / tn-ghost nelle entry point che esponevano il problema di contrasto (Home, navbar/mobile menu del layout pubblico, lista associazioni). In questo modo le CTA non ereditano più il colore link globale di 	heme.css, quindi non finiscono con fondo scuro e testo teal/nero quando devono essere pulsanti.
-- In 
-rontend/src/theme.css ho collegato anche i token --public-* al sistema tema shared e ho aggiunto override tematici per public-footer, public-faq-button, public-faq-icon e public-faq-answer-text. Questo elimina il footer bianco fisso in dark mode e rende leggibile la sezione FAQ/accordion nelle pagine pubbliche.
-- Sempre in 
-rontend/src/theme.css ho esteso il compatibility layer dark per utility usate ancora nelle dashboard e nelle hero card (g-slate-50/70-90, g-slate-100/70-90, g-slate-200/70, nuove varianti order-slate-200/*, order-slate-950/*, divide-slate-200, hover/table wrappers g-slate-*). Lo scopo e coprire i contenitori/card interne che rimanevano chiare o incoerenti senza inseguire patch file-per-file.
+- In rontend/src/theme.css ho collegato anche i token --public-* al sistema tema shared e ho aggiunto override tematici per public-footer, public-faq-button, public-faq-icon e public-faq-answer-text. Questo elimina il footer bianco fisso in dark mode e rende leggibile la sezione FAQ/accordion nelle pagine pubbliche.
+- Sempre in rontend/src/theme.css ho esteso il compatibility layer dark per utility usate ancora nelle dashboard e nelle hero card (g-slate-50/70-90, g-slate-100/70-90, g-slate-200/70, nuove varianti order-slate-200/*, order-slate-950/*, divide-slate-200, hover/table wrappers g-slate-*). Lo scopo e coprire i contenitori/card interne che rimanevano chiare o incoerenti senza inseguire patch file-per-file.
 - Verifiche eseguite: 
 pm --prefix frontend run build OK; screenshot locali da build preview con Playwright in 	asks/screenshots/home-light-20260312.png, 	asks/screenshots/home-dark-20260312.png, 	asks/screenshots/home-dark-tall-20260312.png. Nel check visuale homepage dark risultano leggibili FAQ e footer, e le CTA pubbliche non mostrano più il contrasto errato.
 - Dopo il primo check visuale ho corretto anche la hero shell di /associazioni, che restava troppo chiara per via di wrapper/gradient light-only. Verifica aggiuntiva con service worker bloccati: 	asks/screenshots/associazioni-dark-20260312.png mostra ora la sezione introduttiva coerente con la dark mode.
@@ -3759,136 +3621,3 @@ pm --prefix frontend run build.
 - In `frontend/src/pages/super-admin/components/OrganizationManageModal.tsx` il Super Admin vede ora la sezione “Numerazione tessere”, il default `Condivisa ASSONAM` in create org, lo stato “Modificabile liberamente” vs “Configurazione sensibile”, il warning storico e la conferma esplicita prima del cambio modalita.
 - Ho esteso anche i path di bootstrap/riparazione SQLite in `init_db.py`, `app/scripts/repair_sqlite.py` e `tests/conftest.py` per evitare drift sugli ambienti dev/test che non passano subito da Alembic.
 - Verifiche eseguite: `python -m pytest -q tests/test_card_assignment.py tests/test_super_admin_numbering_scopes.py tests/test_super_admin_card_lot_management.py` OK (`16 passed`); `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK.
-## Controlled ASSONAM shared-pool legacy adoption (Mar 17, 2026)
-- [x] Implementare service/script operativo con allowlist esplicita e modalita `--dry-run` di default
-- [x] Analizzare org allowlisted, batch legacy/scoped, conflitti e proiezione del prossimo numero senza scrivere dati
-- [x] Applicare in modo idempotente solo link org e batch legacy deterministici verso `ASSONAM_CENTRAL`
-- [x] Lasciare invariati i members storici e documentare esplicitamente i batch released solo come `reported_only`
-- [x] Aggiungere test backend mirati per dry-run, blocker sensibili, apply idempotente e preservazione progressione lotti
-- [x] Eseguire pytest mirato e review finale con procedura operativa/rollback logico
-
-## Review (Controlled ASSONAM shared-pool legacy adoption - Mar 17, 2026)
-- Ho aggiunto `app/services/shared_scope_migration.py`, un motore riusabile che lavora solo su allowlist esplicita, produce report strutturato `dry-run/apply`, classifica i batch (`legacy_active_candidate`, `legacy_inactive_candidate`, `released_sensitive`, `ambiguous`, `already_scoped`) e applica solo org/batch deterministici verso `ASSONAM_CENTRAL`.
-- Lo script operativo `app/scripts/migrate_assonam_shared_scope.py` usa `--dry-run` di default, legge allowlist JSON/CSV, supporta `--apply`, `--org-id`, `--report-out` e `--fail-on-ambiguous`, e ora puo essere eseguito sia come modulo sia come file diretto.
-- La procedura non tocca mai i `members` storici: nessun backfill di `members.numbering_scope_id`, nessuna modifica di `card_no`, `batch_id`, `card_year`, login, email o wallet. I batch released vengono sempre riportati nel report e mai migrati automaticamente in apply.
-- Ho corretto il controllo overlap del dry-run per confrontare solo batch dello stesso anno e per segnalare solo conflitti che coinvolgono almeno un batch candidato, evitando falsi positivi dovuti a overlap storici preesistenti nello scope centrale non inclusi nella migrazione.
-- I test in `tests/test_assonam_shared_scope_migration.py` coprono dry-run sicuro, overlap che blocca l'apply, released sensitive `reported_only`, apply idempotente e preservazione della progressione lotto->lotto; ho isolato i dati del modulo per evitare interferenze dal database test condiviso.
-- Verifiche eseguite: `python -m pytest -q tests/test_assonam_shared_scope_migration.py tests/test_super_admin_numbering_scopes.py tests/test_card_assignment.py` OK (`18 passed`); `python -m py_compile app/services/numbering_scopes.py app/services/shared_scope_migration.py app/scripts/migrate_assonam_shared_scope.py tests/test_assonam_shared_scope_migration.py` OK; `python app/scripts/migrate_assonam_shared_scope.py --help` OK.
-- Dry-run operativo locale eseguito con allowlist draft `tasks/assonam_shared_allowlist.local.json` e report `tasks/reports/assonam_shared_local_dry_run.json`: `My Awesome Association` risulta `safe_to_apply` con comportamento identico previsto, mentre `Golden Age Club` risulta `unsafe_to_apply` per differenza di comportamento atteso (oggi nessun batch legacy, domani userebbe il batch shared centrale 100-200).
-- Dry-run reale eseguito sul DB Hetzner Postgres via tunnel SSH verso `157.90.31.105` usando allowlist draft `tasks/assonam_shared_allowlist.hetzner-draft.json` e report `tasks/reports/assonam_shared_hetzner_dry_run.json`: `Golden Age Club - Speakeasy` (`org_id=6`) e `TAG CULTURE` (`org_id=8`) sono entrambi safe se migrati singolarmente, ma il dry-run combinato segnala `TAG` come `unsafe_to_apply` perche il prossimo numero cambierebbe da `25660` a `18662` condividendo subito lo scope con i batch gia riallineati di `Golden Age`.
-- Pilot apply reale eseguito solo su `Golden Age Club - Speakeasy` (`org_id=6`) nel DB Hetzner: collegata l'organizzazione a `ASSONAM_CENTRAL` e riallineati esclusivamente i batch `7`, `8`, `9`, `39`, senza toccare alcun `member` storico o `TAG` (`org_id=8`).
-- Verifica post-apply su Hetzner completata con report `tasks/reports/assonam_shared_hetzner_org6_post_apply_verification.json`: fingerprint membri invariato, `members_with_scope` ancora `0`, `current_next` ancora `18662` su `batch_id=7`, `next_after_current_exhausted` ancora `25701` su `batch_id=39`, `org_id=8` rimasta con `numbering_scope_id = NULL`.
-
-## Review (Shared scope allocator per-org fix - Mar 17, 2026)
-- Ho corretto `app/services/card_allocation.py` per fare allocazione scoped solo sui batch della stessa org: `_allocate_next_card_scoped()` ora usa batch filtrati da `org_id + numbering_scope_id`, mentre `release_card_number()` cerca e riavvolge solo batch della org chiamante.
-- In `app/services/shared_scope_migration.py` il dry-run/apply simula ora la selezione batch per-org invece che per scope globale; questo preserva la classificazione shared e i controlli overlap scope-based, ma evita ogni allocazione cross-org tra affiliate ASSONAM shared.
-- In `app/routes/super_admin.py` la lettura e il listing lotti del Super Admin tornano per-org anche quando la org e shared; `check_card_overlap()` resta scope-based per bloccare range sovrapposti tra org nello stesso scope.
-- Ho aggiunto test mirati in `tests/test_super_admin_numbering_scopes.py` e `tests/test_assonam_shared_scope_migration.py` per garantire che due org nello stesso scope non peschino batch l'una dell'altra, che la progressione lotto->lotto resti interna alla stessa org, che `release_card_number()` non tocchi batch di altre org e che `TAG` resti `safe_to_apply` con `current_next/projected_next = 25660` dopo il pilot su `Golden`.
-- Verifiche eseguite: `python -m pytest -q tests/test_super_admin_numbering_scopes.py tests/test_assonam_shared_scope_migration.py tests/test_super_admin_card_lot_management.py tests/test_card_assignment.py` OK (`26 passed`).
-- Dry-run reale post-fix su Hetzner eseguito solo per `org_id=8` con report `tasks/reports/assonam_shared_hetzner_org8_post_fix_dry_run.json` e controllo manuale `tasks/reports/assonam_shared_hetzner_org8_post_fix_manual_check.json`: `safe_to_apply = true`, prossimo numero invariato `25660`, batch attivo invariato `37`, stesso esito di progressione dopo esaurimento, nessun overlap rilevante e nessuna collisione numerica nello scope `ASSONAM_CENTRAL`.
-
-## Comunicazioni UX redesign (Mar 17, 2026)
-- [x] Mappare la sezione Comunicazioni attuale, i componenti riusabili e i vincoli dei payload/backend gia esistenti
-- [x] Rifattorizzare l'information architecture con i tab `Panoramica`, `Campagne`, `Modelli`, `Form pubblici`, `Invii e statistiche`, `Impostazioni email` mantenendo compatibilita con il routing/query legacy
-- [x] Spezzare `MessagesHub` in componenti piu piccoli e introdurre naming UI piu chiaro con adapter frontend verso i campi legacy (`name`, `cta_label`, `hero_image_url`, `linked_form_id`, ecc.)
-- [x] Implementare il nuovo composer guidato a step per le campagne con wizard progressivo, microcopy obbligatorie e spiegazione esplicita del comportamento del modulo collegato
-- [x] Costruire una preview email reale con viste desktop/mobile/testo/mock data riusando l'endpoint di preview gia disponibile e aggiungere il riepilogo laterale campagna
-- [x] Sostituire i campi tecnici URL con controlli guidati di aspetto/layout e introdurre almeno 4 layout email predefiniti lato frontend
-- [x] Riorganizzare overview, modelli, invii/statistiche e integrazione mentale tra `Form pubblici` e campagne senza rompere il workspace form esistente
-- [x] Eseguire `npm --prefix frontend run typecheck` e `npm --prefix frontend run build`, poi documentare review, compromessi e TODO backend residui
-
-## Review (Comunicazioni UX redesign - Mar 17, 2026)
-- `frontend/src/pages/org-admin/OrgAdminCommunications.tsx` ora espone la nuova IA con i tab `Panoramica`, `Campagne`, `Modelli`, `Form pubblici`, `Invii e statistiche`, `Impostazioni email`, mantenendo compatibilita con i query param legacy (`messaggi`, `invio-email`, ecc.) e supportando launch intent via URL (`intent`, `formId`, `templateId`).
-- `frontend/src/pages/org-admin/components/communications/CommunicationsOverview.tsx` e stata ridisegnata come vera dashboard editoriale: hero chiara, 4 quick action card, KPI `campagne inviate / bozze / form attivi / risposte`, e box `Stato invio email` con CTA verso impostazioni.
-- `frontend/src/pages/org-admin/components/communications/MessagesHub.tsx` e stato riscritto come workspace unico ma separato per `Campagne`, `Modelli` e `Invii`: wizard step-by-step, CTA selector, layout picker, preview reale desktop/mobile/testo/mock, libreria modelli distinta, cards invii/statistiche e summary sidebar.
-- Per non rompere il backend ho introdotto un adapter additivo sul `design_json`: in `frontend/src/lib/api.ts` e `app/services/email_templates.py` ora sono supportati anche `button_color`, `hide_logo`, `email_title`, `cta_kind`, `cta_url`, `layout_key`, mantenendo compatibilita con le campagne/template esistenti e migliorando il renderer email reale.
-- `frontend/src/pages/org-admin/OrgAdminForms.tsx` ora mostra anche un box `Comunicazioni collegate` nel dettaglio form con azioni `Crea invito email`, `Copia link pubblico`, `Anteprima pagina pubblica`, cosi il legame mentale form -> campagna e piu esplicito.
-- Naming UX e microcopy aggiornati nel nuovo flusso: `Messaggi -> Campagne`, `Nome interno -> Nome campagna`, `Programma invio -> Data e ora di invio`, `Form collegato -> Azione del pulsante / Modulo collegato`, copy obbligatorie per modulo collegato, logo email, immagine intestazione e testo pulsante.
-- Compromesso esplicito: `Invia anteprima a me` e presente come UI/hook ma non esegue ancora l'invio reale; mostra un TODO backend chiaro per un endpoint dedicato alla preview della campagna corrente.
-- Compromesso tecnico: gli upload immagine guidati lato email riusano il pattern `base64` gia usato nel form builder. Funziona per preview e payload attuale, ma per massima compatibilita email production-grade conviene introdurre un upload asset dedicato e URL pubblici serviti dal backend.
-- Verifiche eseguite: `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK; `python -m py_compile app/services/email_templates.py app/routes/org_admin.py` OK.
-## Communications simplification pass (Mar 18, 2026)
-- [x] Ridurre `Panoramica` a titolo compatto, 3 metriche e 3 quick actions, eliminando hero e box ridondanti
-- [x] Separare `Campagne` in viste distinte lista vs dettaglio/composer, evitando compresenza di elenco, wizard e preview
-- [x] Rendere il composer una vista dedicata con editor principale e preview live sticky laterale
-- [x] Rafforzare la personalizzazione email con temi visivi, preset font, hero image guidata, blocchi opzionali e stili CTA distinti
-- [x] Aggiornare preview/rendering in modo che rifletta davvero le nuove scelte visuali senza rompere il payload backend esistente
-- [x] Eseguire verifiche frontend/backend mirate e documentare review + TODO residui
-
-## Review (Communications simplification pass - Mar 18, 2026)
-- `Panoramica` e stata ridotta a una schermata compatta: titolo piccolo, 3 metriche, 3 quick actions e stato invio email sintetico senza hero esteso o card narrative ridondanti.
-- `Campagne` ora ha tre stati distinti nello stesso route workspace senza rompere la IA esistente: elenco principale focalizzato sull'azione, dettaglio dedicato con preview separata e composer immersivo con editor a sinistra + preview sticky a destra.
-- Il composer non mostra piu elenco, dettaglio rapido e preview nello stesso canvas: ogni task ha una sola vista dominante, con back esplicito verso elenco o dettaglio.
-- La personalizzazione email e stata resa piu concreta con temi `Istituzionale`, `Moderno`, `Elegante`, `Evento`, `Reminder`, preset font, stili CTA, gestione hero image guidata e blocchi opzionali reali (`immagine`, `box evidenza`, `dettagli evento`, `firma`, `nota finale`).
-- Il renderer backend email ora supporta in modo additivo i nuovi campi `font_preset`, `cta_style`, `secondary_image_url`, `highlight_*`, `event_details`, `signature_*`, `final_note`, mantenendo compatibilita con i layout storici tramite mapping `essential -> modern`, `invitation -> event`, `renewal -> reminder`.
-- Verifiche eseguite: `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK; `python -m py_compile app/services/email_templates.py app/routes/org_admin.py` OK.
-
-## Dedicated campaign flow shell (Mar 18, 2026)
-- [x] Riesaminare il flusso iscrizione soci esistente e fissare i pattern UX da riusare per il composer campagne
-- [x] Separare davvero lista campagne e composer a livello di shell/query routing, mantenendo `Campagne` come elenco puro
-- [x] Creare una vista dedicata per nuova/modifica campagna con stepper centrato e canvas principale focalizzato
-- [x] Ridurre il composer a una procedura guidata centrata, mostrando la preview in modo prominente solo negli step finali
-- [x] Allineare overview/form pubblici e gli entry point rapidi per aprire direttamente la nuova vista composer
-- [x] Eseguire typecheck/build/py_compile e documentare review, compromessi e TODO residui
-
-## Review (Dedicated campaign flow shell - Mar 18, 2026)
-- `frontend/src/pages/org-admin/OrgAdminCommunications.tsx` ora separa davvero le shell: la vista standard mantiene tab + lista, mentre `tab=campagne&mode=create|edit` apre un composer dedicato, senza tab, senza blocchi laterali e senza convivenza con l'elenco.
-- `frontend/src/pages/org-admin/components/communications/MessagesHub.tsx` continua a riusare la logica esistente, ma il ramo campagne in lista e stato ridotto a elenco + ricerca + CTA `Nuova campagna`; il composer e stato riallestito come flusso centrato con stepper esplicito in alto e preview prominente solo negli step `Aspetto`, `Anteprima` e `Invio`.
-- Il riferimento UX al flusso iscrizione soci e stato tradotto in: shell centrata, progressione visiva chiara, una sola card principale per step e azioni di avanzamento/ritorno coerenti.
-- Gli entry point rapidi ora aprono direttamente la vista dedicata del composer: quick actions della panoramica e CTA `Crea invito email` dal dettaglio modulo pubblico.
-- Ho chiuso anche il gap funzionale lato backend con update additivo della campagna: `app/services/email_campaigns.py`, `app/routes/org_admin.py` e `frontend/src/lib/api.ts` supportano ora `PUT /communications/campaigns/{id}`, cosi il flusso `Modifica campagna` aggiorna la bozza o la programmata esistente invece di creare sempre una nuova copia.
-- Compromesso residuo: il composer dedicato resta nello stesso componente `MessagesHub` per limitare il refactor e preservare compatibilita; la separazione e a livello di shell/route query e UX, non ancora come file dedicato autonomo.
-- TODO residuo: `Invia anteprima a me` mostra ancora il gancio UI ma richiede un endpoint backend dedicato per l'invio reale della preview al mittente autenticato.
-- Verifiche eseguite: `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK; `python -m py_compile app/services/email_templates.py app/services/email_campaigns.py app/routes/org_admin.py` OK.
-
-## Communications browser smoke verification (Mar 18, 2026)
-- [x] Verificare la disponibilita di strumenti browser locali e il percorso piu affidabile per uno smoke test visuale
-- [x] Avviare frontend/backend locali o riusare server gia attivi per la verifica Comunicazioni
-- [x] Eseguire smoke desktop sulle schermate Campagne, composer dedicato e overview
-- [x] Eseguire smoke mobile sulle stesse schermate e verificare stepper, leggibilita e CTA
-- [x] Salvare evidenze e documentare eventuali problemi o limiti residui
-
-## Review (Communications browser smoke verification - Mar 18, 2026)
-- Verifica browser reale eseguita in locale su `http://127.0.0.1:8010` con Playwright headless e sessione org-admin autenticata tramite magic link temporaneo, sia desktop sia mobile.
-- Durante il primo smoke la preview live del composer falliva localmente per `403 CSRF blocked (origin mismatch)` quando il frontend chiamava `/api/org-admin/communications/templates/preview` da `127.0.0.1:8010`; fix applicato in `app/middleware.py` aggiungendo l'origine runtime `request.base_url` alla allowlist locale CSRF.
-- La preview email e stata poi verificata con contenuto reale compilato nel wizard: oggetto, titolo, body, CTA custom e iframe renderer visibile negli step `Aspetto` e `Anteprima`.
-- Desktop: overview compatta, lista campagne pulita e composer dedicato leggibile; la preview laterale/finale risulta coerente con il contenuto inserito e non convive piu con la lista.
-- Mobile: il primo smoke ha evidenziato un problema UX reale nello stepper, con label sovrapposte e step attivo non chiaramente visibile; il componente `CampaignWizardStepper` e stato corretto con rail mobile dedicato, label corte e auto-scroll verso lo step corrente.
-- Evidenze salvate in `tasks/screenshots/`:
-- `communications-overview-desktop-20260318.png`
-- `communications-campaigns-list-desktop-20260318.png`
-- `communications-composer-appearance-desktop-20260318.png`
-- `communications-composer-preview-desktop-20260318.png`
-- `communications-overview-mobile-20260318.png`
-- `communications-campaigns-list-mobile-20260318.png`
-- `communications-composer-appearance-mobile-20260318.png`
-- `communications-composer-preview-mobile-20260318.png`
-- `communications-composer-stepper-mobile-20260318.png`
-- Verifiche eseguite: `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK; `python -m py_compile app/middleware.py` OK; `node tasks/tmp/communications-smoke.js` OK.
-
-## Production incident triage (Mar 18, 2026)
-- [x] Identificare host e branch realmente deployati su ASSONAM
-- [x] Accedere al server via SSH root e ispezionare stato container/log
-- [x] Individuare la causa del `502`
-- [x] Applicare hotfix minimo sicuro e ripristinare i servizi
-- [x] Portare la fix anche sul branch deployato per evitare regressione al prossimo deploy
-
-## Review (Production incident triage - Mar 18, 2026)
-- Host di produzione verificato via SSH: `157.90.31.105`, app in `/opt/assonam/app`, branch deployato `feat/redesign-landing-wizard`, commit attivo prima del fix `f4bc23c`.
-- Causa del `502`: `app-web-1` e `app-email-worker-1` erano in restart loop per `SyntaxError: f-string expression part cannot include a backslash` in `app/services/email_templates.py` durante l'import di startup.
-- Hotfix applicato sostituendo l'f-string annidata nel blocco firma con una variabile intermedia `signature_role_html`; verifica locale eseguita con `python -m py_compile app/services/email_templates.py app/services/email_campaigns.py app/routes/org_admin.py app/main.py`.
-- Ripristino produzione eseguito via SSH: file corretto sincronizzato su server, rebuild `docker compose up -d --build web email-worker low-cards-worker`, health check locale `http://127.0.0.1:8000/health` OK e health esterno `https://assonam.it/health` OK.
-- Stato finale verificato: `app-web-1`, `app-email-worker-1` e `app-low-cards-worker-1` up/healthy; resta nei log un warning separato in `init_db.py` su `COALESCE types boolean and integer cannot be matched` per `forms`, ma non blocca lo startup e non e la causa del `502`.
-- La fix e stata anche pushata sul branch realmente deployato con commit `128643f`, cosi il prossimo deploy non reintroduce il crash.
-
-## Communications cleanup pass (Mar 18, 2026)
-- [x] Semplificare `Invii e statistiche` eliminando la convivenza stabile tra lista, dettaglio e preview
-- [x] Ripulire i simboli corrotti nel composer nuova campagna e nei copy di supporto
-- [x] Verificare che il file `MessagesHub.tsx` torni compilabile dopo il refactor
-
-## Review (Communications cleanup pass - Mar 18, 2026)
-- `frontend/src/pages/org-admin/components/communications/MessagesHub.tsx` ora mostra `Invii e statistiche` come flusso piu pulito: lista focalizzata con filtri di stato e dettaglio separato, invece della vecchia schermata mista con elenco, metriche, dettaglio e preview insieme.
-- Le card degli invii sono state rese piu sintetiche e orientate all'azione: informazioni essenziali nel listato, dettaglio completo solo dopo click, preview reale confinata nella vista dettaglio.
-- Il composer campagna e stato ripulito dai simboli corrotti visibili negli step, soprattutto nelle CTA, nello stepper e nelle azioni finali.
-- Durante la correzione e stato necessario riparare anche alcuni duplicati/escape introdotti dai replace automatici nel file principale; il risultato finale e di nuovo valido a livello TSX.
-- Verifiche eseguite: `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK.
