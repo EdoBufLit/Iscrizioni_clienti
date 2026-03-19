@@ -185,9 +185,9 @@ function emptyTableDraft(roomId: number | null = null) {
 
 function MetricBox({ label, value }: { label: string; value: number }) {
   return (
-    <div className="theme-card-muted rounded-[1.3rem] px-4 py-4">
-      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-2 text-3xl font-bold text-slate-950">{value}</p>
+    <div className="rounded-[1.25rem] bg-slate-50 p-5 ring-1 ring-inset ring-slate-200/60 transition-all hover:bg-slate-100/50">
+      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">{label}</p>
+      <p className="mt-2 text-3xl font-light tracking-tight text-slate-900">{value}</p>
     </div>
   );
 }
@@ -757,25 +757,26 @@ export default function OrgAdminBookings() {
   return (
     <div className="container-shell py-8 md:py-10">
       <div className="mx-auto max-w-[92rem] space-y-6">
-        <section className="surface-strong rounded-[2rem] p-3">
+        <section className="bg-slate-50/50 rounded-[2rem] p-3 ring-1 ring-inset ring-slate-200/60">
           <div className="grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] xl:items-center">
-            <div className="grid gap-3 md:grid-cols-4">
+            {/* Modern, horizontal, scrollable tab navigation without heavy borders */}
+            <nav className="flex gap-1 overflow-x-auto px-1 pb-1 scrollbar-hide">
               {sectionTabs.map((tab) => (
                 <button
                   key={tab.key}
                   type="button"
                   onClick={() => setSection(tab.key)}
-                  className={`rounded-[1.6rem] border px-4 py-4 text-left transition ${
+                  className={`whitespace-nowrap rounded-full px-5 py-3 text-sm font-medium transition-all ${
                     section === tab.key
-                      ? "border-slate-950 bg-slate-950 text-white"
-                      : "border-slate-200 bg-slate-50/70 text-slate-700 hover:border-slate-300 hover:bg-slate-100/70"
+                      ? "bg-slate-900 text-white shadow-sm"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                   }`}
                 >
-                  <p className="text-sm font-bold tracking-tight">{tab.label}</p>
-                  <p className={`mt-1 text-xs leading-5 ${section === tab.key ? "text-white/70" : "text-slate-500"}`}>{tab.hint}</p>
+                  <span className="block">{tab.label}</span>
+                  <span className={`block mt-0.5 text-[10px] uppercase tracking-wider ${section === tab.key ? "text-white/60" : "text-slate-500"}`}>{tab.hint}</span>
                 </button>
               ))}
-            </div>
+            </nav>
             <div className="grid gap-3 sm:grid-cols-4">
               <MetricBox label="Form booking" value={forms.length} />
               <MetricBox label="Nel mese" value={monthOccupancy.total} />
@@ -840,31 +841,31 @@ export default function OrgAdminBookings() {
                     setSelectedRoomId(null);
                     setRoomDraft(emptyRoomDraft());
                   }}
-                  className={`rounded-[1.6rem] border border-dashed p-5 text-center transition min-h-[140px] flex flex-col items-center justify-center ${
+                  className={`rounded-[1.25rem] p-6 text-center transition-all min-h-[140px] flex flex-col items-center justify-center ${
                     !roomDraft.id && !selectedRoomId
-                      ? "border-slate-900 bg-slate-950 text-white"
-                      : "border-slate-300 bg-slate-50 text-slate-600 hover:border-slate-400"
+                      ? "bg-slate-900 text-white shadow-md scale-[1.02]"
+                      : "bg-slate-50/50 ring-1 ring-inset ring-slate-200/60 border-dashed hover:-translate-y-1 hover:shadow-sm hover:bg-slate-50"
                   }`}
                 >
-                  <p className="font-semibold text-lg">+ Aggiungi nuova sala</p>
+                  <p className="font-medium text-lg">+ Aggiungi nuova sala</p>
                 </button>
                 {rooms.map((room) => (
-                    <button
-                      key={room.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedRoomId(room.id);
-                        setRoomDraft({ id: room.id, name: room.name, is_active: room.is_active });
-                      }}
-                      className={`rounded-[1.6rem] border p-5 text-left transition ${
-                        roomDraft.id === room.id ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-slate-50 hover:border-slate-300"
-                      }`}
-                    >
-                      <p className="text-xl font-semibold tracking-tight">{room.name}</p>
-                      <p className={`mt-2 text-sm ${roomDraft.id === room.id ? "text-white/72" : "text-slate-500"}`}>
-                        {room.is_active ? "Sala attiva" : "Sala in pausa"}
-                      </p>
-                    </button>
+                  <button
+                    key={room.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedRoomId(room.id);
+                      setRoomDraft({ id: room.id, name: room.name, is_active: room.is_active });
+                    }}
+                    className={`rounded-[1.25rem] p-6 text-left transition-all ${
+                      roomDraft.id === room.id ? "bg-slate-900 text-white shadow-md scale-[1.02]" : "bg-slate-50 ring-1 ring-inset ring-slate-200/60 hover:-translate-y-1 hover:shadow-sm hover:bg-slate-50"
+                    }`}
+                  >
+                    <p className="text-xl font-medium tracking-tight">{room.name}</p>
+                    <p className={`mt-2 text-sm ${roomDraft.id === room.id ? "text-slate-300" : "text-slate-500"}`}>
+                      {room.is_active ? "Sala attiva" : "Sala in pausa"}
+                    </p>
+                  </button>
                   ))
                 }
               </div>
@@ -906,16 +907,16 @@ export default function OrgAdminBookings() {
                         setSelectedMapTableId(table.id);
                         setTableDraft({ id: table.id, room_id: table.room_id, name: table.name, capacity: table.capacity, shape: table.shape, pos_x: table.pos_x, pos_y: table.pos_y, width: table.width ?? 94, height: table.height ?? 94, is_active: table.is_active, is_out_of_service: table.is_out_of_service });
                       }}
-                      className={`w-full rounded-[1.4rem] border p-4 text-left transition ${
-                        tableDraft.id === table.id ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-slate-50 hover:border-slate-300"
+                      className={`w-full rounded-[1.25rem] p-5 text-left transition-all ${
+                        tableDraft.id === table.id ? "bg-slate-900 text-white shadow-md scale-[1.02]" : "bg-slate-50 ring-1 ring-inset ring-slate-200/60 hover:-translate-y-1 hover:shadow-sm hover:bg-slate-50"
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center justify-between gap-4">
                         <div>
-                          <p className="text-lg font-semibold">{table.name}</p>
-                          <p className={`mt-1 text-sm ${tableDraft.id === table.id ? "text-white/72" : "text-slate-500"}`}>{table.shape} - {table.capacity} posti</p>
+                          <p className="text-lg font-medium tracking-tight">{table.name}</p>
+                          <p className={`mt-1 text-sm ${tableDraft.id === table.id ? "text-slate-300" : "text-slate-500"}`}>{table.shape} &bull; {table.capacity} posti</p>
                         </div>
-                        <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${occupancyTone(table.occupancy_state)}`}>{occupancyLabel(table.occupancy_state)}</span>
+                        <span className={`rounded-full px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.2em] ${tableDraft.id === table.id ? "bg-slate-50/20 text-white" : occupancyTone(table.occupancy_state)}`}>{occupancyLabel(table.occupancy_state)}</span>
                       </div>
                     </button>
                   ))
@@ -1125,7 +1126,7 @@ export default function OrgAdminBookings() {
             />
           </Field>
 
-          <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
+          <div className="flex justify-end gap-3 border-t ring-slate-200/60 pt-4">
             <button 
               type="button" 
               onClick={() => setIsCreatingManual(false)} 
@@ -1148,40 +1149,68 @@ export default function OrgAdminBookings() {
 }
 
 function EmptyState({ message }: { message: string }) {
-  return <div className="theme-card-muted rounded-[1.6rem] border-dashed px-5 py-10 text-center text-sm text-slate-500">{message}</div>;
+  return (
+    <div className="rounded-[1.25rem] bg-slate-50/50 p-8 text-center ring-1 ring-inset ring-slate-200/60 border-dashed">
+      <p className="text-sm font-medium text-slate-500">{message}</p>
+    </div>
+  );
 }
 
 function ActionRow({ primaryLabel, secondaryLabel, onPrimary, onSecondary, busy }: { primaryLabel: string; secondaryLabel: string; onPrimary: () => void; onSecondary: () => void; busy: boolean; }) {
-  return <div className="flex gap-3"><button type="button" onClick={onPrimary} disabled={busy} className="btn-primary flex-1 !rounded-[1rem] !px-4 !py-2.5 text-sm font-semibold">{primaryLabel}</button><button type="button" onClick={onSecondary} disabled={busy} className="btn-ghost !rounded-[1rem] !px-4 !py-2.5 text-sm font-semibold">{secondaryLabel}</button></div>;
+  return (
+    <div className="flex gap-3 pt-4 border-t border-slate-100">
+      <button type="button" onClick={onPrimary} disabled={busy} className="btn-primary flex-1 !rounded-full text-sm font-semibold">
+        {primaryLabel}
+      </button>
+      <button type="button" onClick={onSecondary} disabled={busy} className="btn-secondary !rounded-full px-5 text-sm font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50">
+        {secondaryLabel}
+      </button>
+    </div>
+  );
 }
 
 function ManagementShell({ title, subtitle, main, side }: { title: string; subtitle: string; main: React.ReactNode; side: React.ReactNode }) {
-  return <section className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_360px]"><div className="surface-strong rounded-[2rem] p-6"><p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">{title}</p><h2 className="mt-2 font-serif text-3xl tracking-tight text-slate-950">{subtitle}</h2><div className="mt-6">{main}</div></div><aside className="surface-strong rounded-[2rem] p-5">{side}</aside></section>;
+  return (
+    <section className="grid gap-8 xl:grid-cols-[minmax(0,1.2fr)_360px]">
+      <div className="rounded-[2rem] bg-slate-50 p-8 ring-1 ring-inset ring-slate-200/60 shadow-sm">
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">{title}</p>
+        <h2 className="mt-2 text-2xl font-light tracking-tight text-slate-900">{subtitle}</h2>
+        <div className="mt-8">{main}</div>
+      </div>
+      <aside className="rounded-[2rem] bg-slate-50/50 p-6 ring-1 ring-inset ring-slate-200/60 h-fit sticky top-6">
+        {side}
+      </aside>
+    </section>
+  );
 }
 
 function BookingCard({ booking, selected, onSelect, compact = false }: { booking: AssociationBooking; selected: boolean; onSelect: (id: number) => void; compact?: boolean }) {
   return (
-    <button type="button" onClick={() => onSelect(booking.id)} className={`w-full rounded-[1.4rem] border p-4 text-left transition ${selected ? "border-slate-950 bg-slate-950 text-white" : compact ? "border-slate-200 bg-slate-50/70 hover:border-slate-300 hover:bg-slate-100/70" : "border-slate-200 bg-slate-50/70 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-100/70"}`}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <button type="button" onClick={() => onSelect(booking.id)} className={`w-full rounded-[1.25rem] p-5 text-left transition-all ${selected ? "bg-slate-900 text-white shadow-md scale-[1.02]" : compact ? "bg-slate-50 ring-1 ring-inset ring-slate-200/60 hover:bg-slate-50" : "bg-slate-50 ring-1 ring-inset ring-slate-200/60 hover:-translate-y-1 hover:shadow-sm"}`}>
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-lg font-semibold">{booking.customer_name}</h3>
-            <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${selected ? "bg-white/12 text-white" : toneForStatus(booking.status)}`}>{formatStatusLabel(booking.status)}</span>
+          <div className="flex flex-wrap items-center gap-3">
+            <h3 className="text-lg font-medium tracking-tight">{booking.customer_name}</h3>
+            <span className={`rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.2em] ${selected ? "bg-slate-50/20 text-white" : toneForStatus(booking.status)}`}>{formatStatusLabel(booking.status)}</span>
           </div>
-          <p className={`mt-2 text-sm ${selected ? "text-white/72" : "text-slate-500"}`}>{formatDateTime(booking.booking_date, booking.booking_time)}</p>
+          <p className={`mt-1.5 text-sm ${selected ? "text-slate-300" : "text-slate-500"}`}>{formatDateTime(booking.booking_date, booking.booking_time)}</p>
         </div>
-        <div className={`rounded-[1rem] px-3 py-2 text-sm ${selected ? "bg-white/8 text-white/82" : "bg-slate-100 text-slate-600"}`}>{booking.party_size || "-"} persone</div>
+        <div className={`rounded-full px-4 py-1.5 text-sm font-medium ${selected ? "bg-slate-50/10 text-white" : "bg-slate-100 text-slate-700"}`}>
+          {booking.party_size || "-"} pax
+        </div>
       </div>
       {!compact && (
-        <div className={`mt-4 grid gap-3 md:grid-cols-4 ${selected ? "text-white/80" : "text-slate-600"}`}>
-          <div><p className="text-[11px] uppercase tracking-[0.18em] opacity-70">Form</p><p className="mt-1 font-semibold">{booking.source_form?.title || "N/D"}</p></div>
-          <div><p className="text-[11px] uppercase tracking-[0.18em] opacity-70">Contatto</p><p className="mt-1 font-semibold">{booking.customer_email || booking.customer_phone || "N/D"}</p></div>
-          <div><p className="text-[11px] uppercase tracking-[0.18em] opacity-70">Sala</p><p className="mt-1 font-semibold">{booking.room?.name || "Da assegnare"}</p></div>
-          <div><p className="text-[11px] uppercase tracking-[0.18em] opacity-70">Tavolo</p><p className="mt-1 font-semibold">{booking.table?.name || "Da assegnare"}</p></div>
+        <div className={`mt-6 grid gap-4 border-t pt-4 md:grid-cols-4 ${selected ? "border-white/10" : "border-slate-100"}`}>
+          <div><p className={`text-[10px] uppercase tracking-[0.2em] ${selected ? "text-slate-500" : "text-slate-500"}`}>Form</p><p className={`mt-1 text-sm font-medium ${selected ? "text-white" : "text-slate-900"}`}>{booking.source_form?.title || "N/D"}</p></div>
+          <div><p className={`text-[10px] uppercase tracking-[0.2em] ${selected ? "text-slate-500" : "text-slate-500"}`}>Contatto</p><p className={`mt-1 text-sm font-medium ${selected ? "text-white" : "text-slate-900"}`}>{booking.customer_email || booking.customer_phone || "N/D"}</p></div>
+          <div><p className={`text-[10px] uppercase tracking-[0.2em] ${selected ? "text-slate-500" : "text-slate-500"}`}>Sala</p><p className={`mt-1 text-sm font-medium ${selected ? "text-white" : "text-slate-900"}`}>{booking.room?.name || "Da assegnare"}</p></div>
+          <div><p className={`text-[10px] uppercase tracking-[0.2em] ${selected ? "text-slate-500" : "text-slate-500"}`}>Tavolo</p><p className={`mt-1 text-sm font-medium ${selected ? "text-white" : "text-slate-900"}`}>{booking.table?.name || "Da assegnare"}</p></div>
         </div>
       )}
       {!compact && booking.notes_preview ? (
-        <p className={`mt-4 text-sm leading-6 ${selected ? "text-white/68" : "text-slate-500"}`}>{booking.notes_preview}</p>
+        <div className={`mt-4 rounded-xl p-3 text-sm ${selected ? "bg-slate-50/5 text-slate-300" : "bg-slate-50 text-slate-600"}`}>
+          <p className="line-clamp-2">{booking.notes_preview}</p>
+        </div>
       ) : null}
     </button>
   );
@@ -1225,67 +1254,66 @@ function AgendaSection(props: {
 
   return (
     <>
-      <section className="space-y-6">
-        <div className="surface-strong rounded-[2.2rem] p-6">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+      <section className="space-y-8">
+        <div className="rounded-[2rem] bg-slate-50 p-8 ring-1 ring-inset ring-slate-200/60 shadow-sm">
+          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between border-b border-slate-100 pb-8">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.28em] text-slate-500">Calendario prenotazioni</p>
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <button type="button" onClick={() => props.setAgendaMonth(shiftMonth(props.agendaMonth, -1))} className="btn-ghost !rounded-full !px-4 !py-2 text-sm font-semibold">
-                  Mese precedente
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Calendario</p>
+              <div className="mt-3 flex flex-wrap items-center gap-4">
+                <button type="button" onClick={() => props.setAgendaMonth(shiftMonth(props.agendaMonth, -1))} className="btn-secondary !rounded-full !px-5 !py-2.5 text-sm font-medium transition-all hover:-translate-x-0.5">
+                  &larr;
                 </button>
                 <div>
-                  <h2 className="font-serif text-4xl tracking-tight text-slate-950">{formatMonthLabel(props.agendaMonth)}</h2>
-                  <p className="mt-1 text-sm text-slate-500">Ogni casella mostra le prenotazioni del giorno. Clicca per aprire il popup operativo.</p>
+                  <h2 className="text-3xl font-light tracking-tight text-slate-900 capitalize">{formatMonthLabel(props.agendaMonth)}</h2>
                 </div>
-                <button type="button" onClick={() => props.setAgendaMonth(shiftMonth(props.agendaMonth, 1))} className="btn-ghost !rounded-full !px-4 !py-2 text-sm font-semibold">
-                  Mese successivo
+                <button type="button" onClick={() => props.setAgendaMonth(shiftMonth(props.agendaMonth, 1))} className="btn-secondary !rounded-full !px-5 !py-2.5 text-sm font-medium transition-all hover:translate-x-0.5">
+                  &rarr;
                 </button>
               </div>
             </div>
-            <div className="grid gap-3 md:grid-cols-4 xl:min-w-[40rem]">
-              <Field label="Mese">
-                <select className={inputClass} value={monthIndex} onChange={(event) => props.setAgendaMonth(setMonthYear(props.agendaMonth, monthYear, Number(event.target.value)))}>
+            <div className="flex flex-wrap gap-4 items-center">
+              <div className="w-40">
+                <select className="w-full rounded-full border-0 bg-slate-50 py-2.5 pl-4 pr-10 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-200/60 hover:bg-slate-100 focus:ring-2 focus:ring-slate-900 transition-all" value={monthIndex} onChange={(event) => props.setAgendaMonth(setMonthYear(props.agendaMonth, monthYear, Number(event.target.value)))}>
                   {monthOptions.map((label, index) => (
                     <option key={label} value={index}>{label}</option>
                   ))}
                 </select>
-              </Field>
-              <Field label="Anno">
-                <select className={inputClass} value={monthYear} onChange={(event) => props.setAgendaMonth(setMonthYear(props.agendaMonth, Number(event.target.value), monthIndex))}>
+              </div>
+              <div className="w-28">
+                <select className="w-full rounded-full border-0 bg-slate-50 py-2.5 pl-4 pr-10 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-200/60 hover:bg-slate-100 focus:ring-2 focus:ring-slate-900 transition-all" value={monthYear} onChange={(event) => props.setAgendaMonth(setMonthYear(props.agendaMonth, Number(event.target.value), monthIndex))}>
                   {props.agendaYearOptions.map((year) => (
                     <option key={year} value={year}>{year}</option>
                   ))}
                 </select>
-              </Field>
-              <Field label="Stato">
-                <select className={inputClass} value={props.statusFilter} onChange={(event) => props.setStatusFilter(event.target.value)}>
-                  <option value="">Tutti</option>
+              </div>
+              <div className="w-36">
+                <select className="w-full rounded-full border-0 bg-slate-50 py-2.5 pl-4 pr-10 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-200/60 hover:bg-slate-100 focus:ring-2 focus:ring-slate-900 transition-all" value={props.statusFilter} onChange={(event) => props.setStatusFilter(event.target.value)}>
+                  <option value="">Tutti gli stati</option>
                   {bookingStatuses.map((status) => <option key={status} value={status}>{formatStatusLabel(status)}</option>)}
                 </select>
-              </Field>
-              <Field label="Form sorgente">
-                <select className={inputClass} value={props.formFilter} onChange={(event) => props.setFormFilter(event.target.value ? Number(event.target.value) : "")}>
-                  <option value="">Tutti i form booking</option>
+              </div>
+              <div className="w-48">
+                <select className="w-full rounded-full border-0 bg-slate-50 py-2.5 pl-4 pr-10 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-200/60 hover:bg-slate-100 focus:ring-2 focus:ring-slate-900 transition-all" value={props.formFilter} onChange={(event) => props.setFormFilter(event.target.value ? Number(event.target.value) : "")}>
+                  <option value="">Tutti i form</option>
                   {props.forms.map((form) => <option key={form.id} value={form.id}>{form.title}</option>)}
                 </select>
-              </Field>
+              </div>
             </div>
           </div>
-          <div className="mt-6 grid gap-3 md:grid-cols-4">
+          <div className="mt-8 grid gap-4 md:grid-cols-4">
             <MetricBox label="Prenotazioni mese" value={props.monthOccupancy.total} />
             <MetricBox label="Da confermare" value={props.monthOccupancy.pending} />
             <MetricBox label="Confermate" value={props.monthOccupancy.confirmed} />
             <MetricBox label="Servite" value={props.monthOccupancy.completed} />
           </div>
         </div>
-        <div className="surface-strong rounded-[2.2rem] p-4">
-          <div className="grid grid-cols-7 gap-2 border-b border-slate-200 px-2 pb-3">
+        <div className="rounded-[2rem] bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60 shadow-sm">
+          <div className="grid grid-cols-7 gap-2 border-b ring-slate-200/60 px-2 pb-4">
             {["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"].map((label) => (
-              <div key={label} className="px-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">{label}</div>
+              <div key={label} className="px-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">{label}</div>
             ))}
           </div>
-          <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-7">
+          <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-7">
             {props.monthGrid.map((day) => {
               const dateKey = toDateKey(day);
               const items = props.bookingsByDay.get(dateKey) ?? [];
@@ -1301,32 +1329,36 @@ function AgendaSection(props: {
                     props.setSelectedCalendarDate(dateKey);
                     props.setSelectedBookingId(items[0]?.id ?? null);
                   }}
-                  className={`min-h-[11.5rem] rounded-[1.8rem] border p-3 text-left transition ${
+                  className={`relative flex min-h-[140px] flex-col rounded-[1.25rem] p-4 text-left transition-all ${
                     isSelected
-                        ? "border-slate-950 bg-slate-950 text-white shadow-[0_18px_60px_rgba(15,23,42,0.18)]"
-                        : isCurrentMonth
-                        ? "border-slate-200 bg-slate-50/70 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-100/70 hover:shadow-[0_18px_45px_rgba(15,23,42,0.08)]"
-                        : "border-slate-100 bg-slate-50/70 text-slate-400"
+                      ? "bg-slate-900 text-white shadow-md scale-105 z-10"
+                      : isCurrentMonth
+                        ? "bg-slate-50 ring-1 ring-inset ring-slate-200/60 hover:-translate-y-1 hover:shadow-sm"
+                        : "bg-slate-50/50 text-slate-500 opacity-60 ring-1 ring-inset ring-slate-200/40 hover:opacity-100"
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-2">
+                  <div className="flex w-full items-start justify-between">
                     <div>
-                      <p className={`text-[11px] font-bold uppercase tracking-[0.2em] ${isSelected ? "text-white/60" : "text-slate-400"}`}>{formatWeekdayCell(day)}</p>
-                      <p className={`mt-1 text-2xl font-bold tracking-tight ${isSelected ? "text-white" : "text-slate-950"}`}>{day.getDate()}</p>
+                      <p className={`text-[9px] font-bold uppercase tracking-[0.2em] ${isSelected ? "text-slate-500" : "text-slate-500"}`}>{formatWeekdayCell(day)}</p>
+                      <p className={`mt-1 text-2xl font-light tracking-tight ${isSelected ? "text-white" : "text-slate-900"}`}>{day.getDate()}</p>
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       {isToday ? (
-                        <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${isSelected ? "bg-white/12 text-white" : "bg-sky-100 text-sky-700"}`}>Oggi</span>
+                        <span className={`rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.2em] ${isSelected ? "bg-slate-50/20 text-white" : "bg-sky-100 text-sky-700"}`}>Oggi</span>
                       ) : null}
-                      <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${isSelected ? "bg-white/12 text-white" : items.length > 0 ? "bg-slate-100 text-slate-700" : "bg-slate-100/70 text-slate-400"}`}>
-                        {items.length} pren.
-                      </span>
+                      {items.length > 0 && (
+                        <span className={`rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.2em] ${isSelected ? "bg-slate-50/20 text-white" : "bg-slate-100 text-slate-700"}`}>
+                          {items.length} pax
+                        </span>
+                      )}
                     </div>
                   </div>
-                  <div className="mt-4 space-y-2">
+                  <div className="mt-4 w-full space-y-1.5 flex-1 flex flex-col justify-end">
                     {items.length === 0 ? (
-                      <div className={`rounded-[1rem] border border-dashed px-3 py-4 text-center text-xs ${isSelected ? "border-white/14 text-white/62" : "border-slate-200 text-slate-400"}`}>
-                        Nessuna prenotazione
+                      <div className="flex items-center justify-center flex-1">
+                        <span className={`text-[10px] uppercase tracking-wider ${isSelected ? "text-white/40" : "text-slate-500"}`}>
+                          Vuoto
+                        </span>
                       </div>
                     ) : (
                       <>
@@ -1339,18 +1371,23 @@ function AgendaSection(props: {
                               props.setSelectedCalendarDate(dateKey);
                               props.setSelectedBookingId(booking.id);
                             }}
-                            className={`w-full rounded-[1rem] border px-3 py-2 text-left transition ${isSelected ? "border-white/14 bg-white/8 text-white hover:bg-white/12" : "border-slate-200 bg-slate-50/70 text-slate-700 hover:border-slate-300 hover:bg-slate-100/70"}`}
+                            className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-xs font-medium transition-all ${
+                              isSelected
+                                ? booking.id === props.selectedBookingId
+                                  ? "bg-slate-50 text-slate-900 shadow-sm"
+                                  : "bg-slate-50/10 text-white hover:bg-slate-50/20"
+                                : "bg-slate-50 text-slate-700 hover:bg-slate-100"
+                            }`}
                           >
-                            <div className="flex items-center justify-between gap-3">
-                              <p className="truncate text-sm font-semibold">{booking.customer_name}</p>
-                              <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${isSelected ? "bg-white/12 text-white" : toneForStatus(booking.status)}`}>{booking.booking_time || "--:--"}</span>
-                            </div>
-                            <p className={`mt-1 truncate text-xs ${isSelected ? "text-white/68" : "text-slate-500"}`}>{booking.party_size || "-"} persone · {booking.source_form?.title || "Form booking"}</p>
+                            <span className="truncate pr-2 text-left">{booking.customer_name}</span>
+                            <span className={isSelected ? (booking.id === props.selectedBookingId ? "text-slate-500" : "text-white/60") : "text-slate-500"}>{(booking.booking_time || "00:00").slice(0, 5)}</span>
                           </button>
                         ))}
-                        {items.length > 3 ? (
-                          <div className={`rounded-[1rem] px-3 py-2 text-xs font-semibold ${isSelected ? "bg-white/8 text-white/75" : "bg-slate-100 text-slate-600"}`}>+{items.length - 3} altre prenotazioni</div>
-                        ) : null}
+                        {items.length > 3 && (
+                          <p className={`mt-2 text-center text-[10px] font-bold uppercase tracking-[0.2em] ${isSelected ? "text-slate-500" : "text-slate-500"}`}>
+                            +{items.length - 3} altre
+                          </p>
+                        )}
                       </>
                     )}
                   </div>
@@ -1372,16 +1409,16 @@ function AgendaSection(props: {
         sizeClassName="max-w-6xl"
         contentClassName="overflow-hidden p-0"
       >
-        <div className="grid lg:grid-cols-[320px_minmax(0,1fr)]">
-          <div className="border-b border-slate-200 bg-white p-6 lg:border-b-0 lg:border-r">
-            <div className="flex items-center justify-between gap-3">
+        <div className="grid lg:grid-cols-[360px_minmax(0,1fr)] bg-slate-50 min-h-[600px]">
+          <div className="bg-slate-50 border-b ring-slate-200/60 lg:border-b-0 lg:border-r p-6 overflow-y-auto max-h-[80vh]">
+            <div className="flex items-center justify-between gap-4 pb-6 border-b border-slate-100">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">Giornata</p>
-                <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{props.selectedCalendarDate ? formatDate(props.selectedCalendarDate) : "Nessuna data"}</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Giornata</p>
+                <p className="mt-1 text-2xl font-light tracking-tight text-slate-900">{props.selectedCalendarDate ? formatDate(props.selectedCalendarDate) : "Nessuna data"}</p>
               </div>
-              <div className="rounded-[1rem] bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">{props.activeDayItems.length} pren.</div>
+              <div className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600">{props.activeDayItems.length} pren.</div>
             </div>
-            <div className="mt-5 space-y-3">
+            <div className="mt-6 space-y-3">
               {props.activeDayItems.length === 0 ? (
                 <EmptyState message="Nessuna prenotazione per questo giorno." />
               ) : (
@@ -1391,7 +1428,7 @@ function AgendaSection(props: {
               )}
             </div>
           </div>
-          <div className="bg-slate-50/70 p-6">
+          <div className="p-8 lg:p-10 overflow-y-auto max-h-[80vh]">
             <BookingDetailPanel
               selectedBooking={props.selectedBooking}
               rooms={props.rooms}
@@ -1426,43 +1463,84 @@ function BookingDetailPanel(props: {
   saving: string;
 }) {
   if (!props.selectedBooking) {
-    return <div className="theme-card-muted rounded-[1.8rem] border-dashed px-6 py-12 text-center text-sm text-slate-500">Seleziona una prenotazione dal popup per vedere dettaglio, stato e assegnazione tavolo.</div>;
+    return <div className="rounded-[1.25rem] bg-slate-50/50 p-8 text-center ring-1 ring-inset ring-slate-200/60 border-dashed text-sm text-slate-500">Seleziona una prenotazione dal popup per vedere dettaglio, stato e assegnazione tavolo.</div>;
   }
 
   return (
-    <div className="space-y-4">
-      <div className="surface-strong rounded-[1.8rem] p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="space-y-6">
+      <div className="rounded-[2rem] bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-5">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500">Prenotazione</p>
-            <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">{props.selectedBooking.customer_name}</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Prenotazione</p>
+            <p className="mt-2 text-2xl font-light tracking-tight text-slate-900">{props.selectedBooking.customer_name}</p>
             <p className="mt-1 text-sm text-slate-500">{props.selectedBooking.customer_email || props.selectedBooking.customer_phone || "Contatto non disponibile"}</p>
           </div>
-          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${toneForStatus(props.selectedBooking.status)}`}>{formatStatusLabel(props.selectedBooking.status)}</span>
+          <span className={`rounded-full px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] ${toneForStatus(props.selectedBooking.status)}`}>{formatStatusLabel(props.selectedBooking.status)}</span>
         </div>
-        <div className="mt-5 grid gap-3 md:grid-cols-2">
-          <div className="theme-card-muted rounded-[1.2rem] px-4 py-3 text-sm text-slate-700"><p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Quando</p><p className="mt-2 font-semibold text-slate-950">{formatDateTime(props.selectedBooking.booking_date, props.selectedBooking.booking_time)}</p></div>
-          <div className="theme-card-muted rounded-[1.2rem] px-4 py-3 text-sm text-slate-700"><p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Persone</p><p className="mt-2 font-semibold text-slate-950">{props.selectedBooking.party_size || "-"}</p></div>
-          <div className="theme-card-muted rounded-[1.2rem] px-4 py-3 text-sm text-slate-700"><p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Form origine</p><p className="mt-2 font-semibold text-slate-950">{props.selectedBooking.source_form?.title || "N/D"}</p></div>
-          <div className="theme-card-muted rounded-[1.2rem] px-4 py-3 text-sm text-slate-700"><p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Assegnazione attuale</p><p className="mt-2 font-semibold text-slate-950">{props.selectedBooking.room?.name || "Sala da assegnare"} · {props.selectedBooking.table?.name || "Tavolo da assegnare"}</p></div>
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-inset ring-slate-200/60 text-sm text-slate-700">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Quando</p>
+            <p className="mt-2 font-medium text-slate-900">{formatDateTime(props.selectedBooking.booking_date, props.selectedBooking.booking_time)}</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-inset ring-slate-200/60 text-sm text-slate-700">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Persone</p>
+            <p className="mt-2 font-medium text-slate-900">{props.selectedBooking.party_size || "-"}</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-inset ring-slate-200/60 text-sm text-slate-700">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Form origine</p>
+            <p className="mt-2 font-medium text-slate-900">{props.selectedBooking.source_form?.title || "N/D"}</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-inset ring-slate-200/60 text-sm text-slate-700">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Assegnazione attuale</p>
+            <p className="mt-2 font-medium text-slate-900">{props.selectedBooking.room?.name || "Sala da assegnare"} &bull; {props.selectedBooking.table?.name || "Tavolo da assegnare"}</p>
+          </div>
         </div>
         {props.selectedBooking.notes ? (
-          <div className="theme-card-muted mt-4 rounded-[1.2rem] px-4 py-4 text-sm text-slate-700"><p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Note</p><p className="mt-2 leading-6">{props.selectedBooking.notes}</p></div>
+          <div className="mt-4 rounded-xl bg-amber-50/50 p-4 ring-1 ring-inset ring-amber-500/20 text-sm text-amber-900">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-700">Note cliente</p>
+            <p className="mt-2 leading-relaxed font-medium">{props.selectedBooking.notes}</p>
+          </div>
         ) : null}
       </div>
-      <div className="surface-strong rounded-[1.8rem] p-5">
-        <p className="text-sm font-semibold text-slate-900">Stato servizio</p>
-        <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
-          {bookingStatuses.map((status) => <button key={status} type="button" onClick={() => props.onStatusChange(status)} disabled={props.saving === "booking-status"} className={`rounded-[1rem] px-3 py-2 text-sm font-semibold transition ${props.selectedBooking?.status === status ? "bg-slate-950 text-white" : "border border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300"}`}>{formatStatusLabel(status)}</button>)}
+
+      <div className="rounded-[2rem] bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60 shadow-sm">
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-4">Stato servizio</p>
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+          {bookingStatuses.map((status) => (
+            <button 
+              key={status} 
+              type="button" 
+              onClick={() => props.onStatusChange(status)} 
+              disabled={props.saving === "booking-status"} 
+              className={`rounded-full px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] transition-all ${
+                props.selectedBooking?.status === status 
+                  ? "bg-slate-900 text-white shadow-sm" 
+                  : "bg-slate-50 text-slate-600 ring-1 ring-inset ring-slate-200/60 hover:bg-slate-100 hover:text-slate-900"
+              }`}
+            >
+              {formatStatusLabel(status)}
+            </button>
+          ))}
         </div>
       </div>
-      <div className="surface-strong rounded-[1.8rem] p-5">
-        <p className="text-sm font-semibold text-slate-900">Assegna sala e tavolo</p>
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <Field label="Sala"><select className={inputClass} value={props.assignmentRoomId} onChange={(event) => props.setAssignmentRoomId(event.target.value ? Number(event.target.value) : "")}><option value="">Seleziona una sala</option>{props.rooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}</select></Field>
-          <Field label="Tavolo"><select className={inputClass} value={props.assignmentTableId} onChange={(event) => props.setAssignmentTableId(event.target.value ? Number(event.target.value) : "")}><option value="">Solo sala</option>{props.assignmentTables.map((table) => <option key={table.id} value={table.id}>{table.name} - {table.capacity} posti</option>)}</select></Field>
+
+      <div className="rounded-[2rem] bg-slate-50/50 p-6 ring-1 ring-inset ring-slate-200/60">
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-4">Assegna sala e tavolo</p>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label="Sala">
+            <select className={inputClass} value={props.assignmentRoomId} onChange={(event) => props.setAssignmentRoomId(event.target.value ? Number(event.target.value) : "")}>
+              <option value="">Seleziona una sala</option>
+              {props.rooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Tavolo">
+            <select className={inputClass} value={props.assignmentTableId} onChange={(event) => props.setAssignmentTableId(event.target.value ? Number(event.target.value) : "")}>
+              <option value="">Solo sala</option>
+              {props.assignmentTables.map((table) => <option key={table.id} value={table.id}>{table.name} - {table.capacity} posti</option>)}
+            </select>
+          </Field>
         </div>
-        <div className="mt-4">
+        <div className="mt-6">
           <ActionRow primaryLabel="Salva assegnazione" secondaryLabel="Rimuovi" onPrimary={props.onSaveAssignment} onSecondary={props.onClearAssignment} busy={props.saving.startsWith("assignment")} />
         </div>
       </div>
