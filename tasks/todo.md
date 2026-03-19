@@ -1,10 +1,19 @@
 
 ## Plan (Evolution Lite custom patch for chats/history - Mar 19, 2026)
-- [ ] Ispezionare l'upstream ufficiale Evolution API Lite sui path `contacts/chats/messages` e riprodurre la root cause di `findChats` / persistenza storica insufficiente
-- [ ] Definire una patch minima mantenibile e costruire una nostra immagine Docker custom derivata da Lite
-- [ ] Integrare l'immagine custom nello stack/deploy ASSONAM senza allargare inutilmente la superficie env
-- [ ] Deployare su Hetzner, verificare DB `evolution`, stato container, endpoint utili e comportamento live
-- [ ] Documentare esito reale, limiti residui e impatto sulla UX tipo WhatsApp Web
+- [x] Ispezionare l'upstream ufficiale Evolution API Lite sui path `contacts/chats/messages` e riprodurre la root cause di `findChats` / persistenza storica insufficiente
+- [x] Definire una patch minima mantenibile e costruire una nostra immagine Docker custom derivata da Lite
+- [x] Integrare l'immagine custom nello stack/deploy ASSONAM senza allargare inutilmente la superficie env
+- [x] Deployare su Hetzner, verificare DB `evolution`, stato container, endpoint utili e comportamento live
+- [x] Documentare esito reale, limiti residui e impatto sulla UX tipo WhatsApp Web
+
+## Review (Evolution Lite custom patch for chats/history - Mar 19, 2026)
+- Root cause upstream confermata sul repo Lite `d6131d7`: `findChats` legge dal DB ma `messages.upsert/messages.update` non garantiscono la creazione delle righe `Chat`, quindi sul live avevamo `Message > 0` e `Chat = 0`.
+- Ho introdotto una custom image Docker `assonam/evolution-api-lite:custom` costruita da `docker/evolution-lite/Dockerfile`, che clona/pinna l'upstream Lite, applica una patch minima tramite `scripts/patch_evolution_lite.js` e ricompila l'immagine senza allargare la superficie env esterna.
+- Patch upstream applicata in due punti: `channel.service.ts` ora backfilla le `Chat` a partire dai `Message` esistenti e restituisce `findChats` con alias corretti; `whatsapp.baileys.service.ts` ora chiama `ensureChatRecord(...)` durante `messages.upsert/messages.update`, cosi le chat future vengono persistite subito.
+- L'overlay [docker-compose.evolution-lite.yml](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti__evolution_push\docker-compose.evolution-lite.yml) usa ora la custom image con `build:` server-side, mantenendo le sole env esterne gia fissate e derivando internamente solo i flag runtime necessari di Evolution Lite.
+- Verifica live su Hetzner completata dopo deploy della custom image: `app-evolution-api-1` `running healthy 0`, `POST /chat/findChats/assonam-org-2` ritorna 4 chat reali, e il DB `evolution` e passato da `Chat=0` a `Chat=4` mantenendo `Message=23`.
+- Verifica live lato ASSONAM completata: per `Golden Filippini Qualificati SRLS` (`org_id=2`) `/api/org-admin/communications/whatsapp/chats` ora restituisce 5 thread locali e `/api/org-admin/communications/whatsapp/chats/{chat_id}/messages` restituisce cronologia reale (nel check live, 10 messaggi sul primo thread).
+- Limite residuo reale: la parita completa con WhatsApp Web non esiste ancora. La patch sblocca chat e storico recente osservabile, ma i `Contact.pushName` che arrivano da Lite restano spesso vuoti e la profondita storica dipende da cio che Baileys/Evolution riescono davvero a sincronizzare nella sessione, quindi i nomi contatto e l'import completo totale non sono ancora garantiti come nel client ufficiale.
 
 ## Plan (WhatsApp auto-messages on form submissions - Mar 19, 2026)
 - [x] Mappare submit pubblico, CRUD forms e workspace org-admin per scegliere il punto corretto di configurazione
