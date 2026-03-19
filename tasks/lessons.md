@@ -79,6 +79,10 @@
 - Nei custom `RequestValidationError` handler FastAPI, non serializzare mai direttamente `exc.errors()` senza `jsonable_encoder`: il payload puo includere `bytes` (es. body form-urlencoded) e trasformare un 422 atteso in un 500.
 - I webhook Twilio arrivano spesso come `application/x-www-form-urlencoded`: non modellare la route come body JSON obbligatorio, ma fare parsing esplicito di `request.form()` con campi opzionali ed `extra="allow"` per evitare 422/500 e retry aggressivi.
 - Quando si integra un servizio esterno da codice e si dispone del source upstream, validare sempre anche i prefissi completi delle route (`/instance/...`, `/message/...`, ecc.), non solo i nomi degli handler: un namespace mancante passa i test mockati ma rompe subito il runtime con 404/502.
+- Se un servizio Docker "minimale" dipende in realta da flag interni dell'upstream per inizializzare il proprio stato runtime, derivare quei flag dentro il container e verificare il percorso live end-to-end; altrimenti l'health puo risultare verde mentre la feature principale resta inutilizzabile.
+- Se una feature dipende da webhook asincroni subito dopo una create/connect, persistere e committare prima l'entita locale che deve ricevere gli eventi; altrimenti il primo burst webhook viene perso come `unknown_instance` e la UI resta fuori sync.
+- Se un upstream puo annidare il vero motivo dell'errore dentro `response.message` o payload simili, il client deve estrarre il dettaglio piu specifico e non fermarsi al solo `error` top-level; altrimenti i fallback idempotenti (`already exists`, `already in use`) non scattano e i retry UI falliscono inutilmente.
+- Se una inbox tenant mostra solo conversazioni osservate via webhook, nella stessa feature va previsto anche un path esplicito per avviare la prima chat; altrimenti il test reale arriva a "connesso ma inutilizzabile".
 - Per i low-cards alert Twilio Studio, usare `organizations.whatsapp_e164` come sorgente canonica del destinatario e passare lo stesso valore sia come `to` top-level sia come `parameters.to`, altrimenti il Flow puo creare execution invalide o fallire con `missing to/from_`.
 - Se una feature opzionale dipende da moduli/modelli non garantiti, non importarla mai top-level in `app.main`: usare import lazy condizionato da feature flag e fallback che mantiene il servizio up.
 - Se una route opzionale usa modelli non garantiti, isolare i modelli in un modulo fallback dedicato e importarlo dalla route/service per evitare ImportError in produzione.
@@ -168,3 +172,9 @@
 - Se uso replace automatici su file TSX grandi, devo evitare sostituzioni interpolate con stringhe/template in PowerShell: per blocchi React e piu sicuro usare replace per marker stabili o patch mirate e poi rilanciare subito `typecheck`.
 - Se un "tema visivo" serve solo a cambiare stile, la sua label non deve mai finire nell'HTML finale inviato ai soci: theme metadata e contenuto email vanno tenuti separati nel renderer.
 
+
+- Se una inbox dipende da webhook asincroni, il frontend non puo limitarsi al polling della fase QR: deve refreshare anche in stato `connected` e non leggere state stale per contatti/chat, altrimenti i messaggi ricevuti sembrano sparire pur essendo gia nel DB locale.
+
+- Se l'utente chiede una capability "come WhatsApp Web", non basta rendere possibile l'invio: bisogna allineare anche il mental model della UI (sidebar chat-first, ricerca, thread sempre visibile, composer fisso) oppure la feature resta percepita come incompleta.
+- Se il cliente chiede messaggi automatici legati a una risposta form/prenotazione, la configurazione deve vivere vicino al trigger reale (`Form pubblici`) e non dentro campagne bulk: prima mappare l'evento sorgente, poi scegliere il workspace UI.
+- Se un deploy Docker su host persistente e lento, controllare prima il workflow: `builder prune`, `buildx prune`, `--no-cache` e build duplicate dello stesso runtime distruggono la cache locale e possono aggiungere minuti inutili a ogni push.

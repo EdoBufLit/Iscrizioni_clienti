@@ -30,6 +30,9 @@ x-app-env: &app-env
   TWILIO_WHATSAPP_FROM: ${TWILIO_WHATSAPP_FROM}
   TWILIO_SMS_FROM: ${TWILIO_SMS_FROM}
   ADMIN_PHONE_E164: ${ADMIN_PHONE_E164}
+  ENABLE_WHATSAPP_EVOLUTION: ${ENABLE_WHATSAPP_EVOLUTION:-false}
+  EVOLUTION_API_BASE_URL: ${EVOLUTION_API_BASE_URL:-http://evolution-api:8080}
+  EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-}
   OPENAI_API_KEY: ${OPENAI_API_KEY}
   OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
   LOW_CARDS_ALERT_JOB_INTERVAL_SECONDS: ${LOW_CARDS_ALERT_JOB_INTERVAL_SECONDS:-300}
@@ -83,6 +86,7 @@ services:
     restart: unless-stopped
 
   web:
+    image: assonam/app-runtime:local
     build: .
     depends_on:
       - db
@@ -96,7 +100,7 @@ services:
     restart: always
 
   email-worker:
-    build: .
+    image: assonam/app-runtime:local
     depends_on:
       - db
     command: python -m app.workers.email_sender
@@ -111,7 +115,7 @@ services:
     restart: always
 
   low-cards-worker:
-    build: .
+    image: assonam/app-runtime:local
     depends_on:
       - db
     command: python -m app.workers.low_cards_scheduler

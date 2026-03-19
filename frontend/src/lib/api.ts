@@ -683,6 +683,25 @@ export type OrgAdminWhatsAppMessage = {
   updated_at: string | null;
 };
 
+export type OrgAdminWhatsAppOutboundInput = {
+  number: string;
+  text: string;
+  display_name?: string | null;
+};
+
+export type OrgAdminWhatsAppDraftChatInput = {
+  number: string;
+  display_name?: string | null;
+};
+
+export type OrgAdminWhatsAppContact = {
+  remote_jid: string;
+  display_name: string;
+  phone_number: string | null;
+  profile_pic_url: string | null;
+  updated_at: string | null;
+};
+
 export type OrgAdminStripeDemoAccountStatus = {
   id: string | null;
   display_name: string | null;
@@ -926,6 +945,8 @@ export type AssociationForm = {
   booking_field_mapping: Record<string, string>;
   notify_admin_on_submit: boolean;
   send_user_confirmation: boolean;
+  whatsapp_auto_reply_enabled: boolean;
+  whatsapp_auto_reply_template: string | null;
   admin_notification_template_id: number | null;
   user_confirmation_template_id: number | null;
   create_internal_request: boolean;
@@ -951,6 +972,8 @@ export type AssociationForm = {
     save_submission: boolean;
     notify_admin_on_submit: boolean;
     send_user_confirmation: boolean;
+    whatsapp_auto_reply_enabled: boolean;
+    whatsapp_auto_reply_template: string | null;
     admin_notification_template: AssociationFormActionTemplate | null;
     user_confirmation_template: AssociationFormActionTemplate | null;
     create_internal_request: boolean;
@@ -1338,6 +1361,16 @@ export async function fetchOrgAdminWhatsAppChats(): Promise<{
   return res.json();
 }
 
+export async function fetchOrgAdminWhatsAppContacts(): Promise<{
+  items: OrgAdminWhatsAppContact[];
+  total: number;
+}> {
+  const res = await fetch("/api/org-admin/communications/whatsapp/contacts");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento contatti WhatsApp"));
+  return res.json();
+}
+
 export async function fetchOrgAdminWhatsAppMessages(
   chatId: number,
 ): Promise<{
@@ -1365,6 +1398,39 @@ export async function sendOrgAdminWhatsAppMessage(
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore invio messaggio WhatsApp"));
+  return res.json();
+}
+
+export async function openOrgAdminWhatsAppDraftChat(
+  input: OrgAdminWhatsAppDraftChatInput,
+): Promise<{
+  ok: boolean;
+  chat: OrgAdminWhatsAppChat;
+}> {
+  const res = await fetch("/api/org-admin/communications/whatsapp/draft-chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore apertura chat WhatsApp"));
+  return res.json();
+}
+
+export async function startOrgAdminWhatsAppChat(
+  input: OrgAdminWhatsAppOutboundInput,
+): Promise<{
+  ok: boolean;
+  chat: OrgAdminWhatsAppChat;
+  message: OrgAdminWhatsAppMessage;
+}> {
+  const res = await fetch("/api/org-admin/communications/whatsapp/outbound", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore avvio nuova chat WhatsApp"));
   return res.json();
 }
 
@@ -1609,6 +1675,8 @@ export async function createOrgAdminForm(data: {
   booking_field_mapping?: Record<string, string>;
   notify_admin_on_submit?: boolean;
   send_user_confirmation?: boolean;
+  whatsapp_auto_reply_enabled?: boolean;
+  whatsapp_auto_reply_template?: string | null;
   admin_notification_template_id?: number | null;
   user_confirmation_template_id?: number | null;
   create_internal_request?: boolean;
@@ -1656,6 +1724,8 @@ export async function updateOrgAdminForm(
   booking_field_mapping?: Record<string, string>;
   notify_admin_on_submit?: boolean;
   send_user_confirmation?: boolean;
+  whatsapp_auto_reply_enabled?: boolean;
+  whatsapp_auto_reply_template?: string | null;
   admin_notification_template_id?: number | null;
   user_confirmation_template_id?: number | null;
   create_internal_request?: boolean;

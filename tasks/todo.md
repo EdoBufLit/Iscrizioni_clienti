@@ -1,3 +1,78 @@
+
+## Plan (WhatsApp Web polish + deploy speedup - Mar 19, 2026)
+- [x] Rifinire la UI WhatsApp per sembrare piu vicina a WhatsApp Web nei punti ancora deboli: nomi fallback, barra ricerca/azioni, meta thread e quick-open
+- [x] Rendere il payload locale piu utile alla UI dove serve senza introdurre overengineering
+- [x] Ridurre il tempo deploy eliminando build duplicate, `--no-cache` forzato e prune aggressivo della cache Docker
+- [x] Verificare con test/typecheck e, se stabile, pushare sul branch di deploy
+- [x] Riallineare Hetzner e misurare l'impatto reale del nuovo path di deploy
+
+## Review (WhatsApp Web polish + deploy speedup - Mar 19, 2026)
+- La UI WhatsApp in [WhatsAppHub.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti__evolution_push\frontend\src\pages\org-admin\components\communications\WhatsAppHub.tsx) e stata rifinita nei punti che la facevano sembrare ancora troppo “tooling”: ricerca con icona corretta, quick-open da search anche con sidebar piena, badge riepilogo `thread/contatti/profilo`, header thread piu pulito e fallback label che convertono JID/numero in un display piu umano.
+- L'endpoint backend `GET /api/org-admin/communications/whatsapp/chats` ora sincronizza anche i contatti Evolution prima della lista chat, cosi la sidebar ha piu chance di mostrare subito nomi/avatar leggibili dove il provider li espone.
+- Il deploy e stato snellito in [.github/workflows/deploy-hetzner.yml](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti__evolution_push\.github\workflows\deploy-hetzner.yml): niente `docker builder prune`, niente `buildx prune`, niente `--no-cache`, niente doppia build di `web` per Alembic + runtime.
+- Il runtime Python condiviso (`web`, `email-worker`, `low-cards-worker`) ora usa la stessa image locale `assonam/app-runtime:local` in [docker-compose.yml](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti__evolution_push\docker-compose.yml), quindi il server builda una volta e riusa l'immagine per i worker invece di ricompilarla piu volte.
+- Verifiche locali eseguite: `python -m py_compile app/routes/whatsapp_evolution.py`, `pytest tests/test_org_admin_whatsapp.py -q`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
+
+## Plan (Evolution Lite custom patch for chats/history - Mar 19, 2026)
+- [x] Ispezionare l'upstream ufficiale Evolution API Lite sui path `contacts/chats/messages` e riprodurre la root cause di `findChats` / persistenza storica insufficiente
+- [x] Definire una patch minima mantenibile e costruire una nostra immagine Docker custom derivata da Lite
+- [x] Integrare l'immagine custom nello stack/deploy ASSONAM senza allargare inutilmente la superficie env
+- [x] Deployare su Hetzner, verificare DB `evolution`, stato container, endpoint utili e comportamento live
+- [x] Documentare esito reale, limiti residui e impatto sulla UX tipo WhatsApp Web
+
+## Review (Evolution Lite custom patch for chats/history - Mar 19, 2026)
+- Root cause upstream confermata sul repo Lite `d6131d7`: `findChats` legge dal DB ma `messages.upsert/messages.update` non garantiscono la creazione delle righe `Chat`, quindi sul live avevamo `Message > 0` e `Chat = 0`.
+- Ho introdotto una custom image Docker `assonam/evolution-api-lite:custom` costruita da `docker/evolution-lite/Dockerfile`, che clona/pinna l'upstream Lite, applica una patch minima tramite `scripts/patch_evolution_lite.js` e ricompila l'immagine senza allargare la superficie env esterna.
+- Patch upstream applicata in due punti: `channel.service.ts` ora backfilla le `Chat` a partire dai `Message` esistenti e restituisce `findChats` con alias corretti; `whatsapp.baileys.service.ts` ora chiama `ensureChatRecord(...)` durante `messages.upsert/messages.update`, cosi le chat future vengono persistite subito.
+- L'overlay [docker-compose.evolution-lite.yml](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti__evolution_push\docker-compose.evolution-lite.yml) usa ora la custom image con `build:` server-side, mantenendo le sole env esterne gia fissate e derivando internamente solo i flag runtime necessari di Evolution Lite.
+- Verifica live su Hetzner completata dopo deploy della custom image: `app-evolution-api-1` `running healthy 0`, `POST /chat/findChats/assonam-org-2` ritorna 4 chat reali, e il DB `evolution` e passato da `Chat=0` a `Chat=4` mantenendo `Message=23`.
+- Verifica live lato ASSONAM completata: per `Golden Filippini Qualificati SRLS` (`org_id=2`) `/api/org-admin/communications/whatsapp/chats` ora restituisce 5 thread locali e `/api/org-admin/communications/whatsapp/chats/{chat_id}/messages` restituisce cronologia reale (nel check live, 10 messaggi sul primo thread).
+- Limite residuo reale: la parita completa con WhatsApp Web non esiste ancora. La patch sblocca chat e storico recente osservabile, ma i `Contact.pushName` che arrivano da Lite restano spesso vuoti e la profondita storica dipende da cio che Baileys/Evolution riescono davvero a sincronizzare nella sessione, quindi i nomi contatto e l'import completo totale non sono ancora garantiti come nel client ufficiale.
+
+## Plan (WhatsApp auto-messages on form submissions - Mar 19, 2026)
+- [x] Mappare submit pubblico, CRUD forms e workspace org-admin per scegliere il punto corretto di configurazione
+- [x] Decidere il posizionamento prodotto: automazioni WhatsApp per-form dentro `Form pubblici`, non nelle campagne bulk
+- [x] Estendere schema/API forms con configurazione WhatsApp automatica sperimentale e template personalizzabili
+- [x] Collegare il trigger al submit pubblico usando il service WhatsApp esistente e mantenendo ASSONAM come source of truth
+- [x] Aggiornare la UI org-admin del form con setup, anteprima variabili e toggle per l'automazione
+- [ ] Verificare con test backend, typecheck/build frontend, push e deploy live su Hetzner
+
+## Review (WhatsApp auto-messages on form submissions - Mar 19, 2026)
+- La configurazione degli auto-messaggi WhatsApp e stata messa nel tab `Impostazioni` del singolo form, non nelle campagne bulk, perche il trigger reale e il submit del modulo e non un invio massivo.
+- Il modello `forms` ora salva due soli campi additivi: toggle sperimentale `whatsapp_auto_reply_enabled` e template `whatsapp_auto_reply_template`, con migration Alembic dedicata e repair idempotente in `init_db.py`.
+- Il submit pubblico ora prova ad inviare un messaggio WhatsApp automatico solo se la feature flag `ENABLE_WHATSAPP_EVOLUTION` e attiva, l'associazione ha una connessione Evolution gia `connected` e il numero viene risolto da form -> booking -> socio.
+- Il renderer template WhatsApp usa sia variabili curate (`{{nome_contatto}}`, `{{titolo_form}}`, `{{data_prenotazione}}`, ecc.) sia direttamente le `field_key` del form, cosi i copy restano personalizzabili senza introdurre un sistema template separato.
+- L'invio riusa la pipeline locale ASSONAM (`chat` + `message` nel DB) e non rende il submit fragile: eventuali errori WhatsApp vengono loggati senza far fallire la submission del form.
+- UI aggiornata in `Form pubblici` con card `WhatsApp automatico`, toggle, textarea template, caricamento rapido del template base e chips per inserire variabili sistema/campi del form.
+- Verifiche locali eseguite: `python -m py_compile app/services/whatsapp_automation.py app/services/forms.py app/routes/public.py app/routes/org_admin.py app/models.py init_db.py`, `pytest tests/test_forms_module.py -q`, `pytest tests/test_org_admin_whatsapp.py -q`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `python -m alembic upgrade head`.
+
+## Review (WhatsApp Web-like layout + contact import pass - Mar 18, 2026)
+- UI WhatsApp rifatta con canvas dark a due colonne, sidebar chat-first, ricerca, filtri rapidi, header thread e composer in basso per avvicinare molto di piu il comportamento percepito a WhatsApp Web.
+- Sidebar ora fonde chat locali ASSONAM e contatti importati da Evolution Lite, cosi i contatti gia noti possono comparire anche prima del primo messaggio locale.
+- Backend esteso per sync contatti -> chat stub locali e per apertura thread da contatto/numero senza invio immediato, mantenendo ASSONAM come source of truth applicativa.
+- Client Evolution aggiornato per richiedere anche webhook `contacts/chats` e per paginare i contatti oltre la prima pagina, invece di fermarsi ai primi 100 record.
+- Overlay Docker Evolution Lite aggiornato con flag interni di persistenza `contacts/chats/messages/historic`, senza introdurre nuove env esterne oltre al setup minimo gia fissato.
+- Verifiche locali eseguite: `python -m py_compile app/routes/whatsapp_evolution.py app/services/whatsapp_evolution.py app/services/whatsapp_sync.py`, `pytest tests/test_org_admin_whatsapp.py -q`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
+
+- [x] Verificare perché l'inbound WhatsApp non entra ancora in modo affidabile dopo la connessione live
+- [x] Mappare gli endpoint Evolution Lite disponibili per lista chat e cronologia recente importabile
+- [x] Estendere backend WhatsApp con sync iniziale chat + finestra cronologica recente senza perdere ASSONAM come source of truth
+- [x] Rifinire la UI inbox per comportamento più vicino a WhatsApp Web, con refresh chat/thread e meno input manuale
+- [ ] Verificare su server reale e pushare la passata "WhatsApp Web-like"
+
+## Review (WhatsApp Web-like inbox pass - Mar 18, 2026)
+- Verifica live completata: i webhook inbound da Evolution Lite arrivano correttamente ad ASSONAM (`messages.upsert` / `send.message` 200), quindi il gap principale non era il trasporto ma l'inbox locale/UX.
+- Root cause frontend corretta in `WhatsAppHub.tsx`: il polling era attivo solo in fase QR e `loadContacts()` leggeva uno state `connection` stale, quindi una sessione gia connessa poteva sembrare vuota anche con risposte gia sincronizzate nel DB locale.
+- Inbox resa piu vicina a un uso chat reale: mentre `connected`, la UI ora refresha periodicamente stato connessione, lista chat e thread selezionato; i contatti recenti vengono ricaricati subito e poi in polling dedicato.
+- Backend esteso con route `POST /api/org-admin/communications/whatsapp/draft-chat` per creare/riusare un thread locale senza invio immediato, cosi l'utente puo aprire una chat da numero o da contatto e poi scrivere dal composer principale.
+- UI aggiornata con CTA `Apri chat` e selezione diretta dei `Contatti recenti`: il click su un contatto ora apre o seleziona il thread locale invece di limitarsi a precompilare i campi.
+- Limite upstream esplicitato dal test reale: `Evolution Lite` nel setup minimale attuale non espone in modo affidabile una vera importazione storica stile WhatsApp Web; `findChats` e rotto upstream e il DB `evolution` non sta persistendo `Chat`/`Message`, quindi la vista completa resta best-effort sui thread osservati da ASSONAM + contatti recenti.
+- Verifiche locali eseguite: `python -m py_compile app/routes/whatsapp_evolution.py app/services/whatsapp_evolution.py app/services/whatsapp_sync.py`, `pytest tests/test_org_admin_whatsapp.py -q`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
+
+- [x] Aggiungere un path org-admin per avviare una nuova chat WhatsApp verso numero diretto quando l'inbox locale è ancora vuota
+- [x] Rendere la UI WhatsApp utilizzabile anche senza chat pregresse sincronizzate, con form minima `numero + testo`
+- [x] Verificare backend/frontend e pushare la correzione sul branch di deploy
+
 - [x] Aggiungere persistenza WhatsApp org-scoped con migration Alembic (`WhatsAppConnection`, `WhatsAppChat`, `WhatsAppMessage`)
 - [x] Implementare client Evolution Lite, service layer di sync e webhook interno ASSONAM
 - [x] Esporre API org-admin `Comunicazioni > WhatsApp` per connection state, connect/qr/disconnect, chat list, thread e send text
@@ -13,6 +88,12 @@
 - Preparato il service passivo `prepare_form_submission_whatsapp_candidate(...)` e agganciato in modo non attivo al submit pubblico solo come predisposizione futura.
 - Verifiche eseguite: `python -m alembic upgrade head`, `pytest tests/test_org_admin_whatsapp.py -q`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
 
+## Review (WhatsApp first chat usability fix - Mar 18, 2026)
+- Root cause confermata nel test reale: con connessione già attiva, la UI mostrava solo chat osservate via webhook e il composer richiedeva una chat selezionata, quindi il primo invio outbound era impossibile.
+- Backend esteso con route org-admin `POST /api/org-admin/communications/whatsapp/outbound` che crea/riusa una chat locale da numero, salva il messaggio outbound e invia subito via Evolution Lite.
+- Service layer aggiornato con helper per derivare `external_chat_id` da numero e creare in modo idempotente la prima chat locale senza attendere webhook inbound.
+- UI WhatsApp aggiornata con pannello `Nuova chat` nella colonna sinistra (`numero`, `nome contatto opzionale`, `testo`) che avvia la conversazione, seleziona il thread creato e mantiene poi il composer classico per le risposte.
+- Verifiche eseguite: `python -m py_compile app/routes/whatsapp_evolution.py app/services/whatsapp_sync.py app/services/whatsapp_evolution.py`, `pytest tests/test_org_admin_whatsapp.py -q`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
 - [x] Analizzare workflow `deploy-hetzner`, compose Docker, catena env/secrets e configurazione Postgres effettiva per l'integrazione Evolution API Lite
 - [x] Aggiungere Evolution API Lite come servizio Docker separato con sole env minime richieste e collegamento al Postgres esistente su DB `evolution`
 - [x] Estendere workflow/file di deploy per propagare le nuove env ASSONAM/Evolution senza introdurre variabili superflue
@@ -167,8 +248,17 @@
 - [x] Riprodurre il failure runtime del pulsante `Connetti` e verificare risposta/log del backend
 - [x] Correggere il client Evolution Lite usando i prefissi route reali dell'upstream (`/instance`, `/message`, `/webhook`)
 - [x] Coprire la regressione con test mirato sulle URL chiamate dal client
-- [ ] Pushare la fix sul branch che attiva il deploy GitHub Actions
-- [ ] Verificare deploy e smoke test live del connect su Hetzner
+- [x] Derivare nel container Evolution Lite il flag interno minimo necessario per inizializzare l'auth state e spostare il pairing sulla chiamata `connect`
+- [x] Rendere idempotente il retry di `Connetti` quando l'istanza Evolution esiste gia e il payload upstream risponde `already in use` dentro un `403 Forbidden`
+- [x] Pushare la fix sul branch che attiva il deploy GitHub Actions
+- [x] Verificare deploy e smoke test live del connect su Hetzner
+
+## Review (WhatsApp connect runtime fix - Mar 18, 2026)
+- Root cause finale del retry failure: Evolution Lite rispondeva `403 Forbidden` con il vero dettaglio annidato (`This name "assonam-org-2" is already in use.`), ma il client ASSONAM estraeva solo il campo top-level `error`, quindi `ensure_instance()` non riconosceva il caso idempotente e il pulsante `Connetti` falliva al secondo click.
+- Hotfix applicato in `app/services/whatsapp_evolution.py`: parsing difensivo del dettaglio annidato (`message` / `response` / `detail` / `error`) e riuso del fallback gia presente per trattare correttamente i casi `already exists / already in use`.
+- Regressione coperta in `tests/test_org_admin_whatsapp.py` con test dedicato sul payload `403` di Evolution Lite.
+- Push effettuato sul branch di deploy `feat/redesign-landing-wizard` con commit live `d10da99`.
+- Verifica reale su Hetzner completata per l'org `Golden Filippini Qualificati SRLS`: `GET /connection` -> `qr_required`, `POST /connect` -> `200 OK`, `GET /qr` -> `200 OK`, QR ancora presente e nessun `502`.
 
 ---
 - [x] Limitare watermark/logo e naming speciale alla sola org `oasi-2`
@@ -3521,8 +3611,10 @@ pm --prefix frontend run build OK.
 pm --prefix frontend run build e documentare review finale
 ## Review (Theme contrast hardening public + dashboard - Mar 12, 2026)
 - Ho normalizzato i CTA pubblici principali su tn-primary / tn-ghost nelle entry point che esponevano il problema di contrasto (Home, navbar/mobile menu del layout pubblico, lista associazioni). In questo modo le CTA non ereditano più il colore link globale di 	heme.css, quindi non finiscono con fondo scuro e testo teal/nero quando devono essere pulsanti.
-- In rontend/src/theme.css ho collegato anche i token --public-* al sistema tema shared e ho aggiunto override tematici per public-footer, public-faq-button, public-faq-icon e public-faq-answer-text. Questo elimina il footer bianco fisso in dark mode e rende leggibile la sezione FAQ/accordion nelle pagine pubbliche.
-- Sempre in rontend/src/theme.css ho esteso il compatibility layer dark per utility usate ancora nelle dashboard e nelle hero card (g-slate-50/70-90, g-slate-100/70-90, g-slate-200/70, nuove varianti order-slate-200/*, order-slate-950/*, divide-slate-200, hover/table wrappers g-slate-*). Lo scopo e coprire i contenitori/card interne che rimanevano chiare o incoerenti senza inseguire patch file-per-file.
+- In 
+rontend/src/theme.css ho collegato anche i token --public-* al sistema tema shared e ho aggiunto override tematici per public-footer, public-faq-button, public-faq-icon e public-faq-answer-text. Questo elimina il footer bianco fisso in dark mode e rende leggibile la sezione FAQ/accordion nelle pagine pubbliche.
+- Sempre in 
+rontend/src/theme.css ho esteso il compatibility layer dark per utility usate ancora nelle dashboard e nelle hero card (g-slate-50/70-90, g-slate-100/70-90, g-slate-200/70, nuove varianti order-slate-200/*, order-slate-950/*, divide-slate-200, hover/table wrappers g-slate-*). Lo scopo e coprire i contenitori/card interne che rimanevano chiare o incoerenti senza inseguire patch file-per-file.
 - Verifiche eseguite: 
 pm --prefix frontend run build OK; screenshot locali da build preview con Playwright in 	asks/screenshots/home-light-20260312.png, 	asks/screenshots/home-dark-20260312.png, 	asks/screenshots/home-dark-tall-20260312.png. Nel check visuale homepage dark risultano leggibili FAQ e footer, e le CTA pubbliche non mostrano più il contrasto errato.
 - Dopo il primo check visuale ho corretto anche la hero shell di /associazioni, che restava troppo chiara per via di wrapper/gradient light-only. Verifica aggiuntiva con service worker bloccati: 	asks/screenshots/associazioni-dark-20260312.png mostra ora la sezione introduttiva coerente con la dark mode.

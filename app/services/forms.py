@@ -150,6 +150,13 @@ def normalize_form_submit_button_text(value: Any) -> str | None:
     return normalized[:120]
 
 
+def normalize_form_whatsapp_template(value: Any) -> str | None:
+    normalized = _normalize_multiline_text(value)
+    if normalized is None:
+        return None
+    return normalized[:4096]
+
+
 def normalize_form_cover_image_url(value: Any) -> str | None:
     normalized = _normalize_text(value)
     if normalized is None:
@@ -384,6 +391,8 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
         ),
         "notify_admin_on_submit": bool(getattr(form, "notify_admin_on_submit", True)),
         "send_user_confirmation": bool(getattr(form, "send_user_confirmation", True)),
+        "whatsapp_auto_reply_enabled": bool(getattr(form, "whatsapp_auto_reply_enabled", False)),
+        "whatsapp_auto_reply_template": getattr(form, "whatsapp_auto_reply_template", None),
         "admin_notification_template_id": getattr(form, "admin_notification_template_id", None),
         "user_confirmation_template_id": getattr(form, "user_confirmation_template_id", None),
         "create_internal_request": bool(getattr(form, "create_internal_request", False)),
@@ -413,6 +422,8 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
             "save_submission": True,
             "notify_admin_on_submit": bool(getattr(form, "notify_admin_on_submit", True)),
             "send_user_confirmation": bool(getattr(form, "send_user_confirmation", True)),
+            "whatsapp_auto_reply_enabled": bool(getattr(form, "whatsapp_auto_reply_enabled", False)),
+            "whatsapp_auto_reply_template": getattr(form, "whatsapp_auto_reply_template", None),
             "admin_notification_template": _serialize_template_summary(
                 getattr(form, "admin_notification_template", None)
             ),
@@ -527,6 +538,8 @@ def apply_form_updates(
     booking_field_mapping: Any,
     notify_admin_on_submit: bool,
     send_user_confirmation: bool,
+    whatsapp_auto_reply_enabled: bool,
+    whatsapp_auto_reply_template: Any,
     admin_notification_template_id: Any,
     user_confirmation_template_id: Any,
     create_internal_request: bool,
@@ -563,6 +576,10 @@ def apply_form_updates(
     form.booking_field_mapping = normalize_booking_field_mapping(booking_field_mapping)
     form.notify_admin_on_submit = bool(notify_admin_on_submit)
     form.send_user_confirmation = bool(send_user_confirmation)
+    form.whatsapp_auto_reply_enabled = bool(whatsapp_auto_reply_enabled)
+    form.whatsapp_auto_reply_template = normalize_form_whatsapp_template(
+        whatsapp_auto_reply_template
+    )
     form.admin_notification_template_id = _resolve_template_reference(
         db,
         association_id=form.association_id,

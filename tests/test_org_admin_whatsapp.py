@@ -11,9 +11,12 @@ from app.models import AdminRole, AdminUser, OrgAdminToken, Organization, WhatsA
 from app.services.whatsapp_evolution import EvolutionLiteClient
 from app.services.whatsapp_evolution import (
     EvolutionConnectionSnapshot,
+    EvolutionContact,
+    EVOLUTION_WEBHOOK_EVENTS,
     EvolutionSendTextResult,
+    parse_connection_snapshot,
 )
-from app.services.whatsapp_sync import get_or_create_connection
+from app.services.whatsapp_sync import apply_connection_snapshot, get_or_create_connection
 from app.utils import hash_token
 
 
@@ -97,6 +100,8 @@ def test_whatsapp_module_locked_returns_403(client, db):
 def test_whatsapp_connect_send_and_disconnect(client, db, monkeypatch):
     org, admin = _create_org_admin(db, communications_enabled=True)
     _login_org_admin(client, db, admin.id)
+    outbound_texts: list[str] = []
+    send_counter = {"value": 0}
 
     def fake_ensure_instance(self, *, org_id: int):
         assert org_id == org.id
@@ -118,8 +123,9 @@ def test_whatsapp_connect_send_and_disconnect(client, db, monkeypatch):
     def fake_send_text(self, instance_name: str, *, number: str, text: str):
         assert instance_name == f"assonam-org-{org.id}"
         assert "39333" in number
-        assert text == "Ciao dal test"
-        external_id = f"wamid-outbound-{org.id}"
+        outbound_texts.append(text)
+        send_counter["value"] += 1
+        external_id = f"wamid-outbound-{org.id}-{send_counter['value']}"
         return EvolutionSendTextResult(
             external_message_id=external_id,
             status="sent",
@@ -155,25 +161,34 @@ def test_whatsapp_connect_send_and_disconnect(client, db, monkeypatch):
 
     connection = get_or_create_connection(db, org)
     connection.status = "connected"
-    chat = WhatsAppChat(
-        org_id=org.id,
-        connection_id=connection.id,
-        external_chat_id="393331234567@s.whatsapp.net",
-        display_name="Mario Rossi",
-    )
-    db.add(chat)
     db.commit()
-    db.refresh(chat)
+
+    outbound_res = client.post(
+        "/api/org-admin/communications/whatsapp/outbound",
+        json={
+            "number": "+39 333 1234567",
+            "display_name": "Mario Rossi",
+            "text": "Primo contatto dal test",
+        },
+    )
+    assert outbound_res.status_code == 200, outbound_res.text
+    outbound_payload = outbound_res.json()
+    assert outbound_payload["chat"]["display_name"] == "Mario Rossi"
+    assert outbound_payload["chat"]["external_chat_id"] == "393331234567@s.whatsapp.net"
+    assert outbound_payload["message"]["direction"] == "outbound"
+    assert outbound_payload["message"]["status"] == "sent"
+    chat_id = outbound_payload["chat"]["id"]
 
     send_res = client.post(
-        f"/api/org-admin/communications/whatsapp/chats/{chat.id}/messages",
+        f"/api/org-admin/communications/whatsapp/chats/{chat_id}/messages",
         json={"text": "Ciao dal test"},
     )
     assert send_res.status_code == 200, send_res.text
     send_payload = send_res.json()["message"]
     assert send_payload["direction"] == "outbound"
-    assert send_payload["external_message_id"] == f"wamid-outbound-{org.id}"
+    assert send_payload["external_message_id"] == f"wamid-outbound-{org.id}-2"
     assert send_payload["status"] == "sent"
+    assert outbound_texts == ["Primo contatto dal test", "Ciao dal test"]
 
     other_org, _other_admin = _create_org_admin(db, communications_enabled=True)
     other_connection = get_or_create_connection(db, other_org)
@@ -193,6 +208,49 @@ def test_whatsapp_connect_send_and_disconnect(client, db, monkeypatch):
     disconnect_res = client.post("/api/org-admin/communications/whatsapp/disconnect")
     assert disconnect_res.status_code == 200, disconnect_res.text
     assert disconnect_res.json()["connection"]["status"] == "not_connected"
+
+
+def test_whatsapp_contacts_and_draft_chat(client, db, monkeypatch):
+    org, admin = _create_org_admin(db, communications_enabled=True)
+    _login_org_admin(client, db, admin.id)
+    connection = get_or_create_connection(db, org)
+    connection.status = "connected"
+    connection.phone_number = "+393404244452"
+    db.commit()
+
+    monkeypatch.setattr(
+        "app.routes.whatsapp_evolution.EvolutionLiteClient.list_contacts",
+        lambda self, instance_name: [
+            EvolutionContact(
+                remote_jid="393331234567@s.whatsapp.net",
+                display_name="Mario Rossi",
+                phone_number="+393331234567",
+                profile_pic_url=None,
+                created_at=None,
+                updated_at=datetime(2026, 3, 18, 21, 35, 0),
+                raw={},
+            )
+        ],
+    )
+
+    contacts_res = client.get("/api/org-admin/communications/whatsapp/contacts")
+    assert contacts_res.status_code == 200, contacts_res.text
+    contacts_payload = contacts_res.json()
+    assert contacts_payload["total"] == 1
+    assert contacts_payload["items"][0]["display_name"] == "Mario Rossi"
+
+    draft_res = client.post(
+        "/api/org-admin/communications/whatsapp/draft-chat",
+        json={"number": "+39 333 1234567", "display_name": "Mario Rossi"},
+    )
+    assert draft_res.status_code == 200, draft_res.text
+    draft_payload = draft_res.json()["chat"]
+    assert draft_payload["display_name"] == "Mario Rossi"
+    assert draft_payload["external_chat_id"] == "393331234567@s.whatsapp.net"
+
+    messages_res = client.get(f"/api/org-admin/communications/whatsapp/chats/{draft_payload['id']}/messages")
+    assert messages_res.status_code == 200, messages_res.text
+    assert messages_res.json()["total"] == 0
 
 
 def test_internal_webhook_syncs_connection_messages_and_dedupes(client, db):
@@ -336,7 +394,8 @@ def test_internal_webhook_syncs_connection_messages_and_dedupes(client, db):
 
 
 def test_evolution_client_uses_lite_namespaced_paths(monkeypatch):
-    captured: list[tuple[str, str]] = []
+    captured: list[tuple[str, str, object | None]] = []
+    settings_by_instance: dict[str, dict[str, object]] = {}
 
     class DummyResponse:
         def __init__(self, payload: dict[str, object] | None = None):
@@ -348,7 +407,12 @@ def test_evolution_client_uses_lite_namespaced_paths(monkeypatch):
             return self._payload
 
     def fake_request(method, url, json=None, headers=None, timeout=None):
-        captured.append((method, url))
+        captured.append((method, url, json))
+        if url.endswith("/settings/find/assonam-org-7"):
+            return DummyResponse(settings_by_instance.get("assonam-org-7", {}))
+        if url.endswith("/settings/set/assonam-org-7"):
+            settings_by_instance["assonam-org-7"] = dict(json or {})
+            return DummyResponse({"settings": {"instanceName": "assonam-org-7", "settings": json or {}}})
         return DummyResponse({"instance": {"state": "close"}})
 
     monkeypatch.setattr("app.services.whatsapp_evolution.requests.request", fake_request)
@@ -363,12 +427,220 @@ def test_evolution_client_uses_lite_namespaced_paths(monkeypatch):
     client.send_text("assonam-org-7", number="+393331234567", text="ciao")
 
     assert captured == [
+        (
+            "POST",
+            "http://evolution-api:8080/instance/create",
+            {
+                "instanceName": "assonam-org-7",
+                "qrcode": False,
+                "integration": "WHATSAPP-BAILEYS",
+                "webhook": {
+                    "enabled": True,
+                    "url": "http://web:8000/api/internal/whatsapp/evolution",
+                    "headers": {"X-Evolution-ApiKey": "test-key"},
+                    "events": EVOLUTION_WEBHOOK_EVENTS,
+                    "byEvents": False,
+                    "base64": False,
+                },
+            },
+        ),
+        (
+            "POST",
+            "http://evolution-api:8080/webhook/set/assonam-org-7",
+            {
+                "webhook": {
+                    "enabled": True,
+                    "url": "http://web:8000/api/internal/whatsapp/evolution",
+                    "headers": {"X-Evolution-ApiKey": "test-key"},
+                    "events": EVOLUTION_WEBHOOK_EVENTS,
+                    "byEvents": False,
+                    "base64": False,
+                }
+            },
+        ),
+        ("GET", "http://evolution-api:8080/settings/find/assonam-org-7", None),
+        (
+            "POST",
+            "http://evolution-api:8080/settings/set/assonam-org-7",
+            {
+                "rejectCall": False,
+                "msgCall": "",
+                "groupsIgnore": False,
+                "alwaysOnline": False,
+                "readMessages": False,
+                "readStatus": False,
+                "syncFullHistory": True,
+                "wavoipToken": "",
+            },
+        ),
+        (
+            "POST",
+            "http://evolution-api:8080/webhook/set/assonam-org-7",
+            {
+                "webhook": {
+                    "enabled": True,
+                    "url": "http://web:8000/api/internal/whatsapp/evolution",
+                    "headers": {"X-Evolution-ApiKey": "test-key"},
+                    "events": EVOLUTION_WEBHOOK_EVENTS,
+                    "byEvents": False,
+                    "base64": False,
+                }
+            },
+        ),
+        ("GET", "http://evolution-api:8080/settings/find/assonam-org-7", None),
+        ("GET", "http://evolution-api:8080/instance/connect/assonam-org-7", None),
+        ("GET", "http://evolution-api:8080/instance/connectionState/assonam-org-7", None),
+        ("GET", "http://evolution-api:8080/instance/connect/assonam-org-7", None),
+        ("DELETE", "http://evolution-api:8080/instance/logout/assonam-org-7", None),
+        (
+            "POST",
+            "http://evolution-api:8080/message/sendText/assonam-org-7",
+            {"number": "+393331234567", "text": "ciao"},
+        ),
+    ]
+
+
+def test_apply_connection_snapshot_preserves_existing_qr():
+    connection = type(
+        "ConnectionStub",
+        (),
+        {
+            "status": "not_connected",
+            "phone_number": None,
+            "profile_name": None,
+            "last_error": None,
+            "last_event_at": None,
+            "connected_at": None,
+            "qr_code": "existing-qr",
+        },
+    )()
+    snapshot = EvolutionConnectionSnapshot(
+        raw_state="close",
+        status="not_connected",
+        qr_code=None,
+        phone_number=None,
+        profile_name=None,
+        last_error=None,
+        connected_at=None,
+        raw={},
+    )
+
+    apply_connection_snapshot(connection, snapshot)
+
+    assert connection.status == "qr_required"
+    assert connection.qr_code == "existing-qr"
+
+
+def test_parse_connection_snapshot_handles_top_level_qr_payload():
+    snapshot = parse_connection_snapshot(
+        {
+            "count": 0,
+            "base64": "data:image/png;base64,test-qr",
+            "code": "qr-code",
+            "pairingCode": None,
+        }
+    )
+
+    assert snapshot.raw_state == "connecting"
+    assert snapshot.status == "qr_required"
+    assert snapshot.qr_code == "data:image/png;base64,test-qr"
+
+
+def test_ensure_instance_treats_already_in_use_as_idempotent(monkeypatch):
+    requests_seen: list[tuple[str, str]] = []
+    settings_calls: list[tuple[str, str]] = []
+
+    class DummyResponse:
+        def __init__(self, status_code: int, payload: dict[str, object]):
+            self.status_code = status_code
+            self.ok = status_code < 400
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    def fake_request(method, url, json=None, headers=None, timeout=None):
+        requests_seen.append((method, url))
+        if url.endswith("/instance/create"):
+            return DummyResponse(
+                403,
+                {
+                    "status": 403,
+                    "error": "Forbidden",
+                    "response": {"message": ['This name "assonam-org-7" is already in use.']},
+                },
+            )
+        return DummyResponse(200, {"ok": True})
+
+    monkeypatch.setattr("app.services.whatsapp_evolution.requests.request", fake_request)
+
+    client = EvolutionLiteClient(base_url="http://evolution-api:8080", api_key="test-key")
+    payload = client.ensure_instance(org_id=7)
+
+    assert payload == {"instance": {"instanceName": "assonam-org-7"}}
+    assert requests_seen == [
+        ("POST", "http://evolution-api:8080/instance/create"),
+        ("GET", "http://evolution-api:8080/instance/fetchInstances"),
+        ("POST", "http://evolution-api:8080/webhook/set/assonam-org-7"),
+        ("GET", "http://evolution-api:8080/settings/find/assonam-org-7"),
+        ("POST", "http://evolution-api:8080/settings/set/assonam-org-7"),
+    ]
+
+
+def test_ensure_instance_recreates_device_removed_session(monkeypatch):
+    requests_seen: list[tuple[str, str]] = []
+
+    class DummyResponse:
+        def __init__(self, status_code: int, payload):
+            self.status_code = status_code
+            self.ok = status_code < 400
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    create_calls = {"count": 0}
+
+    def fake_request(method, url, json=None, headers=None, timeout=None):
+        requests_seen.append((method, url))
+        if url.endswith("/instance/create"):
+            create_calls["count"] += 1
+            if create_calls["count"] == 1:
+                return DummyResponse(
+                    403,
+                    {
+                        "status": 403,
+                        "error": "Forbidden",
+                        "response": {"message": ['This name "assonam-org-7" is already in use.']},
+                    },
+                )
+            return DummyResponse(200, {"instance": {"instanceName": "assonam-org-7"}})
+        if url.endswith("/instance/fetchInstances"):
+            return DummyResponse(
+                200,
+                [
+                    {
+                        "name": "assonam-org-7",
+                        "connectionStatus": "connecting",
+                        "disconnectionReasonCode": 401,
+                        "disconnectionObject": '{"error":{"output":{"payload":{"message":"Stream Errored (conflict)"}}},"data":{"content":[{"tag":"conflict","attrs":{"type":"device_removed"}}]}}',
+                    }
+                ],
+            )
+        return DummyResponse(200, {"ok": True})
+
+    monkeypatch.setattr("app.services.whatsapp_evolution.requests.request", fake_request)
+
+    client = EvolutionLiteClient(base_url="http://evolution-api:8080", api_key="test-key")
+    payload = client.ensure_instance(org_id=7)
+
+    assert payload == {"instance": {"instanceName": "assonam-org-7"}}
+    assert requests_seen == [
+        ("POST", "http://evolution-api:8080/instance/create"),
+        ("GET", "http://evolution-api:8080/instance/fetchInstances"),
+        ("DELETE", "http://evolution-api:8080/instance/delete/assonam-org-7"),
         ("POST", "http://evolution-api:8080/instance/create"),
         ("POST", "http://evolution-api:8080/webhook/set/assonam-org-7"),
-        ("POST", "http://evolution-api:8080/webhook/set/assonam-org-7"),
-        ("GET", "http://evolution-api:8080/instance/connect/assonam-org-7"),
-        ("GET", "http://evolution-api:8080/instance/connectionState/assonam-org-7"),
-        ("GET", "http://evolution-api:8080/instance/connect/assonam-org-7"),
-        ("DELETE", "http://evolution-api:8080/instance/logout/assonam-org-7"),
-        ("POST", "http://evolution-api:8080/message/sendText/assonam-org-7"),
+        ("GET", "http://evolution-api:8080/settings/find/assonam-org-7"),
+        ("POST", "http://evolution-api:8080/settings/set/assonam-org-7"),
     ]

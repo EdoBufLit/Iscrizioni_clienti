@@ -65,6 +65,27 @@ Association-level storage:
 - `organizations.whatsapp_e164`: preferred destination number for low-cards alerts.
 - The low-cards alert worker sends only when `whatsapp_e164` is populated and valid.
 
+## WhatsApp / Evolution API Lite
+
+Optional internal-only connector for a separate Evolution API Lite container running in the same Docker network as ASSONAM.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ENABLE_WHATSAPP_EVOLUTION` | No | `false` | Enables ASSONAM runtime awareness of the internal Evolution API Lite connector and instructs deploy automation to provision the extra service when `EVOLUTION_API_KEY` is also configured. |
+| `EVOLUTION_API_BASE_URL` | No | `http://evolution-api:8080` | Internal base URL used by ASSONAM containers to reach the Evolution API Lite service over the Docker network. |
+| `EVOLUTION_API_KEY` | Yes (Evolution Lite enabled) | _(empty)_ | Shared API key between ASSONAM and Evolution Lite. Must match Evolution Lite `AUTHENTICATION_API_KEY`. |
+
+Runtime notes:
+
+- Evolution Lite uses the same PostgreSQL server already configured by `DATABASE_URL`, but a separate database named `evolution`.
+- The deploy workflow renders a minimal runtime file at `secrets/evolution-api-lite.env` with only:
+- `SERVER_PORT`
+- `SERVER_URL`
+- `DATABASE_PROVIDER`
+- `DATABASE_CONNECTION_URI`
+- `AUTHENTICATION_API_KEY`
+- No Redis, subdomain or dedicated HTTPS endpoint is required for the initial internal test setup.
+
 ## OpenAI
 
 Optional fallback for generic bot replies outside the tessere ordering flow.

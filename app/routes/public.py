@@ -38,6 +38,7 @@ from app.services.forms import (
     validate_form_submission_payload,
 )
 from app.services.whatsapp_automation import (
+    maybe_send_form_submission_whatsapp_message,
     prepare_form_submission_whatsapp_candidate,
 )
 from app.services.member_activity import (
@@ -385,8 +386,20 @@ def _submit_public_form(
         member=member,
         booking=booking,
     )
-    # Passive hook only: candidate resolution is prepared here for future automations,
-    # but no WhatsApp message is sent and no global form toggle is introduced in v1.
+    try:
+        maybe_send_form_submission_whatsapp_message(
+            db,
+            form=form,
+            submission=submission,
+            member=member,
+            booking=booking,
+        )
+    except Exception:
+        logger.exception(
+            "submit_public_form_whatsapp_automation_failed form_id=%s submission_id=%s",
+            getattr(form, "id", None),
+            submission.id,
+        )
     enqueue_submission_notifications(
         db,
         form=form,

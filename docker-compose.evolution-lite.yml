@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+  evolution-api:
+    image: assonam/evolution-api-lite:custom
+    build:
+      context: .
+      dockerfile: docker/evolution-lite/Dockerfile
+    entrypoint:
+      - /bin/bash
+      - -lc
+      - export DATABASE_URL="$${DATABASE_CONNECTION_URI:-}"; export SERVER_TYPE="$${SERVER_TYPE:-http}"; export DATABASE_SAVE_DATA_INSTANCE="$${DATABASE_SAVE_DATA_INSTANCE:-true}"; export DATABASE_SAVE_DATA_NEW_MESSAGE="$${DATABASE_SAVE_DATA_NEW_MESSAGE:-true}"; export DATABASE_SAVE_MESSAGE_UPDATE="$${DATABASE_SAVE_MESSAGE_UPDATE:-true}"; export DATABASE_SAVE_DATA_CONTACTS="$${DATABASE_SAVE_DATA_CONTACTS:-true}"; export DATABASE_SAVE_DATA_CHATS="$${DATABASE_SAVE_DATA_CHATS:-true}"; export DATABASE_SAVE_DATA_HISTORIC="$${DATABASE_SAVE_DATA_HISTORIC:-true}"; export DATABASE_SAVE_IS_ON_WHATSAPP="$${DATABASE_SAVE_IS_ON_WHATSAPP:-true}"; export CACHE_REDIS_ENABLED="$${CACHE_REDIS_ENABLED:-false}"; . ./Docker/scripts/deploy_database.sh && npm run start:prod
+    depends_on:
+      - db
+    env_file:
+      - ./secrets/evolution-api-lite.env
+    expose:
+      - "8080"
+    volumes:
+      - evolution_instances:/evolution/instances
+      - ./secrets/evolution-api-lite.env:/evolution/.env:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+    restart: unless-stopped
+
+volumes:
+  evolution_instances:
