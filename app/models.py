@@ -1146,6 +1146,10 @@ class Form(Base):
     send_user_confirmation = Column(
         Boolean, nullable=False, default=True, server_default="true"
     )
+    whatsapp_auto_reply_enabled = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    whatsapp_auto_reply_template = Column(Text, nullable=True)
     admin_notification_template_id = Column(
         Integer, ForeignKey("email_templates.id"), nullable=True, index=True
     )

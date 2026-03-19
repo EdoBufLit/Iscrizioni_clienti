@@ -945,6 +945,8 @@ export type AssociationForm = {
   booking_field_mapping: Record<string, string>;
   notify_admin_on_submit: boolean;
   send_user_confirmation: boolean;
+  whatsapp_auto_reply_enabled: boolean;
+  whatsapp_auto_reply_template: string | null;
   admin_notification_template_id: number | null;
   user_confirmation_template_id: number | null;
   create_internal_request: boolean;
@@ -970,6 +972,8 @@ export type AssociationForm = {
     save_submission: boolean;
     notify_admin_on_submit: boolean;
     send_user_confirmation: boolean;
+    whatsapp_auto_reply_enabled: boolean;
+    whatsapp_auto_reply_template: string | null;
     admin_notification_template: AssociationFormActionTemplate | null;
     user_confirmation_template: AssociationFormActionTemplate | null;
     create_internal_request: boolean;
@@ -1671,6 +1675,8 @@ export async function createOrgAdminForm(data: {
   booking_field_mapping?: Record<string, string>;
   notify_admin_on_submit?: boolean;
   send_user_confirmation?: boolean;
+  whatsapp_auto_reply_enabled?: boolean;
+  whatsapp_auto_reply_template?: string | null;
   admin_notification_template_id?: number | null;
   user_confirmation_template_id?: number | null;
   create_internal_request?: boolean;
@@ -1718,6 +1724,8 @@ export async function updateOrgAdminForm(
   booking_field_mapping?: Record<string, string>;
   notify_admin_on_submit?: boolean;
   send_user_confirmation?: boolean;
+  whatsapp_auto_reply_enabled?: boolean;
+  whatsapp_auto_reply_template?: string | null;
   admin_notification_template_id?: number | null;
   user_confirmation_template_id?: number | null;
   create_internal_request?: boolean;

@@ -1711,6 +1711,8 @@ class CreateAssociationFormBody(BaseModel):
     booking_field_mapping: dict[str, str] = Field(default_factory=dict)
     notify_admin_on_submit: bool = True
     send_user_confirmation: bool = True
+    whatsapp_auto_reply_enabled: bool = False
+    whatsapp_auto_reply_template: Optional[str] = None
     admin_notification_template_id: Optional[int] = None
     user_confirmation_template_id: Optional[int] = None
     create_internal_request: bool = False
@@ -1740,6 +1742,8 @@ class UpdateAssociationFormBody(BaseModel):
     booking_field_mapping: dict[str, str] = Field(default_factory=dict)
     notify_admin_on_submit: bool = True
     send_user_confirmation: bool = True
+    whatsapp_auto_reply_enabled: bool = False
+    whatsapp_auto_reply_template: Optional[str] = None
     admin_notification_template_id: Optional[int] = None
     user_confirmation_template_id: Optional[int] = None
     create_internal_request: bool = False
@@ -4993,6 +4997,8 @@ def create_association_form(
         booking_field_mapping=body.booking_field_mapping,
         notify_admin_on_submit=body.notify_admin_on_submit,
         send_user_confirmation=body.send_user_confirmation,
+        whatsapp_auto_reply_enabled=body.whatsapp_auto_reply_enabled,
+        whatsapp_auto_reply_template=body.whatsapp_auto_reply_template,
         admin_notification_template_id=body.admin_notification_template_id,
         user_confirmation_template_id=body.user_confirmation_template_id,
         create_internal_request=body.create_internal_request,
@@ -5055,6 +5061,8 @@ def update_association_form(
         booking_field_mapping=body.booking_field_mapping,
         notify_admin_on_submit=body.notify_admin_on_submit,
         send_user_confirmation=body.send_user_confirmation,
+        whatsapp_auto_reply_enabled=body.whatsapp_auto_reply_enabled,
+        whatsapp_auto_reply_template=body.whatsapp_auto_reply_template,
         admin_notification_template_id=body.admin_notification_template_id,
         user_confirmation_template_id=body.user_confirmation_template_id,
         create_internal_request=body.create_internal_request,
@@ -5123,6 +5131,8 @@ def duplicate_association_form(
         booking_field_mapping=getattr(source_form, "booking_field_mapping", None) or {},
         notify_admin_on_submit=bool(source_form.notify_admin_on_submit),
         send_user_confirmation=bool(source_form.send_user_confirmation),
+        whatsapp_auto_reply_enabled=bool(getattr(source_form, "whatsapp_auto_reply_enabled", False)),
+        whatsapp_auto_reply_template=getattr(source_form, "whatsapp_auto_reply_template", None),
         admin_notification_template_id=source_form.admin_notification_template_id,
         user_confirmation_template_id=source_form.user_confirmation_template_id,
         create_internal_request=bool(source_form.create_internal_request),

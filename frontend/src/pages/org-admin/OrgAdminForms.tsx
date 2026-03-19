@@ -44,6 +44,13 @@ type BookingMappingTarget =
   | "party_size"
   | "notes";
 
+type WhatsAppAutomationVariable = {
+  key: string;
+  label: string;
+  placeholder: string;
+  hint: string;
+};
+
 const editorTabs: Array<{ key: EditorTab; label: string; hint: string }> = [
   { key: "builder", label: "Struttura", hint: "Campi e layout" },
   { key: "design", label: "Stile", hint: "Testi, colori, immagini" },
@@ -90,6 +97,25 @@ const bookingMappingTargets: Array<{ key: BookingMappingTarget; label: string; h
   { key: "party_size", label: "Numero persone", hint: "Dimensione gruppo o coperti." },
   { key: "notes", label: "Note", hint: "Richieste speciali o dettagli utili." },
 ];
+
+const baseWhatsAppVariables: WhatsAppAutomationVariable[] = [
+  { key: "nome_contatto", label: "Nome contatto", placeholder: "{{nome_contatto}}", hint: "Nome ricavato da form, prenotazione o socio associato." },
+  { key: "nome_associazione", label: "Nome associazione", placeholder: "{{nome_associazione}}", hint: "Nome dell'associazione." },
+  { key: "titolo_form", label: "Titolo form", placeholder: "{{titolo_form}}", hint: "Titolo del modulo che ha generato la richiesta." },
+  { key: "id_richiesta", label: "ID richiesta", placeholder: "{{id_richiesta}}", hint: "ID interno della submission." },
+  { key: "email_destinatario", label: "Email destinatario", placeholder: "{{email_destinatario}}", hint: "Email del submitter se disponibile." },
+  { key: "numero_whatsapp", label: "Numero WhatsApp", placeholder: "{{numero_whatsapp}}", hint: "Numero a cui ASSONAM inviera il messaggio." },
+  { key: "data_prenotazione", label: "Data prenotazione", placeholder: "{{data_prenotazione}}", hint: "Valorizzata quando il form genera una booking." },
+  { key: "orario_prenotazione", label: "Orario prenotazione", placeholder: "{{orario_prenotazione}}", hint: "Valorizzata quando il form genera una booking." },
+  { key: "numero_persone", label: "Numero persone", placeholder: "{{numero_persone}}", hint: "Party size della prenotazione se disponibile." },
+];
+
+function defaultWhatsAppTemplate(formType: AssociationFormType, bookingEnabled: boolean): string {
+  if (bookingEnabled || formType === "booking") {
+    return "Ciao {{nome_contatto}}, la tua richiesta di prenotazione per {{titolo_form}} e stata registrata correttamente. Ti ricontatteremo presto.";
+  }
+  return "Ciao {{nome_contatto}}, la tua richiesta tramite {{titolo_form}} e stata registrata correttamente. Ti ricontatteremo presto.";
+}
 
 function slugifyKey(value: string): string {
   return value
@@ -153,6 +179,8 @@ function emptyFormDraft() {
     booking_field_mapping: {} as Record<string, string>,
     notify_admin_on_submit: true,
     send_user_confirmation: true,
+    whatsapp_auto_reply_enabled: false,
+    whatsapp_auto_reply_template: "",
     admin_notification_template_id: null as number | null,
     user_confirmation_template_id: null as number | null,
     create_internal_request: false,
@@ -361,6 +389,8 @@ export function OrgAdminFormsWorkspace({
       booking_field_mapping: selectedForm.booking_field_mapping || {},
       notify_admin_on_submit: Boolean(selectedForm.notify_admin_on_submit),
       send_user_confirmation: Boolean(selectedForm.send_user_confirmation),
+      whatsapp_auto_reply_enabled: Boolean(selectedForm.whatsapp_auto_reply_enabled),
+      whatsapp_auto_reply_template: selectedForm.whatsapp_auto_reply_template || "",
       admin_notification_template_id: selectedForm.admin_notification_template_id,
       user_confirmation_template_id: selectedForm.user_confirmation_template_id,
       create_internal_request: Boolean(selectedForm.create_internal_request),
@@ -432,6 +462,18 @@ export function OrgAdminFormsWorkspace({
       value,
     }));
   }, [selectedForm?.fields, selectedSubmission?.payload_json]);
+  const whatsappAutomationVariables = useMemo<WhatsAppAutomationVariable[]>(
+    () => [
+      ...baseWhatsAppVariables,
+      ...sortedFields.map((field) => ({
+        key: field.field_key,
+        label: field.label,
+        placeholder: `{{${field.field_key}}}`,
+        hint: "Valore inviato dall'utente in questo campo del form.",
+      })),
+    ],
+    [sortedFields],
+  );
 
   function resetEditorState() {
     setIsCreatingForm(false);
@@ -535,6 +577,26 @@ export function OrgAdminFormsWorkspace({
     });
   }
 
+  function toggleWhatsAppAutoReply(enabled: boolean) {
+    setFormDraft((current) => ({
+      ...current,
+      whatsapp_auto_reply_enabled: enabled,
+      whatsapp_auto_reply_template:
+        enabled && !current.whatsapp_auto_reply_template.trim()
+          ? defaultWhatsAppTemplate(current.form_type, Boolean(current.booking_enabled || current.create_booking))
+          : current.whatsapp_auto_reply_template,
+    }));
+  }
+
+  function insertWhatsAppVariable(placeholder: string) {
+    setFormDraft((current) => ({
+      ...current,
+      whatsapp_auto_reply_template: current.whatsapp_auto_reply_template.trim()
+        ? `${current.whatsapp_auto_reply_template} ${placeholder}`
+        : placeholder,
+    }));
+  }
+
   function syncBookingFieldMapping(target: BookingMappingTarget, fieldKey: string) {
     setFormDraft((current) => ({
       ...current,
@@ -580,6 +642,8 @@ export function OrgAdminFormsWorkspace({
         booking_field_mapping: formDraft.booking_field_mapping || {},
         admin_notification_template_id: formDraft.admin_notification_template_id || null,
         user_confirmation_template_id: formDraft.user_confirmation_template_id || null,
+        whatsapp_auto_reply_enabled: formDraft.whatsapp_auto_reply_enabled,
+        whatsapp_auto_reply_template: formDraft.whatsapp_auto_reply_template || null,
         create_booking: bookingEnabled,
       };
       const response = selectedFormId
@@ -1214,6 +1278,99 @@ export function OrgAdminFormsWorkspace({
                 <input type="checkbox" disabled={locked} checked={formDraft.allow_multiple_submissions} onChange={(event) => syncFormDraft("allow_multiple_submissions", event.target.checked)} className="rounded border-neutral-300 text-brand" />
                 Consenti invii multipli dallo stesso utente
               </label>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-[1.4rem] border border-neutral-200 bg-white p-6 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-neutral-900">WhatsApp automatico</h3>
+                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-700">
+                  Sperimentale
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-neutral-500">
+                Invia un messaggio testuale automatico quando arriva una risposta a questo form. Usa la connessione WhatsApp gia attiva in Comunicazioni.
+              </p>
+            </div>
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-neutral-700">
+              <div className="relative flex items-center justify-center">
+                <input
+                  type="checkbox"
+                  disabled={locked}
+                  checked={formDraft.whatsapp_auto_reply_enabled}
+                  onChange={(event) => toggleWhatsAppAutoReply(event.target.checked)}
+                  className="peer sr-only"
+                />
+                <div className="h-6 w-10 rounded-full bg-neutral-200 transition-colors peer-checked:bg-brand"></div>
+                <div className="absolute left-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-4"></div>
+              </div>
+            </label>
+          </div>
+
+          <div className="mt-5 space-y-4">
+            <div className="rounded-xl border border-amber-100 bg-amber-50/70 p-4 text-xs text-amber-900">
+              Il messaggio parte solo se `ENABLE_WHATSAPP_EVOLUTION` e attivo, l'associazione ha una sessione WhatsApp connessa e il form contiene un numero valido oppure il socio associato ha un telefono.
+            </div>
+
+            <label className={labelClass}>
+              Template messaggio
+              <textarea
+                className={`${inputClass} min-h-[150px] resize-y`}
+                disabled={locked || !formDraft.whatsapp_auto_reply_enabled}
+                value={formDraft.whatsapp_auto_reply_template}
+                onChange={(event) => syncFormDraft("whatsapp_auto_reply_template", event.target.value)}
+                placeholder={defaultWhatsAppTemplate(formDraft.form_type, Boolean(formDraft.booking_enabled || formDraft.create_booking))}
+              />
+            </label>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn-secondary !px-4 !py-2 !text-sm"
+                disabled={locked || !formDraft.whatsapp_auto_reply_enabled}
+                onClick={() =>
+                  syncFormDraft(
+                    "whatsapp_auto_reply_template",
+                    defaultWhatsAppTemplate(formDraft.form_type, Boolean(formDraft.booking_enabled || formDraft.create_booking)),
+                  )
+                }
+              >
+                Carica template base
+              </button>
+              <button
+                type="button"
+                className="btn-secondary !px-4 !py-2 !text-sm"
+                disabled={locked || !formDraft.whatsapp_auto_reply_enabled}
+                onClick={() => syncFormDraft("whatsapp_auto_reply_template", "")}
+              >
+                Svuota
+              </button>
+            </div>
+
+            <div className="space-y-3 rounded-xl border border-neutral-200 bg-neutral-50/70 p-4">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-neutral-500">Variabili rapide</p>
+                <p className="mt-1 text-xs text-neutral-500">
+                  Puoi usare sia le variabili di sistema sia direttamente le `field_key` dei campi del form.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {whatsappAutomationVariables.map((variable) => (
+                  <button
+                    key={variable.placeholder}
+                    type="button"
+                    className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={locked || !formDraft.whatsapp_auto_reply_enabled}
+                    onClick={() => insertWhatsAppVariable(variable.placeholder)}
+                    title={variable.hint}
+                  >
+                    {variable.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>

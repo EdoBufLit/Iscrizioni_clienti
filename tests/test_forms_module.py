@@ -6,6 +6,7 @@ import uuid
 
 import pytest
 
+from app.config import settings
 from app.db import SessionLocal
 from app.models import (
     AdminRole,
@@ -17,7 +18,9 @@ from app.models import (
     OrgAdminNotification,
     OrgAdminToken,
     Organization,
+    WhatsAppMessage,
 )
+from app.services.whatsapp_sync import get_or_create_connection
 from app.utils import hash_token
 
 
@@ -116,6 +119,8 @@ def test_org_admin_forms_crud_public_submit_and_export(client, db):
             "allow_multiple_submissions": False,
             "notify_admin_on_submit": True,
             "send_user_confirmation": True,
+            "whatsapp_auto_reply_enabled": True,
+            "whatsapp_auto_reply_template": "Ciao {{nome_socio}}, abbiamo registrato {{titolo_form}}.",
             "admin_notification_template_id": admin_template.id,
             "user_confirmation_template_id": user_template.id,
             "create_internal_request": True,
@@ -130,6 +135,8 @@ def test_org_admin_forms_crud_public_submit_and_export(client, db):
     assert form["submit_button_text"] == "Prenota ora"
     assert form["cover_image_url"] == "https://example.com/cover.jpg"
     assert form["page_style"] == "spotlight"
+    assert form["whatsapp_auto_reply_enabled"] is True
+    assert "registrato" in (form["whatsapp_auto_reply_template"] or "")
 
     name_field_res = client.post(
         f"/api/org-admin/forms/{form_id}/fields",
@@ -311,6 +318,115 @@ def test_public_form_is_locked_when_communications_disabled(client, db):
     public_res = client.get(f"/api/forms/{org.slug}/{public_slug}")
     assert public_res.status_code == 403, public_res.text
     assert "richiedono il modulo comunicazioni attivo" in public_res.json()["detail"].lower()
+
+
+def test_public_form_submit_sends_whatsapp_auto_reply_when_connected(client, db, monkeypatch):
+    original_enabled = settings.ENABLE_WHATSAPP_EVOLUTION
+    settings.ENABLE_WHATSAPP_EVOLUTION = True
+    try:
+        org, admin = _create_org_admin(db)
+        _login_org_admin(client, db, admin.id)
+        public_slug = f"richiesta-whatsapp-{uuid.uuid4().hex[:6]}"
+
+        create_res = client.post(
+            "/api/org-admin/forms",
+            json={
+                "title": "Richiesta prenotazione",
+                "public_slug": public_slug,
+                "is_active": True,
+                "visibility": "public",
+                "form_type": "booking",
+                "booking_enabled": True,
+                "whatsapp_auto_reply_enabled": True,
+                "whatsapp_auto_reply_template": (
+                    "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} del {{data_prenotazione}} "
+                    "alle {{orario_prenotazione}} e stata registrata."
+                ),
+            },
+        )
+        assert create_res.status_code == 201, create_res.text
+        form_id = create_res.json()["form"]["id"]
+
+        for index, field in enumerate(
+            [
+                {"field_type": "short_text", "label": "Nome cliente", "field_key": "nome_cliente"},
+                {"field_type": "phone", "label": "Telefono", "field_key": "telefono"},
+                {"field_type": "date", "label": "Data", "field_key": "data_prenotazione"},
+                {"field_type": "short_text", "label": "Orario", "field_key": "orario_prenotazione"},
+            ]
+        ):
+            field_res = client.post(
+                f"/api/org-admin/forms/{form_id}/fields",
+                json={**field, "is_required": True, "sort_order": index * 10},
+            )
+            assert field_res.status_code == 201, field_res.text
+
+        connection = get_or_create_connection(db, org)
+        connection.status = "connected"
+        connection.phone_number = "+393404244452"
+        db.commit()
+
+        sent_payloads: list[dict[str, str]] = []
+        external_message_id = f"wamid-auto-{uuid.uuid4().hex[:10]}"
+
+        class _FakeSendResult:
+            def __init__(self, message_id: str):
+                self.external_message_id = message_id
+                self.status = "sent"
+                self.raw = {"id": message_id, "status": "sent"}
+
+        def fake_send_text(self, instance_name: str, *, number: str, text: str):
+            sent_payloads.append(
+                {
+                    "instance_name": instance_name,
+                    "number": number,
+                    "text": text,
+                }
+            )
+            return _FakeSendResult(external_message_id)
+
+        monkeypatch.setattr(
+            "app.services.whatsapp_automation.EvolutionLiteClient.send_text",
+            fake_send_text,
+        )
+
+        submit_res = client.post(
+            f"/api/forms/{org.slug}/{public_slug}/submit",
+            json={
+                "nome_cliente": "Giulia Bianchi",
+                "telefono": "+39 333 7654321",
+                "data_prenotazione": "2026-03-25",
+                "orario_prenotazione": "20:30",
+            },
+        )
+        assert submit_res.status_code == 200, submit_res.text
+
+        assert sent_payloads == [
+            {
+                "instance_name": f"assonam-org-{org.id}",
+                "number": "+393337654321",
+                "text": (
+                    "Ciao Giulia Bianchi, la tua richiesta per Richiesta prenotazione del 2026-03-25 "
+                    "alle 20:30 e stata registrata."
+                ),
+            }
+        ]
+
+        verification_db = SessionLocal()
+        try:
+            whatsapp_message = (
+                verification_db.query(WhatsAppMessage)
+                .filter(WhatsAppMessage.external_message_id == external_message_id)
+                .first()
+            )
+            assert whatsapp_message is not None
+            assert whatsapp_message.status == "sent"
+            assert whatsapp_message.recipient_phone == "+393337654321"
+            assert "Giulia Bianchi" in (whatsapp_message.text_body or "")
+        finally:
+            verification_db.close()
+    finally:
+        settings.ENABLE_WHATSAPP_EVOLUTION = original_enabled
 
 
 def test_org_admin_can_create_manual_booking_from_agenda(client, db):

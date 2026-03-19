@@ -1,4 +1,21 @@
 
+## Plan (WhatsApp auto-messages on form submissions - Mar 19, 2026)
+- [x] Mappare submit pubblico, CRUD forms e workspace org-admin per scegliere il punto corretto di configurazione
+- [x] Decidere il posizionamento prodotto: automazioni WhatsApp per-form dentro `Form pubblici`, non nelle campagne bulk
+- [x] Estendere schema/API forms con configurazione WhatsApp automatica sperimentale e template personalizzabili
+- [x] Collegare il trigger al submit pubblico usando il service WhatsApp esistente e mantenendo ASSONAM come source of truth
+- [x] Aggiornare la UI org-admin del form con setup, anteprima variabili e toggle per l'automazione
+- [ ] Verificare con test backend, typecheck/build frontend, push e deploy live su Hetzner
+
+## Review (WhatsApp auto-messages on form submissions - Mar 19, 2026)
+- La configurazione degli auto-messaggi WhatsApp e stata messa nel tab `Impostazioni` del singolo form, non nelle campagne bulk, perche il trigger reale e il submit del modulo e non un invio massivo.
+- Il modello `forms` ora salva due soli campi additivi: toggle sperimentale `whatsapp_auto_reply_enabled` e template `whatsapp_auto_reply_template`, con migration Alembic dedicata e repair idempotente in `init_db.py`.
+- Il submit pubblico ora prova ad inviare un messaggio WhatsApp automatico solo se la feature flag `ENABLE_WHATSAPP_EVOLUTION` e attiva, l'associazione ha una connessione Evolution gia `connected` e il numero viene risolto da form -> booking -> socio.
+- Il renderer template WhatsApp usa sia variabili curate (`{{nome_contatto}}`, `{{titolo_form}}`, `{{data_prenotazione}}`, ecc.) sia direttamente le `field_key` del form, cosi i copy restano personalizzabili senza introdurre un sistema template separato.
+- L'invio riusa la pipeline locale ASSONAM (`chat` + `message` nel DB) e non rende il submit fragile: eventuali errori WhatsApp vengono loggati senza far fallire la submission del form.
+- UI aggiornata in `Form pubblici` con card `WhatsApp automatico`, toggle, textarea template, caricamento rapido del template base e chips per inserire variabili sistema/campi del form.
+- Verifiche locali eseguite: `python -m py_compile app/services/whatsapp_automation.py app/services/forms.py app/routes/public.py app/routes/org_admin.py app/models.py init_db.py`, `pytest tests/test_forms_module.py -q`, `pytest tests/test_org_admin_whatsapp.py -q`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `python -m alembic upgrade head`.
+
 ## Review (WhatsApp Web-like layout + contact import pass - Mar 18, 2026)
 - UI WhatsApp rifatta con canvas dark a due colonne, sidebar chat-first, ricerca, filtri rapidi, header thread e composer in basso per avvicinare molto di piu il comportamento percepito a WhatsApp Web.
 - Sidebar ora fonde chat locali ASSONAM e contatti importati da Evolution Lite, cosi i contatti gia noti possono comparire anche prima del primo messaggio locale.
