@@ -258,7 +258,7 @@ const OrgAdminLayout = () => {
             moreItems={mobileMoreNav}
             moreTitle="Altro"
             moreContent={
-              <ReviewGuideButton className="mobile-dashboard-sheet__action w-full justify-start rounded-[1.4rem] border border-neutral-200/70 bg-white/85 px-4 py-3.5 text-sm font-semibold text-neutral-700 shadow-sm" />
+              <ReviewGuideButton className="mobile-dashboard-sheet__action w-full justify-start rounded-[1.25rem] border border-neutral-200/70 bg-white/85 px-4 py-3.5 text-sm font-semibold text-neutral-700 shadow-sm" />
             }
           />
         )}

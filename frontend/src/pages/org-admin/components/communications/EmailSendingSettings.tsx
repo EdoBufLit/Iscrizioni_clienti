@@ -137,18 +137,18 @@ export function EmailSendingSettings({ communicationsLocked }: EmailSendingSetti
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+    <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
       <div className="space-y-6">
-        <form className="rounded-[1.75rem] border border-neutral-200 bg-white p-6 shadow-sm" onSubmit={handleSaveSettings}>
-          <div>
-            <h2 className="text-lg font-semibold text-neutral-900">Configurazione Mittente</h2>
-            <p className="mt-1 text-sm text-neutral-600">
+        <form className="rounded-[1.25rem] bg-white p-8 ring-1 ring-inset ring-slate-200/60 shadow-sm" onSubmit={handleSaveSettings}>
+          <div className="border-b border-slate-100 pb-6 mb-8">
+            <h2 className="text-2xl font-light tracking-tight text-slate-900">Configurazione Mittente</h2>
+            <p className="mt-2 text-sm text-slate-500">
               Gestisci le informazioni con cui i tuoi soci riceveranno le email.
             </p>
           </div>
 
-          <div className="mt-6 space-y-5">
-            <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-8">
+            <div className="grid gap-6 md:grid-cols-2">
               <div>
                 <label className={labelClass}>
                   Nome visibile (Mittente)
@@ -163,7 +163,7 @@ export function EmailSendingSettings({ communicationsLocked }: EmailSendingSetti
                     placeholder={admin?.organization?.name || "Il nome della tua associazione"}
                   />
                 </label>
-                <p className="mt-2 text-xs text-neutral-500">Es: "Segreteria Associazione"</p>
+                <p className="mt-2 text-[11px] text-slate-500">Es: "Segreteria Associazione"</p>
               </div>
               <div>
                 <label className={labelClass}>
@@ -179,7 +179,7 @@ export function EmailSendingSettings({ communicationsLocked }: EmailSendingSetti
                     placeholder="info"
                   />
                 </label>
-                <p className="mt-2 text-xs text-neutral-500">Es: "info" per generare info@dominio.it</p>
+                <p className="mt-2 text-[11px] text-slate-500">Es: "info" per generare info@dominio.it</p>
               </div>
             </div>
 
@@ -198,12 +198,12 @@ export function EmailSendingSettings({ communicationsLocked }: EmailSendingSetti
                   placeholder="segreteria@associazione.it"
                 />
               </label>
-              <p className="mt-2 text-xs text-neutral-500">Se lasciato vuoto, le risposte andranno all'indirizzo mittente.</p>
+              <p className="mt-2 text-[11px] text-slate-500">Se lasciato vuoto, le risposte andranno all'indirizzo mittente.</p>
             </div>
           </div>
 
-          <div className="mt-8 flex flex-wrap items-center gap-4 border-t border-neutral-100 pt-6">
-            <button className="btn-primary py-3 px-6" type="submit" disabled={settingsSaving || communicationsLocked}>
+          <div className="mt-10 flex flex-wrap items-center gap-6 border-t border-slate-100 pt-8">
+            <button className="btn-primary !rounded-full px-8 py-3.5 text-sm font-medium" type="submit" disabled={settingsSaving || communicationsLocked}>
               {communicationsLocked
                 ? "Modulo bloccato"
                 : settingsSaving
@@ -212,7 +212,7 @@ export function EmailSendingSettings({ communicationsLocked }: EmailSendingSetti
                     ? "Salvato ✓"
                     : "Salva impostazioni"}
             </button>
-            <span className="text-sm text-neutral-500">
+            <span className="text-sm text-slate-500">
               Dominio collegato: <strong>{settings?.mail_from_domain || "Non configurato"}</strong>
             </span>
           </div>
@@ -220,31 +220,31 @@ export function EmailSendingSettings({ communicationsLocked }: EmailSendingSetti
       </div>
 
       <div className="space-y-6">
-        <div className="rounded-[1.75rem] border border-neutral-200 bg-neutral-50 p-6">
-          <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-neutral-500">Stato del servizio</h3>
+        <div className="rounded-[1.25rem] bg-slate-50 p-8 ring-1 ring-inset ring-slate-200/60">
+          <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Stato del servizio</h3>
           <div className="mt-4">
             <span
-              className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${
+              className={`inline-flex rounded-full px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] ${
                 moduleActive
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  : "border-amber-200 bg-amber-50 text-amber-700"
+                  ? "bg-emerald-100/50 text-emerald-700 ring-1 ring-inset ring-emerald-500/20"
+                  : "bg-amber-100/50 text-amber-700 ring-1 ring-inset ring-amber-500/20"
               }`}
             >
               {moduleActive ? "Attivo e funzionante" : "Non attivo"}
             </span>
           </div>
           {!moduleActive && (
-            <p className="mt-3 text-sm text-neutral-600">
+            <p className="mt-4 text-sm text-slate-600 leading-relaxed">
               Contatta ASSONAM per abilitare il modulo comunicazioni e l'invio di email.
             </p>
           )}
         </div>
 
-        <form className="rounded-[1.75rem] border border-neutral-200 bg-white p-6 shadow-sm" onSubmit={handleSendTestEmail}>
-          <h3 className="text-sm font-semibold text-neutral-900">Prova l'invio</h3>
-          <p className="mt-1 text-sm text-neutral-600">Invia un'email di test per verificare che tutto funzioni.</p>
+        <form className="rounded-[1.25rem] bg-white p-8 ring-1 ring-inset ring-slate-200/60 shadow-sm" onSubmit={handleSendTestEmail}>
+          <h3 className="text-lg font-medium text-slate-900">Prova l'invio</h3>
+          <p className="mt-2 text-sm text-slate-500 mb-6">Invia un'email di test per verificare che tutto funzioni.</p>
           
-          <div className="mt-4">
+          <div className="space-y-6">
             <label className={labelClass}>
               Email di destinazione
               <input
@@ -257,10 +257,8 @@ export function EmailSendingSettings({ communicationsLocked }: EmailSendingSetti
                 required
               />
             </label>
-          </div>
-          
-          <div className="mt-5">
-            <button className="btn-secondary w-full" type="submit" disabled={testSending || communicationsLocked || !testEmail}>
+            
+            <button className="btn-secondary w-full !rounded-full py-3" type="submit" disabled={testSending || communicationsLocked || !testEmail}>
               {testSending ? "Invio in corso..." : "Invia email di test"}
             </button>
           </div>

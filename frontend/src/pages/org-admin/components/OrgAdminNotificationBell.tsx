@@ -243,7 +243,7 @@ const OrgAdminNotificationBell = () => {
             {loading ? (
               <div className="space-y-3 p-2">
                 {[0, 1, 2].map((item) => (
-                  <div key={item} className="animate-pulse rounded-3xl border border-neutral-100 bg-neutral-50/70 px-4 py-4">
+                  <div key={item} className="animate-pulse rounded-[1.25rem] border border-neutral-100 bg-neutral-50/70 px-4 py-4">
                     <div className="h-3 w-24 rounded bg-neutral-200" />
                     <div className="mt-3 h-4 w-40 rounded bg-neutral-200" />
                     <div className="mt-2 h-3 w-full rounded bg-neutral-100" />
@@ -251,7 +251,7 @@ const OrgAdminNotificationBell = () => {
                 ))}
               </div>
             ) : items.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-neutral-300 bg-neutral-50/70 px-5 py-10 text-center">
+              <div className="rounded-[1.25rem] border border-dashed border-neutral-300 bg-neutral-50/70 px-5 py-10 text-center">
                 <p className="text-sm font-semibold text-neutral-500">Nessuna notifica disponibile.</p>
               </div>
             ) : (
@@ -259,7 +259,7 @@ const OrgAdminNotificationBell = () => {
                 {items.map((notification) => (
                   <div
                     key={notification.id}
-                    className={`w-full rounded-3xl border px-4 py-4 text-left transition ${
+                    className={`w-full rounded-[1.25rem] border px-4 py-4 text-left transition ${
                       notification.is_read
                         ? "border-neutral-200 bg-white hover:border-neutral-300"
                         : "border-brand/20 bg-brand/5 shadow-[0_18px_50px_-40px_rgba(15,118,110,0.45)] hover:border-brand/40"

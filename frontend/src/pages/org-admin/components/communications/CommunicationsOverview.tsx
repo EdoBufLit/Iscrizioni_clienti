@@ -16,9 +16,9 @@ type CommunicationsOverviewProps = {
 function StatCard(props: { label: string; value: number }) {
   const { label, value } = props;
   return (
-    <div className="rounded-[1.4rem] border border-neutral-200 bg-white px-5 py-4 shadow-sm">
-      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">{label}</p>
-      <p className="mt-2 text-3xl font-bold tracking-tight text-neutral-900">{value}</p>
+    <div className="rounded-[1.25rem] bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60 transition-all hover:bg-slate-100/50">
+      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">{label}</p>
+      <p className="mt-3 text-4xl font-light tracking-tight text-slate-900">{value}</p>
     </div>
   );
 }
@@ -35,11 +35,11 @@ function QuickActionCard(props: {
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`rounded-[1.5rem] border px-5 py-4 text-left shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 ${tone}`}
+      className={`rounded-[1.25rem] p-6 text-left transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-50 ${tone}`}
     >
       <div className="flex items-center justify-between gap-4">
-        <p className="text-sm font-semibold text-neutral-900">{title}</p>
-        <span className="text-lg text-neutral-500">-&gt;</span>
+        <p className="text-base font-medium">{title}</p>
+        <span className="text-xl font-light opacity-50 transition-transform group-hover:translate-x-1">&rarr;</span>
       </div>
     </button>
   );
@@ -125,55 +125,61 @@ export function CommunicationsOverview({
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+    <div className="space-y-12">
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-6">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Comunicazioni</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-neutral-900">Comunicazioni</h1>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Communications Module</p>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">Panoramica</h1>
         </div>
-        <button type="button" className="btn-secondary" onClick={() => onTabChange("impostazioni")}>
+        <button type="button" className="btn-secondary !rounded-full !px-5" onClick={() => onTabChange("impostazioni")}>
           Impostazioni email
         </button>
       </div>
 
-      <section className="grid gap-4 md:grid-cols-3">
-        <StatCard label="Campagne inviate" value={stats.sentCampaigns} />
-        <StatCard label="Bozze" value={stats.drafts} />
-        <StatCard label="Form pubblici attivi" value={stats.activeForms} />
+      <section>
+        <h2 className="text-sm font-bold uppercase tracking-[0.15em] text-slate-400 mb-6">Stato attuale</h2>
+        <div className="grid gap-4 md:grid-cols-3">
+          <StatCard label="Campagne inviate" value={stats.sentCampaigns} />
+          <StatCard label="Bozze in lavorazione" value={stats.drafts} />
+          <StatCard label="Form pubblici attivi" value={stats.activeForms} />
+        </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
-        <QuickActionCard
-          title="Invita a compilare un modulo"
-          tone="border-emerald-200 bg-emerald-50/80"
-          onClick={() => onQuickAction("form_invite")}
-          disabled={communicationsLocked}
-        />
-        <QuickActionCard
-          title="Invia comunicazione ai soci"
-          tone="border-sky-200 bg-sky-50/80"
-          onClick={() => onQuickAction("general")}
-          disabled={communicationsLocked}
-        />
-        <QuickActionCard
-          title="Ricorda un rinnovo"
-          tone="border-amber-200 bg-amber-50/80"
-          onClick={() => onQuickAction("renewal")}
-          disabled={communicationsLocked}
-        />
+      <section>
+        <h2 className="text-sm font-bold uppercase tracking-[0.15em] text-slate-400 mb-6">Azioni rapide</h2>
+        <div className="grid gap-4 md:grid-cols-3">
+          <QuickActionCard
+            title="Invita a compilare un modulo"
+            tone="bg-emerald-50/50 hover:bg-emerald-50 ring-1 ring-inset ring-emerald-500/20 text-emerald-900"
+            onClick={() => onQuickAction("form_invite")}
+            disabled={communicationsLocked}
+          />
+          <QuickActionCard
+            title="Invia comunicazione ai soci"
+            tone="bg-sky-50/50 hover:bg-sky-50 ring-1 ring-inset ring-sky-500/20 text-sky-900"
+            onClick={() => onQuickAction("general")}
+            disabled={communicationsLocked}
+          />
+          <QuickActionCard
+            title="Ricorda un rinnovo"
+            tone="bg-amber-50/50 hover:bg-amber-50 ring-1 ring-inset ring-amber-500/20 text-amber-900"
+            onClick={() => onQuickAction("renewal")}
+            disabled={communicationsLocked}
+          />
+        </div>
       </section>
 
       {senderInfo ? (
-        <section className="rounded-[1.5rem] border border-neutral-200 bg-white px-5 py-4 shadow-sm">
+        <section className="rounded-[1.5rem] bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Stato invio email</p>
-              <p className="mt-2 text-sm font-semibold text-neutral-900 break-all">{senderInfo.fromHeader}</p>
-              <p className="mt-1 text-xs text-neutral-500">
-                Reply-to: {senderInfo.replyTo || "Usa il mittente"} / Stato dominio: {senderInfo.domainLabel}
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Stato invio email</p>
+              <p className="mt-3 text-base font-medium text-slate-900 break-all">{senderInfo.fromHeader}</p>
+              <p className="mt-1 text-sm text-slate-500">
+                Reply-to: {senderInfo.replyTo || "Usa il mittente"} &bull; Dominio: {senderInfo.domainLabel}
               </p>
             </div>
-            <button type="button" className="btn-secondary !text-sm" onClick={() => onTabChange("impostazioni")}>
+            <button type="button" className="btn-secondary !rounded-full !text-sm !px-5" onClick={() => onTabChange("impostazioni")}>
               Modifica
             </button>
           </div>

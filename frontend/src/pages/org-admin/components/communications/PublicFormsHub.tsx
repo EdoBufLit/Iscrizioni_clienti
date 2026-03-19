@@ -42,7 +42,7 @@ export function PublicFormsHub({ locked = false }: PublicFormsHubProps) {
   }, [showToast]);
 
   if (loading) {
-    return <Skeleton className="h-[32rem] w-full rounded-[2rem]" />;
+    return <Skeleton className="h-[32rem] w-full rounded-[1.25rem]" />;
   }
 
   return <OrgAdminFormsWorkspace embedded locked={locked} availableTemplates={templates} />;

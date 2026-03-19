@@ -243,7 +243,7 @@ const OrgAdminCards = () => {
           </p>
 
           {movementsTotal === 0 ? (
-            <div className="surface mt-6 px-7 py-12 text-center">
+            <div className="mt-6 px-7 py-12 text-center rounded-[1.25rem] ring-1 ring-inset ring-slate-200/60 border-dashed bg-slate-50">
               <svg
                 className="mx-auto h-10 w-10 text-neutral-300"
                 viewBox="0 0 24 24"

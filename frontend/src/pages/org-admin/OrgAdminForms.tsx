@@ -31,7 +31,6 @@ import { ImageUpload } from "../../components/forms/builder/ImageUpload";
 const inputClass =
   "mt-1 w-full rounded-[1.1rem] border border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-neutral-900/40 focus:ring-2 focus:ring-neutral-900/10";
 const labelClass = "block text-sm font-medium text-neutral-700";
-const studioCardClass = "rounded-[1.85rem] border border-neutral-200 bg-white/92 shadow-[0_24px_80px_rgba(15,23,42,0.06)] backdrop-blur";
 
 type EditorTab = "builder" | "design" | "settings" | "responses";
 type PageStyleOption = "editorial" | "minimal" | "spotlight";
@@ -999,7 +998,7 @@ export function OrgAdminFormsWorkspace({
   const designTab = (
     <div className="grid gap-6 lg:grid-cols-[380px_1fr] h-[calc(100vh-280px)]">
       <div className="space-y-6 overflow-y-auto pr-2 custom-scrollbar pb-10">
-        <div className="rounded-[1.4rem] border border-neutral-200 bg-white p-5 shadow-sm">
+        <div className="rounded-[1.25rem] border border-neutral-200 bg-white p-5 shadow-sm">
           <h3 className="text-sm font-semibold text-neutral-900 mb-4">Contenuto hero</h3>
           <div className="space-y-4">
             <label className={labelClass}>
@@ -1035,7 +1034,7 @@ export function OrgAdminFormsWorkspace({
           </div>
         </div>
 
-        <div className="rounded-[1.4rem] border border-neutral-200 bg-white p-5 shadow-sm">
+        <div className="rounded-[1.25rem] border border-neutral-200 bg-white p-5 shadow-sm">
           <h3 className="text-sm font-semibold text-neutral-900 mb-4">Branding e Immagini</h3>
           <div className="space-y-6">
             <label className="flex items-center justify-between cursor-pointer group">
@@ -1063,7 +1062,7 @@ export function OrgAdminFormsWorkspace({
           </div>
         </div>
 
-        <div className="rounded-[1.4rem] border border-neutral-200 bg-white p-5 shadow-sm">
+        <div className="rounded-[1.25rem] border border-neutral-200 bg-white p-5 shadow-sm">
           <h3 className="text-sm font-semibold text-neutral-900 mb-4">Stile visivo</h3>
           <div className="space-y-6">
             <label className={labelClass}>
@@ -1128,7 +1127,7 @@ export function OrgAdminFormsWorkspace({
         </div>
       </div>
 
-      <div className="rounded-[1.6rem] border border-neutral-200 bg-neutral-100 overflow-hidden shadow-inner flex flex-col h-full">
+      <div className="rounded-[1.25rem] border border-neutral-200 bg-neutral-100 overflow-hidden shadow-inner flex flex-col h-full">
         <div className="bg-white/80 px-4 py-2 border-b border-neutral-200 backdrop-blur-md flex items-center justify-between z-10 shrink-0">
           <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Live Preview</span>
           <div className="flex gap-1.5">
@@ -1147,7 +1146,7 @@ export function OrgAdminFormsWorkspace({
   const automationsTab = (
     <div className="grid gap-6 lg:grid-cols-[1fr_1fr] h-[calc(100vh-280px)] overflow-y-auto custom-scrollbar pb-10">
       <div className="space-y-6">
-        <div className="rounded-[1.4rem] border border-neutral-200 bg-white p-6 shadow-sm">
+        <div className="rounded-[1.25rem] border border-neutral-200 bg-white p-6 shadow-sm">
           <h3 className="text-sm font-semibold text-neutral-900 mb-1">Pubblicazione e Accesso</h3>
           <p className="text-xs text-neutral-500 mb-5">Gestisci la visibilità del form.</p>
           
@@ -1188,7 +1187,7 @@ export function OrgAdminFormsWorkspace({
           </div>
         </div>
 
-        <div className="rounded-[1.4rem] border border-neutral-200 bg-white p-6 shadow-sm">
+        <div className="rounded-[1.25rem] border border-neutral-200 bg-white p-6 shadow-sm">
           <h3 className="text-sm font-semibold text-neutral-900 mb-4">Comportamento invio</h3>
           <div className="space-y-4">
             <label className={labelClass}>
@@ -1220,7 +1219,7 @@ export function OrgAdminFormsWorkspace({
       </div>
 
       <div className="space-y-6">
-        <div className="rounded-[1.4rem] border border-neutral-200 bg-white p-6 shadow-sm">
+        <div className="rounded-[1.25rem] border border-neutral-200 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-neutral-900">Integrazione Prenotazioni</h3>
             <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer group">
@@ -1274,7 +1273,7 @@ export function OrgAdminFormsWorkspace({
           )}
         </div>
         
-        <div className="rounded-[1.4rem] border border-neutral-200 bg-white p-6 shadow-sm">
+        <div className="rounded-[1.25rem] border border-neutral-200 bg-white p-6 shadow-sm">
           <h3 className="text-sm font-semibold text-neutral-900 mb-4">Personalizzazione Email (Avanzate)</h3>
           <div className="space-y-4">
             <label className={labelClass}>
@@ -1389,51 +1388,52 @@ export function OrgAdminFormsWorkspace({
   );
 
   return (
-    <div className={embedded ? "" : (isEditorOpen ? "w-full" : "container-shell py-6")}>
-      <div className={`${embedded ? "space-y-6" : (isEditorOpen ? "w-full" : "mx-auto max-w-6xl space-y-6")}`}>
+    <div className={embedded ? "" : (isEditorOpen ? "w-full" : "container-shell py-8 md:py-10")}>
+      <div className={`${embedded ? "space-y-6" : (isEditorOpen ? "w-full" : "mx-auto max-w-[92rem] space-y-6")}`}>
         {error ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+          <div className="rounded-[1.25rem] bg-rose-50/50 p-4 text-sm font-medium text-rose-700 ring-1 ring-inset ring-rose-500/20">{error}</div>
         ) : null}
         {locked ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-5 text-sm text-amber-900 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-700">Workflow bloccato</p>
-            <p className="mt-2">{lockedMessage}</p>
+          <div className="rounded-[1.25rem] bg-amber-50/50 p-5 text-sm text-amber-900 ring-1 ring-inset ring-amber-500/20">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-700">Workflow bloccato</p>
+            <p className="mt-1.5 font-medium">{lockedMessage}</p>
           </div>
         ) : null}
 
         {!isEditorOpen && !loading && !adminLoading && forms.length > 0 && (
-          <section className={`${studioCardClass} overflow-hidden`}>
-            <div className="border-b border-neutral-200/80 px-5 py-4">
+          <section className="rounded-[1.25rem] bg-white p-8 ring-1 ring-inset ring-slate-200/60 shadow-sm">
+            <div className="border-b border-slate-100 pb-6 mb-8">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h2 className="text-xl font-semibold tracking-tight text-neutral-900">Le tue pagine modulo</h2>
-                  <p className="mt-1 text-sm text-neutral-500">Seleziona una pagina esistente o creane una nuova.</p>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Gestione Moduli</p>
+                  <h2 className="mt-2 text-2xl font-light tracking-tight text-slate-900">Le tue pagine modulo</h2>
+                  <p className="mt-1 text-sm text-slate-500">Seleziona una pagina esistente o creane una nuova.</p>
                 </div>
-                <button className="btn-primary" type="button" onClick={handleCreateNewForm} disabled={locked}>
+                <button className="btn-primary !rounded-full !px-6" type="button" onClick={handleCreateNewForm} disabled={locked}>
                   {locked ? "Modulo richiesto" : "Nuovo form"}
                 </button>
               </div>
             </div>
-            <div className="px-5 py-5">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div>
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {forms.map((form) => (
                   <div
                     key={form.id}
                     onClick={() => {
                       void openFormEditor(form.id);
                     }}
-                    className="group cursor-pointer rounded-xl border border-neutral-200 bg-white p-4 transition hover:border-neutral-300 hover:shadow-sm"
+                    className="group cursor-pointer rounded-[1.25rem] bg-white p-5 ring-1 ring-inset ring-slate-200/60 transition-all hover:-translate-y-1 hover:shadow-sm hover:bg-slate-50"
                   >
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start justify-between gap-4">
                       <div>
-                        <h3 className="font-semibold text-neutral-900">{form.title}</h3>
-                        <p className="mt-1 text-xs text-neutral-500">/{form.public_slug}</p>
+                        <h3 className="text-lg font-medium tracking-tight text-slate-900">{form.title}</h3>
+                        <p className="mt-1 text-sm text-slate-400">/{form.public_slug}</p>
                       </div>
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${form.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-neutral-100 text-neutral-600'}`}>
+                      <span className={`inline-flex rounded-full px-3 py-1 text-[9px] font-bold uppercase tracking-[0.2em] ${form.is_active ? 'bg-emerald-100/50 text-emerald-700 ring-1 ring-inset ring-emerald-500/20' : 'bg-slate-100/80 text-slate-600'}`}>
                         {form.is_active ? 'Attivo' : 'Bozza'}
                       </span>
                     </div>
-                    <div className="mt-4 flex items-center justify-between text-xs text-neutral-500">
+                    <div className="mt-6 flex items-center justify-between text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 border-t border-slate-100 pt-4">
                       <span>{form.submission_count} risposte</span>
                       <span>{form.field_count} campi</span>
                     </div>
@@ -1445,14 +1445,14 @@ export function OrgAdminFormsWorkspace({
         )}
 
         {!isEditorOpen && !loading && !adminLoading && forms.length === 0 && (
-          <section className={`${studioCardClass} px-6 py-10 text-center`}>
+          <section className="rounded-[1.25rem] bg-white p-12 ring-1 ring-inset ring-slate-200/60 shadow-sm text-center">
             <div className="mx-auto max-w-xl">
-              <p className="text-xs font-bold uppercase tracking-[0.24em] text-neutral-500">Pagine e moduli</p>
-              <h2 className="mt-3 text-2xl font-semibold tracking-tight text-neutral-900">Nessun form creato</h2>
-              <p className="mt-2 text-sm text-neutral-500">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Pagine e moduli</p>
+              <h2 className="mt-4 text-3xl font-light tracking-tight text-slate-900">Nessun form creato</h2>
+              <p className="mt-3 text-base text-slate-500">
                 Crea il primo modulo pubblico per raccogliere iscrizioni, richieste o prenotazioni.
               </p>
-              <button className="btn-primary mt-6" type="button" onClick={handleCreateNewForm} disabled={locked}>
+              <button className="btn-primary !rounded-full !px-8 !py-3.5 text-sm font-medium mt-8" type="button" onClick={handleCreateNewForm} disabled={locked}>
                 Crea un nuovo form
               </button>
             </div>
@@ -1630,7 +1630,7 @@ export function OrgAdminFormsWorkspace({
           
           <div className="flex-1 overflow-auto p-4 md:p-8 flex justify-center items-start custom-scrollbar">
             <div 
-               className={`bg-white rounded-[2rem] overflow-hidden shadow-2xl transition-all duration-300 ring-4 ring-white/5 ${previewMode === "mobile" ? "w-[375px] min-h-[812px]" : "w-full max-w-[1440px] min-h-[800px]"}`}
+               className={`bg-white rounded-[1.25rem] overflow-hidden shadow-2xl transition-all duration-300 ring-4 ring-white/5 ${previewMode === "mobile" ? "w-[375px] min-h-[812px]" : "w-full max-w-[1440px] min-h-[800px]"}`}
             >
               <FormPublicCanvas form={previewForm} values={previewValues} interactive />
             </div>

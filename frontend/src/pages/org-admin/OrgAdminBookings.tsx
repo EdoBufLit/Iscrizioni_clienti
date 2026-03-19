@@ -737,8 +737,8 @@ export default function OrgAdminBookings() {
   if (loading) {
     return (
       <div className="container-shell py-8 space-y-4">
-        <Skeleton className="h-28 w-full rounded-[2rem]" />
-        <Skeleton className="h-[38rem] w-full rounded-[2rem]" />
+        <Skeleton className="h-28 w-full rounded-[1.25rem]" />
+        <Skeleton className="h-[38rem] w-full rounded-[1.25rem]" />
       </div>
     );
   }
@@ -746,7 +746,7 @@ export default function OrgAdminBookings() {
   if (locked) {
     return (
       <div className="container-shell py-8">
-        <div className="rounded-[2rem] border border-amber-200 bg-amber-50 px-6 py-6 text-sm text-amber-900">
+        <div className="rounded-[1.25rem] border border-amber-200 bg-amber-50 px-6 py-6 text-sm text-amber-900">
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-700">Modulo bloccato</p>
           <p className="mt-2">Le Prenotazioni richiedono il modulo Comunicazioni attivo.</p>
         </div>
@@ -757,7 +757,7 @@ export default function OrgAdminBookings() {
   return (
     <div className="container-shell py-8 md:py-10">
       <div className="mx-auto max-w-[92rem] space-y-6">
-        <section className="bg-slate-50/50 rounded-[2rem] p-3 ring-1 ring-inset ring-slate-200/60">
+        <section className="bg-slate-50/50 rounded-[1.25rem] p-3 ring-1 ring-inset ring-slate-200/60">
           <div className="grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] xl:items-center">
             {/* Modern, horizontal, scrollable tab navigation without heavy borders */}
             <nav className="flex gap-1 overflow-x-auto px-1 pb-1 scrollbar-hide">
@@ -956,7 +956,7 @@ export default function OrgAdminBookings() {
 
         {section === "map" && (
           <section className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_380px]">
-            <div className="surface-strong rounded-[2rem] p-6">
+            <div className="surface-strong rounded-[1.25rem] p-6">
               <div className="grid gap-3 md:grid-cols-3">
                 <Field label="Sala">
                   <select className={inputClass} value={selectedRoomId ?? ""} onChange={(event) => setSelectedRoomId(event.target.value ? Number(event.target.value) : null)}>
@@ -989,7 +989,7 @@ export default function OrgAdminBookings() {
               </div>
             </div>
             <aside className="space-y-4">
-              <div className="surface-strong rounded-[2rem] p-5">
+              <div className="surface-strong rounded-[1.25rem] p-5">
                 <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">Legenda</p>
                 <div className="mt-4 space-y-3">
                   {["free", "reserved", "occupied", "out_of_service"].map((state) => (
@@ -1000,7 +1000,7 @@ export default function OrgAdminBookings() {
                   Salva posizione tavoli
                 </button>
               </div>
-              <div className="surface-strong rounded-[2rem] p-5">
+              <div className="surface-strong rounded-[1.25rem] p-5">
                 <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">Tavolo selezionato</p>
                 {selectedMapTable ? (
                   <div className="mt-4 space-y-2 text-sm text-slate-700">
@@ -1150,10 +1150,11 @@ export default function OrgAdminBookings() {
 
 function EmptyState({ message }: { message: string }) {
   return (
-    <div className="rounded-[1.25rem] bg-slate-50/50 p-8 text-center ring-1 ring-inset ring-slate-200/60 border-dashed">
+    <div className="rounded-[1.25rem] bg-slate-50 p-8 text-center ring-1 ring-inset ring-slate-200/60 border-dashed shadow-sm">
       <p className="text-sm font-medium text-slate-500">{message}</p>
     </div>
   );
+}
 }
 
 function ActionRow({ primaryLabel, secondaryLabel, onPrimary, onSecondary, busy }: { primaryLabel: string; secondaryLabel: string; onPrimary: () => void; onSecondary: () => void; busy: boolean; }) {
@@ -1172,12 +1173,12 @@ function ActionRow({ primaryLabel, secondaryLabel, onPrimary, onSecondary, busy 
 function ManagementShell({ title, subtitle, main, side }: { title: string; subtitle: string; main: React.ReactNode; side: React.ReactNode }) {
   return (
     <section className="grid gap-8 xl:grid-cols-[minmax(0,1.2fr)_360px]">
-      <div className="rounded-[2rem] bg-slate-50 p-8 ring-1 ring-inset ring-slate-200/60 shadow-sm">
+      <div className="rounded-[1.25rem] bg-slate-50 p-8 ring-1 ring-inset ring-slate-200/60 shadow-sm">
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">{title}</p>
         <h2 className="mt-2 text-2xl font-light tracking-tight text-slate-900">{subtitle}</h2>
         <div className="mt-8">{main}</div>
       </div>
-      <aside className="rounded-[2rem] bg-slate-50/50 p-6 ring-1 ring-inset ring-slate-200/60 h-fit sticky top-6">
+      <aside className="rounded-[1.25rem] bg-slate-50/50 p-6 ring-1 ring-inset ring-slate-200/60 h-fit sticky top-6">
         {side}
       </aside>
     </section>
@@ -1255,7 +1256,7 @@ function AgendaSection(props: {
   return (
     <>
       <section className="space-y-8">
-        <div className="rounded-[2rem] bg-slate-50 p-8 ring-1 ring-inset ring-slate-200/60 shadow-sm">
+        <div className="rounded-[1.25rem] bg-slate-50 p-8 ring-1 ring-inset ring-slate-200/60 shadow-sm">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between border-b border-slate-100 pb-8">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Calendario</p>
@@ -1307,7 +1308,7 @@ function AgendaSection(props: {
             <MetricBox label="Servite" value={props.monthOccupancy.completed} />
           </div>
         </div>
-        <div className="rounded-[2rem] bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60 shadow-sm">
+        <div className="rounded-[1.25rem] bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60 shadow-sm">
           <div className="grid grid-cols-7 gap-2 border-b ring-slate-200/60 px-2 pb-4">
             {["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"].map((label) => (
               <div key={label} className="px-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">{label}</div>
@@ -1468,7 +1469,7 @@ function BookingDetailPanel(props: {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-[2rem] bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60 shadow-sm">
+      <div className="rounded-[1.25rem] bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-5">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Prenotazione</p>
@@ -1503,7 +1504,7 @@ function BookingDetailPanel(props: {
         ) : null}
       </div>
 
-      <div className="rounded-[2rem] bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60 shadow-sm">
+      <div className="rounded-[1.25rem] bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60 shadow-sm">
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-4">Stato servizio</p>
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
           {bookingStatuses.map((status) => (
@@ -1524,7 +1525,7 @@ function BookingDetailPanel(props: {
         </div>
       </div>
 
-      <div className="rounded-[2rem] bg-slate-50/50 p-6 ring-1 ring-inset ring-slate-200/60">
+      <div className="rounded-[1.25rem] bg-slate-50/50 p-6 ring-1 ring-inset ring-slate-200/60">
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-4">Assegna sala e tavolo</p>
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Sala">

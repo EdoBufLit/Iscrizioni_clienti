@@ -375,13 +375,13 @@ const OrgAdminInvites = () => {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td className="px-4 py-6 text-neutral-500" colSpan={4}>
+                    <td className="px-6 py-12 text-center text-sm text-slate-500 bg-slate-50 border-dashed ring-1 ring-inset ring-slate-200/60 rounded-[1.25rem] block m-4" colSpan={4}>
                       Caricamento inviti...
                     </td>
                   </tr>
                 ) : items.length === 0 ? (
                   <tr>
-                    <td className="px-4 py-6 text-neutral-500" colSpan={4}>
+                    <td className="px-6 py-12 text-center text-sm text-slate-500 bg-slate-50 border-dashed ring-1 ring-inset ring-slate-200/60 rounded-[1.25rem] block m-4" colSpan={4}>
                       Nessun invito registrato.
                     </td>
                   </tr>
