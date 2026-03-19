@@ -145,10 +145,10 @@ export default function OrgAdminCommunications() {
   }, [activeTab, searchParams]);
 
   useEffect(() => {
-    if (!whatsappEnabled && activeTab === "whatsapp") {
+    if (!loading && !whatsappEnabled && activeTab === "whatsapp") {
       selectTab("messaggi");
     }
-  }, [activeTab, whatsappEnabled]);
+  }, [activeTab, loading, whatsappEnabled]);
 
   if (loading) {
     return (
