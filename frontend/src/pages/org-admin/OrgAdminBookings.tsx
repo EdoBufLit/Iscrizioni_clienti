@@ -1155,7 +1155,6 @@ function EmptyState({ message }: { message: string }) {
     </div>
   );
 }
-}
 
 function ActionRow({ primaryLabel, secondaryLabel, onPrimary, onSecondary, busy }: { primaryLabel: string; secondaryLabel: string; onPrimary: () => void; onSecondary: () => void; busy: boolean; }) {
   return (
