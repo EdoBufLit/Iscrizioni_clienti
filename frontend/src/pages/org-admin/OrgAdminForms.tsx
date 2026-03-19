@@ -473,6 +473,59 @@ export function OrgAdminFormsWorkspace({
     ],
     [sortedFields],
   );
+  const connectedWhatsAppAutomations = useMemo(
+    () => selectedForm?.whatsapp_automations || [],
+    [selectedForm?.whatsapp_automations],
+  );
+  const automationConnectionRows = useMemo(() => {
+    const rows = [
+      {
+        key: "email_confirmation",
+        label: "Email confirmation",
+        description: formDraft.send_user_confirmation
+          ? "Conferma utente via email attiva."
+          : "Nessuna conferma email utente attiva.",
+        enabled: Boolean(formDraft.send_user_confirmation),
+        action: () => setActiveTab("settings"),
+      },
+      {
+        key: "whatsapp_confirmation",
+        label: "WhatsApp confirmation",
+        description: connectedWhatsAppAutomations.length
+          ? connectedWhatsAppAutomations[0]
+            ? `Regola attiva: ${connectedWhatsAppAutomations[0].template_name}.`
+            : "Regola WhatsApp collegata."
+          : "Nessuna regola WhatsApp collegata a questo form.",
+        enabled: connectedWhatsAppAutomations.some((item) => item.is_active),
+        action: () => navigate(`/org-admin/comunicazioni?tab=whatsapp&formId=${selectedFormId ?? ""}`),
+      },
+      {
+        key: "admin_notification",
+        label: "Admin notification",
+        description: formDraft.notify_admin_on_submit
+          ? "La segreteria riceve una notifica o un riepilogo."
+          : "Nessuna notifica admin automatica.",
+        enabled: Boolean(formDraft.notify_admin_on_submit),
+        action: () => setActiveTab("settings"),
+      },
+      {
+        key: "reminder",
+        label: "Reminder",
+        description: connectedWhatsAppAutomations.some((item) => item.trigger_event === "booking_created")
+          ? "Esiste almeno una regola collegata al momento della prenotazione."
+          : "Nessun reminder collegato.",
+        enabled: connectedWhatsAppAutomations.some((item) => item.is_active && item.trigger_event === "booking_created"),
+        action: () => navigate(`/org-admin/comunicazioni?tab=whatsapp&formId=${selectedFormId ?? ""}`),
+      },
+    ];
+    return rows;
+  }, [
+    connectedWhatsAppAutomations,
+    formDraft.notify_admin_on_submit,
+    formDraft.send_user_confirmation,
+    navigate,
+    selectedFormId,
+  ]);
 
   function resetEditorState() {
     setIsCreatingForm(false);
@@ -1210,6 +1263,48 @@ export function OrgAdminFormsWorkspace({
   const automationsTab = (
     <div className="grid gap-6 lg:grid-cols-[1fr_1fr] h-[calc(100vh-280px)] overflow-y-auto custom-scrollbar pb-10">
       <div className="space-y-6">
+        <div className="rounded-[1.4rem] border border-neutral-200 bg-white p-6 shadow-sm">
+          <h3 className="text-sm font-semibold text-neutral-900 mb-1">Automazioni collegate</h3>
+          <p className="text-xs text-neutral-500 mb-5">Qui vedi subito quali automazioni partono da questo form e dove configurarle.</p>
+          <div className="space-y-3">
+            {automationConnectionRows.map((row) => (
+              <div key={row.key} className="rounded-[1.1rem] border border-neutral-200 bg-neutral-50 px-4 py-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-neutral-900">{row.label}</p>
+                    <p className="mt-1 text-xs leading-5 text-neutral-500">{row.description}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] ${row.enabled ? "bg-emerald-100 text-emerald-700" : "bg-neutral-200 text-neutral-600"}`}>
+                      {row.enabled ? "ON" : "OFF"}
+                    </span>
+                    <button type="button" className="btn-secondary !py-2 !px-3 !text-xs" onClick={row.action}>
+                      Configura
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          {connectedWhatsAppAutomations.length > 0 ? (
+            <div className="mt-5 rounded-[1.1rem] border border-emerald-200 bg-emerald-50 px-4 py-4">
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-700">Relazione WhatsApp</p>
+              <div className="mt-3 space-y-2">
+                {connectedWhatsAppAutomations.map((automation) => (
+                  <p key={automation.id} className="text-sm leading-6 text-emerald-900">
+                    Quando un utente invia il modulo "{selectedForm?.title || "modulo"}", ASSONAM invia automaticamente il template "{automation.template_name}" usando{" "}
+                    {automation.phone_source === "custom"
+                      ? `il numero ${automation.custom_phone || "manuale"}`
+                      : automation.phone_source === "member_phone"
+                        ? "il telefono socio già salvato"
+                        : `il campo ${automation.phone_field_key || "Telefono"}`}.
+                  </p>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+
         <div className="rounded-[1.25rem] border border-neutral-200 bg-white p-6 shadow-sm">
           <h3 className="text-sm font-semibold text-neutral-900 mb-1">Pubblicazione e Accesso</h3>
           <p className="text-xs text-neutral-500 mb-5">Gestisci la visibilità del form.</p>

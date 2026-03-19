@@ -204,6 +204,92 @@ def test_org_admin_template_library_seed_duplicate_preview_and_archive(client, d
     assert archive_res.json()["template"]["is_active"] is False
 
 
+def test_org_admin_whatsapp_automations_create_list_and_update(client, db):
+    org, admin = _create_org_admin(db, communications_enabled=True)
+    _login_org_admin(client, db, admin.id)
+    public_slug = f"prenotazione-evento-{uuid.uuid4().hex[:6]}"
+
+    create_form_res = client.post(
+        "/api/org-admin/forms",
+        json={
+            "title": "Prenotazione evento",
+            "public_slug": public_slug,
+            "is_active": True,
+            "visibility": "public",
+        },
+    )
+    assert create_form_res.status_code == 201, create_form_res.text
+    form_id = create_form_res.json()["form"]["id"]
+
+    phone_field_res = client.post(
+        f"/api/org-admin/forms/{form_id}/fields",
+        json={
+            "field_type": "phone",
+            "label": "Telefono",
+            "field_key": "telefono",
+            "is_required": True,
+            "sort_order": 0,
+        },
+    )
+    assert phone_field_res.status_code == 201, phone_field_res.text
+
+    create_res = client.post(
+        "/api/org-admin/communications/whatsapp/automations",
+        json={
+            "name": "Conferma WhatsApp evento",
+            "form_id": form_id,
+            "source_type": "public_form",
+            "trigger_event": "form_submitted",
+            "recipient_type": "submitter",
+            "phone_source": "form_field",
+            "phone_field_key": "telefono",
+            "template_name": "Conferma prenotazione evento",
+            "template_body": "Ciao {{nome_socio}}, abbiamo ricevuto la tua richiesta.",
+            "is_active": True,
+        },
+    )
+    assert create_res.status_code == 201, create_res.text
+    automation = create_res.json()["automation"]
+    assert automation["name"] == "Conferma WhatsApp evento"
+    assert automation["form_id"] == form_id
+    assert automation["phone_field_key"] == "telefono"
+    assert automation["form"]["title"] == "Prenotazione evento"
+    assert automation["form"]["public_path"] == f"/forms/{org.slug}/{public_slug}"
+
+    list_res = client.get(f"/api/org-admin/communications/whatsapp/automations?form_id={form_id}")
+    assert list_res.status_code == 200, list_res.text
+    list_payload = list_res.json()
+    assert list_payload["total"] == 1
+    assert list_payload["items"][0]["id"] == automation["id"]
+    assert "form_field" in list_payload["phone_source_options"]
+    assert "submitter" in list_payload["recipient_options"]
+
+    update_res = client.put(
+        f"/api/org-admin/communications/whatsapp/automations/{automation['id']}",
+        json={
+            "name": "Reminder WhatsApp evento",
+            "form_id": form_id,
+            "source_type": "public_form",
+            "trigger_event": "booking_created",
+            "recipient_type": "custom",
+            "phone_source": "custom",
+            "custom_phone": "+393331234567",
+            "template_name": "Reminder prenotazione evento",
+            "template_body": "Ti aspettiamo all'evento.",
+            "is_active": False,
+        },
+    )
+    assert update_res.status_code == 200, update_res.text
+    updated = update_res.json()["automation"]
+    assert updated["name"] == "Reminder WhatsApp evento"
+    assert updated["trigger_event"] == "booking_created"
+    assert updated["recipient_type"] == "custom"
+    assert updated["phone_source"] == "custom"
+    assert updated["phone_field_key"] is None
+    assert updated["custom_phone"] == "+393331234567"
+    assert updated["is_active"] is False
+
+
 def test_org_admin_campaign_send_snapshots_recipients_and_updates_history(client, db, drain_email_outbox):
     original_mode = settings.EMAIL_MODE
     original_domain = settings.MAIL_FROM_DOMAIN

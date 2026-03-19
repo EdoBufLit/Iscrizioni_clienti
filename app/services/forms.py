@@ -31,6 +31,7 @@ from app.services.bookings import (
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 from app.services.email_templates import render_template_content
+from app.services.whatsapp_automations import serialize_whatsapp_automation
 
 
 FORM_VISIBILITY_PUBLIC = "public"
@@ -359,6 +360,14 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
         list(form.fields or []),
         key=lambda field: (int(field.sort_order or 0), int(field.id or 0)),
     )
+    whatsapp_automations = sorted(
+        list(getattr(form, "whatsapp_automations", []) or []),
+        key=lambda automation: (
+            0 if bool(getattr(automation, "is_active", False)) else 1,
+            str(getattr(automation, "name", "") or "").lower(),
+            int(getattr(automation, "id", 0) or 0),
+        ),
+    )
     return {
         "id": form.id,
         "association_id": form.association_id,
@@ -404,6 +413,9 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
         "submission_count": len(form.submissions or []),
         "booking_count": len(form.bookings or []),
         "fields": [serialize_form_field(field) for field in items] if include_fields else [],
+        "whatsapp_automations": [
+            serialize_whatsapp_automation(automation) for automation in whatsapp_automations
+        ],
         "public_path": (
             f"/forms/{form.organization.slug}/{form.public_slug}"
             if form.organization is not None and getattr(form.organization, "slug", None)
@@ -441,6 +453,9 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
             "booking_field_mapping": normalize_booking_field_mapping(
                 getattr(form, "booking_field_mapping", None) or {}
             ),
+            "connected_whatsapp_automations": [
+                serialize_whatsapp_automation(automation) for automation in whatsapp_automations
+            ],
         },
     }
 

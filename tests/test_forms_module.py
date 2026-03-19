@@ -246,6 +246,68 @@ def test_org_admin_forms_crud_public_submit_and_export(client, db):
     assert "mario@example.com" in csv_text
 
 
+def test_org_admin_form_payload_includes_connected_whatsapp_automations(client, db):
+    org, admin = _create_org_admin(db)
+    _login_org_admin(client, db, admin.id)
+    public_slug = f"conferma-whatsapp-{uuid.uuid4().hex[:6]}"
+
+    create_res = client.post(
+        "/api/org-admin/forms",
+        json={
+            "title": "Richiesta informazioni",
+            "public_slug": public_slug,
+            "is_active": True,
+            "visibility": "public",
+        },
+    )
+    assert create_res.status_code == 201, create_res.text
+    form_id = create_res.json()["form"]["id"]
+
+    phone_field_res = client.post(
+        f"/api/org-admin/forms/{form_id}/fields",
+        json={
+            "field_type": "phone",
+            "label": "Telefono",
+            "field_key": "telefono",
+            "is_required": True,
+            "sort_order": 0,
+        },
+    )
+    assert phone_field_res.status_code == 201, phone_field_res.text
+
+    automation_res = client.post(
+        "/api/org-admin/communications/whatsapp/automations",
+        json={
+            "name": "WhatsApp conferma richiesta",
+            "form_id": form_id,
+            "source_type": "public_form",
+            "trigger_event": "form_submitted",
+            "recipient_type": "submitter",
+            "phone_source": "form_field",
+            "phone_field_key": "telefono",
+            "template_name": "Conferma richiesta",
+            "template_body": "Abbiamo ricevuto la tua richiesta.",
+            "is_active": True,
+        },
+    )
+    assert automation_res.status_code == 201, automation_res.text
+    automation_id = automation_res.json()["automation"]["id"]
+
+    list_res = client.get("/api/org-admin/forms")
+    assert list_res.status_code == 200, list_res.text
+    listed_form = next(item for item in list_res.json()["items"] if item["id"] == form_id)
+    assert len(listed_form["whatsapp_automations"]) == 1
+    assert listed_form["whatsapp_automations"][0]["id"] == automation_id
+    assert listed_form["actions"]["connected_whatsapp_automations"][0]["template_name"] == "Conferma richiesta"
+
+    detail_res = client.get(f"/api/org-admin/forms/{form_id}")
+    assert detail_res.status_code == 200, detail_res.text
+    detail_form = detail_res.json()["form"]
+    assert detail_form["public_path"] == f"/forms/{org.slug}/{public_slug}"
+    assert detail_form["whatsapp_automations"][0]["phone_field_key"] == "telefono"
+    assert detail_form["actions"]["connected_whatsapp_automations"][0]["id"] == automation_id
+
+
 def test_members_only_public_form_requires_member_session(client, db):
     org, admin = _create_org_admin(db)
     _login_org_admin(client, db, admin.id)

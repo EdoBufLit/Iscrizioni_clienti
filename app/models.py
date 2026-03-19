@@ -353,6 +353,12 @@ class Organization(Base):
         back_populates="organization",
         foreign_keys="EmailCampaignRecipient.association_id",
     )
+    whatsapp_automations = relationship(
+        "WhatsAppAutomation",
+        back_populates="organization",
+        foreign_keys="WhatsAppAutomation.association_id",
+        cascade="all, delete-orphan",
+    )
     forms = relationship(
         "Form",
         back_populates="organization",
@@ -740,6 +746,11 @@ class AdminUser(Base):
         back_populates="created_by_user",
         foreign_keys="EmailTemplate.created_by_user_id",
     )
+    whatsapp_automations = relationship(
+        "WhatsAppAutomation",
+        back_populates="created_by_user",
+        foreign_keys="WhatsAppAutomation.created_by_user_id",
+    )
     forms = relationship(
         "Form",
         back_populates="created_by_user",
@@ -1112,6 +1123,50 @@ class EmailCampaignRecipient(Base):
     member = relationship("Member", foreign_keys=[user_id])
 
 
+class WhatsAppAutomation(Base):
+    __tablename__ = "whatsapp_automations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    association_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    form_id = Column(Integer, ForeignKey("forms.id"), nullable=True, index=True)
+    name = Column(String, nullable=False)
+    source_type = Column(String, nullable=False, default="public_form", server_default="public_form")
+    trigger_event = Column(String, nullable=False, default="form_submitted", server_default="form_submitted")
+    recipient_type = Column(String, nullable=False, default="submitter", server_default="submitter")
+    phone_source = Column(String, nullable=False, default="form_field", server_default="form_field")
+    phone_field_key = Column(String, nullable=True)
+    custom_phone = Column(String, nullable=True)
+    template_name = Column(String, nullable=False)
+    template_body = Column(Text, nullable=False)
+    is_active = Column(
+        Boolean, nullable=False, default=True, server_default="true", index=True
+    )
+    created_by_user_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    organization = relationship(
+        "Organization",
+        back_populates="whatsapp_automations",
+        foreign_keys=[association_id],
+    )
+    form = relationship(
+        "Form",
+        back_populates="whatsapp_automations",
+        foreign_keys=[form_id],
+    )
+    created_by_user = relationship(
+        "AdminUser",
+        back_populates="whatsapp_automations",
+        foreign_keys=[created_by_user_id],
+    )
+
+
 class Form(Base):
     __tablename__ = "forms"
 
@@ -1225,6 +1280,12 @@ class Form(Base):
         back_populates="form",
         cascade="all, delete-orphan",
         order_by="Booking.created_at.desc(), Booking.id.desc()",
+    )
+    whatsapp_automations = relationship(
+        "WhatsAppAutomation",
+        back_populates="form",
+        foreign_keys="WhatsAppAutomation.form_id",
+        cascade="all, delete-orphan",
     )
 
 

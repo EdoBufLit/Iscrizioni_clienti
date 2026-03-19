@@ -90,6 +90,7 @@ DEFAULT_EMAIL_DESIGN = {
     "hide_logo": False,
     "logo_url": "",
     "hero_image_url": "",
+    "content_image_url": "",
     "email_title": "",
     "cta_label": "",
     "cta_note": "",
@@ -106,6 +107,12 @@ DEFAULT_EMAIL_DESIGN = {
     "signature_name": "",
     "signature_role": "",
     "final_note": "",
+    "style_preset": "istituzionale",
+    "button_style": "pill",
+    "hero_kicker": "",
+    "hero_title": "",
+    "highlight_box": "",
+    "signature": "",
 }
 
 
@@ -257,21 +264,37 @@ def normalize_email_design(value: Any) -> dict[str, Any]:
         "essential": "modern",
         "invitation": "event",
         "renewal": "reminder",
+        "istituzionale": "institutional",
+        "moderno": "modern",
+        "elegante": "elegant",
+        "evento": "event",
     }.get(layout_key, layout_key)
     if layout_key not in {"institutional", "modern", "elegant", "event", "reminder"}:
         layout_key = DEFAULT_EMAIL_DESIGN["layout_key"]
     font_preset = (_normalize_text(value.get("font_preset")) or DEFAULT_EMAIL_DESIGN["font_preset"]).lower()
+    font_preset = {
+        "classico": "classic",
+        "editoriale": "editorial",
+        "pulito": "modern_sans",
+    }.get(font_preset, font_preset)
     if font_preset not in {"modern_sans", "editorial", "classic"}:
         font_preset = DEFAULT_EMAIL_DESIGN["font_preset"]
     cta_style = (_normalize_text(value.get("cta_style")) or DEFAULT_EMAIL_DESIGN["cta_style"]).lower()
     if cta_style not in {"solid", "soft", "outline", "shadow"}:
         cta_style = DEFAULT_EMAIL_DESIGN["cta_style"]
+    style_preset = (_normalize_text(value.get("style_preset")) or DEFAULT_EMAIL_DESIGN["style_preset"]).lower()
+    if style_preset not in {"istituzionale", "moderno", "elegante", "evento", "reminder"}:
+        style_preset = DEFAULT_EMAIL_DESIGN["style_preset"]
+    button_style = (_normalize_text(value.get("button_style")) or DEFAULT_EMAIL_DESIGN["button_style"]).lower()
+    if button_style not in {"pill", "morbido", "solido"}:
+        button_style = DEFAULT_EMAIL_DESIGN["button_style"]
     return {
         "accent_color": _normalize_color(value.get("accent_color")) or DEFAULT_EMAIL_DESIGN["accent_color"],
         "button_color": _normalize_color(value.get("button_color")) or _normalize_color(value.get("accent_color")) or DEFAULT_EMAIL_DESIGN["button_color"],
         "hide_logo": bool(value.get("hide_logo")),
         "logo_url": _normalize_text(value.get("logo_url")) or "",
         "hero_image_url": _normalize_text(value.get("hero_image_url")) or "",
+        "content_image_url": _normalize_text(value.get("content_image_url")) or "",
         "email_title": (_normalize_text(value.get("email_title")) or "")[:180],
         "cta_label": (_normalize_text(value.get("cta_label")) or "")[:120],
         "cta_note": (_normalize_text(value.get("cta_note")) or "")[:240],
@@ -292,6 +315,12 @@ def normalize_email_design(value: Any) -> dict[str, Any]:
         "signature_name": (_normalize_text(value.get("signature_name")) or "")[:120],
         "signature_role": (_normalize_text(value.get("signature_role")) or "")[:180],
         "final_note": (_normalize_text(value.get("final_note")) or "")[:500],
+        "style_preset": style_preset,
+        "button_style": button_style,
+        "hero_kicker": (_normalize_text(value.get("hero_kicker")) or "")[:120],
+        "hero_title": (_normalize_text(value.get("hero_title")) or "")[:200],
+        "highlight_box": (_normalize_text(value.get("highlight_box")) or "")[:1000],
+        "signature": (_normalize_text(value.get("signature")) or "")[:500],
     }
 
 
@@ -456,10 +485,15 @@ def decorate_rendered_email(
     button_color = resolved_design["button_color"] or accent_color
     logo_url = "" if resolved_design["hide_logo"] else (resolved_design["logo_url"] or _normalize_text(getattr(association, "logo_url", None)))
     hero_image_url = resolved_design["hero_image_url"]
-    email_title = resolved_design["email_title"]
+    content_image_url = resolved_design["content_image_url"]
+    hero_kicker = resolved_design["hero_kicker"]
+    hero_title = resolved_design["hero_title"]
+    email_title = hero_title or resolved_design["email_title"]
     layout_key = resolved_design["layout_key"]
     font_preset = resolved_design["font_preset"]
     cta_style = resolved_design["cta_style"]
+    style_preset = str(resolved_design.get("style_preset") or "istituzionale").lower()
+    button_style = str(resolved_design.get("button_style") or "pill").lower()
     association_name = _normalize_text(getattr(association, "name", None) if association is not None else None) or "ASSONAM"
     linked_form_url = build_linked_form_url(association=association, linked_form=linked_form)
     cta_kind = resolved_design["cta_kind"]
@@ -512,6 +546,13 @@ def decorate_rendered_email(
         if resolved_design["show_association_name"]
         else ""
     )
+    surface_tint = {
+        "istituzionale": "#f8fafc",
+        "moderno": "#f0fdfa",
+        "elegante": "#faf7f2",
+        "evento": "#fff7ed",
+        "reminder": "#fffbeb",
+    }.get(style_preset, "#f8fafc")
     layout_styles = {
         "modern": {
             "outer_bg": "#f3f7f9",
@@ -555,11 +596,16 @@ def decorate_rendered_email(
         "badge_bg": "#ecfeff",
         "badge_fg": accent_color,
     })
+    button_radius = {
+        "pill": "999px",
+        "morbido": "18px",
+        "solido": "10px",
+    }.get(button_style, "999px")
     cta_style_map = {
-        "solid": f"display:inline-block;padding:12px 20px;border-radius:999px;background:{button_color};color:#ffffff;text-decoration:none;font-weight:700",
-        "soft": f"display:inline-block;padding:12px 20px;border-radius:999px;background:{layout_styles['badge_bg']};color:{button_color};text-decoration:none;font-weight:700;border:1px solid {button_color}22",
-        "outline": f"display:inline-block;padding:12px 20px;border-radius:999px;background:#ffffff;color:{button_color};text-decoration:none;font-weight:700;border:1px solid {button_color}",
-        "shadow": f"display:inline-block;padding:12px 20px;border-radius:999px;background:{button_color};color:#ffffff;text-decoration:none;font-weight:700;box-shadow:0 12px 28px {button_color}33",
+        "solid": f"display:inline-block;padding:12px 20px;border-radius:{button_radius};background:{button_color};color:#ffffff;text-decoration:none;font-weight:700",
+        "soft": f"display:inline-block;padding:12px 20px;border-radius:{button_radius};background:{layout_styles['badge_bg']};color:{button_color};text-decoration:none;font-weight:700;border:1px solid {button_color}22",
+        "outline": f"display:inline-block;padding:12px 20px;border-radius:{button_radius};background:#ffffff;color:{button_color};text-decoration:none;font-weight:700;border:1px solid {button_color}",
+        "shadow": f"display:inline-block;padding:12px 20px;border-radius:{button_radius};background:{button_color};color:#ffffff;text-decoration:none;font-weight:700;box-shadow:0 12px 28px {button_color}33",
     }
     if cta_url and cta_label:
         cta_html = (
@@ -596,26 +642,47 @@ def decorate_rendered_email(
         if email_title
         else ""
     )
+    kicker_html = (
+        f"<div style=\"font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:{accent_color};font-weight:700;margin-bottom:10px\">"
+        f"{html.escape(hero_kicker)}</div>"
+        if hero_kicker
+        else ""
+    )
     secondary_image_url = resolved_design["secondary_image_url"]
     highlight_title = resolved_design["highlight_title"]
     highlight_body = resolved_design["highlight_body"]
+    highlight_box = resolved_design["highlight_box"]
     event_details = resolved_design["event_details"]
     signature_name = resolved_design["signature_name"]
     signature_role = resolved_design["signature_role"]
+    signature = resolved_design["signature"]
     final_note = resolved_design["final_note"]
+    content_image_html = (
+        f"<div style=\"margin:24px 0\"><img src=\"{html.escape(content_image_url, quote=True)}\" alt=\"\" "
+        f"style=\"display:block;width:100%;border-radius:20px;max-height:280px;object-fit:cover\" /></div>"
+        if content_image_url
+        else ""
+    )
     secondary_image_html = (
         f"<div style=\"margin:0 0 24px\"><img src=\"{html.escape(secondary_image_url, quote=True)}\" alt=\"Visual\" "
         "style=\"width:100%;display:block;border-radius:18px\" /></div>"
         if secondary_image_url
         else ""
     )
-    highlight_html = (
+    legacy_highlight_html = (
         f"<div style=\"margin:0 0 24px;padding:18px 20px;border-radius:18px;background:{layout_styles['badge_bg']};border:1px solid {layout_styles['border']}\">"
         f"<div style=\"font-size:16px;font-weight:800;color:#0f172a;margin-bottom:8px\">{html.escape(highlight_title or 'In evidenza')}</div>"
         f"<div style=\"color:#334155;font-size:14px;line-height:1.7\">{html.escape(highlight_body)}</div></div>"
         if highlight_body
         else ""
     )
+    modern_highlight_html = (
+        f"<div style=\"margin:24px 0;padding:18px 20px;border-radius:20px;background:{surface_tint};"
+        f"border:1px solid rgba(15,23,42,0.08);color:#0f172a;font-weight:600\">{html.escape(highlight_box)}</div>"
+        if highlight_box
+        else ""
+    )
+    highlight_html = modern_highlight_html or legacy_highlight_html
     event_html = (
         f"<div style=\"margin:0 0 24px;padding:18px 20px;border-radius:18px;background:#ffffff;border:1px dashed {layout_styles['border']}\">"
         f"<div style=\"font-size:12px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:{layout_styles['badge_fg']};margin-bottom:10px\">Dettagli evento</div>"
@@ -636,6 +703,10 @@ def decorate_rendered_email(
         if signature_name
         else ""
     )
+    if signature:
+        signature_html = (
+            f"<p style=\"margin:28px 0 0;color:#0f172a;font-weight:600;white-space:pre-line\">{html.escape(signature)}</p>"
+        )
     final_note_html = (
         f"<div style=\"margin-top:24px;padding-top:18px;border-top:1px solid {layout_styles['border']};color:#64748b;font-size:13px;line-height:1.7\">{html.escape(final_note)}</div>"
         if final_note
@@ -648,8 +719,8 @@ def decorate_rendered_email(
         f"{hero_html}"
         f"<div style=\"padding:32px\">"
         f"<div style=\"display:flex;align-items:center;gap:16px;margin-bottom:24px\">{logo_html}{association_name_html}</div>"
-        f"{title_html}"
-        f"{secondary_image_html}{highlight_html}{event_html}"
+        f"{kicker_html}{title_html}"
+        f"{content_image_html}{secondary_image_html}{highlight_html}{event_html}"
         f"<div style=\"color:#0f172a;font-size:{font_styles['body_size']};line-height:1.7\">{body_html}</div>"
         f"{note_html}{cta_html}{signature_html}{final_note_html}"
         "</div></div></div>"

@@ -1,4 +1,11 @@
 
+## Plan (Comunicazioni live verification + push + deploy - Mar 19, 2026)
+- [ ] Chiudere il rebase del refactor Comunicazioni e dell'hotfix barra top integrando i conflitti con `origin/feat/redesign-landing-wizard`
+- [ ] Rieseguire build frontend e test backend mirati per confermare che entrambe le passate siano stabili
+- [ ] Verificare live su `assonam.it` il nuovo editor Comunicazioni, la barra top fissa e la sezione WhatsApp/Form collegate
+- [ ] Pushare entrambi i cambi sul branch di deploy
+- [ ] Allineare Hetzner, eseguire eventuale migration Alembic e fare smoke check finale server-side
+
 ## Plan (WhatsApp Web polish + deploy speedup - Mar 19, 2026)
 - [x] Rifinire la UI WhatsApp per sembrare piu vicina a WhatsApp Web nei punti ancora deboli: nomi fallback, barra ricerca/azioni, meta thread e quick-open
 - [x] Rendere il payload locale piu utile alla UI dove serve senza introdurre overengineering

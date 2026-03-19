@@ -147,7 +147,7 @@ const App = () => {
                 <Route path="documenti" element={<OrgAdminSharedDocuments />} />
                 <Route path="comunicazioni" element={<OrgAdminCommunications />} />
                 <Route path="billing" element={<OrgAdminStripeDemoBilling />} />
-                <Route path="forms" element={<Navigate to="/org-admin/comunicazioni?tab=forms" replace />} />
+                <Route path="forms" element={<Navigate to="/org-admin/comunicazioni?tab=moduli" replace />} />
                 <Route path="contabilita" element={<OrgAdminAccounting />} />
                 <Route path="associazione" element={<OrgAdminSettings />} />
               </Route>

@@ -782,6 +782,7 @@ export type OrgAdminEmailDesign = {
   logo_url: string;
   hero_image_url: string;
   email_title: string;
+  content_image_url?: string;
   cta_label: string;
   cta_note: string;
   cta_kind: OrgAdminEmailCtaKind;
@@ -797,6 +798,12 @@ export type OrgAdminEmailDesign = {
   signature_name: string;
   signature_role: string;
   final_note: string;
+  style_preset?: string;
+  button_style?: string;
+  hero_kicker?: string;
+  hero_title?: string;
+  highlight_box?: string;
+  signature?: string;
 };
 
 export type OrgAdminLinkedFormSummary = {
@@ -958,6 +965,7 @@ export type AssociationForm = {
   submission_count: number;
   booking_count: number;
   fields: AssociationFormField[];
+  whatsapp_automations?: OrgAdminWhatsAppAutomation[];
   public_path?: string;
   design: {
     title: string;
@@ -982,7 +990,33 @@ export type AssociationForm = {
     booking_requires_manual_confirmation: boolean;
     booking_notification_enabled: boolean;
     booking_field_mapping: Record<string, string>;
+    connected_whatsapp_automations?: OrgAdminWhatsAppAutomation[];
   };
+};
+
+export type OrgAdminWhatsAppAutomation = {
+  id: number;
+  association_id: number;
+  form_id: number | null;
+  form: {
+    id: number;
+    title: string;
+    public_slug: string;
+    public_path: string;
+  } | null;
+  name: string;
+  source_type: string;
+  trigger_event: string;
+  recipient_type: string;
+  phone_source: string;
+  phone_field_key: string | null;
+  custom_phone: string | null;
+  template_name: string;
+  template_body: string;
+  is_active: boolean;
+  created_by_user_id: number | null;
+  created_at: string | null;
+  updated_at: string | null;
 };
 
 export type AssociationFormSubmission = {
@@ -2217,6 +2251,73 @@ export async function previewOrgAdminEmailTemplate(data: {
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore preview template"));
+  return res.json();
+}
+
+export async function fetchOrgAdminWhatsAppAutomations(
+  params?: { formId?: number | null },
+): Promise<{
+  items: OrgAdminWhatsAppAutomation[];
+  total: number;
+  phone_source_options: string[];
+  recipient_options: string[];
+  source_options: string[];
+  trigger_options: string[];
+}> {
+  const search = new URLSearchParams();
+  if (params?.formId) search.set("form_id", String(params.formId));
+  const res = await fetch(`/api/org-admin/communications/whatsapp/automations${search.toString() ? `?${search.toString()}` : ""}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento automazioni WhatsApp"));
+  return res.json();
+}
+
+export async function createOrgAdminWhatsAppAutomation(data: {
+  name: string;
+  form_id?: number | null;
+  source_type?: string;
+  trigger_event: string;
+  recipient_type: string;
+  phone_source: string;
+  phone_field_key?: string | null;
+  custom_phone?: string | null;
+  template_name: string;
+  template_body: string;
+  is_active: boolean;
+}): Promise<{ ok: boolean; automation: OrgAdminWhatsAppAutomation }> {
+  const res = await fetch("/api/org-admin/communications/whatsapp/automations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione automazione WhatsApp"));
+  return res.json();
+}
+
+export async function updateOrgAdminWhatsAppAutomation(
+  automationId: number,
+  data: {
+    name: string;
+    form_id?: number | null;
+    source_type?: string;
+    trigger_event: string;
+    recipient_type: string;
+    phone_source: string;
+    phone_field_key?: string | null;
+    custom_phone?: string | null;
+    template_name: string;
+    template_body: string;
+    is_active: boolean;
+  },
+): Promise<{ ok: boolean; automation: OrgAdminWhatsAppAutomation }> {
+  const res = await fetch(`/api/org-admin/communications/whatsapp/automations/${automationId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento automazione WhatsApp"));
   return res.json();
 }
 

@@ -49,6 +49,7 @@ from app.models import (
     Form as AssociationForm,
     FormField,
     FormSubmission,
+    WhatsAppAutomation,
     Room,
     RoomTable,
 )
@@ -110,6 +111,14 @@ from app.services.forms import (
     serialize_form,
     serialize_form_field,
     serialize_submission,
+)
+from app.services.whatsapp_automations import (
+    ALLOWED_WHATSAPP_PHONE_SOURCES,
+    ALLOWED_WHATSAPP_RECIPIENTS,
+    ALLOWED_WHATSAPP_SOURCES,
+    ALLOWED_WHATSAPP_TRIGGERS,
+    apply_whatsapp_automation_updates,
+    serialize_whatsapp_automation,
 )
 from app.services.bookings import (
     agenda_day_payload,
@@ -1688,6 +1697,20 @@ class RenderEmailTemplatePreviewBody(BaseModel):
     linked_form_id: Optional[int] = None
 
 
+class UpsertWhatsAppAutomationBody(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    form_id: Optional[int] = Field(default=None, ge=1)
+    source_type: str = Field(default="public_form", max_length=40)
+    trigger_event: str = Field(default="form_submitted", max_length=40)
+    recipient_type: str = Field(default="submitter", max_length=40)
+    phone_source: str = Field(default="form_field", max_length=40)
+    phone_field_key: Optional[str] = Field(default=None, max_length=64)
+    custom_phone: Optional[str] = Field(default=None, max_length=40)
+    template_name: str = Field(min_length=1, max_length=160)
+    template_body: str = Field(min_length=1, max_length=4000)
+    is_active: bool = True
+
+
 class CreateAssociationFormBody(BaseModel):
     title: str = Field(min_length=1, max_length=160)
     description: Optional[str] = None
@@ -2644,6 +2667,122 @@ def archive_communication_template(
         "ok": True,
         "template": _serialize_email_template(template, include_body=True),
     }
+
+
+@router.get("/communications/whatsapp/automations")
+def list_whatsapp_automations(
+    request: Request,
+    form_id: Optional[int] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    automations_query = (
+        db.query(WhatsAppAutomation)
+        .options(
+            joinedload(WhatsAppAutomation.form).joinedload(AssociationForm.organization),
+        )
+        .filter(WhatsAppAutomation.association_id == admin.org_id)
+        .order_by(
+            WhatsAppAutomation.is_active.desc(),
+            WhatsAppAutomation.updated_at.desc(),
+            WhatsAppAutomation.id.desc(),
+        )
+    )
+    if form_id is not None:
+        automations_query = automations_query.filter(WhatsAppAutomation.form_id == form_id)
+    items = automations_query.all()
+    return {
+        "items": [serialize_whatsapp_automation(item) for item in items],
+        "total": len(items),
+        "phone_source_options": sorted(ALLOWED_WHATSAPP_PHONE_SOURCES),
+        "recipient_options": sorted(ALLOWED_WHATSAPP_RECIPIENTS),
+        "source_options": sorted(ALLOWED_WHATSAPP_SOURCES),
+        "trigger_options": sorted(ALLOWED_WHATSAPP_TRIGGERS),
+    }
+
+
+@router.post("/communications/whatsapp/automations", status_code=201)
+def create_whatsapp_automation(
+    request: Request,
+    body: UpsertWhatsAppAutomationBody,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    _require_active_communications_module(admin.organization)
+    form = _resolve_optional_linked_form_for_admin(db, admin=admin, form_id=body.form_id)
+    automation = WhatsAppAutomation(
+        association_id=admin.org_id,
+        created_by_user_id=admin.id,
+    )
+    apply_whatsapp_automation_updates(
+        automation,
+        form=form,
+        name=body.name,
+        source_type=body.source_type,
+        trigger_event=body.trigger_event,
+        recipient_type=body.recipient_type,
+        phone_source=body.phone_source,
+        phone_field_key=body.phone_field_key,
+        custom_phone=body.custom_phone,
+        template_name=body.template_name,
+        template_body=body.template_body,
+        is_active=body.is_active,
+    )
+    db.add(automation)
+    db.commit()
+    db.refresh(automation)
+    return {"ok": True, "automation": serialize_whatsapp_automation(automation)}
+
+
+@router.put("/communications/whatsapp/automations/{automation_id}")
+def update_whatsapp_automation(
+    automation_id: int,
+    request: Request,
+    body: UpsertWhatsAppAutomationBody,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    _require_active_communications_module(admin.organization)
+    automation = (
+        db.query(WhatsAppAutomation)
+        .options(
+            joinedload(WhatsAppAutomation.form).joinedload(AssociationForm.organization),
+        )
+        .filter(
+            WhatsAppAutomation.id == automation_id,
+            WhatsAppAutomation.association_id == admin.org_id,
+        )
+        .first()
+    )
+    if automation is None:
+        raise HTTPException(status_code=404, detail="Automazione WhatsApp non trovata.")
+    form = _resolve_optional_linked_form_for_admin(db, admin=admin, form_id=body.form_id)
+    apply_whatsapp_automation_updates(
+        automation,
+        form=form,
+        name=body.name,
+        source_type=body.source_type,
+        trigger_event=body.trigger_event,
+        recipient_type=body.recipient_type,
+        phone_source=body.phone_source,
+        phone_field_key=body.phone_field_key,
+        custom_phone=body.custom_phone,
+        template_name=body.template_name,
+        template_body=body.template_body,
+        is_active=body.is_active,
+    )
+    db.commit()
+    db.refresh(automation)
+    return {"ok": True, "automation": serialize_whatsapp_automation(automation)}
 
 
 @router.get("/communications/audience-estimate")
