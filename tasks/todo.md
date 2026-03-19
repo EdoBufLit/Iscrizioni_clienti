@@ -1,9 +1,18 @@
 ## Plan (Comunicazioni live verification + push + deploy - Mar 19, 2026)
-- [ ] Chiudere il rebase del refactor Comunicazioni e dell'hotfix barra top integrando i conflitti con `origin/feat/redesign-landing-wizard`
-- [ ] Rieseguire build frontend e test backend mirati per confermare che entrambe le passate siano stabili
-- [ ] Verificare live su `assonam.it` il nuovo editor Comunicazioni, la barra top fissa e la sezione WhatsApp/Form collegate
-- [ ] Pushare entrambi i cambi sul branch di deploy
-- [ ] Allineare Hetzner, eseguire eventuale migration Alembic e fare smoke check finale server-side
+- [x] Chiudere il rebase del refactor Comunicazioni e dell'hotfix barra top integrando i conflitti con `origin/feat/redesign-landing-wizard`
+- [x] Rieseguire build frontend e test backend mirati per confermare che entrambe le passate siano stabili
+- [x] Verificare live su `assonam.it` il nuovo editor Comunicazioni, la barra top fissa e la sezione WhatsApp/Form collegate
+- [x] Pushare entrambi i cambi sul branch di deploy
+- [x] Allineare Hetzner, eseguire eventuale migration Alembic e fare smoke check finale server-side
+
+## Review (Comunicazioni live verification + push + deploy - Mar 19, 2026)
+- Rebase completato sul branch reale `feat/redesign-landing-wizard`, con push finale dei commit `75b6744`, `d14e89b`, `f064767`, `0842a57`, `d8df35e`.
+- Durante il deploy è emerso un problema strutturale Alembic: il repo aveva due `head` (`c7d8e9f0a1b2`, `e6f7a8b9c0d1`). Ho corretto alla radice con la merge migration pura `47b20c34c33e_merge_whatsapp_automation_heads.py`, poi ripushato e riallineato Hetzner.
+- Il deploy server-side è stato eseguito su `157.90.31.105` in `/opt/assonam/app` usando `docker compose -f docker-compose.yml -f docker-compose.evolution-lite.yml ...`, così `evolution-api` resta nello stack durante il recreate.
+- Verifiche locali eseguite: `python -m py_compile app/models.py app/routes/org_admin.py app/services/forms.py app/services/whatsapp_automations.py app/services/email_templates.py`, `npm --prefix frontend run build`, `python -m pytest -q tests/test_org_admin_communications.py tests/test_forms_module.py` (`24 passed`).
+- Verifica browser live completata su `https://assonam.it` con sessione org-admin reale: barra `Comunicazioni` senza overflow orizzontale (`scrollWidth == clientWidth`), editor campagna full-page aperto correttamente, tab `WhatsApp` con builder `Automazioni` visibile e blocco `Automazioni collegate` confermato nel tab `Impostazioni` del form.
+- Evidenze salvate in `tasks/screenshots/`: `communications-live-topbar-20260319.png`, `communications-live-campaign-editor-20260319.png`, `communications-live-whatsapp-automations-20260319.png`, `communications-live-form-automations-20260319.png`.
+- Stato finale server: `web`, `email-worker`, `low-cards-worker`, `affiliation-video-worker` ed `evolution-api` tutti `Up`, con i worker ed Evolution in stato `healthy`; `alembic current` sul server punta a `47b20c34c33e (head)`.
 
 - [x] Analizzare la barra superiore di `Comunicazioni` e il riferimento visuale allegato per allineare struttura e gerarchia
 - [x] Rifare la sub-navigation di `Comunicazioni` come barra fissa non scrollabile con colonne, icone e microcopy
