@@ -2,7 +2,7 @@
 - [x] Ispezionare il flusso reale `Form -> submit pubblico -> candidate/dispatch WhatsApp` per capire come viene risolto il numero destinatario
 - [x] Verificare su server/log live perché il test utente non ha prodotto nessun invio
 - [x] Correggere il comportamento o il copy UI se il numero destinatario o le condizioni di invio non sono chiare/sbagliate
-- [ ] Rieseguire test/build, push e deploy del fix se necessario
+- [x] Rieseguire test/build, push e deploy del fix se necessario
 
 ## Review (Form WhatsApp auto-message debug - Mar 20, 2026)
 - Root cause confermata su produzione: il form `test` (`id=7`) aveva sia il toggle legacy `whatsapp_auto_reply_enabled = true` sia una nuova regola in `whatsapp_automations` con `trigger_event = request_received` e `phone_field_key = telefono_3c52el`; nessuna delle due arrivava a inviare davvero.
@@ -13,6 +13,9 @@
 - Copy chiarita in [OrgAdminForms.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\OrgAdminForms.tsx): il blocco `WhatsApp automatico` viene esplicitato come risposta rapida legacy distinta dalle nuove regole in `Comunicazioni > WhatsApp`.
 - Copertura aggiunta in [test_forms_module.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\tests\test_forms_module.py) per auto-reply legacy con `field_key` telefono dinamica ed esecuzione reale di una regola `whatsapp_automations` sul submit pubblico.
 - Verifiche locali completate: `python -m pytest -q tests/test_forms_module.py -q`, `python -m py_compile app/services/whatsapp_automation.py app/routes/public.py`, `npm --prefix frontend run build`.
+- Push/deploy completati sul branch `feat/redesign-landing-wizard` con commit `3cdaaf4`; Hetzner `157.90.31.105` aggiornato e stack riallineato via `docker compose -f docker-compose.yml -f docker-compose.evolution-lite.yml up -d --build ...` seguito da `up -d --remove-orphans` per superare il race del daemon durante il recreate dei worker.
+- Verifica live reale eseguita sul form pubblico `golden-filippini-qualificati-srls/nuovo-form`: submission `id=8` creata con `telefono_3c52el = +39 333 1234567`. I due messaggi outbound registrati in DB (`whatsapp_messages.id = 1468, 1469`) hanno `recipient_phone = +393331234567`, quindi il routing ora usa correttamente il numero inserito nel form.
+- Il mancato recapito residuo non dipende piu dal codice del form: Evolution Lite risponde `400 Bad Request` con payload `exists=false` per `393331234567@s.whatsapp.net`, cioe il numero di test usato nella prova live non risulta raggiungibile su WhatsApp.
 
 ## Plan (WhatsApp inbox restore + admin cleanup - Mar 19, 2026)
 - [x] Ripristinare la vista principale WhatsApp con inbox, QR code e stato connessione
@@ -3659,4 +3662,5 @@ pm --prefix frontend run build.
 - In `frontend/src/pages/super-admin/components/OrganizationManageModal.tsx` il Super Admin vede ora la sezione “Numerazione tessere”, il default `Condivisa ASSONAM` in create org, lo stato “Modificabile liberamente” vs “Configurazione sensibile”, il warning storico e la conferma esplicita prima del cambio modalita.
 - Ho esteso anche i path di bootstrap/riparazione SQLite in `init_db.py`, `app/scripts/repair_sqlite.py` e `tests/conftest.py` per evitare drift sugli ambienti dev/test che non passano subito da Alembic.
 - Verifiche eseguite: `python -m pytest -q tests/test_card_assignment.py tests/test_super_admin_numbering_scopes.py tests/test_super_admin_card_lot_management.py` OK (`16 passed`); `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK.
+
 
