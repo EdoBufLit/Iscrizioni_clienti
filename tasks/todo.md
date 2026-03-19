@@ -1,8 +1,15 @@
 ## Plan (WhatsApp inbox restore + admin cleanup - Mar 19, 2026)
-- [ ] Ripristinare la vista principale WhatsApp con inbox, QR code e stato connessione
-- [ ] Spostare le automazioni WhatsApp in una sottovista interna senza sostituire la chat
-- [ ] Rimuovere il blocco hero/promozionale dal builder automazioni e rendere la UI piu amministrativa
-- [ ] Rieseguire build frontend, verificare live e riallineare Hetzner
+- [x] Ripristinare la vista principale WhatsApp con inbox, QR code e stato connessione
+- [x] Spostare le automazioni WhatsApp in una sottovista interna senza sostituire la chat
+- [x] Rimuovere il blocco hero/promozionale dal builder automazioni e rendere la UI piu amministrativa
+- [x] Rieseguire build frontend, verificare live e riallineare Hetzner
+
+## Review (WhatsApp inbox restore + admin cleanup - Mar 19, 2026)
+- La tab `Comunicazioni > WhatsApp` non sostituisce piu la chat con le automazioni: la vista primaria e tornata `Chat e connessione`, con inbox, stato sessione e QR code gestiti da [WhatsAppHub.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\components\communications\WhatsAppHub.tsx).
+- Le automazioni restano disponibili come sottovista interna `Automazioni`, mantenendo compatibili i deep-link esistenti dai form (`tab=whatsapp&formId=...`) tramite la logica aggiornata in [OrgAdminCommunications.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\OrgAdminCommunications.tsx).
+- In [WhatsAppAutomationsHub.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\components\communications\WhatsAppAutomationsHub.tsx) ho rimosso il blocco hero/marketing e ridotto l'area a una UI piu amministrativa: intestazione compatta, contatori discreti e builder senza storytelling promozionale.
+- Verifica locale: `npm --prefix frontend run build` OK.
+- Verifica live su `https://assonam.it`: inbox WhatsApp visibile di default, sottovista `Automazioni` raggiungibile, vecchio hero assente (`HAS_OLD_HERO=false`), nuove evidenze salvate in `tasks/screenshots/communications-live-whatsapp-inbox-20260319.png` e `tasks/screenshots/communications-live-whatsapp-automations-clean-20260319.png`.
 
 ## Plan (Comunicazioni live verification + push + deploy - Mar 19, 2026)
 - [x] Chiudere il rebase del refactor Comunicazioni e dell'hotfix barra top integrando i conflitti con `origin/feat/redesign-landing-wizard`
