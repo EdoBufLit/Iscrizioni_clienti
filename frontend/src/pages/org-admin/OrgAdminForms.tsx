@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   buildOrgAdminFormSubmissionsExportUrl,
   createOrgAdminForm,
@@ -303,6 +304,7 @@ export function OrgAdminFormsWorkspace({
 }: OrgAdminFormsWorkspaceProps) {
   const { admin, loading: adminLoading } = useOrgAdmin();
   const { showToast } = useToast();
+  const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");

@@ -22,6 +22,7 @@ import {
   type OrgAdminCampaignRecipientMode,
   type OrgAdminEmailCampaign,
   type OrgAdminEmailDesign,
+  type OrgAdminEmailFontPreset,
   type OrgAdminEmailTemplate,
   type OrgAdminEmailTemplateVariable,
   type OrgAdminMember,
@@ -75,9 +76,9 @@ const stylePresetCards = [
 ] as const;
 
 const fontPresetOptions = [
-  { value: "classico", label: "Classico" },
-  { value: "editoriale", label: "Editoriale" },
-  { value: "pulito", label: "Pulito" },
+  { value: "classic", label: "Classico" },
+  { value: "editorial", label: "Editoriale" },
+  { value: "modern_sans", label: "Pulito" },
 ] as const;
 
 const buttonStyleOptions = [
@@ -124,21 +125,32 @@ function statusLabel(value: string | null | undefined): string {
 function createDefaultDesign(): OrgAdminEmailDesign {
   return {
     accent_color: "#0f766e",
+    button_color: "#0f766e",
+    hide_logo: false,
     logo_url: "",
     hero_image_url: "",
+    email_title: "",
     content_image_url: "",
     cta_label: "",
     cta_url: "",
     cta_note: "",
+    cta_kind: "custom",
+    layout_key: "institutional",
     show_association_name: true,
     style_preset: "istituzionale",
-    font_preset: "classico",
+    font_preset: "classic",
+    cta_style: "solid",
+    secondary_image_url: "",
+    highlight_title: "",
+    highlight_body: "",
     button_style: "pill",
     hero_kicker: "",
     hero_title: "",
     highlight_box: "",
     event_details: "",
     signature: "",
+    signature_name: "",
+    signature_role: "",
     final_note: "",
   };
 }
@@ -1019,7 +1031,7 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <label className={labelClass}>
                     Font preset
-                    <select className={inputClass} value={campaignForm.design.font_preset || "classico"} onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, font_preset: event.target.value } }))}>
+                    <select className={inputClass} value={campaignForm.design.font_preset || "classic"} onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, font_preset: event.target.value as OrgAdminEmailFontPreset } }))}>
                       {fontPresetOptions.map((option) => (
                         <option key={option.value} value={option.value}>{option.label}</option>
                       ))}
@@ -1246,7 +1258,7 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                   <div className="mt-4 grid gap-4 md:grid-cols-2">
                     <label className={labelClass}>
                       Font preset
-                      <select className={inputClass} disabled={templateForm.is_system} value={templateForm.design.font_preset || "classico"} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, font_preset: event.target.value } }))}>
+                      <select className={inputClass} disabled={templateForm.is_system} value={templateForm.design.font_preset || "classic"} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, font_preset: event.target.value as OrgAdminEmailFontPreset } }))}>
                         {fontPresetOptions.map((option) => (
                           <option key={option.value} value={option.value}>{option.label}</option>
                         ))}
