@@ -177,3 +177,4 @@
 
 - Se l'utente chiede una capability "come WhatsApp Web", non basta rendere possibile l'invio: bisogna allineare anche il mental model della UI (sidebar chat-first, ricerca, thread sempre visibile, composer fisso) oppure la feature resta percepita come incompleta.
 - Se il cliente chiede messaggi automatici legati a una risposta form/prenotazione, la configurazione deve vivere vicino al trigger reale (`Form pubblici`) e non dentro campagne bulk: prima mappare l'evento sorgente, poi scegliere il workspace UI.
+- Se un deploy Docker su host persistente e lento, controllare prima il workflow: `builder prune`, `buildx prune`, `--no-cache` e build duplicate dello stesso runtime distruggono la cache locale e possono aggiungere minuti inutili a ogni push.

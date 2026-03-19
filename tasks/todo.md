@@ -1,4 +1,18 @@
 
+## Plan (WhatsApp Web polish + deploy speedup - Mar 19, 2026)
+- [x] Rifinire la UI WhatsApp per sembrare piu vicina a WhatsApp Web nei punti ancora deboli: nomi fallback, barra ricerca/azioni, meta thread e quick-open
+- [x] Rendere il payload locale piu utile alla UI dove serve senza introdurre overengineering
+- [x] Ridurre il tempo deploy eliminando build duplicate, `--no-cache` forzato e prune aggressivo della cache Docker
+- [x] Verificare con test/typecheck e, se stabile, pushare sul branch di deploy
+- [x] Riallineare Hetzner e misurare l'impatto reale del nuovo path di deploy
+
+## Review (WhatsApp Web polish + deploy speedup - Mar 19, 2026)
+- La UI WhatsApp in [WhatsAppHub.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti__evolution_push\frontend\src\pages\org-admin\components\communications\WhatsAppHub.tsx) e stata rifinita nei punti che la facevano sembrare ancora troppo “tooling”: ricerca con icona corretta, quick-open da search anche con sidebar piena, badge riepilogo `thread/contatti/profilo`, header thread piu pulito e fallback label che convertono JID/numero in un display piu umano.
+- L'endpoint backend `GET /api/org-admin/communications/whatsapp/chats` ora sincronizza anche i contatti Evolution prima della lista chat, cosi la sidebar ha piu chance di mostrare subito nomi/avatar leggibili dove il provider li espone.
+- Il deploy e stato snellito in [.github/workflows/deploy-hetzner.yml](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti__evolution_push\.github\workflows\deploy-hetzner.yml): niente `docker builder prune`, niente `buildx prune`, niente `--no-cache`, niente doppia build di `web` per Alembic + runtime.
+- Il runtime Python condiviso (`web`, `email-worker`, `low-cards-worker`) ora usa la stessa image locale `assonam/app-runtime:local` in [docker-compose.yml](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti__evolution_push\docker-compose.yml), quindi il server builda una volta e riusa l'immagine per i worker invece di ricompilarla piu volte.
+- Verifiche locali eseguite: `python -m py_compile app/routes/whatsapp_evolution.py`, `pytest tests/test_org_admin_whatsapp.py -q`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
+
 ## Plan (Evolution Lite custom patch for chats/history - Mar 19, 2026)
 - [x] Ispezionare l'upstream ufficiale Evolution API Lite sui path `contacts/chats/messages` e riprodurre la root cause di `findChats` / persistenza storica insufficiente
 - [x] Definire una patch minima mantenibile e costruire una nostra immagine Docker custom derivata da Lite

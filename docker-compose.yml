@@ -86,6 +86,7 @@ services:
     restart: unless-stopped
 
   web:
+    image: assonam/app-runtime:local
     build: .
     depends_on:
       - db
@@ -99,7 +100,7 @@ services:
     restart: always
 
   email-worker:
-    build: .
+    image: assonam/app-runtime:local
     depends_on:
       - db
     command: python -m app.workers.email_sender
@@ -114,7 +115,7 @@ services:
     restart: always
 
   low-cards-worker:
-    build: .
+    image: assonam/app-runtime:local
     depends_on:
       - db
     command: python -m app.workers.low_cards_scheduler

@@ -210,6 +210,16 @@ def list_whatsapp_chats(
     if connection.status == "connected":
         client = EvolutionLiteClient()
         try:
+            remote_contacts = client.list_contacts(connection.instance_name)
+        except EvolutionApiError as exc:
+            logger.warning(
+                "whatsapp_evolution_contact_sync_failed org=%s detail=%s",
+                admin.organization.id,
+                str(exc),
+            )
+        else:
+            sync_contacts_into_chats(db, connection=connection, contacts=remote_contacts)
+        try:
             remote_chats = client.list_chats(connection.instance_name)
         except EvolutionApiError as exc:
             logger.warning("whatsapp_evolution_chat_sync_failed org=%s detail=%s", admin.organization.id, str(exc))

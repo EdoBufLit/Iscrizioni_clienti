@@ -218,6 +218,17 @@ jobs:
               fi
             }
 
+            BUILD_TARGETS="web"
+            DEPLOY_SERVICES="web email-worker low-cards-worker"
+            if [ "$ENABLE_WHATSAPP_EVOLUTION" = "true" ]; then
+              BUILD_TARGETS="$BUILD_TARGETS evolution-api"
+              DEPLOY_SERVICES="$DEPLOY_SERVICES evolution-api"
+            fi
+            if [ "$AFFILIATION_VIDEO_WORKER_ENABLED" = "true" ]; then
+              BUILD_TARGETS="$BUILD_TARGETS affiliation-video-worker"
+              DEPLOY_SERVICES="$DEPLOY_SERVICES affiliation-video-worker"
+            fi
+
             MIGRATE='${{ github.event.inputs.MIGRATE || 'false' }}'
             echo "[deploy] MIGRATE=${MIGRATE}"
 
@@ -305,47 +316,27 @@ jobs:
                 exit 1
               fi
 
+              echo "[deploy] Building images with Docker cache: $BUILD_TARGETS"
+              docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS build $BUILD_TARGETS
+
               echo "[migrate] Running Alembic migrations on Postgres before app restart"
-              docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS run --rm --build web alembic upgrade head
+              docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS run --rm web alembic upgrade head
             fi
 
             ensure_evolution_database
 
+            if [ "$MIGRATE" != "true" ]; then
+              echo "[deploy] Building images with Docker cache: $BUILD_TARGETS"
+              docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS build $BUILD_TARGETS
+            fi
+
             echo "[deploy] Running Alembic migrations on Postgres"
             docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS up -d db
             wait_for_postgres
-            docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS run --rm --build web alembic upgrade head
+            docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS run --rm web alembic upgrade head
 
-            echo "[deploy] Cleaning stale service containers to avoid name conflicts"
-            docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS rm -f -s web email-worker low-cards-worker affiliation-video-worker evolution-api || true
-            for stale_pattern in "^/app-web-1$" "^/app-email-worker-1$" "^/app-low-cards-worker-1$" "^/app-affiliation-video-worker-1$" "^/app-evolution-api-1$" "app-web-1" "app-email-worker-1" "app-low-cards-worker-1" "app-affiliation-video-worker-1" "app-evolution-api-1"; do
-              STALE_IDS="$(docker ps -aq --filter "name=${stale_pattern}" || true)"
-              if [ -n "${STALE_IDS}" ]; then
-                echo "[deploy] Removing stale containers (${stale_pattern}): ${STALE_IDS}"
-                docker rm -f ${STALE_IDS} || true
-              fi
-            done
-
-            echo "[deploy] Docker diagnostics before builder cleanup"
-            docker system df || true
-            docker builder ls || true
-            docker buildx ls || true
-
-            echo "[deploy] Pruning Docker builder cache safely"
-            docker builder prune -af || true
-            docker buildx prune -af || true
-
-            if [ "$AFFILIATION_VIDEO_WORKER_ENABLED" = "true" ]; then
-              echo "[deploy] Running docker compose --profile video-worker build --no-cache"
-              docker compose $COMPOSE_FILES --profile video-worker build --no-cache
-              echo "[deploy] Running docker compose --profile video-worker up -d --remove-orphans"
-              docker compose $COMPOSE_FILES --profile video-worker up -d --remove-orphans
-            else
-              echo "[deploy] Running docker compose build --no-cache"
-              docker compose $COMPOSE_FILES build --no-cache
-              echo "[deploy] Running docker compose up -d --remove-orphans"
-              docker compose $COMPOSE_FILES up -d --remove-orphans
-            fi
+            echo "[deploy] Recreating runtime services: $DEPLOY_SERVICES"
+            docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS up -d --remove-orphans $DEPLOY_SERVICES
 
             if [ "$AFFILIATION_VIDEO_WORKER_ENABLED" = "true" ]; then
               echo "[deploy] Sanity check: waiting up to 90s for affiliation-video-worker health"

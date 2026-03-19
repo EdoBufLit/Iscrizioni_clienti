@@ -82,6 +82,44 @@ function formatMessageTime(value: string | null): string {
   return parsed.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
 }
 
+function extractDigits(value: string | null | undefined): string {
+  return (value || "").replace(/[^\d]/g, "");
+}
+
+function formatPhoneLabel(value: string | null | undefined): string | null {
+  const digits = extractDigits(value);
+  if (!digits) return null;
+  if (digits.length === 12 && digits.startsWith("39")) {
+    return `+${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5, 8)} ${digits.slice(8)}`;
+  }
+  if (digits.length === 10) {
+    return `+39 ${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`;
+  }
+  return `+${digits}`;
+}
+
+function isMachineLikeLabel(value: string | null | undefined): boolean {
+  const raw = (value || "").trim().toLowerCase();
+  if (!raw) return true;
+  return raw.includes("@s.whatsapp.net") || raw.includes("@lid") || raw === extractDigits(raw);
+}
+
+function resolveDisplayName(input: {
+  displayName?: string | null;
+  phoneNumber?: string | null;
+  externalChatId?: string | null;
+}): string {
+  const preferred = (input.displayName || "").trim();
+  if (preferred && !isMachineLikeLabel(preferred)) {
+    return preferred;
+  }
+  const formattedPhone = formatPhoneLabel(input.phoneNumber || input.externalChatId);
+  if (formattedPhone) {
+    return formattedPhone;
+  }
+  return preferred || (input.externalChatId || "").trim() || "Contatto WhatsApp";
+}
+
 function initialsForName(value: string | null | undefined): string {
   const raw = (value || "").trim();
   if (!raw) return "WA";
@@ -147,6 +185,18 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
     return contactByJid.get(normalizeLookupValue(selectedChat.external_chat_id)) ?? null;
   }, [contactByJid, selectedChat]);
 
+  const selectedChatLabel = useMemo(
+    () =>
+      selectedChat
+        ? resolveDisplayName({
+            displayName: selectedChat.display_name || selectedContact?.display_name,
+            phoneNumber: selectedContact?.phone_number,
+            externalChatId: selectedChat.external_chat_id,
+          })
+        : null,
+    [selectedChat, selectedContact],
+  );
+
   const sidebarItems = useMemo(() => {
     const seen = new Set<string>();
     const items: SidebarItem[] = [];
@@ -160,8 +210,12 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
         kind: "chat",
         chatId: chat.id,
         externalChatId: chat.external_chat_id,
-        displayName: chat.display_name || linkedContact?.display_name || chat.external_chat_id,
-        phoneNumber: linkedContact?.phone_number ?? null,
+        displayName: resolveDisplayName({
+          displayName: chat.display_name || linkedContact?.display_name,
+          phoneNumber: linkedContact?.phone_number,
+          externalChatId: chat.external_chat_id,
+        }),
+        phoneNumber: linkedContact?.phone_number ?? formatPhoneLabel(chat.external_chat_id),
         preview: chat.last_message_text || "Nessun messaggio ancora",
         lastMessageAt: chat.last_message_at,
         unreadCount: chat.unread_count,
@@ -177,8 +231,12 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
         kind: "contact",
         chatId: null,
         externalChatId: contact.remote_jid,
-        displayName: contact.display_name,
-        phoneNumber: contact.phone_number,
+        displayName: resolveDisplayName({
+          displayName: contact.display_name,
+          phoneNumber: contact.phone_number,
+          externalChatId: contact.remote_jid,
+        }),
+        phoneNumber: contact.phone_number ?? formatPhoneLabel(contact.remote_jid),
         preview: "Contatto importato",
         lastMessageAt: contact.updated_at,
         unreadCount: 0,
@@ -209,9 +267,10 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
   }, [chats, contactByJid, contacts, sidebarMode, sidebarQuery]);
 
   const canQuickOpenFromSearch = useMemo(() => {
-    const digits = sidebarQuery.trim().replace(/[^\d+]/g, "");
-    return connection.status === "connected" && digits.length >= 5;
-  }, [connection.status, sidebarQuery]);
+    const digits = extractDigits(sidebarQuery);
+    if (connection.status !== "connected" || digits.length < 5) return false;
+    return !sidebarItems.some((item) => extractDigits(item.phoneNumber || item.externalChatId) === digits);
+  }, [connection.status, sidebarItems, sidebarQuery]);
 
   async function loadConnection(options?: { preferQr?: boolean }) {
     const next = options?.preferQr ? await fetchOrgAdminWhatsAppQr() : await fetchOrgAdminWhatsAppConnection();
@@ -584,7 +643,19 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
 
                 <div className="mt-4">
                   <div className="flex items-center rounded-full border border-[#2a3942] bg-[#202c33] px-4 py-3 text-sm text-[#d1d7db]">
-                    <span className="mr-3 text-[#8696a0]">⌕</span>
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      className="mr-3 h-4 w-4 shrink-0 text-[#8696a0]"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="M20 20l-3.5-3.5" />
+                    </svg>
                     <input
                       type="text"
                       value={sidebarQuery}
@@ -617,6 +688,14 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
                       </button>
                     );
                   })}
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-[#667781]">
+                  <span className="rounded-full border border-[#2a3942] px-2.5 py-1">{chats.length} thread</span>
+                  <span className="rounded-full border border-[#2a3942] px-2.5 py-1">{contacts.length} contatti</span>
+                  {connection.profile_name ? (
+                    <span className="rounded-full border border-[#2a3942] px-2.5 py-1">{connection.profile_name}</span>
+                  ) : null}
                 </div>
 
                 {showNewChatPanel ? (
@@ -699,7 +778,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
                   </div>
                 ) : (
                   <div className="py-2">
-                    {canQuickOpenFromSearch && !sidebarItems.length ? (
+                    {canQuickOpenFromSearch ? (
                       <button
                         type="button"
                         className="mx-2 mb-2 flex w-[calc(100%-1rem)] items-center gap-3 rounded-[1.2rem] border border-[#2a3942] bg-[#172229] px-4 py-3 text-left transition hover:border-[#41525d] hover:bg-[#1b2a30]"
@@ -715,7 +794,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
                         </div>
                         <div className="min-w-0">
                           <p className="truncate text-sm font-semibold text-[#f8f9fa]">Apri nuova chat</p>
-                          <p className="truncate text-xs text-[#8696a0]">{sidebarQuery}</p>
+                          <p className="truncate text-xs text-[#8696a0]">{formatPhoneLabel(sidebarQuery) || sidebarQuery}</p>
                         </div>
                       </button>
                     ) : null}
@@ -772,11 +851,11 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
               <>
                 <header className="flex items-center justify-between gap-4 border-b border-[#203239] bg-[#202c33] px-5 py-4">
                   <div className="flex min-w-0 items-center gap-3">
-                    <Avatar label={selectedChat.display_name} imageUrl={selectedContact?.profile_pic_url ?? null} sizeClass="h-12 w-12" />
+                    <Avatar label={selectedChatLabel || selectedChat.display_name} imageUrl={selectedContact?.profile_pic_url ?? null} sizeClass="h-12 w-12" />
                     <div className="min-w-0">
-                      <p className="truncate text-lg font-semibold text-[#f8f9fa]">{selectedChat.display_name}</p>
+                      <p className="truncate text-lg font-semibold text-[#f8f9fa]">{selectedChatLabel || selectedChat.display_name}</p>
                       <p className="truncate text-sm text-[#aebac1]">
-                        {selectedContact?.phone_number || selectedChat.external_chat_id}
+                        {selectedContact?.phone_number || formatPhoneLabel(selectedChat.external_chat_id) || selectedChat.external_chat_id}
                       </p>
                     </div>
                   </div>
@@ -784,7 +863,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
                     <span className={`rounded-full border px-3 py-1 font-semibold ${statusUi.tone}`}>
                       {statusUi.label}
                     </span>
-                    <span>Sync locale: {formatPanelDate(connection.updated_at)}</span>
+                    <span>Sync: {formatPanelDate(connection.updated_at)}</span>
                   </div>
                 </header>
 
@@ -900,3 +979,6 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
     </div>
   );
 }
+
+
+
