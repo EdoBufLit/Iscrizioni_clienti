@@ -16,8 +16,10 @@ from app.models import (
     WhatsAppMessage,
 )
 from app.services.whatsapp_evolution import (
+    EvolutionChat,
     EvolutionContact,
     EvolutionConnectionSnapshot,
+    EvolutionHistoryMessage,
     EvolutionSendTextResult,
     build_evolution_instance_name,
     normalize_phone,
@@ -214,6 +216,105 @@ def sync_contacts_into_chats(
         if display_name and chat.display_name != display_name:
             chat.display_name = display_name
         synced.append(chat)
+    return synced
+
+
+def sync_remote_chats_into_store(
+    db: Session,
+    *,
+    connection: WhatsAppConnection,
+    chats: list[EvolutionChat],
+) -> list[WhatsAppChat]:
+    synced: list[WhatsAppChat] = []
+    for remote_chat in chats:
+        external_chat_id = (remote_chat.remote_jid or "").strip()
+        if not external_chat_id or external_chat_id.endswith("@g.us"):
+            continue
+        display_name = remote_chat.display_name or normalize_phone(external_chat_id) or external_chat_id
+        chat = _get_or_create_chat(
+            db,
+            connection=connection,
+            external_chat_id=external_chat_id,
+            display_name=display_name,
+        )
+        if display_name and chat.display_name != display_name:
+            chat.display_name = display_name
+        if remote_chat.last_message_text:
+            chat.last_message_text = remote_chat.last_message_text
+        if remote_chat.last_message_at is not None:
+            chat.last_message_at = remote_chat.last_message_at
+        synced.append(chat)
+    return synced
+
+
+def sync_remote_messages_into_store(
+    db: Session,
+    *,
+    connection: WhatsAppConnection,
+    chat: WhatsAppChat,
+    messages: list[EvolutionHistoryMessage],
+) -> list[WhatsAppMessage]:
+    synced: list[WhatsAppMessage] = []
+    for remote_message in messages:
+        payload = dict(remote_message.raw)
+        key = payload.get("key")
+        if not isinstance(key, dict):
+            continue
+        if not isinstance(key.get("remoteJid"), str) or not key.get("remoteJid"):
+            key = {**key, "remoteJid": chat.external_chat_id}
+            payload["key"] = key
+        message_context = _build_message_context(
+            connection=connection,
+            payload=payload,
+            event_name="messages.upsert",
+            fallback_time=remote_message.created_at or utcnow(),
+        )
+        if message_context is None:
+            continue
+        message_context["external_chat_id"] = chat.external_chat_id
+        existing = _find_existing_message(
+            db,
+            connection=connection,
+            external_message_id=message_context["external_message_id"],
+            dedupe_key=message_context["dedupe_key"],
+        )
+        is_new = existing is None
+        message = existing or WhatsAppMessage(
+            org_id=connection.org_id,
+            connection_id=connection.id,
+            chat_id=chat.id,
+            dedupe_key=message_context["dedupe_key"],
+            direction=message_context["direction"],
+            status=message_context["status"],
+            created_at=message_context["created_at"],
+        )
+        if is_new:
+            db.add(message)
+
+        message.chat_id = chat.id
+        message.external_message_id = message_context["external_message_id"]
+        message.sender_phone = message_context["sender_phone"]
+        message.recipient_phone = message_context["recipient_phone"]
+        message.direction = message_context["direction"]
+        message.status = message_context["status"]
+        message.text_body = message_context["text_body"]
+        message.sent_at = message_context["created_at"]
+        if message.status == "delivered":
+            message.delivered_at = message.delivered_at or message_context["created_at"]
+        if message.status == "read":
+            message.delivered_at = message.delivered_at or message_context["created_at"]
+            message.read_at = message.read_at or message_context["created_at"]
+        if message.status == "failed":
+            message.failed_at = message.failed_at or message_context["created_at"]
+
+        _touch_chat(
+            chat,
+            text_body=message.text_body,
+            message_at=message.sent_at or utcnow(),
+            increment_unread=False,
+        )
+        synced.append(message)
+
     return synced
 
 

@@ -74,6 +74,24 @@ class EvolutionContact:
     raw: dict[str, Any]
 
 
+@dataclass(frozen=True)
+class EvolutionChat:
+    remote_jid: str
+    display_name: str | None
+    updated_at: datetime | None
+    last_message_text: str | None
+    last_message_at: datetime | None
+    raw: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class EvolutionHistoryMessage:
+    external_message_id: str | None
+    remote_jid: str | None
+    created_at: datetime | None
+    raw: dict[str, Any]
+
+
 def build_evolution_instance_name(org_id: int) -> str:
     return f"assonam-org-{int(org_id)}"
 
@@ -255,6 +273,22 @@ def _parse_datetime(value: Any) -> datetime | None:
         return None
 
 
+def _parse_timestamp_value(value: Any) -> datetime | None:
+    parsed = _parse_datetime(value)
+    if parsed is not None:
+        return parsed
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.isdigit():
+            value = int(stripped)
+    if isinstance(value, (int, float)):
+        timestamp = float(value)
+        if timestamp > 10_000_000_000:
+            timestamp = timestamp / 1000.0
+        return datetime.utcfromtimestamp(timestamp)
+    return None
+
+
 def _parse_contact(payload: Any) -> EvolutionContact | None:
     if not isinstance(payload, dict):
         return None
@@ -276,6 +310,66 @@ def _parse_contact(payload: Any) -> EvolutionContact | None:
         profile_pic_url=profile_pic_url,
         created_at=_parse_datetime(payload.get("createdAt")),
         updated_at=_parse_datetime(payload.get("updatedAt")),
+        raw=payload,
+    )
+
+
+def _extract_text_preview(payload: Any) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    for candidate in (payload.get("text"), payload.get("body")):
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    message = payload.get("message")
+    if isinstance(message, dict):
+        conversation = message.get("conversation")
+        if isinstance(conversation, str) and conversation.strip():
+            return conversation.strip()
+        extended = message.get("extendedTextMessage")
+        if isinstance(extended, dict):
+            text_value = extended.get("text")
+            if isinstance(text_value, str) and text_value.strip():
+                return text_value.strip()
+    return None
+
+
+def _parse_chat(payload: Any) -> EvolutionChat | None:
+    if not isinstance(payload, dict):
+        return None
+    remote_jid = payload.get("remoteJid")
+    if not isinstance(remote_jid, str) or not remote_jid.strip():
+        return None
+    display_name = None
+    for candidate in (payload.get("pushName"), payload.get("profileName"), payload.get("name")):
+        if isinstance(candidate, str) and candidate.strip():
+            display_name = candidate.strip()
+            break
+    last_message = payload.get("lastMessage")
+    if not isinstance(last_message, dict):
+        last_message = {}
+    updated_at = _parse_timestamp_value(payload.get("updatedAt")) or _parse_timestamp_value(payload.get("windowStart"))
+    last_message_at = _parse_timestamp_value(last_message.get("messageTimestamp")) or updated_at
+    return EvolutionChat(
+        remote_jid=remote_jid.strip(),
+        display_name=display_name,
+        updated_at=updated_at,
+        last_message_text=_extract_text_preview(last_message),
+        last_message_at=last_message_at,
+        raw=payload,
+    )
+
+
+def _parse_history_message(payload: Any) -> EvolutionHistoryMessage | None:
+    if not isinstance(payload, dict):
+        return None
+    key = payload.get("key")
+    remote_jid = key.get("remoteJid") if isinstance(key, dict) else None
+    if not isinstance(remote_jid, str) or not remote_jid.strip():
+        remote_jid = None
+    return EvolutionHistoryMessage(
+        external_message_id=_extract_message_id(payload),
+        remote_jid=remote_jid.strip() if isinstance(remote_jid, str) and remote_jid.strip() else None,
+        created_at=_parse_timestamp_value(payload.get("messageTimestamp")),
         raw=payload,
     )
 
@@ -513,6 +607,96 @@ class EvolutionLiteClient:
             reverse=True,
         )
         return contacts
+
+    def list_chats(
+        self,
+        instance_name: str,
+        *,
+        page: int = 1,
+        limit: int = 100,
+        max_pages: int = 5,
+    ) -> list[EvolutionChat]:
+        chats: list[EvolutionChat] = []
+        seen_remote_jids: set[str] = set()
+        current_page = max(1, int(page))
+        page_limit = max(1, int(limit))
+        for _ in range(max(1, int(max_pages))):
+            payload = self._request(
+                "POST",
+                f"/chat/findChats/{instance_name}",
+                json={"page": current_page, "offset": page_limit},
+            )
+            items = payload if isinstance(payload, list) else []
+            if not items:
+                break
+            page_added = 0
+            for item in items:
+                chat = _parse_chat(item)
+                if chat is None or chat.remote_jid in seen_remote_jids:
+                    continue
+                seen_remote_jids.add(chat.remote_jid)
+                chats.append(chat)
+                page_added += 1
+            if len(items) < page_limit or page_added == 0:
+                break
+            current_page += 1
+        chats.sort(
+            key=lambda chat: (
+                chat.last_message_at or chat.updated_at or datetime.min,
+                (chat.display_name or chat.remote_jid).lower(),
+            ),
+            reverse=True,
+        )
+        return chats
+
+    def list_messages(
+        self,
+        instance_name: str,
+        *,
+        remote_jid: str,
+        page: int = 1,
+        limit: int = 100,
+        max_pages: int = 5,
+    ) -> list[EvolutionHistoryMessage]:
+        messages: list[EvolutionHistoryMessage] = []
+        seen_keys: set[str] = set()
+        current_page = max(1, int(page))
+        page_limit = max(1, int(limit))
+        for _ in range(max(1, int(max_pages))):
+            payload = self._request(
+                "POST",
+                f"/chat/findMessages/{instance_name}",
+                json={
+                    "where": {"key": {"remoteJid": remote_jid}},
+                    "page": current_page,
+                    "offset": page_limit,
+                },
+            )
+            records: list[Any] = []
+            if isinstance(payload, dict):
+                messages_payload = payload.get("messages")
+                if isinstance(messages_payload, dict):
+                    maybe_records = messages_payload.get("records")
+                    if isinstance(maybe_records, list):
+                        records = maybe_records
+            if not records:
+                break
+            page_added = 0
+            for record in records:
+                message = _parse_history_message(record)
+                if message is None:
+                    continue
+                dedupe_key = message.external_message_id or repr(message.raw)
+                if dedupe_key in seen_keys:
+                    continue
+                seen_keys.add(dedupe_key)
+                messages.append(message)
+                page_added += 1
+            if len(records) < page_limit or page_added == 0:
+                break
+            current_page += 1
+        messages.sort(key=lambda message: message.created_at or datetime.min)
+        return messages
 
     def send_text(self, instance_name: str, *, number: str, text: str) -> EvolutionSendTextResult:
         payload = self._request(

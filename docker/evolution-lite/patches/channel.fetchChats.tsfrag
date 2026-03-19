@@ -1,0 +1,156 @@
+  private async backfillChatsFromMessages() {
+    const missingChats = await this.prismaRepository.$queryRaw<
+      { remoteJid: string; name: string | null }[]
+    >(Prisma.sql`
+      SELECT DISTINCT ON (message_data."remoteJid")
+        message_data."remoteJid" AS "remoteJid",
+        message_data."name" AS "name"
+      FROM (
+        SELECT
+          "Message"."key"->>'remoteJid' AS "remoteJid",
+          COALESCE(NULLIF("Contact"."pushName", ''), NULLIF("Chat"."name", ''), NULLIF("Message"."pushName", '')) AS "name",
+          "Message"."messageTimestamp" AS "messageTimestamp"
+        FROM "Message"
+        LEFT JOIN "Contact"
+          ON "Contact"."instanceId" = "Message"."instanceId"
+         AND "Contact"."remoteJid" = "Message"."key"->>'remoteJid'
+        LEFT JOIN "Chat"
+          ON "Chat"."instanceId" = "Message"."instanceId"
+         AND "Chat"."remoteJid" = "Message"."key"->>'remoteJid'
+        WHERE "Message"."instanceId" = ${this.instanceId}
+          AND ("Message"."key"->>'remoteJid') IS NOT NULL
+          AND ("Message"."key"->>'remoteJid') <> 'status@broadcast'
+          AND ("Message"."key"->>'remoteJid') NOT LIKE '%@g.us'
+          AND "Chat"."id" IS NULL
+      ) AS message_data
+      ORDER BY message_data."remoteJid", message_data."messageTimestamp" DESC
+    `);
+
+    if (!missingChats.length) {
+      return;
+    }
+
+    await this.prismaRepository.chat.createMany({
+      data: missingChats.map((chat) => ({
+        id: v4(),
+        remoteJid: chat.remoteJid,
+        instanceId: this.instanceId,
+        name: chat.name || null,
+        unreadMessages: 0,
+      })),
+    });
+  }
+
+  public async fetchChats(query: any) {
+    const remoteJid = query?.where?.remoteJid
+      ? query?.where?.remoteJid.includes('@')
+        ? query.where?.remoteJid
+        : createJid(query.where?.remoteJid)
+      : null;
+
+    if (!query?.offset) {
+      query.offset = 50;
+    }
+
+    if (!query?.page) {
+      query.page = 1;
+    }
+
+    await this.backfillChatsFromMessages();
+
+    const timestampFilter =
+      query?.where?.messageTimestamp?.gte && query?.where?.messageTimestamp?.lte
+        ? Prisma.sql`
+          AND "Message"."messageTimestamp" >= ${Math.floor(new Date(query.where.messageTimestamp.gte).getTime() / 1000)}
+          AND "Message"."messageTimestamp" <= ${Math.floor(new Date(query.where.messageTimestamp.lte).getTime() / 1000)}`
+        : Prisma.sql``;
+
+    const pagination = Prisma.sql`
+      LIMIT ${query.offset}
+      OFFSET ${query.offset * (query?.page === 1 ? 0 : (query?.page as number) - 1)}
+    `;
+
+    const results = await this.prismaRepository.$queryRaw<any[]>(Prisma.sql`
+      WITH rankedMessages AS (
+        SELECT DISTINCT ON ("Message"."key"->>'remoteJid')
+          COALESCE("Chat"."id", "Contact"."id", "Message"."key"->>'remoteJid') AS "id",
+          "Message"."key"->>'remoteJid' AS "remoteJid",
+          COALESCE(NULLIF("Contact"."pushName", ''), NULLIF("Chat"."name", ''), NULLIF("Message"."pushName", ''), "Message"."key"->>'remoteJid') AS "pushName",
+          "Contact"."profilePicUrl" AS "profilePicUrl",
+          to_timestamp("Message"."messageTimestamp"::double precision) AS "updatedAt",
+          COALESCE("Chat"."createdAt", to_timestamp("Message"."messageTimestamp"::double precision)) AS "windowStart",
+          COALESCE("Chat"."createdAt", to_timestamp("Message"."messageTimestamp"::double precision)) + INTERVAL '24 hours' AS "windowExpires",
+          CASE
+            WHEN COALESCE("Chat"."createdAt", to_timestamp("Message"."messageTimestamp"::double precision)) + INTERVAL '24 hours' > NOW() THEN true
+            ELSE false
+          END AS "windowActive",
+          "Message"."id" AS "lastMessageId",
+          "Message"."key" AS "lastMessageKey",
+          "Message"."pushName" AS "lastMessagePushName",
+          "Message"."participant" AS "lastMessageParticipant",
+          "Message"."messageType" AS "lastMessageMessageType",
+          "Message"."message" AS "lastMessageMessage",
+          "Message"."contextInfo" AS "lastMessageContextInfo",
+          "Message"."source" AS "lastMessageSource",
+          "Message"."messageTimestamp" AS "lastMessageMessageTimestamp",
+          "Message"."instanceId" AS "lastMessageInstanceId",
+          "Message"."sessionId" AS "lastMessageSessionId",
+          "Message"."status" AS "lastMessageStatus"
+        FROM "Message"
+        LEFT JOIN "Contact"
+          ON "Contact"."instanceId" = "Message"."instanceId"
+         AND "Contact"."remoteJid" = "Message"."key"->>'remoteJid'
+        LEFT JOIN "Chat"
+          ON "Chat"."instanceId" = "Message"."instanceId"
+         AND "Chat"."remoteJid" = "Message"."key"->>'remoteJid'
+        WHERE "Message"."instanceId" = ${this.instanceId}
+          AND ("Message"."key"->>'remoteJid') IS NOT NULL
+          AND ("Message"."key"->>'remoteJid') <> 'status@broadcast'
+          AND ("Message"."key"->>'remoteJid') NOT LIKE '%@g.us'
+          ${remoteJid ? Prisma.sql`AND ("Message"."key"->>'remoteJid') = ${remoteJid}` : Prisma.sql``}
+          ${timestampFilter}
+        ORDER BY ("Message"."key"->>'remoteJid'), "Message"."messageTimestamp" DESC
+      )
+      SELECT *
+      FROM rankedMessages
+      ORDER BY "updatedAt" DESC NULLS LAST
+      ${pagination};
+    `);
+
+    if (!results || !isArray(results) || results.length === 0) {
+      return [];
+    }
+
+    return results.map((contact) => {
+      const lastMessage = contact.lastMessageId
+        ? {
+            id: contact.lastMessageId,
+            key: contact.lastMessageKey,
+            pushName: contact.lastMessagePushName,
+            participant: contact.lastMessageParticipant,
+            messageType: contact.lastMessageMessageType,
+            message: contact.lastMessageMessage,
+            contextInfo: contact.lastMessageContextInfo,
+            source: contact.lastMessageSource,
+            messageTimestamp: contact.lastMessageMessageTimestamp,
+            instanceId: contact.lastMessageInstanceId,
+            sessionId: contact.lastMessageSessionId,
+            status: contact.lastMessageStatus,
+          }
+        : undefined;
+
+      return {
+        id: contact.id,
+        remoteJid: contact.remoteJid,
+        pushName: contact.pushName,
+        profilePicUrl: contact.profilePicUrl,
+        updatedAt: contact.updatedAt,
+        windowStart: contact.windowStart,
+        windowExpires: contact.windowExpires,
+        windowActive: contact.windowActive,
+        lastMessage: lastMessage ? this.cleanMessageData(lastMessage) : undefined,
+      };
+    });
+  }
+}
+

@@ -17,12 +17,12 @@ from app.services.whatsapp_evolution import (
 )
 from app.services.whatsapp_sync import (
     apply_connection_snapshot,
-    get_or_create_chat_for_number,
     create_pending_outbound_message,
     finalize_outbound_send,
     get_chat_for_connection,
     get_connection_by_instance_name,
     get_messages_for_chat,
+    get_or_create_chat_for_number,
     get_or_create_connection,
     ingest_evolution_webhook,
     list_chats_for_connection,
@@ -31,6 +31,8 @@ from app.services.whatsapp_sync import (
     serialize_connection,
     serialize_message,
     sync_contacts_into_chats,
+    sync_remote_chats_into_store,
+    sync_remote_messages_into_store,
 )
 
 logger = logging.getLogger(__name__)
@@ -205,6 +207,15 @@ def list_whatsapp_chats(
     connection = _get_existing_connection(db, org_id=admin.organization.id)
     if connection is None:
         return {"items": [], "total": 0}
+    if connection.status == "connected":
+        client = EvolutionLiteClient()
+        try:
+            remote_chats = client.list_chats(connection.instance_name)
+        except EvolutionApiError as exc:
+            logger.warning("whatsapp_evolution_chat_sync_failed org=%s detail=%s", admin.organization.id, str(exc))
+        else:
+            sync_remote_chats_into_store(db, connection=connection, chats=remote_chats)
+            db.commit()
     items = [serialize_chat(chat) for chat in list_chats_for_connection(db, connection=connection)]
     return {"items": items, "total": len(items)}
 
@@ -244,6 +255,29 @@ def list_whatsapp_messages(
     chat = get_chat_for_connection(db, connection=connection, chat_id=chat_id)
     if chat is None:
         raise HTTPException(status_code=404, detail="Chat non trovata.")
+    if connection.status == "connected":
+        client = EvolutionLiteClient()
+        try:
+            remote_messages = client.list_messages(
+                connection.instance_name,
+                remote_jid=chat.external_chat_id,
+            )
+        except EvolutionApiError as exc:
+            logger.warning(
+                "whatsapp_evolution_message_sync_failed org=%s chat=%s detail=%s",
+                admin.organization.id,
+                chat.external_chat_id,
+                str(exc),
+            )
+        else:
+            sync_remote_messages_into_store(
+                db,
+                connection=connection,
+                chat=chat,
+                messages=remote_messages,
+            )
+            db.commit()
+            db.refresh(chat)
     items = [serialize_message(message) for message in get_messages_for_chat(db, chat=chat)]
     db.commit()
     return {

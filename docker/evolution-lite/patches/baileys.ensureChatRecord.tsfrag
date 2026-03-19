@@ -1,0 +1,55 @@
+  private async ensureChatRecord(remoteJid: string, pushName?: string | null) {
+    if (!remoteJid || remoteJid === 'status@broadcast') {
+      return null;
+    }
+
+    const existingChat = await this.prismaRepository.chat.findFirst({
+      where: { instanceId: this.instanceId, remoteJid },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, name: true },
+    });
+
+    const nextName = typeof pushName === 'string' ? pushName.trim() : '';
+    const chatData = {
+      remoteJid,
+      instanceId: this.instanceId,
+      name: nextName || '',
+      unreadMessages: 0,
+    };
+
+    if (!existingChat) {
+      this.sendDataWebhook(Events.CHATS_UPSERT, [chatData]);
+
+      if (!this.configService.get<Database>('DATABASE').SAVE_DATA.CHATS) {
+        return chatData;
+      }
+
+      try {
+        return await this.prismaRepository.chat.create({
+          data: chatData,
+        });
+      } catch (error) {
+        console.log(`Chat insert record ignored: ${chatData.remoteJid} - ${chatData.instanceId}`);
+        return null;
+      }
+    }
+
+    if (nextName && existingChat.name !== nextName) {
+      this.sendDataWebhook(Events.CHATS_UPSERT, [{ ...existingChat, name: nextName }]);
+
+      if (this.configService.get<Database>('DATABASE').SAVE_DATA.CHATS) {
+        try {
+          await this.prismaRepository.chat.update({
+            where: { id: existingChat.id },
+            data: { name: nextName },
+          });
+        } catch (error) {
+          console.log(`Chat update record ignored: ${chatData.remoteJid} - ${chatData.instanceId}`);
+        }
+      }
+    }
+
+    return existingChat;
+  }
+
+

@@ -1,4 +1,11 @@
 
+## Plan (Evolution Lite custom patch for chats/history - Mar 19, 2026)
+- [ ] Ispezionare l'upstream ufficiale Evolution API Lite sui path `contacts/chats/messages` e riprodurre la root cause di `findChats` / persistenza storica insufficiente
+- [ ] Definire una patch minima mantenibile e costruire una nostra immagine Docker custom derivata da Lite
+- [ ] Integrare l'immagine custom nello stack/deploy ASSONAM senza allargare inutilmente la superficie env
+- [ ] Deployare su Hetzner, verificare DB `evolution`, stato container, endpoint utili e comportamento live
+- [ ] Documentare esito reale, limiti residui e impatto sulla UX tipo WhatsApp Web
+
 ## Plan (WhatsApp auto-messages on form submissions - Mar 19, 2026)
 - [x] Mappare submit pubblico, CRUD forms e workspace org-admin per scegliere il punto corretto di configurazione
 - [x] Decidere il posizionamento prodotto: automazioni WhatsApp per-form dentro `Form pubblici`, non nelle campagne bulk

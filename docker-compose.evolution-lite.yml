@@ -2,7 +2,10 @@ version: "3.8"
 
 services:
   evolution-api:
-    image: atendai/evolution-api-lite:latest
+    image: assonam/evolution-api-lite:custom
+    build:
+      context: .
+      dockerfile: docker/evolution-lite/Dockerfile
     entrypoint:
       - /bin/bash
       - -lc
