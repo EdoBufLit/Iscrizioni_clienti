@@ -519,7 +519,6 @@ def decorate_rendered_email(
             "border": "#dce7ec",
             "badge_bg": "#ecfeff",
             "badge_fg": accent_color,
-            "badge_label": "Comunicazione moderna",
         },
         "institutional": {
             "outer_bg": "#eef2ff",
@@ -527,7 +526,6 @@ def decorate_rendered_email(
             "border": "#cbd5e1",
             "badge_bg": "#e2e8f0",
             "badge_fg": "#334155",
-            "badge_label": "Comunicazione ufficiale",
         },
         "elegant": {
             "outer_bg": "#faf7f2",
@@ -535,7 +533,6 @@ def decorate_rendered_email(
             "border": "#e7dcc8",
             "badge_bg": "#f4ead8",
             "badge_fg": "#8a5a24",
-            "badge_label": "Messaggio elegante",
         },
         "event": {
             "outer_bg": "#fff7ed",
@@ -543,7 +540,6 @@ def decorate_rendered_email(
             "border": "#fed7aa",
             "badge_bg": "#ffedd5",
             "badge_fg": "#c2410c",
-            "badge_label": "Invito evento",
         },
         "reminder": {
             "outer_bg": "#eff6ff",
@@ -551,7 +547,6 @@ def decorate_rendered_email(
             "border": "#bfdbfe",
             "badge_bg": "#dbeafe",
             "badge_fg": "#1d4ed8",
-            "badge_label": "Promemoria rinnovo",
         },
     }.get(layout_key, {
         "outer_bg": "#f3f7f9",
@@ -559,7 +554,6 @@ def decorate_rendered_email(
         "border": "#dce7ec",
         "badge_bg": "#ecfeff",
         "badge_fg": accent_color,
-        "badge_label": "Comunicazione email",
     })
     cta_style_map = {
         "solid": f"display:inline-block;padding:12px 20px;border-radius:999px;background:{button_color};color:#ffffff;text-decoration:none;font-weight:700",
@@ -647,12 +641,6 @@ def decorate_rendered_email(
         if final_note
         else ""
     )
-    badge_html = (
-        f"<div style=\"display:inline-flex;align-items:center;padding:8px 12px;border-radius:999px;"
-        f"background:{layout_styles['badge_bg']};color:{layout_styles['badge_fg']};font-size:11px;font-weight:800;"
-        f"letter-spacing:0.16em;text-transform:uppercase;margin-bottom:18px\">"
-        f"{html.escape(layout_styles['badge_label'])}</div>"
-    )
     wrapped_html = (
         f"<div style=\"margin:0;padding:24px;background:{layout_styles['outer_bg']};font-family:{font_styles['outer']}\">"
         f"<div style=\"max-width:640px;margin:0 auto;background:{layout_styles['card_bg']};border:1px solid {layout_styles['border']};"
@@ -660,7 +648,7 @@ def decorate_rendered_email(
         f"{hero_html}"
         f"<div style=\"padding:32px\">"
         f"<div style=\"display:flex;align-items:center;gap:16px;margin-bottom:24px\">{logo_html}{association_name_html}</div>"
-        f"{badge_html}{title_html}"
+        f"{title_html}"
         f"{secondary_image_html}{highlight_html}{event_html}"
         f"<div style=\"color:#0f172a;font-size:{font_styles['body_size']};line-height:1.7\">{body_html}</div>"
         f"{note_html}{cta_html}{signature_html}{final_note_html}"

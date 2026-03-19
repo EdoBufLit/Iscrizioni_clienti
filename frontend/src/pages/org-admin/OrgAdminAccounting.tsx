@@ -271,8 +271,8 @@ const OrgAdminAccounting = () => {
     return (
       <div className="container-shell py-10 space-y-8">
         <Skeleton className="h-12 w-80" />
-        <Skeleton className="h-24 w-full rounded-3xl" />
-        <Skeleton className="h-80 w-full rounded-3xl" />
+        <Skeleton className="h-24 w-full rounded-[1.25rem]" />
+        <Skeleton className="h-80 w-full rounded-[1.25rem]" />
       </div>
     );
   }
@@ -280,7 +280,7 @@ const OrgAdminAccounting = () => {
   return (
     <div className="container-shell py-10 space-y-8">
       {/* Header and Filters in a unified clean card */}
-      <section className="rounded-3xl border border-neutral-200 bg-white shadow-sm overflow-hidden">
+      <section className="rounded-[1.25rem] border border-neutral-200 bg-white shadow-sm overflow-hidden">
         <div className="px-8 py-7 border-b border-neutral-100 bg-gradient-to-r from-neutral-50 to-white">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -354,7 +354,7 @@ const OrgAdminAccounting = () => {
 
       {/* Main Content Area */}
       {items.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-neutral-300 bg-white px-6 py-20 text-center">
+        <div className="rounded-[1.25rem] ring-1 ring-inset ring-slate-200/60 border-dashed bg-slate-50 px-6 py-20 text-center">
           <div className="mx-auto w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4 text-neutral-400">
             <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
@@ -370,7 +370,7 @@ const OrgAdminAccounting = () => {
           {items.map((folder) => {
             const folderOpen = expandedFolders.includes(folder.id);
             return (
-              <section key={folder.id} className="rounded-3xl border border-neutral-200 bg-white shadow-sm overflow-hidden">
+              <section key={folder.id} className="rounded-[1.25rem] border border-neutral-200 bg-white shadow-sm overflow-hidden">
                 {/* Folder Header */}
                 <button
                   type="button"
@@ -593,7 +593,7 @@ const OrgAdminAccounting = () => {
               </div>
               
               {shareLinks.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-neutral-200 bg-neutral-50/50 p-6 text-center text-sm text-neutral-500">
+                <div className="rounded-[1.25rem] ring-1 ring-inset ring-slate-200/60 border-dashed bg-slate-50 p-6 text-center text-sm text-neutral-500">
                   Nessun link generato per questo documento.
                 </div>
               ) : (

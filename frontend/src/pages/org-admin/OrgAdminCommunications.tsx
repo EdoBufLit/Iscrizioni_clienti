@@ -173,7 +173,7 @@ export default function OrgAdminCommunications() {
     return (
       <div className="container-shell py-8 space-y-5">
         <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-96 w-full rounded-[2rem]" />
+        <Skeleton className="h-96 w-full rounded-[1.25rem]" />
       </div>
     );
   }
@@ -213,107 +213,104 @@ export default function OrgAdminCommunications() {
   }
 
   return (
-    <div className="container-shell py-8 space-y-6">
-      <section className="surface overflow-hidden">
-        {communicationsLocked && (
-          <div className="mx-6 mt-6 rounded-[1.75rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900 md:mx-8">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-700">Modulo non attivo</p>
-                <p className="mt-1">{COMMUNICATIONS_LOCKED_MESSAGE}</p>
-              </div>
+    <div className="container-shell py-8 md:py-10 space-y-8">
+      {communicationsLocked && (
+        <div className="rounded-[1.25rem] bg-amber-50/50 p-5 text-sm text-amber-900 ring-1 ring-inset ring-amber-500/20">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-700">Modulo bloccato</p>
+              <p className="mt-1 font-medium">{COMMUNICATIONS_LOCKED_MESSAGE}</p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Modern, horizontal, scrollable tab navigation without heavy borders */}
+      <nav className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-2 scrollbar-hide md:mx-0 md:px-0">
+        {visibleTabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            className={`whitespace-nowrap rounded-full px-5 py-3 text-sm font-medium transition-all flex flex-col items-start ${
+              activeTab === tab.key
+                ? "bg-slate-900 text-white shadow-sm"
+                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+            }`}
+            onClick={() => updateQuery(tab.key)}
+          >
+            <span className="block">{tab.label}</span>
+            <span className={`block mt-0.5 text-[10px] uppercase tracking-wider ${activeTab === tab.key ? "text-white/60" : "text-slate-400"}`}>{tab.hint}</span>
+          </button>
+        ))}
+      </nav>
+
+      <main className="min-h-[60vh]">
+        {activeTab === "panoramica" && (
+          <CommunicationsOverview
+            communicationsLocked={communicationsLocked}
+            onTabChange={(tab) => updateQuery(tab)}
+            onQuickAction={(intent) => updateQuery("campagne", { mode: "create", intent })}
+          />
         )}
-
-        <div className="px-4 pt-6 md:px-8">
-          <div className="grid gap-2 border-b border-neutral-200 pb-4 md:grid-cols-3 xl:grid-cols-7">
-            {visibleTabs.map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                className={`rounded-[1.35rem] border px-4 py-3 text-left transition ${
-                  activeTab === tab.key
-                    ? "border-brand bg-brand text-white shadow-sm"
-                    : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50"
-                }`}
-                onClick={() => updateQuery(tab.key)}
-              >
-                <p className="text-sm font-semibold">{tab.label}</p>
-                <p className={`mt-1 text-xs ${activeTab === tab.key ? "text-white/80" : "text-neutral-500"}`}>{tab.hint}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="px-6 py-8 md:px-8">
-          {activeTab === "panoramica" && (
-            <CommunicationsOverview
-              communicationsLocked={communicationsLocked}
-              onTabChange={(tab) => updateQuery(tab)}
-              onQuickAction={(intent) => updateQuery("campagne", { mode: "create", intent })}
-            />
-          )}
-          {activeTab === "campagne" && (
-            <MessagesHub
-              section="campaigns"
-              communicationsLocked={communicationsLocked}
-              launchIntent={launchIntent}
-              launchFormId={launchFormId}
-              launchTemplateId={launchTemplateId}
-              onConsumeLaunch={consumeLaunchParams}
-              campaignMode="list"
-              onCreateCampaign={() =>
-                updateQuery("campagne", {
-                  mode: "create",
-                  intent: null,
-                  formId: null,
-                  templateId: null,
-                  campaignId: null,
-                })
-              }
-              onEditCampaign={(campaignId) =>
-                updateQuery("campagne", {
-                  mode: "edit",
-                  campaignId,
-                  intent: null,
-                  formId: null,
-                  templateId: null,
-                })
-              }
-            />
-          )}
-          {activeTab === "modelli" && (
-            <MessagesHub
-              section="templates"
-              communicationsLocked={communicationsLocked}
-              launchIntent={launchIntent}
-              launchFormId={launchFormId}
-              launchTemplateId={launchTemplateId}
-              onConsumeLaunch={consumeLaunchParams}
-            />
-          )}
-          {activeTab === "moduli" && (
-            <PublicFormsHub locked={communicationsLocked} />
-          )}
-          {activeTab === "invii" && (
-            <MessagesHub
-              section="deliveries"
-              communicationsLocked={communicationsLocked}
-              launchIntent={launchIntent}
-              launchFormId={launchFormId}
-              launchTemplateId={launchTemplateId}
-              onConsumeLaunch={consumeLaunchParams}
-            />
-          )}
-          {activeTab === "whatsapp" && whatsappEnabled && (
-            <WhatsAppHub communicationsLocked={communicationsLocked} />
-          )}
-          {activeTab === "impostazioni" && (
-            <EmailSendingSettings communicationsLocked={communicationsLocked} />
-          )}
-        </div>
-      </section>
+        {activeTab === "campagne" && (
+          <MessagesHub
+            section="campaigns"
+            communicationsLocked={communicationsLocked}
+            launchIntent={launchIntent}
+            launchFormId={launchFormId}
+            launchTemplateId={launchTemplateId}
+            onConsumeLaunch={consumeLaunchParams}
+            campaignMode="list"
+            onCreateCampaign={() =>
+              updateQuery("campagne", {
+                mode: "create",
+                intent: null,
+                formId: null,
+                templateId: null,
+                campaignId: null,
+              })
+            }
+            onEditCampaign={(campaignId) =>
+              updateQuery("campagne", {
+                mode: "edit",
+                campaignId,
+                intent: null,
+                formId: null,
+                templateId: null,
+              })
+            }
+          />
+        )}
+        {activeTab === "modelli" && (
+          <MessagesHub
+            section="templates"
+            communicationsLocked={communicationsLocked}
+            launchIntent={launchIntent}
+            launchFormId={launchFormId}
+            launchTemplateId={launchTemplateId}
+            onConsumeLaunch={consumeLaunchParams}
+          />
+        )}
+        {activeTab === "moduli" && (
+          <PublicFormsHub locked={communicationsLocked} />
+        )}
+        {activeTab === "invii" && (
+          <MessagesHub
+            section="deliveries"
+            communicationsLocked={communicationsLocked}
+            launchIntent={launchIntent}
+            launchFormId={launchFormId}
+            launchTemplateId={launchTemplateId}
+            onConsumeLaunch={consumeLaunchParams}
+          />
+        )}
+        {activeTab === "whatsapp" && whatsappEnabled && (
+          <WhatsAppHub communicationsLocked={communicationsLocked} />
+        )}
+        {activeTab === "impostazioni" && (
+          <EmailSendingSettings communicationsLocked={communicationsLocked} />
+        )}
+      </main>
     </div>
   );
 }

@@ -161,8 +161,8 @@ export default function OrgAdminStripeDemoBilling() {
   if (loading) {
     return (
       <div className="container-shell py-8 space-y-6">
-        <Skeleton className="h-32 w-full rounded-3xl" />
-        <Skeleton className="h-96 w-full rounded-3xl" />
+        <Skeleton className="h-32 w-full rounded-[1.25rem]" />
+        <Skeleton className="h-96 w-full rounded-[1.25rem]" />
       </div>
     );
   }
@@ -170,7 +170,7 @@ export default function OrgAdminStripeDemoBilling() {
   return (
     <div className="container-shell py-8 space-y-8">
       {/* Hero Header */}
-      <section className="relative overflow-hidden rounded-[2rem] bg-neutral-900 px-8 py-10 shadow-xl">
+      <section className="relative overflow-hidden rounded-[1.25rem] bg-neutral-900 px-8 py-10 shadow-xl">
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#4f46e5_0%,#0ea5e9_100%)] opacity-10 mix-blend-overlay"></div>
         <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-2xl">
@@ -215,7 +215,7 @@ export default function OrgAdminStripeDemoBilling() {
       </section>
 
       {!state?.enabled ? (
-        <section className="rounded-[2rem] border border-amber-200 bg-amber-50 px-8 py-10 text-center">
+        <section className="rounded-[1.25rem] border border-amber-200 bg-amber-50 px-8 py-10 text-center">
           <div className="mx-auto w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 mb-4">
             <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -229,7 +229,7 @@ export default function OrgAdminStripeDemoBilling() {
       ) : (
         <div className="grid gap-8 lg:grid-cols-2">
           {/* Step 1: Connected Account */}
-          <section className="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm flex flex-col">
+          <section className="rounded-[1.25rem] border border-neutral-200 bg-white p-6 shadow-sm flex flex-col">
             <div className="flex items-center justify-between border-b border-neutral-100 pb-5">
               <div>
                 <div className="flex items-center gap-2">
@@ -282,7 +282,7 @@ export default function OrgAdminStripeDemoBilling() {
                   )}
                 </div>
               ) : (
-                <div className="rounded-2xl border border-dashed border-neutral-200 bg-neutral-50 px-6 py-10 text-center">
+                <div className="rounded-[1.25rem] ring-1 ring-inset ring-slate-200/60 border-dashed bg-slate-50 px-6 py-10 text-center">
                   <p className="text-sm font-bold text-neutral-900">Nessun account collegato</p>
                   <p className="mt-1 text-xs font-medium text-neutral-500">Crea un account per iniziare a ricevere pagamenti.</p>
                 </div>
@@ -325,7 +325,7 @@ export default function OrgAdminStripeDemoBilling() {
           </section>
 
           {/* Step 2: Subscription */}
-          <section className="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm flex flex-col">
+          <section className="rounded-[1.25rem] border border-neutral-200 bg-white p-6 shadow-sm flex flex-col">
             <div className="border-b border-neutral-100 pb-5">
               <div className="flex items-center gap-2">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand text-xs font-bold text-white">2</span>
@@ -396,7 +396,7 @@ export default function OrgAdminStripeDemoBilling() {
           </section>
 
           {/* Step 3: Demo Products */}
-          <section className="rounded-[2rem] border border-neutral-200 bg-white p-6 shadow-sm col-span-1 lg:col-span-2">
+          <section className="rounded-[1.25rem] border border-neutral-200 bg-white p-6 shadow-sm col-span-1 lg:col-span-2">
             <div className="border-b border-neutral-100 pb-5">
               <div className="flex items-center gap-2">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand text-xs font-bold text-white">3</span>
@@ -497,7 +497,7 @@ export default function OrgAdminStripeDemoBilling() {
                       <Skeleton className="h-20 w-full rounded-xl" />
                     </div>
                   ) : products.length === 0 ? (
-                    <div className="h-full rounded-2xl border border-dashed border-neutral-200 bg-neutral-50/50 flex flex-col items-center justify-center p-6 text-center">
+                    <div className="h-full rounded-[1.25rem] ring-1 ring-inset ring-slate-200/60 border-dashed bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
                       <p className="text-sm font-bold text-neutral-900">Catalogo vuoto</p>
                       <p className="mt-1 text-xs font-medium text-neutral-500">I prodotti creati appariranno qui.</p>
                     </div>

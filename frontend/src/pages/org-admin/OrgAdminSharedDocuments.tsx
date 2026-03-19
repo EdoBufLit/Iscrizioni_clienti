@@ -99,7 +99,7 @@ const OrgAdminSharedDocuments = () => {
     return (
       <div className="container-shell py-10 space-y-8">
         <Skeleton className="h-12 w-72" />
-        <Skeleton className="h-64 w-full rounded-3xl" />
+        <Skeleton className="h-64 w-full rounded-[1.25rem]" />
       </div>
     );
   }
@@ -121,7 +121,7 @@ const OrgAdminSharedDocuments = () => {
 
         <div className="grid gap-5 px-7 py-7 sm:grid-cols-2 xl:grid-cols-3">
           {items.length === 0 ? (
-            <div className="col-span-full rounded-3xl border border-dashed border-neutral-300 bg-neutral-50/70 px-6 py-12 text-center">
+            <div className="col-span-full rounded-[1.25rem] ring-1 ring-inset ring-slate-200/60 border-dashed bg-slate-50 px-6 py-12 text-center">
               <p className="text-sm font-semibold text-neutral-500">
                 Nessun documento disponibile in questa sezione.
               </p>
@@ -130,7 +130,7 @@ const OrgAdminSharedDocuments = () => {
             items.map((document) => (
               <article
                 key={document.id}
-                className="group rounded-3xl border border-neutral-200 bg-white p-6 shadow-[0_18px_60px_-40px_rgba(15,23,42,0.32)] transition hover:-translate-y-0.5 hover:border-brand/30"
+                className="group rounded-[1.25rem] border border-neutral-200 bg-white p-6 shadow-[0_18px_60px_-40px_rgba(15,23,42,0.32)] transition hover:-translate-y-0.5 hover:border-brand/30"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
