@@ -101,7 +101,9 @@ function main() {
   if (!repoRoot) {
     throw new Error("Usage: node patch_evolution_lite.js <repo-root>");
   }
-  const patchRoot = path.join(__dirname, "..", "docker", "evolution-lite", "patches");
+  const patchRoot =
+    process.env.EVOLUTION_PATCH_ROOT ||
+    path.join(__dirname, "..", "docker", "evolution-lite", "patches");
 
   patchChannelService(repoRoot, patchRoot);
   patchBaileysService(repoRoot, patchRoot);

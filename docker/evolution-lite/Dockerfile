@@ -12,7 +12,8 @@ WORKDIR /tmp/evolution
 RUN git checkout "${EVOLUTION_LITE_COMMIT}"
 
 COPY scripts/patch_evolution_lite.js /tmp/patch_evolution_lite.js
-RUN node /tmp/patch_evolution_lite.js /tmp/evolution
+COPY docker/evolution-lite/patches /tmp/evolution-patches
+RUN EVOLUTION_PATCH_ROOT=/tmp/evolution-patches node /tmp/patch_evolution_lite.js /tmp/evolution
 
 LABEL version="2.2.1-assonam-patched" description="ASSONAM-patched Evolution API Lite with chat/history fixes."
 
