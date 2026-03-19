@@ -155,50 +155,44 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
   if (loading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-36 w-full rounded-[1.75rem]" />
+        <Skeleton className="h-20 w-full rounded-[1.75rem]" />
         <Skeleton className="h-80 w-full rounded-[1.75rem]" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
-      <section className="grid gap-6 rounded-[2rem] border border-neutral-200 bg-gradient-to-br from-emerald-50 via-white to-white p-6 lg:grid-cols-[1.15fr_0.85fr]">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-neutral-200 pb-4">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-emerald-700">WhatsApp</p>
-          <h2 className="mt-3 text-3xl font-bold tracking-tight text-neutral-900">Automazioni leggibili, non catene tecniche nascoste.</h2>
-          <p className="mt-4 max-w-2xl text-sm leading-7 text-neutral-600">
-            Qui la relazione tra form pubblico, trigger, destinatario, sorgente del numero e template WhatsApp viene esposta in modo esplicito. Ogni regola produce una frase naturale leggibile anche dalla segreteria.
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Automazioni WhatsApp</p>
+          <h2 className="mt-2 text-2xl font-bold tracking-tight text-neutral-900">Regole collegate ai form</h2>
+          <p className="mt-2 max-w-2xl text-sm text-neutral-600">
+            Configura evento, destinatario, numero e template senza toccare l'inbox.
           </p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-[1.25rem] border border-neutral-200 bg-white px-4 py-3">
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Regole</p>
-            <p className="mt-2 text-xl font-bold text-neutral-900">{automations.length}</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="rounded-[1rem] border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-600">
+            <strong className="text-neutral-900">{automations.length}</strong> regole
           </div>
-          <div className="rounded-[1.25rem] border border-neutral-200 bg-white px-4 py-3">
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Attive</p>
-            <p className="mt-2 text-xl font-bold text-neutral-900">{automations.filter((item) => item.is_active).length}</p>
+          <div className="rounded-[1rem] border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-600">
+            <strong className="text-neutral-900">{automations.filter((item) => item.is_active).length}</strong> attive
           </div>
-          <div className="rounded-[1.25rem] border border-neutral-200 bg-white px-4 py-3 sm:col-span-2">
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Form connessi</p>
-            <p className="mt-2 text-xl font-bold text-neutral-900">{new Set(automations.map((item) => item.form_id).filter(Boolean)).size}</p>
-          </div>
+          <button className="btn-secondary" type="button" onClick={() => setDraft(emptyAutomationDraft())}>
+            Nuova regola
+          </button>
         </div>
-      </section>
+      </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.9fr)]">
         <section className="space-y-4">
           <div className={cardClass}>
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start justify-between gap-4 border-b border-neutral-200 pb-5">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Automazioni</p>
-                <h3 className="mt-2 text-2xl font-bold tracking-tight text-neutral-900">Regole attive e bozze</h3>
-                <p className="mt-2 text-sm text-neutral-600">Apri una regola per modificarla oppure crea una nuova configurazione dal builder laterale.</p>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Elenco regole</p>
+                <h3 className="mt-2 text-2xl font-bold tracking-tight text-neutral-900">Automazioni configurate</h3>
+                <p className="mt-2 text-sm text-neutral-600">Apri una regola esistente o prepara una nuova configurazione dal pannello laterale.</p>
               </div>
-              <button className="btn-secondary" type="button" onClick={() => setDraft(emptyAutomationDraft())}>
-                Nuova regola
-              </button>
             </div>
 
             <div className="mt-6 space-y-3">
@@ -237,7 +231,7 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
 
         <aside className="space-y-6 xl:sticky xl:top-28 xl:self-start">
           <section className={cardClass}>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Automation Builder</p>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Configurazione</p>
             <h3 className="mt-2 text-xl font-semibold text-neutral-900">{draft.id ? "Modifica regola" : "Nuova regola"}</h3>
             <div className="mt-5 space-y-4">
               <label className={labelClass}>

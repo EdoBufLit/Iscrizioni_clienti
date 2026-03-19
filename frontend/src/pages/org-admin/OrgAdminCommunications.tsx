@@ -8,9 +8,11 @@ import { CommunicationsOverview } from "./components/communications/Communicatio
 import { MessagesHub } from "./components/communications/MessagesHub";
 import { PublicFormsHub } from "./components/communications/PublicFormsHub";
 import { EmailSendingSettings } from "./components/communications/EmailSendingSettings";
+import { WhatsAppHub } from "./components/communications/WhatsAppHub";
 import { WhatsAppAutomationsHub } from "./components/communications/WhatsAppAutomationsHub";
 
 type TabKey = "panoramica" | "messaggi" | "whatsapp" | "moduli" | "impostazioni";
+type WhatsAppView = "inbox" | "automazioni";
 
 const COMMUNICATIONS_LOCKED_MESSAGE = "Modulo Comunicazioni non attivo. Contatta ASSONAM per abilitarlo.";
 
@@ -57,7 +59,7 @@ const communicationsTabs: Array<{
   {
     key: "whatsapp",
     label: "WhatsApp",
-    subtitle: "Automazioni e regole collegate ai form.",
+    subtitle: "Chat, QR e regole collegate ai form.",
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 20.25a8.2 8.2 0 004.15-1.12l3.85.87-.96-3.68A8.25 8.25 0 1012 20.25z" />
@@ -89,12 +91,24 @@ function normalizeTab(value: string | null | undefined): TabKey {
   return "messaggi";
 }
 
+function normalizeWhatsAppView(value: string | null | undefined, hasFormLink: boolean): WhatsAppView {
+  const normalized = (value || "").trim().toLowerCase();
+  if (normalized === "automazioni" || normalized === "automation" || normalized === "rules") return "automazioni";
+  if (normalized === "inbox" || normalized === "chat" || normalized === "qr") return "inbox";
+  if (hasFormLink) return "automazioni";
+  return "inbox";
+}
+
 export default function OrgAdminCommunications() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabKey>(normalizeTab(searchParams.get("tab")));
   const [loading, setLoading] = useState(true);
   const [communicationsLocked, setCommunicationsLocked] = useState(true);
   const [whatsappEnabled, setWhatsappEnabled] = useState(false);
+  const activeWhatsAppView = normalizeWhatsAppView(
+    searchParams.get("whatsappView"),
+    Boolean(searchParams.get("formId")),
+  );
 
   useEffect(() => {
     applySeo({
@@ -135,6 +149,17 @@ export default function OrgAdminCommunications() {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("tab", tab);
     setSearchParams(nextParams, { replace: true });
+  };
+
+  const selectWhatsAppView = (view: WhatsAppView) => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("tab", "whatsapp");
+    nextParams.set("whatsappView", view);
+    if (view === "inbox") {
+      nextParams.delete("formId");
+    }
+    setSearchParams(nextParams, { replace: true });
+    setActiveTab("whatsapp");
   };
 
   useEffect(() => {
@@ -233,7 +258,36 @@ export default function OrgAdminCommunications() {
           )}
           {activeTab === "whatsapp" && (
             whatsappEnabled ? (
-              <WhatsAppAutomationsHub communicationsLocked={communicationsLocked} />
+              <div className="space-y-6">
+                <div className="flex flex-wrap items-center gap-3 border-b border-neutral-200 pb-4">
+                  {([
+                    { key: "inbox", label: "Chat e connessione", hint: "QR code, stato sessione e inbox." },
+                    { key: "automazioni", label: "Automazioni", hint: "Regole collegate ai form." },
+                  ] as const).map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => selectWhatsAppView(item.key)}
+                      className={`rounded-[1rem] border px-4 py-2.5 text-left transition ${
+                        activeWhatsAppView === item.key
+                          ? "border-neutral-900 bg-neutral-900 text-white"
+                          : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 hover:text-neutral-900"
+                      }`}
+                    >
+                      <span className="block text-sm font-semibold">{item.label}</span>
+                      <span className={`mt-1 block text-[11px] ${activeWhatsAppView === item.key ? "text-white/70" : "text-neutral-500"}`}>
+                        {item.hint}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                {activeWhatsAppView === "inbox" ? (
+                  <WhatsAppHub communicationsLocked={communicationsLocked} />
+                ) : (
+                  <WhatsAppAutomationsHub communicationsLocked={communicationsLocked} />
+                )}
+              </div>
             ) : (
               <div className="rounded-[1.75rem] border border-dashed border-neutral-300 bg-neutral-50 px-6 py-10 text-sm text-neutral-600">
                 WhatsApp non è ancora attivo per questa associazione. Quando la connessione sarà disponibile, qui vedrai le automazioni collegate ai form pubblici.

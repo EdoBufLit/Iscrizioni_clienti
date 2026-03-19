@@ -1,5 +1,6 @@
 # Lessons
 
+- Se in un workspace admin esiste gia una vista operativa primaria (es. inbox WhatsApp con QR/chat), una nuova capability secondaria (es. automazioni) non deve mai sostituirla: va introdotta come sottovista discreta, senza hero promozionali o blocchi marketing.
 - Se il cliente chiede una modifica UI in area gia live e il flusso implica rilascio, non chiudere dopo build/test locali: completare sempre push, deploy, migration eventuale e smoke check live prima di considerare il task finito.
 
 - When a user reports runtime errors, add defensive guards around optional/unknown values and make the logger safe-by-default.

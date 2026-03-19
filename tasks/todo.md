@@ -1,3 +1,9 @@
+## Plan (WhatsApp inbox restore + admin cleanup - Mar 19, 2026)
+- [ ] Ripristinare la vista principale WhatsApp con inbox, QR code e stato connessione
+- [ ] Spostare le automazioni WhatsApp in una sottovista interna senza sostituire la chat
+- [ ] Rimuovere il blocco hero/promozionale dal builder automazioni e rendere la UI piu amministrativa
+- [ ] Rieseguire build frontend, verificare live e riallineare Hetzner
+
 ## Plan (Comunicazioni live verification + push + deploy - Mar 19, 2026)
 - [x] Chiudere il rebase del refactor Comunicazioni e dell'hotfix barra top integrando i conflitti con `origin/feat/redesign-landing-wizard`
 - [x] Rieseguire build frontend e test backend mirati per confermare che entrambe le passate siano stabili
