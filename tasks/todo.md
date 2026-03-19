@@ -1,3 +1,19 @@
+## Plan (Form WhatsApp auto-message debug - Mar 20, 2026)
+- [x] Ispezionare il flusso reale `Form -> submit pubblico -> candidate/dispatch WhatsApp` per capire come viene risolto il numero destinatario
+- [x] Verificare su server/log live perché il test utente non ha prodotto nessun invio
+- [x] Correggere il comportamento o il copy UI se il numero destinatario o le condizioni di invio non sono chiare/sbagliate
+- [ ] Rieseguire test/build, push e deploy del fix se necessario
+
+## Review (Form WhatsApp auto-message debug - Mar 20, 2026)
+- Root cause confermata su produzione: il form `test` (`id=7`) aveva sia il toggle legacy `whatsapp_auto_reply_enabled = true` sia una nuova regola in `whatsapp_automations` con `trigger_event = request_received` e `phone_field_key = telefono_3c52el`; nessuna delle due arrivava a inviare davvero.
+- Il vecchio auto-reply per-form risolveva il numero solo su chiavi payload rigide (`phone`, `telefono`, `cellulare`, ecc.), quindi ignorava i veri campi `phone` del builder quando la `field_key` era dinamica come `telefono_3c52el`.
+- Le nuove `Automazioni WhatsApp` erano solo CRUD/UI: risultavano collegate ai form ma il submit pubblico non le eseguiva affatto. Per questo attivarle da `Comunicazioni > Form > Impostazioni` non produceva messaggi.
+- Fix backend in [whatsapp_automation.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\services\whatsapp_automation.py): ora il numero viene risolto dai veri campi `phone` del form, le automazioni attive vengono eseguite al submit e `request_received` viene trattato come evento valido sul submit pubblico.
+- Fix integrazione submit in [public.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\routes\public.py): dopo il salvataggio submission vengono valutati sia il legacy auto-reply sia le nuove regole `whatsapp_automations`.
+- Copy chiarita in [OrgAdminForms.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\OrgAdminForms.tsx): il blocco `WhatsApp automatico` viene esplicitato come risposta rapida legacy distinta dalle nuove regole in `Comunicazioni > WhatsApp`.
+- Copertura aggiunta in [test_forms_module.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\tests\test_forms_module.py) per auto-reply legacy con `field_key` telefono dinamica ed esecuzione reale di una regola `whatsapp_automations` sul submit pubblico.
+- Verifiche locali completate: `python -m pytest -q tests/test_forms_module.py -q`, `python -m py_compile app/services/whatsapp_automation.py app/routes/public.py`, `npm --prefix frontend run build`.
+
 ## Plan (WhatsApp inbox restore + admin cleanup - Mar 19, 2026)
 - [x] Ripristinare la vista principale WhatsApp con inbox, QR code e stato connessione
 - [x] Spostare le automazioni WhatsApp in una sottovista interna senza sostituire la chat
@@ -3643,3 +3659,4 @@ pm --prefix frontend run build.
 - In `frontend/src/pages/super-admin/components/OrganizationManageModal.tsx` il Super Admin vede ora la sezione “Numerazione tessere”, il default `Condivisa ASSONAM` in create org, lo stato “Modificabile liberamente” vs “Configurazione sensibile”, il warning storico e la conferma esplicita prima del cambio modalita.
 - Ho esteso anche i path di bootstrap/riparazione SQLite in `init_db.py`, `app/scripts/repair_sqlite.py` e `tests/conftest.py` per evitare drift sugli ambienti dev/test che non passano subito da Alembic.
 - Verifiche eseguite: `python -m pytest -q tests/test_card_assignment.py tests/test_super_admin_numbering_scopes.py tests/test_super_admin_card_lot_management.py` OK (`16 passed`); `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK.
+

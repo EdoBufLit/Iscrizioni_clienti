@@ -38,6 +38,7 @@ from app.services.forms import (
     validate_form_submission_payload,
 )
 from app.services.whatsapp_automation import (
+    maybe_send_form_submission_whatsapp_automations,
     maybe_send_form_submission_whatsapp_message,
     prepare_form_submission_whatsapp_candidate,
 )
@@ -388,6 +389,13 @@ def _submit_public_form(
     )
     try:
         maybe_send_form_submission_whatsapp_message(
+            db,
+            form=form,
+            submission=submission,
+            member=member,
+            booking=booking,
+        )
+        maybe_send_form_submission_whatsapp_automations(
             db,
             form=form,
             submission=submission,

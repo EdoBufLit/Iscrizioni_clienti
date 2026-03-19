@@ -1,3 +1,4 @@
+- Se una nuova UI di configurazione mostra automazioni WhatsApp come attive o collegate al form, il backend deve gia eseguirle davvero sul submit pubblico: non va mai rilasciata una UX che sembra operativa ma e solo CRUD. Inoltre il resolver del numero deve usare i veri campi phone del form, non un elenco rigido di field_key legacy.
 # Lessons
 
 - Se in un workspace admin esiste gia una vista operativa primaria (es. inbox WhatsApp con QR/chat), una nuova capability secondaria (es. automazioni) non deve mai sostituirla: va introdotta come sottovista discreta, senza hero promozionali o blocchi marketing.

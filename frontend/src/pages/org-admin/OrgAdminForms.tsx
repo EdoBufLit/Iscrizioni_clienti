@@ -1388,7 +1388,7 @@ export function OrgAdminFormsWorkspace({
                 </span>
               </div>
               <p className="mt-1 text-xs text-neutral-500">
-                Invia un messaggio testuale automatico quando arriva una risposta a questo form. Usa la connessione WhatsApp gia attiva in Comunicazioni.
+                Questa e la risposta rapida legacy del form. Le nuove regole in "Automazioni collegate" qui sopra vengono configurate in Comunicazioni {" > "} WhatsApp e usano il numero definito nella singola regola.
               </p>
             </div>
             <label className="flex cursor-pointer items-center gap-2 text-sm text-neutral-700">
@@ -1408,7 +1408,7 @@ export function OrgAdminFormsWorkspace({
 
           <div className="mt-5 space-y-4">
             <div className="rounded-xl border border-amber-100 bg-amber-50/70 p-4 text-xs text-amber-900">
-              Il messaggio parte solo se `ENABLE_WHATSAPP_EVOLUTION` e attivo, l'associazione ha una sessione WhatsApp connessa e il form contiene un numero valido oppure il socio associato ha un telefono.
+              Questo invio rapido parte solo se `ENABLE_WHATSAPP_EVOLUTION` e attivo, l'associazione ha una sessione WhatsApp connessa e il form contiene un vero campo telefono compilato oppure il socio associato ha un telefono.
             </div>
 
             <label className={labelClass}>

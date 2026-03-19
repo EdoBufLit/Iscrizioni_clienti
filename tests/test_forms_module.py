@@ -491,6 +491,199 @@ def test_public_form_submit_sends_whatsapp_auto_reply_when_connected(client, db,
         settings.ENABLE_WHATSAPP_EVOLUTION = original_enabled
 
 
+def test_public_form_submit_sends_whatsapp_auto_reply_using_dynamic_phone_field_key(client, db, monkeypatch):
+    original_enabled = settings.ENABLE_WHATSAPP_EVOLUTION
+    settings.ENABLE_WHATSAPP_EVOLUTION = True
+    try:
+        org, admin = _create_org_admin(db)
+        _login_org_admin(client, db, admin.id)
+        public_slug = f"richiesta-whatsapp-dyn-{uuid.uuid4().hex[:6]}"
+
+        create_res = client.post(
+            "/api/org-admin/forms",
+            json={
+                "title": "Richiesta informazioni",
+                "public_slug": public_slug,
+                "is_active": True,
+                "visibility": "public",
+                "whatsapp_auto_reply_enabled": True,
+                "whatsapp_auto_reply_template": "Ciao {{nome_contatto}}, ti scriviamo sul numero {{numero_whatsapp}}.",
+            },
+        )
+        assert create_res.status_code == 201, create_res.text
+        form_id = create_res.json()["form"]["id"]
+
+        for index, field in enumerate(
+            [
+                {"field_type": "short_text", "label": "Nome", "field_key": "nome"},
+                {"field_type": "phone", "label": "Telefono", "field_key": "telefono_3c52el"},
+            ]
+        ):
+            field_res = client.post(
+                f"/api/org-admin/forms/{form_id}/fields",
+                json={**field, "is_required": True, "sort_order": index * 10},
+            )
+            assert field_res.status_code == 201, field_res.text
+
+        connection = get_or_create_connection(db, org)
+        connection.status = "connected"
+        connection.phone_number = "+393404244452"
+        db.commit()
+
+        sent_payloads: list[dict[str, str]] = []
+
+        class _FakeSendResult:
+            def __init__(self, message_id: str):
+                self.external_message_id = message_id
+                self.status = "sent"
+                self.raw = {"id": message_id, "status": "sent"}
+
+        def fake_send_text(self, instance_name: str, *, number: str, text: str):
+            sent_payloads.append(
+                {
+                    "instance_name": instance_name,
+                    "number": number,
+                    "text": text,
+                }
+            )
+            return _FakeSendResult(f"wamid-auto-{uuid.uuid4().hex[:10]}")
+
+        monkeypatch.setattr(
+            "app.services.whatsapp_automation.EvolutionLiteClient.send_text",
+            fake_send_text,
+        )
+
+        submit_res = client.post(
+            f"/api/forms/{org.slug}/{public_slug}/submit",
+            json={
+                "nome": "Paola Verdi",
+                "telefono_3c52el": "+39 331 2223344",
+            },
+        )
+        assert submit_res.status_code == 200, submit_res.text
+        assert sent_payloads == [
+            {
+                "instance_name": f"assonam-org-{org.id}",
+                "number": "+393312223344",
+                "text": "Ciao Paola Verdi, ti scriviamo sul numero +393312223344.",
+            }
+        ]
+    finally:
+        settings.ENABLE_WHATSAPP_EVOLUTION = original_enabled
+
+
+def test_public_form_submit_runs_whatsapp_automation_rules(client, db, monkeypatch):
+    original_enabled = settings.ENABLE_WHATSAPP_EVOLUTION
+    settings.ENABLE_WHATSAPP_EVOLUTION = True
+    try:
+        org, admin = _create_org_admin(db)
+        _login_org_admin(client, db, admin.id)
+        public_slug = f"richiesta-whatsapp-auto-{uuid.uuid4().hex[:6]}"
+
+        create_res = client.post(
+            "/api/org-admin/forms",
+            json={
+                "title": "Modulo test automazione",
+                "public_slug": public_slug,
+                "is_active": True,
+                "visibility": "public",
+                "whatsapp_auto_reply_enabled": False,
+            },
+        )
+        assert create_res.status_code == 201, create_res.text
+        form_id = create_res.json()["form"]["id"]
+
+        for index, field in enumerate(
+            [
+                {"field_type": "short_text", "label": "Nome", "field_key": "nome"},
+                {"field_type": "phone", "label": "Telefono", "field_key": "telefono_3c52el"},
+            ]
+        ):
+            field_res = client.post(
+                f"/api/org-admin/forms/{form_id}/fields",
+                json={**field, "is_required": True, "sort_order": index * 10},
+            )
+            assert field_res.status_code == 201, field_res.text
+
+        automation_res = client.post(
+            "/api/org-admin/communications/whatsapp/automations",
+            json={
+                "name": "Conferma automatica",
+                "form_id": form_id,
+                "source_type": "public_form",
+                "trigger_event": "request_received",
+                "recipient_type": "submitter",
+                "phone_source": "form_field",
+                "phone_field_key": "telefono_3c52el",
+                "template_name": "Conferma richiesta",
+                "template_body": "Ciao {{nome_contatto}}, abbiamo ricevuto {{titolo_form}} sul numero {{numero_whatsapp}}.",
+                "is_active": True,
+            },
+        )
+        assert automation_res.status_code == 201, automation_res.text
+
+        connection = get_or_create_connection(db, org)
+        connection.status = "connected"
+        connection.phone_number = "+393404244452"
+        db.commit()
+
+        sent_payloads: list[dict[str, str]] = []
+        external_message_id = f"wamid-auto-{uuid.uuid4().hex[:10]}"
+
+        class _FakeSendResult:
+            def __init__(self, message_id: str):
+                self.external_message_id = message_id
+                self.status = "sent"
+                self.raw = {"id": message_id, "status": "sent"}
+
+        def fake_send_text(self, instance_name: str, *, number: str, text: str):
+            sent_payloads.append(
+                {
+                    "instance_name": instance_name,
+                    "number": number,
+                    "text": text,
+                }
+            )
+            return _FakeSendResult(external_message_id)
+
+        monkeypatch.setattr(
+            "app.services.whatsapp_automation.EvolutionLiteClient.send_text",
+            fake_send_text,
+        )
+
+        submit_res = client.post(
+            f"/api/forms/{org.slug}/{public_slug}/submit",
+            json={
+                "nome": "Luca Neri",
+                "telefono_3c52el": "+39 339 9988776",
+            },
+        )
+        assert submit_res.status_code == 200, submit_res.text
+
+        assert sent_payloads == [
+            {
+                "instance_name": f"assonam-org-{org.id}",
+                "number": "+393399988776",
+                "text": "Ciao Luca Neri, abbiamo ricevuto Modulo test automazione sul numero +393399988776.",
+            }
+        ]
+
+        verification_db = SessionLocal()
+        try:
+            whatsapp_message = (
+                verification_db.query(WhatsAppMessage)
+                .filter(WhatsAppMessage.external_message_id == external_message_id)
+                .first()
+            )
+            assert whatsapp_message is not None
+            assert whatsapp_message.status == "sent"
+            assert whatsapp_message.recipient_phone == "+393399988776"
+        finally:
+            verification_db.close()
+    finally:
+        settings.ENABLE_WHATSAPP_EVOLUTION = original_enabled
+
+
 def test_org_admin_can_create_manual_booking_from_agenda(client, db):
     org, admin = _create_org_admin(db)
     _login_org_admin(client, db, admin.id)
