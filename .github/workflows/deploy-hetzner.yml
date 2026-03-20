@@ -60,10 +60,19 @@ jobs:
 
             BRANCH="${{ github.ref_name }}"
             if [ -n "$(git status --porcelain)" ]; then
-              DEPLOY_STASH="deploy-autostash-$(date -u +'%Y%m%dT%H%M%SZ')"
-              echo "[deploy] working tree dirty, stashing local changes as ${DEPLOY_STASH}"
-              git stash push --include-untracked --message "${DEPLOY_STASH}"
+              BACKUP_ROOT="${HOME}/deploy-backups/assonam"
+              BACKUP_DIR="${BACKUP_ROOT}/$(date -u +'%Y%m%dT%H%M%SZ')"
+              echo "[deploy] working tree dirty, archiving local changes to ${BACKUP_DIR}"
+              mkdir -p "${BACKUP_DIR}"
+              git status --short > "${BACKUP_DIR}/status.txt" || true
+              git diff --binary > "${BACKUP_DIR}/tracked.patch" || true
+              git diff --cached --binary > "${BACKUP_DIR}/staged.patch" || true
+              if [ -n "$(git ls-files --others --exclude-standard)" ]; then
+                git ls-files --others --exclude-standard -z | tar --null -T - -czf "${BACKUP_DIR}/untracked.tar.gz"
+              fi
             fi
+            git reset --hard
+            git clean -fd
             git checkout -B "$BRANCH" "origin/$BRANCH"
             git reset --hard "origin/$BRANCH"
 
