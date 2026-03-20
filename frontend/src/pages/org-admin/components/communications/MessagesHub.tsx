@@ -89,6 +89,12 @@ const labelClass = "block text-sm font-semibold text-neutral-800";
 const sectionCardClass = "rounded-[1.8rem] border border-neutral-200 bg-white p-6 shadow-[0_18px_48px_rgba(15,23,42,0.05)]";
 const wizardCardClass =
   "rounded-[2rem] border border-neutral-200 bg-white p-5 shadow-[0_22px_60px_rgba(15,23,42,0.06)] md:p-6";
+const wizardPrimaryActionClass =
+  "signup-wizard-primary inline-flex min-h-[3.5rem] items-center justify-center gap-2 rounded-[1.2rem] px-6 py-3 text-sm font-semibold";
+const wizardSecondaryActionClass =
+  "signup-wizard-secondary inline-flex min-h-[3.5rem] items-center justify-center gap-2 rounded-[1.2rem] px-5 py-3 text-sm font-medium";
+const wizardGhostActionClass =
+  "inline-flex min-h-[3.5rem] items-center justify-center gap-2 rounded-[1.2rem] border border-transparent px-4 py-3 text-sm font-medium text-slate-500 transition hover:bg-white/70 hover:text-slate-900";
 
 const emailSectionCatalog: Array<{
   key: OrgAdminEmailSectionKey;
@@ -331,6 +337,111 @@ function StepRail<T extends string>(props: {
         </p>
       </div>
     </div>
+  );
+}
+
+function SignupStepRail<T extends string>(props: {
+  steps: Array<{ key: T; label: string; hint: string }>;
+  active: T;
+  onSelect: (step: T) => void;
+}) {
+  const activeIndex = props.steps.findIndex((step) => step.key === props.active);
+  const progress = props.steps.length > 1 ? (activeIndex / (props.steps.length - 1)) * 100 : 0;
+  return (
+    <div className="mx-auto max-w-4xl px-2">
+      <div className={`grid gap-4 ${props.steps.length === 4 ? "grid-cols-4" : "grid-cols-3"}`}>
+        {props.steps.map((step, index) => {
+          const isActive = step.key === props.active;
+          const isDone = index < activeIndex;
+          const segmentProgress = Math.max(
+            Math.min(
+              (progress - index * (100 / Math.max(props.steps.length - 1, 1))) * Math.max(props.steps.length - 1, 1),
+              100,
+            ),
+            0,
+          );
+          return (
+            <button
+              key={step.key}
+              type="button"
+              onClick={() => props.onSelect(step.key)}
+              className="group relative flex flex-col items-center text-center"
+            >
+              {index < props.steps.length - 1 ? (
+                <span className="absolute left-1/2 top-6 hidden h-px w-full bg-slate-200 sm:block" aria-hidden="true">
+                  <span
+                    className="block h-full bg-[#c7d2fe] transition-[width] duration-300"
+                    style={{ width: index < activeIndex ? "100%" : isActive ? `${segmentProgress}%` : "0%" }}
+                  />
+                </span>
+              ) : null}
+              <span
+                className={`relative z-10 inline-flex h-12 w-12 items-center justify-center rounded-full border text-base font-semibold transition ${
+                  isActive
+                    ? "border-[#7c6cf6] bg-[#6d5ef4] text-white shadow-[0_24px_48px_-26px_rgba(109,94,244,0.68)]"
+                    : isDone
+                      ? "border-[#c7d2fe] bg-[#eef2ff] text-[#4f46e5]"
+                      : "border-slate-200 bg-white text-slate-400"
+                }`}
+              >
+                {isDone && !isActive ? "✓" : index + 1}
+              </span>
+              <span className={`mt-4 text-base font-semibold ${isActive ? "text-slate-950" : "text-slate-400 group-hover:text-slate-700"}`}>
+                {step.label}
+              </span>
+              <span className={`mt-1 hidden max-w-[12rem] text-sm leading-6 md:block ${isActive ? "text-slate-500" : "text-slate-400"}`}>
+                {step.hint}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function WizardShell<T extends string>(props: {
+  breadcrumb: string;
+  sectionLabel: string;
+  title: string;
+  description: string;
+  onBack: () => void;
+  steps: Array<{ key: T; label: string; hint: string }>;
+  active: T;
+  onSelect: (step: T) => void;
+  footer: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="signup-wizard-shell py-10 md:py-16">
+      <div className="container-shell max-w-[1180px]">
+        <div className="mx-auto max-w-5xl">
+          <div className="mb-8 flex flex-wrap items-center justify-center gap-2 text-sm font-medium text-slate-400">
+            <button type="button" onClick={props.onBack} className="transition hover:text-slate-700">
+              Comunicazioni
+            </button>
+            <span>/</span>
+            <span className="text-slate-500">{props.breadcrumb}</span>
+          </div>
+
+          <header className="text-center">
+            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#0f766e]">{props.sectionLabel}</p>
+            <h1 className="mt-4 text-4xl font-semibold tracking-tight text-slate-950 md:text-6xl">{props.title}</h1>
+            <p className="mx-auto mt-5 max-w-3xl text-lg leading-8 text-slate-500 md:text-[1.7rem] md:leading-10">
+              {props.description}
+            </p>
+          </header>
+
+          <div className="mt-12 md:mt-14">
+            <SignupStepRail steps={props.steps} active={props.active} onSelect={props.onSelect} />
+          </div>
+
+          <div className="mt-10 space-y-6 md:mt-14">{props.children}</div>
+
+          <div className="mt-10 border-t border-slate-200 px-1 pt-8">{props.footer}</div>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -1585,6 +1696,428 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
 
   if (screen.type === "campaign-editor") {
     const campaignStepIndex = campaignWizardSteps.findIndex((step) => step.key === campaignStep);
+    const campaignStepMeta = campaignWizardSteps[campaignStepIndex] ?? campaignWizardSteps[0];
+    return (
+      <WizardShell
+        breadcrumb="Campagne"
+        sectionLabel="Studio campagne"
+        title={campaignForm.name.trim() || "Nuova campagna"}
+        description={`Passo ${campaignStepIndex + 1} di ${campaignWizardSteps.length}: ${campaignStepMeta.hint}`}
+        onBack={() => setScreen({ type: "library" })}
+        steps={campaignWizardSteps}
+        active={campaignStep}
+        onSelect={setCampaignStep}
+        footer={
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex justify-center sm:justify-start">
+              {campaignStepIndex > 0 ? (
+                <button className={wizardSecondaryActionClass} type="button" onClick={() => setCampaignStep(campaignWizardSteps[campaignStepIndex - 1].key)}>
+                  Indietro
+                </button>
+              ) : (
+                <button className={wizardGhostActionClass} type="button" onClick={() => setScreen({ type: "library" })}>
+                  Torna alla libreria
+                </button>
+              )}
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
+              {campaignStepIndex < campaignWizardSteps.length - 1 ? (
+                <button className={wizardPrimaryActionClass} type="button" onClick={() => setCampaignStep(campaignWizardSteps[campaignStepIndex + 1].key)}>
+                  Continua
+                </button>
+              ) : (
+                <>
+                  <button className={wizardSecondaryActionClass} type="button" disabled={savingCampaign} onClick={() => void saveCampaign(false, false)}>
+                    Salva bozza
+                  </button>
+                  <button className={wizardSecondaryActionClass} type="button" disabled={savingCampaign} onClick={() => void saveCampaign(false, true)}>
+                    Programma
+                  </button>
+                  <button className={wizardPrimaryActionClass} type="button" disabled={savingCampaign || communicationsLocked} onClick={() => void saveCampaign(true, false)}>
+                    Invia ora
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        }
+      >
+        {campaignStep === "brief" ? (
+          <>
+            <section className="signup-wizard-card px-6 py-7 md:px-10 md:py-10">
+              <div className="flex flex-col gap-6 border-b border-slate-100 pb-8 md:flex-row md:items-start md:justify-between">
+                <div className="max-w-2xl">
+                  <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6d5ef4]">Impostazione campagna</p>
+                  <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">Prima chiarisci obiettivo, oggetto e timing</h2>
+                  <p className="mt-3 text-base leading-7 text-slate-500">
+                    Questo passo serve a definire il contesto della campagna. Messaggio e pubblico li rifinisci subito dopo.
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <StatChip label="Pubblico" value={campaignForm.recipient_mode === "selected_members" ? `${selectedMembers.length} soci` : "Segmento"} hint="Puoi cambiarlo nel passo destinatari." />
+                  <StatChip label="Programmazione" value={campaignForm.scheduled_at ? "Pianificata" : "Manuale"} hint={campaignForm.scheduled_at ? formatDateTime(campaignForm.scheduled_at) : "Invio quando decidi tu."} />
+                </div>
+              </div>
+              <div className="mt-8 grid gap-x-7 gap-y-8 md:grid-cols-2">
+                <label className={labelClass}>
+                  Nome interno
+                  <input className={inputClass} value={campaignForm.name} onChange={(event) => setCampaignForm((prev) => ({ ...prev, name: event.target.value }))} placeholder="Es. Convocazione assemblea aprile" />
+                </label>
+                <label className={labelClass}>
+                  Programma invio
+                  <input type="datetime-local" className={inputClass} value={campaignForm.scheduled_at} onChange={(event) => setCampaignForm((prev) => ({ ...prev, scheduled_at: event.target.value }))} />
+                </label>
+                <label className={`${labelClass} md:col-span-2`}>
+                  Oggetto email
+                  <input className={inputClass} value={campaignForm.subject} onChange={(event) => setCampaignForm((prev) => ({ ...prev, subject: event.target.value }))} placeholder="Oggetto chiaro e leggibile gia in inbox" />
+                </label>
+                <label className={`${labelClass} md:col-span-2`}>
+                  Titolo principale
+                  <input className={inputClass} value={campaignForm.design.hero_title || ""} onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, hero_title: event.target.value } }))} placeholder="Titolo hero dentro il messaggio" />
+                </label>
+                <label className={`${labelClass} md:col-span-2`}>
+                  Messaggio introduttivo
+                  <textarea className={`${inputClass} min-h-[220px]`} value={campaignForm.body} onChange={(event) => setCampaignForm((prev) => ({ ...prev, body: event.target.value }))} placeholder="Apri con il contesto. I blocchi e la struttura li rifinisci nel prossimo passo." />
+                </label>
+              </div>
+            </section>
+
+            <section className="signup-wizard-card px-6 py-7 md:px-10 md:py-10">
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-400">Scorciatoia utile</p>
+                  <h3 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">Parti da un modello se vuoi accelerare</h3>
+                  <p className="mt-3 text-base leading-7 text-slate-500">
+                    Puoi precaricare soggetto, struttura e CTA da un modello esistente, poi personalizzare tutto nel passo messaggio.
+                  </p>
+                </div>
+                <label className={labelClass}>
+                  Carica modello
+                  <select
+                    className={inputClass}
+                    onChange={(event) => {
+                      const id = Number(event.target.value || 0);
+                      const template = activeTemplates.find((item) => item.id === id);
+                      if (template) applyCampaignToEditor(template);
+                    }}
+                  >
+                    <option value="">Nessun modello</option>
+                    {activeTemplates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </section>
+          </>
+        ) : null}
+
+        {campaignStep === "message" ? (
+          <>
+            <section className="signup-wizard-card px-6 py-7 md:px-10 md:py-10">
+              <div className="max-w-3xl">
+                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6d5ef4]">Builder messaggio</p>
+                <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">Ordina i blocchi e scrivi una sezione per volta</h2>
+                <p className="mt-3 text-base leading-7 text-slate-500">
+                  Il drag & drop resta, ma dentro un layout chiaro: struttura a sinistra, editor della sezione a destra, senza pannelli laterali compressi.
+                </p>
+              </div>
+              <div className="mt-8 grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+                <SectionPlanner
+                  order={campaignSectionOrder}
+                  selected={selectedCampaignSection}
+                  onSelect={setSelectedCampaignSection}
+                  onChange={(next) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, section_order: next } }))}
+                  title="Messaggio"
+                  description="Trascina i blocchi come nel builder form e lavora sul blocco selezionato."
+                />
+                {renderCampaignSectionEditor()}
+              </div>
+            </section>
+
+            <section className="signup-wizard-card px-6 py-7 md:px-10 md:py-10">
+              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-400">Variabili rapide</p>
+              <h3 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">Placeholder sempre visibili mentre scrivi</h3>
+              <p className="mt-3 text-base leading-7 text-slate-500">
+                Inseriscili nel testo per personalizzare saluto, CTA e riferimenti al socio senza cambiare contesto.
+              </p>
+              <div className="mt-6">
+                <VariableCloud variables={variables} />
+              </div>
+            </section>
+          </>
+        ) : null}
+
+        {campaignStep === "audience" ? (
+          <>
+            <section className="signup-wizard-card px-6 py-7 md:px-10 md:py-10">
+              <div className="max-w-3xl">
+                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6d5ef4]">Destinatari e CTA</p>
+                <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">Definisci a chi scrivi e dove porti il click</h2>
+                <p className="mt-3 text-base leading-7 text-slate-500">
+                  Qui colleghi il form giusto, chiarisci la CTA e scegli se usare un segmento automatico o una lista manuale di soci.
+                </p>
+              </div>
+
+              <div className="mt-8 grid gap-x-7 gap-y-8 md:grid-cols-2">
+                <label className={labelClass}>
+                  Form collegato
+                  <select className={inputClass} value={campaignForm.linked_form_id ?? ""} onChange={(event) => setCampaignForm((prev) => ({ ...prev, linked_form_id: event.target.value ? Number(event.target.value) : null }))}>
+                    <option value="">Nessun form collegato</option>
+                    {activeForms.map((form) => (
+                      <option key={form.id} value={form.id}>
+                        {form.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={labelClass}>
+                  Etichetta CTA
+                  <input className={inputClass} value={campaignForm.design.cta_label || ""} onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, cta_label: event.target.value } }))} placeholder="Es. Compila il modulo" />
+                </label>
+                <label className={`${labelClass} md:col-span-2`}>
+                  Link CTA
+                  <input className={inputClass} value={campaignForm.design.cta_url || ""} onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, cta_url: event.target.value } }))} placeholder="Se vuoto usa il form collegato" />
+                </label>
+              </div>
+
+              <div className="mt-10 border-t border-slate-100 pt-8">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {(["all_members", "selected_members"] as OrgAdminCampaignRecipientMode[]).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      className={`rounded-[1.6rem] border px-5 py-5 text-left transition ${
+                        campaignForm.recipient_mode === mode
+                          ? "border-[#c7d2fe] bg-[#eef2ff] text-[#4338ca]"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                      }`}
+                      onClick={() => setCampaignForm((prev) => ({ ...prev, recipient_mode: mode }))}
+                    >
+                      <p className="text-base font-semibold">{mode === "selected_members" ? "Soci selezionati" : "Segmento soci"}</p>
+                      <p className="mt-2 text-sm leading-6">
+                        {mode === "selected_members"
+                          ? "Cerca persone specifiche e costruisci una lista manuale."
+                          : "Usa una platea predefinita dell'associazione."}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+
+                {campaignForm.recipient_mode === "all_members" ? (
+                  <label className={`${labelClass} mt-6 block`}>
+                    Segmento soci
+                    <select className={inputClass} value={campaignForm.audience_type} onChange={(event) => setCampaignForm((prev) => ({ ...prev, audience_type: event.target.value as OrgAdminCampaignAudienceType }))}>
+                      {audienceOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="mt-3 block text-sm leading-6 text-slate-500">{audienceOptions.find((option) => option.value === campaignForm.audience_type)?.description}</span>
+                  </label>
+                ) : (
+                  <div className="mt-6 rounded-[1.75rem] border border-slate-200 bg-[#f8fafc] p-5">
+                    <label className={labelClass}>
+                      Cerca soci
+                      <input className={inputClass} value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder="Nome, email o numero tessera" />
+                    </label>
+                    <div className="mt-4 rounded-[1.2rem] border border-slate-200 bg-white">
+                      {memberSearch.trim() && memberResults.length === 0 ? (
+                        <div className="p-4 text-sm text-slate-500">Nessun socio trovato.</div>
+                      ) : (
+                        memberResults.map((member) => (
+                          <button key={member.id} type="button" className="flex w-full items-start justify-between gap-4 border-b border-slate-100 px-4 py-3 text-left last:border-b-0 hover:bg-slate-50" onClick={() => addSelectedMember(member)}>
+                            <div>
+                              <p className="font-semibold text-slate-900">{member.name}</p>
+                              <p className="mt-1 text-xs text-slate-500">{[member.email || "Email non disponibile", member.card_number ? `Tessera ${member.card_number}` : null].filter(Boolean).join(" • ")}</p>
+                            </div>
+                            <span className="text-xs font-semibold text-[#4338ca]">Aggiungi</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {selectedMembers.map((member) => (
+                        <span key={member.id} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700">
+                          {member.name}
+                          <button type="button" className="text-slate-400 hover:text-slate-700" onClick={() => removeSelectedMember(member.id)}>
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="signup-wizard-card px-6 py-7 md:px-10 md:py-10">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <StatChip label="Stimati" value={estimate ?? "-"} hint="Conteggio previsto sul pubblico selezionato." />
+                <StatChip label="Form collegato" value={selectedCampaignLinkedForm?.title || "Nessuno"} hint="La CTA puo aprire questo form." />
+              </div>
+            </section>
+          </>
+        ) : null}
+
+        {campaignStep === "review" ? (
+          <>
+            <section className="signup-wizard-card px-6 py-7 md:px-10 md:py-10">
+              <div className="max-w-3xl">
+                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6d5ef4]">Review finale</p>
+                <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">Rifinisci lo stile e controlla la resa finale</h2>
+                <p className="mt-3 text-base leading-7 text-slate-500">
+                  Qui decidi il tono visivo della campagna, sistemi gli ultimi blocchi opzionali e valuti l'anteprima in formato largo.
+                </p>
+              </div>
+
+              <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                <div className="space-y-6">
+                  <section className="rounded-[1.6rem] border border-slate-200 bg-[#fbfafc] p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-950">Stile del messaggio</p>
+                        <p className="mt-1 text-sm leading-6 text-slate-500">Preset, font e bottone senza opzioni sparse ovunque.</p>
+                      </div>
+                      <ModeSwitch value={composerMode} onChange={setComposerMode} />
+                    </div>
+                    <div className="mt-4 grid gap-3">
+                      {stylePresetCards.map((preset) => (
+                        <button
+                          key={preset.key}
+                          type="button"
+                          className={`rounded-[1.3rem] border p-4 text-left transition ${
+                            campaignForm.design.style_preset === preset.key
+                              ? "border-[#c7d2fe] bg-[#eef2ff]"
+                              : "border-slate-200 bg-white hover:border-slate-300"
+                          }`}
+                          onClick={() => setCampaignForm((prev) => ({ ...prev, design: applyStylePreset(prev.design, preset) }))}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="h-3 w-3 rounded-full border border-black/10" style={{ backgroundColor: preset.accent }} />
+                            <strong className="text-sm text-slate-900">{preset.label}</strong>
+                          </div>
+                          <p className="mt-2 text-xs leading-5 text-slate-500">{preset.note}</p>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                      <label className={labelClass}>
+                        Font preset
+                        <select className={inputClass} value={campaignForm.design.font_preset || "classic"} onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, font_preset: event.target.value as OrgAdminEmailFontPreset } }))}>
+                          {fontPresetOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className={labelClass}>
+                        Button style
+                        <select className={inputClass} value={campaignForm.design.button_style || "pill"} onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, button_style: event.target.value } }))}>
+                          {buttonStyleOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  </section>
+
+                  <section className="rounded-[1.6rem] border border-slate-200 bg-[#fbfafc] p-5">
+                    <p className="text-sm font-semibold text-slate-950">Branding essenziale</p>
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                      <label className={labelClass}>
+                        Hero kicker
+                        <input className={inputClass} value={campaignForm.design.hero_kicker || ""} onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, hero_kicker: event.target.value } }))} />
+                      </label>
+                      <label className={labelClass}>
+                        Logo URL
+                        <input className={inputClass} value={campaignForm.design.logo_url || ""} onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, logo_url: event.target.value } }))} />
+                      </label>
+                      <label className={labelClass}>
+                        Hero image
+                        <input className={inputClass} value={campaignForm.design.hero_image_url || ""} onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, hero_image_url: event.target.value } }))} />
+                      </label>
+                      <label className={labelClass}>
+                        Content image
+                        <input className={inputClass} value={campaignForm.design.content_image_url || ""} onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, content_image_url: event.target.value } }))} />
+                      </label>
+                      <label className={labelClass}>
+                        Colore principale
+                        <input className={`${inputClass} h-12 p-2`} type="color" value={campaignForm.design.accent_color} onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, accent_color: event.target.value } }))} />
+                      </label>
+                      <label className="flex items-center gap-3 pt-9 text-sm font-medium text-slate-700">
+                        <input type="checkbox" className="rounded border-slate-300 text-brand" checked={campaignForm.design.show_association_name} onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, show_association_name: event.target.checked } }))} />
+                        Mostra il nome associazione
+                      </label>
+                    </div>
+                  </section>
+                </div>
+
+                <section className="rounded-[1.6rem] border border-slate-200 bg-[#fbfafc] p-5">
+                  <p className="text-sm font-semibold text-slate-950">Blocchi opzionali</p>
+                  <div className="mt-4 space-y-4">
+                    <label className={labelClass}>
+                      Highlight box
+                      <textarea className={`${inputClass} min-h-[88px]`} value={campaignForm.design.highlight_box || ""} onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, highlight_box: event.target.value } }))} />
+                    </label>
+                    <label className={labelClass}>
+                      Event details
+                      <textarea className={`${inputClass} min-h-[88px]`} value={campaignForm.design.event_details || ""} onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, event_details: event.target.value } }))} />
+                    </label>
+                    <label className={labelClass}>
+                      Signature
+                      <textarea className={`${inputClass} min-h-[74px]`} value={campaignForm.design.signature || ""} onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, signature: event.target.value } }))} />
+                    </label>
+                    <details className="rounded-[1.2rem] border border-slate-200 bg-white p-4">
+                      <summary className="cursor-pointer text-sm font-semibold text-slate-800">Opzioni avanzate</summary>
+                      <div className="mt-4 space-y-4">
+                        <label className={labelClass}>
+                          CTA note
+                          <textarea className={`${inputClass} min-h-[70px]`} value={campaignForm.design.cta_note || ""} onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, cta_note: event.target.value } }))} />
+                        </label>
+                        <label className={labelClass}>
+                          Final note
+                          <textarea className={`${inputClass} min-h-[70px]`} value={campaignForm.design.final_note || ""} onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, final_note: event.target.value } }))} />
+                        </label>
+                      </div>
+                    </details>
+                  </div>
+                </section>
+              </div>
+            </section>
+
+            <PreviewCanvas
+              eyebrow="Anteprima campagna"
+              title={campaignForm.name.trim() || "Nuova campagna"}
+              subject={campaignPreview?.subject || campaignForm.subject || "Compila oggetto e contenuto per attivare la preview."}
+              linkedFormLabel={selectedCampaignLinkedForm ? `CTA collegata a ${selectedCampaignLinkedForm.title}` : "Nessun form collegato"}
+              previewHtml={campaignPreview?.body_html}
+              fallbackText={campaignForm.body || "Compila oggetto e contenuto per vedere l'anteprima."}
+              sidebarNote={
+                <div className="rounded-[1.5rem] border border-neutral-200 bg-[#fbfaf6] p-4">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-500">Stima invio</p>
+                  <p className="mt-3 text-sm leading-6 text-neutral-600">
+                    {estimate != null
+                      ? `Pubblico stimato: ${estimate} destinatari.`
+                      : "La stima si aggiorna in base al pubblico scelto nel passo precedente."}
+                  </p>
+                </div>
+              }
+            />
+          </>
+        ) : null}
+      </WizardShell>
+    );
+  }
+
+  if (false) {
+    const campaignStepIndex = campaignWizardSteps.findIndex((step) => step.key === campaignStep);
     return (
       <div className="-mx-6 md:-mx-8">
         <EditorHeader
@@ -1903,13 +2436,13 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-neutral-900">{campaignPreview?.subject || campaignForm.subject || "Anteprima campagna"}</p>
-                      <p className="mt-1 text-xs text-neutral-500">{selectedCampaignLinkedForm ? `CTA collegata a ${selectedCampaignLinkedForm.title}` : "Nessun form collegato"}</p>
+                      <p className="mt-1 text-xs text-neutral-500">{selectedCampaignLinkedForm ? `CTA collegata a ${selectedCampaignLinkedForm?.title}` : "Nessun form collegato"}</p>
                     </div>
                     <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-neutral-600 shadow-sm">{estimate ?? "-"} destinatari</span>
                   </div>
                   <div className="rounded-[1.2rem] bg-white p-3">
                     {campaignPreview?.body_html ? (
-                      <div dangerouslySetInnerHTML={{ __html: campaignPreview.body_html }} />
+                      <div dangerouslySetInnerHTML={{ __html: campaignPreview?.body_html ?? "" }} />
                     ) : (
                       <div className="whitespace-pre-wrap text-sm leading-6 text-neutral-600">{campaignForm.body || "Compila oggetto e contenuto per vedere l'anteprima."}</div>
                     )}
@@ -1925,6 +2458,311 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
   }
 
   if (screen.type === "template-editor") {
+    const templateStepIndex = templateWizardSteps.findIndex((step) => step.key === templateStep);
+    const templateStepMeta = templateWizardSteps[templateStepIndex] ?? templateWizardSteps[0];
+    return (
+      <>
+        <WizardShell
+          breadcrumb="Modelli"
+          sectionLabel="Libreria modelli"
+          title={templateForm.id ? templateForm.name || "Modello email" : "Nuovo modello"}
+          description={`Passo ${templateStepIndex + 1} di ${templateWizardSteps.length}: ${templateStepMeta.hint}`}
+          onBack={() => setScreen({ type: "library" })}
+          steps={templateWizardSteps}
+          active={templateStep}
+          onSelect={setTemplateStep}
+          footer={
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex justify-center sm:justify-start">
+                {templateStepIndex > 0 ? (
+                  <button className={wizardSecondaryActionClass} type="button" onClick={() => setTemplateStep(templateWizardSteps[templateStepIndex - 1].key)}>
+                    Indietro
+                  </button>
+                ) : (
+                  <button className={wizardGhostActionClass} type="button" onClick={() => setScreen({ type: "library" })}>
+                    Torna alla libreria
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
+                {templateStepIndex < templateWizardSteps.length - 1 ? (
+                  <button className={wizardPrimaryActionClass} type="button" onClick={() => setTemplateStep(templateWizardSteps[templateStepIndex + 1].key)}>
+                    Continua
+                  </button>
+                ) : (
+                  <>
+                    <button className={wizardSecondaryActionClass} type="button" onClick={() => void handleDuplicateTemplate()} disabled={templateForm.id == null}>
+                      Duplica
+                    </button>
+                    {!templateForm.is_system ? (
+                      <>
+                        <button className={wizardSecondaryActionClass} type="button" onClick={() => void handleArchiveTemplate()} disabled={templateForm.id == null}>
+                          Archivia
+                        </button>
+                        <button className={wizardSecondaryActionClass} type="button" onClick={() => setTemplatePendingDelete(templates.find((template) => template.id === templateForm.id) || null)} disabled={templateForm.id == null}>
+                          Elimina
+                        </button>
+                      </>
+                    ) : null}
+                    <button className={wizardPrimaryActionClass} type="button" disabled={savingTemplate || templateForm.is_system} onClick={() => void saveTemplate()}>
+                      {templateForm.id ? "Salva modello" : "Crea modello"}
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          }
+        >
+          {detailLoading ? (
+            <Skeleton className="h-[720px] w-full rounded-[2rem]" />
+          ) : (
+            <>
+              {templateStep === "essentials" ? (
+                <>
+                  <section className="signup-wizard-card px-6 py-7 md:px-10 md:py-10">
+                    <div className="max-w-3xl">
+                      <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6d5ef4]">Fondamenta del modello</p>
+                      <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">Imposta nome, oggetto e collegamenti principali</h2>
+                      <p className="mt-3 text-base leading-7 text-slate-500">
+                        Questo wizard e piu corto della campagna: prima definisci l'ossatura riusabile, poi sistemi i blocchi e chiudi con la review.
+                      </p>
+                    </div>
+                    <div className="mt-8 grid gap-x-7 gap-y-8 md:grid-cols-2">
+                      <label className={labelClass}>
+                        Nome modello
+                        <input className={inputClass} disabled={templateForm.is_system} value={templateForm.name} onChange={(event) => setTemplateForm((prev) => ({ ...prev, name: event.target.value }))} />
+                      </label>
+                      <label className={labelClass}>
+                        Categoria
+                        <input className={inputClass} disabled={templateForm.is_system} value={templateForm.category} onChange={(event) => setTemplateForm((prev) => ({ ...prev, category: event.target.value }))} />
+                      </label>
+                      <label className={`${labelClass} md:col-span-2`}>
+                        Oggetto
+                        <input className={inputClass} disabled={templateForm.is_system} value={templateForm.subject} onChange={(event) => setTemplateForm((prev) => ({ ...prev, subject: event.target.value }))} />
+                      </label>
+                      <label className={`${labelClass} md:col-span-2`}>
+                        Titolo principale
+                        <input className={inputClass} disabled={templateForm.is_system} value={templateForm.design.hero_title || ""} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, hero_title: event.target.value } }))} />
+                      </label>
+                      <label className={`${labelClass} md:col-span-2`}>
+                        Corpo base
+                        <textarea className={`${inputClass} min-h-[220px]`} disabled={templateForm.is_system} value={templateForm.body} onChange={(event) => setTemplateForm((prev) => ({ ...prev, body: event.target.value }))} />
+                      </label>
+                    </div>
+                  </section>
+
+                  <section className="signup-wizard-card px-6 py-7 md:px-10 md:py-10">
+                    <div className="grid gap-6 lg:grid-cols-2">
+                      <label className={labelClass}>
+                        Form collegato
+                        <select className={inputClass} disabled={templateForm.is_system} value={templateForm.linked_form_id ?? ""} onChange={(event) => setTemplateForm((prev) => ({ ...prev, linked_form_id: event.target.value ? Number(event.target.value) : null }))}>
+                          <option value="">Nessun form collegato</option>
+                          {activeForms.map((form) => (
+                            <option key={form.id} value={form.id}>
+                              {form.title}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className={labelClass}>
+                        CTA label
+                        <input className={inputClass} disabled={templateForm.is_system} value={templateForm.design.cta_label || ""} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, cta_label: event.target.value } }))} />
+                      </label>
+                      <label className={`${labelClass} lg:col-span-2`}>
+                        CTA link
+                        <input className={inputClass} disabled={templateForm.is_system} value={templateForm.design.cta_url || ""} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, cta_url: event.target.value } }))} />
+                      </label>
+                      <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
+                        <input type="checkbox" className="rounded border-slate-300 text-brand" disabled={templateForm.is_system} checked={templateForm.is_active} onChange={(event) => setTemplateForm((prev) => ({ ...prev, is_active: event.target.checked }))} />
+                        Modello attivo
+                      </label>
+                    </div>
+                  </section>
+                </>
+              ) : null}
+
+              {templateStep === "message" ? (
+                <>
+                  <section className="signup-wizard-card px-6 py-7 md:px-10 md:py-10">
+                    <div className="max-w-3xl">
+                      <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6d5ef4]">Builder del modello</p>
+                      <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">Rendi riusabile il messaggio blocco per blocco</h2>
+                      <p className="mt-3 text-base leading-7 text-slate-500">
+                        Stessa logica del form builder: ordina i blocchi con drag & drop e compila il contenuto dal pannello principale.
+                      </p>
+                    </div>
+                    <div className="mt-8 grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+                      <SectionPlanner
+                        order={templateSectionOrder}
+                        selected={selectedTemplateSection}
+                        onSelect={setSelectedTemplateSection}
+                        onChange={(next) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, section_order: next } }))}
+                        title="Messaggio"
+                        description="Riordina i blocchi del modello e modifica la sezione selezionata."
+                      />
+                      {renderTemplateSectionEditor()}
+                    </div>
+                  </section>
+
+                  <section className="signup-wizard-card px-6 py-7 md:px-10 md:py-10">
+                    <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-400">Variabili rapide</p>
+                    <h3 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">Placeholder disponibili nel template</h3>
+                    <div className="mt-6">
+                      <VariableCloud variables={variables} />
+                    </div>
+                  </section>
+                </>
+              ) : null}
+
+              {templateStep === "review" ? (
+                <>
+                  <section className="signup-wizard-card px-6 py-7 md:px-10 md:py-10">
+                    <div className="max-w-3xl">
+                      <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6d5ef4]">Review modello</p>
+                      <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">Rifinisci stile, branding e stato del template</h2>
+                      <p className="mt-3 text-base leading-7 text-slate-500">
+                        L'anteprima resta ampia. Le opzioni di branding sono raccolte qui, senza il vecchio riquadro stretto e inutile.
+                      </p>
+                    </div>
+
+                    <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                      <div className="space-y-6">
+                        <section className="rounded-[1.6rem] border border-slate-200 bg-[#fbfafc] p-5">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-950">Stile del modello</p>
+                              <p className="mt-1 text-sm leading-6 text-slate-500">Preset compatti per mantenere coerenza visuale.</p>
+                            </div>
+                            <ModeSwitch value={templateMode} onChange={setTemplateMode} />
+                          </div>
+                          <div className="mt-4 grid gap-3">
+                            {stylePresetCards.map((preset) => (
+                              <button
+                                key={preset.key}
+                                type="button"
+                                disabled={templateForm.is_system}
+                                className={`rounded-[1.3rem] border p-4 text-left transition ${
+                                  templateForm.design.style_preset === preset.key
+                                    ? "border-[#c7d2fe] bg-[#eef2ff]"
+                                    : "border-slate-200 bg-white hover:border-slate-300"
+                                } ${templateForm.is_system ? "opacity-60" : ""}`}
+                                onClick={() => setTemplateForm((prev) => ({ ...prev, design: applyStylePreset(prev.design, preset) }))}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <span className="h-3 w-3 rounded-full border border-black/10" style={{ backgroundColor: preset.accent }} />
+                                  <strong className="text-sm text-slate-900">{preset.label}</strong>
+                                </div>
+                                <p className="mt-2 text-xs leading-5 text-slate-500">{preset.note}</p>
+                              </button>
+                            ))}
+                          </div>
+                          <div className="mt-4 grid gap-4 md:grid-cols-2">
+                            <label className={labelClass}>
+                              Font preset
+                              <select className={inputClass} disabled={templateForm.is_system} value={templateForm.design.font_preset || "classic"} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, font_preset: event.target.value as OrgAdminEmailFontPreset } }))}>
+                                {fontPresetOptions.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className={labelClass}>
+                              Button style
+                              <select className={inputClass} disabled={templateForm.is_system} value={templateForm.design.button_style || "pill"} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, button_style: event.target.value } }))}>
+                                {buttonStyleOptions.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          </div>
+                        </section>
+
+                        <section className="rounded-[1.6rem] border border-slate-200 bg-[#fbfafc] p-5">
+                          <p className="text-sm font-semibold text-slate-950">Branding e blocchi</p>
+                          <div className="mt-4 space-y-4">
+                            {templateBrandingFields.map((item) => (
+                              <label key={item.key} className={labelClass}>
+                                {item.label}
+                                <input className={inputClass} disabled={templateForm.is_system} value={templateForm.design[item.key] || ""} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, [item.key]: event.target.value } }))} />
+                              </label>
+                            ))}
+                            <label className={labelClass}>
+                              Highlight box
+                              <textarea className={`${inputClass} min-h-[76px]`} disabled={templateForm.is_system} value={templateForm.design.highlight_box || ""} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, highlight_box: event.target.value } }))} />
+                            </label>
+                            <label className={labelClass}>
+                              Event details
+                              <textarea className={`${inputClass} min-h-[76px]`} disabled={templateForm.is_system} value={templateForm.design.event_details || ""} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, event_details: event.target.value } }))} />
+                            </label>
+                            <label className={labelClass}>
+                              Signature
+                              <textarea className={`${inputClass} min-h-[64px]`} disabled={templateForm.is_system} value={templateForm.design.signature || ""} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, signature: event.target.value } }))} />
+                            </label>
+                          </div>
+                        </section>
+                      </div>
+
+                      <section className="rounded-[1.6rem] border border-slate-200 bg-[#fbfafc] p-5">
+                        <p className="text-sm font-semibold text-slate-950">Opzioni finali</p>
+                        <div className="mt-4 space-y-4">
+                          <details className="rounded-[1.2rem] border border-slate-200 bg-white p-4">
+                            <summary className="cursor-pointer text-sm font-semibold text-slate-800">Opzioni avanzate</summary>
+                            <div className="mt-4 space-y-4">
+                              <label className={labelClass}>
+                                CTA note
+                                <textarea className={`${inputClass} min-h-[64px]`} disabled={templateForm.is_system} value={templateForm.design.cta_note || ""} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, cta_note: event.target.value } }))} />
+                              </label>
+                              <label className={labelClass}>
+                                Final note
+                                <textarea className={`${inputClass} min-h-[64px]`} disabled={templateForm.is_system} value={templateForm.design.final_note || ""} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, final_note: event.target.value } }))} />
+                              </label>
+                            </div>
+                          </details>
+                          <div className="rounded-[1.4rem] border border-slate-200 bg-white p-4">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Stato modello</p>
+                            <p className="mt-3 text-sm leading-6 text-slate-600">
+                              {templateForm.is_system
+                                ? "Template di sistema: lo puoi ispezionare ma non salvare."
+                                : templateForm.is_active
+                                  ? "Modello attivo e pronto per essere riusato nelle campagne."
+                                  : "Modello archiviato: puoi riattivarlo o duplicarlo."}
+                            </p>
+                          </div>
+                        </div>
+                      </section>
+                    </div>
+                  </section>
+
+                  <PreviewCanvas
+                    eyebrow="Anteprima modello"
+                    title={templateForm.name.trim() || "Nuovo modello"}
+                    subject={templatePreview?.subject || templateForm.subject || "Compila oggetto e contenuto per attivare la preview."}
+                    linkedFormLabel={selectedTemplateLinkedForm ? `Collegato al form ${selectedTemplateLinkedForm.title}` : "Nessun form collegato"}
+                    previewHtml={templatePreview?.body_html}
+                    fallbackText={templateForm.body || "Compila oggetto e contenuto per vedere l'anteprima."}
+                    sidebarNote={
+                      <div className="rounded-[1.5rem] border border-neutral-200 bg-[#fbfaf6] p-4">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-500">Riutilizzo</p>
+                        <p className="mt-3 text-sm leading-6 text-neutral-600">
+                          Usa questo template come base nelle campagne, senza dover ricostruire struttura e stile ogni volta.
+                        </p>
+                      </div>
+                    }
+                  />
+                </>
+              ) : null}
+            </>
+          )}
+        </WizardShell>
+        {deleteTemplateModal}
+      </>
+    );
+  }
+
+  if (false) {
     const templateStepIndex = templateWizardSteps.findIndex((step) => step.key === templateStep);
     return (
       <>
@@ -2160,11 +2998,11 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                   <div className="mt-4 rounded-[1.4rem] border border-neutral-200 bg-neutral-50 p-4">
                     <div className="mb-4">
                       <p className="text-sm font-semibold text-neutral-900">{templatePreview?.subject || templateForm.subject || "Anteprima modello"}</p>
-                      <p className="mt-1 text-xs text-neutral-500">{selectedTemplateLinkedForm ? `Collegato al form ${selectedTemplateLinkedForm.title}` : "Nessun form collegato"}</p>
+                      <p className="mt-1 text-xs text-neutral-500">{selectedTemplateLinkedForm ? `Collegato al form ${selectedTemplateLinkedForm?.title}` : "Nessun form collegato"}</p>
                     </div>
                     <div className="rounded-[1.2rem] bg-white p-3">
                       {templatePreview?.body_html ? (
-                        <div dangerouslySetInnerHTML={{ __html: templatePreview.body_html }} />
+                        <div dangerouslySetInnerHTML={{ __html: templatePreview?.body_html ?? "" }} />
                       ) : (
                         <div className="whitespace-pre-wrap text-sm leading-6 text-neutral-600">{templateForm.body || "Compila oggetto e contenuto per vedere l'anteprima."}</div>
                       )}
@@ -2180,7 +3018,7 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                   eyebrow="Anteprima modello"
                   title={templateForm.name.trim() || "Nuovo modello"}
                   subject={templatePreview?.subject || templateForm.subject || "Compila oggetto e contenuto per attivare la preview."}
-                  linkedFormLabel={selectedTemplateLinkedForm ? `Collegato al form ${selectedTemplateLinkedForm.title}` : "Nessun form collegato"}
+                  linkedFormLabel={selectedTemplateLinkedForm ? `Collegato al form ${selectedTemplateLinkedForm?.title}` : "Nessun form collegato"}
                   previewHtml={templatePreview?.body_html}
                   fallbackText={templateForm.body || "Compila oggetto e contenuto per vedere l'anteprima."}
                   sidebarNote={<div className="rounded-[1.5rem] border border-neutral-200 bg-[#fbfaf6] p-4"><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-500">Stato modello</p><p className="mt-3 text-sm leading-6 text-neutral-600">{templateForm.is_system ? "Template di sistema: puoi ispezionarlo ma non salvarne modifiche." : templateForm.is_active ? "Modello attivo e pronto per essere riusato nelle campagne." : "Modello archiviato: puoi riattivarlo o duplicarlo."}</p></div>}
