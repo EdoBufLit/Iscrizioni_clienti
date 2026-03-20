@@ -804,7 +804,17 @@ export type OrgAdminEmailDesign = {
   hero_title?: string;
   highlight_box?: string;
   signature?: string;
+  section_order?: OrgAdminEmailSectionKey[];
 };
+
+export type OrgAdminEmailSectionKey =
+  | "hero"
+  | "body"
+  | "cta"
+  | "highlight"
+  | "event"
+  | "signature"
+  | "final_note";
 
 export type OrgAdminLinkedFormSummary = {
   id: number;
@@ -1697,6 +1707,17 @@ export async function duplicateOrgAdminEmailTemplate(
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore duplicazione template"));
+  return res.json();
+}
+
+export async function deleteOrgAdminEmailTemplate(
+  templateId: number,
+): Promise<{ ok: boolean }> {
+  const res = await fetch(`/api/org-admin/communications/templates/${templateId}`, {
+    method: "DELETE",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore eliminazione template"));
   return res.json();
 }
 

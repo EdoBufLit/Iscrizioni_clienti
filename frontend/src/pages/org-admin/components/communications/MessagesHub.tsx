@@ -1,10 +1,26 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
   archiveOrgAdminEmailTemplate,
   AuthError,
   createOrgAdminEmailCampaign,
   createOrgAdminEmailTemplate,
+  deleteOrgAdminEmailTemplate,
   duplicateOrgAdminEmailTemplate,
   fetchOrgAdminCommunicationAudienceEstimate,
   fetchOrgAdminEmailCampaign,
@@ -23,12 +39,14 @@ import {
   type OrgAdminEmailCampaign,
   type OrgAdminEmailDesign,
   type OrgAdminEmailFontPreset,
+  type OrgAdminEmailSectionKey,
   type OrgAdminEmailTemplate,
   type OrgAdminEmailTemplateVariable,
   type OrgAdminMember,
 } from "../../../../lib/api";
 import Skeleton from "../../../../components/ui/Skeleton";
 import { useToast } from "../../../../components/ui/ToastProvider";
+import ConfirmModal from "../../../../components/ui/ConfirmModal";
 
 type MessagesHubProps = { communicationsLocked: boolean };
 type Mode = "text" | "html";
@@ -62,10 +80,43 @@ type TemplateFormState = {
   design: OrgAdminEmailDesign;
 };
 
+type CampaignWizardStep = "brief" | "message" | "audience" | "review";
+type TemplateWizardStep = "essentials" | "message" | "review";
+
 const inputClass =
   "mt-2 w-full rounded-[1.1rem] border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand/60 focus:ring-2 focus:ring-brand/15";
 const labelClass = "block text-sm font-semibold text-neutral-800";
 const sectionCardClass = "rounded-[1.8rem] border border-neutral-200 bg-white p-6 shadow-[0_18px_48px_rgba(15,23,42,0.05)]";
+const wizardCardClass =
+  "rounded-[2rem] border border-neutral-200 bg-white p-5 shadow-[0_22px_60px_rgba(15,23,42,0.06)] md:p-6";
+
+const emailSectionCatalog: Array<{
+  key: OrgAdminEmailSectionKey;
+  label: string;
+  kicker: string;
+  description: string;
+  required?: boolean;
+}> = [
+  { key: "hero", label: "Hero", kicker: "Apertura", description: "Titolo, kicker e immagini di apertura." },
+  { key: "body", label: "Corpo", kicker: "Obbligatorio", description: "Testo principale del messaggio.", required: true },
+  { key: "cta", label: "CTA", kicker: "Azione", description: "Pulsante, nota e collegamento al form o link." },
+  { key: "highlight", label: "Highlight", kicker: "Supporto", description: "Messaggio in evidenza o box riassuntivo." },
+  { key: "event", label: "Dettagli", kicker: "Contesto", description: "Informazioni evento, agenda o istruzioni operative." },
+  { key: "signature", label: "Firma", kicker: "Chiusura", description: "Firma libera o firma nome/ruolo." },
+  { key: "final_note", label: "Nota finale", kicker: "Post scriptum", description: "Richiamo finale o nota di servizio." },
+];
+const defaultSectionOrder: OrgAdminEmailSectionKey[] = emailSectionCatalog.map((section) => section.key);
+const campaignWizardSteps: Array<{ key: CampaignWizardStep; label: string; hint: string }> = [
+  { key: "brief", label: "Brief", hint: "Oggetto, template e programma invio." },
+  { key: "message", label: "Messaggio", hint: "Blocchi, contenuto e ordine del messaggio." },
+  { key: "audience", label: "Destinatari", hint: "Segmento, soci selezionati e CTA." },
+  { key: "review", label: "Review", hint: "Stile, anteprima grande e azione finale." },
+];
+const templateWizardSteps: Array<{ key: TemplateWizardStep; label: string; hint: string }> = [
+  { key: "essentials", label: "Essentials", hint: "Nome, categoria, oggetto e collegamenti." },
+  { key: "message", label: "Messaggio", hint: "Blocchi riordinabili e contenuto." },
+  { key: "review", label: "Review", hint: "Stile, anteprima ampia e salvataggio." },
+];
 
 const stylePresetCards = [
   { key: "istituzionale", label: "Istituzionale", accent: "#0f766e", note: "Pulito, affidabile, molto leggibile." },
@@ -152,6 +203,7 @@ function createDefaultDesign(): OrgAdminEmailDesign {
     signature_name: "",
     signature_role: "",
     final_note: "",
+    section_order: [...defaultSectionOrder],
   };
 }
 
@@ -208,6 +260,231 @@ function StatChip(props: { label: string; value: string | number; hint?: string 
       <p className="mt-2 text-xl font-bold text-neutral-900">{props.value}</p>
       {props.hint ? <p className="mt-1 text-xs text-neutral-500">{props.hint}</p> : null}
     </div>
+  );
+}
+
+function normalizeSectionOrder(order?: OrgAdminEmailSectionKey[] | null): OrgAdminEmailSectionKey[] {
+  const next: OrgAdminEmailSectionKey[] = [];
+  for (const key of order || []) {
+    if (emailSectionCatalog.some((section) => section.key === key) && !next.includes(key)) {
+      next.push(key);
+    }
+  }
+  for (const fallback of defaultSectionOrder) {
+    if (!next.includes(fallback)) {
+      next.push(fallback);
+    }
+  }
+  return next;
+}
+
+function StepRail<T extends string>(props: {
+  steps: Array<{ key: T; label: string; hint: string }>;
+  active: T;
+  onSelect: (step: T) => void;
+}) {
+  const activeIndex = props.steps.findIndex((step) => step.key === props.active);
+  return (
+    <div className="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)]">
+      <div className="rounded-[1.75rem] border border-neutral-200 bg-[#f6f5f1] p-3">
+        <div className="grid gap-2">
+          {props.steps.map((step, index) => {
+            const isActive = step.key === props.active;
+            const isDone = index < activeIndex;
+            return (
+              <button
+                key={step.key}
+                type="button"
+                onClick={() => props.onSelect(step.key)}
+                className={`rounded-[1.2rem] px-4 py-3 text-left transition ${
+                  isActive
+                    ? "bg-neutral-900 text-white shadow-[0_18px_30px_rgba(15,23,42,0.16)]"
+                    : "bg-white text-neutral-700 hover:bg-neutral-50"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span
+                    className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${
+                      isActive
+                        ? "bg-white/14 text-white"
+                        : isDone
+                          ? "bg-brand/10 text-brand"
+                          : "bg-neutral-100 text-neutral-500"
+                    }`}
+                  >
+                    {isDone && !isActive ? "✓" : index + 1}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">{step.label}</p>
+                    <p className={`mt-1 text-xs leading-5 ${isActive ? "text-white/72" : "text-neutral-500"}`}>{step.hint}</p>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="rounded-[1.75rem] border border-neutral-200 bg-[#fbfaf6] px-5 py-4 text-sm text-neutral-600">
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Percorso guidato</p>
+        <p className="mt-2 text-sm leading-6">
+          Un passo alla volta: definisci prima la struttura, poi il contenuto, poi la distribuzione. L'obiettivo è ridurre errori e far leggere subito il messaggio finale.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function SortableSectionCard(props: {
+  sectionKey: OrgAdminEmailSectionKey;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const item = emailSectionCatalog.find((section) => section.key === props.sectionKey)!;
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.sectionKey });
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      onClick={props.onSelect}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`group flex w-full items-start gap-4 rounded-[1.3rem] border px-4 py-4 text-left transition ${
+        props.selected
+          ? "border-neutral-900 bg-neutral-900 text-white"
+          : "border-neutral-200 bg-white text-neutral-800 hover:border-neutral-300 hover:bg-neutral-50"
+      } ${isDragging ? "opacity-70 shadow-xl" : ""}`}
+    >
+      <span
+        {...attributes}
+        {...listeners}
+        onClick={(event) => event.stopPropagation()}
+        className={`mt-1 inline-flex h-10 w-10 shrink-0 cursor-grab items-center justify-center rounded-[1rem] border ${
+          props.selected ? "border-white/16 bg-white/10 text-white/80" : "border-neutral-200 bg-neutral-50 text-neutral-500"
+        }`}
+        aria-label={`Riordina ${item.label}`}
+      >
+        ⋮⋮
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-semibold">{item.label}</p>
+          {item.required ? (
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${props.selected ? "bg-white/12 text-white/72" : "bg-brand/10 text-brand"}`}>
+              Base
+            </span>
+          ) : null}
+        </div>
+        <p className={`mt-1 text-[11px] font-bold uppercase tracking-[0.14em] ${props.selected ? "text-white/60" : "text-neutral-500"}`}>{item.kicker}</p>
+        <p className={`mt-2 text-sm leading-6 ${props.selected ? "text-white/74" : "text-neutral-600"}`}>{item.description}</p>
+      </div>
+    </button>
+  );
+}
+
+function SectionPlanner(props: {
+  order: OrgAdminEmailSectionKey[];
+  selected: OrgAdminEmailSectionKey;
+  onSelect: (key: OrgAdminEmailSectionKey) => void;
+  onChange: (next: OrgAdminEmailSectionKey[]) => void;
+  title: string;
+  description: string;
+}) {
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  return (
+    <section className={wizardCardClass}>
+      <div className="flex flex-col gap-3 border-b border-neutral-200 pb-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">{props.title}</p>
+          <p className="mt-2 text-sm leading-6 text-neutral-600">{props.description}</p>
+        </div>
+        <span className="rounded-full bg-neutral-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-600">
+          Drag & drop attivo
+        </span>
+      </div>
+      <div className="mt-5">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={(event: DragEndEvent) => {
+            const { active, over } = event;
+            if (!over || active.id === over.id) return;
+            const oldIndex = props.order.findIndex((key) => key === active.id);
+            const newIndex = props.order.findIndex((key) => key === over.id);
+            if (oldIndex < 0 || newIndex < 0) return;
+            props.onChange(arrayMove(props.order, oldIndex, newIndex));
+          }}
+        >
+          <SortableContext items={props.order} strategy={verticalListSortingStrategy}>
+            <div className="grid gap-3">
+              {props.order.map((sectionKey) => (
+                <SortableSectionCard
+                  key={sectionKey}
+                  sectionKey={sectionKey}
+                  selected={props.selected === sectionKey}
+                  onSelect={() => props.onSelect(sectionKey)}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+      </div>
+    </section>
+  );
+}
+
+function PreviewCanvas(props: {
+  eyebrow: string;
+  title: string;
+  subject: string;
+  linkedFormLabel: string;
+  previewHtml: string | null | undefined;
+  fallbackText: string;
+  sidebarNote?: ReactNode;
+}) {
+  return (
+    <section className={`${wizardCardClass} overflow-hidden`}>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="min-w-0">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">{props.eyebrow}</p>
+          <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-2xl font-semibold tracking-tight text-neutral-900">{props.title}</h3>
+              <p className="mt-2 text-sm leading-6 text-neutral-600">{props.subject}</p>
+            </div>
+            <span className="rounded-full bg-neutral-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-600">
+              {props.linkedFormLabel}
+            </span>
+          </div>
+          <div className="mt-6 rounded-[1.8rem] border border-neutral-200 bg-[#f4f1ea] p-3 md:p-5">
+            <div className="mx-auto min-h-[38rem] max-w-[860px] overflow-hidden rounded-[1.5rem] border border-neutral-200 bg-white shadow-[0_30px_70px_rgba(15,23,42,0.08)]">
+              <div className="flex items-center gap-2 border-b border-neutral-200 bg-neutral-50 px-4 py-3">
+                <span className="h-2.5 w-2.5 rounded-full bg-[#e76f51]" />
+                <span className="h-2.5 w-2.5 rounded-full bg-[#f4a261]" />
+                <span className="h-2.5 w-2.5 rounded-full bg-[#2a9d8f]" />
+                <span className="ml-3 text-xs font-semibold uppercase tracking-[0.14em] text-neutral-500">Preview email</span>
+              </div>
+              <div className="max-h-[44rem] overflow-auto bg-white p-3 md:p-5">
+                {props.previewHtml ? (
+                  <div dangerouslySetInnerHTML={{ __html: props.previewHtml }} />
+                ) : (
+                  <div className="rounded-[1.4rem] border border-dashed border-neutral-200 bg-neutral-50 px-6 py-10 text-sm leading-7 text-neutral-500">
+                    {props.fallbackText}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+        <aside className="space-y-4">
+          {props.sidebarNote}
+          <div className="rounded-[1.5rem] border border-neutral-200 bg-[#fbfaf6] p-4">
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-500">Nota UX</p>
+            <p className="mt-3 text-sm leading-6 text-neutral-600">
+              L'anteprima è ampia e leggibile perché qui la decisione non è “scrivere testo”, ma valutare ritmo, CTA e resa finale del messaggio.
+            </p>
+          </div>
+        </aside>
+      </div>
+    </section>
   );
 }
 
@@ -291,6 +568,10 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
   const [templatePreview, setTemplatePreview] = useState<{ subject: string; body_html: string | null; body_text: string | null } | null>(null);
   const [composerMode, setComposerMode] = useState<Mode>("text");
   const [templateMode, setTemplateMode] = useState<Mode>("text");
+  const [campaignStep, setCampaignStep] = useState<CampaignWizardStep>("brief");
+  const [templateStep, setTemplateStep] = useState<TemplateWizardStep>("essentials");
+  const [selectedCampaignSection, setSelectedCampaignSection] = useState<OrgAdminEmailSectionKey>("body");
+  const [selectedTemplateSection, setSelectedTemplateSection] = useState<OrgAdminEmailSectionKey>("body");
   const [campaignForm, setCampaignForm] = useState<CampaignFormState>(createEmptyCampaignForm);
   const [templateForm, setTemplateForm] = useState<TemplateFormState>(createEmptyTemplateForm);
   const [selectedMembers, setSelectedMembers] = useState<OrgAdminMember[]>([]);
@@ -300,9 +581,19 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
   const [savingCampaign, setSavingCampaign] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [sendingExisting, setSendingExisting] = useState(false);
+  const [templatePendingDelete, setTemplatePendingDelete] = useState<OrgAdminEmailTemplate | null>(null);
+  const [deletingTemplate, setDeletingTemplate] = useState(false);
 
   const activeForms = useMemo(() => forms.filter((form) => form.is_active), [forms]);
   const activeTemplates = useMemo(() => templates.filter((template) => template.is_active), [templates]);
+  const campaignSectionOrder = useMemo(
+    () => normalizeSectionOrder(campaignForm.design.section_order),
+    [campaignForm.design.section_order],
+  );
+  const templateSectionOrder = useMemo(
+    () => normalizeSectionOrder(templateForm.design.section_order),
+    [templateForm.design.section_order],
+  );
   const selectedCampaignLinkedForm = useMemo(
     () => activeForms.find((form) => form.id === campaignForm.linked_form_id) ?? null,
     [activeForms, campaignForm.linked_form_id],
@@ -321,6 +612,11 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
   }
 
   function applyTemplateToEditor(template: OrgAdminEmailTemplate) {
+    const nextDesign = {
+      ...createDefaultDesign(),
+      ...template.design,
+      section_order: normalizeSectionOrder(template.design.section_order),
+    };
     setTemplateForm({
       id: template.id,
       name: template.name,
@@ -330,8 +626,10 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
       linked_form_id: template.linked_form_id,
       is_active: template.is_active,
       is_system: template.is_system,
-      design: { ...createDefaultDesign(), ...template.design },
+      design: nextDesign,
     });
+    setTemplateStep("essentials");
+    setSelectedTemplateSection("body");
     setTemplateMode(template.body_html && template.body_html.trim() ? "html" : "text");
   }
 
@@ -341,8 +639,14 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
       subject: template.subject,
       body: template.body_html || template.body_text || "",
       linked_form_id: template.linked_form_id,
-      design: { ...createDefaultDesign(), ...template.design },
+      design: {
+        ...createDefaultDesign(),
+        ...template.design,
+        section_order: normalizeSectionOrder(template.design.section_order),
+      },
     }));
+    setCampaignStep("message");
+    setSelectedCampaignSection("body");
     setComposerMode(template.body_html && template.body_html.trim() ? "html" : "text");
   }
 
@@ -451,6 +755,8 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
 
   async function openTemplateEditor(templateId: number | null) {
     setScreen({ type: "template-editor", templateId });
+    setTemplateStep("essentials");
+    setSelectedTemplateSection("body");
     if (templateId == null) {
       setTemplateForm(createEmptyTemplateForm());
       setTemplateMode("text");
@@ -472,6 +778,8 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
   function openNewCampaignEditor() {
     setScreen({ type: "campaign-editor" });
     setCampaignForm(createEmptyCampaignForm());
+    setCampaignStep("brief");
+    setSelectedCampaignSection("body");
     setComposerMode("text");
     setSelectedMembers([]);
     setMemberSearch("");
@@ -587,6 +895,29 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
     }
   }
 
+  async function handleDeleteTemplate() {
+    if (!templatePendingDelete || templatePendingDelete.is_system || deletingTemplate) return;
+    setDeletingTemplate(true);
+    try {
+      await deleteOrgAdminEmailTemplate(templatePendingDelete.id);
+      await refreshTemplates();
+      if (screen.type === "template-editor" && templateForm.id === templatePendingDelete.id) {
+        setScreen({ type: "library" });
+        setMainTab("modelli");
+      }
+      showToast({
+        title: "Modello eliminato",
+        message: "Il modello è stato rimosso definitivamente dalla libreria.",
+        tone: "success",
+      });
+      setTemplatePendingDelete(null);
+    } catch (err) {
+      handleLoadError(err, "Impossibile eliminare il modello.");
+    } finally {
+      setDeletingTemplate(false);
+    }
+  }
+
   async function handleSendExisting(campaignId: number) {
     if (sendingExisting) return;
     setSendingExisting(true);
@@ -611,6 +942,339 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
     setSelectedMembers((prev) => prev.filter((member) => member.id !== memberId));
   }
 
+  const selectedCampaignSectionMeta = emailSectionCatalog.find((section) => section.key === selectedCampaignSection)!;
+
+  const renderCampaignSectionEditor = () => {
+    switch (selectedCampaignSection) {
+      case "hero":
+        return (
+          <section className={wizardCardClass}>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">
+              Blocco {selectedCampaignSectionMeta.label}
+            </p>
+            <h3 className="mt-2 text-xl font-semibold tracking-tight text-neutral-900">
+              Definisci l'apertura del messaggio
+            </h3>
+            <div className="mt-5 grid gap-5 md:grid-cols-2">
+              <label className={labelClass}>
+                Kicker
+                <input
+                  className={inputClass}
+                  value={campaignForm.design.hero_kicker || ""}
+                  onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, hero_kicker: event.target.value } }))}
+                  placeholder="Es. Avviso ai soci"
+                />
+              </label>
+              <label className={labelClass}>
+                Titolo hero
+                <input
+                  className={inputClass}
+                  value={campaignForm.design.hero_title || ""}
+                  onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, hero_title: event.target.value } }))}
+                  placeholder="Titolo principale dentro la mail"
+                />
+              </label>
+              <label className={labelClass}>
+                Hero image
+                <input
+                  className={inputClass}
+                  value={campaignForm.design.hero_image_url || ""}
+                  onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, hero_image_url: event.target.value } }))}
+                  placeholder="URL immagine di apertura"
+                />
+              </label>
+              <label className={labelClass}>
+                Immagine contenuto
+                <input
+                  className={inputClass}
+                  value={campaignForm.design.content_image_url || ""}
+                  onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, content_image_url: event.target.value } }))}
+                  placeholder="URL immagine nel corpo"
+                />
+              </label>
+            </div>
+          </section>
+        );
+      case "cta":
+        return (
+          <section className={wizardCardClass}>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">
+              Blocco {selectedCampaignSectionMeta.label}
+            </p>
+            <h3 className="mt-2 text-xl font-semibold tracking-tight text-neutral-900">
+              Guida l'azione successiva
+            </h3>
+            <div className="mt-5 grid gap-5 md:grid-cols-2">
+              <label className={labelClass}>
+                Form collegato
+                <select
+                  className={inputClass}
+                  value={campaignForm.linked_form_id ?? ""}
+                  onChange={(event) => setCampaignForm((prev) => ({ ...prev, linked_form_id: event.target.value ? Number(event.target.value) : null }))}
+                >
+                  <option value="">Nessun form collegato</option>
+                  {activeForms.map((form) => (
+                    <option key={form.id} value={form.id}>
+                      {form.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={labelClass}>
+                Etichetta CTA
+                <input
+                  className={inputClass}
+                  value={campaignForm.design.cta_label || ""}
+                  onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, cta_label: event.target.value } }))}
+                  placeholder="Es. Compila il modulo"
+                />
+              </label>
+              <label className={labelClass}>
+                Link CTA
+                <input
+                  className={inputClass}
+                  value={campaignForm.design.cta_url || ""}
+                  onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, cta_url: event.target.value } }))}
+                  placeholder="Se vuoto usa il form collegato"
+                />
+              </label>
+              <label className={labelClass}>
+                Nota CTA
+                <textarea
+                  className={`${inputClass} min-h-[96px]`}
+                  value={campaignForm.design.cta_note || ""}
+                  onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, cta_note: event.target.value } }))}
+                  placeholder="Testo di supporto sotto il pulsante"
+                />
+              </label>
+            </div>
+          </section>
+        );
+      case "highlight":
+        return (
+          <section className={wizardCardClass}>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Blocco Highlight</p>
+            <textarea
+              className={`${inputClass} mt-5 min-h-[180px]`}
+              value={campaignForm.design.highlight_box || ""}
+              onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, highlight_box: event.target.value } }))}
+              placeholder="Scrivi qui il messaggio da mettere in evidenza."
+            />
+          </section>
+        );
+      case "event":
+        return (
+          <section className={wizardCardClass}>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Blocco Dettagli</p>
+            <textarea
+              className={`${inputClass} mt-5 min-h-[180px]`}
+              value={campaignForm.design.event_details || ""}
+              onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, event_details: event.target.value } }))}
+              placeholder="Agenda, luogo, orari o istruzioni operative."
+            />
+          </section>
+        );
+      case "signature":
+        return (
+          <section className={wizardCardClass}>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Blocco Firma</p>
+            <div className="mt-5 grid gap-5 md:grid-cols-2">
+              <label className={labelClass}>
+                Firma libera
+                <textarea
+                  className={`${inputClass} min-h-[140px]`}
+                  value={campaignForm.design.signature || ""}
+                  onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, signature: event.target.value } }))}
+                  placeholder="In alternativa a nome e ruolo."
+                />
+              </label>
+              <div className="grid gap-5">
+                <label className={labelClass}>
+                  Nome firma
+                  <input
+                    className={inputClass}
+                    value={campaignForm.design.signature_name || ""}
+                    onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, signature_name: event.target.value } }))}
+                  />
+                </label>
+                <label className={labelClass}>
+                  Ruolo firma
+                  <input
+                    className={inputClass}
+                    value={campaignForm.design.signature_role || ""}
+                    onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, signature_role: event.target.value } }))}
+                  />
+                </label>
+              </div>
+            </div>
+          </section>
+        );
+      case "final_note":
+        return (
+          <section className={wizardCardClass}>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Blocco Nota finale</p>
+            <textarea
+              className={`${inputClass} mt-5 min-h-[140px]`}
+              value={campaignForm.design.final_note || ""}
+              onChange={(event) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, final_note: event.target.value } }))}
+              placeholder="Chiusura breve, nota di servizio o post scriptum."
+            />
+          </section>
+        );
+      case "body":
+      default:
+        return (
+          <section className={wizardCardClass}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Blocco Corpo</p>
+                <h3 className="mt-2 text-xl font-semibold tracking-tight text-neutral-900">Scrivi il messaggio principale</h3>
+              </div>
+              <ModeSwitch value={composerMode} onChange={setComposerMode} />
+            </div>
+            <label className={`${labelClass} mt-5 block`}>
+              Contenuto
+              <textarea
+                className={`${inputClass} min-h-[280px]`}
+                value={campaignForm.body}
+                onChange={(event) => setCampaignForm((prev) => ({ ...prev, body: event.target.value }))}
+                placeholder="Scrivi qui il corpo della campagna."
+              />
+            </label>
+            <div className="mt-5">
+              <p className="text-sm font-semibold text-neutral-900">Variabili disponibili</p>
+              <div className="mt-3">
+                <VariableCloud variables={variables} />
+              </div>
+            </div>
+          </section>
+        );
+    }
+  };
+
+  const renderTemplateSectionEditor = () => {
+    const disabled = templateForm.is_system;
+    switch (selectedTemplateSection) {
+      case "hero":
+        return (
+          <section className={wizardCardClass}>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Blocco Hero</p>
+            <div className="mt-5 grid gap-5 md:grid-cols-2">
+              <label className={labelClass}>
+                Kicker
+                <input className={inputClass} disabled={disabled} value={templateForm.design.hero_kicker || ""} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, hero_kicker: event.target.value } }))} />
+              </label>
+              <label className={labelClass}>
+                Titolo hero
+                <input className={inputClass} disabled={disabled} value={templateForm.design.hero_title || ""} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, hero_title: event.target.value } }))} />
+              </label>
+              <label className={labelClass}>
+                Hero image
+                <input className={inputClass} disabled={disabled} value={templateForm.design.hero_image_url || ""} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, hero_image_url: event.target.value } }))} />
+              </label>
+              <label className={labelClass}>
+                Immagine contenuto
+                <input className={inputClass} disabled={disabled} value={templateForm.design.content_image_url || ""} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, content_image_url: event.target.value } }))} />
+              </label>
+            </div>
+          </section>
+        );
+      case "cta":
+        return (
+          <section className={wizardCardClass}>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Blocco CTA</p>
+            <div className="mt-5 grid gap-5 md:grid-cols-2">
+              <label className={labelClass}>
+                Form collegato
+                <select className={inputClass} disabled={disabled} value={templateForm.linked_form_id ?? ""} onChange={(event) => setTemplateForm((prev) => ({ ...prev, linked_form_id: event.target.value ? Number(event.target.value) : null }))}>
+                  <option value="">Nessun form collegato</option>
+                  {activeForms.map((form) => (
+                    <option key={form.id} value={form.id}>{form.title}</option>
+                  ))}
+                </select>
+              </label>
+              <label className={labelClass}>
+                Etichetta CTA
+                <input className={inputClass} disabled={disabled} value={templateForm.design.cta_label || ""} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, cta_label: event.target.value } }))} />
+              </label>
+              <label className={labelClass}>
+                Link CTA
+                <input className={inputClass} disabled={disabled} value={templateForm.design.cta_url || ""} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, cta_url: event.target.value } }))} />
+              </label>
+              <label className={labelClass}>
+                Nota CTA
+                <textarea className={`${inputClass} min-h-[96px]`} disabled={disabled} value={templateForm.design.cta_note || ""} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, cta_note: event.target.value } }))} />
+              </label>
+            </div>
+          </section>
+        );
+      case "highlight":
+        return (
+          <section className={wizardCardClass}>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Blocco Highlight</p>
+            <textarea className={`${inputClass} mt-5 min-h-[180px]`} disabled={disabled} value={templateForm.design.highlight_box || ""} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, highlight_box: event.target.value } }))} />
+          </section>
+        );
+      case "event":
+        return (
+          <section className={wizardCardClass}>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Blocco Dettagli</p>
+            <textarea className={`${inputClass} mt-5 min-h-[180px]`} disabled={disabled} value={templateForm.design.event_details || ""} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, event_details: event.target.value } }))} />
+          </section>
+        );
+      case "signature":
+        return (
+          <section className={wizardCardClass}>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Blocco Firma</p>
+            <div className="mt-5 grid gap-5 md:grid-cols-2">
+              <label className={labelClass}>
+                Firma libera
+                <textarea className={`${inputClass} min-h-[140px]`} disabled={disabled} value={templateForm.design.signature || ""} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, signature: event.target.value } }))} />
+              </label>
+              <div className="grid gap-5">
+                <label className={labelClass}>
+                  Nome firma
+                  <input className={inputClass} disabled={disabled} value={templateForm.design.signature_name || ""} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, signature_name: event.target.value } }))} />
+                </label>
+                <label className={labelClass}>
+                  Ruolo firma
+                  <input className={inputClass} disabled={disabled} value={templateForm.design.signature_role || ""} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, signature_role: event.target.value } }))} />
+                </label>
+              </div>
+            </div>
+          </section>
+        );
+      case "final_note":
+        return (
+          <section className={wizardCardClass}>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Blocco Nota finale</p>
+            <textarea className={`${inputClass} mt-5 min-h-[140px]`} disabled={disabled} value={templateForm.design.final_note || ""} onChange={(event) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, final_note: event.target.value } }))} />
+          </section>
+        );
+      case "body":
+      default:
+        return (
+          <section className={wizardCardClass}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Blocco Corpo</p>
+                <h3 className="mt-2 text-xl font-semibold tracking-tight text-neutral-900">Scrivi il template riusabile</h3>
+              </div>
+              <ModeSwitch value={templateMode} onChange={setTemplateMode} />
+            </div>
+            <label className={`${labelClass} mt-5 block`}>
+              Contenuto
+              <textarea className={`${inputClass} min-h-[280px]`} disabled={disabled} value={templateForm.body} onChange={(event) => setTemplateForm((prev) => ({ ...prev, body: event.target.value }))} />
+            </label>
+            <div className="mt-5">
+              <p className="text-sm font-semibold text-neutral-900">Variabili disponibili</p>
+              <div className="mt-3"><VariableCloud variables={variables} /></div>
+            </div>
+          </section>
+        );
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -620,160 +1284,230 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
     );
   }
 
+  const deleteTemplateModal = (
+    <ConfirmModal
+      open={templatePendingDelete != null}
+      title="Eliminare il modello?"
+      description={
+        templatePendingDelete
+          ? `Il modello "${templatePendingDelete.name}" verra rimosso definitivamente dalla libreria.`
+          : ""
+      }
+      confirmLabel="Elimina modello"
+      tone="danger"
+      confirmState={deletingTemplate ? "loading" : "idle"}
+      onClose={() => {
+        if (!deletingTemplate) setTemplatePendingDelete(null);
+      }}
+      onConfirm={() => void handleDeleteTemplate()}
+    />
+  );
+
   const libraryView = (
-    <div className="space-y-8">
-      <section className="grid gap-6 rounded-[2rem] border border-neutral-200 bg-gradient-to-br from-brand/10 via-white to-white p-6 lg:grid-cols-[1.15fr_0.85fr]">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand">Studio Comunicazioni</p>
-          <h2 className="mt-3 max-w-3xl text-3xl font-bold tracking-tight text-neutral-900">
-            Campagne e modelli respirano meglio quando editing e libreria non competono nello stesso pannello.
-          </h2>
-          <p className="mt-4 max-w-2xl text-sm leading-7 text-neutral-600">
-            La libreria resta separata dal lavoro di scrittura. Quando apri un modello o una nuova campagna, entri in un editor a pagina intera con sezioni ampie, preview stabile e collegamenti ai form chiari.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <button className="btn-primary" type="button" disabled={communicationsLocked} onClick={openNewCampaignEditor}>
-              Nuova campagna
-            </button>
-            <button className="btn-secondary" type="button" disabled={communicationsLocked} onClick={() => void openTemplateEditor(null)}>
-              Nuovo modello
-            </button>
-          </div>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <StatChip label="Campagne" value={campaigns.length} hint="Storico completo di bozze, invii e programmati." />
-          <StatChip label="Modelli" value={templates.length} hint="Template di sistema e personalizzati." />
-          <StatChip label="Form attivi" value={activeForms.length} hint="Origini collegate disponibili per CTA e automazioni." />
-          <StatChip label="Variabili" value={variables.length} hint="Placeholder cliccabili per personalizzare i contenuti." />
-        </div>
-      </section>
-
-      <div className="flex flex-wrap gap-3">
-        {([
-          { key: "campagne", label: "Campagne" },
-          { key: "modelli", label: "Modelli" },
-        ] as const).map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => setMainTab(tab.key)}
-            className={`rounded-[1.2rem] px-5 py-3 text-sm font-semibold transition ${
-              mainTab === tab.key
-                ? "bg-neutral-900 text-white"
-                : "border border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 hover:text-neutral-900"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {mainTab === "campagne" ? (
-        <section className={sectionCardClass}>
-          <div className="flex flex-col gap-3 border-b border-neutral-200 pb-5 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Library</p>
-              <h3 className="mt-2 text-2xl font-bold tracking-tight text-neutral-900">Campagne e bozze</h3>
-              <p className="mt-2 text-sm text-neutral-600">Seleziona una campagna per vedere il dettaglio o apri un nuovo editor full-width.</p>
+    <>
+      <div className="space-y-8">
+        <section className="grid gap-6 rounded-[2rem] border border-neutral-200 bg-gradient-to-br from-brand/10 via-white to-white p-6 lg:grid-cols-[1.15fr_0.85fr]">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand">Studio Comunicazioni</p>
+            <h2 className="mt-3 max-w-3xl text-3xl font-bold tracking-tight text-neutral-900">
+              Campagne e modelli tornano in un flusso guidato, con preview leggibile e zero pannelli soffocati.
+            </h2>
+            <p className="mt-4 max-w-2xl text-sm leading-7 text-neutral-600">
+              La libreria resta ordinata. Quando apri una campagna o un modello entri in un wizard ampio, con messaggio costruito per blocchi, drag and drop e anteprima finale davvero utile.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button className="btn-primary" type="button" disabled={communicationsLocked} onClick={openNewCampaignEditor}>
+                Nuova campagna
+              </button>
+              <button className="btn-secondary" type="button" disabled={communicationsLocked} onClick={() => void openTemplateEditor(null)}>
+                Nuovo modello
+              </button>
             </div>
-            <button className="btn-primary" type="button" disabled={communicationsLocked} onClick={openNewCampaignEditor}>
-              Crea campagna
-            </button>
           </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <StatChip label="Campagne" value={campaigns.length} hint="Bozze, programmati e invii nello stesso storico." />
+            <StatChip label="Modelli" value={templates.length} hint="Template sistema e personalizzati della tua associazione." />
+            <StatChip label="Form attivi" value={activeForms.length} hint="CTA collegabili direttamente dentro il wizard." />
+            <StatChip label="Variabili" value={variables.length} hint="Placeholder sempre visibili durante la scrittura." />
+          </div>
+        </section>
 
-          <div className="mt-6 overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-neutral-200 text-neutral-500">
-                <tr>
-                  <th className="px-2 py-3 font-semibold">Campagna</th>
-                  <th className="px-2 py-3 font-semibold">Pubblico</th>
-                  <th className="px-2 py-3 font-semibold">Stato</th>
-                  <th className="px-2 py-3 font-semibold">Ultimo passaggio</th>
-                  <th className="px-2 py-3 font-semibold">Azioni</th>
-                </tr>
-              </thead>
-              <tbody>
-                {campaigns.length === 0 ? (
+        <div className="flex flex-wrap gap-3">
+          {([
+            { key: "campagne", label: "Campagne" },
+            { key: "modelli", label: "Modelli" },
+          ] as const).map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setMainTab(tab.key)}
+              className={`rounded-[1.2rem] px-5 py-3 text-sm font-semibold transition ${
+                mainTab === tab.key
+                  ? "bg-neutral-900 text-white"
+                  : "border border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 hover:text-neutral-900"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {mainTab === "campagne" ? (
+          <section className={sectionCardClass}>
+            <div className="flex flex-col gap-3 border-b border-neutral-200 pb-5 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Library</p>
+                <h3 className="mt-2 text-2xl font-bold tracking-tight text-neutral-900">Campagne e bozze</h3>
+                <p className="mt-2 text-sm text-neutral-600">Apri il dettaglio di una campagna esistente oppure riparti dal wizard per crearne una nuova.</p>
+              </div>
+              <button className="btn-primary" type="button" disabled={communicationsLocked} onClick={openNewCampaignEditor}>
+                Crea campagna
+              </button>
+            </div>
+
+            <div className="mt-6 overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="border-b border-neutral-200 text-neutral-500">
                   <tr>
-                    <td colSpan={5} className="px-2 py-12 text-center text-neutral-500">
-                      Nessuna campagna disponibile. Crea la prima bozza dal nuovo editor a pagina intera.
-                    </td>
+                    <th className="px-2 py-3 font-semibold">Campagna</th>
+                    <th className="px-2 py-3 font-semibold">Pubblico</th>
+                    <th className="px-2 py-3 font-semibold">Stato</th>
+                    <th className="px-2 py-3 font-semibold">Ultimo passaggio</th>
+                    <th className="px-2 py-3 font-semibold">Azioni</th>
                   </tr>
-                ) : (
-                  campaigns.map((campaign) => (
-                    <tr key={campaign.id} className="border-b border-neutral-100 last:border-b-0">
-                      <td className="px-2 py-4">
-                        <p className="font-semibold text-neutral-900">{campaign.name || campaign.subject}</p>
-                        <p className="mt-1 text-xs text-neutral-500">{campaign.subject}</p>
-                      </td>
-                      <td className="px-2 py-4 text-neutral-600">{campaign.target_summary}</td>
-                      <td className="px-2 py-4">
-                        <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-700">
-                          {statusLabel(campaign.status)}
-                        </span>
-                      </td>
-                      <td className="px-2 py-4 text-neutral-600">{formatDateTime(campaign.sent_at || campaign.scheduled_at || campaign.created_at)}</td>
-                      <td className="px-2 py-4">
-                        <button
-                          type="button"
-                          className="rounded-full border border-neutral-200 px-3 py-1.5 text-xs font-semibold text-neutral-700 transition hover:border-neutral-300 hover:text-neutral-900"
-                          onClick={() => void openCampaignDetail(campaign.id)}
-                        >
-                          Apri dettaglio
-                        </button>
+                </thead>
+                <tbody>
+                  {campaigns.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-2 py-12 text-center text-neutral-500">
+                        Nessuna campagna disponibile. Il wizard ti guida da brief a invio finale senza appesantire la libreria.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      ) : (
-        <section className={sectionCardClass}>
-          <div className="flex flex-col gap-3 border-b border-neutral-200 pb-5 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Library</p>
-              <h3 className="mt-2 text-2xl font-bold tracking-tight text-neutral-900">Modelli salvati</h3>
-              <p className="mt-2 text-sm text-neutral-600">Ogni modello apre un editor dedicato, senza comprimere branding, contenuto e collegamenti.</p>
+                  ) : (
+                    campaigns.map((campaign) => (
+                      <tr key={campaign.id} className="border-b border-neutral-100 last:border-b-0">
+                        <td className="px-2 py-4">
+                          <p className="font-semibold text-neutral-900">{campaign.name || campaign.subject}</p>
+                          <p className="mt-1 text-xs text-neutral-500">{campaign.subject}</p>
+                        </td>
+                        <td className="px-2 py-4 text-neutral-600">{campaign.target_summary}</td>
+                        <td className="px-2 py-4">
+                          <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-700">
+                            {statusLabel(campaign.status)}
+                          </span>
+                        </td>
+                        <td className="px-2 py-4 text-neutral-600">{formatDateTime(campaign.sent_at || campaign.scheduled_at || campaign.created_at)}</td>
+                        <td className="px-2 py-4">
+                          <button
+                            type="button"
+                            className="rounded-full border border-neutral-200 px-3 py-1.5 text-xs font-semibold text-neutral-700 transition hover:border-neutral-300 hover:text-neutral-900"
+                            onClick={() => void openCampaignDetail(campaign.id)}
+                          >
+                            Apri dettaglio
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
-            <button className="btn-primary" type="button" disabled={communicationsLocked} onClick={() => void openTemplateEditor(null)}>
-              Crea modello
-            </button>
-          </div>
-
-          <div className="mt-6 grid gap-4 lg:grid-cols-2">
-            {templates.length === 0 ? (
-              <div className="rounded-[1.5rem] border border-dashed border-neutral-200 bg-neutral-50 p-8 text-center text-sm text-neutral-500">
-                Nessun modello creato. Apri il nuovo editor per preparare template riusabili per campagne, reminder o inviti.
+          </section>
+        ) : (
+          <section className={sectionCardClass}>
+            <div className="flex flex-col gap-3 border-b border-neutral-200 pb-5 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Library</p>
+                <h3 className="mt-2 text-2xl font-bold tracking-tight text-neutral-900">Modelli salvati</h3>
+                <p className="mt-2 text-sm text-neutral-600">Preview piu ampia, azioni immediate e un wizard piu corto per creare o correggere i modelli.</p>
               </div>
-            ) : (
-              templates.map((template) => (
-                <button
-                  key={template.id}
-                  type="button"
-                  onClick={() => void openTemplateEditor(template.id)}
-                  className="rounded-[1.5rem] border border-neutral-200 bg-white p-5 text-left transition hover:border-neutral-300 hover:shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-neutral-900">{template.name}</p>
-                      <p className="mt-1 text-xs text-neutral-500">
-                        {template.is_system ? "Template di sistema" : "Template associazione"}{template.category ? ` • ${template.category}` : ""}
-                      </p>
+              <button className="btn-primary" type="button" disabled={communicationsLocked} onClick={() => void openTemplateEditor(null)}>
+                Crea modello
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-5 xl:grid-cols-2">
+              {templates.length === 0 ? (
+                <div className="rounded-[1.5rem] border border-dashed border-neutral-200 bg-neutral-50 p-8 text-center text-sm text-neutral-500">
+                  Nessun modello creato. Apri il wizard breve e prepara un template riusabile per campagne, reminder o inviti.
+                </div>
+              ) : (
+                templates.map((template) => (
+                  <article key={template.id} className="rounded-[1.7rem] border border-neutral-200 bg-white p-5 shadow-[0_18px_40px_rgba(15,23,42,0.04)]">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-lg font-semibold text-neutral-900">{template.name}</p>
+                          <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-700">
+                            {template.is_active ? "Attivo" : "Archiviato"}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-neutral-500">
+                          {template.is_system ? "Template di sistema" : "Template associazione"}
+                          {template.category ? ` • ${template.category}` : ""}
+                          {template.linked_form?.title ? ` • ${template.linked_form.title}` : ""}
+                        </p>
+                      </div>
+                      {!template.is_system ? (
+                        <button type="button" className="btn-ghost text-red-600 hover:text-red-700" onClick={() => setTemplatePendingDelete(template)}>
+                          Elimina
+                        </button>
+                      ) : null}
                     </div>
-                    <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-700">
-                      {template.is_active ? "Attivo" : "Archiviato"}
-                    </span>
-                  </div>
-                  <p className="mt-4 line-clamp-2 text-sm leading-6 text-neutral-600">{template.subject}</p>
-                </button>
-              ))
-            )}
-          </div>
-        </section>
-      )}
-    </div>
+
+                    <div className="mt-5 rounded-[1.5rem] border border-neutral-200 bg-[#f7f4ee] p-4">
+                      <div className="mx-auto max-w-[720px] rounded-[1.35rem] border border-neutral-200 bg-white p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
+                        <div className="flex items-center justify-between gap-3 border-b border-neutral-100 pb-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-neutral-900">{template.subject || "Oggetto non impostato"}</p>
+                            <p className="mt-1 text-xs uppercase tracking-[0.14em] text-neutral-500">
+                              {template.design.style_preset || "istituzionale"} · {template.design.font_preset || "classic"}
+                            </p>
+                          </div>
+                          <span className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-600">
+                            Preview
+                          </span>
+                        </div>
+                        <div className="mt-4 space-y-3">
+                          <div className="rounded-[1rem] bg-neutral-50 px-4 py-3">
+                            <p className="text-xs font-bold uppercase tracking-[0.16em] text-neutral-500">
+                              {template.design.hero_kicker || "Hero"}
+                            </p>
+                            <p className="mt-2 text-lg font-semibold leading-7 text-neutral-900">
+                              {template.design.hero_title || template.subject || "Titolo del modello"}
+                            </p>
+                          </div>
+                          <div className="line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-neutral-600">
+                            {template.body_text || template.body_html || "Nessun contenuto disponibile."}
+                          </div>
+                          {template.design.cta_label ? (
+                            <div className="inline-flex rounded-full bg-neutral-900 px-4 py-2 text-xs font-semibold text-white">
+                              {template.design.cta_label}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 flex flex-wrap gap-3">
+                      <button className="btn-primary" type="button" onClick={() => void openTemplateEditor(template.id)}>
+                        Apri wizard
+                      </button>
+                      {!template.is_system ? (
+                        <button className="btn-secondary" type="button" onClick={() => setTemplatePendingDelete(template)}>
+                          Elimina
+                        </button>
+                      ) : null}
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
+        )}
+      </div>
+      {deleteTemplateModal}
+    </>
   );
 
   if (screen.type === "campaign-detail") {
@@ -850,30 +1584,48 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
   }
 
   if (screen.type === "campaign-editor") {
+    const campaignStepIndex = campaignWizardSteps.findIndex((step) => step.key === campaignStep);
     return (
       <div className="-mx-6 md:-mx-8">
         <EditorHeader
           title={campaignForm.name.trim() || "Nuova campagna"}
-          subtitle="Editor a pagina intera per definire contenuto, targeting, collegamento al form e branding senza comprimere i blocchi di personalizzazione."
-          badge={campaignForm.scheduled_at ? "Programmazione" : "Bozza"}
+          subtitle="Wizard campagne ripristinato: brief, messaggio con drag and drop, destinatari e review finale."
+          badge={campaignForm.scheduled_at ? "Programmazione" : "Wizard campagna"}
           onBack={() => setScreen({ type: "library" })}
           actions={
             <>
-              <button className="btn-secondary" type="button" disabled={savingCampaign} onClick={() => void saveCampaign(false, false)}>
-                Salva bozza
-              </button>
-              <button className="btn-secondary" type="button" disabled={savingCampaign} onClick={() => void saveCampaign(false, true)}>
-                Programma
-              </button>
-              <button className="btn-primary" type="button" disabled={savingCampaign || communicationsLocked} onClick={() => void saveCampaign(true, false)}>
-                Invia ora
-              </button>
+              {campaignStepIndex > 0 ? (
+                <button className="btn-ghost" type="button" onClick={() => setCampaignStep(campaignWizardSteps[campaignStepIndex - 1].key)}>
+                  Indietro
+                </button>
+              ) : null}
+              {campaignStepIndex < campaignWizardSteps.length - 1 ? (
+                <button className="btn-secondary" type="button" onClick={() => setCampaignStep(campaignWizardSteps[campaignStepIndex + 1].key)}>
+                  Avanti
+                </button>
+              ) : (
+                <>
+                  <button className="btn-secondary" type="button" disabled={savingCampaign} onClick={() => void saveCampaign(false, false)}>
+                    Salva bozza
+                  </button>
+                  <button className="btn-secondary" type="button" disabled={savingCampaign} onClick={() => void saveCampaign(false, true)}>
+                    Programma
+                  </button>
+                  <button className="btn-primary" type="button" disabled={savingCampaign || communicationsLocked} onClick={() => void saveCampaign(true, false)}>
+                    Invia ora
+                  </button>
+                </>
+              )}
             </>
           }
         />
         <div className="px-4 py-6 md:px-8">
+          <div className="mb-6">
+            <StepRail steps={campaignWizardSteps} active={campaignStep} onSelect={setCampaignStep} />
+          </div>
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.95fr)]">
             <div className="space-y-6">
+              {campaignStep === "brief" ? (
               <section className={sectionCardClass}>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Basic Info</p>
                 <div className="mt-5 grid gap-5 md:grid-cols-2">
@@ -899,7 +1651,23 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                   </label>
                 </div>
               </section>
+              ) : null}
 
+              {campaignStep === "message" ? (
+                <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+                  <SectionPlanner
+                    order={campaignSectionOrder}
+                    selected={selectedCampaignSection}
+                    onSelect={setSelectedCampaignSection}
+                    onChange={(next) => setCampaignForm((prev) => ({ ...prev, design: { ...prev.design, section_order: next } }))}
+                    title="Step 2 · Messaggio"
+                    description="Riordina i blocchi come nel builder form e compila una sezione per volta."
+                  />
+                  {renderCampaignSectionEditor()}
+                </div>
+              ) : null}
+
+              {campaignStep === "audience" ? (
               <section className={sectionCardClass}>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Linking / Targeting</p>
                 <div className="mt-5 grid gap-5 md:grid-cols-2">
@@ -992,14 +1760,28 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                   )}
                 </div>
               </section>
+              ) : null}
 
+              {campaignStep === "message" ? (
               <section className={sectionCardClass}>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Variabili disponibili</p>
                 <p className="mt-2 text-sm text-neutral-600">Usa i placeholder direttamente nel contenuto per personalizzare titolo, testo e CTA.</p>
                 <div className="mt-4"><VariableCloud variables={variables} /></div>
               </section>
+              ) : null}
             </div>
             <aside className="space-y-6 xl:sticky xl:top-28 xl:self-start">
+              {campaignStep === "audience" ? (
+                <section className={sectionCardClass}>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Stima invio</p>
+                  <div className="mt-4 grid gap-3">
+                    <StatChip label="Stimati" value={estimate ?? "-"} hint="Conteggio previsto del pubblico scelto." />
+                    <StatChip label="Form collegato" value={selectedCampaignLinkedForm?.title || "Nessuno"} hint="La CTA puo aprire questo form." />
+                  </div>
+                </section>
+              ) : null}
+
+              {campaignStep === "review" ? (
               <section className={sectionCardClass}>
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -1047,7 +1829,9 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                   </label>
                 </div>
               </section>
+              ) : null}
 
+              {campaignStep === "review" ? (
               <section className={sectionCardClass}>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Branding</p>
                 <div className="mt-4 space-y-4">
@@ -1077,7 +1861,9 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                   </label>
                 </div>
               </section>
+              ) : null}
 
+              {campaignStep === "review" ? (
               <section className={sectionCardClass}>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Optional Content Blocks</p>
                 <div className="mt-4 space-y-4">
@@ -1108,7 +1894,9 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                   </details>
                 </div>
               </section>
+              ) : null}
 
+              {campaignStep === "review" ? (
               <section className={sectionCardClass}>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Sticky Preview</p>
                 <div className="mt-4 rounded-[1.4rem] border border-neutral-200 bg-neutral-50 p-4">
@@ -1128,6 +1916,7 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                   </div>
                 </div>
               </section>
+              ) : null}
             </aside>
           </div>
         </div>
@@ -1136,26 +1925,46 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
   }
 
   if (screen.type === "template-editor") {
+    const templateStepIndex = templateWizardSteps.findIndex((step) => step.key === templateStep);
     return (
+      <>
       <div className="-mx-6 md:-mx-8">
         <EditorHeader
           title={templateForm.id ? templateForm.name || "Modello" : "Nuovo modello"}
-          subtitle="Editor full-page per i modelli riusabili: contenuto, form collegato, preset visuali e blocchi opzionali restano nello stesso flusso verticale."
+          subtitle="Wizard modelli piu corto: essentials, messaggio e review finale con preview ampia."
           badge={templateForm.is_system ? "Sistema" : templateForm.is_active ? "Attivo" : "Archiviato"}
           onBack={() => setScreen({ type: "library" })}
           actions={
             <>
-              <button className="btn-secondary" type="button" onClick={() => void handleDuplicateTemplate()} disabled={templateForm.id == null}>
-                Duplica
-              </button>
-              {!templateForm.is_system ? (
-                <button className="btn-secondary" type="button" onClick={() => void handleArchiveTemplate()} disabled={templateForm.id == null}>
-                  Archivia
+              {templateStepIndex > 0 ? (
+                <button className="btn-ghost" type="button" onClick={() => setTemplateStep(templateWizardSteps[templateStepIndex - 1].key)}>
+                  Indietro
                 </button>
               ) : null}
-              <button className="btn-primary" type="button" disabled={savingTemplate || templateForm.is_system} onClick={() => void saveTemplate()}>
-                {templateForm.id ? "Salva modello" : "Crea modello"}
-              </button>
+              {templateStepIndex < templateWizardSteps.length - 1 ? (
+                <button className="btn-secondary" type="button" onClick={() => setTemplateStep(templateWizardSteps[templateStepIndex + 1].key)}>
+                  Avanti
+                </button>
+              ) : (
+                <>
+                  <button className="btn-secondary" type="button" onClick={() => void handleDuplicateTemplate()} disabled={templateForm.id == null}>
+                    Duplica
+                  </button>
+                  {!templateForm.is_system ? (
+                    <>
+                      <button className="btn-secondary" type="button" onClick={() => void handleArchiveTemplate()} disabled={templateForm.id == null}>
+                        Archivia
+                      </button>
+                      <button className="btn-secondary text-red-600 hover:text-red-700" type="button" onClick={() => setTemplatePendingDelete(templates.find((template) => template.id === templateForm.id) || null)} disabled={templateForm.id == null}>
+                        Elimina
+                      </button>
+                    </>
+                  ) : null}
+                  <button className="btn-primary" type="button" disabled={savingTemplate || templateForm.is_system} onClick={() => void saveTemplate()}>
+                    {templateForm.id ? "Salva modello" : "Crea modello"}
+                  </button>
+                </>
+              )}
             </>
           }
         />
@@ -1163,8 +1972,13 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
           {detailLoading ? (
             <Skeleton className="h-[720px] w-full rounded-[1.8rem]" />
           ) : (
+            <>
+            <div className="mb-6">
+              <StepRail steps={templateWizardSteps} active={templateStep} onSelect={setTemplateStep} />
+            </div>
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.95fr)]">
               <div className="space-y-6">
+                {templateStep === "essentials" ? (
                 <section className={sectionCardClass}>
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Basic Info</p>
                   <div className="mt-5 grid gap-5 md:grid-cols-2">
@@ -1190,7 +2004,9 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                     </label>
                   </div>
                 </section>
+                ) : null}
 
+                {templateStep === "essentials" ? (
                 <section className={sectionCardClass}>
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Linking / Preview</p>
                   <div className="mt-5 grid gap-5 md:grid-cols-2">
@@ -1217,15 +2033,33 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                     </label>
                   </div>
                 </section>
+                ) : null}
 
+                {templateStep === "message" ? (
+                  <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+                    <SectionPlanner
+                      order={templateSectionOrder}
+                      selected={selectedTemplateSection}
+                      onSelect={setSelectedTemplateSection}
+                      onChange={(next) => setTemplateForm((prev) => ({ ...prev, design: { ...prev.design, section_order: next } }))}
+                      title="Step 2 · Messaggio"
+                      description="Riordina i blocchi del modello con drag and drop e modifica una sezione per volta."
+                    />
+                    {renderTemplateSectionEditor()}
+                  </div>
+                ) : null}
+
+                {templateStep !== "essentials" ? (
                 <section className={sectionCardClass}>
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Variabili disponibili</p>
                   <p className="mt-2 text-sm text-neutral-600">I placeholder restano visibili nello stesso flusso di editing, senza pannelli stretti laterali.</p>
                   <div className="mt-4"><VariableCloud variables={variables} /></div>
                 </section>
+                ) : null}
               </div>
 
               <aside className="space-y-6 xl:sticky xl:top-28 xl:self-start">
+                {templateStep === "review" ? (
                 <section className={sectionCardClass}>
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -1274,7 +2108,9 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                     </label>
                   </div>
                 </section>
+                ) : null}
 
+                {templateStep === "review" ? (
                 <section className={sectionCardClass}>
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Branding & Blocks</p>
                   <div className="mt-4 space-y-4">
@@ -1316,7 +2152,9 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                     </details>
                   </div>
                 </section>
+                ) : null}
 
+                {templateStep === "review" ? (
                 <section className={sectionCardClass}>
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Sticky Preview</p>
                   <div className="mt-4 rounded-[1.4rem] border border-neutral-200 bg-neutral-50 p-4">
@@ -1333,11 +2171,28 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                     </div>
                   </div>
                 </section>
+                ) : null}
               </aside>
             </div>
+            {templateStep === "review" ? (
+              <div className="mt-6">
+                <PreviewCanvas
+                  eyebrow="Anteprima modello"
+                  title={templateForm.name.trim() || "Nuovo modello"}
+                  subject={templatePreview?.subject || templateForm.subject || "Compila oggetto e contenuto per attivare la preview."}
+                  linkedFormLabel={selectedTemplateLinkedForm ? `Collegato al form ${selectedTemplateLinkedForm.title}` : "Nessun form collegato"}
+                  previewHtml={templatePreview?.body_html}
+                  fallbackText={templateForm.body || "Compila oggetto e contenuto per vedere l'anteprima."}
+                  sidebarNote={<div className="rounded-[1.5rem] border border-neutral-200 bg-[#fbfaf6] p-4"><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-500">Stato modello</p><p className="mt-3 text-sm leading-6 text-neutral-600">{templateForm.is_system ? "Template di sistema: puoi ispezionarlo ma non salvarne modifiche." : templateForm.is_active ? "Modello attivo e pronto per essere riusato nelle campagne." : "Modello archiviato: puoi riattivarlo o duplicarlo."}</p></div>}
+                />
+              </div>
+            ) : null}
+            </>
           )}
         </div>
       </div>
+      {deleteTemplateModal}
+      </>
     );
   }
 

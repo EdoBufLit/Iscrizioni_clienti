@@ -2684,6 +2684,31 @@ def archive_communication_template(
     }
 
 
+@router.delete("/communications/templates/{template_id}")
+def delete_communication_template(
+    template_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    _require_active_communications_module(admin.organization)
+    template = _get_email_template_for_admin(db, admin=admin, template_id=template_id)
+    if template.is_system:
+        raise HTTPException(
+            status_code=409,
+            detail="I template di sistema non possono essere eliminati.",
+        )
+    if template.association_id != admin.org_id:
+        raise HTTPException(status_code=404, detail="Template non trovato.")
+
+    db.delete(template)
+    db.commit()
+    return {"ok": True}
+
+
 @router.get("/communications/whatsapp/automations")
 def list_whatsapp_automations(
     request: Request,

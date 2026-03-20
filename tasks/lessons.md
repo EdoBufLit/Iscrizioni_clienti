@@ -159,3 +159,5 @@
 - Se Alembic segnala multiple heads, verificare sempre gli id reali con 'alembic heads' e 'alembic history --verbose' e creare una merge migration pura nel repo senza toccare le revisioni esistenti.
 
 - Nei deploy su checkout persistente del server, non assumere mai working tree pulito: prima di git checkout bisogna gestire modifiche locali e file untracked in modo robusto (stash nominato o strategia equivalente), altrimenti il push Git va a buon fine ma il deploy fallisce durante lo switch di branch.
+
+- Se il cliente segnala che una UI rimossa gli piaceva, non sostituirla con un editor piu povero solo per semplificare il layout: bisogna ripristinare il flusso apprezzato oppure offrire subito un wizard equivalente o migliore, mantenendo le affordance chiave.

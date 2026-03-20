@@ -3689,3 +3689,29 @@ pm --prefix frontend run build.
 - [ ] Implementare endpoint di review submission con sync booking collegato, audit trail e dispatch WhatsApp idempotente
 - [ ] Aggiornare API/frontend org admin per gestione richieste in `OrgAdminForms` e summary richiesta in `OrgAdminBookings`
 - [ ] Eseguire test/backend build, poi deploy/migration su Hetzner e smoke check live dell'area org admin
+## Plan (Comunicazioni wizard campagne/modelli UX refresh - Mar 20, 2026)
+- [ ] Analizzare `MessagesHub` e i contratti API esistenti per campagne, modelli, preview e lifecycle template
+- [ ] Reintrodurre un wizard campagne progressivo con migliore gerarchia, step chiari e drag & drop dei blocchi messaggio
+- [ ] Creare un wizard modelli più breve e pulito, ispirato al flusso iscrizione ma semplificato e focalizzato sulla preview
+- [ ] Ampliare l'anteprima modelli/campagne in un canvas serio e non in un box compresso laterale
+- [ ] Aggiungere l'eliminazione reale dei modelli non di sistema end-to-end (API + frontend)
+- [ ] Eseguire `npm --prefix frontend run build` e documentare review finale
+
+## Plan (Comunicazioni wizard campagne/modelli UX refresh - Mar 20, 2026)
+- [x] Analizzare MessagesHub e il flusso reale campagne/modelli per capire cosa era stato perso nel refactor Comunicazioni
+- [x] Ripristinare un wizard campagne con step guidati e drag & drop dei blocchi messaggio
+- [x] Introdurre un wizard modelli piu corto con preview ampia e leggibile
+- [x] Migliorare la libreria modelli con card preview piu utili e azione elimina
+- [x] Completare delete template end-to-end su API + frontend senza toccare i template di sistema
+- [x] Rieseguire build frontend e verifiche backend toccate
+
+## Review (Comunicazioni wizard campagne/modelli UX refresh - Mar 20, 2026)
+- In [frontend/src/pages/org-admin/components/communications/MessagesHub.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\components\communications\MessagesHub.tsx) ho reintrodotto il wizard campagne con step Brief / Messaggio / Destinatari / Review, ripristinando un flusso guidato invece dell'editor lungo lineare.
+- Il passo Messaggio usa ora drag & drop reale sui blocchi email (hero, ody, cta, highlight, event, signature, inal_note) tramite dnd-kit, con ordine persistito in design.section_order e riflesso nella preview/render finale.
+- Sempre in [MessagesHub.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\components\communications\MessagesHub.tsx) ho introdotto un wizard modelli piu corto (Essentials / Messaggio / Review) con preview finale ampia tramite PreviewCanvas, al posto della preview compressa nel box piccolo laterale.
+- La libreria Modelli ora mostra card piu leggibili con mini-preview ampia del subject/hero/body/CTA e azioni dirette Apri wizard ed Elimina per i template non di sistema.
+- In [frontend/src/lib/api.ts](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\lib\api.ts) ho esteso OrgAdminEmailDesign con section_order e aggiunto il client deleteOrgAdminEmailTemplate(...).
+- In [app/services/email_templates.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\services\email_templates.py) il renderer email usa ora davvero section_order, quindi il drag & drop non e solo cosmetico ma cambia l'ordine finale del messaggio.
+- In [app/routes/org_admin.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\routes\org_admin.py) ho aggiunto DELETE /api/org-admin/communications/templates/{template_id} con protezione per i template di sistema.
+- Verifiche completate: python -m py_compile app/routes/org_admin.py app/services/email_templates.py, 
+pm --prefix frontend run build.

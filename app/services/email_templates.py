@@ -113,7 +113,26 @@ DEFAULT_EMAIL_DESIGN = {
     "hero_title": "",
     "highlight_box": "",
     "signature": "",
+    "section_order": [
+        "hero",
+        "body",
+        "cta",
+        "highlight",
+        "event",
+        "signature",
+        "final_note",
+    ],
 }
+
+EMAIL_SECTION_KEYS = (
+    "hero",
+    "body",
+    "cta",
+    "highlight",
+    "event",
+    "signature",
+    "final_note",
+)
 
 
 def plain_text_to_html(value: str) -> str:
@@ -288,6 +307,15 @@ def normalize_email_design(value: Any) -> dict[str, Any]:
     button_style = (_normalize_text(value.get("button_style")) or DEFAULT_EMAIL_DESIGN["button_style"]).lower()
     if button_style not in {"pill", "morbido", "solido"}:
         button_style = DEFAULT_EMAIL_DESIGN["button_style"]
+    raw_section_order = value.get("section_order")
+    section_order: list[str] = []
+    if isinstance(raw_section_order, list):
+        for item in raw_section_order:
+            normalized_item = _normalize_text(item)
+            if normalized_item in EMAIL_SECTION_KEYS and normalized_item not in section_order:
+                section_order.append(normalized_item)
+    if "body" not in section_order:
+        section_order.insert(0, "body")
     return {
         "accent_color": _normalize_color(value.get("accent_color")) or DEFAULT_EMAIL_DESIGN["accent_color"],
         "button_color": _normalize_color(value.get("button_color")) or _normalize_color(value.get("accent_color")) or DEFAULT_EMAIL_DESIGN["button_color"],
@@ -321,6 +349,7 @@ def normalize_email_design(value: Any) -> dict[str, Any]:
         "hero_title": (_normalize_text(value.get("hero_title")) or "")[:200],
         "highlight_box": (_normalize_text(value.get("highlight_box")) or "")[:1000],
         "signature": (_normalize_text(value.get("signature")) or "")[:500],
+        "section_order": section_order,
     }
 
 
@@ -712,6 +741,20 @@ def decorate_rendered_email(
         if final_note
         else ""
     )
+    section_order = normalize_email_design({"section_order": resolved_design.get("section_order")}).get(
+        "section_order",
+        DEFAULT_EMAIL_DESIGN["section_order"],
+    )
+    section_html = {
+        "hero": f"{kicker_html}{title_html}{content_image_html}{secondary_image_html}",
+        "body": f"<div style=\"color:#0f172a;font-size:{font_styles['body_size']};line-height:1.7\">{body_html}</div>",
+        "cta": f"{note_html}{cta_html}",
+        "highlight": highlight_html,
+        "event": event_html,
+        "signature": signature_html,
+        "final_note": final_note_html,
+    }
+    ordered_sections = "".join(section_html[key] for key in section_order if section_html.get(key))
     wrapped_html = (
         f"<div style=\"margin:0;padding:24px;background:{layout_styles['outer_bg']};font-family:{font_styles['outer']}\">"
         f"<div style=\"max-width:640px;margin:0 auto;background:{layout_styles['card_bg']};border:1px solid {layout_styles['border']};"
@@ -719,10 +762,7 @@ def decorate_rendered_email(
         f"{hero_html}"
         f"<div style=\"padding:32px\">"
         f"<div style=\"display:flex;align-items:center;gap:16px;margin-bottom:24px\">{logo_html}{association_name_html}</div>"
-        f"{kicker_html}{title_html}"
-        f"{content_image_html}{secondary_image_html}{highlight_html}{event_html}"
-        f"<div style=\"color:#0f172a;font-size:{font_styles['body_size']};line-height:1.7\">{body_html}</div>"
-        f"{note_html}{cta_html}{signature_html}{final_note_html}"
+        f"{ordered_sections}"
         "</div></div></div>"
     )
     return RenderedTemplateContent(
