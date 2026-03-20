@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 .env
 data/uploads/
+data/videos/
 data/app.db
 *.log
 verification/
