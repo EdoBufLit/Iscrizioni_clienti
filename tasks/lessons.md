@@ -157,3 +157,5 @@
 - Nei wizard multi-step dentro un unico `form`, il submit finale non deve dipendere dal semplice cambio di step o dalla sostituzione del bottone sotto al cursore: la conferma conclusiva va protetta con un handler esplicito e non deve poter partire nello stesso click che porta all'ultimo step.
 
 - Se Alembic segnala multiple heads, verificare sempre gli id reali con 'alembic heads' e 'alembic history --verbose' e creare una merge migration pura nel repo senza toccare le revisioni esistenti.
+
+- Nei deploy su checkout persistente del server, non assumere mai working tree pulito: prima di git checkout bisogna gestire modifiche locali e file untracked in modo robusto (stash nominato o strategia equivalente), altrimenti il push Git va a buon fine ma il deploy fallisce durante lo switch di branch.
