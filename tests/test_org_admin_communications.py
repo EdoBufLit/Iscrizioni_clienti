@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import base64
 import uuid
 
 import pytest
@@ -202,6 +203,73 @@ def test_org_admin_template_library_seed_duplicate_preview_and_archive(client, d
     archive_res = client.post(f"/api/org-admin/communications/templates/{duplicated['id']}/archive")
     assert archive_res.status_code == 200, archive_res.text
     assert archive_res.json()["template"]["is_active"] is False
+
+
+def test_org_admin_builder_template_assets_and_campaign_from_template(client, db):
+    org, admin = _create_org_admin(db, communications_enabled=True)
+    _login_org_admin(client, db, admin.id)
+    png_bytes = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlH0n0AAAAASUVORK5CYII="
+    )
+
+    create_res = client.post(
+        "/api/org-admin/communications/templates",
+        json={
+            "name": "Reminder rinnovo builder",
+            "template_type": "renewal_reminder",
+            "category": "renewal_reminder",
+            "subject": "Rinnova {{nome_socio}}",
+            "compiled_html": "<div><strong>Ciao {{nome_socio}}</strong><p>Vai su {{link_iscrizione}}</p></div>",
+            "mjml_source": "<mjml><mj-body><mj-section><mj-column><mj-text>Ciao {{nome_socio}}</mj-text></mj-column></mj-section></mj-body></mjml>",
+            "grapesjs_project_json": {"pages": [{"id": "main"}]},
+            "editor_status": "ready",
+            "linked_form_id": None,
+        },
+    )
+    assert create_res.status_code == 201, create_res.text
+    created_template = create_res.json()["template"]
+    assert created_template["template_type"] == "renewal_reminder"
+    assert created_template["editor_status"] == "ready"
+    assert created_template["compiled_html"]
+    assert created_template["mjml_source"]
+    assert created_template["grapesjs_project_json"] == {"pages": [{"id": "main"}]}
+
+    detail_res = client.get(f"/api/org-admin/communications/templates/{created_template['id']}")
+    assert detail_res.status_code == 200, detail_res.text
+    assert detail_res.json()["template"]["compiled_html"]
+
+    upload_res = client.post(
+        "/api/org-admin/communications/assets",
+        data={"name": "Logo rinnovo"},
+        files={"file": ("logo.png", png_bytes, "image/png")},
+    )
+    assert upload_res.status_code == 201, upload_res.text
+    asset = upload_res.json()["asset"]
+    assert asset["association_id"] == org.id
+    assert asset["name"] == "Logo rinnovo"
+    assert asset["public_url"].startswith("/uploads/")
+
+    assets_res = client.get("/api/org-admin/communications/assets")
+    assert assets_res.status_code == 200, assets_res.text
+    assert any(item["id"] == asset["id"] for item in assets_res.json()["items"])
+
+    campaign_res = client.post(
+        "/api/org-admin/communications/campaigns/from-template",
+        json={
+            "template_id": created_template["id"],
+            "audience_type": "active_members",
+        },
+    )
+    assert campaign_res.status_code == 201, campaign_res.text
+    campaign = campaign_res.json()["campaign"]
+    assert campaign["source_template_id"] == created_template["id"]
+    assert campaign["compiled_html"]
+    assert campaign["mjml_source"]
+    assert campaign["editor_status"] == "draft"
+
+    delete_asset_res = client.delete(f"/api/org-admin/communications/assets/{asset['id']}")
+    assert delete_asset_res.status_code == 200, delete_asset_res.text
+    assert delete_asset_res.json()["deleted_asset_id"] == asset["id"]
 
 
 def test_org_admin_whatsapp_automations_create_list_and_update(client, db):

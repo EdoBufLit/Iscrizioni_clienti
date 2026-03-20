@@ -334,6 +334,11 @@ def create_campaign_draft(
     scheduled_at: datetime | None = None,
     design: dict[str, Any] | None = None,
     linked_form: Form | None = None,
+    source_template_id: int | None = None,
+    editor_status: str | None = None,
+    grapesjs_project_json: dict[str, Any] | None = None,
+    mjml_source: str | None = None,
+    compiled_html: str | None = None,
 ) -> EmailCampaign:
     normalized_subject = _normalize_text(subject)
     if normalized_subject is None:
@@ -355,7 +360,7 @@ def create_campaign_draft(
         )
 
     normalized_body_html, normalized_body_text = normalize_campaign_bodies(
-        body_html=body_html,
+        body_html=compiled_html or body_html,
         body_text=body_text,
     )
     normalized_scheduled_at = normalize_scheduled_at(scheduled_at)
@@ -363,10 +368,17 @@ def create_campaign_draft(
     campaign = EmailCampaign(
         association_id=organization.id,
         name=_normalize_text(name),
+        source_template_id=source_template_id,
         subject=normalized_subject,
-        body_html=normalized_body_html,
+        body_html=compiled_html or normalized_body_html,
         body_text=normalized_body_text,
+        editor_status=_normalize_text(editor_status) or (
+            "ready" if compiled_html or mjml_source or grapesjs_project_json else "draft"
+        ),
         design_json=normalize_email_design(design),
+        grapesjs_project_json=grapesjs_project_json,
+        mjml_source=_normalize_text(mjml_source),
+        compiled_html=compiled_html or normalized_body_html,
         linked_form_id=linked_form.id if linked_form is not None else None,
         audience_type=normalized_audience,
         recipient_mode=normalized_recipient_mode,
@@ -399,6 +411,11 @@ def update_campaign_draft(
     scheduled_at: datetime | None = None,
     design: dict[str, Any] | None = None,
     linked_form: Form | None = None,
+    source_template_id: int | None = None,
+    editor_status: str | None = None,
+    grapesjs_project_json: dict[str, Any] | None = None,
+    mjml_source: str | None = None,
+    compiled_html: str | None = None,
 ) -> EmailCampaign:
     if campaign.association_id != organization.id:
         raise HTTPException(status_code=404, detail="Campagna non trovata.")
@@ -431,17 +448,24 @@ def update_campaign_draft(
         )
 
     normalized_body_html, normalized_body_text = normalize_campaign_bodies(
-        body_html=body_html,
+        body_html=compiled_html or body_html,
         body_text=body_text,
     )
     normalized_scheduled_at = normalize_scheduled_at(scheduled_at)
     now = datetime.utcnow()
 
     campaign.name = _normalize_text(name)
+    campaign.source_template_id = source_template_id
     campaign.subject = normalized_subject
-    campaign.body_html = normalized_body_html
+    campaign.body_html = compiled_html or normalized_body_html
     campaign.body_text = normalized_body_text
+    campaign.editor_status = _normalize_text(editor_status) or (
+        "ready" if compiled_html or mjml_source or grapesjs_project_json else "draft"
+    )
     campaign.design_json = normalize_email_design(design)
+    campaign.grapesjs_project_json = grapesjs_project_json
+    campaign.mjml_source = _normalize_text(mjml_source)
+    campaign.compiled_html = compiled_html or normalized_body_html
     campaign.linked_form_id = linked_form.id if linked_form is not None else None
     campaign.audience_type = normalized_audience
     campaign.recipient_mode = normalized_recipient_mode

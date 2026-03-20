@@ -807,6 +807,16 @@ export type OrgAdminEmailDesign = {
   section_order?: OrgAdminEmailSectionKey[];
 };
 
+export type OrgAdminEmailTemplateType =
+  | "newsletter"
+  | "event"
+  | "renewal_reminder"
+  | "booking_confirmation"
+  | "booking_rejection"
+  | "generic_notice";
+
+export type OrgAdminEmailEditorStatus = "draft" | "ready";
+
 export type OrgAdminEmailSectionKey =
   | "hero"
   | "body"
@@ -828,9 +838,13 @@ export type OrgAdminEmailCampaign = {
   id: number;
   association_id: number;
   name: string | null;
+  source_template_id?: number | null;
   subject: string;
   body_html?: string | null;
   body_text?: string | null;
+  compiled_html?: string | null;
+  mjml_source?: string | null;
+  grapesjs_project_json?: Record<string, unknown> | null;
   audience_type: OrgAdminCampaignAudienceType;
   recipient_mode: OrgAdminCampaignRecipientMode;
   selected_member_ids: number[];
@@ -838,12 +852,14 @@ export type OrgAdminEmailCampaign = {
   target_summary: string;
   planned_recipient_count: number;
   status: string;
+  editor_status: OrgAdminEmailEditorStatus;
   created_at: string | null;
   scheduled_at: string | null;
   sent_at: string | null;
   design: OrgAdminEmailDesign;
   linked_form_id: number | null;
   linked_form: OrgAdminLinkedFormSummary | null;
+  source_template?: OrgAdminEmailTemplate | null;
   recipient_count: number;
   recipient_status_counts: {
     queued: number;
@@ -876,11 +892,16 @@ export type OrgAdminEmailTemplate = {
   is_system: boolean;
   name: string;
   category: string | null;
+  template_type: OrgAdminEmailTemplateType;
   subject: string;
   body_html?: string | null;
   body_text?: string | null;
+  compiled_html?: string | null;
+  mjml_source?: string | null;
+  grapesjs_project_json?: Record<string, unknown> | null;
   channel: string;
   is_active: boolean;
+  editor_status: OrgAdminEmailEditorStatus;
   created_by_user_id: number | null;
   created_at: string | null;
   updated_at: string | null;
@@ -898,6 +919,20 @@ export type OrgAdminEmailTemplateVariable = {
   label: string;
   description: string;
   example: string;
+};
+
+export type OrgAdminEmailBuilderAsset = {
+  id: number;
+  association_id: number;
+  created_by_user_id: number | null;
+  name: string;
+  file_name: string;
+  mime_type: string;
+  size_bytes: number;
+  storage_path: string;
+  public_url: string;
+  created_at: string | null;
+  updated_at: string | null;
 };
 
 export type AssociationFormVisibility = "public" | "members_only";
@@ -1549,12 +1584,17 @@ export async function createOrgAdminEmailCampaign(data: {
   subject: string;
   body_html?: string | null;
   body_text?: string | null;
+  compiled_html?: string | null;
+  mjml_source?: string | null;
+  grapesjs_project_json?: Record<string, unknown> | null;
   audience_type: OrgAdminCampaignAudienceType;
   recipient_mode?: OrgAdminCampaignRecipientMode;
   member_ids?: number[];
   scheduled_at?: string | null;
   design?: Partial<OrgAdminEmailDesign> | null;
   linked_form_id?: number | null;
+  source_template_id?: number | null;
+  editor_status?: OrgAdminEmailEditorStatus | null;
 }): Promise<{ ok: boolean; campaign: OrgAdminEmailCampaign }> {
   const res = await fetch("/api/org-admin/communications/campaigns", {
     method: "POST",
@@ -1573,12 +1613,17 @@ export async function updateOrgAdminEmailCampaign(
     subject: string;
     body_html?: string | null;
     body_text?: string | null;
+    compiled_html?: string | null;
+    mjml_source?: string | null;
+    grapesjs_project_json?: Record<string, unknown> | null;
     audience_type: OrgAdminCampaignAudienceType;
     recipient_mode?: OrgAdminCampaignRecipientMode;
     member_ids?: number[];
     scheduled_at?: string | null;
     design?: Partial<OrgAdminEmailDesign> | null;
     linked_form_id?: number | null;
+    source_template_id?: number | null;
+    editor_status?: OrgAdminEmailEditorStatus | null;
   },
 ): Promise<{ ok: boolean; campaign: OrgAdminEmailCampaign }> {
   const res = await fetch(`/api/org-admin/communications/campaigns/${campaignId}`, {
@@ -1655,10 +1700,15 @@ export async function fetchOrgAdminEmailTemplate(
 export async function createOrgAdminEmailTemplate(data: {
   name: string;
   category?: string | null;
+  template_type?: OrgAdminEmailTemplateType | null;
   subject: string;
   body_html?: string | null;
   body_text?: string | null;
+  compiled_html?: string | null;
+  mjml_source?: string | null;
+  grapesjs_project_json?: Record<string, unknown> | null;
   channel?: string;
+  editor_status?: OrgAdminEmailEditorStatus | null;
   design?: Partial<OrgAdminEmailDesign> | null;
   linked_form_id?: number | null;
 }): Promise<{ ok: boolean; template: OrgAdminEmailTemplate }> {
@@ -1677,11 +1727,16 @@ export async function updateOrgAdminEmailTemplate(
   data: {
     name: string;
     category?: string | null;
+    template_type?: OrgAdminEmailTemplateType | null;
     subject: string;
     body_html?: string | null;
     body_text?: string | null;
+    compiled_html?: string | null;
+    mjml_source?: string | null;
+    grapesjs_project_json?: Record<string, unknown> | null;
     channel?: string;
     is_active?: boolean;
+    editor_status?: OrgAdminEmailEditorStatus | null;
     design?: Partial<OrgAdminEmailDesign> | null;
     linked_form_id?: number | null;
   },
@@ -2312,6 +2367,9 @@ export async function previewOrgAdminEmailTemplate(data: {
   subject?: string | null;
   body_html?: string | null;
   body_text?: string | null;
+  compiled_html?: string | null;
+  mjml_source?: string | null;
+  grapesjs_project_json?: Record<string, unknown> | null;
   design?: Partial<OrgAdminEmailDesign> | null;
   linked_form_id?: number | null;
 }): Promise<{
@@ -2319,6 +2377,7 @@ export async function previewOrgAdminEmailTemplate(data: {
     subject: string;
     body_html: string | null;
     body_text: string | null;
+    compiled_html?: string | null;
   };
   fake_context: Record<string, string>;
 }> {
@@ -2329,6 +2388,95 @@ export async function previewOrgAdminEmailTemplate(data: {
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore preview template"));
+  return res.json();
+}
+
+export async function createOrgAdminEmailCampaignFromTemplate(data: {
+  template_id: number;
+  name?: string | null;
+  subject?: string | null;
+  linked_form_id?: number | null;
+  audience_type: OrgAdminCampaignAudienceType;
+  recipient_mode?: OrgAdminCampaignRecipientMode;
+  member_ids?: number[];
+  scheduled_at?: string | null;
+  design?: Partial<OrgAdminEmailDesign> | null;
+}): Promise<{ ok: boolean; campaign: OrgAdminEmailCampaign }> {
+  const res = await fetch("/api/org-admin/communications/campaigns/from-template", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione campagna da template"));
+  return res.json();
+}
+
+export async function sendOrgAdminCommunicationBuilderTestEmail(data: {
+  to_email: string;
+  subject: string;
+  body_html?: string | null;
+  body_text?: string | null;
+  compiled_html?: string | null;
+  design?: Partial<OrgAdminEmailDesign> | null;
+  linked_form_id?: number | null;
+  message_name?: string | null;
+}): Promise<{
+  ok: boolean;
+  provider_message_id: string;
+  message: string;
+  preview: {
+    subject: string;
+    body_html: string | null;
+    body_text: string | null;
+  };
+  sender: OrgAdminCommunicationSettings["association_email_sender"];
+}> {
+  const res = await fetch("/api/org-admin/communications/campaigns/test-send", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore invio test builder"));
+  return res.json();
+}
+
+export async function fetchOrgAdminCommunicationAssets(): Promise<{
+  items: OrgAdminEmailBuilderAsset[];
+  total: number;
+}> {
+  const res = await fetch("/api/org-admin/communications/assets");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento asset"));
+  return res.json();
+}
+
+export async function uploadOrgAdminCommunicationAsset(file: File, name?: string): Promise<{
+  ok: boolean;
+  asset: OrgAdminEmailBuilderAsset;
+}> {
+  const body = new FormData();
+  body.append("file", file);
+  if (name?.trim()) body.append("name", name.trim());
+  const res = await fetch("/api/org-admin/communications/assets", {
+    method: "POST",
+    body,
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore upload asset"));
+  return res.json();
+}
+
+export async function deleteOrgAdminCommunicationAsset(assetId: number): Promise<{
+  ok: boolean;
+  deleted_asset_id: number;
+}> {
+  const res = await fetch(`/api/org-admin/communications/assets/${assetId}`, {
+    method: "DELETE",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore eliminazione asset"));
   return res.json();
 }
 

@@ -5,7 +5,7 @@ import { fetchOrgAdminCommunicationSettings } from "../../lib/api";
 import Skeleton from "../../components/ui/Skeleton";
 
 import { CommunicationsOverview } from "./components/communications/CommunicationsOverview";
-import { MessagesHub } from "./components/communications/MessagesHub";
+import { MessagesHub } from "./components/communications/MessagesComposerHub";
 import { PublicFormsHub } from "./components/communications/PublicFormsHub";
 import { EmailSendingSettings } from "./components/communications/EmailSendingSettings";
 import { WhatsAppHub } from "./components/communications/WhatsAppHub";

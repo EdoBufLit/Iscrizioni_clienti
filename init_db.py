@@ -39,6 +39,7 @@ from app.models import (
     AccountingShareLink,
     EmailCampaign,
     EmailCampaignRecipient,
+    EmailBuilderAsset,
     EmailTemplate,
     Form,
     FormField,
@@ -238,11 +239,18 @@ def init_db():
         )
         EmailCampaignRecipient.__table__.create(bind=engine, checkfirst=True)
 
-        if "email_templates" not in inspect(engine).get_table_names():
-            logger.warning(
-                "email_templates table not found. Creating it idempotently at startup; "
-                "run 'alembic upgrade head' to align schema history."
-            )
+    if "email_builder_assets" not in inspect(engine).get_table_names():
+        logger.warning(
+            "email_builder_assets table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        EmailBuilderAsset.__table__.create(bind=engine, checkfirst=True)
+
+    if "email_templates" not in inspect(engine).get_table_names():
+        logger.warning(
+            "email_templates table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
         EmailTemplate.__table__.create(bind=engine, checkfirst=True)
 
     if "forms" not in inspect(engine).get_table_names():
@@ -430,9 +438,19 @@ def init_db():
         if "email_templates" in table_names:
             _add_column_if_missing(conn, "email_templates", "design_json", "TEXT")
             _add_column_if_missing(conn, "email_templates", "linked_form_id", "INTEGER")
+            _add_column_if_missing(conn, "email_templates", "template_type", "TEXT DEFAULT 'generic_notice'")
+            _add_column_if_missing(conn, "email_templates", "editor_status", "TEXT DEFAULT 'draft'")
+            _add_column_if_missing(conn, "email_templates", "grapesjs_project_json", "TEXT")
+            _add_column_if_missing(conn, "email_templates", "mjml_source", "TEXT")
+            _add_column_if_missing(conn, "email_templates", "compiled_html", "TEXT")
         if "email_campaigns" in table_names:
             _add_column_if_missing(conn, "email_campaigns", "design_json", "TEXT")
             _add_column_if_missing(conn, "email_campaigns", "linked_form_id", "INTEGER")
+            _add_column_if_missing(conn, "email_campaigns", "source_template_id", "INTEGER")
+            _add_column_if_missing(conn, "email_campaigns", "editor_status", "TEXT DEFAULT 'draft'")
+            _add_column_if_missing(conn, "email_campaigns", "grapesjs_project_json", "TEXT")
+            _add_column_if_missing(conn, "email_campaigns", "mjml_source", "TEXT")
+            _add_column_if_missing(conn, "email_campaigns", "compiled_html", "TEXT")
         if "organizations" in table_names:
             _add_column_if_missing(
                 conn, "organizations", "stripe_connected_account_id", "TEXT"

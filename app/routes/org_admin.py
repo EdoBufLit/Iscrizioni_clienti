@@ -45,6 +45,7 @@ from app.models import (
     AccountingShareLink,
     EmailCampaign,
     EmailCampaignRecipient,
+    EmailBuilderAsset,
     EmailTemplate,
     Form as AssociationForm,
     FormField,
@@ -83,14 +84,24 @@ from app.services.email_campaigns import (
 from app.services.email_templates import (
     AVAILABLE_TEMPLATE_VARIABLES,
     EMAIL_TEMPLATE_CHANNEL,
+    EMAIL_EDITOR_STATUS_DRAFT,
+    EMAIL_EDITOR_STATUS_READY,
+    EMAIL_TEMPLATE_TYPE_GENERIC_NOTICE,
+    EMAIL_TEMPLATE_TYPES,
     decorate_rendered_email,
     build_template_context,
     build_linked_form_url,
+    normalize_email_editor_status,
     normalize_email_design,
+    normalize_email_template_type,
     normalize_template_bodies,
     normalize_template_channel,
     normalize_template_scope,
     render_template_content,
+)
+from app.services.email_builder_assets import (
+    enforce_email_builder_asset_request_size_from_headers,
+    save_email_builder_asset_file,
 )
 from app.services.accounting import (
     accounting_document_preview_available,
@@ -157,6 +168,7 @@ from app.utils import (
     RetryableEmailDeliveryError,
     generate_token,
     hash_token,
+    send_email_via_transport_low_level,
 )
 from app.services.municipalities import (
     get_municipality_by_code,
@@ -718,6 +730,7 @@ def _serialize_email_campaign(
         "id": campaign.id,
         "association_id": campaign.association_id,
         "name": campaign.name,
+        "source_template_id": getattr(campaign, "source_template_id", None),
         "subject": campaign.subject,
         "audience_type": campaign.audience_type,
         "recipient_mode": recipient_mode,
@@ -725,6 +738,9 @@ def _serialize_email_campaign(
         "selected_member_count": selected_member_count,
         "target_summary": target_summary,
         "status": campaign.status,
+        "editor_status": normalize_email_editor_status(
+            getattr(campaign, "editor_status", None) or EMAIL_EDITOR_STATUS_DRAFT
+        ),
         "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
         "scheduled_at": campaign.scheduled_at.isoformat() if campaign.scheduled_at else None,
         "sent_at": campaign.sent_at.isoformat() if campaign.sent_at else None,
@@ -734,6 +750,9 @@ def _serialize_email_campaign(
         "design": normalize_email_design(getattr(campaign, "design_json", None)),
         "linked_form_id": getattr(campaign, "linked_form_id", None),
         "linked_form": _serialize_form_summary(getattr(campaign, "linked_form", None)),
+        "source_template": _serialize_email_template(getattr(campaign, "source_template", None))
+        if getattr(campaign, "source_template", None) is not None
+        else None,
         "created_by": (
             {
                 "id": campaign.created_by_user.id,
@@ -746,6 +765,9 @@ def _serialize_email_campaign(
     if include_body:
         payload["body_html"] = campaign.body_html
         payload["body_text"] = campaign.body_text
+        payload["grapesjs_project_json"] = getattr(campaign, "grapesjs_project_json", None)
+        payload["mjml_source"] = getattr(campaign, "mjml_source", None)
+        payload["compiled_html"] = getattr(campaign, "compiled_html", None)
     return payload
 
 
@@ -768,19 +790,29 @@ def _serialize_email_campaign_recipient(
 
 
 def _serialize_email_template(
-    template: EmailTemplate,
+    template: EmailTemplate | None,
     *,
     include_body: bool = False,
-) -> dict[str, object]:
+) -> dict[str, object] | None:
+    if template is None:
+        return None
     payload = {
         "id": template.id,
         "association_id": template.association_id,
         "is_system": bool(template.is_system),
         "name": template.name,
         "category": template.category,
+        "template_type": normalize_email_template_type(
+            getattr(template, "template_type", None)
+            or getattr(template, "category", None)
+            or EMAIL_TEMPLATE_TYPE_GENERIC_NOTICE
+        ),
         "subject": template.subject,
         "channel": template.channel,
         "is_active": bool(template.is_active),
+        "editor_status": normalize_email_editor_status(
+            getattr(template, "editor_status", None) or EMAIL_EDITOR_STATUS_DRAFT
+        ),
         "created_by_user_id": template.created_by_user_id,
         "created_at": template.created_at.isoformat() if template.created_at else None,
         "updated_at": template.updated_at.isoformat() if template.updated_at else None,
@@ -794,7 +826,41 @@ def _serialize_email_template(
     if include_body:
         payload["body_html"] = template.body_html
         payload["body_text"] = template.body_text
+        payload["grapesjs_project_json"] = getattr(template, "grapesjs_project_json", None)
+        payload["mjml_source"] = getattr(template, "mjml_source", None)
+        payload["compiled_html"] = getattr(template, "compiled_html", None)
     return payload
+
+
+def _serialize_email_builder_asset(asset: EmailBuilderAsset) -> dict[str, object]:
+    return {
+        "id": asset.id,
+        "association_id": asset.association_id,
+        "created_by_user_id": asset.created_by_user_id,
+        "name": asset.name,
+        "file_name": asset.file_name,
+        "mime_type": asset.mime_type,
+        "size_bytes": asset.size_bytes,
+        "storage_path": asset.storage_path,
+        "public_url": asset.public_url,
+        "created_at": asset.created_at.isoformat() if asset.created_at else None,
+        "updated_at": asset.updated_at.isoformat() if asset.updated_at else None,
+    }
+
+
+def _resolve_email_builder_bodies(
+    *,
+    body_html: str | None,
+    body_text: str | None,
+    compiled_html: str | None,
+) -> tuple[str | None, str | None, str | None]:
+    normalized_compiled = (compiled_html or "").strip() or None
+    normalized_html = normalized_compiled or body_html
+    resolved_html, resolved_text = normalize_template_bodies(
+        body_html=normalized_html,
+        body_text=body_text,
+    )
+    return resolved_html, resolved_text, normalized_compiled or resolved_html
 
 
 def _serialize_form_summary(form: AssociationForm | None) -> dict[str, object] | None:
@@ -874,6 +940,17 @@ def _resolve_optional_linked_form_for_admin(
     if form is None:
         raise HTTPException(status_code=422, detail="Form collegato non trovato.")
     return form
+
+
+def _resolve_optional_source_template_for_admin(
+    db: Session,
+    *,
+    admin: AdminUser,
+    template_id: int | None,
+) -> EmailTemplate | None:
+    if template_id in (None, 0):
+        return None
+    return _get_email_template_for_admin(db, admin=admin, template_id=int(template_id))
 
 
 def _resolve_frontend_base(request: Request) -> str:
@@ -1659,21 +1736,31 @@ class CreateEmailCampaignBody(BaseModel):
     subject: str = Field(min_length=1, max_length=255)
     body_html: Optional[str] = None
     body_text: Optional[str] = None
+    compiled_html: Optional[str] = None
+    mjml_source: Optional[str] = None
+    grapesjs_project_json: Optional[dict[str, object]] = None
     audience_type: str
     recipient_mode: str = Field(default=RECIPIENT_MODE_ALL_MEMBERS, max_length=40)
     member_ids: list[int] = Field(default_factory=list)
     scheduled_at: Optional[datetime] = None
     design: Optional[dict[str, object]] = None
     linked_form_id: Optional[int] = None
+    source_template_id: Optional[int] = None
+    editor_status: Optional[str] = Field(default=None, max_length=40)
 
 
 class CreateEmailTemplateBody(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     category: Optional[str] = Field(default=None, max_length=80)
+    template_type: Optional[str] = Field(default=None, max_length=80)
     subject: str = Field(min_length=1, max_length=255)
     body_html: Optional[str] = None
     body_text: Optional[str] = None
+    compiled_html: Optional[str] = None
+    mjml_source: Optional[str] = None
+    grapesjs_project_json: Optional[dict[str, object]] = None
     channel: str = Field(default=EMAIL_TEMPLATE_CHANNEL, max_length=40)
+    editor_status: Optional[str] = Field(default=None, max_length=40)
     design: Optional[dict[str, object]] = None
     linked_form_id: Optional[int] = None
 
@@ -1681,11 +1768,16 @@ class CreateEmailTemplateBody(BaseModel):
 class UpdateEmailTemplateBody(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     category: Optional[str] = Field(default=None, max_length=80)
+    template_type: Optional[str] = Field(default=None, max_length=80)
     subject: str = Field(min_length=1, max_length=255)
     body_html: Optional[str] = None
     body_text: Optional[str] = None
+    compiled_html: Optional[str] = None
+    mjml_source: Optional[str] = None
+    grapesjs_project_json: Optional[dict[str, object]] = None
     channel: str = Field(default=EMAIL_TEMPLATE_CHANNEL, max_length=40)
     is_active: Optional[bool] = None
+    editor_status: Optional[str] = Field(default=None, max_length=40)
     design: Optional[dict[str, object]] = None
     linked_form_id: Optional[int] = None
 
@@ -1699,8 +1791,34 @@ class RenderEmailTemplatePreviewBody(BaseModel):
     subject: Optional[str] = None
     body_html: Optional[str] = None
     body_text: Optional[str] = None
+    compiled_html: Optional[str] = None
+    mjml_source: Optional[str] = None
+    grapesjs_project_json: Optional[dict[str, object]] = None
     design: Optional[dict[str, object]] = None
     linked_form_id: Optional[int] = None
+
+
+class SendCommunicationBuilderTestBody(BaseModel):
+    to_email: EmailStr
+    subject: str = Field(min_length=1, max_length=255)
+    body_html: Optional[str] = None
+    body_text: Optional[str] = None
+    compiled_html: Optional[str] = None
+    design: Optional[dict[str, object]] = None
+    linked_form_id: Optional[int] = None
+    message_name: Optional[str] = Field(default=None, max_length=160)
+
+
+class CreateCampaignFromTemplateBody(BaseModel):
+    template_id: int = Field(ge=1)
+    name: Optional[str] = Field(default=None, max_length=160)
+    subject: Optional[str] = Field(default=None, max_length=255)
+    linked_form_id: Optional[int] = None
+    audience_type: str
+    recipient_mode: str = Field(default=RECIPIENT_MODE_ALL_MEMBERS, max_length=40)
+    member_ids: list[int] = Field(default_factory=list)
+    scheduled_at: Optional[datetime] = None
+    design: Optional[dict[str, object]] = None
 
 
 class UpsertWhatsAppAutomationBody(BaseModel):
@@ -2452,19 +2570,25 @@ def create_communication_template(
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     _require_active_communications_module(admin.organization)
-    body_html, body_text = normalize_template_bodies(
+    body_html, body_text, compiled_html = _resolve_email_builder_bodies(
         body_html=body.body_html,
         body_text=body.body_text,
+        compiled_html=body.compiled_html,
     )
     template = EmailTemplate(
         association_id=admin.org_id,
         is_system=False,
         name=_normalize_template_name(body.name),
         category=_normalize_optional_text(body.category),
+        template_type=normalize_email_template_type(body.template_type or body.category),
         subject=_normalize_template_subject(body.subject),
         body_html=body_html,
         body_text=body_text,
+        editor_status=normalize_email_editor_status(body.editor_status or EMAIL_EDITOR_STATUS_DRAFT),
         design_json=normalize_email_design(body.design),
+        grapesjs_project_json=body.grapesjs_project_json,
+        mjml_source=_normalize_optional_text(body.mjml_source),
+        compiled_html=compiled_html,
         linked_form_id=(
             _resolve_optional_linked_form_for_admin(db, admin=admin, form_id=body.linked_form_id).id
             if body.linked_form_id
@@ -2521,6 +2645,9 @@ def preview_communication_template(
     body_text = _normalize_optional_text(body.body_text) if body.body_text is not None else (
         template.body_text if template else None
     )
+    compiled_html = _normalize_optional_text(body.compiled_html) if body.compiled_html is not None else (
+        getattr(template, "compiled_html", None) if template else None
+    )
     if subject is None:
         raise HTTPException(status_code=422, detail="Oggetto template obbligatorio.")
     linked_form = (
@@ -2529,10 +2656,14 @@ def preview_communication_template(
         else getattr(template, "linked_form", None)
     )
     design = normalize_email_design(body.design if body.design is not None else getattr(template, "design_json", None))
-    body_html, body_text = normalize_template_bodies(body_html=body_html, body_text=body_text)
+    body_html, body_text, compiled_html = _resolve_email_builder_bodies(
+        body_html=body_html,
+        body_text=body_text,
+        compiled_html=compiled_html,
+    )
     rendered = render_template_content(
         subject=subject,
-        body_html=body_html,
+        body_html=compiled_html or body_html,
         body_text=body_text,
         association=admin.organization,
         fake=True,
@@ -2551,6 +2682,7 @@ def preview_communication_template(
             "subject": rendered.subject,
             "body_html": rendered.body_html,
             "body_text": rendered.body_text,
+            "compiled_html": compiled_html,
         },
         "fake_context": rendered.context,
     }
@@ -2593,16 +2725,22 @@ def update_communication_template(
     if template.association_id != admin.org_id:
         raise HTTPException(status_code=404, detail="Template non trovato.")
 
-    body_html, body_text = normalize_template_bodies(
+    body_html, body_text, compiled_html = _resolve_email_builder_bodies(
         body_html=body.body_html,
         body_text=body.body_text,
+        compiled_html=body.compiled_html,
     )
     template.name = _normalize_template_name(body.name)
     template.category = _normalize_optional_text(body.category)
+    template.template_type = normalize_email_template_type(body.template_type or body.category or template.category)
     template.subject = _normalize_template_subject(body.subject)
     template.body_html = body_html
     template.body_text = body_text
+    template.editor_status = normalize_email_editor_status(body.editor_status or getattr(template, "editor_status", None))
     template.design_json = normalize_email_design(body.design)
+    template.grapesjs_project_json = body.grapesjs_project_json
+    template.mjml_source = _normalize_optional_text(body.mjml_source)
+    template.compiled_html = compiled_html
     template.linked_form_id = (
         _resolve_optional_linked_form_for_admin(db, admin=admin, form_id=body.linked_form_id).id
         if body.linked_form_id
@@ -2637,10 +2775,15 @@ def duplicate_communication_template(
         is_system=False,
         name=_normalize_template_name(body.name or f"{template.name} (copia)"),
         category=template.category,
+        template_type=getattr(template, "template_type", None) or normalize_email_template_type(template.category),
         subject=template.subject,
         body_html=template.body_html,
         body_text=template.body_text,
+        editor_status=getattr(template, "editor_status", None) or EMAIL_EDITOR_STATUS_DRAFT,
         design_json=normalize_email_design(getattr(template, "design_json", None)),
+        grapesjs_project_json=getattr(template, "grapesjs_project_json", None),
+        mjml_source=getattr(template, "mjml_source", None),
+        compiled_html=getattr(template, "compiled_html", None),
         linked_form_id=getattr(template, "linked_form_id", None),
         channel=template.channel,
         is_active=True,
@@ -2707,6 +2850,92 @@ def delete_communication_template(
     db.delete(template)
     db.commit()
     return {"ok": True}
+
+
+@router.get("/communications/assets")
+def list_communication_assets(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    items = (
+        db.query(EmailBuilderAsset)
+        .filter(EmailBuilderAsset.association_id == admin.org_id)
+        .order_by(EmailBuilderAsset.created_at.desc(), EmailBuilderAsset.id.desc())
+        .all()
+    )
+    return {
+        "items": [_serialize_email_builder_asset(item) for item in items],
+        "total": len(items),
+    }
+
+
+@router.post("/communications/assets", status_code=201)
+async def upload_communication_asset(
+    request: Request,
+    file: UploadFile = File(...),
+    name: Optional[str] = Form(default=None),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    _require_active_communications_module(admin.organization)
+    enforce_email_builder_asset_request_size_from_headers(request.headers)
+    rel_path, size_bytes, _sha = await save_email_builder_asset_file(file, org_id=admin.org_id)
+    public_url = f"/uploads/{rel_path.replace(os.sep, '/')}"
+    asset = EmailBuilderAsset(
+        association_id=admin.org_id,
+        created_by_user_id=admin.id,
+        name=(name or file.filename or "Asset builder").strip()[:160] or "Asset builder",
+        file_name=(file.filename or "asset").strip()[:255] or "asset",
+        mime_type=file.content_type or "application/octet-stream",
+        size_bytes=size_bytes,
+        storage_path=rel_path.replace(os.sep, "/"),
+        public_url=public_url,
+    )
+    db.add(asset)
+    db.commit()
+    db.refresh(asset)
+    return {"ok": True, "asset": _serialize_email_builder_asset(asset)}
+
+
+@router.delete("/communications/assets/{asset_id}")
+def delete_communication_asset(
+    asset_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    _require_active_communications_module(admin.organization)
+    asset = (
+        db.query(EmailBuilderAsset)
+        .filter(
+            EmailBuilderAsset.id == asset_id,
+            EmailBuilderAsset.association_id == admin.org_id,
+        )
+        .first()
+    )
+    if asset is None:
+        raise HTTPException(status_code=404, detail="Asset non trovato.")
+
+    file_path = os.path.join(settings.UPLOAD_DIR, asset.storage_path)
+    if os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+        except OSError:
+            logger.warning("Failed to delete communication asset file path=%s", file_path)
+
+    db.delete(asset)
+    db.commit()
+    return {"ok": True, "deleted_asset_id": asset_id}
 
 
 @router.get("/communications/whatsapp/automations")
@@ -2901,6 +3130,129 @@ def search_communications_members(
     }
 
 
+@router.post("/communications/campaigns/from-template", status_code=201)
+def create_communications_campaign_from_template(
+    request: Request,
+    body: CreateCampaignFromTemplateBody,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    _require_active_communications_module(admin.organization)
+    template = _resolve_optional_source_template_for_admin(
+        db,
+        admin=admin,
+        template_id=body.template_id,
+    )
+    if template is None:
+        raise HTTPException(status_code=422, detail="Template sorgente obbligatorio.")
+    campaign = create_campaign_draft(
+        db,
+        organization=admin.organization,
+        created_by_user_id=admin.id,
+        name=body.name or f"{template.name} - campagna",
+        subject=body.subject or template.subject,
+        body_html=template.body_html,
+        body_text=template.body_text,
+        audience_type=body.audience_type,
+        recipient_mode=body.recipient_mode,
+        selected_member_ids=body.member_ids,
+        scheduled_at=body.scheduled_at,
+        design=body.design or normalize_email_design(getattr(template, "design_json", None)),
+        linked_form=_resolve_optional_linked_form_for_admin(
+            db,
+            admin=admin,
+            form_id=body.linked_form_id if body.linked_form_id is not None else template.linked_form_id,
+        ),
+        source_template_id=template.id,
+        editor_status=EMAIL_EDITOR_STATUS_DRAFT,
+        grapesjs_project_json=getattr(template, "grapesjs_project_json", None),
+        mjml_source=getattr(template, "mjml_source", None),
+        compiled_html=getattr(template, "compiled_html", None),
+    )
+    db.commit()
+    campaign = (
+        db.query(EmailCampaign)
+        .options(
+            joinedload(EmailCampaign.recipients),
+            joinedload(EmailCampaign.created_by_user),
+            joinedload(EmailCampaign.linked_form).joinedload(AssociationForm.organization),
+            joinedload(EmailCampaign.source_template),
+        )
+        .filter(EmailCampaign.id == campaign.id)
+        .first()
+    )
+    return {"ok": True, "campaign": _serialize_email_campaign(campaign, include_body=True)}
+
+
+@router.post("/communications/campaigns/test-send")
+def send_communications_builder_test(
+    request: Request,
+    body: SendCommunicationBuilderTestBody,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    _require_active_communications_module(admin.organization)
+    linked_form = _resolve_optional_linked_form_for_admin(
+        db,
+        admin=admin,
+        form_id=body.linked_form_id,
+    )
+    body_html, body_text, compiled_html = _resolve_email_builder_bodies(
+        body_html=body.body_html,
+        body_text=body.body_text,
+        compiled_html=body.compiled_html,
+    )
+    rendered = render_template_content(
+        subject=_normalize_template_subject(body.subject),
+        body_html=compiled_html or body_html,
+        body_text=body_text,
+        association=admin.organization,
+        fake=True,
+        extra_context={
+            "titolo_form": linked_form.title if linked_form is not None else "",
+            "nome_evento": body.message_name or "",
+        },
+    )
+    rendered = decorate_rendered_email(
+        rendered,
+        association=admin.organization,
+        design=normalize_email_design(body.design),
+        linked_form=linked_form,
+    )
+    try:
+        provider_message_id = send_email_via_transport_low_level(
+            to_email=str(body.to_email),
+            subject=rendered.subject,
+            text_body=rendered.body_text or "",
+            html_body=rendered.body_html,
+            mode="association",
+            association=admin.organization,
+        )
+    except PermanentEmailDeliveryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except RetryableEmailDeliveryError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    sender = resolve_email_sender(mode="association", association=admin.organization)
+    return {
+        "ok": True,
+        "provider_message_id": provider_message_id,
+        "message": "Email di test builder inviata correttamente.",
+        "preview": {
+            "subject": rendered.subject,
+            "body_html": rendered.body_html,
+            "body_text": rendered.body_text,
+        },
+        "sender": _serialize_communications_sender(sender),
+    }
+
+
 @router.get("/communications/campaigns")
 def list_communications_campaigns(
     request: Request,
@@ -2916,6 +3268,7 @@ def list_communications_campaigns(
             joinedload(EmailCampaign.recipients),
             joinedload(EmailCampaign.created_by_user),
             joinedload(EmailCampaign.linked_form).joinedload(AssociationForm.organization),
+            joinedload(EmailCampaign.source_template),
         )
         .filter(EmailCampaign.association_id == admin.org_id)
         .order_by(EmailCampaign.created_at.desc(), EmailCampaign.id.desc())
@@ -2956,6 +3309,19 @@ def create_communications_campaign(
             admin=admin,
             form_id=body.linked_form_id,
         ),
+        source_template_id=(
+            _resolve_optional_source_template_for_admin(
+                db,
+                admin=admin,
+                template_id=body.source_template_id,
+            ).id
+            if body.source_template_id
+            else None
+        ),
+        editor_status=body.editor_status,
+        grapesjs_project_json=body.grapesjs_project_json,
+        mjml_source=body.mjml_source,
+        compiled_html=body.compiled_html,
     )
     db.commit()
     campaign = (
@@ -2964,6 +3330,7 @@ def create_communications_campaign(
             joinedload(EmailCampaign.recipients),
             joinedload(EmailCampaign.created_by_user),
             joinedload(EmailCampaign.linked_form).joinedload(AssociationForm.organization),
+            joinedload(EmailCampaign.source_template),
         )
         .filter(EmailCampaign.id == campaign.id)
         .first()
@@ -2990,6 +3357,7 @@ def get_communications_campaign_detail(
             joinedload(EmailCampaign.recipients),
             joinedload(EmailCampaign.created_by_user),
             joinedload(EmailCampaign.linked_form).joinedload(AssociationForm.organization),
+            joinedload(EmailCampaign.source_template),
         )
         .filter(
             EmailCampaign.id == campaign_id,
@@ -3046,6 +3414,19 @@ def update_communications_campaign(
             admin=admin,
             form_id=body.linked_form_id,
         ),
+        source_template_id=(
+            _resolve_optional_source_template_for_admin(
+                db,
+                admin=admin,
+                template_id=body.source_template_id,
+            ).id
+            if body.source_template_id
+            else None
+        ),
+        editor_status=body.editor_status,
+        grapesjs_project_json=body.grapesjs_project_json,
+        mjml_source=body.mjml_source,
+        compiled_html=body.compiled_html,
     )
     db.commit()
     campaign = (
@@ -3054,6 +3435,7 @@ def update_communications_campaign(
             joinedload(EmailCampaign.recipients),
             joinedload(EmailCampaign.created_by_user),
             joinedload(EmailCampaign.linked_form).joinedload(AssociationForm.organization),
+            joinedload(EmailCampaign.source_template),
         )
         .filter(EmailCampaign.id == campaign.id)
         .first()
@@ -3138,6 +3520,7 @@ def send_communications_campaign(
             joinedload(EmailCampaign.recipients),
             joinedload(EmailCampaign.created_by_user),
             joinedload(EmailCampaign.linked_form).joinedload(AssociationForm.organization),
+            joinedload(EmailCampaign.source_template),
         )
         .filter(EmailCampaign.id == campaign.id)
         .first()

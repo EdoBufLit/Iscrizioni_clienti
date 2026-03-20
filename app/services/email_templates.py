@@ -17,6 +17,26 @@ EMAIL_TEMPLATE_CHANNEL = "email"
 EMAIL_TEMPLATE_SCOPE_ALL = "all"
 EMAIL_TEMPLATE_SCOPE_SYSTEM = "system"
 EMAIL_TEMPLATE_SCOPE_ASSOCIATION = "association"
+EMAIL_TEMPLATE_TYPE_NEWSLETTER = "newsletter"
+EMAIL_TEMPLATE_TYPE_EVENT = "event"
+EMAIL_TEMPLATE_TYPE_RENEWAL_REMINDER = "renewal_reminder"
+EMAIL_TEMPLATE_TYPE_BOOKING_CONFIRMATION = "booking_confirmation"
+EMAIL_TEMPLATE_TYPE_BOOKING_REJECTION = "booking_rejection"
+EMAIL_TEMPLATE_TYPE_GENERIC_NOTICE = "generic_notice"
+EMAIL_TEMPLATE_TYPES = {
+    EMAIL_TEMPLATE_TYPE_NEWSLETTER,
+    EMAIL_TEMPLATE_TYPE_EVENT,
+    EMAIL_TEMPLATE_TYPE_RENEWAL_REMINDER,
+    EMAIL_TEMPLATE_TYPE_BOOKING_CONFIRMATION,
+    EMAIL_TEMPLATE_TYPE_BOOKING_REJECTION,
+    EMAIL_TEMPLATE_TYPE_GENERIC_NOTICE,
+}
+EMAIL_EDITOR_STATUS_DRAFT = "draft"
+EMAIL_EDITOR_STATUS_READY = "ready"
+EMAIL_EDITOR_STATUSES = {
+    EMAIL_EDITOR_STATUS_DRAFT,
+    EMAIL_EDITOR_STATUS_READY,
+}
 ALLOWED_TEMPLATE_SCOPES = {
     EMAIL_TEMPLATE_SCOPE_ALL,
     EMAIL_TEMPLATE_SCOPE_SYSTEM,
@@ -30,7 +50,14 @@ AVAILABLE_TEMPLATE_VARIABLES = [
         "key": "nome_socio",
         "placeholder": "{{nome_socio}}",
         "label": "Nome socio",
-        "description": "Nome e cognome del socio destinatario.",
+        "description": "Nome del socio o del destinatario principale.",
+        "example": "Mario",
+    },
+    {
+        "key": "cognome_socio",
+        "placeholder": "{{cognome_socio}}",
+        "label": "Cognome socio",
+        "description": "Cognome del socio o del destinatario principale.",
         "example": "Mario Rossi",
     },
     {
@@ -55,17 +82,66 @@ AVAILABLE_TEMPLATE_VARIABLES = [
         "example": "31/12/2026",
     },
     {
+        "key": "email_socio",
+        "placeholder": "{{email_socio}}",
+        "label": "Email socio",
+        "description": "Email del socio o del submitter.",
+        "example": "mario.rossi@example.com",
+    },
+    {
+        "key": "link_iscrizione",
+        "placeholder": "{{link_iscrizione}}",
+        "label": "Link iscrizione",
+        "description": "Link pubblico all'iscrizione o al rinnovo.",
+        "example": "https://app.assonam.it/associazioni/golden-age-club/iscrizione",
+    },
+    {
+        "key": "link_evento",
+        "placeholder": "{{link_evento}}",
+        "label": "Link evento",
+        "description": "Link all'evento, pagina pubblica o CTA associata.",
+        "example": "https://app.assonam.it/associazioni/golden-age-club",
+    },
+    {
+        "key": "nome_evento",
+        "placeholder": "{{nome_evento}}",
+        "label": "Nome evento",
+        "description": "Titolo evento o appuntamento.",
+        "example": "Assemblea soci 2026",
+    },
+    {
+        "key": "data_evento",
+        "placeholder": "{{data_evento}}",
+        "label": "Data evento",
+        "description": "Data o slot evento/prenotazione.",
+        "example": "12 aprile 2026 - 20:30",
+    },
+    {
+        "key": "stato_prenotazione",
+        "placeholder": "{{stato_prenotazione}}",
+        "label": "Stato prenotazione",
+        "description": "Stato della richiesta o prenotazione.",
+        "example": "confirmed",
+    },
+    {
+        "key": "messaggio_org",
+        "placeholder": "{{messaggio_org}}",
+        "label": "Messaggio org",
+        "description": "Nota libera aggiunta dall'associazione.",
+        "example": "Ti aspettiamo con 15 minuti di anticipo.",
+    },
+    {
         "key": "link_rinnovo",
         "placeholder": "{{link_rinnovo}}",
         "label": "Link rinnovo",
-        "description": "Link di rinnovo o iscrizione dell'associazione.",
+        "description": "Alias legacy del link iscrizione/rinnovo.",
         "example": "https://app.assonam.it/associazioni/golden-age-club/iscrizione",
     },
     {
         "key": "link_documento",
         "placeholder": "{{link_documento}}",
         "label": "Link documento",
-        "description": "Link al documento o alla pagina associazione.",
+        "description": "Alias legacy del link evento/documento.",
         "example": "https://app.assonam.it/associazioni/golden-age-club",
     },
     {
@@ -79,7 +155,7 @@ AVAILABLE_TEMPLATE_VARIABLES = [
         "key": "email_destinatario",
         "placeholder": "{{email_destinatario}}",
         "label": "Email destinatario",
-        "description": "Email usata per il submit del form o per la conferma utente.",
+        "description": "Alias legacy dell'email socio.",
         "example": "mario.rossi@example.com",
     },
 ]
@@ -151,15 +227,19 @@ def _system_template(
     *,
     name: str,
     category: str,
+    template_type: str,
     subject: str,
     body_text: str,
 ) -> dict[str, str]:
     return {
         "name": name,
         "category": category,
+        "template_type": template_type,
+        "editor_status": EMAIL_EDITOR_STATUS_READY,
         "subject": subject,
         "body_text": body_text,
         "body_html": plain_text_to_html(body_text),
+        "compiled_html": plain_text_to_html(body_text),
     }
 
 
@@ -167,6 +247,7 @@ SYSTEM_EMAIL_TEMPLATES = [
     _system_template(
         name="Benvenuto nuovo socio",
         category="onboarding",
+        template_type=EMAIL_TEMPLATE_TYPE_NEWSLETTER,
         subject="Benvenuto in {{nome_associazione}}, {{nome_socio}}",
         body_text=(
             "Ciao {{nome_socio}},\n\n"
@@ -178,6 +259,7 @@ SYSTEM_EMAIL_TEMPLATES = [
     _system_template(
         name="Iscrizione approvata",
         category="membership",
+        template_type=EMAIL_TEMPLATE_TYPE_GENERIC_NOTICE,
         subject="Iscrizione approvata per {{nome_socio}}",
         body_text=(
             "Ciao {{nome_socio}},\n\n"
@@ -188,6 +270,7 @@ SYSTEM_EMAIL_TEMPLATES = [
     _system_template(
         name="Tessera disponibile",
         category="membership",
+        template_type=EMAIL_TEMPLATE_TYPE_GENERIC_NOTICE,
         subject="La tua tessera {{numero_tessera}} e disponibile",
         body_text=(
             "Ciao {{nome_socio}},\n\n"
@@ -199,6 +282,7 @@ SYSTEM_EMAIL_TEMPLATES = [
     _system_template(
         name="Rinnovo quota in scadenza",
         category="renewal",
+        template_type=EMAIL_TEMPLATE_TYPE_RENEWAL_REMINDER,
         subject="Rinnovo in scadenza per {{nome_socio}}",
         body_text=(
             "Ciao {{nome_socio}},\n\n"
@@ -209,6 +293,7 @@ SYSTEM_EMAIL_TEMPLATES = [
     _system_template(
         name="Sollecito quota gentile",
         category="renewal",
+        template_type=EMAIL_TEMPLATE_TYPE_RENEWAL_REMINDER,
         subject="Promemoria gentile rinnovo quota",
         body_text=(
             "Ciao {{nome_socio}},\n\n"
@@ -219,6 +304,7 @@ SYSTEM_EMAIL_TEMPLATES = [
     _system_template(
         name="Convocazione assemblea",
         category="assembly",
+        template_type=EMAIL_TEMPLATE_TYPE_EVENT,
         subject="Convocazione assemblea {{nome_associazione}}",
         body_text=(
             "Ciao {{nome_socio}},\n\n"
@@ -229,6 +315,7 @@ SYSTEM_EMAIL_TEMPLATES = [
     _system_template(
         name="Documento disponibile",
         category="documents",
+        template_type=EMAIL_TEMPLATE_TYPE_GENERIC_NOTICE,
         subject="Nuovo documento disponibile per {{nome_socio}}",
         body_text=(
             "Ciao {{nome_socio}},\n\n"
@@ -239,11 +326,69 @@ SYSTEM_EMAIL_TEMPLATES = [
     _system_template(
         name="Avviso evento",
         category="events",
+        template_type=EMAIL_TEMPLATE_TYPE_EVENT,
         subject="Nuovo avviso evento da {{nome_associazione}}",
         body_text=(
             "Ciao {{nome_socio}},\n\n"
             "ti segnaliamo un nuovo evento organizzato da {{nome_associazione}}.\n"
             "Maggiori dettagli sono disponibili qui: {{link_documento}}"
+        ),
+    ),
+    _system_template(
+        name="Newsletter base",
+        category="newsletter",
+        template_type=EMAIL_TEMPLATE_TYPE_NEWSLETTER,
+        subject="Aggiornamenti da {{nome_associazione}}",
+        body_text=(
+            "Ciao {{nome_socio}},\n\n"
+            "ecco gli aggiornamenti piu importanti della settimana da {{nome_associazione}}.\n\n"
+            "{{messaggio_org}}"
+        ),
+    ),
+    _system_template(
+        name="Reminder rinnovo",
+        category="renewal",
+        template_type=EMAIL_TEMPLATE_TYPE_RENEWAL_REMINDER,
+        subject="Reminder rinnovo {{nome_associazione}}",
+        body_text=(
+            "Ciao {{nome_socio}},\n\n"
+            "ti ricordiamo che il rinnovo della tua iscrizione e in scadenza.\n"
+            "Puoi completarlo qui: {{link_iscrizione}}"
+        ),
+    ),
+    _system_template(
+        name="Conferma prenotazione",
+        category="booking",
+        template_type=EMAIL_TEMPLATE_TYPE_BOOKING_CONFIRMATION,
+        subject="Prenotazione confermata - {{nome_associazione}}",
+        body_text=(
+            "Ciao {{nome_socio}},\n\n"
+            "la tua prenotazione per {{nome_evento}} e stata confermata.\n"
+            "Dettagli: {{data_evento}}\n"
+            "Stato: {{stato_prenotazione}}"
+        ),
+    ),
+    _system_template(
+        name="Rigetto prenotazione",
+        category="booking",
+        template_type=EMAIL_TEMPLATE_TYPE_BOOKING_REJECTION,
+        subject="Prenotazione non confermata - {{nome_associazione}}",
+        body_text=(
+            "Ciao {{nome_socio}},\n\n"
+            "la tua richiesta per {{nome_evento}} non puo essere confermata.\n"
+            "{{messaggio_org}}"
+        ),
+    ),
+    _system_template(
+        name="Invito evento",
+        category="events",
+        template_type=EMAIL_TEMPLATE_TYPE_EVENT,
+        subject="Invito: {{nome_evento}}",
+        body_text=(
+            "Ciao {{nome_socio}},\n\n"
+            "sei invitato a {{nome_evento}}.\n"
+            "Quando: {{data_evento}}\n"
+            "Apri i dettagli qui: {{link_evento}}"
         ),
     ),
 ]
@@ -396,6 +541,39 @@ def normalize_template_channel(value: str | None) -> str:
     return normalized
 
 
+def normalize_email_template_type(value: str | None) -> str:
+    normalized = (_normalize_text(value) or EMAIL_TEMPLATE_TYPE_GENERIC_NOTICE).lower()
+    aliases = {
+        "events": EMAIL_TEMPLATE_TYPE_EVENT,
+        "eventi": EMAIL_TEMPLATE_TYPE_EVENT,
+        "event": EMAIL_TEMPLATE_TYPE_EVENT,
+        "newsletter": EMAIL_TEMPLATE_TYPE_NEWSLETTER,
+        "renewal": EMAIL_TEMPLATE_TYPE_RENEWAL_REMINDER,
+        "reminder": EMAIL_TEMPLATE_TYPE_RENEWAL_REMINDER,
+        "booking": EMAIL_TEMPLATE_TYPE_GENERIC_NOTICE,
+        "booking_confirmation": EMAIL_TEMPLATE_TYPE_BOOKING_CONFIRMATION,
+        "booking_rejection": EMAIL_TEMPLATE_TYPE_BOOKING_REJECTION,
+        "generic": EMAIL_TEMPLATE_TYPE_GENERIC_NOTICE,
+        "generic_notice": EMAIL_TEMPLATE_TYPE_GENERIC_NOTICE,
+        "custom": EMAIL_TEMPLATE_TYPE_GENERIC_NOTICE,
+        "membership": EMAIL_TEMPLATE_TYPE_GENERIC_NOTICE,
+        "documents": EMAIL_TEMPLATE_TYPE_GENERIC_NOTICE,
+        "assembly": EMAIL_TEMPLATE_TYPE_EVENT,
+        "onboarding": EMAIL_TEMPLATE_TYPE_NEWSLETTER,
+    }
+    resolved = aliases.get(normalized, normalized)
+    if resolved not in EMAIL_TEMPLATE_TYPES:
+        raise HTTPException(status_code=422, detail="Tipo template non valido.")
+    return resolved
+
+
+def normalize_email_editor_status(value: str | None) -> str:
+    normalized = (_normalize_text(value) or EMAIL_EDITOR_STATUS_DRAFT).lower()
+    if normalized not in EMAIL_EDITOR_STATUSES:
+        raise HTTPException(status_code=422, detail="Stato editoriale non valido.")
+    return normalized
+
+
 def build_template_context(
     *,
     association: Any = None,
@@ -410,31 +588,43 @@ def build_template_context(
     first_name = _normalize_text(getattr(member, "first_name", None) if member is not None else None)
     last_name = _normalize_text(getattr(member, "last_name", None) if member is not None else None)
     full_name = " ".join(part for part in [first_name, last_name] if part).strip() or ""
+    recipient_email = _normalize_text(getattr(member, "email", None) if member is not None else None) or ""
     card_no = getattr(member, "card_no", None) if member is not None else None
     card_year = getattr(member, "card_year", None) if member is not None else None
 
     if fake:
+        first_name = first_name or "Mario"
+        last_name = last_name or "Rossi"
         full_name = full_name or "Mario Rossi"
+        recipient_email = recipient_email or "mario.rossi@example.com"
         card_no = card_no or 12345
         card_year = card_year or datetime.utcnow().year
 
     expiry = f"31/12/{int(card_year)}" if card_year else ""
     if base_url and association_slug:
-        renewal_link = f"{base_url}/associazioni/{association_slug}/iscrizione"
+        signup_link = f"{base_url}/associazioni/{association_slug}/iscrizione"
         document_link = f"{base_url}/associazioni/{association_slug}"
     else:
-        renewal_link = ""
+        signup_link = ""
         document_link = ""
 
     context = {
         "nome_socio": full_name,
+        "cognome_socio": last_name or "",
         "nome_associazione": association_name,
+        "email_socio": recipient_email,
         "numero_tessera": str(card_no or ""),
         "data_scadenza": expiry,
-        "link_rinnovo": renewal_link,
+        "link_iscrizione": signup_link,
+        "link_rinnovo": signup_link,
+        "link_evento": document_link,
         "link_documento": document_link,
+        "nome_evento": "",
+        "data_evento": "",
+        "stato_prenotazione": "",
+        "messaggio_org": "",
         "titolo_form": "",
-        "email_destinatario": "",
+        "email_destinatario": recipient_email,
     }
     for key, value in (extra_context or {}).items():
         normalized_key = _normalize_text(key)
@@ -791,9 +981,13 @@ def seed_system_email_templates(db: Session) -> int:
                 is_system=True,
                 name=template["name"],
                 category=template["category"],
+                template_type=normalize_email_template_type(template.get("template_type")),
                 subject=template["subject"],
                 body_html=template["body_html"],
                 body_text=template["body_text"],
+                editor_status=normalize_email_editor_status(template.get("editor_status")),
+                mjml_source=template.get("mjml_source"),
+                compiled_html=template.get("compiled_html"),
                 channel=EMAIL_TEMPLATE_CHANNEL,
                 is_active=True,
                 created_by_user_id=None,

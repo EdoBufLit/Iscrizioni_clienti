@@ -348,6 +348,12 @@ class Organization(Base):
         foreign_keys="EmailTemplate.association_id",
         cascade="all, delete-orphan",
     )
+    email_builder_assets = relationship(
+        "EmailBuilderAsset",
+        back_populates="organization",
+        foreign_keys="EmailBuilderAsset.association_id",
+        cascade="all, delete-orphan",
+    )
     email_campaign_recipients = relationship(
         "EmailCampaignRecipient",
         back_populates="organization",
@@ -1019,10 +1025,27 @@ class EmailTemplate(Base):
     )
     name = Column(String, nullable=False)
     category = Column(String, nullable=True, index=True)
+    template_type = Column(
+        String,
+        nullable=False,
+        default="generic_notice",
+        server_default="generic_notice",
+        index=True,
+    )
     subject = Column(String, nullable=False)
     body_html = Column(Text, nullable=True)
     body_text = Column(Text, nullable=True)
+    editor_status = Column(
+        String,
+        nullable=False,
+        default="draft",
+        server_default="draft",
+        index=True,
+    )
     design_json = Column(GENERIC_JSON_TYPE, nullable=True)
+    grapesjs_project_json = Column(GENERIC_JSON_TYPE, nullable=True)
+    mjml_source = Column(Text, nullable=True)
+    compiled_html = Column(Text, nullable=True)
     linked_form_id = Column(Integer, ForeignKey("forms.id"), nullable=True, index=True)
     channel = Column(String, nullable=False, default="email", server_default="email", index=True)
     is_active = Column(
@@ -1066,10 +1089,21 @@ class EmailCampaign(Base):
     id = Column(Integer, primary_key=True, index=True)
     association_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     name = Column(String, nullable=True)
+    source_template_id = Column(Integer, ForeignKey("email_templates.id"), nullable=True, index=True)
     subject = Column(String, nullable=False)
     body_html = Column(Text, nullable=True)
     body_text = Column(Text, nullable=True)
+    editor_status = Column(
+        String,
+        nullable=False,
+        default="draft",
+        server_default="draft",
+        index=True,
+    )
     design_json = Column(GENERIC_JSON_TYPE, nullable=True)
+    grapesjs_project_json = Column(GENERIC_JSON_TYPE, nullable=True)
+    mjml_source = Column(Text, nullable=True)
+    compiled_html = Column(Text, nullable=True)
     linked_form_id = Column(Integer, ForeignKey("forms.id"), nullable=True, index=True)
     audience_type = Column(String, nullable=False, index=True)
     recipient_mode = Column(
@@ -1092,6 +1126,7 @@ class EmailCampaign(Base):
         back_populates="email_campaigns",
         foreign_keys=[created_by_user_id],
     )
+    source_template = relationship("EmailTemplate", foreign_keys=[source_template_id])
     linked_form = relationship("Form", foreign_keys=[linked_form_id])
     recipients = relationship(
         "EmailCampaignRecipient",
@@ -1126,6 +1161,34 @@ class EmailCampaignRecipient(Base):
         foreign_keys=[association_id],
     )
     member = relationship("Member", foreign_keys=[user_id])
+
+
+class EmailBuilderAsset(Base):
+    __tablename__ = "email_builder_assets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    association_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    created_by_user_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True, index=True)
+    name = Column(String, nullable=False)
+    file_name = Column(String, nullable=False)
+    mime_type = Column(String, nullable=False)
+    size_bytes = Column(Integer, nullable=False, default=0, server_default="0")
+    storage_path = Column(Text, nullable=False)
+    public_url = Column(Text, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    organization = relationship(
+        "Organization",
+        back_populates="email_builder_assets",
+        foreign_keys=[association_id],
+    )
+    created_by_user = relationship("AdminUser", foreign_keys=[created_by_user_id])
 
 
 class WhatsAppAutomation(Base):
