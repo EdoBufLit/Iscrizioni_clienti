@@ -31,6 +31,14 @@ DEFAULT_FORM_SUBMISSION_WHATSAPP_TEMPLATE = (
     "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} e stata registrata correttamente. "
     "Ti ricontatteremo presto."
 )
+DEFAULT_FORM_CONFIRMATION_WHATSAPP_TEMPLATE = (
+    "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} e stata confermata. "
+    "Ti aspettiamo il {{data_prenotazione}} alle {{orario_prenotazione}}."
+)
+DEFAULT_FORM_REJECTION_WHATSAPP_TEMPLATE = (
+    "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} non puo essere confermata. "
+    "{{motivo_rigetto}}"
+)
 
 AVAILABLE_WHATSAPP_AUTOMATION_VARIABLES = [
     {"key": "nome_contatto", "placeholder": "{{nome_contatto}}", "label": "Nome contatto"},
@@ -330,6 +338,88 @@ def render_form_submission_whatsapp_template(
     return render_template_string(template, context=context) or ""
 
 
+def maybe_send_form_submission_decision_whatsapp_message(
+    db: Session,
+    *,
+    form: Any,
+    submission: FormSubmission,
+    member: Member | None,
+    booking: Booking | None,
+    decision_status: str,
+    review_reason: str | None = None,
+) -> dict[str, Any]:
+    normalized_decision = str(decision_status or "").strip().lower()
+    if normalized_decision not in {"confirmed", "rejected"}:
+        return {"sent": False, "reason": "unsupported_status"}
+    if not settings.ENABLE_WHATSAPP_EVOLUTION:
+        return {"sent": False, "reason": "feature_disabled"}
+
+    organization = getattr(form, "organization", None)
+    if organization is None or not bool(getattr(organization, "communications_enabled", False)):
+        return {"sent": False, "reason": "communications_disabled"}
+
+    candidate = prepare_form_submission_whatsapp_candidate(
+        form=form,
+        submission=submission,
+        member=member,
+        booking=booking,
+    )
+    if not candidate["available"]:
+        return {"sent": False, "reason": "missing_phone"}
+
+    connection = (
+        db.query(WhatsAppConnection)
+        .filter(WhatsAppConnection.org_id == int(form.association_id))
+        .first()
+    )
+    if connection is None or connection.status != "connected":
+        return {"sent": False, "reason": "connection_unavailable"}
+
+    template = _resolve_submission_decision_template(
+        form=form,
+        decision_status=normalized_decision,
+    )
+    text = _render_submission_decision_template(
+        template=template,
+        form=form,
+        submission=submission,
+        member=member,
+        booking=booking,
+        organization=organization,
+        phone_number=candidate["phone_number"],
+        review_reason=review_reason,
+    ).strip()
+    if not text:
+        return {"sent": False, "reason": "empty_template"}
+
+    send_result = _send_whatsapp_text(
+        db,
+        connection=connection,
+        phone_number=candidate["phone_number"],
+        text=text,
+        display_name=_resolve_contact_name(
+            submission=submission,
+            member=member,
+            booking=booking,
+        ),
+    )
+    if not send_result["sent"]:
+        logger.warning(
+            "form_submission_decision_whatsapp_failed org_id=%s form_id=%s submission_id=%s status=%s reason=%s",
+            form.association_id,
+            form.id,
+            submission.id,
+            normalized_decision,
+            send_result.get("reason"),
+        )
+        return send_result
+    return {
+        **send_result,
+        "source": candidate["source"],
+        "status": normalized_decision,
+    }
+
+
 def _build_form_submission_whatsapp_context(
     *,
     form: Any,
@@ -338,6 +428,7 @@ def _build_form_submission_whatsapp_context(
     booking: Booking | None,
     organization: Organization | None,
     phone_number: str | None,
+    extra_context: dict[str, str] | None = None,
 ) -> dict[str, str]:
     payload = submission.payload_json if isinstance(submission.payload_json, dict) else {}
     contact_name = _resolve_contact_name(
@@ -367,7 +458,50 @@ def _build_form_submission_whatsapp_context(
         if not normalized_key:
             continue
         context[normalized_key] = _stringify_template_value(value)
+    if extra_context:
+        for key, value in extra_context.items():
+            normalized_key = str(key or "").strip()
+            if not normalized_key:
+                continue
+            context[normalized_key] = _stringify_template_value(value)
     return context
+
+
+def _resolve_submission_decision_template(*, form: Any, decision_status: str) -> str:
+    if decision_status == "confirmed":
+        return (
+            getattr(form, "whatsapp_confirmation_template", None)
+            or DEFAULT_FORM_CONFIRMATION_WHATSAPP_TEMPLATE
+        )
+    return (
+        getattr(form, "whatsapp_rejection_template", None)
+        or DEFAULT_FORM_REJECTION_WHATSAPP_TEMPLATE
+    )
+
+
+def _render_submission_decision_template(
+    *,
+    template: str,
+    form: Any,
+    submission: FormSubmission,
+    member: Member | None,
+    booking: Booking | None,
+    organization: Organization | None,
+    phone_number: str | None,
+    review_reason: str | None,
+) -> str:
+    context = _build_form_submission_whatsapp_context(
+        form=form,
+        submission=submission,
+        member=member,
+        booking=booking,
+        organization=organization,
+        phone_number=phone_number,
+        extra_context={
+            "motivo_rigetto": review_reason or "Se hai bisogno di supporto contatta la segreteria.",
+        },
+    )
+    return render_template_string(template, context=context) or ""
 
 
 def _resolve_phone_from_form_payload(

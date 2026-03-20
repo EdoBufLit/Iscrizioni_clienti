@@ -38,6 +38,10 @@ BOOKING_STATUSES = {
     BookingStatus.CANCELLED.value,
     BookingStatus.NO_SHOW.value,
 }
+REQUEST_STATUS_LEGACY_NEW = "new"
+REQUEST_STATUS_PENDING = "pending"
+REQUEST_STATUS_CONFIRMED = "confirmed"
+REQUEST_STATUS_REJECTED = "rejected"
 
 _TIME_PATTERN = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
 
@@ -81,6 +85,8 @@ def serialize_booking_event(event: BookingEvent) -> dict[str, Any]:
 
 
 def serialize_booking(booking: Booking, *, include_events: bool = False) -> dict[str, Any]:
+    request_status = _normalize_request_status(getattr(getattr(booking, "submission", None), "status", None))
+    request_review_summary = _serialize_request_review_summary(getattr(booking, "submission", None))
     return {
         "id": booking.id,
         "association_id": booking.association_id,
@@ -129,10 +135,41 @@ def serialize_booking(booking: Booking, *, include_events: bool = False) -> dict
         "submission": {
             "id": booking.submission.id,
             "submitted_at": booking.submission.submitted_at.isoformat() if booking.submission.submitted_at else None,
+            "status": request_status,
         }
         if booking.submission is not None
         else None,
+        "request_status": request_status,
+        "request_review_summary": request_review_summary,
         "events": [serialize_booking_event(item) for item in list(booking.events or [])] if include_events else [],
+    }
+
+
+def _normalize_request_status(value: Any) -> str | None:
+    normalized = _normalize_text(value)
+    if normalized is None:
+        return None
+    lowered = normalized.lower()
+    if lowered == REQUEST_STATUS_LEGACY_NEW:
+        return REQUEST_STATUS_PENDING
+    if lowered in {REQUEST_STATUS_PENDING, REQUEST_STATUS_CONFIRMED, REQUEST_STATUS_REJECTED}:
+        return lowered
+    return lowered
+
+
+def _serialize_request_review_summary(submission: FormSubmission | None) -> dict[str, Any] | None:
+    if submission is None:
+        return None
+    return {
+        "status": _normalize_request_status(getattr(submission, "status", None)),
+        "reviewed_at": submission.reviewed_at.isoformat() if getattr(submission, "reviewed_at", None) else None,
+        "review_reason": getattr(submission, "review_reason", None),
+        "reviewed_by": {
+            "id": submission.reviewed_by_admin.id,
+            "email": submission.reviewed_by_admin.email,
+        }
+        if getattr(submission, "reviewed_by_admin", None) is not None
+        else None,
     }
 
 

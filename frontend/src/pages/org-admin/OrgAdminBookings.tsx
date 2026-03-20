@@ -14,6 +14,7 @@ import {
   fetchOrgAdminRoomTables,
   saveOrgAdminRoomMap,
   unassignOrgAdminBookingTable,
+  updateOrgAdminFormSubmissionStatus,
   updateOrgAdminBooking,
   updateOrgAdminRoom,
   updateOrgAdminRoomTable,
@@ -24,7 +25,9 @@ import {
   type AssociationRoomTable,
 } from "../../lib/api";
 import { applySeo } from "../../lib/seo";
+import ConfirmModal from "../../components/ui/ConfirmModal";
 import ModalShell from "../../components/ui/ModalShell";
+import PromptModal from "../../components/ui/PromptModal";
 import Skeleton from "../../components/ui/Skeleton";
 import { useToast } from "../../components/ui/ToastProvider";
 import { RoomFloorMap } from "../../components/bookings/RoomFloorMap";
@@ -137,6 +140,20 @@ function toneForStatus(status: string) {
   }
 }
 
+function requestStatusMeta(status: string | null | undefined) {
+  switch ((status || "").toLowerCase()) {
+    case "confirmed":
+      return { label: "Richiesta confermata", className: "status-badge status-badge--success" };
+    case "rejected":
+      return { label: "Richiesta rigettata", className: "status-badge status-badge--danger" };
+    case "pending":
+    case "new":
+      return { label: "Richiesta pending", className: "status-badge status-badge--pending" };
+    default:
+      return { label: "Richiesta non disponibile", className: "status-badge status-badge--info" };
+  }
+}
+
 function occupancyTone(state: string) {
   switch (state) {
     case "reserved":
@@ -241,6 +258,10 @@ export default function OrgAdminBookings() {
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
   const [selectedBookingId, setSelectedBookingId] = useState<number | null>(null);
   const [selectedBooking, setSelectedBooking] = useState<AssociationBooking | null>(null);
+  const [requestActionState, setRequestActionState] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [requestActionError, setRequestActionError] = useState<string | null>(null);
+  const [requestConfirmOpen, setRequestConfirmOpen] = useState<false | "confirmed" | "pending">(false);
+  const [requestRejectOpen, setRequestRejectOpen] = useState(false);
   const [assignmentRoomId, setAssignmentRoomId] = useState<number | "">("");
   const [assignmentTableId, setAssignmentTableId] = useState<number | "">("");
   const [assignmentTables, setAssignmentTables] = useState<AssociationRoomTable[]>([]);
@@ -647,6 +668,48 @@ export default function OrgAdminBookings() {
     }
   }
 
+  async function handleLinkedRequestDecision(nextStatus: "pending" | "confirmed" | "rejected", reason?: string) {
+    if (!selectedBooking?.form_id || !selectedBooking?.submission_id) return;
+    setRequestActionState("loading");
+    setRequestActionError(null);
+    try {
+      await updateOrgAdminFormSubmissionStatus(selectedBooking.form_id, selectedBooking.submission_id, {
+        status: nextStatus,
+        reason: reason?.trim() || null,
+      });
+      const detail = await fetchOrgAdminBooking(selectedBooking.id);
+      setSelectedBooking(detail.booking);
+      await loadBookings();
+      if (selectedRoomId) {
+        await loadRoomState(selectedRoomId);
+      }
+      setRequestConfirmOpen(false);
+      setRequestRejectOpen(false);
+      setRequestActionState("success");
+      showToast({
+        tone: "success",
+        title:
+          nextStatus === "confirmed"
+            ? "Richiesta confermata"
+            : nextStatus === "rejected"
+              ? "Richiesta rigettata"
+              : "Richiesta riportata in attesa",
+        message: "Dettaglio prenotazione e stato richiesta aggiornati.",
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Errore aggiornamento richiesta collegata.";
+      setRequestActionError(message);
+      setRequestActionState("error");
+      showToast({
+        tone: "error",
+        title: "Aggiornamento non riuscito",
+        message,
+      });
+    } finally {
+      window.setTimeout(() => setRequestActionState("idle"), 1200);
+    }
+  }
+
   async function handleMapSave() {
     if (!selectedRoomId) return;
     setSaving("map");
@@ -823,8 +886,11 @@ export default function OrgAdminBookings() {
             assignmentTables={assignmentTables}
             onStatusChange={handleBookingStatus}
             onSaveAssignment={handleAssignmentSave}
-              onClearAssignment={handleAssignmentClear}
-              saving={saving}
+            onClearAssignment={handleAssignmentClear}
+            requestActionState={requestActionState}
+            onOpenRequestConfirm={setRequestConfirmOpen}
+            onOpenRequestReject={setRequestRejectOpen}
+            saving={saving}
             />
           </div>
         )}
@@ -1144,6 +1210,48 @@ export default function OrgAdminBookings() {
           </div>
         </form>
       </ModalShell>
+      <ConfirmModal
+        open={requestConfirmOpen === "confirmed"}
+        title="Confermare la richiesta collegata?"
+        description="La richiesta passera a confermata e la prenotazione verra riallineata."
+        confirmLabel="Conferma richiesta"
+        confirmState={requestActionState}
+        onClose={() => {
+          if (requestActionState === "loading") return;
+          setRequestConfirmOpen(false);
+          setRequestActionError(null);
+        }}
+        onConfirm={() => void handleLinkedRequestDecision("confirmed")}
+      />
+      <ConfirmModal
+        open={requestConfirmOpen === "pending"}
+        title="Riportare la richiesta collegata in attesa?"
+        description="La review verra rimossa e la richiesta tornera nello stato pending."
+        confirmLabel="Riporta a pending"
+        confirmState={requestActionState}
+        onClose={() => {
+          if (requestActionState === "loading") return;
+          setRequestConfirmOpen(false);
+          setRequestActionError(null);
+        }}
+        onConfirm={() => void handleLinkedRequestDecision("pending")}
+      />
+      <PromptModal
+        open={requestRejectOpen}
+        title="Rigettare la richiesta collegata?"
+        description="Il motivo viene salvato nell'audit e mostrato nel riepilogo prenotazione."
+        label="Motivo del rigetto"
+        placeholder="Es. disponibilita esaurita o dati non sufficienti."
+        confirmLabel="Rigetta richiesta"
+        confirmState={requestActionState}
+        error={requestActionError}
+        onClose={() => {
+          if (requestActionState === "loading") return;
+          setRequestRejectOpen(false);
+          setRequestActionError(null);
+        }}
+        onConfirm={(value) => void handleLinkedRequestDecision("rejected", value)}
+      />
     </div>
   );
 }
@@ -1243,6 +1351,9 @@ function AgendaSection(props: {
   onStatusChange: (status: string) => void;
   onSaveAssignment: () => void;
   onClearAssignment: () => void;
+  requestActionState: "idle" | "loading" | "success" | "error";
+  onOpenRequestConfirm: (value: false | "confirmed" | "pending") => void;
+  onOpenRequestReject: (value: boolean) => void;
   saving: string;
 }) {
   const monthDate = new Date(`${props.agendaMonth}T00:00:00`);
@@ -1440,6 +1551,9 @@ function AgendaSection(props: {
               onStatusChange={props.onStatusChange}
               onSaveAssignment={props.onSaveAssignment}
               onClearAssignment={props.onClearAssignment}
+              requestActionState={props.requestActionState}
+              onOpenRequestConfirm={props.onOpenRequestConfirm}
+              onOpenRequestReject={props.onOpenRequestReject}
               saving={props.saving}
             />
           </div>
@@ -1460,11 +1574,16 @@ function BookingDetailPanel(props: {
   onStatusChange: (status: string) => void;
   onSaveAssignment: () => void;
   onClearAssignment: () => void;
+  requestActionState: "idle" | "loading" | "success" | "error";
+  onOpenRequestConfirm: (value: false | "confirmed" | "pending") => void;
+  onOpenRequestReject: (value: boolean) => void;
   saving: string;
 }) {
   if (!props.selectedBooking) {
     return <div className="rounded-[1.25rem] bg-slate-50/50 p-8 text-center ring-1 ring-inset ring-slate-200/60 border-dashed text-sm text-slate-500">Seleziona una prenotazione dal popup per vedere dettaglio, stato e assegnazione tavolo.</div>;
   }
+
+  const requestMeta = requestStatusMeta(props.selectedBooking.request_status);
 
   return (
     <div className="space-y-6">
@@ -1502,6 +1621,62 @@ function BookingDetailPanel(props: {
           </div>
         ) : null}
       </div>
+
+      {props.selectedBooking.submission_id ? (
+        <div className="rounded-[1.25rem] bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Richiesta collegata</p>
+              <p className="mt-2 text-lg font-semibold text-slate-900">{requestMeta.label}</p>
+              <p className="mt-1 text-sm text-slate-500">
+                Submission #{props.selectedBooking.submission_id}
+                {props.selectedBooking.request_review_summary?.reviewed_at
+                  ? ` · ${formatDateTime(props.selectedBooking.request_review_summary.reviewed_at)}`
+                  : ""}
+              </p>
+            </div>
+            <span className={requestMeta.className}>{requestMeta.label}</span>
+          </div>
+          {props.selectedBooking.request_review_summary?.review_reason ? (
+            <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-rose-700">Motivo rigetto</p>
+              <p className="mt-2 leading-6">{props.selectedBooking.request_review_summary.review_reason}</p>
+            </div>
+          ) : null}
+          <div className="mt-4 flex flex-wrap gap-3">
+            {props.selectedBooking.request_status !== "confirmed" ? (
+              <button
+                type="button"
+                className="btn-success"
+                disabled={props.requestActionState === "loading"}
+                onClick={() => props.onOpenRequestConfirm("confirmed")}
+              >
+                Conferma richiesta
+              </button>
+            ) : null}
+            {props.selectedBooking.request_status !== "rejected" ? (
+              <button
+                type="button"
+                className="btn-danger"
+                disabled={props.requestActionState === "loading"}
+                onClick={() => props.onOpenRequestReject(true)}
+              >
+                Rigetta richiesta
+              </button>
+            ) : null}
+            {props.selectedBooking.request_status !== "pending" && props.selectedBooking.request_status !== "new" ? (
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={props.requestActionState === "loading"}
+                onClick={() => props.onOpenRequestConfirm("pending")}
+              >
+                Riporta a pending
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       <div className="rounded-[1.25rem] bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60 shadow-sm">
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-4">Stato servizio</p>

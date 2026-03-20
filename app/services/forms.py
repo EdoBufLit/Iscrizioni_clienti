@@ -61,6 +61,15 @@ FIELD_TYPE_ALIASES = {
 }
 _EMAIL_ADAPTER = TypeAdapter(EmailStr)
 FORMS_MODULE_LOCKED_MESSAGE = "I Form richiedono il modulo Comunicazioni attivo."
+FORM_SUBMISSION_STATUS_PENDING = "pending"
+FORM_SUBMISSION_STATUS_CONFIRMED = "confirmed"
+FORM_SUBMISSION_STATUS_REJECTED = "rejected"
+FORM_SUBMISSION_STATUS_LEGACY_NEW = "new"
+ALLOWED_FORM_SUBMISSION_STATUSES = {
+    FORM_SUBMISSION_STATUS_PENDING,
+    FORM_SUBMISSION_STATUS_CONFIRMED,
+    FORM_SUBMISSION_STATUS_REJECTED,
+}
 
 
 @dataclass(frozen=True)
@@ -156,6 +165,59 @@ def normalize_form_whatsapp_template(value: Any) -> str | None:
     if normalized is None:
         return None
     return normalized[:4096]
+
+
+def default_form_whatsapp_confirmation_template(form_type: Any, *, booking_enabled: bool = False) -> str:
+    normalized_form_type = normalize_form_type(form_type, booking_enabled=booking_enabled)
+    if booking_enabled or normalized_form_type == "booking":
+        return (
+            "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} e stata confermata. "
+            "Ti aspettiamo il {{data_prenotazione}} alle {{orario_prenotazione}}."
+        )
+    return (
+        "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} e stata confermata. "
+        "Ti ricontatteremo se serviranno altri dettagli."
+    )
+
+
+def default_form_whatsapp_rejection_template(form_type: Any, *, booking_enabled: bool = False) -> str:
+    normalized_form_type = normalize_form_type(form_type, booking_enabled=booking_enabled)
+    if booking_enabled or normalized_form_type == "booking":
+        return (
+            "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} non puo essere confermata. "
+            "{{motivo_rigetto}}"
+        )
+    return (
+        "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} e stata rigettata. "
+        "{{motivo_rigetto}}"
+    )
+
+
+def normalize_submission_status(value: Any) -> str:
+    normalized = (_normalize_text(value) or FORM_SUBMISSION_STATUS_PENDING).lower()
+    if normalized == FORM_SUBMISSION_STATUS_LEGACY_NEW:
+        return FORM_SUBMISSION_STATUS_PENDING
+    if normalized not in ALLOWED_FORM_SUBMISSION_STATUSES:
+        raise HTTPException(status_code=422, detail="Stato richiesta non valido.")
+    return normalized
+
+
+def _submission_available_actions(status: str) -> dict[str, bool]:
+    normalized = normalize_submission_status(status)
+    return {
+        "set_pending": normalized != FORM_SUBMISSION_STATUS_PENDING,
+        "confirm": normalized != FORM_SUBMISSION_STATUS_CONFIRMED,
+        "reject": normalized != FORM_SUBMISSION_STATUS_REJECTED,
+    }
+
+
+def _serialize_submission_reviewer(admin: AdminUser | None) -> dict[str, Any] | None:
+    if admin is None:
+        return None
+    return {
+        "id": admin.id,
+        "email": admin.email,
+    }
 
 
 def normalize_form_cover_image_url(value: Any) -> str | None:
@@ -402,6 +464,8 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
         "send_user_confirmation": bool(getattr(form, "send_user_confirmation", True)),
         "whatsapp_auto_reply_enabled": bool(getattr(form, "whatsapp_auto_reply_enabled", False)),
         "whatsapp_auto_reply_template": getattr(form, "whatsapp_auto_reply_template", None),
+        "whatsapp_confirmation_template": getattr(form, "whatsapp_confirmation_template", None),
+        "whatsapp_rejection_template": getattr(form, "whatsapp_rejection_template", None),
         "admin_notification_template_id": getattr(form, "admin_notification_template_id", None),
         "user_confirmation_template_id": getattr(form, "user_confirmation_template_id", None),
         "create_internal_request": bool(getattr(form, "create_internal_request", False)),
@@ -436,6 +500,8 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
             "send_user_confirmation": bool(getattr(form, "send_user_confirmation", True)),
             "whatsapp_auto_reply_enabled": bool(getattr(form, "whatsapp_auto_reply_enabled", False)),
             "whatsapp_auto_reply_template": getattr(form, "whatsapp_auto_reply_template", None),
+            "whatsapp_confirmation_template": getattr(form, "whatsapp_confirmation_template", None),
+            "whatsapp_rejection_template": getattr(form, "whatsapp_rejection_template", None),
             "admin_notification_template": _serialize_template_summary(
                 getattr(form, "admin_notification_template", None)
             ),
@@ -498,14 +564,19 @@ def resolve_form_notification_email(db: Session, *, form: Form) -> str | None:
 def serialize_submission(submission: FormSubmission) -> dict[str, Any]:
     member = submission.member
     booking = next(iter(submission.bookings or []), None)
+    normalized_status = normalize_submission_status(submission.status)
     return {
         "id": submission.id,
         "form_id": submission.form_id,
         "association_id": submission.association_id,
         "submitted_by_user_id": submission.submitted_by_user_id,
         "submitted_at": submission.submitted_at.isoformat() if submission.submitted_at else None,
-        "status": submission.status,
+        "status": normalized_status,
         "payload_json": submission.payload_json or {},
+        "reviewed_at": submission.reviewed_at.isoformat() if submission.reviewed_at else None,
+        "review_reason": submission.review_reason,
+        "reviewed_by": _serialize_submission_reviewer(getattr(submission, "reviewed_by_admin", None)),
+        "available_actions": _submission_available_actions(normalized_status),
         "submitted_by": {
             "id": member.id,
             "name": f"{(member.first_name or '').strip()} {(member.last_name or '').strip()}".strip()
@@ -555,6 +626,8 @@ def apply_form_updates(
     send_user_confirmation: bool,
     whatsapp_auto_reply_enabled: bool,
     whatsapp_auto_reply_template: Any,
+    whatsapp_confirmation_template: Any,
+    whatsapp_rejection_template: Any,
     admin_notification_template_id: Any,
     user_confirmation_template_id: Any,
     create_internal_request: bool,
@@ -594,6 +667,12 @@ def apply_form_updates(
     form.whatsapp_auto_reply_enabled = bool(whatsapp_auto_reply_enabled)
     form.whatsapp_auto_reply_template = normalize_form_whatsapp_template(
         whatsapp_auto_reply_template
+    )
+    form.whatsapp_confirmation_template = normalize_form_whatsapp_template(
+        whatsapp_confirmation_template
+    )
+    form.whatsapp_rejection_template = normalize_form_whatsapp_template(
+        whatsapp_rejection_template
     )
     form.admin_notification_template_id = _resolve_template_reference(
         db,
@@ -797,7 +876,7 @@ def create_submission(
         association_id=form.association_id,
         submitted_by_user_id=member.id if member is not None else None,
         payload_json=validated_submission.payload,
-        status="new",
+        status=FORM_SUBMISSION_STATUS_PENDING,
     )
     db.add(submission)
     db.flush()

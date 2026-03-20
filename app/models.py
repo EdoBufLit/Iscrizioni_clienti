@@ -761,6 +761,11 @@ class AdminUser(Base):
         back_populates="created_by_user",
         foreign_keys="BookingEvent.created_by_user_id",
     )
+    reviewed_form_submissions = relationship(
+        "FormSubmission",
+        back_populates="reviewed_by_admin",
+        foreign_keys="FormSubmission.reviewed_by_admin_id",
+    )
 
 
 class OrganizationSharedDocument(Base):
@@ -1205,6 +1210,8 @@ class Form(Base):
         Boolean, nullable=False, default=False, server_default="false"
     )
     whatsapp_auto_reply_template = Column(Text, nullable=True)
+    whatsapp_confirmation_template = Column(Text, nullable=True)
+    whatsapp_rejection_template = Column(Text, nullable=True)
     admin_notification_template_id = Column(
         Integer, ForeignKey("email_templates.id"), nullable=True, index=True
     )
@@ -1323,6 +1330,9 @@ class FormSubmission(Base):
     submitted_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
     status = Column(String, nullable=False, default="new", server_default="new", index=True)
     payload_json = Column(GENERIC_JSON_TYPE, nullable=False, default=dict)
+    reviewed_at = Column(DateTime, nullable=True)
+    reviewed_by_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True, index=True)
+    review_reason = Column(Text, nullable=True)
 
     form = relationship("Form", back_populates="submissions", foreign_keys=[form_id])
     organization = relationship(
@@ -1331,6 +1341,11 @@ class FormSubmission(Base):
         foreign_keys=[association_id],
     )
     member = relationship("Member", back_populates="form_submissions", foreign_keys=[submitted_by_user_id])
+    reviewed_by_admin = relationship(
+        "AdminUser",
+        back_populates="reviewed_form_submissions",
+        foreign_keys=[reviewed_by_admin_id],
+    )
     bookings = relationship(
         "Booking",
         back_populates="submission",

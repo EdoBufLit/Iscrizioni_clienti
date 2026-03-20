@@ -835,6 +835,182 @@ def test_booking_enabled_form_creates_booking_and_exposes_agenda(client, db):
     submissions_res = client.get(f"/api/org-admin/forms/{form_id}/submissions")
     assert submissions_res.status_code == 200, submissions_res.text
     assert submissions_res.json()["items"][0]["booking"]["status"] == "confirmed"
+    assert submissions_res.json()["items"][0]["status"] == "pending"
+
+
+def test_org_admin_can_review_form_submission_and_dispatch_whatsapp(client, db, monkeypatch):
+    original_enabled = settings.ENABLE_WHATSAPP_EVOLUTION
+    settings.ENABLE_WHATSAPP_EVOLUTION = True
+    try:
+        org, admin = _create_org_admin(db)
+        _login_org_admin(client, db, admin.id)
+        public_slug = f"review-richiesta-{uuid.uuid4().hex[:6]}"
+
+        create_res = client.post(
+            "/api/org-admin/forms",
+            json={
+                "title": "Prenotazione review",
+                "public_slug": public_slug,
+                "is_active": True,
+                "visibility": "public",
+                "form_type": "booking",
+                "booking_enabled": True,
+                "whatsapp_confirmation_template": "Conferma per {{titolo_form}} il {{data_prenotazione}} alle {{orario_prenotazione}}.",
+                "whatsapp_rejection_template": "Rigetto per {{titolo_form}}. {{motivo_rigetto}}",
+                "booking_field_mapping": {
+                    "customer_name": "nome_cliente",
+                    "customer_phone": "telefono",
+                    "booking_date": "data_prenotazione",
+                    "booking_time": "orario_prenotazione",
+                },
+            },
+        )
+        assert create_res.status_code == 201, create_res.text
+        form_id = create_res.json()["form"]["id"]
+
+        for index, field in enumerate(
+            [
+                {"field_type": "short_text", "label": "Nome cliente", "field_key": "nome_cliente"},
+                {"field_type": "phone", "label": "Telefono", "field_key": "telefono"},
+                {"field_type": "date", "label": "Data", "field_key": "data_prenotazione"},
+                {"field_type": "short_text", "label": "Orario", "field_key": "orario_prenotazione"},
+            ]
+        ):
+            field_res = client.post(
+                f"/api/org-admin/forms/{form_id}/fields",
+                json={**field, "is_required": True, "sort_order": index * 10},
+            )
+            assert field_res.status_code == 201, field_res.text
+
+        connection = get_or_create_connection(db, org)
+        connection.status = "connected"
+        connection.phone_number = "+393404244452"
+        db.commit()
+
+        sent_payloads: list[dict[str, str]] = []
+
+        class _FakeSendResult:
+            def __init__(self, message_id: str):
+                self.external_message_id = message_id
+                self.status = "sent"
+                self.raw = {"id": message_id, "status": "sent"}
+
+        def fake_send_text(self, instance_name: str, *, number: str, text: str):
+            sent_payloads.append({"instance_name": instance_name, "number": number, "text": text})
+            return _FakeSendResult(f"wamid-review-{uuid.uuid4().hex[:10]}")
+
+        monkeypatch.setattr(
+            "app.services.whatsapp_automation.EvolutionLiteClient.send_text",
+            fake_send_text,
+        )
+
+        submit_res = client.post(
+            f"/api/forms/{org.slug}/{public_slug}/submit",
+            json={
+                "nome_cliente": "Elena Neri",
+                "telefono": "+39 333 4567890",
+                "data_prenotazione": "2026-03-29",
+                "orario_prenotazione": "20:15",
+            },
+        )
+        assert submit_res.status_code == 200, submit_res.text
+        submission_id = submit_res.json()["submission"]["id"]
+        booking_id = submit_res.json()["booking"]["id"]
+        assert submit_res.json()["submission"]["status"] == "pending"
+
+        confirm_res = client.patch(
+            f"/api/org-admin/forms/{form_id}/submissions/{submission_id}/status",
+            json={"status": "confirmed"},
+        )
+        assert confirm_res.status_code == 200, confirm_res.text
+        assert confirm_res.json()["submission"]["status"] == "confirmed"
+        assert confirm_res.json()["submission"]["reviewed_by"]["id"] == admin.id
+        assert confirm_res.json()["booking"]["id"] == booking_id
+        assert confirm_res.json()["booking"]["status"] == "confirmed"
+        assert confirm_res.json()["booking"]["request_status"] == "confirmed"
+        assert confirm_res.json()["whatsapp_result"]["sent"] is True
+
+        repeat_res = client.patch(
+            f"/api/org-admin/forms/{form_id}/submissions/{submission_id}/status",
+            json={"status": "confirmed"},
+        )
+        assert repeat_res.status_code == 200, repeat_res.text
+        assert repeat_res.json()["whatsapp_result"]["sent"] is False
+        assert repeat_res.json()["whatsapp_result"]["reason"] == "unchanged"
+        assert len(sent_payloads) == 1
+        assert sent_payloads[0]["instance_name"] == f"assonam-org-{org.id}"
+        assert sent_payloads[0]["number"] == "+393334567890"
+        assert "Conferma per Prenotazione review" in sent_payloads[0]["text"]
+
+        reject_res = client.patch(
+            f"/api/org-admin/forms/{form_id}/submissions/{submission_id}/status",
+            json={"status": "rejected", "reason": "Posti esauriti"},
+        )
+        assert reject_res.status_code == 200, reject_res.text
+        assert reject_res.json()["submission"]["status"] == "rejected"
+        assert reject_res.json()["submission"]["review_reason"] == "Posti esauriti"
+        assert reject_res.json()["booking"]["status"] == "cancelled"
+        assert reject_res.json()["booking"]["request_status"] == "rejected"
+        assert reject_res.json()["whatsapp_result"]["sent"] is True
+        assert len(sent_payloads) == 2
+        assert "Posti esauriti" in sent_payloads[1]["text"]
+    finally:
+        settings.ENABLE_WHATSAPP_EVOLUTION = original_enabled
+
+
+def test_legacy_form_submission_status_new_is_normalized_to_pending(client, db):
+    org, admin = _create_org_admin(db)
+    _login_org_admin(client, db, admin.id)
+    public_slug = f"legacy-status-{uuid.uuid4().hex[:6]}"
+
+    create_res = client.post(
+        "/api/org-admin/forms",
+        json={
+            "title": "Legacy status form",
+            "public_slug": public_slug,
+            "is_active": True,
+            "visibility": "public",
+        },
+    )
+    assert create_res.status_code == 201, create_res.text
+    form_id = create_res.json()["form"]["id"]
+
+    field_res = client.post(
+        f"/api/org-admin/forms/{form_id}/fields",
+        json={
+            "field_type": "short_text",
+            "label": "Nome",
+            "field_key": "nome",
+            "is_required": True,
+            "sort_order": 0,
+        },
+    )
+    assert field_res.status_code == 201, field_res.text
+
+    submit_res = client.post(
+        f"/api/forms/{org.slug}/{public_slug}/submit",
+        json={"nome": "Mario Legacy"},
+    )
+    assert submit_res.status_code == 200, submit_res.text
+    submission_id = submit_res.json()["submission"]["id"]
+
+    verification_db = SessionLocal()
+    try:
+        submission = verification_db.query(FormSubmission).filter(FormSubmission.id == submission_id).first()
+        assert submission is not None
+        submission.status = "new"
+        verification_db.add(submission)
+        verification_db.commit()
+    finally:
+        verification_db.close()
+
+    list_res = client.get(f"/api/org-admin/forms/{form_id}/submissions")
+    assert list_res.status_code == 200, list_res.text
+    assert list_res.json()["items"][0]["status"] == "pending"
+
+    detail_res = client.get(f"/api/org-admin/forms/{form_id}/submissions/{submission_id}")
+    assert detail_res.status_code == 200, detail_res.text
+    assert detail_res.json()["submission"]["status"] == "pending"
 
 
 def test_booking_rooms_tables_and_assignment_flow(client, db):

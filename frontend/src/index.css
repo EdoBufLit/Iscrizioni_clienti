@@ -179,6 +179,118 @@ body::before {
     @apply translate-y-0 bg-neutral-50;
   }
 
+  .btn-secondary,
+  .btn-success,
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold transition-all duration-200;
+  }
+
+  .btn-secondary {
+    @apply border-neutral-300 bg-white text-neutral-800 shadow-sm;
+  }
+
+  .btn-secondary:hover {
+    @apply -translate-y-px border-neutral-400 bg-neutral-50 text-neutral-950;
+  }
+
+  .btn-secondary:focus-visible,
+  .btn-success:focus-visible,
+  .btn-danger:focus-visible {
+    @apply outline-none ring-2 ring-offset-2;
+  }
+
+  .btn-secondary:focus-visible {
+    @apply ring-neutral-900/15;
+  }
+
+  .btn-success {
+    @apply border-emerald-300 bg-emerald-600 text-white shadow-sm;
+  }
+
+  .btn-success:hover {
+    @apply -translate-y-px border-emerald-400 bg-emerald-700;
+  }
+
+  .btn-success:focus-visible {
+    @apply ring-emerald-500/25;
+  }
+
+  .btn-danger {
+    @apply border-rose-300 bg-rose-600 text-white shadow-sm;
+  }
+
+  .btn-danger:hover {
+    @apply -translate-y-px border-rose-400 bg-rose-700;
+  }
+
+  .btn-danger:focus-visible {
+    @apply ring-rose-500/25;
+  }
+
+  .btn-sm {
+    @apply px-3 py-2 text-xs;
+  }
+
+  .btn-lg {
+    @apply px-5 py-3 text-base;
+  }
+
+  .admin-eyebrow {
+    @apply text-[11px] font-bold uppercase tracking-[0.22em] text-neutral-500;
+  }
+
+  .admin-toolbar {
+    @apply flex flex-col gap-4 rounded-xl border border-neutral-200 bg-white px-5 py-5 shadow-sm md:flex-row md:items-center md:justify-between;
+  }
+
+  .admin-panel {
+    @apply rounded-xl border border-neutral-200 bg-white shadow-sm;
+  }
+
+  .admin-panel--soft {
+    @apply bg-neutral-50/70;
+  }
+
+  .admin-panel__header {
+    @apply flex flex-wrap items-start justify-between gap-4 border-b border-neutral-200 px-5 py-4;
+  }
+
+  .admin-stat {
+    @apply rounded-xl border border-neutral-200 bg-white px-4 py-4 shadow-sm;
+  }
+
+  .admin-stat__label {
+    @apply block text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500;
+  }
+
+  .admin-stat__value {
+    @apply mt-2 block text-2xl font-semibold tracking-tight text-neutral-950;
+  }
+
+  .admin-empty-state {
+    @apply flex min-h-[16rem] flex-col items-center justify-center px-6 py-10 text-center;
+  }
+
+  .status-badge {
+    @apply inline-flex items-center justify-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em];
+  }
+
+  .status-badge--pending {
+    @apply bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200;
+  }
+
+  .status-badge--success {
+    @apply bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-200;
+  }
+
+  .status-badge--danger {
+    @apply bg-rose-50 text-rose-800 ring-1 ring-inset ring-rose-200;
+  }
+
+  .status-badge--info {
+    @apply bg-sky-50 text-sky-800 ring-1 ring-inset ring-sky-200;
+  }
+
   .premium-select {
     @apply rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm font-semibold text-neutral-700 outline-none transition-all duration-200 cursor-pointer;
   }

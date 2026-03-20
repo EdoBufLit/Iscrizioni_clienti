@@ -954,6 +954,8 @@ export type AssociationForm = {
   send_user_confirmation: boolean;
   whatsapp_auto_reply_enabled: boolean;
   whatsapp_auto_reply_template: string | null;
+  whatsapp_confirmation_template: string | null;
+  whatsapp_rejection_template: string | null;
   admin_notification_template_id: number | null;
   user_confirmation_template_id: number | null;
   create_internal_request: boolean;
@@ -982,6 +984,8 @@ export type AssociationForm = {
     send_user_confirmation: boolean;
     whatsapp_auto_reply_enabled: boolean;
     whatsapp_auto_reply_template: string | null;
+    whatsapp_confirmation_template: string | null;
+    whatsapp_rejection_template: string | null;
     admin_notification_template: AssociationFormActionTemplate | null;
     user_confirmation_template: AssociationFormActionTemplate | null;
     create_internal_request: boolean;
@@ -1027,6 +1031,17 @@ export type AssociationFormSubmission = {
   submitted_at: string | null;
   status: string;
   payload_json: Record<string, unknown>;
+  reviewed_at: string | null;
+  review_reason: string | null;
+  reviewed_by: {
+    id: number;
+    email: string | null;
+  } | null;
+  available_actions: {
+    set_pending: boolean;
+    confirm: boolean;
+    reject: boolean;
+  };
   submitted_by: {
     id: number;
     name: string | null;
@@ -1101,6 +1116,17 @@ export type AssociationBooking = {
   submission: {
     id: number;
     submitted_at: string | null;
+    status: string | null;
+  } | null;
+  request_status: string | null;
+  request_review_summary: {
+    status: string | null;
+    reviewed_at: string | null;
+    review_reason: string | null;
+    reviewed_by: {
+      id: number;
+      email: string | null;
+    } | null;
   } | null;
   events: AssociationBookingEvent[];
 };
@@ -1711,6 +1737,8 @@ export async function createOrgAdminForm(data: {
   send_user_confirmation?: boolean;
   whatsapp_auto_reply_enabled?: boolean;
   whatsapp_auto_reply_template?: string | null;
+  whatsapp_confirmation_template?: string | null;
+  whatsapp_rejection_template?: string | null;
   admin_notification_template_id?: number | null;
   user_confirmation_template_id?: number | null;
   create_internal_request?: boolean;
@@ -1760,6 +1788,8 @@ export async function updateOrgAdminForm(
   send_user_confirmation?: boolean;
   whatsapp_auto_reply_enabled?: boolean;
   whatsapp_auto_reply_template?: string | null;
+  whatsapp_confirmation_template?: string | null;
+  whatsapp_rejection_template?: string | null;
   admin_notification_template_id?: number | null;
   user_confirmation_template_id?: number | null;
   create_internal_request?: boolean;
@@ -1886,6 +1916,33 @@ export async function fetchOrgAdminFormSubmission(
   const res = await fetch(`/api/org-admin/forms/${formId}/submissions/${submissionId}`);
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento dettaglio risposta"));
+  return res.json();
+}
+
+export async function updateOrgAdminFormSubmissionStatus(
+  formId: number,
+  submissionId: number,
+  data: {
+    status: "pending" | "confirmed" | "rejected";
+    reason?: string | null;
+  },
+): Promise<{
+  submission: AssociationFormSubmission;
+  booking: AssociationBooking | null;
+  whatsapp_result: {
+    sent?: boolean;
+    reason?: string | null;
+    error?: string | null;
+    status?: string | null;
+  };
+}> {
+  const res = await fetch(`/api/org-admin/forms/${formId}/submissions/${submissionId}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento richiesta"));
   return res.json();
 }
 

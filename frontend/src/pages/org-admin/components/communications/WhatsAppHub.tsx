@@ -482,8 +482,8 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
   if (loading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-24 w-full rounded-[1.75rem]" />
-        <Skeleton className="h-[42rem] w-full rounded-[1.25rem]" />
+        <Skeleton className="h-24 w-full rounded-[1rem]" />
+        <Skeleton className="h-[34rem] w-full rounded-[1rem]" />
       </div>
     );
   }
@@ -491,8 +491,8 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
   const statusUi = statusCopy[connection.status];
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-[1.25rem] ring-1 ring-inset ring-[#203239] bg-[#111b21] px-5 py-4 text-sm text-[#d1d7db] shadow-[0_24px_80px_rgba(6,17,23,0.35)]">
+    <div className="flex h-[calc(100dvh-27rem)] min-h-[30rem] min-h-0 flex-col gap-4 overflow-hidden">
+      <div className="shrink-0 rounded-[1rem] border border-neutral-200 bg-[#111b21] px-5 py-4 text-sm text-[#d1d7db] shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">
             <span className="rounded-full ring-1 ring-inset ring-[#2a3942] bg-[#172229] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-[#7dd3c5]">
@@ -540,7 +540,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
       </div>
 
       {connection.status === "qr_required" ? (
-        <div className="rounded-[1.25rem] ring-1 ring-inset ring-amber-500/20 bg-[#111b21] p-5 text-[#d1d7db] shadow-[0_24px_80px_rgba(6,17,23,0.35)]">
+        <div className="max-h-[18rem] shrink-0 overflow-y-auto rounded-[1rem] border border-amber-500/20 bg-[#111b21] p-5 text-[#d1d7db] shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-5">
             <div className="max-w-xl">
               <p className="text-base font-semibold text-[#f8f9fa]">Scansiona il QR per completare il collegamento</p>
@@ -569,10 +569,10 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
         </div>
       ) : null}
 
-      <section className="overflow-hidden rounded-[1.25rem] ring-1 ring-inset ring-[#203239] bg-[#0b141a] shadow-[0_24px_80px_rgba(6,17,23,0.35)]">
-        <div className="grid min-h-[72vh] xl:grid-cols-[26rem,minmax(0,1fr)]">
-          <aside className="border-r border-[#203239] bg-[#111b21]">
-            <div className="flex h-full flex-col">
+      <section className="min-h-0 flex-1 overflow-hidden rounded-[1rem] border border-neutral-200 bg-[#0b141a] shadow-sm">
+        <div className="grid h-full min-h-0 xl:grid-cols-[24rem,minmax(0,1fr)]">
+          <aside className="min-h-0 border-r border-[#203239] bg-[#111b21]">
+            <div className="flex h-full min-h-0 flex-col">
               <div className="border-b border-[#203239] px-5 py-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -777,10 +777,10 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
             </div>
           </aside>
 
-          <div className="flex min-h-[72vh] flex-col bg-[#0b141a]">
+          <div className="flex min-h-0 flex-col bg-[#0b141a]">
             {selectedChat ? (
               <>
-                <header className="flex items-center justify-between gap-4 border-b border-[#203239] bg-[#202c33] px-5 py-4">
+                <header className="sticky top-0 z-10 flex shrink-0 items-center justify-between gap-4 border-b border-[#203239] bg-[#202c33] px-5 py-4">
                   <div className="flex min-w-0 items-center gap-3">
                     <Avatar label={selectedChat.display_name} imageUrl={selectedContact?.profile_pic_url ?? null} sizeClass="h-12 w-12" />
                     <div className="min-w-0">
@@ -846,7 +846,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
                   )}
                 </div>
 
-                <div className="border-t border-[#203239] bg-[#202c33] px-5 py-4">
+                <div className="shrink-0 border-t border-[#203239] bg-[#202c33] px-5 py-4">
                   <div className="flex items-end gap-3">
                     <textarea
                       value={composerText}
@@ -884,7 +884,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
               </>
             ) : (
               <div
-                className="flex min-h-[72vh] items-center justify-center px-8 py-10 text-center"
+                className="flex min-h-0 flex-1 items-center justify-center px-8 py-10 text-center"
                 style={{
                   backgroundColor: "#0b141a",
                   backgroundImage:

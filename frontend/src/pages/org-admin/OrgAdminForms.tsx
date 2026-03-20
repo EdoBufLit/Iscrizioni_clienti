@@ -11,6 +11,7 @@ import {
   fetchOrgAdminFormSubmission,
   fetchOrgAdminFormSubmissions,
   setOrgAdminFormActive,
+  updateOrgAdminFormSubmissionStatus,
   updateOrgAdminForm,
   updateOrgAdminFormField,
   type AssociationForm,
@@ -28,6 +29,9 @@ import { FormBuilder } from "../../components/forms/builder/FormBuilder";
 import { decodeField, encodeField, type BuilderField } from "../../components/forms/builder/utils";
 import { FormPublicCanvas } from "../../components/forms/FormPublicCanvas";
 import { ImageUpload } from "../../components/forms/builder/ImageUpload";
+import ConfirmModal from "../../components/ui/ConfirmModal";
+import PromptModal from "../../components/ui/PromptModal";
+import Skeleton from "../../components/ui/Skeleton";
 
 const inputClass =
   "mt-1 w-full rounded-[1.1rem] border border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-neutral-900/40 focus:ring-2 focus:ring-neutral-900/10";
@@ -117,6 +121,33 @@ function defaultWhatsAppTemplate(formType: AssociationFormType, bookingEnabled: 
   return "Ciao {{nome_contatto}}, la tua richiesta tramite {{titolo_form}} e stata registrata correttamente. Ti ricontatteremo presto.";
 }
 
+function defaultWhatsAppConfirmationTemplate(formType: AssociationFormType, bookingEnabled: boolean): string {
+  if (bookingEnabled || formType === "booking") {
+    return "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} e stata confermata. Ti aspettiamo il {{data_prenotazione}} alle {{orario_prenotazione}}.";
+  }
+  return "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} e stata confermata. Ti ricontatteremo se serviranno altri dettagli.";
+}
+
+function defaultWhatsAppRejectionTemplate(formType: AssociationFormType, bookingEnabled: boolean): string {
+  if (bookingEnabled || formType === "booking") {
+    return "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} non puo essere confermata. {{motivo_rigetto}}";
+  }
+  return "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} e stata rigettata. {{motivo_rigetto}}";
+}
+
+const submissionStatusMeta: Record<string, { label: string; className: string }> = {
+  pending: { label: "In attesa", className: "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200" },
+  confirmed: { label: "Confermata", className: "bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-200" },
+  rejected: { label: "Rigettata", className: "bg-rose-50 text-rose-800 ring-1 ring-inset ring-rose-200" },
+};
+
+function submissionStatusLabel(status: string | null | undefined) {
+  return submissionStatusMeta[(status || "").toLowerCase()] ?? {
+    label: status || "Sconosciuto",
+    className: "bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-200",
+  };
+}
+
 function slugifyKey(value: string): string {
   return value
     .normalize("NFD")
@@ -181,6 +212,8 @@ function emptyFormDraft() {
     send_user_confirmation: true,
     whatsapp_auto_reply_enabled: false,
     whatsapp_auto_reply_template: "",
+    whatsapp_confirmation_template: "",
+    whatsapp_rejection_template: "",
     admin_notification_template_id: null as number | null,
     user_confirmation_template_id: null as number | null,
     create_internal_request: false,
@@ -333,6 +366,10 @@ export function OrgAdminFormsWorkspace({
   const [submissions, setSubmissions] = useState<AssociationFormSubmission[]>([]);
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
   const [selectedSubmission, setSelectedSubmission] = useState<AssociationFormSubmission | null>(null);
+  const [submissionActionState, setSubmissionActionState] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [submissionActionError, setSubmissionActionError] = useState<string | null>(null);
+  const [confirmActionOpen, setConfirmActionOpen] = useState<false | "confirmed" | "pending">(false);
+  const [rejectActionOpen, setRejectActionOpen] = useState(false);
 
   useEffect(() => {
     if (embedded) return;
@@ -392,6 +429,8 @@ export function OrgAdminFormsWorkspace({
       send_user_confirmation: Boolean(selectedForm.send_user_confirmation),
       whatsapp_auto_reply_enabled: Boolean(selectedForm.whatsapp_auto_reply_enabled),
       whatsapp_auto_reply_template: selectedForm.whatsapp_auto_reply_template || "",
+      whatsapp_confirmation_template: selectedForm.whatsapp_confirmation_template || "",
+      whatsapp_rejection_template: selectedForm.whatsapp_rejection_template || "",
       admin_notification_template_id: selectedForm.admin_notification_template_id,
       user_confirmation_template_id: selectedForm.user_confirmation_template_id,
       create_internal_request: Boolean(selectedForm.create_internal_request),
@@ -463,6 +502,23 @@ export function OrgAdminFormsWorkspace({
       value,
     }));
   }, [selectedForm?.fields, selectedSubmission?.payload_json]);
+  const submissionSummary = useMemo(
+    () =>
+      submissions.reduce(
+        (accumulator, submission) => {
+          const status = (submission.status || "pending").toLowerCase();
+          accumulator.total += 1;
+          if (status === "confirmed") accumulator.confirmed += 1;
+          else if (status === "rejected") accumulator.rejected += 1;
+          else accumulator.pending += 1;
+          if (submission.booking) accumulator.booking += 1;
+          return accumulator;
+        },
+        { total: 0, pending: 0, confirmed: 0, rejected: 0, booking: 0 },
+      ),
+    [submissions],
+  );
+  const selectedSubmissionStatus = submissionStatusLabel(selectedSubmission?.status);
   const whatsappAutomationVariables = useMemo<WhatsAppAutomationVariable[]>(
     () => [
       ...baseWhatsAppVariables,
@@ -651,6 +707,18 @@ export function OrgAdminFormsWorkspace({
     }));
   }
 
+  function insertDecisionTemplateVariable(
+    target: "whatsapp_confirmation_template" | "whatsapp_rejection_template",
+    placeholder: string,
+  ) {
+    setFormDraft((current) => ({
+      ...current,
+      [target]: String(current[target] || "").trim()
+        ? `${String(current[target] || "")} ${placeholder}`
+        : placeholder,
+    }));
+  }
+
   function syncBookingFieldMapping(target: BookingMappingTarget, fieldKey: string) {
     setFormDraft((current) => ({
       ...current,
@@ -698,6 +766,8 @@ export function OrgAdminFormsWorkspace({
         user_confirmation_template_id: formDraft.user_confirmation_template_id || null,
         whatsapp_auto_reply_enabled: formDraft.whatsapp_auto_reply_enabled,
         whatsapp_auto_reply_template: formDraft.whatsapp_auto_reply_template || null,
+        whatsapp_confirmation_template: formDraft.whatsapp_confirmation_template || null,
+        whatsapp_rejection_template: formDraft.whatsapp_rejection_template || null,
         create_booking: bookingEnabled,
       };
       const response = selectedFormId
@@ -1066,6 +1136,75 @@ export function OrgAdminFormsWorkspace({
     handleToggleActive,
   };
   void legacyFieldEditorHandlers;
+
+  function syncSubmissionState(nextSubmission: AssociationFormSubmission) {
+    setSubmissions((current) =>
+      current.map((item) => (item.id === nextSubmission.id ? { ...item, ...nextSubmission } : item)),
+    );
+    setSelectedSubmission(nextSubmission);
+  }
+
+  async function openSubmissionDetail(submission: AssociationFormSubmission) {
+    if (!selectedFormId) return;
+    setSelectedSubmission(submission);
+    try {
+      const response = await fetchOrgAdminFormSubmission(selectedFormId, submission.id);
+      syncSubmissionState(response.submission);
+    } catch {
+      setSelectedSubmission(submission);
+    }
+  }
+
+  async function handleSubmissionDecision(
+    nextStatus: "pending" | "confirmed" | "rejected",
+    reason?: string,
+  ) {
+    if (!selectedFormId || !selectedSubmission) return;
+    setSubmissionActionState("loading");
+    setSubmissionActionError(null);
+    try {
+      const response = await updateOrgAdminFormSubmissionStatus(selectedFormId, selectedSubmission.id, {
+        status: nextStatus,
+        reason: reason?.trim() || null,
+      });
+      syncSubmissionState(response.submission);
+      setSubmissionActionState("success");
+      setConfirmActionOpen(false);
+      setRejectActionOpen(false);
+
+      let message = "Lo stato della richiesta e stato aggiornato.";
+      if (response.whatsapp_result?.sent) {
+        message = "Richiesta aggiornata e messaggio WhatsApp inviato automaticamente.";
+      } else if (response.whatsapp_result?.error) {
+        message = "Richiesta aggiornata, ma il messaggio WhatsApp non e partito.";
+      } else if (response.whatsapp_result?.reason === "missing_phone") {
+        message = "Richiesta aggiornata. Nessun WhatsApp inviato: numero non disponibile.";
+      }
+
+      showToast({
+        tone: response.whatsapp_result?.error ? "info" : "success",
+        title:
+          nextStatus === "confirmed"
+            ? "Richiesta confermata"
+            : nextStatus === "rejected"
+              ? "Richiesta rigettata"
+              : "Richiesta riportata in attesa",
+        message,
+      });
+      void loadSubmissions(selectedFormId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Errore aggiornamento richiesta.";
+      setSubmissionActionError(message);
+      setSubmissionActionState("error");
+      showToast({
+        tone: "error",
+        title: "Aggiornamento non riuscito",
+        message,
+      });
+    } finally {
+      window.setTimeout(() => setSubmissionActionState("idle"), 1200);
+    }
+  }
 
   function handleCreateNewForm() {
     setIsCreatingForm(true);
@@ -1468,6 +1607,126 @@ export function OrgAdminFormsWorkspace({
                 ))}
               </div>
             </div>
+
+            <div className="rounded-[1.2rem] border border-neutral-200 bg-neutral-50/70 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-neutral-900">Template WhatsApp decisione richiesta</p>
+                  <p className="mt-1 text-xs leading-5 text-neutral-500">
+                    Questi messaggi partono quando l'org admin conferma o rigetta una richiesta.
+                  </p>
+                </div>
+                <span className="rounded-full bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-500 ring-1 ring-inset ring-neutral-200">
+                  Nuovo flusso
+                </span>
+              </div>
+
+              <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                <div className="rounded-[1rem] border border-neutral-200 bg-white p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-neutral-900">Messaggio conferma</p>
+                      <p className="mt-1 text-xs text-neutral-500">Inviato quando la richiesta viene approvata.</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-secondary btn-sm"
+                      disabled={locked}
+                      onClick={() =>
+                        syncFormDraft(
+                          "whatsapp_confirmation_template",
+                          defaultWhatsAppConfirmationTemplate(
+                            formDraft.form_type,
+                            Boolean(formDraft.booking_enabled || formDraft.create_booking),
+                          ),
+                        )
+                      }
+                    >
+                      Usa base
+                    </button>
+                  </div>
+                  <textarea
+                    className={`${inputClass} min-h-[160px] resize-y`}
+                    disabled={locked}
+                    value={formDraft.whatsapp_confirmation_template}
+                    onChange={(event) => syncFormDraft("whatsapp_confirmation_template", event.target.value)}
+                    placeholder={defaultWhatsAppConfirmationTemplate(
+                      formDraft.form_type,
+                      Boolean(formDraft.booking_enabled || formDraft.create_booking),
+                    )}
+                  />
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {whatsappAutomationVariables.map((variable) => (
+                      <button
+                        key={`confirm-${variable.placeholder}`}
+                        type="button"
+                        className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-100"
+                        disabled={locked}
+                        onClick={() => insertDecisionTemplateVariable("whatsapp_confirmation_template", variable.placeholder)}
+                      >
+                        {variable.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-[1rem] border border-neutral-200 bg-white p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-neutral-900">Messaggio rigetto</p>
+                      <p className="mt-1 text-xs text-neutral-500">Puoi usare anche la variabile <code>{"{{motivo_rigetto}}"}</code>.</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-secondary btn-sm"
+                      disabled={locked}
+                      onClick={() =>
+                        syncFormDraft(
+                          "whatsapp_rejection_template",
+                          defaultWhatsAppRejectionTemplate(
+                            formDraft.form_type,
+                            Boolean(formDraft.booking_enabled || formDraft.create_booking),
+                          ),
+                        )
+                      }
+                    >
+                      Usa base
+                    </button>
+                  </div>
+                  <textarea
+                    className={`${inputClass} min-h-[160px] resize-y`}
+                    disabled={locked}
+                    value={formDraft.whatsapp_rejection_template}
+                    onChange={(event) => syncFormDraft("whatsapp_rejection_template", event.target.value)}
+                    placeholder={defaultWhatsAppRejectionTemplate(
+                      formDraft.form_type,
+                      Boolean(formDraft.booking_enabled || formDraft.create_booking),
+                    )}
+                  />
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 transition hover:border-rose-300 hover:bg-rose-100"
+                      disabled={locked}
+                      onClick={() => insertDecisionTemplateVariable("whatsapp_rejection_template", "{{motivo_rigetto}}")}
+                    >
+                      Motivo rigetto
+                    </button>
+                    {whatsappAutomationVariables.map((variable) => (
+                      <button
+                        key={`reject-${variable.placeholder}`}
+                        type="button"
+                        className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-100"
+                        disabled={locked}
+                        onClick={() => insertDecisionTemplateVariable("whatsapp_rejection_template", variable.placeholder)}
+                      >
+                        {variable.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1552,89 +1811,252 @@ export function OrgAdminFormsWorkspace({
 
   const responsesTab = (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex gap-4">
-          <div className="rounded-lg border border-neutral-200 bg-white px-4 py-2">
-            <span className="text-xs text-neutral-500 block">Totale</span>
-            <span className="text-lg font-semibold">{submissions.length}</span>
-          </div>
-          <div className="rounded-lg border border-neutral-200 bg-white px-4 py-2">
-            <span className="text-xs text-neutral-500 block">Booking</span>
-            <span className="text-lg font-semibold">{submissions.filter((item) => item.booking).length}</span>
-          </div>
+      <div className="admin-toolbar">
+        <div>
+          <p className="admin-eyebrow">Workflow richieste</p>
+          <h3 className="mt-2 text-2xl font-semibold tracking-tight text-neutral-950">Risposte e decisioni</h3>
+          <p className="mt-1 text-sm text-neutral-500">
+            Ogni richiesta ha uno stato esplicito, audit chiaro e feedback immediato per la segreteria.
+          </p>
         </div>
-        {selectedFormId && submissions.length > 0 && (
-          <a className="btn-secondary !py-2" href={buildOrgAdminFormSubmissionsExportUrl(selectedFormId)}>
+        {selectedFormId && submissions.length > 0 ? (
+          <a className="btn-secondary" href={buildOrgAdminFormSubmissionsExportUrl(selectedFormId)}>
             Scarica CSV
           </a>
-        )}
+        ) : null}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-        <div className="rounded-xl border border-neutral-200 bg-white overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-neutral-200 text-sm">
-              <thead className="bg-neutral-50">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium text-neutral-500">Data</th>
-                  <th className="px-4 py-3 text-left font-medium text-neutral-500">Stato</th>
-                  <th className="px-4 py-3 text-left font-medium text-neutral-500">Mittente</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-200">
-                {submissionsLoading ? (
-                  <tr><td colSpan={3} className="px-4 py-8 text-center text-neutral-500">Caricamento...</td></tr>
-                ) : submissions.length === 0 ? (
-                  <tr><td colSpan={3} className="px-4 py-8 text-center text-neutral-500">Nessuna risposta</td></tr>
-                ) : (
-                  submissions.map((sub) => (
-                    <tr
-                      key={sub.id}
-                      onClick={() => {
-                        fetchOrgAdminFormSubmission(selectedFormId!, sub.id)
-                          .then((r) => setSelectedSubmission(r.submission))
-                          .catch(() => setSelectedSubmission(sub));
-                      }}
-                      className={`cursor-pointer transition-colors ${
-                        selectedSubmission?.id === sub.id ? "bg-brand/5" : "hover:bg-neutral-50"
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <div className="admin-stat">
+          <span className="admin-stat__label">Totale richieste</span>
+          <span className="admin-stat__value">{submissionSummary.total}</span>
+        </div>
+        <div className="admin-stat">
+          <span className="admin-stat__label">In attesa</span>
+          <span className="admin-stat__value">{submissionSummary.pending}</span>
+        </div>
+        <div className="admin-stat">
+          <span className="admin-stat__label">Confermate</span>
+          <span className="admin-stat__value">{submissionSummary.confirmed}</span>
+        </div>
+        <div className="admin-stat">
+          <span className="admin-stat__label">Rigettate</span>
+          <span className="admin-stat__value">{submissionSummary.rejected}</span>
+        </div>
+        <div className="admin-stat">
+          <span className="admin-stat__label">Con booking</span>
+          <span className="admin-stat__value">{submissionSummary.booking}</span>
+        </div>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(340px,0.92fr)_minmax(0,1.35fr)] xl:items-start">
+        <div className="admin-panel min-h-[36rem] overflow-hidden">
+          <div className="admin-panel__header">
+            <div>
+              <p className="admin-eyebrow">Lista richieste</p>
+              <h4 className="mt-2 text-lg font-semibold text-neutral-950">Inbox form</h4>
+            </div>
+            <span className="status-badge status-badge--pending">{submissionSummary.pending} pending</span>
+          </div>
+          <div className="max-h-[58vh] overflow-y-auto">
+            {submissionsLoading ? (
+              <div className="space-y-3 p-4">
+                <Skeleton className="h-24 w-full rounded-xl" />
+                <Skeleton className="h-24 w-full rounded-xl" />
+                <Skeleton className="h-24 w-full rounded-xl" />
+              </div>
+            ) : submissions.length === 0 ? (
+              <div className="admin-empty-state">
+                <p className="text-base font-semibold text-neutral-900">Nessuna risposta ricevuta</p>
+                <p className="mt-2 text-sm text-neutral-500">
+                  Quando arriveranno nuove richieste le vedrai qui con stato, audit e azioni rapide.
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-neutral-200">
+                {submissions.map((submission) => {
+                  const status = submissionStatusLabel(submission.status);
+                  const isSelected = selectedSubmission?.id === submission.id;
+                  return (
+                    <button
+                      key={submission.id}
+                      type="button"
+                      onClick={() => void openSubmissionDetail(submission)}
+                      className={`w-full px-4 py-4 text-left transition ${
+                        isSelected ? "bg-neutral-950 text-white" : "bg-white hover:bg-neutral-50"
                       }`}
                     >
-                      <td className="px-4 py-3 whitespace-nowrap">{formatDateTime(sub.submitted_at)}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {sub.booking ? (
-                          <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-800">
-                            Booking: {sub.booking.status}
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className={`truncate text-sm font-semibold ${isSelected ? "text-white" : "text-neutral-900"}`}>
+                            {submission.submitted_by?.name || submission.submitted_by?.email || `Richiesta #${submission.id}`}
+                          </p>
+                          <p className={`mt-1 text-xs ${isSelected ? "text-white/70" : "text-neutral-500"}`}>
+                            {formatDateTime(submission.submitted_at)}
+                          </p>
+                        </div>
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${
+                            isSelected ? "bg-white/10 text-white" : status.className
+                          }`}
+                        >
+                          {status.label}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                        {submission.booking ? (
+                          <span className={`rounded-full px-2.5 py-1 ${isSelected ? "bg-white/10 text-white/80" : "bg-neutral-100 text-neutral-700"}`}>
+                            Booking {submission.booking.status}
+                          </span>
+                        ) : null}
+                        {submission.reviewed_by ? (
+                          <span className={`rounded-full px-2.5 py-1 ${isSelected ? "bg-white/10 text-white/80" : "bg-neutral-100 text-neutral-700"}`}>
+                            Gestita da {submission.reviewed_by.email || `#${submission.reviewed_by.id}`}
                           </span>
                         ) : (
-                          <span className="text-neutral-500 text-xs">{sub.status}</span>
+                          <span className={`rounded-full px-2.5 py-1 ${isSelected ? "bg-white/10 text-white/80" : "bg-neutral-100 text-neutral-700"}`}>
+                            In attesa di review
+                          </span>
                         )}
-                      </td>
-                      <td className="px-4 py-3 truncate max-w-[200px]">
-                        {sub.submitted_by?.name || sub.submitted_by?.email || `#${sub.id}`}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 h-fit sticky top-6">
-          <h3 className="text-sm font-semibold text-neutral-900 mb-4">Dettaglio risposta</h3>
+        <div className="admin-panel admin-panel--soft sticky top-6">
+          <div className="admin-panel__header">
+            <div>
+              <p className="admin-eyebrow">Dettaglio risposta</p>
+              <h4 className="mt-2 text-lg font-semibold text-neutral-950">Dati, stato e audit</h4>
+            </div>
+            {selectedSubmission ? (
+              <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${selectedSubmissionStatus.className}`}>
+                {selectedSubmissionStatus.label}
+              </span>
+            ) : null}
+          </div>
           {selectedSubmission ? (
-            <div className="space-y-3">
-              {selectedSubmissionEntries.map((entry) => (
-                <div key={entry.key} className="rounded-lg bg-white p-3 shadow-sm border border-neutral-100">
-                  <div className="text-xs text-neutral-500">{entry.label}</div>
-                  <div className="mt-1 text-sm text-neutral-900 font-medium break-words">
-                    {stringifySubmissionValue(entry.value)}
+            <div className="space-y-5">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-xl border border-neutral-200 bg-white p-4">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Mittente</p>
+                  <p className="mt-2 text-sm font-semibold text-neutral-900">
+                    {selectedSubmission.submitted_by?.name || selectedSubmission.submitted_by?.email || `Richiesta #${selectedSubmission.id}`}
+                  </p>
+                  <p className="mt-1 text-sm text-neutral-500">{formatDateTime(selectedSubmission.submitted_at)}</p>
+                </div>
+                <div className="rounded-xl border border-neutral-200 bg-white p-4">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Review</p>
+                  <p className="mt-2 text-sm font-semibold text-neutral-900">
+                    {selectedSubmission.reviewed_by?.email || "Non ancora gestita"}
+                  </p>
+                  <p className="mt-1 text-sm text-neutral-500">
+                    {selectedSubmission.reviewed_at ? formatDateTime(selectedSubmission.reviewed_at) : "Nessuna review registrata"}
+                  </p>
+                </div>
+              </div>
+
+              {selectedSubmission.booking ? (
+                <div className="rounded-xl border border-neutral-200 bg-white p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Prenotazione collegata</p>
+                      <p className="mt-2 text-sm font-semibold text-neutral-900">{selectedSubmission.booking.customer_name}</p>
+                      <p className="mt-1 text-sm text-neutral-500">
+                        {selectedSubmission.booking.booking_date || "Data da definire"}
+                        {selectedSubmission.booking.booking_time ? ` · ${selectedSubmission.booking.booking_time}` : ""}
+                        {selectedSubmission.booking.party_size ? ` · ${selectedSubmission.booking.party_size} persone` : ""}
+                      </p>
+                    </div>
+                    <span className="status-badge status-badge--info">{selectedSubmission.booking.status}</span>
                   </div>
                 </div>
-              ))}
+              ) : null}
+
+              <div className="rounded-xl border border-neutral-200 bg-white p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Azioni rapide</p>
+                    <p className="mt-1 text-sm text-neutral-500">
+                      Conferma, rigetta o riporta la richiesta in attesa senza uscire dal dettaglio.
+                    </p>
+                  </div>
+                  {submissionActionState === "loading" ? (
+                    <span className="text-xs font-semibold text-neutral-500">Aggiornamento in corso...</span>
+                  ) : null}
+                </div>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  {selectedSubmission.available_actions.confirm ? (
+                    <button
+                      type="button"
+                      className="btn-success"
+                      disabled={submissionActionState === "loading"}
+                      onClick={() => {
+                        setSubmissionActionError(null);
+                        setConfirmActionOpen("confirmed");
+                      }}
+                    >
+                      Conferma richiesta
+                    </button>
+                  ) : null}
+                  {selectedSubmission.available_actions.reject ? (
+                    <button
+                      type="button"
+                      className="btn-danger"
+                      disabled={submissionActionState === "loading"}
+                      onClick={() => {
+                        setSubmissionActionError(null);
+                        setRejectActionOpen(true);
+                      }}
+                    >
+                      Rigetta richiesta
+                    </button>
+                  ) : null}
+                  {selectedSubmission.available_actions.set_pending ? (
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      disabled={submissionActionState === "loading"}
+                      onClick={() => {
+                        setSubmissionActionError(null);
+                        setConfirmActionOpen("pending");
+                      }}
+                    >
+                      Riporta a pending
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
+              {selectedSubmission.review_reason ? (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-rose-700">Motivo rigetto</p>
+                  <p className="mt-2 leading-6">{selectedSubmission.review_reason}</p>
+                </div>
+              ) : null}
+
+              <div className="grid gap-3 md:grid-cols-2">
+                {selectedSubmissionEntries.map((entry) => (
+                  <div key={entry.key} className="rounded-xl border border-neutral-200 bg-white p-4">
+                    <div className="text-xs font-medium uppercase tracking-[0.12em] text-neutral-500">{entry.label}</div>
+                    <div className="mt-2 break-words text-sm font-medium text-neutral-900">
+                      {stringifySubmissionValue(entry.value)}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
-            <p className="text-sm text-neutral-500 text-center py-4">Seleziona una riga per vedere i dettagli.</p>
+            <div className="admin-empty-state">
+              <p className="text-base font-semibold text-neutral-900">Seleziona una richiesta</p>
+              <p className="mt-2 text-sm text-neutral-500">
+                A destra vedrai dati inviati, stato corrente, storico review e azioni disponibili.
+              </p>
+            </div>
           )}
         </div>
       </div>
@@ -1891,6 +2313,48 @@ export function OrgAdminFormsWorkspace({
           </div>
         </div>
       )}
+      <ConfirmModal
+        open={confirmActionOpen === "confirmed"}
+        title="Confermare la richiesta?"
+        description="La richiesta passera a confermata e, se disponibile, partira il messaggio WhatsApp automatico."
+        confirmLabel="Conferma richiesta"
+        confirmState={submissionActionState}
+        onClose={() => {
+          if (submissionActionState === "loading") return;
+          setConfirmActionOpen(false);
+          setSubmissionActionError(null);
+        }}
+        onConfirm={() => void handleSubmissionDecision("confirmed")}
+      />
+      <ConfirmModal
+        open={confirmActionOpen === "pending"}
+        title="Riportare la richiesta in attesa?"
+        description="La review verra azzerata e la richiesta tornera nello stato pending."
+        confirmLabel="Riporta a pending"
+        confirmState={submissionActionState}
+        onClose={() => {
+          if (submissionActionState === "loading") return;
+          setConfirmActionOpen(false);
+          setSubmissionActionError(null);
+        }}
+        onConfirm={() => void handleSubmissionDecision("pending")}
+      />
+      <PromptModal
+        open={rejectActionOpen}
+        title="Rigettare la richiesta?"
+        description="Inserisci un motivo chiaro: verra salvato nell'audit e puo essere riusato nel messaggio WhatsApp automatico."
+        label="Motivo del rigetto"
+        placeholder="Es. posti esauriti, dati incompleti, richiesta fuori finestra utile."
+        confirmLabel="Rigetta richiesta"
+        confirmState={submissionActionState}
+        error={submissionActionError}
+        onClose={() => {
+          if (submissionActionState === "loading") return;
+          setRejectActionOpen(false);
+          setSubmissionActionError(null);
+        }}
+        onConfirm={(value) => void handleSubmissionDecision("rejected", value)}
+      />
       </div>
     </div>
   );

@@ -371,6 +371,8 @@ def init_db():
             _add_column_if_missing(conn, "forms", "send_user_confirmation", "INTEGER DEFAULT 1")
             _add_column_if_missing(conn, "forms", "whatsapp_auto_reply_enabled", "INTEGER DEFAULT 0")
             _add_column_if_missing(conn, "forms", "whatsapp_auto_reply_template", "TEXT")
+            _add_column_if_missing(conn, "forms", "whatsapp_confirmation_template", "TEXT")
+            _add_column_if_missing(conn, "forms", "whatsapp_rejection_template", "TEXT")
             _add_column_if_missing(
                 conn,
                 "forms",
@@ -407,6 +409,21 @@ def init_db():
                             ELSE booking_enabled
                        END
                      WHERE booking_enabled IS NULL
+                    """
+                )
+            )
+        if "form_submissions" in table_names:
+            _add_column_if_missing(conn, "form_submissions", "reviewed_at", "DATETIME")
+            _add_column_if_missing(conn, "form_submissions", "reviewed_by_admin_id", "INTEGER")
+            _add_column_if_missing(conn, "form_submissions", "review_reason", "TEXT")
+            conn.execute(
+                text(
+                    """
+                    UPDATE form_submissions
+                       SET status = 'pending'
+                     WHERE status IS NULL
+                        OR trim(status) = ''
+                        OR lower(trim(status)) = 'new'
                     """
                 )
             )

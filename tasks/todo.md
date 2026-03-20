@@ -1,3 +1,21 @@
+## Plan (ASSONAM org admin UX/UI + request decision flow - Mar 20, 2026)
+- [x] Mappare i colli di bottiglia su org admin, con focus su WhatsApp workspace, forms responses e prenotazioni
+- [x] Estendere backend e schema con stato richiesta `pending/confirmed/rejected`, audit review e template WhatsApp di conferma/rigetto
+- [x] Implementare endpoint org admin per review submission con sync booking e dispatch WhatsApp centralizzato senza duplicati
+- [x] Rifinire il frontend org admin: design system condiviso, CTA/button states, vista risposte form e quick actions sulle prenotazioni
+- [x] Correggere il layout live `Comunicazioni > WhatsApp` con altezza viewport stabile, scroll interni e composer sempre visibile
+- [x] Rieseguire build/test, sistemare la migration Alembic, deployare su Hetzner e fare smoke check live
+
+## Review (ASSONAM org admin UX/UI + request decision flow - Mar 20, 2026)
+- Backend esteso in [app/models.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\models.py), [app/services/forms.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\services\forms.py), [app/services/bookings.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\services\bookings.py), [app/services/whatsapp_automation.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\services\whatsapp_automation.py) e [app/routes/org_admin.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\routes\org_admin.py): `FormSubmission.status` diventa la fonte primaria della richiesta, con audit (`reviewed_at`, `reviewed_by_admin_id`, `review_reason`), template WhatsApp per-form e nuovo endpoint `PATCH /api/org-admin/forms/{form_id}/submissions/{submission_id}/status`.
+- Migration additiva creata in [c91f4b7e2a10_add_form_submission_review_and_decision_templates.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\alembic\versions\c91f4b7e2a10_add_form_submission_review_and_decision_templates.py). Ho dovuto correggere il revision id iniziale perche collideva con una migration gia esistente; ora `python -m alembic heads` restituisce un solo head (`c91f4b7e2a10`).
+- Frontend aggiornato in [frontend/src/index.css](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\index.css), [frontend/src/lib/api.ts](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\lib\api.ts), [frontend/src/pages/org-admin/OrgAdminForms.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\OrgAdminForms.tsx), [frontend/src/pages/org-admin/OrgAdminBookings.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\OrgAdminBookings.tsx) e [frontend/src/pages/org-admin/components/communications/WhatsAppHub.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\components\communications\WhatsAppHub.tsx): pulsanti e pannelli piu sobri/squadrati, risposte form con badge chiari e CTA `Conferma / Rigetta / Pending`, quick actions anche nel dettaglio prenotazione, template editabili per i messaggi automatici e workspace WhatsApp confinato a viewport fisso con scroll interni corretti.
+- In [tests/test_forms_module.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\tests\test_forms_module.py) ho aggiunto copertura per review request + sync booking + dispatch WhatsApp e per la normalizzazione legacy `new -> pending`.
+- Verifiche locali completate: `python -m pytest -q tests/test_forms_module.py -q`, `npm --prefix frontend run build`, `python -m alembic heads`.
+- Deploy live eseguito su `157.90.31.105` in `/opt/assonam/app`: upload patch, `docker compose up -d --build web email-worker low-cards-worker affiliation-video-worker`, `docker compose exec -T web python -m alembic upgrade head`.
+- Smoke check live completati: `docker compose ps` con servizi `web`, `email-worker`, `low-cards-worker`, `affiliation-video-worker` healthy/up; homepage e route SPA `/org-admin/comunicazioni`, `/org-admin/bookings`, `/org-admin/forms` rispondono `200`; il nuovo endpoint review richieste risponde `401 Not authenticated` senza 404, quindi e attivo sul server.
+- Verifica browser live finale completata su `https://assonam.it` con token org-admin one-shot generato sul server: `Comunicazioni > Moduli`, `Prenotazioni` e `Comunicazioni > WhatsApp` caricano autenticati; nel workspace WhatsApp il composer risulta ora dentro il viewport (`bottom=951.5` su viewport `960`) con thread a scroll interno e senza crescita infinita della pagina dovuta ai messaggi.
+
 ## Plan (Form WhatsApp auto-message debug - Mar 20, 2026)
 - [x] Ispezionare il flusso reale `Form -> submit pubblico -> candidate/dispatch WhatsApp` per capire come viene risolto il numero destinatario
 - [x] Verificare su server/log live perché il test utente non ha prodotto nessun invio
@@ -3664,3 +3682,10 @@ pm --prefix frontend run build.
 - Verifiche eseguite: `python -m pytest -q tests/test_card_assignment.py tests/test_super_admin_numbering_scopes.py tests/test_super_admin_card_lot_management.py` OK (`16 passed`); `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK.
 
 
+## Plan (Org admin UX/UI + request decision flow - Mar 20, 2026)
+- [ ] Consolidare il design system org admin condiviso per superfici, toolbar, filtri, badge e pulsanti, applicando il nuovo linguaggio alle pagine chiave
+- [ ] Rifare `Comunicazioni > WhatsApp` con workspace bounded al viewport, sidebar/thread scrollabili internamente e composer sempre visibile
+- [ ] Estendere schema e modelli per richieste form con stati `pending/confirmed/rejected`, audit review e template WhatsApp per-form di conferma/rigetto
+- [ ] Implementare endpoint di review submission con sync booking collegato, audit trail e dispatch WhatsApp idempotente
+- [ ] Aggiornare API/frontend org admin per gestione richieste in `OrgAdminForms` e summary richiesta in `OrgAdminBookings`
+- [ ] Eseguire test/backend build, poi deploy/migration su Hetzner e smoke check live dell'area org admin

@@ -106,11 +106,17 @@ from app.services.forms import (
     build_unique_form_slug,
     ensure_forms_module_enabled,
     export_submissions_csv,
+    FORM_SUBMISSION_STATUS_PENDING,
+    FORM_SUBMISSION_STATUS_REJECTED,
     get_form_for_org_admin,
+    normalize_submission_status,
     normalize_form_slug,
     serialize_form,
     serialize_form_field,
     serialize_submission,
+)
+from app.services.whatsapp_automation import (
+    maybe_send_form_submission_decision_whatsapp_message,
 )
 from app.services.whatsapp_automations import (
     ALLOWED_WHATSAPP_PHONE_SOURCES,
@@ -1736,6 +1742,8 @@ class CreateAssociationFormBody(BaseModel):
     send_user_confirmation: bool = True
     whatsapp_auto_reply_enabled: bool = False
     whatsapp_auto_reply_template: Optional[str] = None
+    whatsapp_confirmation_template: Optional[str] = None
+    whatsapp_rejection_template: Optional[str] = None
     admin_notification_template_id: Optional[int] = None
     user_confirmation_template_id: Optional[int] = None
     create_internal_request: bool = False
@@ -1767,6 +1775,8 @@ class UpdateAssociationFormBody(BaseModel):
     send_user_confirmation: bool = True
     whatsapp_auto_reply_enabled: bool = False
     whatsapp_auto_reply_template: Optional[str] = None
+    whatsapp_confirmation_template: Optional[str] = None
+    whatsapp_rejection_template: Optional[str] = None
     admin_notification_template_id: Optional[int] = None
     user_confirmation_template_id: Optional[int] = None
     create_internal_request: bool = False
@@ -1787,6 +1797,11 @@ class UpsertAssociationFormFieldBody(BaseModel):
     is_required: bool = False
     sort_order: int = 0
     options: Optional[list[str] | str] = None
+
+
+class UpdateFormSubmissionStatusBody(BaseModel):
+    status: str = Field(min_length=1, max_length=40)
+    reason: Optional[str] = None
 
 
 class UpdateBookingStatusBody(BaseModel):
@@ -5138,6 +5153,8 @@ def create_association_form(
         send_user_confirmation=body.send_user_confirmation,
         whatsapp_auto_reply_enabled=body.whatsapp_auto_reply_enabled,
         whatsapp_auto_reply_template=body.whatsapp_auto_reply_template,
+        whatsapp_confirmation_template=body.whatsapp_confirmation_template,
+        whatsapp_rejection_template=body.whatsapp_rejection_template,
         admin_notification_template_id=body.admin_notification_template_id,
         user_confirmation_template_id=body.user_confirmation_template_id,
         create_internal_request=body.create_internal_request,
@@ -5202,6 +5219,8 @@ def update_association_form(
         send_user_confirmation=body.send_user_confirmation,
         whatsapp_auto_reply_enabled=body.whatsapp_auto_reply_enabled,
         whatsapp_auto_reply_template=body.whatsapp_auto_reply_template,
+        whatsapp_confirmation_template=body.whatsapp_confirmation_template,
+        whatsapp_rejection_template=body.whatsapp_rejection_template,
         admin_notification_template_id=body.admin_notification_template_id,
         user_confirmation_template_id=body.user_confirmation_template_id,
         create_internal_request=body.create_internal_request,
@@ -5272,6 +5291,8 @@ def duplicate_association_form(
         send_user_confirmation=bool(source_form.send_user_confirmation),
         whatsapp_auto_reply_enabled=bool(getattr(source_form, "whatsapp_auto_reply_enabled", False)),
         whatsapp_auto_reply_template=getattr(source_form, "whatsapp_auto_reply_template", None),
+        whatsapp_confirmation_template=getattr(source_form, "whatsapp_confirmation_template", None),
+        whatsapp_rejection_template=getattr(source_form, "whatsapp_rejection_template", None),
         admin_notification_template_id=source_form.admin_notification_template_id,
         user_confirmation_template_id=source_form.user_confirmation_template_id,
         create_internal_request=bool(source_form.create_internal_request),
@@ -5445,6 +5466,7 @@ def list_association_form_submissions(
             joinedload(AssociationForm.fields),
             joinedload(AssociationForm.submissions).joinedload(FormSubmission.member),
             joinedload(AssociationForm.submissions).joinedload(FormSubmission.bookings),
+            joinedload(AssociationForm.submissions).joinedload(FormSubmission.reviewed_by_admin),
             joinedload(AssociationForm.admin_notification_template),
             joinedload(AssociationForm.user_confirmation_template),
             joinedload(AssociationForm.bookings),
@@ -5513,7 +5535,11 @@ def get_association_form_submission_detail(
     get_form_for_org_admin(db, association_id=admin.org_id, form_id=form_id)
     submission = (
         db.query(FormSubmission)
-        .options(joinedload(FormSubmission.member), joinedload(FormSubmission.bookings))
+        .options(
+            joinedload(FormSubmission.member),
+            joinedload(FormSubmission.bookings),
+            joinedload(FormSubmission.reviewed_by_admin),
+        )
         .filter(
             FormSubmission.id == submission_id,
             FormSubmission.form_id == form_id,
@@ -5524,6 +5550,139 @@ def get_association_form_submission_detail(
     if submission is None:
         raise HTTPException(status_code=404, detail="Risposta non trovata.")
     return {"submission": serialize_submission(submission)}
+
+
+@router.patch("/forms/{form_id}/submissions/{submission_id}/status")
+def update_association_form_submission_status(
+    form_id: int,
+    submission_id: int,
+    body: UpdateFormSubmissionStatusBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+
+    form = (
+        db.query(AssociationForm)
+        .options(joinedload(AssociationForm.organization))
+        .filter(AssociationForm.id == form_id, AssociationForm.association_id == admin.org_id)
+        .first()
+    )
+    if form is None:
+        raise HTTPException(status_code=404, detail="Form non trovato.")
+
+    submission = (
+        db.query(FormSubmission)
+        .options(
+            joinedload(FormSubmission.member),
+            joinedload(FormSubmission.reviewed_by_admin),
+            joinedload(FormSubmission.bookings).joinedload(Booking.form),
+            joinedload(FormSubmission.bookings).joinedload(Booking.submission).joinedload(FormSubmission.reviewed_by_admin),
+            joinedload(FormSubmission.bookings).joinedload(Booking.room),
+            joinedload(FormSubmission.bookings).joinedload(Booking.table),
+            joinedload(FormSubmission.bookings).joinedload(Booking.events),
+        )
+        .filter(
+            FormSubmission.id == submission_id,
+            FormSubmission.form_id == form_id,
+            FormSubmission.association_id == admin.org_id,
+        )
+        .first()
+    )
+    if submission is None:
+        raise HTTPException(status_code=404, detail="Risposta non trovata.")
+
+    next_status = normalize_submission_status(body.status)
+    previous_status = normalize_submission_status(submission.status)
+    status_changed = next_status != previous_status
+    normalized_reason = _normalize_optional_text(body.reason)
+
+    now = datetime.utcnow()
+    submission.status = next_status
+    if next_status == FORM_SUBMISSION_STATUS_PENDING:
+        submission.reviewed_at = None
+        submission.reviewed_by_admin_id = None
+        submission.review_reason = None
+    else:
+        submission.reviewed_at = now
+        submission.reviewed_by_admin_id = admin.id
+        submission.review_reason = (
+            normalized_reason if next_status == FORM_SUBMISSION_STATUS_REJECTED else None
+        )
+
+    booking = next(iter(submission.bookings or []), None)
+    if booking is not None:
+        target_booking_status = None
+        if next_status == "confirmed":
+            target_booking_status = "confirmed"
+        elif next_status == FORM_SUBMISSION_STATUS_REJECTED:
+            target_booking_status = "cancelled"
+        elif next_status == FORM_SUBMISSION_STATUS_PENDING:
+            target_booking_status = "pending"
+        if target_booking_status:
+            update_booking_status(
+                db,
+                booking=booking,
+                next_status=target_booking_status,
+                created_by_user_id=admin.id,
+                room_id=booking.room_id,
+                table_id=booking.table_id,
+                notes=booking.notes,
+            )
+
+    whatsapp_result: dict[str, object] = {"sent": False, "reason": "unchanged"}
+    if status_changed and next_status in {"confirmed", FORM_SUBMISSION_STATUS_REJECTED}:
+        try:
+            whatsapp_result = maybe_send_form_submission_decision_whatsapp_message(
+                db,
+                form=form,
+                submission=submission,
+                member=submission.member,
+                booking=booking,
+                decision_status=next_status,
+                review_reason=submission.review_reason,
+            )
+        except Exception as exc:
+            logger.exception(
+                "submission_review_whatsapp_failed form_id=%s submission_id=%s status=%s",
+                form_id,
+                submission_id,
+                next_status,
+            )
+            whatsapp_result = {"sent": False, "reason": "exception", "error": str(exc)}
+
+    audit.log_operation(
+        db,
+        action="form_submission.reviewed",
+        entity_type="form_submission",
+        entity_id=submission.id,
+        actor_admin_id=admin.id,
+        actor_role=admin.role.value if isinstance(admin.role, AdminRole) else str(admin.role),
+        metadata={
+            "form_id": form.id,
+            "from_status": previous_status,
+            "to_status": next_status,
+            "reason": submission.review_reason,
+            "booking_id": booking.id if booking is not None else None,
+            "whatsapp_result": whatsapp_result,
+        },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+
+    db.commit()
+    db.refresh(submission)
+    if booking is not None:
+        db.refresh(booking)
+
+    return {
+        "submission": serialize_submission(submission),
+        "booking": serialize_booking(booking, include_events=True) if booking is not None else None,
+        "whatsapp_result": whatsapp_result,
+    }
 
 
 @router.get("/rooms")
