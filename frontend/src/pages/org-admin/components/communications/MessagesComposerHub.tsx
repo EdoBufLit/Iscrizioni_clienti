@@ -1378,21 +1378,28 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
   return (
     <>
       <div className="space-y-6">
-        <section className="overflow-hidden rounded-[2rem] border border-[#ddd4c3] bg-[radial-gradient(circle_at_top_left,_rgba(195,168,118,0.12),transparent_28%),linear-gradient(180deg,#fdfaf4_0%,#f5efe4_100%)] px-5 py-8 md:px-8">
-          <div className="flex flex-wrap items-start justify-between gap-6">
-            <div className="max-w-3xl">
-              <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#7a6647]">Comunicazioni / Builder</p>
-              <h2 className="mt-4 text-[clamp(2rem,4vw,3.4rem)] font-semibold tracking-[-0.04em] text-slate-950">Modelli e campagne, finalmente ordinati</h2>
-              <p className="mt-4 max-w-2xl text-base leading-8 text-slate-500">
-                Libreria template, campagne guidate e builder drag-and-drop centrato sull'uso reale dell'associazione.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <button className={subtab === "campaigns" ? "btn-primary" : "btn-secondary"} type="button" onClick={() => setSubtab("campaigns")}>Campagne</button>
-              <button className={subtab === "templates" ? "btn-primary" : "btn-secondary"} type="button" onClick={() => setSubtab("templates")}>Modelli</button>
-            </div>
+        <div className="flex flex-wrap justify-end gap-3">
+          <div className="inline-flex rounded-[1rem] border border-[#ddd4c3] bg-[#f6f2e8] p-1">
+            <button
+              className={`rounded-[0.8rem] px-4 py-2 text-sm font-semibold transition ${
+                subtab === "campaigns" ? "bg-[#17494a] text-white shadow-sm" : "text-[#31484a] hover:bg-white"
+              }`}
+              type="button"
+              onClick={() => setSubtab("campaigns")}
+            >
+              Campagne
+            </button>
+            <button
+              className={`rounded-[0.8rem] px-4 py-2 text-sm font-semibold transition ${
+                subtab === "templates" ? "bg-[#17494a] text-white shadow-sm" : "text-[#31484a] hover:bg-white"
+              }`}
+              type="button"
+              onClick={() => setSubtab("templates")}
+            >
+              Modelli
+            </button>
           </div>
-        </section>
+        </div>
 
         {subtab === "templates" ? (
           <section className={`${panelClass} space-y-5`}>

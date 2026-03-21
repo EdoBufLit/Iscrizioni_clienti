@@ -3791,3 +3791,14 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - La delete lotti super-admin non fa piu hard delete: imposta `released_at`, il lotto sparisce dai flussi operativi ma resta in storico e continua a contribuire all'unicita dei range.
 - Nuovi endpoint backend: `GET /api/super-admin/card-lots` e `GET /api/super-admin/card-lots/export.xlsx`. Nuova pagina frontend: `frontend/src/pages/super-admin/SuperAdminCardLots.tsx`, raggiungibile da `/super-admin/registro-lotti`.
 - Verifiche eseguite: `python -m py_compile app/services/card_lot_registry.py app/services/whatsapp_bot.py app/routes/super_admin.py app/routes/org_admin.py app/models.py init_db.py` OK, `python -m pytest -q tests/test_card_lot_registry.py tests/test_whatsapp_bot.py tests/test_super_admin_card_lot_management.py` OK (`17 passed`), `npm --prefix frontend run build` OK.
+
+## Plan (Org admin comunicazioni modelli - rimozione hero promo - Mar 21, 2026)
+- [x] Individuare il componente reale della vista `Org admin > Comunicazioni > Modelli`
+- [x] Rimuovere il hero promozionale mantenendo disponibile il cambio vista `Campagne/Modelli`
+- [x] Eseguire verifica frontend mirata e documentare review finale
+
+## Review (Org admin comunicazioni modelli - rimozione hero promo - Mar 21, 2026)
+- In `frontend/src/pages/org-admin/components/communications/MessagesComposerHub.tsx` ho rimosso il hero introduttivo/promozionale dalla vista `Comunicazioni > Modelli/Campagne`.
+- Il cambio vista `Campagne / Modelli` resta disponibile tramite uno switcher compatto, coerente con un workspace amministrativo e senza copy marketing.
+- Il resto della pagina resta invariato: lista template, filtri, CTA `Nuovo modello`, lista campagne e CTA `Nuova campagna` continuano a vivere subito nel contenuto operativo.
+- Verifica eseguita: `npm --prefix frontend run build` OK.
