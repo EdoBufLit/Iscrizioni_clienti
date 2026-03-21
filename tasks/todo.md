@@ -3813,3 +3813,23 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Nei flussi `Nuovo modello` e `Nuova campagna` spariscono quindi eyebrow, titolo grande e descrizione introduttiva; restano solo breadcrumb operativo, azioni in alto, stepper e contenuto dello step.
 - Il fix passa da un solo componente condiviso, quindi il comportamento resta coerente tra entrambi i wizard senza duplicare logica.
 - Verifica eseguita: `npm --prefix frontend run build` OK.
+
+## Plan (Comunicazioni builder GrapesJS - flicker e blocchi - Mar 21, 2026)
+- [x] Ispezionare `GrapesEmailBuilder` e il wiring in `MessagesComposerHub` per identificare la causa di flicker/reinit
+- [x] Correggere il ciclo di inizializzazione del builder e rendere piu robusto l'inserimento dei blocchi nel canvas
+- [x] Eseguire verifica frontend mirata e documentare review finale
+
+## Review (Comunicazioni builder GrapesJS - flicker e blocchi - Mar 21, 2026)
+- Root cause in `frontend/src/pages/org-admin/components/communications/GrapesEmailBuilder.tsx`: il `useEffect` di init/destroy di GrapesJS dipendeva da `initialMjmlSource` e `initialProjectData`, ma quei campi vengono aggiornati dal parent a ogni `onChange` del builder. Risultato: editor distrutto e ricreato continuamente durante l'editing, con sfarfallio e inserimenti che sembravano sparire.
+- Ho limitato il ciclo di init al solo `editorKey`, che e il vero confine di sessione del builder. Le snapshot continuano a risalire al parent, ma non causano piu il remount di GrapesJS nello stesso editing session.
+- Ho reso piu difensivo `appendBlock(...)`: dopo l'append verifica che il numero componenti sia aumentato davvero, seleziona il blocco appena inserito e lo porta in viewport con `scrollIntoView`, cosi l'utente vede subito l'inserimento.
+- Verifica eseguita: `npm --prefix frontend run build` OK. Non ho rieseguito uno smoke browser interattivo in questa passata.
+
+## Review (Smoke browser Comunicazioni cumulativo - Mar 21, 2026)
+- Smoke browser reale completato su istanza locale dedicata `http://127.0.0.1:8100` servita da `uvicorn app.main:app`; ho usato questa porta perche il `8000` locale e occupato da un processo `postgres`, quindi il proxy Vite standard verso `/api` non era affidabile per la verifica.
+- Auth org-admin locale verificata con magic-link one-shot su `admin id=2` / `org id=3`, con `communications_enabled=true`.
+- Casi verificati in browser:
+- lista `Comunicazioni > Modelli/Campagne`: il hero promozionale `Modelli e campagne, finalmente ordinati` non e piu visibile;
+- wizard `Nuova campagna`: il titolo hero `Nuova campagna guidata` non e piu visibile; il builder apre correttamente da `Base vuota guidata`; click su `Titolo + testo` e `Immagine` inseriscono davvero i blocchi nel canvas e restano presenti dopo assestamento;
+- wizard `Nuovo modello`: il titolo hero `Crea un modello guidato` non e piu visibile; il builder apre correttamente da `Parti da base vuota`; click su `Bottone CTA` e `Footer associazione` inseriscono davvero i blocchi nel canvas e restano presenti dopo assestamento.
+- Evidenze salvate in `tasks/screenshots/communications-library-no-hero-20260321.png`, `tasks/screenshots/communications-campaign-builder-smoke-20260321.png`, `tasks/screenshots/communications-template-builder-smoke-20260321.png`.

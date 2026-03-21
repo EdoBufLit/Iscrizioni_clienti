@@ -204,7 +204,7 @@ export function GrapesEmailBuilder({
       editor.destroy();
       editorRef.current = null;
     };
-  }, [editorKey, initialMjmlSource, initialProjectData]);
+  }, [editorKey]);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -225,12 +225,23 @@ export function GrapesEmailBuilder({
     const wrapper = editor.getWrapper();
     if (!wrapper) return;
     const body = wrapper.find("mj-body")[0] || wrapper;
+    const collection = body.components();
+    const previousLength = collection.length;
     body.append(block.mjml.trim() as never);
-    const children = body.components();
-    const last = children.at(children.length - 1);
-    if (last) {
-      editor.select(last);
+    const last = collection.at(collection.length - 1);
+    if (collection.length === previousLength || !last) {
+      showToast({ tone: "error", message: `Impossibile inserire ${block.label.toLowerCase()} nel builder.` });
+      return;
     }
+    const children = body.components();
+    const inserted = children.at(children.length - 1);
+    editor.select(inserted || last);
+    window.requestAnimationFrame(() => {
+      const element = (inserted || last)?.getEl?.();
+      if (element instanceof HTMLElement) {
+        element.scrollIntoView({ block: "center", behavior: "smooth" });
+      }
+    });
     showToast({ tone: "success", message: `${block.label} aggiunto al messaggio.` });
   }
 
