@@ -3833,3 +3833,14 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - wizard `Nuova campagna`: il titolo hero `Nuova campagna guidata` non e piu visibile; il builder apre correttamente da `Base vuota guidata`; click su `Titolo + testo` e `Immagine` inseriscono davvero i blocchi nel canvas e restano presenti dopo assestamento;
 - wizard `Nuovo modello`: il titolo hero `Crea un modello guidato` non e piu visibile; il builder apre correttamente da `Parti da base vuota`; click su `Bottone CTA` e `Footer associazione` inseriscono davvero i blocchi nel canvas e restano presenti dopo assestamento.
 - Evidenze salvate in `tasks/screenshots/communications-library-no-hero-20260321.png`, `tasks/screenshots/communications-campaign-builder-smoke-20260321.png`, `tasks/screenshots/communications-template-builder-smoke-20260321.png`.
+
+## Plan (Comunicazioni libreria - delete campagne/modelli - Mar 21, 2026)
+- [x] Verificare le azioni gia presenti nella libreria `Modelli/Campagne` e lo stato delle API di delete
+- [x] Aggiungere la delete mancante per le campagne e allineare la UI libreria con conferma esplicita
+- [x] Eseguire build frontend e verifica mirata, poi documentare review finale
+
+## Review (Comunicazioni libreria - delete campagne/modelli - Mar 21, 2026)
+- La libreria `Comunicazioni > Modelli/Campagne` ora espone anche l'azione `Elimina` sulle card campagna, con conferma esplicita via modal, allineata al comportamento gia presente per i modelli.
+- In `frontend/src/pages/org-admin/components/communications/MessagesComposerHub.tsx` ho aggiunto stato dedicato `deleteCampaignTarget`, modal di conferma e refresh della libreria dopo la delete; se la campagna eliminata e quella aperta nel builder, il flusso rientra automaticamente alla libreria.
+- In `frontend/src/lib/api.ts` ho aggiunto il client `deleteOrgAdminEmailCampaign(...)`; lato backend, `app/routes/org_admin.py` espone `DELETE /api/org-admin/communications/campaigns/{campaign_id}` con scope ristretto all'associazione dell'org admin autenticato.
+- Verifiche eseguite: `npm --prefix frontend run build` OK, `python -m py_compile app/routes/org_admin.py` OK, `python -m pytest -q tests/test_org_admin_communications.py -k delete_draft_campaign` OK.

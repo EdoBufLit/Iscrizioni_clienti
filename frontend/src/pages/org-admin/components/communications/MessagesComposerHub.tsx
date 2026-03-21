@@ -10,6 +10,7 @@ import {
   createOrgAdminEmailCampaign,
   createOrgAdminEmailTemplate,
   deleteOrgAdminCommunicationAsset,
+  deleteOrgAdminEmailCampaign,
   deleteOrgAdminEmailTemplate,
   duplicateOrgAdminEmailTemplate,
   fetchOrgAdminCommunicationAssets,
@@ -410,6 +411,7 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
   const [deleteTemplateTarget, setDeleteTemplateTarget] = useState<OrgAdminEmailTemplate | null>(null);
+  const [deleteCampaignTarget, setDeleteCampaignTarget] = useState<OrgAdminEmailCampaign | null>(null);
   const [testSendOpen, setTestSendOpen] = useState(false);
   const [testSendState, setTestSendState] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [testSendError, setTestSendError] = useState<string | null>(null);
@@ -886,6 +888,27 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
     }
   }
 
+  async function confirmDeleteCampaign() {
+    if (!deleteCampaignTarget) return;
+    setBusy("delete-campaign");
+    try {
+      await deleteOrgAdminEmailCampaign(deleteCampaignTarget.id);
+      setDeleteCampaignTarget(null);
+      await refreshLibrary();
+      showToast({ tone: "success", message: "Campagna eliminata." });
+      if (view.kind === "campaign-builder" && campaignDraft.id === deleteCampaignTarget.id) {
+        backToLibrary();
+      }
+    } catch (error) {
+      showToast({
+        tone: "error",
+        message: error instanceof Error ? error.message : "Errore eliminazione campagna",
+      });
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function handleUploadAsset(file: File) {
     await uploadOrgAdminCommunicationAsset(file, file.name);
     const res = await fetchOrgAdminCommunicationAssets();
@@ -943,6 +966,19 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
       confirmState={busy === "delete-template" ? "loading" : "idle"}
       onClose={() => setDeleteTemplateTarget(null)}
       onConfirm={() => void confirmDeleteTemplate()}
+    />
+  );
+
+  const campaignDeleteModal = (
+    <ConfirmModal
+      open={Boolean(deleteCampaignTarget)}
+      title="Eliminare la campagna?"
+      description="La campagna verra rimossa dalla libreria dell'organizzazione."
+      confirmLabel="Elimina campagna"
+      tone="danger"
+      confirmState={busy === "delete-campaign" ? "loading" : "idle"}
+      onClose={() => setDeleteCampaignTarget(null)}
+      onConfirm={() => void confirmDeleteCampaign()}
     />
   );
 
@@ -1164,6 +1200,15 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
               Torna alla libreria
             </button>
             <div className="flex flex-wrap gap-3">
+              {campaignDraft.id ? (
+                <button
+                  className="btn-ghost text-red-600"
+                  type="button"
+                  onClick={() => setDeleteCampaignTarget(campaigns.find((item) => item.id === campaignDraft.id) || null)}
+                >
+                  Elimina
+                </button>
+              ) : null}
               <button className="btn-ghost" type="button" disabled={!campaignDraft.compiledHtml.trim()} onClick={() => setTestSendOpen(true)}>
                 Invia test
               </button>
@@ -1495,6 +1540,7 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                     <div className="flex flex-wrap gap-2">
                       <button className="btn-secondary" type="button" onClick={() => void openCampaignBuilder(campaign.id)}>Apri</button>
                       {campaign.status === "draft" ? <button className="btn-primary" type="button" onClick={() => void openCampaignBuilder(campaign.id).then(() => setCampaignStep("action"))}>Invia</button> : null}
+                      <button className="btn-ghost text-red-600" type="button" onClick={() => setDeleteCampaignTarget(campaign)}>Elimina</button>
                     </div>
                   </div>
                 </div>
@@ -1504,6 +1550,7 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
         ) : null}
       </div>
       {templateDeleteModal}
+      {campaignDeleteModal}
       {testSendModal}
     </>
   );

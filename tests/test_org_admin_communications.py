@@ -670,6 +670,37 @@ def test_org_admin_campaign_selected_members_must_belong_to_association(client, 
     assert "destinatari selezionati" in create_res.json()["detail"].lower()
 
 
+def test_org_admin_can_delete_draft_campaign(client, db):
+    org, admin = _create_org_admin(db, communications_enabled=True)
+    _login_org_admin(client, db, admin.id)
+
+    create_res = client.post(
+        "/api/org-admin/communications/campaigns",
+        json={
+            "name": "Bozza da eliminare",
+            "subject": "Newsletter bozza",
+            "body_text": "Contenuto eliminabile",
+            "audience_type": "active_members",
+        },
+    )
+    assert create_res.status_code == 201, create_res.text
+    campaign_id = create_res.json()["campaign"]["id"]
+
+    delete_res = client.delete(f"/api/org-admin/communications/campaigns/{campaign_id}")
+    assert delete_res.status_code == 200, delete_res.text
+    assert delete_res.json() == {"ok": True}
+
+    detail_res = client.get(f"/api/org-admin/communications/campaigns/{campaign_id}")
+    assert detail_res.status_code == 404, detail_res.text
+
+    list_res = client.get("/api/org-admin/communications/campaigns")
+    assert list_res.status_code == 200, list_res.text
+    assert all(item["id"] != campaign_id for item in list_res.json()["items"])
+
+    db.expire_all()
+    assert db.query(EmailCampaign).filter(EmailCampaign.id == campaign_id).first() is None
+
+
 def test_org_admin_test_email_surfaces_mailtrap_provider_error(client, db, monkeypatch):
     original_mode = settings.EMAIL_MODE
     original_domain = settings.MAIL_FROM_DOMAIN

@@ -1645,6 +1645,17 @@ export async function fetchOrgAdminEmailCampaign(
   return res.json();
 }
 
+export async function deleteOrgAdminEmailCampaign(
+  campaignId: number,
+): Promise<{ ok: boolean }> {
+  const res = await fetch(`/api/org-admin/communications/campaigns/${campaignId}`, {
+    method: "DELETE",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore eliminazione campagna"));
+  return res.json();
+}
+
 export async function sendOrgAdminEmailCampaign(
   campaignId: number,
 ): Promise<{ ok: boolean; campaign: OrgAdminEmailCampaign; recipient_count: number; message: string }> {

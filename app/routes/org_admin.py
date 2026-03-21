@@ -3449,6 +3449,33 @@ def update_communications_campaign(
     }
 
 
+@router.delete("/communications/campaigns/{campaign_id}")
+def delete_communications_campaign(
+    request: Request,
+    campaign_id: int,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    _require_active_communications_module(admin.organization)
+    campaign = (
+        db.query(EmailCampaign)
+        .filter(
+            EmailCampaign.id == campaign_id,
+            EmailCampaign.association_id == admin.org_id,
+        )
+        .first()
+    )
+    if campaign is None:
+        raise HTTPException(status_code=404, detail="Campagna non trovata.")
+
+    db.delete(campaign)
+    db.commit()
+    return {"ok": True}
+
+
 @router.get("/communications/campaigns/{campaign_id}/recipients")
 def get_communications_campaign_recipients(
     request: Request,
