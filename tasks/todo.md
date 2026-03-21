@@ -3802,3 +3802,14 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Il cambio vista `Campagne / Modelli` resta disponibile tramite uno switcher compatto, coerente con un workspace amministrativo e senza copy marketing.
 - Il resto della pagina resta invariato: lista template, filtri, CTA `Nuovo modello`, lista campagne e CTA `Nuova campagna` continuano a vivere subito nel contenuto operativo.
 - Verifica eseguita: `npm --prefix frontend run build` OK.
+
+## Plan (Org admin comunicazioni wizard - rimozione hero interno - Mar 21, 2026)
+- [x] Individuare il componente condiviso del hero nei wizard `Nuovo modello` e `Nuova campagna`
+- [x] Rimuovere titolo e descrizione introduttivi mantenendo stepper e azioni operative
+- [x] Eseguire verifica frontend mirata e documentare review finale
+
+## Review (Org admin comunicazioni wizard - rimozione hero interno - Mar 21, 2026)
+- In `frontend/src/pages/org-admin/components/communications/MessagesComposerHub.tsx` ho ridotto il componente condiviso `WizardHero` a un semplice stepper compatto.
+- Nei flussi `Nuovo modello` e `Nuova campagna` spariscono quindi eyebrow, titolo grande e descrizione introduttiva; restano solo breadcrumb operativo, azioni in alto, stepper e contenuto dello step.
+- Il fix passa da un solo componente condiviso, quindi il comportamento resta coerente tra entrambi i wizard senza duplicare logica.
+- Verifica eseguita: `npm --prefix frontend run build` OK.

@@ -242,9 +242,6 @@ function StatusBadge({ value }: { value: string | null | undefined }) {
 }
 
 function WizardHero({
-  eyebrow,
-  title,
-  description,
   steps,
   activeStep,
 }: {
@@ -257,18 +254,8 @@ function WizardHero({
   const activeIndex = Math.max(0, steps.findIndex((step) => step.key === activeStep));
 
   return (
-    <section className="overflow-hidden rounded-[2rem] border border-[#ddd4c3] bg-[radial-gradient(circle_at_top,_rgba(196,167,118,0.12),transparent_32%),linear-gradient(180deg,#fdfaf4_0%,#f5efe4_100%)] px-5 py-8 md:px-8">
-      <div className="mx-auto max-w-4xl text-center">
-        <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#7a6647]">{eyebrow}</p>
-        <h2 className="mt-4 text-[clamp(2rem,5vw,3.8rem)] font-semibold leading-[0.98] tracking-[-0.03em] text-slate-950">
-          {title}
-        </h2>
-        <p className="mx-auto mt-4 max-w-2xl text-base leading-8 text-slate-500 md:text-[1.15rem]">
-          {description}
-        </p>
-      </div>
-
-      <div className="mx-auto mt-10 max-w-4xl">
+    <section className="rounded-[1.6rem] border border-[#ddd4c3] bg-[#fbfaf6] px-4 py-5 md:px-6">
+      <div className="mx-auto max-w-5xl">
         <div className="relative px-2">
           <div className="absolute left-[10%] right-[10%] top-6 hidden h-[2px] rounded-full bg-[#e4dbc9] md:block" />
           <div
