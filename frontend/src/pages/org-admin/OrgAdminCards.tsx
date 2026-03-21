@@ -294,7 +294,7 @@ const OrgAdminCards = () => {
                             : "-"}
                         </td>
                         <td className={`${tdClass} tabular-nums font-medium text-neutral-900`}>
-                          {mv.range_start} - {mv.range_end}
+                          {mv.range_start_label ?? mv.range_start} - {mv.range_end_label ?? mv.range_end}
                         </td>
                         <td className={`${tdClass} tabular-nums`}>
                           {mv.quantity}

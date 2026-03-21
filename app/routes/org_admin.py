@@ -160,6 +160,7 @@ from app.services.booking_rooms import (
 )
 from app.services.card_allocation import allocate_next_card, release_card_number
 from app.services.card_inventory import compute_org_card_stock
+from app.services.card_lot_registry import format_card_number
 from app.services.card_pdf import generate_card_pdf_bytes
 from app.services.card_verification import build_card_verification_token
 from app.services.fiscal_code import validate_fiscal_code
@@ -1113,6 +1114,8 @@ def _serialize_org_admin_card_lot(batch: CardBatch) -> dict[str, object]:
         "year": batch.year,
         "range_start": batch.start_no,
         "range_end": batch.end_no,
+        "range_start_label": format_card_number(batch.start_no),
+        "range_end_label": format_card_number(batch.end_no),
         "quantity": int(batch.end_no - batch.start_no + 1),
         "status_label": _org_admin_batch_status_label(batch),
     }

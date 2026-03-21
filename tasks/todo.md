@@ -190,6 +190,20 @@
 - Fix in `init_db.py`: aggiunta auto-riparazione colonne branding su `organizations` prima delle query modello
 - Smoke check: `python -m uvicorn app.main:app --host 127.0.0.1 --port 8099 --log-level debug` avvia correttamente (errore solo su porta gia in uso locale)
 
+## Plan (Communications wizard rollback + redesign - Mar 20, 2026)
+- [x] Recuperare il linguaggio UX del wizard `Iscrizione` e riportarlo dentro `Campagne` e `Modelli`
+- [x] Rifare il wizard campagne con hero, stepper orizzontale, card centrale e DnD integrato senza sidebar soffocanti
+- [x] Rifare il wizard modelli con la stessa grammatica visuale, piu corto e con preview ampia realmente leggibile
+- [x] Sistemare il comportamento responsive desktop/mobile e preservare azioni `salva`, `programma`, `invia`, `duplica`, `archivia`, `elimina`
+- [x] Rieseguire build frontend e aggiornare review + lessons
+
+## Review (Communications wizard rollback + redesign - Mar 20, 2026)
+- In [MessagesHub.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\components\communications\MessagesHub.tsx) i wizard `Campagne` e `Modelli` sono stati riportati a una shell ispirata direttamente a [Iscrizione.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\Iscrizione.tsx): breadcrumb minimale, hero centrato, stepper orizzontale, card principale ampia e footer con CTA primarie/secondarie leggibili.
+- Il wizard campagne non usa piu header sticky e griglie laterali soffocanti come layout dominante: i passi `Brief`, `Messaggio`, `Destinatari`, `Review` vivono dentro card larghe e leggibili, con DnD dei blocchi mantenuto ma inserito nel corpo del wizard.
+- Il wizard modelli e ora piu corto ma coerente: `Fondamenta`, `Messaggio`, `Review`, con preview ampia tramite `PreviewCanvas`, azioni `Duplica`, `Archivia`, `Elimina` e `Salva` tenute nel footer finale senza schiacciare il contenuto.
+- Ho riusato la grammatica visiva gia presente in `signup-wizard-shell` e `signup-wizard-card`, invece di introdurre un terzo linguaggio UI dentro `Comunicazioni`.
+- Verifica eseguita: `npm --prefix frontend run build` OK.
+
 ---
 - [x] Limitare watermark/logo e naming speciale alla sola org `oasi-2`
 - [x] Mantenere comportamento standard per le altre org
@@ -3715,3 +3729,65 @@ pm --prefix frontend run build.
 - In [app/routes/org_admin.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\app\routes\org_admin.py) ho aggiunto DELETE /api/org-admin/communications/templates/{template_id} con protezione per i template di sistema.
 - Verifiche completate: python -m py_compile app/routes/org_admin.py app/services/email_templates.py, 
 pm --prefix frontend run build.
+
+## Plan (Deploy cleanup permission fix - Mar 20, 2026)
+- [x] Analizzare il failure del workflow deploy su Hetzner e identificare il path che blocca git clean`r
+- [x] Correggere il workflow per trattare data/videos/ come output runtime e non come sporcizia del checkout
+- [x] Verificare il comportamento reale sul server come utente deploy`r
+- [x] Preparare commit e push del fix
+
+## Review (Deploy cleanup permission fix - Mar 20, 2026)
+- Root cause verificata live su 157.90.31.105: data/videos/ e data/videos/welcome erano 
+oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falliva con Permission denied sul cleanup di quei file video runtime.
+- In [.github/workflows/deploy-hetzner.yml](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\.github\workflows\deploy-hetzner.yml) ho aggiunto un exclude persistente in .git/info/exclude per data/videos/ prima del dirty-check e ho reso il cleanup esplicitamente git clean -fd -e data/videos/.
+- In [.gitignore](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\.gitignore) ho aggiunto data/videos/ per allineare anche il repo al fatto che quel path e output runtime del worker video, non sorgente versionata.
+- Verifica reale server-side eseguita come utente deploy: dopo l'exclude git status --porcelain non mostrava piu data/videos/ e git clean -nd -e data/videos/ non tentava piu di rimuoverla, quindi il failure mostrato nello screenshot risulta coperto dal fix.
+
+## Plan (Comunicazioni GrapesJS guided builder - Mar 20, 2026)
+- [x] Mappare l'attuale dominio `email_templates` / `email_campaigns` e progettare l'estensione minima per builder GrapesJS/MJML multi-tenant senza duplicare il motore esistente
+- [x] Estendere schema/modelli/API per template e campagne con stato editoriale, project JSON GrapesJS, MJML compilato, snapshot campagna e asset library isolata per associazione
+- [x] Integrare un editor GrapesJS fortemente guidato nel wizard `Comunicazioni > Modelli` e `Campagne`, riusando la grammatica UX del wizard iscrizione come shell principale
+- [x] Aggiungere blocchi custom, merge tag picker, preview desktop/mobile, invio test e creazione campagna da template senza esporre pannelli tecnici inutili
+- [x] Seedare template iniziali associazione/sistema e verificare build frontend, test backend e review finale con limiti noti e tradeoff
+
+## Review (Comunicazioni GrapesJS guided builder - Mar 20, 2026)
+- Ho introdotto il builder guidato multi-tenant su backend con nuovi campi builder in `email_templates` e `email_campaigns`, nuova tabella `email_builder_assets`, migration `n7p8q9r0s1t2_add_email_builder_fields_and_assets.py` e bootstrap coerente in `init_db.py`.
+- In `app/routes/org_admin.py` ora sono disponibili CRUD template/campagne con `compiled_html`, `mjml_source`, `grapesjs_project_json`, oltre agli endpoint per asset library org-scoped, preview builder, test send e creazione campagna da template.
+- In `app/services/email_templates.py` ho esteso i merge tag, i tipi template e i seed iniziali richiesti (`Newsletter base`, `Reminder rinnovo`, `Conferma prenotazione`, `Rigetto prenotazione`, `Invito evento`), mantenendo compatibilita con il motore esistente di render.
+- Sul frontend ho aggiunto `emailBuilder.ts`, `GrapesEmailBuilder.tsx` e `MessagesComposerHub.tsx`: il tab Comunicazioni usa ora un wizard ispirato a `Iscrizione`, con hero centrale, stepper chiaro, editor GrapesJS limitato, blocchi guidati, merge tags, libreria media per organizzazione, preview desktop/mobile e azioni finali semplici.
+- `OrgAdminCommunications.tsx` punta al nuovo hub builder e `frontend/src/lib/api.ts` espone tutti i contratti builder/asset necessari lato client.
+- Ho aumentato in `frontend/vite.config.ts` e `frontend/vite.config.js` il limite Workbox di precache a 5 MiB: senza questo il build PWA falliva per il chunk Comunicazioni introdotto da GrapesJS.
+- Verifiche eseguite: `python -m py_compile app/routes/org_admin.py app/services/email_templates.py app/services/email_campaigns.py app/models.py init_db.py` OK, `npm --prefix frontend run build` OK, `python -m pytest -q tests/test_org_admin_communications.py` OK (`15 passed`).
+- Tradeoff noto: il chunk `OrgAdminCommunications` resta molto pesante per via di GrapesJS/MJML; funzionalmente il build e stabile, ma il passo successivo elegante sarebbe spezzare il builder in lazy chunks dedicati per ridurre peso iniziale e precache.
+
+
+## Plan (Telegram admin notification for nuove tessere - Mar 21, 2026)
+- [x] Mappare il flusso WhatsApp nuove tessere e il punto esatto in cui oggi parte la notifica admin via Twilio SMS
+- [x] Introdurre config/env e helper `send_telegram_message(text)` con logging errori chiaro senza toccare gli altri flussi Twilio
+- [x] Sostituire solo nel flusso richiesta nuove tessere la chiamata SMS con invio Telegram mantenendo identico il testo messaggio
+- [x] Aggiungere test mirato e breve documentazione/manual test con payload di esempio e punto preciso della sostituzione
+- [x] Eseguire verifiche locali mirate e aggiornare la review finale
+
+## Review (Telegram admin notification for nuove tessere - Mar 21, 2026)
+- La sostituzione funzionale e stata fatta in `app/services/whatsapp_bot.py`, dentro `_handle_order_notes(...)`: il messaggio `Nuovo ordine tessere: ...` e rimasto identico, ma la chiamata `send_admin_sms_notification(...)` e stata sostituita con `send_telegram_message(...)`.
+- Ho aggiunto `app/services/telegram_notifications.py` con helper sync `send_telegram_message(text)` basato su `requests`, coerente con il progetto sincrono, con logging esplicito per env mancanti, errori HTTP, JSON invalido e risposta Telegram `ok=false`.
+- Ho esteso la config runtime con `TG_BOT_TOKEN` e `TG_CHAT_ID` in `app/config.py`, `docker-compose.yml` e `.github/workflows/deploy-hetzner.yml`, cosi la nuova notifica e disponibile anche nei container/deploy.
+- Documentazione minima aggiunta in `docs/telegram_recharge_notification.md` con env richieste, esempio payload manuale e punto preciso della sostituzione; `ENV_REQUIRED.md` e `DEPLOY.md` aggiornati per riflettere il nuovo canale Telegram.
+- Verifiche locali completate: `python -m py_compile app/services/telegram_notifications.py app/services/whatsapp_bot.py app/config.py` OK, `python -m pytest -q tests/test_whatsapp_bot.py` OK (`7 passed`).
+
+## Plan (Registro lotti DB-first + auto-lotto RechargeRequest - Mar 21, 2026)
+- [x] Mappare schema e semantica reale di `CardBatch`, `RechargeRequest`, `next_no`, `released_at` e locking esistente
+- [x] Estendere schema/model con collegamento richiesta->lotto e introdurre service centrale per helper numerazione, auto-creazione lotto shared ASSONAM, idempotenza e audit
+- [x] Aggiornare il flusso WhatsApp per creare automaticamente il lotto nel pool `ASSONAM_CENTRAL` e bloccare in modo esplicito le org non shared
+- [x] Convertire la delete dei lotti in rilascio storico limitato al dominio lotti, aggiornando query operative e di registro/export
+- [x] Aggiungere API super-admin per registro lotti globale ed export Excel live dal DB
+- [x] Implementare pagina super-admin `Registro lotti` con tabella, download Excel e integrazione nav/routing
+- [x] Aggiungere test backend mirati su helper, idempotenza, concorrenza, storico lotti ed export; rieseguire verifiche locali
+
+## Review (Registro lotti DB-first + auto-lotto RechargeRequest - Mar 21, 2026)
+- Ho introdotto `app/services/card_lot_registry.py` come service centrale per helper numerazione, lock dedicato al pool shared ASSONAM, auto-creazione lotto su `RechargeRequest`, serializzazione registro e generazione Excel live da DB.
+- `RechargeRequest` ora ha `card_batch_id` con migration dedicata `p1q2r3s4t5u6_add_recharge_request_card_batch_link.py`; `init_db.py` e `app/scripts/repair_sqlite.py` sono stati estesi per il bootstrap idempotente su ambienti già esistenti.
+- Il punto di aggancio automatico e in `app/services/whatsapp_bot.py`, dentro `_handle_order_notes(...)`, subito dopo `db.flush()` della richiesta: da li parte `ensure_recharge_request_batch(...)`, che crea il lotto solo per org nel pool `ASSONAM_CENTRAL`, altrimenti marca la richiesta come `blocked_non_shared`.
+- La delete lotti super-admin non fa piu hard delete: imposta `released_at`, il lotto sparisce dai flussi operativi ma resta in storico e continua a contribuire all'unicita dei range.
+- Nuovi endpoint backend: `GET /api/super-admin/card-lots` e `GET /api/super-admin/card-lots/export.xlsx`. Nuova pagina frontend: `frontend/src/pages/super-admin/SuperAdminCardLots.tsx`, raggiungibile da `/super-admin/registro-lotti`.
+- Verifiche eseguite: `python -m py_compile app/services/card_lot_registry.py app/services/whatsapp_bot.py app/routes/super_admin.py app/routes/org_admin.py app/models.py init_db.py` OK, `python -m pytest -q tests/test_card_lot_registry.py tests/test_whatsapp_bot.py tests/test_super_admin_card_lot_management.py` OK (`17 passed`), `npm --prefix frontend run build` OK.

@@ -39,7 +39,7 @@ def _create_org(db, slug_prefix: str) -> Organization:
 
 
 def _next_free_range(db, *, size: int = 40) -> tuple[int, int]:
-    max_end = db.query(func.max(CardBatch.end_no)).filter(CardBatch.released_at.is_(None)).scalar()
+    max_end = db.query(func.max(CardBatch.end_no)).scalar()
     base = int(max_end) if max_end is not None else 30000
     start_no = base + 100
     end_no = start_no + size - 1
@@ -177,9 +177,12 @@ def test_super_admin_can_delete_empty_card_lot_and_audit_it(client, db):
     payload = response.json()
     assert payload["ok"] is True
     assert payload["deleted_lot_id"] == batch_id
+    assert payload["released_at"] is not None
 
     db.expire_all()
-    assert db.query(CardBatch).filter(CardBatch.id == batch_id).first() is None
+    released_batch = db.query(CardBatch).filter(CardBatch.id == batch_id).first()
+    assert released_batch is not None
+    assert released_batch.released_at is not None
 
     audit_log = (
         db.query(OperationLog)

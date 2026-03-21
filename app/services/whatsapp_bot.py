@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import Organization, RechargeRequest, WhatsAppSession
+from app.services.card_lot_registry import ensure_recharge_request_batch
 from app.services.telegram_notifications import send_telegram_message
 
 logger = logging.getLogger(__name__)
@@ -371,6 +372,29 @@ def _handle_order_notes(
     )
     db.add(recharge_request)
     db.flush()
+
+    try:
+        created_batch = ensure_recharge_request_batch(db, recharge_request.id)
+        if created_batch is not None:
+            logger.info(
+                "whatsapp_recharge_request_batch_created request_id=%s batch_id=%s range=%s-%s",
+                recharge_request.id,
+                created_batch.id,
+                created_batch.start_no,
+                created_batch.end_no,
+            )
+        else:
+            logger.info(
+                "whatsapp_recharge_request_batch_skipped request_id=%s status=%s",
+                recharge_request.id,
+                recharge_request.status,
+            )
+    except Exception:
+        logger.exception(
+            "whatsapp_recharge_request_batch_failed request_id=%s",
+            recharge_request.id,
+        )
+        raise
 
     _reset_session(session)
 

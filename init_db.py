@@ -631,6 +631,12 @@ def init_db():
             "numbering_scope_id",
             "INTEGER REFERENCES numbering_scopes(id)",
         )
+        _add_column_if_missing(
+            conn,
+            "recharge_requests",
+            "card_batch_id",
+            "INTEGER REFERENCES card_batches(id)",
+        )
         conn.execute(
             text(
                 """

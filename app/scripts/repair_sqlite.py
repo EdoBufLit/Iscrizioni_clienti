@@ -90,6 +90,11 @@ def repair_db():
         ]
         ensure_columns(cursor, "card_batches", batch_columns)
 
+        recharge_request_columns = [
+            ("card_batch_id", "INTEGER REFERENCES card_batches(id)"),
+        ]
+        ensure_columns(cursor, "recharge_requests", recharge_request_columns)
+
         # 4. Check/Add Columns for 'member_documents'
         doc_columns = [
             ("status", "VARCHAR DEFAULT 'uploaded'"),

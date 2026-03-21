@@ -2,10 +2,12 @@ from datetime import datetime
 import uuid
 
 import pytest
+from sqlalchemy import func
 
 from app.db import SessionLocal
-from app.models import Organization, RechargeRequest, WhatsAppSession
+from app.models import CardBatch, Organization, RechargeRequest, WhatsAppSession
 from app.routes import whatsapp as whatsapp_route
+from app.services.numbering_scopes import ensure_assonam_central_scope
 from app.services import whatsapp_bot as whatsapp_bot_service
 
 
@@ -128,6 +130,81 @@ def test_whatsapp_bot_creates_recharge_request_after_candidate_selection(
     assert session_row is not None
     assert session_row.state == "idle"
     assert session_row.data == {}
+
+
+def test_whatsapp_bot_auto_creates_shared_assonam_batch_from_recharge_request(
+    client,
+    db,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        whatsapp_bot_service.whatsapp_bot_rate_limiter,
+        "check",
+        lambda _key: None,
+    )
+    monkeypatch.setattr(
+        whatsapp_bot_service,
+        "send_telegram_message",
+        lambda _text: "12345",
+    )
+
+    central_scope = ensure_assonam_central_scope(db)
+    db.commit()
+
+    shared_org = Organization(
+        name=f"CHICCO CLUB {uuid.uuid4().hex[:6]}",
+        slug=f"chicco-club-{uuid.uuid4().hex[:6]}",
+        privacy_version="v1",
+        is_active=True,
+        numbering_scope_id=central_scope.id,
+    )
+    db.add(shared_org)
+    db.flush()
+    db.add(
+        CardBatch(
+            org_id=shared_org.id,
+            numbering_scope_id=central_scope.id,
+            year=datetime.utcnow().year,
+            start_no=26001,
+            end_no=26300,
+            next_no=26001,
+            is_enabled=True,
+        )
+    )
+    db.commit()
+    db.refresh(shared_org)
+    expected_max_end = (
+        db.query(func.max(CardBatch.end_no))
+        .filter(CardBatch.numbering_scope_id == central_scope.id)
+        .scalar()
+    )
+    assert expected_max_end is not None
+
+    wa_from = f"whatsapp:+39336{uuid.uuid4().hex[:6]}"
+    search_term = shared_org.slug
+
+    for body in ("ordino tessere", search_term, "300", "no"):
+        response = client.post(
+            "/api/whatsapp/bot",
+            json={
+                "from": wa_from,
+                "body": body,
+                "profile_name": "Mario Rossi",
+            },
+        )
+        assert response.status_code == 200, response.text
+
+    request_row = db.query(RechargeRequest).order_by(RechargeRequest.id.desc()).first()
+    assert request_row is not None
+    assert request_row.association_id == shared_org.id
+    assert request_row.card_batch_id is not None
+    assert request_row.status == "lot_created"
+
+    batch = db.query(CardBatch).filter(CardBatch.id == request_row.card_batch_id).first()
+    assert batch is not None
+    assert batch.start_no == int(expected_max_end) + 1
+    assert batch.end_no == batch.start_no + 299
+    assert batch.next_no == batch.start_no
 
 
 def test_whatsapp_bot_sends_telegram_notification_with_same_message_text(

@@ -2942,6 +2942,8 @@ export type CardMovement = {
   year: number;
   range_start: number;
   range_end: number;
+  range_start_label?: string;
+  range_end_label?: string;
   quantity: number;
   status_label: string;
 };
@@ -4555,6 +4557,8 @@ export type OrgBatch = {
   id: number;
   start_no: number;
   end_no: number;
+  start_label?: string;
+  end_label?: string;
   next_no: number;
   year: number;
   is_enabled: boolean;
@@ -4612,6 +4616,47 @@ export async function fetchOrgBatches(orgId: number): Promise<OrgBatchesResult> 
   if (res.status === 404) throw new Error("Organizzazione non trovata");
   if (!res.ok) throw new Error("Errore nel caricamento lotti");
   return res.json();
+}
+
+export type CardLotRegistryItem = {
+  id: number;
+  batch_id: number;
+  organization_id: number | null;
+  organization_name: string | null;
+  numbering_scope_id: number | null;
+  numbering_scope_name: string | null;
+  year: number;
+  range_start: number;
+  range_end: number;
+  range_start_label: string;
+  range_end_label: string;
+  quantity: number;
+  status_label: string;
+  next_no: number | null;
+  recharge_request_id: number | null;
+  created_at: string | null;
+  released_at: string | null;
+  notes: string | null;
+};
+
+export type CardLotRegistryResponse = {
+  items: CardLotRegistryItem[];
+  total: number;
+};
+
+export async function fetchCardLotRegistry(): Promise<CardLotRegistryResponse> {
+  const res = await fetch("/api/super-admin/card-lots");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento del registro lotti"));
+  return res.json();
+}
+
+export async function downloadCardLotRegistryExcel(): Promise<void> {
+  return downloadAuthenticatedFile(
+    "/api/super-admin/card-lots/export.xlsx",
+    "registro-lotti.xlsx",
+    "Impossibile scaricare il registro lotti",
+  );
 }
 
 export type PatchOrgCardLotPayload = {

@@ -699,9 +699,11 @@ class RechargeRequest(Base):
     requested_cards = Column(Integer, nullable=False)
     notes = Column(Text, nullable=True)
     status = Column(String, nullable=False, default="new", server_default="new")
+    card_batch_id = Column(Integer, ForeignKey("card_batches.id"), nullable=True, index=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     organization = relationship("Organization", back_populates="recharge_requests")
+    card_batch = relationship("CardBatch", back_populates="recharge_request")
 
 
 class AdminUser(Base):
@@ -1598,6 +1600,11 @@ class CardBatch(Base):
         "NumberingScope",
         back_populates="batches",
         foreign_keys=[numbering_scope_id],
+    )
+    recharge_request = relationship(
+        "RechargeRequest",
+        back_populates="card_batch",
+        uselist=False,
     )
 
 

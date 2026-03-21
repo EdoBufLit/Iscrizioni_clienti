@@ -41,6 +41,7 @@ const SuperAdminOrganizations = lazy(() => import("./pages/super-admin/SuperAdmi
 const SuperAdminMemberDetail = lazy(() => import("./pages/super-admin/SuperAdminMemberDetail"));
 const SuperAdminAffiliations = lazy(() => import("./pages/super-admin/SuperAdminAffiliations"));
 const SuperAdminDocuments = lazy(() => import("./pages/super-admin/SuperAdminDocuments"));
+const SuperAdminCardLots = lazy(() => import("./pages/super-admin/SuperAdminCardLots"));
 
 const OrgAdminLogin = lazy(() => import("./pages/org-admin/OrgAdminLogin"));
 const OrgAdminCallback = lazy(() => import("./pages/org-admin/OrgAdminCallback"));
@@ -133,6 +134,7 @@ const App = () => {
                 <Route path="affiliazioni" element={<SuperAdminAffiliations />} />
                 <Route path="documenti" element={<SuperAdminDocuments />} />
                 <Route path="org-admins" element={<SuperAdminOrgAdmins />} />
+                <Route path="registro-lotti" element={<SuperAdminCardLots />} />
                 <Route path="soci" element={<SuperAdminMemberDetail />} />
               </Route>
               <Route path="org-admin/login" element={<OrgAdminLogin />} />

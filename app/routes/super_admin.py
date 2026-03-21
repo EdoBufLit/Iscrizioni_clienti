@@ -4,7 +4,7 @@ import os
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, Form
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy.orm import Session, aliased, joinedload
 from datetime import datetime, timedelta
@@ -72,6 +72,13 @@ from app.services.numbering_scopes import (
     get_numbering_usage_state,
     get_target_scope_for_mode,
     serialize_numbering_config,
+)
+from app.services.card_lot_registry import (
+    build_card_lots_workbook,
+    find_batch_overlap,
+    format_card_number,
+    list_card_lot_registry_rows,
+    serialize_card_lot_registry_row,
 )
 from app.models_affiliation import AffiliationApplication
 
@@ -3051,28 +3058,22 @@ def check_card_overlap(
     """
     Check if the given range [start_no, end_no] overlaps within the current numbering domain.
 
-    Legacy orgs (no numbering_scope_id) keep the old global-legacy behavior but only
-    against other legacy/unconfigured batches. Scoped orgs check overlap only inside
-    their current scope.
+    Released batches are included as historical reservations so card numbers cannot
+    be reused after a lot is released.
     """
-    query = db.query(CardBatch).filter(
-        CardBatch.released_at.is_(None),
-        CardBatch.start_no <= end_no,
-        CardBatch.end_no >= start_no,
-    )
     effective_scope_id = (
         org.numbering_scope_id
         if domain_scope_id is _NUMBERING_SCOPE_UNSET
         else domain_scope_id
     )
-    if effective_scope_id is None:
-        query = query.filter(CardBatch.numbering_scope_id.is_(None))
-    else:
-        query = query.filter(CardBatch.numbering_scope_id == effective_scope_id)
-    if exclude_batch_id is not None:
-        query = query.filter(CardBatch.id != exclude_batch_id)
-
-    return query.order_by(CardBatch.start_no.asc(), CardBatch.id.asc()).first()
+    return find_batch_overlap(
+        db,
+        start_no,
+        end_no,
+        domain_scope_id=effective_scope_id,
+        exclude_batch_id=exclude_batch_id,
+        include_released=True,
+    )
 
 
 def _resolve_batch_year(raw_year: Optional[int]) -> int:
@@ -3187,6 +3188,8 @@ def _serialize_batch_usage(db: Session, batch: CardBatch) -> dict[str, object]:
         "id": batch.id,
         "start_no": batch.start_no,
         "end_no": batch.end_no,
+        "start_label": format_card_number(batch.start_no),
+        "end_label": format_card_number(batch.end_no),
         "next_no": batch.next_no,
         "year": batch.year,
         "is_enabled": _batch_manual_enabled(batch),
@@ -3509,6 +3512,46 @@ def get_org_batches(
     }
 
 
+@router.get("/card-lots")
+def get_card_lot_registry(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    rows = list_card_lot_registry_rows(db)
+    return {
+        "items": [serialize_card_lot_registry_row(row) for row in rows],
+        "total": len(rows),
+    }
+
+
+@router.get("/card-lots/export.xlsx")
+def export_card_lot_registry(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    try:
+        rows = list_card_lot_registry_rows(db)
+        workbook_stream = build_card_lots_workbook(rows)
+    except Exception:
+        logger.exception("card_lot_registry_export_failed")
+        raise HTTPException(
+            status_code=500,
+            detail="Impossibile generare l'export Excel del registro lotti",
+        )
+
+    filename = f"registro-lotti-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.xlsx"
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+    }
+    return StreamingResponse(
+        iter([workbook_stream.getvalue()]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
+    )
+
+
 @associations_router.patch("/organizations/{org_id}/card-lots/{lot_id}")
 def patch_org_card_lot(
     request: Request,
@@ -3665,7 +3708,7 @@ def delete_org_card_lot(
         "notes": batch.notes,
     }
 
-    db.delete(batch)
+    batch.released_at = datetime.utcnow()
     audit.log_operation(
         db,
         action="org.cards.batch_deleted",
@@ -3681,6 +3724,7 @@ def delete_org_card_lot(
     return {
         "ok": True,
         "deleted_lot_id": lot_id,
+        "released_at": batch.released_at.isoformat() + "Z" if batch.released_at else None,
     }
 
 

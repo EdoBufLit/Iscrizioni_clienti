@@ -161,3 +161,13 @@
 - Nei deploy su checkout persistente del server, non assumere mai working tree pulito: prima di git checkout bisogna gestire modifiche locali e file untracked in modo robusto (stash nominato o strategia equivalente), altrimenti il push Git va a buon fine ma il deploy fallisce durante lo switch di branch.
 
 - Se il cliente segnala che una UI rimossa gli piaceva, non sostituirla con un editor piu povero solo per semplificare il layout: bisogna ripristinare il flusso apprezzato oppure offrire subito un wizard equivalente o migliore, mantenendo le affordance chiave.
+
+- Se il deploy usa un checkout persistente con artefatti runtime generati da container (es. data/videos/welcome), il workflow deve escluderli esplicitamente da git status e git clean; altrimenti basta un owner diverso (oot vs deploy) per bloccare il deploy anche se il push GitHub e corretto.
+
+- Mar 20, 2026: su UX sensibile non devo sostituire un wizard gia approvato con una shell nuova senza riallinearmi esplicitamente al riferimento migliore del prodotto. Se esiste un wizard canonico forte (qui Iscrizione), va riusato come grammatica primaria prima di provare varianti.
+
+
+- Mar 20, 2026: quando integro un editor terzo pesante (es. GrapesJS) in un flusso business-critical, devo prima ancorarlo a una grammatica UX gia validata dal prodotto e verificare desktop/mobile prima di dichiarare il wizard accettabile. La potenza del builder non giustifica una UX piu tecnica o piu fragile del flusso precedente.
+
+- Mar 21, 2026: nei flussi numerici shared non devo mai introdurre fallback o domini di calcolo impliciti. Prima verifico il pool reale, la query esatta e la semantica dei campi esistenti (
+ext_no, storico eleased_at), poi implemento solo regole esplicite e dimostrabili dal dominio.

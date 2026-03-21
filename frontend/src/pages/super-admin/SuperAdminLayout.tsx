@@ -47,6 +47,7 @@ const SuperAdminLayout = () => {
     { label: "Affiliazioni", path: "/super-admin/affiliazioni" },
     { label: "Documenti", path: "/super-admin/documenti" },
     { label: "Amministratori", path: "/super-admin/org-admins" },
+    { label: "Registro lotti", path: "/super-admin/registro-lotti" },
     { label: "Libro Soci", path: "/super-admin/soci" },
   ];
 
@@ -55,6 +56,7 @@ const SuperAdminLayout = () => {
       { key: "orgs", label: "Associazioni", to: "/super-admin/associazioni", activeMatch: ["/super-admin/associazioni"], icon: "building" as const },
       { key: "affiliations", label: "Affiliazioni", to: "/super-admin/affiliazioni", activeMatch: ["/super-admin/affiliazioni"], icon: "chart" as const },
       { key: "documents", label: "Documenti", to: "/super-admin/documenti", activeMatch: ["/super-admin/documenti"], icon: "docs" as const },
+      { key: "lots", label: "Registro lotti", to: "/super-admin/registro-lotti", activeMatch: ["/super-admin/registro-lotti"], icon: "cards" as const },
     ],
     [],
   );
