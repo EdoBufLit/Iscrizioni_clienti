@@ -56,8 +56,10 @@ Required for the WhatsApp bot and the low-cards alert flow.
 | `TWILIO_LOW_CARDS_FLOW_SID` | Recommended (low-cards alerts) | _(empty)_ | Preferred Twilio Studio Flow SID (`FW...`) for low-cards WhatsApp alerts. Falls back to `TWILIO_STUDIO_FLOW_SID` / `TWILIO_ALERT_FLOW_SID` if unset. |
 | `TWILIO_ALERT_FLOW_SID` | **Yes** (low-cards alerts) | _(empty)_ | Twilio Studio Flow SID (`FW...`) for the low-cards WhatsApp alert. |
 | `TWILIO_WHATSAPP_FROM` | **Yes** (low-cards alerts) | _(empty)_ | WhatsApp sender used for Studio execution (example: `whatsapp:+390299914307`). |
-| `TWILIO_SMS_FROM` | No | _(empty)_ | Optional SMS-capable sender used for admin notifications after a recharge request. |
-| `ADMIN_PHONE_E164` | No | _(empty)_ | Optional admin phone in E.164 format. If present with `TWILIO_SMS_FROM`, the bot sends an SMS notification for new recharge requests. |
+| `TWILIO_SMS_FROM` | No | _(empty)_ | Legacy SMS sender kept for backward compatibility. The nuove tessere admin notification no longer uses it. |
+| `ADMIN_PHONE_E164` | No | _(empty)_ | Legacy admin phone kept for backward compatibility. The nuove tessere admin notification no longer uses it. |
+| `TG_BOT_TOKEN` | **Yes** (nuove tessere admin notification) | _(empty)_ | Telegram bot token used by `send_telegram_message(text)` for the WhatsApp bot recharge request alert. |
+| `TG_CHAT_ID` | **Yes** (nuove tessere admin notification) | _(empty)_ | Telegram chat id that receives the nuove tessere admin notification sent by the WhatsApp bot flow. |
 | `LOW_CARDS_ALERT_JOB_INTERVAL_SECONDS` | No | `300` | How often the dedicated `low-cards-worker` re-checks organizations for low-card alerts. |
 
 Association-level storage:

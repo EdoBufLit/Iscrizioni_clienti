@@ -125,6 +125,8 @@ class Settings:
     TWILIO_WHATSAPP_FROM: str = os.getenv("TWILIO_WHATSAPP_FROM", "")
     TWILIO_SMS_FROM: str = os.getenv("TWILIO_SMS_FROM", "")
     ADMIN_PHONE_E164: str = os.getenv("ADMIN_PHONE_E164", "")
+    TG_BOT_TOKEN: str = os.getenv("TG_BOT_TOKEN", "")
+    TG_CHAT_ID: str = os.getenv("TG_CHAT_ID", "")
     ENABLE_WHATSAPP_EVOLUTION: bool = _env_bool("ENABLE_WHATSAPP_EVOLUTION", default=False)
     EVOLUTION_API_BASE_URL: str = os.getenv(
         "EVOLUTION_API_BASE_URL",

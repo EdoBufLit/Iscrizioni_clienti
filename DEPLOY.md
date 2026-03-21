@@ -16,6 +16,8 @@ Contenuto propagato nel file `.env`:
   - `TWILIO_WHATSAPP_FROM`
   - `ADMIN_PHONE_E164`
   - `TWILIO_SMS_FROM`
+  - `TG_BOT_TOKEN`
+  - `TG_CHAT_ID`
 
 Metadata build:
 
@@ -51,6 +53,8 @@ Creare o verificare in GitHub:
 - `TWILIO_WHATSAPP_FROM`
 - `ADMIN_PHONE_E164`
 - `TWILIO_SMS_FROM`
+- `TG_BOT_TOKEN`
+- `TG_CHAT_ID`
 
 ## Migrazioni
 
@@ -66,7 +70,7 @@ File server:
 
 ```bash
 cd /opt/assonam
-grep -E 'OPENAI|TWILIO_LOW_CARDS_FLOW_SID|TWILIO_ALERT_FLOW_SID|TWILIO_WHATSAPP_FROM' .env
+grep -E 'OPENAI|TWILIO_LOW_CARDS_FLOW_SID|TWILIO_ALERT_FLOW_SID|TWILIO_WHATSAPP_FROM|TG_BOT_TOKEN|TG_CHAT_ID' .env
 ```
 
 Dentro il container backend:
@@ -74,6 +78,7 @@ Dentro il container backend:
 ```bash
 docker compose exec -T web /bin/sh -lc "printenv | grep OPENAI"
 docker compose exec -T web /bin/sh -lc "printenv | grep TWILIO"
+docker compose exec -T web /bin/sh -lc "printenv | grep TG_"
 ```
 
 ## Worker

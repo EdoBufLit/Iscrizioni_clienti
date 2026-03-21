@@ -130,6 +130,126 @@ def test_whatsapp_bot_creates_recharge_request_after_candidate_selection(
     assert session_row.data == {}
 
 
+def test_whatsapp_bot_sends_telegram_notification_with_same_message_text(
+    client,
+    db,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        whatsapp_bot_service.whatsapp_bot_rate_limiter,
+        "check",
+        lambda _key: None,
+    )
+
+    sent_messages: list[str] = []
+
+    def _fake_send_telegram_message(text: str) -> str:
+        sent_messages.append(text)
+        return "12345"
+
+    monkeypatch.setattr(
+        whatsapp_bot_service,
+        "send_telegram_message",
+        _fake_send_telegram_message,
+    )
+
+    token = uuid.uuid4().hex[:6]
+    search_term = f"telegram-{token}"
+    wa_from = f"whatsapp:+39334{token[:6]}"
+    selected_org = _create_org(
+        db,
+        name=f"Associazione Telegram {search_term}",
+        slug=f"telegram-{search_term}",
+    )
+
+    for body in ("ordino tessere", search_term, "75", "no"):
+        response = client.post(
+            "/api/whatsapp/bot",
+            json={
+                "from": wa_from,
+                "body": body,
+                "profile_name": "Mario Rossi",
+            },
+        )
+        assert response.status_code == 200, response.text
+
+    assert sent_messages == [
+        f"Nuovo ordine tessere: {selected_org.name}, 75 tessere, richiedente {wa_from}."
+    ]
+
+
+def test_whatsapp_bot_logs_telegram_error_and_keeps_flow_successful(
+    client,
+    db,
+    monkeypatch,
+    caplog,
+):
+    monkeypatch.setattr(
+        whatsapp_bot_service.whatsapp_bot_rate_limiter,
+        "check",
+        lambda _key: None,
+    )
+
+    def _failing_send_telegram_message(_text: str) -> str | None:
+        raise RuntimeError("telegram boom")
+
+    monkeypatch.setattr(
+        whatsapp_bot_service,
+        "send_telegram_message",
+        _failing_send_telegram_message,
+    )
+
+    token = uuid.uuid4().hex[:6]
+    search_term = f"telegram-error-{token}"
+    wa_from = f"whatsapp:+39335{token[:6]}"
+    _create_org(
+        db,
+        name=f"Associazione Error {search_term}",
+        slug=f"error-{search_term}",
+    )
+
+    with caplog.at_level("ERROR"):
+        first = client.post(
+            "/api/whatsapp/bot",
+            json={
+                "from": wa_from,
+                "body": "ordino tessere",
+                "profile_name": "Mario Rossi",
+            },
+        )
+        second = client.post(
+            "/api/whatsapp/bot",
+            json={
+                "from": wa_from,
+                "body": search_term,
+                "profile_name": "Mario Rossi",
+            },
+        )
+        third = client.post(
+            "/api/whatsapp/bot",
+            json={
+                "from": wa_from,
+                "body": "20",
+                "profile_name": "Mario Rossi",
+            },
+        )
+        finish = client.post(
+            "/api/whatsapp/bot",
+            json={
+                "from": wa_from,
+                "body": "no",
+                "profile_name": "Mario Rossi",
+            },
+        )
+
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    assert third.status_code == 200, third.text
+    assert finish.status_code == 200, finish.text
+    assert "Richiesta registrata" in finish.json()["reply"]
+    assert "whatsapp_recharge_request_admin_telegram_failed" in caplog.text
+
+
 def test_whatsapp_bot_uses_openai_fallback_when_configured(client, monkeypatch):
     monkeypatch.setattr(
         whatsapp_bot_service.whatsapp_bot_rate_limiter,

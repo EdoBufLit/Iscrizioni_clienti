@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import Organization, RechargeRequest, WhatsAppSession
-from app.services.twilio_notifications import send_admin_sms_notification
+from app.services.telegram_notifications import send_telegram_message
 
 logger = logging.getLogger(__name__)
 
@@ -374,21 +374,21 @@ def _handle_order_notes(
 
     _reset_session(session)
 
-    sms_message = (
+    notification_message = (
         f"Nuovo ordine tessere: {association_name}, {requested_cards} tessere, "
         f"richiedente {wa_from}."
     )
     try:
-        sms_sid = send_admin_sms_notification(sms_message)
-        if sms_sid:
+        telegram_message_id = send_telegram_message(notification_message)
+        if telegram_message_id:
             logger.info(
-                "whatsapp_recharge_request_admin_sms_sent request_id=%s sms_sid=%s",
+                "whatsapp_recharge_request_admin_telegram_sent request_id=%s message_id=%s",
                 recharge_request.id,
-                sms_sid,
+                telegram_message_id,
             )
     except Exception:
         logger.exception(
-            "whatsapp_recharge_request_admin_sms_failed request_id=%s",
+            "whatsapp_recharge_request_admin_telegram_failed request_id=%s",
             recharge_request.id,
         )
 

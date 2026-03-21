@@ -117,6 +117,8 @@ jobs:
             TWILIO_WHATSAPP_FROM=${{ secrets.TWILIO_WHATSAPP_FROM }}
             ADMIN_PHONE_E164=${{ secrets.ADMIN_PHONE_E164 }}
             TWILIO_SMS_FROM=${{ secrets.TWILIO_SMS_FROM }}
+            TG_BOT_TOKEN=${{ secrets.TG_BOT_TOKEN }}
+            TG_CHAT_ID=${{ secrets.TG_CHAT_ID }}
             STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
             STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}
             STRIPE_PRICE_ID=${{ secrets.STRIPE_PRICE_ID }}
