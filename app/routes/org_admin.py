@@ -1,4 +1,5 @@
 import csv
+import hashlib
 import io
 import json
 
@@ -234,6 +235,53 @@ def _get_current_org_admin(request: Request, db: Session):
         .first()
     )
     return admin
+
+
+def _hash_email_for_log(email: str | None) -> str:
+    normalized = (email or "").strip().lower()
+    if not normalized:
+        return "unknown"
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+
+
+def _normalize_login_email(email: str | None) -> str:
+    return (email or "").strip().lower()
+
+
+def _resolve_org_admin_magic_link_candidate(
+    db: Session, normalized_email: str
+) -> tuple[AdminUser | None, str, list[AdminUser]]:
+    if not normalized_email:
+        return None, "empty_email", []
+
+    candidates = (
+        db.query(AdminUser)
+        .filter(
+            func.lower(func.trim(AdminUser.email)) == normalized_email,
+            AdminUser.role == AdminRole.ORG_ADMIN,
+        )
+        .order_by(AdminUser.id.desc())
+        .all()
+    )
+    if not candidates:
+        return None, "admin_not_found", []
+
+    for candidate in candidates:
+        if candidate.deleted_at is not None:
+            continue
+        if candidate.org_id is None:
+            continue
+        if not candidate.is_active:
+            continue
+        return candidate, "ok", candidates
+
+    if any(candidate.deleted_at is not None for candidate in candidates):
+        return None, "admin_deleted", candidates
+    if any(candidate.org_id is None for candidate in candidates):
+        return None, "admin_missing_org", candidates
+    if any(not candidate.is_active for candidate in candidates):
+        return None, "admin_inactive", candidates
+    return None, "admin_not_eligible", candidates
 
 
 ACCESS_EMAIL_THROTTLE_MINUTES = 10
@@ -1457,19 +1505,56 @@ def request_magic_link(
     Always returns 200 to prevent email enumeration.
     """
     auth_limiter.check(get_client_ip(request))
-    admin = (
-        db.query(AdminUser)
-        .filter(
-            AdminUser.email == email,
-            AdminUser.role == AdminRole.ORG_ADMIN,
-            AdminUser.is_active.is_(True),
-            AdminUser.deleted_at.is_(None),  # Added deleted_at filter
-            AdminUser.org_id.isnot(None),
-        )
-        .first()
+    client_ip = get_client_ip(request)
+    normalized_email = _normalize_login_email(email)
+    email_hash = _hash_email_for_log(normalized_email)
+    normalization_changed = (email or "") != normalized_email
+    logger.info(
+        "org_admin_magic_link_request_received email_hash=%s normalized=%s normalization_changed=%s ip=%s",
+        email_hash,
+        bool(normalized_email),
+        normalization_changed,
+        client_ip,
     )
 
-    if admin:
+    admin, resolution, candidates = _resolve_org_admin_magic_link_candidate(
+        db, normalized_email
+    )
+    logger.info(
+        "org_admin_magic_link_lookup_result email_hash=%s resolution=%s candidate_count=%s matched_admin_ids=%s",
+        email_hash,
+        resolution,
+        len(candidates),
+        [candidate.id for candidate in candidates],
+    )
+
+    if admin is None:
+        logger.warning(
+            "org_admin_magic_link_blocked email_hash=%s block_reason=%s candidate_states=%s",
+            email_hash,
+            resolution,
+            [
+                {
+                    "id": candidate.id,
+                    "org_id": candidate.org_id,
+                    "is_active": bool(candidate.is_active),
+                    "deleted": candidate.deleted_at is not None,
+                }
+                for candidate in candidates
+            ],
+        )
+        audit.org_admin_magic_link_requested(email=normalized_email, ip=client_ip)
+        return {"ok": True}
+
+    logger.info(
+        "org_admin_magic_link_admin_selected email_hash=%s admin_id=%s org_id=%s is_active=%s",
+        email_hash,
+        admin.id,
+        admin.org_id,
+        bool(admin.is_active),
+    )
+
+    try:
         token_str = generate_token()
         token = OrgAdminToken(
             admin_id=admin.id,
@@ -1479,10 +1564,16 @@ def request_magic_link(
         )
         db.add(token)
         db.flush()
+        logger.info(
+            "org_admin_magic_link_token_created email_hash=%s admin_id=%s token_id=%s expires_at=%s",
+            email_hash,
+            admin.id,
+            token.id,
+            token.expires_at.isoformat() if token.expires_at else None,
+        )
 
         frontend_base = settings.FRONTEND_URL.rstrip("/")
         if not frontend_base:
-            # Fallback: use request base url
             frontend_base = str(request.base_url).rstrip("/")
 
         link = f"{frontend_base}/auth/verify?token={token_str}&role=org_admin"
@@ -1490,10 +1581,16 @@ def request_magic_link(
             "Generated org-admin magic link: %s", link.replace(token_str, "***")
         )
 
-        enqueue_email(
+        logger.info(
+            "org_admin_magic_link_send_enqueuing email_hash=%s admin_id=%s normalized_to_email=%s",
+            email_hash,
+            admin.id,
+            normalized_email,
+        )
+        outbox_id = enqueue_email(
             db,
             email_type="org_admin_magic_link",
-            to_email=email,
+            to_email=normalized_email,
             subject="Accesso area amministrazione associazione",
             payload=build_email_payload(
                 text_body=f"Clicca qui per accedere: {link}",
@@ -1504,9 +1601,30 @@ def request_magic_link(
             ),
             priority=1,
         )
+        logger.info(
+            "org_admin_magic_link_send_enqueued email_hash=%s admin_id=%s outbox_id=%s",
+            email_hash,
+            admin.id,
+            outbox_id,
+        )
         db.commit()
+        logger.info(
+            "org_admin_magic_link_request_completed email_hash=%s admin_id=%s outbox_id=%s",
+            email_hash,
+            admin.id,
+            outbox_id,
+        )
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "org_admin_magic_link_request_failed email_hash=%s admin_id=%s resolution=%s",
+            email_hash,
+            admin.id,
+            resolution,
+        )
+        raise
 
-    audit.org_admin_magic_link_requested(email=email, ip=get_client_ip(request))
+    audit.org_admin_magic_link_requested(email=normalized_email, ip=client_ip)
     return {"ok": True}
 
 
@@ -1518,7 +1636,14 @@ def verify_magic_link(
 ):
     """Verify a magic-link token and create an org-admin session."""
     auth_limiter.check(get_client_ip(request))
+    client_ip = get_client_ip(request)
     token_hash = hash_token(token)
+    token_hash_prefix = token_hash[:12]
+    logger.info(
+        "org_admin_magic_link_verify_received token_hash_prefix=%s ip=%s",
+        token_hash_prefix,
+        client_ip,
+    )
     token_entry = (
         db.query(OrgAdminToken)
         .filter(
@@ -1530,6 +1655,10 @@ def verify_magic_link(
     )
 
     if not token_entry:
+        logger.warning(
+            "org_admin_magic_link_verify_blocked token_hash_prefix=%s block_reason=token_not_found_or_expired",
+            token_hash_prefix,
+        )
         raise HTTPException(status_code=400, detail="Invalid or expired token")
 
     admin = (
@@ -1543,16 +1672,34 @@ def verify_magic_link(
     )
 
     if not admin:
+        logger.warning(
+            "org_admin_magic_link_verify_blocked token_hash_prefix=%s admin_id=%s block_reason=admin_not_eligible",
+            token_hash_prefix,
+            token_entry.admin_id,
+        )
         raise HTTPException(status_code=400, detail="Invalid or expired token")
 
     # Mark token as used (one-time)
     token_entry.used_at = datetime.utcnow()
     db.commit()
+    logger.info(
+        "org_admin_magic_link_verify_token_consumed token_hash_prefix=%s admin_id=%s used_at=%s",
+        token_hash_prefix,
+        admin.id,
+        token_entry.used_at.isoformat() if token_entry.used_at else None,
+    )
 
     # Create session
     request.session["org_admin_id"] = admin.id
     audit.org_admin_verified(
-        admin_id=admin.id, org_id=admin.org_id, ip=get_client_ip(request)
+        admin_id=admin.id, org_id=admin.org_id, ip=client_ip
+    )
+    logger.info(
+        "org_admin_magic_link_verify_completed token_hash_prefix=%s admin_id=%s org_id=%s redirect_to=%s",
+        token_hash_prefix,
+        admin.id,
+        admin.org_id,
+        "/org-admin",
     )
 
     from fastapi.responses import RedirectResponse
