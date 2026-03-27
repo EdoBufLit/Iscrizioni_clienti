@@ -40,6 +40,35 @@ jobs:
             exit 1
           fi
 
+      - name: Wait for Hetzner SSH
+        env:
+          HETZNER_HOST: ${{ secrets.HETZNER_HOST }}
+          HETZNER_USER: ${{ secrets.HETZNER_USER }}
+          HETZNER_SSH_KEY: ${{ secrets.HETZNER_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          KEY_FILE="$(mktemp)"
+          trap 'rm -f "$KEY_FILE"' EXIT
+          printf '%s\n' "$HETZNER_SSH_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+
+          DEADLINE=$(( $(date +%s) + 1200 ))
+          until ssh -i "$KEY_FILE" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -o ConnectTimeout=10 \
+            "$HETZNER_USER@$HETZNER_HOST" "echo ready" >/dev/null 2>&1; do
+            if [ "$(date +%s)" -ge "$DEADLINE" ]; then
+              echo "::error::Hetzner SSH not reachable after 20 minutes"
+              exit 1
+            fi
+            echo "[deploy] SSH handshake not ready yet, retrying in 20s"
+            sleep 20
+          done
+
+          echo "[deploy] SSH handshake ready"
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
