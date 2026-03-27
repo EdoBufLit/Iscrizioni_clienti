@@ -109,6 +109,14 @@ export type OrganizationDetail = {
   has_statute: boolean;
   privacy_version?: string;
   require_membership_document: boolean;
+  membership_payment?: {
+    enabled: boolean;
+    required: boolean;
+    label: string | null;
+    amount: number | null;
+    currency: string | null;
+    button_label: string | null;
+  };
 };
 
 export async function fetchOrganizationDetail(
@@ -1645,6 +1653,80 @@ export async function fetchOrgAdminEmailCampaign(
   return res.json();
 }
 
+export async function createMembershipPaymentCheckout(
+  orgSlug: string,
+  data: {
+    first_name: string;
+    last_name: string;
+    birth_date: string;
+    birth_place: string;
+    birth_place_code: string;
+    gender: "M" | "F";
+    email: string;
+    phone: string;
+    fiscal_code: string;
+    password?: string;
+    accept_statute: boolean;
+    accepted_statute_version: string | null;
+    accept_privacy: boolean;
+    id_document?: File | null;
+  },
+): Promise<{ payment_id: number; hosted_checkout_url: string }> {
+  const body = new FormData();
+  body.append("first_name", data.first_name);
+  body.append("last_name", data.last_name);
+  body.append("birth_date", data.birth_date);
+  body.append("birth_place", data.birth_place);
+  body.append("birth_place_code", data.birth_place_code);
+  body.append("gender", data.gender);
+  body.append("email", data.email);
+  body.append("phone", data.phone);
+  body.append("fiscal_code", data.fiscal_code);
+  if (data.password) body.append("password", data.password);
+  body.append("accept_statute", String(data.accept_statute));
+  if (data.accepted_statute_version) {
+    body.append("accepted_statute_version", data.accepted_statute_version);
+  }
+  body.append("accept_privacy", String(data.accept_privacy));
+  if (data.id_document) {
+    body.append("id_document", data.id_document);
+  }
+
+  const res = await fetch(
+    `/api/public/orgs/${encodeURIComponent(orgSlug)}/membership-payment/create-checkout`,
+    {
+      method: "POST",
+      body,
+    },
+  );
+  if (res.status === 404) throw new Error("Associazione non trovata.");
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null);
+    throw new Error(payload?.detail ?? "Errore durante la creazione del checkout.");
+  }
+  return res.json();
+}
+
+export type MembershipPaymentStatusResponse = {
+  payment_status: string;
+  is_paid: boolean;
+  card_status: string;
+  message: string;
+  can_retry: boolean;
+};
+
+export async function fetchMembershipPaymentStatus(
+  paymentId: number,
+): Promise<MembershipPaymentStatusResponse> {
+  const res = await fetch(`/api/public/membership-payments/${paymentId}/status`);
+  if (res.status === 404) throw new Error("Pagamento non trovato.");
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null);
+    throw new Error(payload?.detail ?? "Errore nel recupero dello stato pagamento.");
+  }
+  return res.json();
+}
+
 export async function deleteOrgAdminEmailCampaign(
   campaignId: number,
 ): Promise<{ ok: boolean }> {
@@ -2873,6 +2955,23 @@ export type OrgAdminMemberPayment = {
   created_at?: string | null;
 };
 
+export type OrgAdminMembershipPayment = {
+  id: number;
+  provider: string;
+  source: string;
+  status: string;
+  payment_reason?: string | null;
+  amount: number | null;
+  currency: string | null;
+  checkout_reference?: string | null;
+  sumup_checkout_id?: string | null;
+  hosted_checkout_url?: string | null;
+  confirmed_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  notes?: string | null;
+};
+
 export type OrgAdminMemberActivity = {
   id: number;
   action: string;
@@ -2898,6 +2997,12 @@ export type OrgAdminMemberDetail = {
   birth_place_code?: string | null;
   fiscal_code: string | null;
   payment_method?: string | null;
+  payment_required?: boolean;
+  payment_status?: string | null;
+  payment_completed_at?: string | null;
+  card_is_paid?: boolean;
+  card_paid_at?: string | null;
+  card_payment_status?: string | null;
   status: string;
   workflow_status?: string | null;
   is_active: boolean;
@@ -2916,6 +3021,7 @@ export type OrgAdminMemberDetail = {
   document_status?: string;
   documents: OrgAdminMemberDocument[];
   payments?: OrgAdminMemberPayment[];
+  membership_payments?: OrgAdminMembershipPayment[];
   activities?: OrgAdminMemberActivity[];
   decision_notes?: string | null;
   decision_at?: string | null;
@@ -4416,6 +4522,78 @@ export async function patchSuperAdminOrganization(
   return res.json();
 }
 
+export type SuperAdminMembershipPaymentSettings = {
+  payment_provider: "none" | "sumup";
+  payment_required_before_card: boolean;
+  membership_payment_label: string | null;
+  membership_fee_amount: number | null;
+  membership_fee_currency: string | null;
+  payment_button_label: string | null;
+  sumup_enabled: boolean;
+  sumup_api_key_configured: boolean;
+  sumup_api_key_last4: string | null;
+  sumup_api_key_configured_at: string | null;
+};
+
+export async function fetchSuperAdminMembershipPaymentSettings(
+  orgId: number,
+): Promise<SuperAdminMembershipPaymentSettings> {
+  const res = await fetch(`/api/super-admin/organizations/${orgId}/membership-payment-settings`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Organizzazione non trovata");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento impostazioni pagamento"));
+  return res.json();
+}
+
+export async function patchSuperAdminMembershipPaymentSettings(
+  orgId: number,
+  payload: {
+    payment_provider: "none" | "sumup";
+    payment_required_before_card: boolean;
+    membership_payment_label?: string | null;
+    membership_fee_amount?: number | null;
+    membership_fee_currency?: string | null;
+    payment_button_label?: string | null;
+  },
+): Promise<SuperAdminMembershipPaymentSettings> {
+  const res = await fetch(`/api/super-admin/organizations/${orgId}/membership-payment-settings`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Organizzazione non trovata");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore salvataggio impostazioni pagamento"));
+  return res.json();
+}
+
+export async function saveSuperAdminSumUpApiKey(
+  orgId: number,
+  apiKey: string,
+): Promise<SuperAdminMembershipPaymentSettings> {
+  const res = await fetch(`/api/super-admin/organizations/${orgId}/sumup-api-key`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ api_key: apiKey }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Organizzazione non trovata");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore salvataggio chiave SumUp"));
+  return res.json();
+}
+
+export async function deleteSuperAdminSumUpApiKey(
+  orgId: number,
+): Promise<SuperAdminMembershipPaymentSettings> {
+  const res = await fetch(`/api/super-admin/organizations/${orgId}/sumup-api-key`, {
+    method: "DELETE",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Organizzazione non trovata");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore rimozione chiave SumUp"));
+  return res.json();
+}
+
 export type DeleteAssociationMode = "archive" | "purge";
 
 export type DeleteAssociationResult = {
@@ -4887,6 +5065,16 @@ export type ManualPaymentResult = {
   };
   member_status: string | null;
   card_assigned: boolean;
+  membership_payment?: {
+    id: number;
+    status: string;
+    source: string;
+    amount: number;
+    currency: string;
+    payment_reason?: string | null;
+    confirmed_at?: string | null;
+    notes?: string | null;
+  };
 };
 
 export async function createManualPayment(

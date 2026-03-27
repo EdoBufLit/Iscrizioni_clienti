@@ -3,7 +3,17 @@ from datetime import datetime, timedelta
 import uuid
 
 from app.db import SessionLocal
-from app.models import Organization, AdminUser, AdminRole, Member, MemberStatus, CardBatch, MemberPayment, OrgAdminToken
+from app.models import (
+    Organization,
+    AdminUser,
+    AdminRole,
+    Member,
+    MemberStatus,
+    CardBatch,
+    MemberPayment,
+    MembershipPayment,
+    OrgAdminToken,
+)
 from app.security import get_password_hash
 from app.utils import hash_token
 
@@ -101,7 +111,43 @@ def test_org_admin_manual_payment_sets_paid_and_status(client, db):
     db.refresh(member)
     assert member.status == MemberStatus.ACTIVE
     assert member.card_no is not None
+    assert member.card_is_paid is True
+    assert member.payment_status == "manual_completed"
     assert db.query(MemberPayment).filter_by(member_id=member.id).count() == 1
+    assert db.query(MembershipPayment).filter_by(socio_id=member.id).count() == 1
+
+
+def test_org_admin_manual_payment_does_not_issue_card_if_payment_required_but_workflow_not_ready(client, db):
+    suffix = uuid.uuid4().hex[:8]
+    org = _create_org(db, f"manual-pay-required-{suffix}", "Manual Pay Required")
+    org.payment_provider = "sumup"
+    org.payment_required_before_card = True
+    org.membership_payment_label = "Quota associativa"
+    org.membership_fee_amount = 35
+    org.membership_fee_currency = "EUR"
+    org.payment_button_label = "Paga con carta"
+    org.sumup_enabled = True
+    db.commit()
+    _create_card_batch(db, org.id)
+    admin = _create_admin(db, f"manualpay_required_admin_{suffix}@example.com", org.id)
+    member = _create_member(db, org.id, f"manualpay_required_member_{suffix}@example.com")
+
+    _login_org_admin(client, db, admin.id)
+
+    payload = {
+        "amount": 35.0,
+        "method": "bonifico",
+        "paid_at": datetime.utcnow().date().isoformat(),
+        "notes": "Registrato a mano",
+    }
+    resp = client.post(f"/api/org-admin/members/{member.id}/payments/manual", json=payload)
+    assert resp.status_code == 200, resp.text
+
+    db.refresh(member)
+    assert member.card_is_paid is True
+    assert member.payment_status == "manual_completed"
+    assert member.card_no is None
+    assert member.status != MemberStatus.ACTIVE
 
 
 def test_org_admin_cannot_pay_other_org_member(client, db):

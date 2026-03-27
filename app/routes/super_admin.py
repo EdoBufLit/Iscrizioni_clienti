@@ -73,6 +73,11 @@ from app.services.numbering_scopes import (
     get_target_scope_for_mode,
     serialize_numbering_config,
 )
+from app.services.membership_payments import (
+    encrypt_sumup_api_key,
+    serialize_super_admin_membership_payment_settings,
+    verify_sumup_api_key,
+)
 from app.services.card_lot_registry import (
     build_card_lots_workbook,
     find_batch_overlap,
@@ -433,6 +438,19 @@ class PatchOrganization(BaseModel):
 
 class PatchOrganizationNumbering(BaseModel):
     numbering_mode: Literal["shared_assonam", "dedicated"]
+
+
+class PatchMembershipPaymentSettingsBody(BaseModel):
+    payment_provider: Literal["none", "sumup"] = "none"
+    payment_required_before_card: bool = False
+    membership_payment_label: Optional[str] = None
+    membership_fee_amount: Optional[float] = Field(default=None, gt=0)
+    membership_fee_currency: Optional[str] = None
+    payment_button_label: Optional[str] = None
+
+
+class SumUpApiKeyBody(BaseModel):
+    api_key: str = Field(..., min_length=1)
 
 
 class CreateAccountingFolderBody(BaseModel):
@@ -2100,6 +2118,169 @@ def update_organization(
         card_min=(card_range.card_min if card_range else None),
         card_max=(card_range.card_max if card_range else None),
     )
+
+
+@router.get("/organizations/{org_id}/membership-payment-settings")
+def get_organization_membership_payment_settings(
+    request: Request,
+    org_id: int,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    return serialize_super_admin_membership_payment_settings(org)
+
+
+@router.patch("/organizations/{org_id}/membership-payment-settings")
+def patch_organization_membership_payment_settings(
+    request: Request,
+    org_id: int,
+    body: PatchMembershipPaymentSettingsBody,
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    provider = (body.payment_provider or "none").strip().lower()
+    payment_label = (body.membership_payment_label or "").strip() or None
+    currency = (body.membership_fee_currency or "EUR").strip().upper() or "EUR"
+    button_label = (body.payment_button_label or "Paga con carta").strip() or "Paga con carta"
+    requires_payment = bool(body.payment_required_before_card)
+
+    if requires_payment and provider != "sumup":
+        raise HTTPException(
+            status_code=400,
+            detail="Se il pagamento e obbligatorio il provider deve essere SumUp.",
+        )
+    if provider == "sumup":
+        if not payment_label:
+            raise HTTPException(status_code=400, detail="Causale pagamento obbligatoria.")
+        if body.membership_fee_amount is None or body.membership_fee_amount <= 0:
+            raise HTTPException(status_code=400, detail="Importo quota non valido.")
+        if not currency:
+            raise HTTPException(status_code=400, detail="Valuta obbligatoria.")
+        if requires_payment and not org.sumup_api_key_encrypted:
+            raise HTTPException(
+                status_code=400,
+                detail="Configura prima la API key SumUp per questa associazione.",
+            )
+
+    if provider == "none":
+        org.payment_provider = "none"
+        org.payment_required_before_card = False
+        org.membership_payment_label = None
+        org.membership_fee_amount = None
+        org.membership_fee_currency = "EUR"
+        org.payment_button_label = "Paga con carta"
+        org.sumup_enabled = False
+    else:
+        org.payment_provider = "sumup"
+        org.payment_required_before_card = requires_payment
+        org.membership_payment_label = payment_label
+        org.membership_fee_amount = body.membership_fee_amount
+        org.membership_fee_currency = currency
+        org.payment_button_label = button_label
+        org.sumup_enabled = True
+
+    audit.log_operation(
+        db,
+        action="org.membership_payment_settings.updated",
+        entity_type="organization",
+        entity_id=org.id,
+        actor_admin_id=admin.id,
+        actor_role=AdminRole.SUPER_ADMIN.value,
+        metadata={
+            "payment_provider": org.payment_provider,
+            "payment_required_before_card": org.payment_required_before_card,
+            "membership_payment_label": org.membership_payment_label,
+            "membership_fee_amount": float(org.membership_fee_amount)
+            if org.membership_fee_amount is not None
+            else None,
+            "membership_fee_currency": org.membership_fee_currency,
+            "payment_button_label": org.payment_button_label,
+            "sumup_enabled": org.sumup_enabled,
+        },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    db.refresh(org)
+    return serialize_super_admin_membership_payment_settings(org)
+
+
+@router.post("/organizations/{org_id}/sumup-api-key")
+def save_organization_sumup_api_key(
+    request: Request,
+    org_id: int,
+    body: SumUpApiKeyBody,
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    normalized_api_key = body.api_key.strip()
+    verify_sumup_api_key(normalized_api_key)
+    org.sumup_api_key_encrypted = encrypt_sumup_api_key(normalized_api_key)
+    org.sumup_api_key_last4 = normalized_api_key[-4:]
+    org.sumup_api_key_configured_at = datetime.utcnow()
+
+    audit.log_operation(
+        db,
+        action="org.sumup_api_key.saved",
+        entity_type="organization",
+        entity_id=org.id,
+        actor_admin_id=admin.id,
+        actor_role=AdminRole.SUPER_ADMIN.value,
+        metadata={
+            "sumup_api_key_last4": org.sumup_api_key_last4,
+            "configured_at": org.sumup_api_key_configured_at.isoformat(),
+        },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    db.refresh(org)
+    return serialize_super_admin_membership_payment_settings(org)
+
+
+@router.delete("/organizations/{org_id}/sumup-api-key")
+def delete_organization_sumup_api_key(
+    request: Request,
+    org_id: int,
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    org.sumup_api_key_encrypted = None
+    org.sumup_api_key_last4 = None
+    org.sumup_api_key_configured_at = None
+    org.sumup_enabled = False
+    if org.payment_provider == "sumup":
+        org.payment_required_before_card = False
+
+    audit.log_operation(
+        db,
+        action="org.sumup_api_key.deleted",
+        entity_type="organization",
+        entity_id=org.id,
+        actor_admin_id=admin.id,
+        actor_role=AdminRole.SUPER_ADMIN.value,
+        metadata={},
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    db.refresh(org)
+    return serialize_super_admin_membership_payment_settings(org)
 
 
 @router.get("/organizations/{org_id}/numbering")

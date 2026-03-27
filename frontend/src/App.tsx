@@ -12,6 +12,7 @@ const Affiliazione = lazy(() => import("./pages/Affiliazione"));
 const AffiliazioneInfo = lazy(() => import("./pages/AffiliazioneInfo"));
 const AffiliazioneDettaglio = lazy(() => import("./pages/AffiliazioneDettaglio"));
 const Iscrizione = lazy(() => import("./pages/Iscrizione"));
+const IscrizionePagamentoEsito = lazy(() => import("./pages/IscrizionePagamentoEsito"));
 const Contatti = lazy(() => import("./pages/Contatti"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Login = lazy(() => import("./pages/Login"));
@@ -106,6 +107,7 @@ const App = () => {
               <Route path="associazioni" element={<Associazioni />} />
               <Route path="associazioni/:slug" element={<AffiliazioneDettaglio />} />
               <Route path="associazioni/:slug/iscrizione" element={<Iscrizione />} />
+              <Route path="iscrizione/pagamento/esito" element={<IscrizionePagamentoEsito />} />
               <Route path="associazioni/:orgSlug/tessera" element={<PienissimoThankYouPage />} />
               <Route path="contatti" element={<Contatti />} />
               <Route path="privacy" element={<Privacy />} />

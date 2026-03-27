@@ -10,6 +10,7 @@ import {
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
+  createMembershipPaymentCheckout,
   fetchOrganizationDetail,
   joinOrganization,
   registerMember,
@@ -77,7 +78,10 @@ const initial: FormData = {
   statuto: false,
 };
 
-function validateStep1(f: FormData): Record<string, string> {
+function validateStep1(
+  f: FormData,
+  requireOnlinePayment: boolean,
+): Record<string, string> {
   const e: Record<string, string> = {};
   if (!f.nome.trim()) e.nome = "Il campo nome e obbligatorio.";
   if (!f.cognome.trim()) e.cognome = "Il campo cognome e obbligatorio.";
@@ -108,7 +112,7 @@ function validateStep1(f: FormData): Record<string, string> {
     e.email = "L'indirizzo email non sembra valido.";
   }
   if (!f.telefono.trim()) e.telefono = "Il numero di telefono e obbligatorio.";
-  if (!f.modalitaPagamento) {
+  if (!requireOnlinePayment && !f.modalitaPagamento) {
     e.modalitaPagamento = "Seleziona la modalita di pagamento.";
   }
   if (!f.password || f.password.length < 6) {
@@ -534,6 +538,13 @@ const Iscrizione = () => {
 
   const associationName = org?.name ?? "questa associazione";
   const membershipDocumentRequired = Boolean(org?.require_membership_document);
+  const membershipPaymentConfig = org?.membership_payment;
+  const membershipPaymentRequired = Boolean(membershipPaymentConfig?.required);
+  const membershipPaymentAmount = membershipPaymentConfig?.amount ?? null;
+  const membershipPaymentCurrency = membershipPaymentConfig?.currency ?? "EUR";
+  const membershipPaymentLabel = membershipPaymentConfig?.label || "Quota associativa";
+  const membershipPaymentButtonLabel =
+    membershipPaymentConfig?.button_label || "Paga con carta";
   const fiscalCodeValidation = validateCodiceFiscale({
     fiscalCode: form.codiceFiscale,
     firstName: form.nome,
@@ -648,7 +659,7 @@ const Iscrizione = () => {
   const goNext = () => {
     let newErrors: Record<string, string> = {};
     if (step === 1) {
-      newErrors = validateStep1(form);
+      newErrors = validateStep1(form, membershipPaymentRequired);
     } else if (step === 2) {
       newErrors = validateStep2(form, Boolean(org?.has_statute), membershipDocumentRequired);
     }
@@ -680,7 +691,7 @@ const Iscrizione = () => {
       return;
     }
 
-    if (!form.modalitaPagamento) {
+    if (!membershipPaymentRequired && !form.modalitaPagamento) {
       setSubmitError("Seleziona la modalita di pagamento.");
       return;
     }
@@ -688,6 +699,27 @@ const Iscrizione = () => {
     setSubmitError("");
     setSubmitting(true);
     try {
+      if (membershipPaymentRequired) {
+        const checkout = await createMembershipPaymentCheckout(slug!, {
+          first_name: form.nome,
+          last_name: form.cognome,
+          birth_date: form.dataNascita,
+          birth_place: form.comuneNascita,
+          birth_place_code: form.comuneNascitaCode,
+          gender: form.sesso as "M" | "F",
+          email: form.email,
+          phone: form.telefono,
+          fiscal_code: normalizeCodiceFiscale(form.codiceFiscale),
+          password: form.password,
+          accept_statute: form.statuto,
+          accepted_statute_version: org?.has_statute ? org.statute_version || null : null,
+          accept_privacy: form.privacy,
+          id_document: form.documentoIdentita,
+        });
+        window.location.assign(checkout.hosted_checkout_url);
+        return;
+      }
+
       const joinResult = await joinOrganization(slug!, {
         first_name: form.nome,
         last_name: form.cognome,
@@ -701,7 +733,7 @@ const Iscrizione = () => {
         accept_statute: form.statuto,
         accepted_statute_version: org?.has_statute ? org.statute_version || null : null,
         accept_privacy: form.privacy,
-        payment_method: form.modalitaPagamento,
+        payment_method: form.modalitaPagamento as "CASH" | "BONIFICO",
         id_document: form.documentoIdentita,
       });
 
@@ -750,7 +782,9 @@ const Iscrizione = () => {
   const progress = ((step - 1) / (STEPS.length - 1)) * 100;
   const hasErrors = Object.keys(errors).length > 0;
   const paymentMethodLabel =
-    form.modalitaPagamento === "CASH"
+    membershipPaymentRequired
+      ? membershipPaymentButtonLabel
+      : form.modalitaPagamento === "CASH"
       ? "Contanti"
       : form.modalitaPagamento === "BONIFICO"
         ? "Bonifico"
@@ -1059,22 +1093,34 @@ const Iscrizione = () => {
                           autoComplete="tel"
                           type="tel"
                         />
-                        <SelectField
-                          id="modalitaPagamento"
-                          label="Modalita di pagamento"
-                          error={errors.modalitaPagamento}
-                          value={form.modalitaPagamento}
-                          onChange={(event) =>
-                            updateField(
-                              "modalitaPagamento",
-                              event.target.value as "" | "CASH" | "BONIFICO",
-                            )
-                          }
-                        >
-                          <option value="">Seleziona...</option>
-                          <option value="CASH">Contanti</option>
-                          <option value="BONIFICO">Bonifico</option>
-                        </SelectField>
+                        {membershipPaymentRequired ? (
+                          <div className="md:col-span-2 rounded-[1.6rem] border border-indigo-200 bg-indigo-50/60 px-5 py-5">
+                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">
+                              Pagamento online obbligatorio
+                            </p>
+                            <p className="mt-2 text-sm leading-7 text-slate-700">
+                              Per completare l&apos;iscrizione è necessario effettuare il pagamento online. Nel passaggio finale vedrai solo il bottone{" "}
+                              <span className="font-semibold text-slate-950">{membershipPaymentButtonLabel}</span>.
+                            </p>
+                          </div>
+                        ) : (
+                          <SelectField
+                            id="modalitaPagamento"
+                            label="Modalita di pagamento"
+                            error={errors.modalitaPagamento}
+                            value={form.modalitaPagamento}
+                            onChange={(event) =>
+                              updateField(
+                                "modalitaPagamento",
+                                event.target.value as "" | "CASH" | "BONIFICO",
+                              )
+                            }
+                          >
+                            <option value="">Seleziona...</option>
+                            <option value="CASH">Contanti</option>
+                            <option value="BONIFICO">Bonifico</option>
+                          </SelectField>
+                        )}
                       </div>
 
                       <div className="mt-10 border-t border-slate-100 pt-8">
@@ -1317,7 +1363,30 @@ const Iscrizione = () => {
                           <dl className="mt-7 space-y-5">
                             <SummaryItem label="Indirizzo email" value={form.email || "-"} muted={!form.email} />
                             <SummaryItem label="Numero di telefono" value={form.telefono || "-"} muted={!form.telefono} />
-                            <SummaryItem label="Modalita di pagamento" value={paymentMethodLabel} muted={paymentMethodLabel === "-"} />
+                            {membershipPaymentRequired ? (
+                              <>
+                                <SummaryItem
+                                  label="Cosa stai pagando"
+                                  value={membershipPaymentLabel}
+                                  muted={!membershipPaymentLabel}
+                                />
+                                <SummaryItem
+                                  label="Importo"
+                                  value={
+                                    membershipPaymentAmount != null
+                                      ? `${membershipPaymentAmount.toFixed(2)} ${membershipPaymentCurrency}`
+                                      : "-"
+                                  }
+                                  muted={membershipPaymentAmount == null}
+                                />
+                              </>
+                            ) : (
+                              <SummaryItem
+                                label="Modalita di pagamento"
+                                value={paymentMethodLabel}
+                                muted={paymentMethodLabel === "-"}
+                              />
+                            )}
                             <SummaryItem
                               label="Documento d'identita allegato"
                               value={
@@ -1340,9 +1409,28 @@ const Iscrizione = () => {
                         </section>
                       </div>
 
-                      <div className="mt-10 rounded-[1.6rem] border border-slate-200 bg-slate-50/70 px-6 py-5 text-base leading-7 text-slate-500">
-                        Confermando l'invio dichiari che i dati inseriti sono corretti e completi. Se la registrazione password andra a buon fine, l'accesso all'area riservata sara disponibile subito.
-                      </div>
+                      {membershipPaymentRequired ? (
+                        <div className="mt-10 rounded-[1.8rem] border border-indigo-200 bg-indigo-50/70 px-6 py-6">
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">
+                            Pagamento quota associativa
+                          </p>
+                          <p className="mt-3 text-base leading-7 text-slate-700">
+                            Per completare l&apos;iscrizione è necessario effettuare il pagamento online.
+                          </p>
+                          <div className="mt-5 rounded-[1.4rem] border border-white/80 bg-white px-5 py-4 shadow-[0_18px_40px_-32px_rgba(79,70,229,0.35)]">
+                            <p className="text-sm text-slate-500">{membershipPaymentLabel}</p>
+                            <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+                              {membershipPaymentAmount != null
+                                ? `${membershipPaymentAmount.toFixed(2)} ${membershipPaymentCurrency}`
+                                : "-"}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-10 rounded-[1.6rem] border border-slate-200 bg-slate-50/70 px-6 py-5 text-base leading-7 text-slate-500">
+                          Confermando l&apos;invio dichiari che i dati inseriti sono corretti e completi. Se la registrazione password andrà a buon fine, l&apos;accesso all&apos;area riservata sarà disponibile subito.
+                        </div>
+                      )}
                     </div>
                   </>
                 ) : null}
@@ -1375,9 +1463,13 @@ const Iscrizione = () => {
                   }}
                 >
                   {submitting
-                    ? "Invio in corso..."
+                    ? membershipPaymentRequired
+                      ? "Creazione checkout..."
+                      : "Invio in corso..."
                     : confirmReady
-                      ? "Conferma iscrizione"
+                      ? membershipPaymentRequired
+                        ? membershipPaymentButtonLabel
+                        : "Conferma iscrizione"
                       : "Preparo conferma..."}
                   {!submitting ? iconFor("m9 18 6-6-6-6", "h-5 w-5") : null}
                 </button>

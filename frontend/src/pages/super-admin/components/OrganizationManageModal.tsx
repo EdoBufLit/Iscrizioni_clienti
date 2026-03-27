@@ -1,9 +1,13 @@
 import { FormEvent, memo, useEffect, useState } from "react";
 import {
   createSuperAdminOrganization,
+  deleteSuperAdminSumUpApiKey,
   fetchOrganizationNumberingConfig,
+  fetchSuperAdminMembershipPaymentSettings,
   patchSuperAdminOrganization,
+  patchSuperAdminMembershipPaymentSettings,
   patchOrganizationNumberingConfig,
+  saveSuperAdminSumUpApiKey,
   setOrganizationCardRange,
   addOrgCardBatch,
   patchOrgCardLot,
@@ -14,6 +18,7 @@ import {
   type SuperAdminOrganization,
   type OrgBatch,
   type OrganizationNumberingConfig,
+  type SuperAdminMembershipPaymentSettings,
 } from "../../../lib/api";
 import ConfirmModal from "../../../components/ui/ConfirmModal";
 
@@ -55,6 +60,22 @@ type BatchEditFormData = {
   range_end: string;
 };
 
+type MembershipPaymentFormData = {
+  payment_provider: "none" | "sumup";
+  payment_required_before_card: boolean;
+  membership_payment_label: string;
+  membership_fee_amount: string;
+  membership_fee_currency: string;
+  payment_button_label: string;
+  sumup_enabled: boolean;
+  sumup_api_key: string;
+  sumup_api_key_configured: boolean;
+  sumup_api_key_last4: string | null;
+  sumup_api_key_configured_at: string | null;
+  remove_sumup_api_key: boolean;
+  show_sumup_api_key: boolean;
+};
+
 const createInitialFormData = (): ModalFormData => ({
   name: "",
   slug: "",
@@ -80,6 +101,41 @@ const createBatchEditFormData = (batch: OrgBatch): BatchEditFormData => ({
   notes: batch.notes ?? "",
   range_start: String(batch.start_no),
   range_end: String(batch.end_no),
+});
+
+const createInitialMembershipPaymentFormData = (): MembershipPaymentFormData => ({
+  payment_provider: "none",
+  payment_required_before_card: false,
+  membership_payment_label: "",
+  membership_fee_amount: "",
+  membership_fee_currency: "EUR",
+  payment_button_label: "Paga con carta",
+  sumup_enabled: false,
+  sumup_api_key: "",
+  sumup_api_key_configured: false,
+  sumup_api_key_last4: null,
+  sumup_api_key_configured_at: null,
+  remove_sumup_api_key: false,
+  show_sumup_api_key: false,
+});
+
+const mapMembershipPaymentSettingsToForm = (
+  settings: SuperAdminMembershipPaymentSettings,
+): MembershipPaymentFormData => ({
+  payment_provider: settings.payment_provider,
+  payment_required_before_card: settings.payment_required_before_card,
+  membership_payment_label: settings.membership_payment_label ?? "",
+  membership_fee_amount:
+    settings.membership_fee_amount != null ? String(settings.membership_fee_amount) : "",
+  membership_fee_currency: settings.membership_fee_currency ?? "EUR",
+  payment_button_label: settings.payment_button_label ?? "Paga con carta",
+  sumup_enabled: settings.sumup_enabled,
+  sumup_api_key: "",
+  sumup_api_key_configured: settings.sumup_api_key_configured,
+  sumup_api_key_last4: settings.sumup_api_key_last4,
+  sumup_api_key_configured_at: settings.sumup_api_key_configured_at,
+  remove_sumup_api_key: false,
+  show_sumup_api_key: false,
 });
 
 const BATCH_DELETE_CONFIRMATION_TEXT = "ELIMINA";
@@ -131,6 +187,11 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
   const [numberingConfig, setNumberingConfig] = useState<OrganizationNumberingConfig | null>(null);
   const [loadingNumbering, setLoadingNumbering] = useState(false);
   const [numberingConfirmOpen, setNumberingConfirmOpen] = useState(false);
+  const [membershipPaymentFormData, setMembershipPaymentFormData] = useState<MembershipPaymentFormData>(
+    createInitialMembershipPaymentFormData,
+  );
+  const [loadingMembershipPayment, setLoadingMembershipPayment] = useState(false);
+  const [membershipPaymentMessage, setMembershipPaymentMessage] = useState("");
   const currentBrandingNumberingMode =
     numberingConfig?.numbering_mode === "dedicated" ? "dedicated" : "shared_assonam";
   const numberingModeChanged =
@@ -214,6 +275,9 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
     setNumberingConfig(null);
     setLoadingNumbering(false);
     setNumberingConfirmOpen(false);
+    setMembershipPaymentFormData(createInitialMembershipPaymentFormData());
+    setLoadingMembershipPayment(false);
+    setMembershipPaymentMessage("");
   }, [open, modalType, selectedOrg?.id]);
 
   useEffect(() => {
@@ -259,6 +323,31 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
       .finally(() => {
         if (!active) return;
         setLoadingNumbering(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [open, modalType, selectedOrg]);
+
+  useEffect(() => {
+    if (!open || !selectedOrg || modalType !== "branding") {
+      return;
+    }
+    let active = true;
+    setLoadingMembershipPayment(true);
+    fetchSuperAdminMembershipPaymentSettings(selectedOrg.id)
+      .then((result) => {
+        if (!active) return;
+        setMembershipPaymentFormData(mapMembershipPaymentSettingsToForm(result));
+      })
+      .catch((err) => {
+        if (!active) return;
+        setSubmitError(err instanceof Error ? err.message : "Errore caricamento impostazioni pagamento");
+      })
+      .finally(() => {
+        if (!active) return;
+        setLoadingMembershipPayment(false);
       });
 
     return () => {
@@ -347,6 +436,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
 
     setSubmitting(true);
     setSubmitError("");
+    setMembershipPaymentMessage("");
     setNumberingConfirmOpen(false);
 
     try {
@@ -399,6 +489,62 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
           require_membership_document: formData.require_membership_document,
           accounting_enabled: formData.accounting_enabled,
         });
+        const requiresPayment = membershipPaymentFormData.payment_required_before_card;
+        const provider = membershipPaymentFormData.payment_provider;
+        const paymentLabel = normalizeOptionalString(
+          membershipPaymentFormData.membership_payment_label,
+        );
+        const amountValue = membershipPaymentFormData.membership_fee_amount.trim();
+        const amount =
+          amountValue.length > 0 ? Number(amountValue.replace(",", ".")) : null;
+        const currency =
+          membershipPaymentFormData.membership_fee_currency.trim().toUpperCase() || "EUR";
+        const buttonLabel =
+          normalizeOptionalString(membershipPaymentFormData.payment_button_label) || "Paga con carta";
+        const hasExistingKey = membershipPaymentFormData.sumup_api_key_configured;
+        const hasNewKey = membershipPaymentFormData.sumup_api_key.trim().length > 0;
+
+        if (requiresPayment && provider !== "sumup") {
+          throw new Error("Se il pagamento è obbligatorio devi selezionare SumUp.");
+        }
+        if (provider === "sumup") {
+          if (!paymentLabel) {
+            throw new Error("Inserisci cosa paga il socio.");
+          }
+          if (amount == null || Number.isNaN(amount) || amount <= 0) {
+            throw new Error("Inserisci un importo quota valido.");
+          }
+          if (!currency) {
+            throw new Error("Inserisci una valuta valida.");
+          }
+          if (requiresPayment && !hasExistingKey && !hasNewKey) {
+            throw new Error("Configura la API key SumUp prima di attivare il pagamento obbligatorio.");
+          }
+        }
+
+        let nextMembershipSettings = await patchSuperAdminMembershipPaymentSettings(selectedOrg.id, {
+          payment_provider: provider,
+          payment_required_before_card: requiresPayment,
+          membership_payment_label: paymentLabel,
+          membership_fee_amount: amount,
+          membership_fee_currency: currency,
+          payment_button_label: buttonLabel,
+        });
+
+        if (hasNewKey) {
+          nextMembershipSettings = await saveSuperAdminSumUpApiKey(
+            selectedOrg.id,
+            membershipPaymentFormData.sumup_api_key.trim(),
+          );
+        } else if (
+          membershipPaymentFormData.remove_sumup_api_key &&
+          membershipPaymentFormData.sumup_api_key_configured
+        ) {
+          nextMembershipSettings = await deleteSuperAdminSumUpApiKey(selectedOrg.id);
+        }
+        setMembershipPaymentFormData(mapMembershipPaymentSettingsToForm(nextMembershipSettings));
+        setMembershipPaymentMessage("Configurazione pagamento quota salvata.");
+
         if (formData.numbering_mode !== currentBrandingNumberingMode) {
           const result = await patchOrganizationNumberingConfig(selectedOrg.id, formData.numbering_mode);
           setNumberingConfig({
@@ -1313,6 +1459,226 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                     </p>
                   </div>
                 </div>
+              </div>
+
+              <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-600">
+                      Pagamento quota associativa
+                    </p>
+                    <p className="mt-1 text-sm text-neutral-600">
+                      Il socio verrà reindirizzato alla pagina di pagamento SumUp. La tessera verrà emessa solo dopo conferma del pagamento.
+                    </p>
+                  </div>
+                  {loadingMembershipPayment ? (
+                    <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-neutral-500">
+                      Caricamento...
+                    </span>
+                  ) : membershipPaymentFormData.sumup_api_key_configured ? (
+                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                      Chiave configurata
+                    </span>
+                  ) : (
+                    <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                      Chiave mancante
+                    </span>
+                  )}
+                </div>
+
+                <div className="mt-4 flex items-start gap-3 rounded-xl border border-white/80 bg-white px-4 py-4">
+                  <input
+                    id="payment_required_before_card"
+                    type="checkbox"
+                    className="mt-0.5 rounded border-gray-300 text-brand focus:ring-brand"
+                    checked={membershipPaymentFormData.payment_required_before_card}
+                    onChange={(e) =>
+                      setMembershipPaymentFormData((prev) => ({
+                        ...prev,
+                        payment_required_before_card: e.target.checked,
+                        payment_provider: e.target.checked ? "sumup" : prev.payment_provider,
+                      }))
+                    }
+                  />
+                  <div>
+                    <label htmlFor="payment_required_before_card" className="text-sm font-medium text-neutral-800">
+                      Richiedi pagamento prima dell&apos;emissione tessera
+                    </label>
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Se attivo, nel wizard pubblico comparirà solo il bottone di pagamento online.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600">Provider</label>
+                    <select
+                      className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
+                      value={membershipPaymentFormData.payment_provider}
+                      onChange={(e) =>
+                        setMembershipPaymentFormData((prev) => ({
+                          ...prev,
+                          payment_provider: e.target.value as "none" | "sumup",
+                        }))
+                      }
+                    >
+                      <option value="none">Nessuno</option>
+                      <option value="sumup">SumUp</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600">Valuta</label>
+                    <input
+                      type="text"
+                      maxLength={3}
+                      className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 uppercase"
+                      value={membershipPaymentFormData.membership_fee_currency}
+                      onChange={(e) =>
+                        setMembershipPaymentFormData((prev) => ({
+                          ...prev,
+                          membership_fee_currency: e.target.value.toUpperCase(),
+                        }))
+                      }
+                      placeholder="EUR"
+                    />
+                  </div>
+                </div>
+
+                {membershipPaymentFormData.payment_provider === "sumup" ? (
+                  <div className="mt-4 grid gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-600">Cosa paga il socio</label>
+                      <input
+                        type="text"
+                        className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
+                        value={membershipPaymentFormData.membership_payment_label}
+                        onChange={(e) =>
+                          setMembershipPaymentFormData((prev) => ({
+                            ...prev,
+                            membership_payment_label: e.target.value,
+                          }))
+                        }
+                        placeholder="Quota associativa annuale"
+                      />
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <label className="block text-xs font-medium text-neutral-600">Importo</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
+                          value={membershipPaymentFormData.membership_fee_amount}
+                          onChange={(e) =>
+                            setMembershipPaymentFormData((prev) => ({
+                              ...prev,
+                              membership_fee_amount: e.target.value,
+                            }))
+                          }
+                          placeholder="25.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-neutral-600">Etichetta pulsante frontend</label>
+                        <input
+                          type="text"
+                          className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
+                          value={membershipPaymentFormData.payment_button_label}
+                          onChange={(e) =>
+                            setMembershipPaymentFormData((prev) => ({
+                              ...prev,
+                              payment_button_label: e.target.value,
+                            }))
+                          }
+                          placeholder="Paga con carta"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-dashed border-neutral-300 bg-white px-4 py-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-600">
+                            API key SumUp del merchant
+                          </p>
+                          <p className="mt-1 text-xs text-neutral-500">
+                            Dopo il salvataggio la chiave non verrà più mostrata in chiaro.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="text-xs font-semibold text-brand"
+                          onClick={() =>
+                            setMembershipPaymentFormData((prev) => ({
+                              ...prev,
+                              show_sumup_api_key: !prev.show_sumup_api_key,
+                            }))
+                          }
+                        >
+                          {membershipPaymentFormData.show_sumup_api_key ? "Nascondi" : "Mostra"}
+                        </button>
+                      </div>
+                      <input
+                        type={membershipPaymentFormData.show_sumup_api_key ? "text" : "password"}
+                        className="mt-3 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
+                        value={membershipPaymentFormData.sumup_api_key}
+                        onChange={(e) =>
+                          setMembershipPaymentFormData((prev) => ({
+                            ...prev,
+                            sumup_api_key: e.target.value,
+                            remove_sumup_api_key: false,
+                          }))
+                        }
+                        placeholder={
+                          membershipPaymentFormData.sumup_api_key_configured
+                            ? "Inserisci una nuova chiave per sostituire quella attuale"
+                            : "Inserisci la API key SumUp"
+                        }
+                      />
+                      <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-neutral-500">
+                        {membershipPaymentFormData.sumup_api_key_configured ? (
+                          <span>
+                            Chiave configurata
+                            {membershipPaymentFormData.sumup_api_key_last4
+                              ? ` • ultime 4: ${membershipPaymentFormData.sumup_api_key_last4}`
+                              : ""}
+                            {membershipPaymentFormData.sumup_api_key_configured_at
+                              ? ` • salvata il ${new Date(membershipPaymentFormData.sumup_api_key_configured_at).toLocaleString("it-IT")}`
+                              : ""}
+                          </span>
+                        ) : (
+                          <span>Nessuna chiave configurata.</span>
+                        )}
+                        {membershipPaymentFormData.sumup_api_key_configured ? (
+                          <label className="inline-flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={membershipPaymentFormData.remove_sumup_api_key}
+                              onChange={(e) =>
+                                setMembershipPaymentFormData((prev) => ({
+                                  ...prev,
+                                  remove_sumup_api_key: e.target.checked,
+                                  sumup_api_key: e.target.checked ? "" : prev.sumup_api_key,
+                                }))
+                              }
+                            />
+                            Rimuovi chiave salvata
+                          </label>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-xl border border-neutral-200 bg-white px-4 py-4 text-sm text-neutral-500">
+                    Seleziona SumUp per configurare il pagamento quota associativa.
+                  </div>
+                )}
+
+                {membershipPaymentMessage ? (
+                  <p className="mt-4 text-sm text-emerald-700">{membershipPaymentMessage}</p>
+                ) : null}
               </div>
             </div>
           )}

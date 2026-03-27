@@ -31,6 +31,7 @@ from app.services.member_cleanup import (
     purge_deleted_members_permanently,
 )
 from app.services.member_activity import is_member_active
+from app.services.membership_payments import organization_requires_membership_payment
 from app.services.municipalities import (
     get_municipality_by_code,
     normalize_municipality_text,
@@ -382,6 +383,11 @@ def api_join_start(
         raise HTTPException(
             status_code=400, detail="L'associazione non è attualmente attiva."
         )
+    if organization_requires_membership_payment(org):
+        raise HTTPException(
+            status_code=400,
+            detail="Per questa associazione il pagamento online è obbligatorio. Usa il pulsante 'Paga con carta'.",
+        )
 
     # Statute acceptance is required only when the org has a statute uploaded
     if org.statute_pdf_path:
@@ -672,6 +678,11 @@ async def api_join_submit_multipart(
     if not org.is_active:
         raise HTTPException(
             status_code=400, detail="L'associazione non è attualmente attiva."
+        )
+    if organization_requires_membership_payment(org):
+        raise HTTPException(
+            status_code=400,
+            detail="Per questa associazione il pagamento online è obbligatorio. Usa il pulsante 'Paga con carta'.",
         )
 
     # Statute acceptance is required only when the org has a statute uploaded

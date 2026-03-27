@@ -49,6 +49,7 @@ from app.models import (
     Room,
     RoomTable,
     StripeWebhookEvent,
+    MembershipPayment,
 )
 from app.security import get_password_hash
 from app.config import settings
@@ -309,6 +310,13 @@ def init_db():
         )
         StripeWebhookEvent.__table__.create(bind=engine, checkfirst=True)
 
+    if "membership_payments" not in inspect(engine).get_table_names():
+        logger.warning(
+            "membership_payments table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        MembershipPayment.__table__.create(bind=engine, checkfirst=True)
+
     # Legacy column migrations - DEPRECATED, kept for backwards compatibility
     with engine.begin() as conn:
         table_names = set(inspect(conn).get_table_names())
@@ -338,10 +346,18 @@ def init_db():
         _add_column_if_missing(conn, "members", "internal_notes", "TEXT")
         _add_column_if_missing(conn, "members", "is_manual", "INTEGER DEFAULT 0")
         _add_column_if_missing(conn, "members", "payment_method", "TEXT")
+        _add_column_if_missing(conn, "members", "payment_required", "INTEGER DEFAULT 0")
+        _add_column_if_missing(
+            conn, "members", "payment_status", "TEXT DEFAULT 'not_required'"
+        )
+        _add_column_if_missing(conn, "members", "payment_completed_at", "DATETIME")
         _add_column_if_missing(conn, "members", "birth_date", "DATE")
         _add_column_if_missing(conn, "members", "birth_place", "TEXT")
         _add_column_if_missing(conn, "members", "birth_place_code", "TEXT")
         _add_column_if_missing(conn, "members", "gender", "TEXT")
+        _add_column_if_missing(conn, "members", "card_is_paid", "INTEGER DEFAULT 0")
+        _add_column_if_missing(conn, "members", "card_paid_at", "DATETIME")
+        _add_column_if_missing(conn, "members", "card_payment_status", "TEXT")
         _add_column_if_missing(conn, "members", "signup_source", "TEXT")
         _add_column_if_missing(conn, "members", "external_customer_id", "TEXT")
         _add_column_if_missing(conn, "members", "card_email_sent_at", "DATETIME")
@@ -466,6 +482,41 @@ def init_db():
                 "organizations",
                 "stripe_platform_subscription_id",
                 "TEXT",
+            )
+            _add_column_if_missing(conn, "organizations", "payment_provider", "TEXT")
+            _add_column_if_missing(
+                conn,
+                "organizations",
+                "payment_required_before_card",
+                "INTEGER DEFAULT 0",
+            )
+            _add_column_if_missing(
+                conn, "organizations", "membership_payment_label", "TEXT"
+            )
+            _add_column_if_missing(
+                conn, "organizations", "membership_fee_amount", "NUMERIC(10,2)"
+            )
+            _add_column_if_missing(
+                conn,
+                "organizations",
+                "membership_fee_currency",
+                "TEXT DEFAULT 'EUR'",
+            )
+            _add_column_if_missing(
+                conn,
+                "organizations",
+                "payment_button_label",
+                "TEXT DEFAULT 'Paga con carta'",
+            )
+            _add_column_if_missing(
+                conn, "organizations", "sumup_enabled", "INTEGER DEFAULT 0"
+            )
+            _add_column_if_missing(
+                conn, "organizations", "sumup_api_key_encrypted", "TEXT"
+            )
+            _add_column_if_missing(conn, "organizations", "sumup_api_key_last4", "TEXT")
+            _add_column_if_missing(
+                conn, "organizations", "sumup_api_key_configured_at", "DATETIME"
             )
         if "bookings" in table_names:
             _add_column_if_missing(conn, "bookings", "room_id", "INTEGER")

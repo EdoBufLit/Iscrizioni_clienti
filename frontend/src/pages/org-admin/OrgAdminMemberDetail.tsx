@@ -70,6 +70,7 @@ export default function OrgAdminMemberDetail() {
     "member_doc.review": "Documento revisionato",
     "member.document.resubmit": "Documento reinviato",
     "member.payment.manual": "Pagamento manuale registrato",
+    "member.payment.membership_manual": "Pagamento quota registrato",
     "member.decision": "Decisione iscrizione",
     "member.card_email.manual": "Tessera inviata",
   };
@@ -116,6 +117,9 @@ export default function OrgAdminMemberDetail() {
       if (typeof method === "string") {
         details = details ? `${details} — Metodo: ${method}` : `Metodo: ${method}`;
       }
+    } else if (item.action === "member.payment.membership_manual") {
+      category = "Pagamenti";
+      tone = "border-emerald-200 bg-emerald-50 text-emerald-700";
     } else if (item.action === "member.access_sent") {
       category = "Accesso";
       tone = "border-blue-200 bg-blue-50 text-blue-700";
@@ -499,24 +503,13 @@ export default function OrgAdminMemberDetail() {
   const handleManualPayment = async (payload: ManualPaymentPayload) => {
     if (!member) return;
     try {
-      const result = await createManualPayment(member.id, {
+      await createManualPayment(member.id, {
         amount: payload.amount,
         method: payload.method,
         paid_at: payload.paid_at,
         notes: payload.notes,
       });
-      if (result.member_status) {
-        await fetchMember();
-      } else {
-        setMember((prev) =>
-          prev
-            ? {
-                ...prev,
-                payments: [result.payment, ...(prev.payments ?? [])],
-              }
-            : prev
-        );
-      }
+      await fetchMember();
     } catch (err) {
       throw err instanceof Error ? err : new Error("Errore durante il salvataggio");
     }
@@ -637,6 +630,23 @@ export default function OrgAdminMemberDetail() {
       : member.payment_method === "BONIFICO"
         ? "Bonifico"
         : "-";
+  const membershipPayments = member.membership_payments ?? [];
+  const paymentStatusLabel =
+    member.card_is_paid || member.payment_status === "completed" || member.payment_status === "manual_completed"
+      ? "Pagata"
+      : member.payment_required
+        ? "Pagamento non registrato"
+        : "Non richiesta";
+  const paymentStatusTone =
+    paymentStatusLabel === "Pagata"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : paymentStatusLabel === "Non richiesta"
+        ? "border-neutral-200 bg-neutral-100 text-neutral-600"
+        : "border-amber-200 bg-amber-50 text-amber-700";
+  const paymentMethodSummary =
+    member.payment_required && membershipPayments[0]?.payment_reason
+      ? membershipPayments[0].payment_reason
+      : paymentMethodLabel;
   const birthDateLabel = member.birth_date
     ? new Date(`${member.birth_date}T00:00:00`).toLocaleDateString("it-IT")
     : "-";
@@ -820,7 +830,7 @@ export default function OrgAdminMemberDetail() {
                 </div>
                 <div className="flex items-start justify-between gap-4">
                   <dt className="text-neutral-500">Modalita di pagamento</dt>
-                  <dd className="text-right font-medium text-neutral-900">{paymentMethodLabel}</dd>
+                  <dd className="text-right font-medium text-neutral-900">{paymentMethodSummary}</dd>
                 </div>
                 <div className="flex items-start justify-between gap-4">
                   <dt className="text-neutral-500">Iscrizione manuale</dt>
@@ -976,6 +986,68 @@ export default function OrgAdminMemberDetail() {
                 <dd className="font-medium text-neutral-900">{documentStatus}</dd>
               </div>
             </dl>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-neutral-900">Pagamenti</h3>
+                <p className="mt-1 text-sm text-neutral-500">
+                  Stato quota associativa e dettagli dei pagamenti registrati.
+                </p>
+              </div>
+              <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${paymentStatusTone}`}>
+                {paymentStatusLabel}
+              </span>
+            </div>
+
+            <dl className="mt-4 space-y-3 text-sm">
+              <div className="flex items-start justify-between gap-4">
+                <dt className="text-neutral-500">Stato pagamento</dt>
+                <dd className="text-right font-medium text-neutral-900">{member.payment_status || "-"}</dd>
+              </div>
+              <div className="flex items-start justify-between gap-4">
+                <dt className="text-neutral-500">Data conferma</dt>
+                <dd className="text-right font-medium text-neutral-900">
+                  {member.payment_completed_at
+                    ? new Date(member.payment_completed_at).toLocaleString("it-IT")
+                    : "-"}
+                </dd>
+              </div>
+            </dl>
+
+            {membershipPayments.length > 0 ? (
+              <div className="mt-4 space-y-3">
+                {membershipPayments.slice(0, 3).map((payment) => (
+                  <div key={payment.id} className="rounded-2xl border border-neutral-200 bg-neutral-50/70 px-4 py-4 text-sm">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-neutral-900">
+                          {payment.payment_reason || "Quota associativa"}
+                        </p>
+                        <p className="mt-1 text-neutral-500">
+                          {payment.amount != null ? `${payment.amount.toFixed(2)} ${payment.currency || "EUR"}` : "-"}
+                        </p>
+                      </div>
+                      <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-neutral-700">
+                        {payment.status}
+                      </span>
+                    </div>
+                    <div className="mt-3 grid gap-2 text-xs text-neutral-500">
+                      <p>Provider: {payment.provider}</p>
+                      <p>Sorgente: {payment.source}</p>
+                      <p>Checkout: {payment.checkout_reference || payment.sumup_checkout_id || "-"}</p>
+                      <p>
+                        Data pagamento: {payment.confirmed_at ? new Date(payment.confirmed_at).toLocaleString("it-IT") : "-"}
+                      </p>
+                      {payment.notes ? <p>Note: {payment.notes}</p> : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-neutral-500">Nessun pagamento quota registrato.</p>
+            )}
           </div>
         </div>
       </div>

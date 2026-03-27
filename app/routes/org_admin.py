@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse, FileResponse, Response
 from sqlalchemy import func, or_, case, and_, select, cast, String
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timedelta, date
+from decimal import Decimal
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, TypeAdapter
 
@@ -28,6 +29,7 @@ from app.models import (
     CardMovement,
     Organization,
     MemberDocument,
+    MembershipPayment,
     DocStatus,
     MemberPayment,
     OperationLog,
@@ -159,7 +161,7 @@ from app.services.booking_rooms import (
     update_table_positions,
     validate_booking_assignment,
 )
-from app.services.card_allocation import allocate_next_card, release_card_number
+from app.services.card_allocation import release_card_number
 from app.services.card_inventory import compute_org_card_stock
 from app.services.card_lot_registry import format_card_number
 from app.services.card_pdf import generate_card_pdf_bytes
@@ -184,6 +186,15 @@ from app.services.member_activity import (
 from app.services.member_card_delivery import (
     maybe_send_member_card_ready_email,
     queue_member_card_email,
+)
+from app.services.membership_payments import (
+    PAID_MEMBERSHIP_STATUSES,
+    apply_manual_membership_payment,
+    create_legacy_manual_member_payment,
+    maybe_fulfill_member_card,
+    normalize_membership_payment_reason,
+    organization_requires_membership_payment,
+    payment_status_is_paid,
 )
 from app.services.org_branding import (
     resolve_club_display_name,
@@ -1355,9 +1366,19 @@ def _build_org_member_detail_payload(
         .limit(5)
         .all()
     )
+    membership_payments = (
+        db.query(MembershipPayment)
+        .filter(MembershipPayment.socio_id == member.id)
+        .order_by(MembershipPayment.created_at.desc(), MembershipPayment.id.desc())
+        .limit(10)
+        .all()
+    )
     doc_ids_sub = select(MemberDocument.id).where(MemberDocument.member_id == member.id)
     payment_ids_sub = select(MemberPayment.id).where(
         MemberPayment.member_id == member.id
+    )
+    membership_payment_ids_sub = select(MembershipPayment.id).where(
+        MembershipPayment.socio_id == member.id
     )
 
     activities = (
@@ -1375,6 +1396,10 @@ def _build_org_member_detail_payload(
                 and_(
                     OperationLog.entity_type == "member_payment",
                     OperationLog.entity_id.in_(payment_ids_sub),
+                ),
+                and_(
+                    OperationLog.entity_type == "membership_payment",
+                    OperationLog.entity_id.in_(membership_payment_ids_sub),
                 ),
             )
         )
@@ -1424,6 +1449,14 @@ def _build_org_member_detail_payload(
         "birth_place_code": member.birth_place_code,
         "fiscal_code": member.fiscal_code,
         "payment_method": _serialize_member_payment_method(member.payment_method),
+        "payment_required": bool(member.payment_required),
+        "payment_status": member.payment_status,
+        "payment_completed_at": member.payment_completed_at.isoformat()
+        if member.payment_completed_at
+        else None,
+        "card_is_paid": bool(member.card_is_paid),
+        "card_paid_at": member.card_paid_at.isoformat() if member.card_paid_at else None,
+        "card_payment_status": member.card_payment_status,
         "status": get_member_lifecycle_status(member, now=current_time),
         "workflow_status": member.status.value if member.status else None,
         "is_active": is_member_active(member, now=current_time),
@@ -1470,6 +1503,25 @@ def _build_org_member_detail_payload(
                 "created_at": p.created_at.isoformat() if p.created_at else None,
             }
             for p in payments
+        ],
+        "membership_payments": [
+            {
+                "id": p.id,
+                "provider": p.provider,
+                "source": p.source,
+                "status": p.status,
+                "payment_reason": p.payment_reason,
+                "amount": float(p.amount) if p.amount is not None else None,
+                "currency": p.currency,
+                "checkout_reference": p.checkout_reference,
+                "sumup_checkout_id": p.sumup_checkout_id,
+                "hosted_checkout_url": p.hosted_checkout_url,
+                "confirmed_at": p.confirmed_at.isoformat() if p.confirmed_at else None,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+                "updated_at": p.updated_at.isoformat() if p.updated_at else None,
+                "notes": p.notes,
+            }
+            for p in membership_payments
         ],
         "activities": [
             {
@@ -4566,6 +4618,18 @@ def list_org_members(
             .all()
         )
         payments_latest = {r[0]: r[1] for r in pay_rows}
+    membership_latest = {}
+    if member_ids:
+        membership_rows = (
+            db.query(MembershipPayment.socio_id, func.max(MembershipPayment.confirmed_at))
+            .filter(
+                MembershipPayment.socio_id.in_(member_ids),
+                MembershipPayment.status.in_(list(PAID_MEMBERSHIP_STATUSES)),
+            )
+            .group_by(MembershipPayment.socio_id)
+            .all()
+        )
+        membership_latest = {r[0]: r[1] for r in membership_rows}
 
     return {
         "items": [
@@ -4586,9 +4650,19 @@ def list_org_members(
                 else None,  # fallback if no created_at
                 "docs_count": docs_counts.get(m.id, 0),
                 "document_status": docs_statuses.get(m.id, "not_provided"),
-                "is_paid": m.id in payments_latest,
-                "last_payment_at": payments_latest.get(m.id).isoformat()
-                if payments_latest.get(m.id)
+                "is_paid": bool(
+                    payment_status_is_paid(m.payment_status) or m.id in payments_latest
+                ),
+                "last_payment_at": (
+                    membership_latest.get(m.id)
+                    or payments_latest.get(m.id)
+                    or m.payment_completed_at
+                ).isoformat()
+                if (
+                    membership_latest.get(m.id)
+                    or payments_latest.get(m.id)
+                    or m.payment_completed_at
+                )
                 else None,
                 "has_access": bool(m.password_hash),
                 "is_manual": bool(m.is_manual),
@@ -5133,33 +5207,22 @@ def member_decision(
     if member.org_id != admin.org_id:
         raise HTTPException(status_code=403, detail="Forbidden")
 
+    org = member.organization or db.query(Organization).filter(Organization.id == member.org_id).first()
+    requires_payment = organization_requires_membership_payment(org)
+
     # Apply decision
     if body.decision == "approve":
-        if member.card_no is None:
-            # Idempotency: do not reassign card numbers
-            try:
-                allocation = allocate_next_card(
-                    db,
-                    org_id=member.org_id,
-                    year=datetime.utcnow().year,
-                )
-                member.card_no = allocation.card_no
-                member.batch_id = allocation.batch_id
-                member.card_year = allocation.year
-                member.numbering_scope_id = allocation.numbering_scope_id
-            except HTTPException as exc:
-                if exc.status_code == 409:
-                    # Manual admin approval must activate member even if cards are exhausted.
-                    pass
-                else:
-                    raise
-
-        member.status = MemberStatus.ACTIVE
-        if member.card_no is not None and member.card_year is None:
-            member.card_year = datetime.utcnow().year
-        # Trigger joined_at if not set (first activation)
-        if not member.joined_at:
-            member.joined_at = datetime.utcnow()
+        if requires_payment and not payment_status_is_paid(member.payment_status):
+            member.status = MemberStatus.PENDING_CARDS
+        else:
+            fulfillment = maybe_fulfill_member_card(
+                db=db,
+                member=member,
+                org=org,
+                request=None,
+            )
+            if not fulfillment.issued_card and fulfillment.reason == "card_stock_exhausted":
+                member.status = MemberStatus.PENDING_CARDS
     else:
         member.status = MemberStatus.REJECTED
 
@@ -5186,7 +5249,7 @@ def member_decision(
     )
     db.commit()
 
-    if body.decision == "approve":
+    if body.decision == "approve" and member.status == MemberStatus.ACTIVE:
         try:
             maybe_send_member_card_ready_email(db, request, member.id)
         except Exception:
@@ -5236,56 +5299,53 @@ def create_manual_payment(
     if notes == "":
         notes = None
 
-    payment = MemberPayment(
-        member_id=member.id,
-        org_id=admin.org_id,
+    org = member.organization or db.query(Organization).filter(Organization.id == member.org_id).first()
+    requires_membership_payment = organization_requires_membership_payment(org)
+    amount_decimal = Decimal(str(body.amount))
+    if (
+        not requires_membership_payment
+        and not member.decision_at
+        and member.status != MemberStatus.REJECTED
+    ):
+        member.decision_at = datetime.utcnow()
+        member.decision_by_admin_id = admin.id
+        if not member.decision_notes:
+            member.decision_notes = "Pagamento manuale"
+    legacy_payment = create_legacy_manual_member_payment(
+        db=db,
+        member=member,
+        org=org,
         admin_id=admin.id,
-        amount_cents=amount_cents,
+        amount=amount_decimal,
         method=method,
-        paid_at=paid_at,
         notes=notes,
     )
-    db.add(payment)
-
-    card_assigned = False
-    if member.status != MemberStatus.REJECTED:
-        if member.card_no is None:
-            try:
-                allocation = allocate_next_card(
-                    db,
-                    org_id=member.org_id,
-                    year=datetime.utcnow().year,
-                )
-                member.card_no = allocation.card_no
-                member.batch_id = allocation.batch_id
-                member.card_year = allocation.year
-                member.numbering_scope_id = allocation.numbering_scope_id
-                card_assigned = True
-            except HTTPException as exc:
-                if exc.status_code == 409:
-                    member.status = MemberStatus.PENDING_CARDS
-                else:
-                    raise
-        if member.card_no is not None:
-            member.status = MemberStatus.ACTIVE
-            if member.card_year is None:
-                member.card_year = datetime.utcnow().year
-            if not member.joined_at:
-                member.joined_at = datetime.utcnow()
-            if not member.decision_at:
-                member.decision_at = datetime.utcnow()
-                member.decision_by_admin_id = admin.id
-                if not member.decision_notes:
-                    member.decision_notes = "Pagamento manuale"
+    membership_payment, fulfillment, _created = apply_manual_membership_payment(
+        db=db,
+        member=member,
+        org=org,
+        admin_id=admin.id,
+        amount=amount_decimal,
+        currency=(org.membership_fee_currency or "EUR") if org else "EUR",
+        reason=normalize_membership_payment_reason(org) if org else "Quota associativa",
+        notes=notes,
+        request=None,
+    )
+    if not member.decision_at and member.status != MemberStatus.REJECTED:
+        member.decision_at = datetime.utcnow()
+        member.decision_by_admin_id = admin.id
+        if not member.decision_notes:
+            member.decision_notes = "Pagamento manuale"
 
     db.commit()
-    db.refresh(payment)
+    db.refresh(legacy_payment)
+    db.refresh(member)
 
     audit.log_operation(
         db,
         action="member.payment.manual",
         entity_type="member_payment",
-        entity_id=payment.id,
+        entity_id=legacy_payment.id,
         actor_admin_id=admin.id,
         actor_role=AdminRole.ORG_ADMIN.value,
         metadata={
@@ -5294,32 +5354,62 @@ def create_manual_payment(
             "amount_cents": amount_cents,
             "method": method,
             "paid_at": paid_at.isoformat(),
+            "membership_payment_id": membership_payment.id,
+        },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    audit.log_operation(
+        db,
+        action="member.payment.membership_manual",
+        entity_type="membership_payment",
+        entity_id=membership_payment.id,
+        actor_admin_id=admin.id,
+        actor_role=AdminRole.ORG_ADMIN.value,
+        metadata={
+            "org_id": admin.org_id,
+            "member_id": member.id,
+            "status": membership_payment.status,
+            "source": membership_payment.source,
         },
         ip=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
     db.commit()
 
-    try:
-        maybe_send_member_card_ready_email(db, request, member.id)
-    except Exception:
-        logger.exception(
-            "Failed card email hook after manual payment for member_id=%s",
-            member.id,
-        )
+    if fulfillment.issued_card:
+        try:
+            maybe_send_member_card_ready_email(db, request, member.id)
+        except Exception:
+            logger.exception(
+                "Failed card email hook after manual payment for member_id=%s",
+                member.id,
+            )
 
     return {
         "ok": True,
         "payment": {
-            "id": payment.id,
-            "amount_cents": payment.amount_cents,
-            "amount": round(payment.amount_cents / 100, 2),
-            "method": payment.method,
-            "paid_at": payment.paid_at.isoformat() if payment.paid_at else None,
-            "notes": payment.notes,
+            "id": legacy_payment.id,
+            "amount_cents": legacy_payment.amount_cents,
+            "amount": round(legacy_payment.amount_cents / 100, 2),
+            "method": legacy_payment.method,
+            "paid_at": legacy_payment.paid_at.isoformat() if legacy_payment.paid_at else None,
+            "notes": legacy_payment.notes,
         },
         "member_status": member.status.value if member.status else None,
-        "card_assigned": card_assigned,
+        "card_assigned": fulfillment.issued_card,
+        "membership_payment": {
+            "id": membership_payment.id,
+            "status": membership_payment.status,
+            "source": membership_payment.source,
+            "amount": float(membership_payment.amount),
+            "currency": membership_payment.currency,
+            "payment_reason": membership_payment.payment_reason,
+            "confirmed_at": membership_payment.confirmed_at.isoformat()
+            if membership_payment.confirmed_at
+            else None,
+            "notes": membership_payment.notes,
+        },
     }
 
 

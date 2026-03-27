@@ -29,6 +29,7 @@ from app.routes import (
     ingest_pienissimo,
     integrations,
     join,
+    membership_payments,
     member,
     onboarding,
     org_admin,
@@ -271,6 +272,7 @@ def _include_affiliation_routers() -> None:
 # ── Routers ───────────────────────────────────────────────────────
 
 app.include_router(join.router)
+app.include_router(membership_payments.router)
 app.include_router(member.router)
 app.include_router(admin.router)
 app.include_router(org_admin.router)

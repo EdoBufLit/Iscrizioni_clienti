@@ -36,9 +36,14 @@ def _ensure_active_member(db):
             email=email,
             password_hash=get_password_hash("TestPass123!"),
             status=MemberStatus.ACTIVE,
+            payment_status="manual_completed",
+            card_is_paid=True,
             card_no=9876,
             card_year=current_year,
             joined_at=datetime(current_year, 1, 5),
+            payment_completed_at=datetime(current_year, 1, 5),
+            card_paid_at=datetime(current_year, 1, 5),
+            card_payment_status="manual_completed",
             signup_ip="127.0.0.1",
             signup_user_agent="pytest",
         )
@@ -49,9 +54,14 @@ def _ensure_active_member(db):
         member.last_name = "Bianchi"
         member.password_hash = get_password_hash("TestPass123!")
         member.status = MemberStatus.ACTIVE
+        member.payment_status = "manual_completed"
+        member.card_is_paid = True
         member.card_no = 9876
         member.card_year = current_year
         member.joined_at = datetime(current_year, 1, 5)
+        member.payment_completed_at = datetime(current_year, 1, 5)
+        member.card_paid_at = datetime(current_year, 1, 5)
+        member.card_payment_status = "manual_completed"
         member.deleted_at = None
 
     db.commit()
@@ -90,6 +100,8 @@ def test_member_card_verification_payload_and_endpoint(client, db):
         org.name,
         org.club_display_name,
     }
+    assert verify_data["payment"]["is_paid"] is True
+    assert verify_data["payment"]["label"] == "Pagata"
 
 
 def test_member_card_verify_html_response_for_browser(client, db):
@@ -108,6 +120,7 @@ def test_member_card_verify_html_response_for_browser(client, db):
     assert res.status_code == 200
     assert "text/html" in res.headers.get("content-type", "")
     assert "TESSERA ATTIVA" in res.text
+    assert "Stato pagamento: Pagata" in res.text
     assert "Mostra dati tecnici (JSON)" in res.text
 
 

@@ -11,6 +11,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Text,
     JSON,
+    Numeric,
     TypeDecorator,
     Index,
     and_,
@@ -44,6 +45,26 @@ class MemberStatus(str, enum.Enum):
 class PaymentMethod(str, enum.Enum):
     CASH = "CASH"
     BONIFICO = "BONIFICO"
+
+
+class OrganizationPaymentProvider(str, enum.Enum):
+    NONE = "none"
+    SUMUP = "sumup"
+
+
+class MembershipPaymentStatus(str, enum.Enum):
+    NOT_REQUIRED = "not_required"
+    PENDING = "pending"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    EXPIRED = "expired"
+    MANUAL_COMPLETED = "manual_completed"
+
+
+class MembershipPaymentSource(str, enum.Enum):
+    SUMUP = "sumup"
+    MANUAL = "manual"
 
 
 class SafeMemberStatusType(TypeDecorator):
@@ -279,6 +300,24 @@ class Organization(Base):
     accounting_enabled = Column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    payment_provider = Column(String, nullable=True)
+    payment_required_before_card = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    membership_payment_label = Column(String, nullable=True)
+    membership_fee_amount = Column(Numeric(10, 2), nullable=True)
+    membership_fee_currency = Column(
+        String, nullable=False, default="EUR", server_default="EUR"
+    )
+    payment_button_label = Column(
+        String, nullable=False, default="Paga con carta", server_default="Paga con carta"
+    )
+    sumup_enabled = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    sumup_api_key_encrypted = Column(Text, nullable=True)
+    sumup_api_key_last4 = Column(String, nullable=True)
+    sumup_api_key_configured_at = Column(DateTime(timezone=True), nullable=True)
     is_active = Column(Boolean, default=True)
     last_low_cards_alert_at = Column(DateTime, nullable=True)
     deleted_at = Column(DateTime, nullable=True)
@@ -321,6 +360,7 @@ class Organization(Base):
         back_populates="organization",
         foreign_keys="OrganizationSharedDocumentAssignment.association_id",
     )
+    membership_payments = relationship("MembershipPayment", back_populates="organization")
     accounting_folders = relationship(
         "AccountingFolder",
         back_populates="organization",
@@ -1623,6 +1663,17 @@ class Member(Base):
     birth_place_code = Column(String, nullable=True)
     gender = Column(String, nullable=True)
     payment_method = Column(SafePaymentMethodType(), nullable=True)
+    payment_required = Column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    payment_status = Column(
+        String,
+        nullable=False,
+        default=MembershipPaymentStatus.NOT_REQUIRED.value,
+        server_default=MembershipPaymentStatus.NOT_REQUIRED.value,
+        index=True,
+    )
+    payment_completed_at = Column(DateTime(timezone=True), nullable=True)
     password_hash = Column(String, nullable=True)
     status = Column(SafeMemberStatusType(), default=MemberStatus.PENDING_DOCS.value)
 
@@ -1644,6 +1695,9 @@ class Member(Base):
     member_type = Column(String, nullable=True)
     internal_notes = Column(Text, nullable=True)
     is_manual = Column(Boolean, default=False, nullable=False, server_default="0")
+    card_is_paid = Column(Boolean, nullable=False, default=False, server_default="0")
+    card_paid_at = Column(DateTime(timezone=True), nullable=True)
+    card_payment_status = Column(String, nullable=True)
 
     accepted_statute_at = Column(DateTime, nullable=True)
     accepted_statute_version = Column(String, nullable=True)
@@ -1676,6 +1730,7 @@ class Member(Base):
     )
     documents = relationship("MemberDocument", back_populates="member")
     payments = relationship("MemberPayment", back_populates="member")
+    membership_payments = relationship("MembershipPayment", back_populates="member")
     tokens = relationship("Token", back_populates="member")
     batch = relationship("CardBatch")
     form_submissions = relationship(
@@ -1791,6 +1846,57 @@ class MemberPayment(Base):
     member = relationship("Member", back_populates="payments")
     organization = relationship("Organization")
     admin = relationship("AdminUser")
+
+
+class MembershipPayment(Base):
+    __tablename__ = "membership_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    socio_id = Column(Integer, ForeignKey("members.id"), nullable=True, index=True)
+    application_id = Column(Integer, nullable=True, index=True)
+    provider = Column(
+        String,
+        nullable=False,
+        default=OrganizationPaymentProvider.SUMUP.value,
+        server_default=OrganizationPaymentProvider.SUMUP.value,
+    )
+    payment_reason = Column(String, nullable=True)
+    amount = Column(Numeric(10, 2), nullable=False)
+    currency = Column(String, nullable=False, default="EUR", server_default="EUR")
+    status = Column(String, nullable=False, index=True)
+    source = Column(String, nullable=False, index=True)
+    checkout_reference = Column(String, nullable=True, unique=True)
+    sumup_checkout_id = Column(String, nullable=True, index=True)
+    hosted_checkout_url = Column(Text, nullable=True)
+    raw_create_response = Column(GENERIC_JSON_TYPE, nullable=True)
+    raw_last_status_response = Column(GENERIC_JSON_TYPE, nullable=True)
+    confirmed_at = Column(DateTime(timezone=True), nullable=True)
+    manual_marked_paid_by_user_id = Column(
+        Integer, ForeignKey("admin_users.id"), nullable=True
+    )
+    notes = Column(Text, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utcnow_aware,
+        server_default=sa.func.now(),
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utcnow_aware,
+        onupdate=utcnow_aware,
+        server_default=sa.func.now(),
+    )
+
+    organization = relationship("Organization", back_populates="membership_payments")
+    member = relationship("Member", back_populates="membership_payments")
+    manual_marked_paid_by = relationship("AdminUser")
+
+    __table_args__ = (
+        Index("ix_membership_payments_org_member_status", "org_id", "socio_id", "status"),
+    )
 
 
 class Token(Base):

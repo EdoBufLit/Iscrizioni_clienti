@@ -53,6 +53,10 @@ from app.services.org_branding import (
     resolve_card_logo_url,
     resolve_club_display_name,
 )
+from app.services.membership_payments import (
+    payment_status_is_paid,
+    serialize_public_membership_payment,
+)
 from app.services.card_pdf import generate_card_pdf_bytes
 from app.services.card_image import generate_card_image_bytes
 from app.services.municipalities import search_municipalities
@@ -133,6 +137,7 @@ def _org_to_dict_detail(org: Organization) -> dict:
         "require_membership_document": bool(
             getattr(org, "require_membership_document", False)
         ),
+        "membership_payment": serialize_public_membership_payment(org),
     }
 
 
@@ -614,6 +619,8 @@ def _render_card_status_html(
     card_number: int | None,
     card_year: int | None,
     checked_at: datetime,
+    payment_label: str,
+    payment_tone: str,
 ) -> str:
     status_title = "TESSERA ATTIVA" if is_valid else "TESSERA NON ATTIVA"
     status_color = "#0b9f55" if is_valid else "#c81e1e"
@@ -626,6 +633,7 @@ def _render_card_status_html(
     )
     safe_card_year = html.escape(str(card_year)) if card_year is not None else "N/D"
     safe_reason = html.escape(reason_label)
+    safe_payment_label = html.escape(payment_label)
     json_link = f"/api/cards/verify/{token}?format=json"
 
     reason_block = ""
@@ -650,6 +658,11 @@ def _render_card_status_html(
         <p style="margin:18px 0 0 0;font-size:15px;"><strong>Associazione:</strong> {safe_org}</p>
         <p style="margin:8px 0 0 0;font-size:15px;"><strong>Socio:</strong> {safe_member}</p>
         <p style="margin:8px 0 0 0;font-size:15px;"><strong>Tessera:</strong> {safe_card_number} / {safe_card_year}</p>
+        <p style="margin:14px 0 0 0;">
+          <span style="display:inline-flex;align-items:center;border-radius:999px;padding:8px 14px;font-size:13px;font-weight:700;background:{payment_tone};color:#10253f;">
+            Stato pagamento: {safe_payment_label}
+          </span>
+        </p>
         <p style="margin:8px 0 0 0;font-size:13px;color:#41566f;"><strong>Ultimo aggiornamento:</strong> {checked_at_label}</p>
         {reason_block}
       </section>
@@ -852,6 +865,8 @@ def verify_member_card(request: Request, token: str, db: Session = Depends(get_d
                 card_number=None,
                 card_year=None,
                 checked_at=checked_at,
+                payment_label="Pagamento non registrato",
+                payment_tone="#fee2e2",
             ),
             status_code=200,
         )
@@ -897,6 +912,9 @@ def verify_member_card(request: Request, token: str, db: Session = Depends(get_d
     organization_display_name = resolve_club_display_name(organization) or (
         organization.name if organization else None
     )
+    is_paid = bool(member and payment_status_is_paid(member.payment_status))
+    payment_label = "Pagata" if is_paid else "Pagamento non registrato"
+    payment_tone = "#dcfce7" if is_paid else "#fee2e2"
 
     response_payload = {
         "valid": is_valid,
@@ -912,6 +930,11 @@ def verify_member_card(request: Request, token: str, db: Session = Depends(get_d
         "organization": {
             "name": organization_display_name,
             "slug": organization.slug if organization else None,
+        },
+        "payment": {
+            "status": member.payment_status if member else None,
+            "is_paid": is_paid,
+            "label": payment_label,
         },
         "checked_at": checked_at.isoformat() + "Z",
     }
@@ -932,6 +955,8 @@ def verify_member_card(request: Request, token: str, db: Session = Depends(get_d
             card_number=card_number,
             card_year=card_year,
             checked_at=checked_at,
+            payment_label=payment_label,
+            payment_tone=payment_tone,
         ),
         status_code=200,
     )

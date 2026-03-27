@@ -186,6 +186,15 @@ class Settings:
         "AFFILIATION_VIDEO_ENABLED",
         default=True,
     )
+    SUMUP_API_BASE_URL: str = os.getenv(
+        "SUMUP_API_BASE_URL", "https://api.sumup.com/v0.1"
+    )
+    SUMUP_REQUEST_TIMEOUT_SECONDS: int = int(
+        os.getenv("SUMUP_REQUEST_TIMEOUT_SECONDS", "20")
+    )
+    SUMUP_CREDENTIALS_ENCRYPTION_KEY: str | None = _env_optional(
+        "SUMUP_CREDENTIALS_ENCRYPTION_KEY"
+    )
 
     # OpenAI
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
