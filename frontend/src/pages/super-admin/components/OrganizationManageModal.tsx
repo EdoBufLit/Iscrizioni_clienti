@@ -522,6 +522,13 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
           }
         }
 
+        if (hasNewKey) {
+          await saveSuperAdminSumUpApiKey(
+            selectedOrg.id,
+            membershipPaymentFormData.sumup_api_key.trim(),
+          );
+        }
+
         let nextMembershipSettings = await patchSuperAdminMembershipPaymentSettings(selectedOrg.id, {
           payment_provider: provider,
           payment_required_before_card: requiresPayment,
@@ -531,12 +538,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
           payment_button_label: buttonLabel,
         });
 
-        if (hasNewKey) {
-          nextMembershipSettings = await saveSuperAdminSumUpApiKey(
-            selectedOrg.id,
-            membershipPaymentFormData.sumup_api_key.trim(),
-          );
-        } else if (
+        if (
           membershipPaymentFormData.remove_sumup_api_key &&
           membershipPaymentFormData.sumup_api_key_configured
         ) {
