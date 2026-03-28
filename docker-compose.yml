@@ -54,6 +54,7 @@ x-app-env: &app-env
   AFFILIATION_VIDEO_OUTPUT_DIR: ${AFFILIATION_VIDEO_OUTPUT_DIR:-/app/data/videos/welcome}
   AFFILIATION_VIDEO_RENDER_CONCURRENCY: ${AFFILIATION_VIDEO_RENDER_CONCURRENCY:-}
   AFFILIATION_VIDEO_POLL_SECONDS: ${AFFILIATION_VIDEO_POLL_SECONDS:-}
+  SUMUP_CREDENTIALS_ENCRYPTION_KEY: ${SUMUP_CREDENTIALS_ENCRYPTION_KEY:-}
 
 x-video-worker-env: &video-worker-env
   PYTHONUNBUFFERED: "1"
@@ -88,7 +89,7 @@ services:
     restart: unless-stopped
 
   web:
-    image: assonam/app-runtime:local
+    image: ${APP_RUNTIME_IMAGE:-assonam/app-runtime:local}
     build: .
     depends_on:
       - db
@@ -101,8 +102,20 @@ services:
 
     restart: always
 
+  migrate:
+    profiles: ["ops"]
+    image: ${APP_RUNTIME_IMAGE:-assonam/app-runtime:local}
+    depends_on:
+      - db
+    command: alembic upgrade head
+    volumes:
+      - ./data:/app/data
+    environment: *app-env
+    mem_limit: ${MIGRATE_MEM_LIMIT:-1024m}
+    restart: "no"
+
   email-worker:
-    image: assonam/app-runtime:local
+    image: ${APP_RUNTIME_IMAGE:-assonam/app-runtime:local}
     depends_on:
       - db
     command: python -m app.workers.email_sender
@@ -114,10 +127,11 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+    mem_limit: ${EMAIL_WORKER_MEM_LIMIT:-512m}
     restart: always
 
   low-cards-worker:
-    image: assonam/app-runtime:local
+    image: ${APP_RUNTIME_IMAGE:-assonam/app-runtime:local}
     depends_on:
       - db
     command: python -m app.workers.low_cards_scheduler
@@ -129,10 +143,12 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+    mem_limit: ${LOW_CARDS_WORKER_MEM_LIMIT:-512m}
     restart: always
 
   affiliation-video-worker:
     profiles: ["video-worker"]
+    image: ${AFFILIATION_VIDEO_WORKER_IMAGE:-assonam/affiliation-video-worker:local}
     build:
       context: .
       dockerfile: Dockerfile.affiliation-video-worker
@@ -146,6 +162,7 @@ services:
       interval: 10s
       timeout: 3s
       retries: 12
+    mem_limit: ${AFFILIATION_VIDEO_WORKER_MEM_LIMIT:-4096m}
     restart: always
 
 volumes:

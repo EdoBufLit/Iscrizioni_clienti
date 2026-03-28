@@ -2,7 +2,13 @@
 
 ## Hetzner Workflow
 
-Il workflow GitHub Actions `deploy-hetzner.yml` ora scrive `${APP_PATH}/.env` sul server prima di eseguire `docker compose up -d --build`.
+Il workflow GitHub Actions `deploy-hetzner.yml` ora:
+
+1. builda le immagini Docker pesanti in GitHub Actions e le pubblica su GHCR;
+2. scrive `${APP_PATH}/.env` sul server con i tag immagine da usare;
+3. esegue sul server solo `docker compose pull`, migration e restart mirato dei servizi toccati.
+
+Questo evita i picchi RAM causati da `docker compose build` sul nodo Hetzner durante deploy.
 
 Contenuto propagato nel file `.env`:
 
@@ -18,6 +24,13 @@ Contenuto propagato nel file `.env`:
   - `TWILIO_SMS_FROM`
   - `TG_BOT_TOKEN`
   - `TG_CHAT_ID`
+  - `SUMUP_CREDENTIALS_ENCRYPTION_KEY`
+
+Image refs scritti automaticamente dal workflow:
+
+- `APP_RUNTIME_IMAGE`
+- `AFFILIATION_VIDEO_WORKER_IMAGE`
+- `EVOLUTION_API_IMAGE`
 
 Metadata build:
 
@@ -58,10 +71,12 @@ Creare o verificare in GitHub:
 
 ## Migrazioni
 
-Dopo il deploy esegui:
+Le migration vengono eseguite dal workflow con il service dedicato `migrate`, riusando l'immagine gia pullata invece di creare un secondo build path sul server.
+
+Comando manuale equivalente:
 
 ```bash
-docker compose exec -T web alembic upgrade head
+docker compose --profile ops run --rm --no-deps migrate
 ```
 
 ## Verifica Env
@@ -173,11 +188,12 @@ ORDER BY next_retry_at ASC, created_at ASC;
 
 ## Test Manuale
 
-1. Esegui la migration: `docker compose exec -T web alembic upgrade head`
-2. Verifica env nel container: `docker compose exec -T web /bin/sh -lc "printenv | grep OPENAI"`
-3. Prova il bot con `curl` o via Studio Twilio.
-4. Esegui il job alert manuale: `docker compose exec -T low-cards-worker python -m app.workers.low_cards_alerts --force`
-5. Controlla i log di `email-worker`, `low-cards-worker` e gli execution log di Twilio Studio.
+1. Verifica i tag immagine applicati: `grep -E 'APP_RUNTIME_IMAGE|AFFILIATION_VIDEO_WORKER_IMAGE|EVOLUTION_API_IMAGE' .env`
+2. Verifica la migration: `docker compose --profile ops run --rm --no-deps migrate`
+3. Verifica env nel container: `docker compose exec -T web /bin/sh -lc "printenv | grep SUMUP_CREDENTIALS_ENCRYPTION_KEY"`
+4. Prova il bot con `curl` o via Studio Twilio.
+5. Esegui il job alert manuale: `docker compose exec -T low-cards-worker python -m app.workers.low_cards_alerts --force`
+6. Controlla i log di `email-worker`, `low-cards-worker` e gli execution log di Twilio Studio.
 
 Controlli rapidi worker su server:
 
@@ -187,3 +203,34 @@ docker logs -f --tail=200 app-low-cards-worker-1
 ```
 
 Se SMTP non e configurato correttamente, la mail resta in `email_outbox` con `status='failed'` e `next_retry_at` valorizzato per il retry successivo.
+
+## Mitigazioni OOM consigliate
+
+Host Hetzner:
+
+```bash
+sudo fallocate -l 8G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+sudo sysctl vm.swappiness=10
+echo 'vm.swappiness=10' | sudo tee /etc/sysctl.d/99-assonam-swappiness.conf
+```
+
+Controlli memoria durante deploy:
+
+```bash
+free -m
+docker stats --no-stream
+ps -eo pid,ppid,rss,comm --sort=-rss | head -n 15
+```
+
+Ordine rollout sicuro:
+
+1. `docker compose up -d db`
+2. `docker compose pull ...`
+3. `docker compose --profile ops run --rm --no-deps migrate`
+4. `docker compose up -d --no-deps web`
+5. `docker compose up -d --no-deps email-worker low-cards-worker`
+6. Riavviare `affiliation-video-worker` o `evolution-api` solo se l'immagine o la loro compose specifica sono cambiate

@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   evolution-api:
-    image: assonam/evolution-api-lite:custom
+    image: ${EVOLUTION_API_IMAGE:-assonam/evolution-api-lite:custom}
     build:
       context: .
       dockerfile: docker/evolution-lite/Dockerfile
@@ -31,6 +31,7 @@ services:
       timeout: 10s
       retries: 10
       start_period: 40s
+    mem_limit: ${EVOLUTION_API_MEM_LIMIT:-1024m}
     restart: unless-stopped
 
 volumes:

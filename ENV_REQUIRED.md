@@ -17,6 +17,7 @@ All environment variables used by the application. Variables marked **required**
 | `UPLOAD_DIR` | No | `<APP_DATA_DIR>/uploads` | Directory for storing uploaded member documents. |
 | `SPA_DIR` | No | `frontend/dist` | Path to the built frontend SPA directory. |
 | `AFFILIAZIONE_ENABLED` | No | `false` | Enables public affiliation endpoints (`/api/affiliazione/*`). If `false`, public affiliation routes return `404`. |
+| `SUMUP_CREDENTIALS_ENCRYPTION_KEY` | **Yes** (SumUp feature) | _(empty)_ | Global server-side encryption key used to protect per-organization SumUp API keys stored in DB. Must be a long random secret and must stay stable across deploys. |
 
 Note: frontend does not use a build-time affiliation flag. Public UI visibility is driven at runtime by `/api/capabilities` (backed by `AFFILIAZIONE_ENABLED`).
 
@@ -170,3 +171,11 @@ Set automatically by CI/CD pipelines. Not required for local development.
 |---|---|---|---|
 | `GIT_SHA` | No | _(empty)_ | Git commit SHA, shown in the admin footer. |
 | `BUILD_TIME` | No | _(empty)_ | ISO 8601 build timestamp. |
+
+Deploy-managed image refs:
+
+- `APP_RUNTIME_IMAGE`
+- `AFFILIATION_VIDEO_WORKER_IMAGE`
+- `EVOLUTION_API_IMAGE`
+
+These are written automatically by the Hetzner deploy workflow so the server can `docker compose pull` prebuilt GHCR images instead of building on-host.

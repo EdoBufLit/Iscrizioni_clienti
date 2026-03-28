@@ -17,9 +17,175 @@ on:
           - "true"
 
 jobs:
-  deploy:
+  build-images:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      app_runtime_changed: ${{ steps.changes.outputs.app_runtime }}
+      runtime_config_changed: ${{ steps.changes.outputs.runtime_config }}
+      video_worker_changed: ${{ steps.changes.outputs.video_worker }}
+      evolution_changed: ${{ steps.changes.outputs.evolution }}
+      app_runtime_image_branch: ${{ steps.image_vars.outputs.app_runtime_image_branch }}
+      video_worker_image_branch: ${{ steps.image_vars.outputs.video_worker_image_branch }}
+      evolution_image_branch: ${{ steps.image_vars.outputs.evolution_image_branch }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
+      - name: Sanity check deploy files
+        run: |
+          set -euo pipefail
+          if [ ! -f "Dockerfile.affiliation-video-worker" ]; then
+            echo "::error::Missing Dockerfile.affiliation-video-worker referenced by docker-compose.yml"
+            exit 1
+          fi
+          if [ ! -f "docker-compose.evolution-lite.yml" ]; then
+            echo "::error::Missing docker-compose.evolution-lite.yml"
+            exit 1
+          fi
+          if [ ! -f "scripts/render_evolution_lite_env.py" ]; then
+            echo "::error::Missing scripts/render_evolution_lite_env.py"
+            exit 1
+          fi
+
+      - name: Detect changed deploy targets
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            app_runtime:
+              - 'Dockerfile'
+              - 'requirements.txt'
+              - 'init_db.py'
+              - 'alembic/**'
+              - 'app/**'
+              - 'frontend/**'
+            runtime_config:
+              - 'docker-compose.yml'
+              - 'docker-compose.prod.yml'
+            video_worker:
+              - 'Dockerfile.affiliation-video-worker'
+              - 'docker-compose.yml'
+              - 'requirements.txt'
+              - 'app/config.py'
+              - 'app/db.py'
+              - 'app/models_affiliation.py'
+              - 'app/services/affiliation_video.py'
+              - 'app/workers/affiliation_video_worker.py'
+              - 'video-renderer/**'
+            evolution:
+              - 'docker-compose.evolution-lite.yml'
+              - 'docker/evolution-lite/**'
+
+      - name: Compute image tags
+        id: image_vars
+        run: |
+          set -euo pipefail
+          OWNER_LC="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          BRANCH_TAG="$(echo '${{ github.ref_name }}' | tr '[:upper:]' '[:lower:]' | sed 's#[^a-z0-9._-]#-#g')"
+          echo "app_runtime_image_branch=ghcr.io/${OWNER_LC}/assonam-app-runtime:${BRANCH_TAG}" >> "$GITHUB_OUTPUT"
+          echo "video_worker_image_branch=ghcr.io/${OWNER_LC}/assonam-affiliation-video-worker:${BRANCH_TAG}" >> "$GITHUB_OUTPUT"
+          echo "evolution_image_branch=ghcr.io/${OWNER_LC}/assonam-evolution-api-lite:${BRANCH_TAG}" >> "$GITHUB_OUTPUT"
+          echo "app_runtime_image_sha=ghcr.io/${OWNER_LC}/assonam-app-runtime:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "video_worker_image_sha=ghcr.io/${OWNER_LC}/assonam-affiliation-video-worker:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "evolution_image_sha=ghcr.io/${OWNER_LC}/assonam-evolution-api-lite:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Log image build plan
+        run: |
+          echo "app_runtime_changed=${{ steps.changes.outputs.app_runtime }}"
+          echo "runtime_config_changed=${{ steps.changes.outputs.runtime_config }}"
+          echo "video_worker_changed=${{ steps.changes.outputs.video_worker }}"
+          echo "evolution_changed=${{ steps.changes.outputs.evolution }}"
+          echo "app_runtime_image=${{ steps.image_vars.outputs.app_runtime_image_branch }}"
+          echo "video_worker_image=${{ steps.image_vars.outputs.video_worker_image_branch }}"
+          echo "evolution_image=${{ steps.image_vars.outputs.evolution_image_branch }}"
+
+      - name: Set up Docker Buildx
+        if: steps.changes.outputs.app_runtime == 'true' || steps.changes.outputs.video_worker == 'true' || steps.changes.outputs.evolution == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: steps.changes.outputs.app_runtime == 'true' || steps.changes.outputs.video_worker == 'true' || steps.changes.outputs.evolution == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push app runtime image
+        if: steps.changes.outputs.app_runtime == 'true'
+        env:
+          APP_RUNTIME_IMAGE_BRANCH: ${{ steps.image_vars.outputs.app_runtime_image_branch }}
+          APP_RUNTIME_IMAGE_SHA: ${{ steps.image_vars.outputs.app_runtime_image_sha }}
+        run: |
+          set -euo pipefail
+          echo "[build] app-runtime image"
+          date -u +"[build] started_at=%Y-%m-%dT%H:%M:%SZ"
+          free -m
+          docker stats --no-stream || true
+          /usr/bin/time -v docker buildx build \
+            --platform linux/amd64 \
+            --progress plain \
+            --push \
+            -f Dockerfile \
+            -t "$APP_RUNTIME_IMAGE_SHA" \
+            -t "$APP_RUNTIME_IMAGE_BRANCH" \
+            .
+          free -m
+          docker stats --no-stream || true
+
+      - name: Build and push affiliation video worker image
+        if: steps.changes.outputs.video_worker == 'true'
+        env:
+          VIDEO_WORKER_IMAGE_BRANCH: ${{ steps.image_vars.outputs.video_worker_image_branch }}
+          VIDEO_WORKER_IMAGE_SHA: ${{ steps.image_vars.outputs.video_worker_image_sha }}
+        run: |
+          set -euo pipefail
+          echo "[build] affiliation-video-worker image"
+          date -u +"[build] started_at=%Y-%m-%dT%H:%M:%SZ"
+          free -m
+          docker stats --no-stream || true
+          /usr/bin/time -v docker buildx build \
+            --platform linux/amd64 \
+            --progress plain \
+            --push \
+            -f Dockerfile.affiliation-video-worker \
+            -t "$VIDEO_WORKER_IMAGE_SHA" \
+            -t "$VIDEO_WORKER_IMAGE_BRANCH" \
+            .
+          free -m
+          docker stats --no-stream || true
+
+      - name: Build and push evolution image
+        if: steps.changes.outputs.evolution == 'true'
+        env:
+          EVOLUTION_IMAGE_BRANCH: ${{ steps.image_vars.outputs.evolution_image_branch }}
+          EVOLUTION_IMAGE_SHA: ${{ steps.image_vars.outputs.evolution_image_sha }}
+        run: |
+          set -euo pipefail
+          echo "[build] evolution-api image"
+          date -u +"[build] started_at=%Y-%m-%dT%H:%M:%SZ"
+          free -m
+          docker stats --no-stream || true
+          /usr/bin/time -v docker buildx build \
+            --platform linux/amd64 \
+            --progress plain \
+            --push \
+            -f docker/evolution-lite/Dockerfile \
+            -t "$EVOLUTION_IMAGE_SHA" \
+            -t "$EVOLUTION_IMAGE_BRANCH" \
+            .
+          free -m
+          docker stats --no-stream || true
+
+  deploy:
+    needs: build-images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -75,7 +241,7 @@ jobs:
           host: ${{ secrets.HETZNER_HOST }}
           username: ${{ secrets.HETZNER_USER }}
           key: ${{ secrets.HETZNER_SSH_KEY }}
-          command_timeout: 30m
+          command_timeout: 35m
           script: |
             set -euo pipefail
 
@@ -117,6 +283,21 @@ jobs:
             POSTGRES_PASSWORD='${{ secrets.POSTGRES_PASSWORD }}'
             EVOLUTION_API_KEY='${{ secrets.EVOLUTION_API_KEY }}'
             BUILD_TIME="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            GHCR_USERNAME='${{ github.actor }}'
+            GHCR_TOKEN='${{ github.token }}'
+            APP_RUNTIME_CHANGED='${{ needs.build-images.outputs.app_runtime_changed }}'
+            RUNTIME_CONFIG_CHANGED='${{ needs.build-images.outputs.runtime_config_changed }}'
+            VIDEO_WORKER_CHANGED='${{ needs.build-images.outputs.video_worker_changed }}'
+            EVOLUTION_CHANGED='${{ needs.build-images.outputs.evolution_changed }}'
+            APP_RUNTIME_IMAGE='${{ needs.build-images.outputs.app_runtime_image_branch }}'
+            AFFILIATION_VIDEO_WORKER_IMAGE='${{ needs.build-images.outputs.video_worker_image_branch }}'
+            EVOLUTION_API_IMAGE='${{ needs.build-images.outputs.evolution_image_branch }}'
+            MIGRATE='${{ github.event.inputs.MIGRATE || 'false' }}'
+
+            APP_RUNTIME_ROLLOUT_NEEDED="false"
+            if [ "$APP_RUNTIME_CHANGED" = "true" ] || [ "$RUNTIME_CONFIG_CHANGED" = "true" ]; then
+              APP_RUNTIME_ROLLOUT_NEEDED="true"
+            fi
 
             cat > .env <<'EOF'
             SECRET_KEY=${{ secrets.SECRET_KEY }}
@@ -143,6 +324,7 @@ jobs:
             TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }}
             OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
             OPENAI_MODEL=${{ secrets.OPENAI_MODEL }}
+            TWILIO_LOW_CARDS_FLOW_SID=${{ secrets.TWILIO_LOW_CARDS_FLOW_SID }}
             TWILIO_ALERT_FLOW_SID=${{ secrets.TWILIO_ALERT_FLOW_SID }}
             TWILIO_WHATSAPP_FROM=${{ secrets.TWILIO_WHATSAPP_FROM }}
             ADMIN_PHONE_E164=${{ secrets.ADMIN_PHONE_E164 }}
@@ -163,6 +345,10 @@ jobs:
             ENABLE_WHATSAPP_EVOLUTION=${{ secrets.ENABLE_WHATSAPP_EVOLUTION }}
             EVOLUTION_API_BASE_URL=http://evolution-api:8080
             EVOLUTION_API_KEY=${{ secrets.EVOLUTION_API_KEY }}
+            SUMUP_CREDENTIALS_ENCRYPTION_KEY=${{ secrets.SUMUP_CREDENTIALS_ENCRYPTION_KEY }}
+            APP_RUNTIME_IMAGE=${{ needs.build-images.outputs.app_runtime_image_branch }}
+            AFFILIATION_VIDEO_WORKER_IMAGE=${{ needs.build-images.outputs.video_worker_image_branch }}
+            EVOLUTION_API_IMAGE=${{ needs.build-images.outputs.evolution_image_branch }}
             EOF
             printf 'GIT_SHA=%s\n' '${{ github.sha }}' >> .env
             printf 'BUILD_TIME=%s\n' "$BUILD_TIME" >> .env
@@ -172,7 +358,6 @@ jobs:
             fi
             AFFILIAZIONE_ENABLED="$(echo "$AFFILIAZIONE_ENABLED" | tr '[:upper:]' '[:lower:]')"
             printf 'AFFILIAZIONE_ENABLED=%s\n' "$AFFILIAZIONE_ENABLED" >> .env
-            echo "AFFILIAZIONE_ENABLED=$AFFILIAZIONE_ENABLED"
             ENABLE_WHATSAPP_EVOLUTION='${{ secrets.ENABLE_WHATSAPP_EVOLUTION }}'
             if [ -z "${ENABLE_WHATSAPP_EVOLUTION:-}" ]; then
               ENABLE_WHATSAPP_EVOLUTION="false"
@@ -183,7 +368,6 @@ jobs:
             else
               printf 'ENABLE_WHATSAPP_EVOLUTION=%s\n' "$ENABLE_WHATSAPP_EVOLUTION" >> .env
             fi
-            echo "ENABLE_WHATSAPP_EVOLUTION=$ENABLE_WHATSAPP_EVOLUTION"
             if ! grep -q '^AFFILIATION_VIDEO_WORKER_ENABLED=' .env; then
               printf 'AFFILIATION_VIDEO_WORKER_ENABLED=false\n' >> .env
             fi
@@ -197,23 +381,16 @@ jobs:
               AFFILIATION_VIDEO_WORKER_ENABLED="false"
             fi
             AFFILIATION_VIDEO_WORKER_ENABLED="$(echo "$AFFILIATION_VIDEO_WORKER_ENABLED" | tr '[:upper:]' '[:lower:]')"
-            echo "AFFILIATION_VIDEO_WORKER_ENABLED=$AFFILIATION_VIDEO_WORKER_ENABLED"
             AFFILIATION_VIDEO_ENABLED='${{ secrets.AFFILIATION_VIDEO_ENABLED }}'
             if [ -z "${AFFILIATION_VIDEO_ENABLED:-}" ]; then
               AFFILIATION_VIDEO_ENABLED="true"
             fi
             AFFILIATION_VIDEO_ENABLED="$(echo "$AFFILIATION_VIDEO_ENABLED" | tr '[:upper:]' '[:lower:]')"
-            echo "AFFILIATION_VIDEO_ENABLED=$AFFILIATION_VIDEO_ENABLED"
-            COMPOSE_PROFILE_ARGS=""
-            if [ "$AFFILIATION_VIDEO_WORKER_ENABLED" = "true" ]; then
-              COMPOSE_PROFILE_ARGS="--profile video-worker"
-            fi
 
             COMPOSE_FILES="-f docker-compose.yml"
             if [ -f "docker-compose.prod.yml" ] && [ -f "secrets/google-wallet-sa.json" ]; then
               COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.prod.yml"
             fi
-            EVOLUTION_COMPOSE_FILES=""
             if [ "$ENABLE_WHATSAPP_EVOLUTION" = "true" ]; then
               if [ -z "${EVOLUTION_API_KEY:-}" ]; then
                 echo "::error::ENABLE_WHATSAPP_EVOLUTION=true but EVOLUTION_API_KEY secret is empty"
@@ -228,28 +405,58 @@ jobs:
                 --output "$EVOLUTION_ENV_TMP"
               chmod 600 "$EVOLUTION_ENV_TMP"
               mv "$EVOLUTION_ENV_TMP" secrets/evolution-api-lite.env
-              EVOLUTION_COMPOSE_FILES="-f docker-compose.evolution-lite.yml"
-              COMPOSE_FILES="$COMPOSE_FILES $EVOLUTION_COMPOSE_FILES"
+              COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.evolution-lite.yml"
             else
               rm -f secrets/evolution-api-lite.env || true
             fi
 
+            log_memory_snapshot() {
+              label="$1"
+              echo "[deploy] memory_snapshot label=${label} ts=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+              free -m || true
+              docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}' || true
+              ps -eo pid,ppid,rss,comm --sort=-rss | head -n 15 || true
+            }
+
             wait_for_postgres() {
               echo "[deploy] Waiting for Postgres readiness (up to 60s)"
-              PG_READY=0
               for i in $(seq 1 60); do
                 if docker compose -f docker-compose.yml exec -T db pg_isready -U assonam -d assonam; then
-                  PG_READY=1
                   echo "[deploy] Postgres is ready"
-                  break
+                  return 0
                 fi
                 sleep 1
               done
+              echo "[deploy] Postgres did not become ready within 60s"
+              exit 1
+            }
 
-              if [ "$PG_READY" -ne 1 ]; then
-                echo "[deploy] Postgres did not become ready within 60s"
-                exit 1
-              fi
+            wait_for_service_ready() {
+              compose_args="$1"
+              service="$2"
+              timeout_seconds="${3:-120}"
+              elapsed=0
+              while [ "$elapsed" -lt "$timeout_seconds" ]; do
+                cid="$(docker compose $COMPOSE_FILES $compose_args ps -q "$service" || true)"
+                if [ -n "$cid" ]; then
+                  status="$(docker inspect --format '{{.State.Status}}' "$cid" 2>/dev/null || true)"
+                  health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$cid" 2>/dev/null || true)"
+                  if [ "$health" = "healthy" ]; then
+                    echo "[deploy] ${service} healthy"
+                    return 0
+                  fi
+                  if [ "$health" = "none" ] && [ "$status" = "running" ]; then
+                    echo "[deploy] ${service} running"
+                    return 0
+                  fi
+                fi
+                sleep 2
+                elapsed=$((elapsed + 2))
+              done
+              echo "::error::${service} did not become ready within ${timeout_seconds}s"
+              docker compose $COMPOSE_FILES $compose_args ps || true
+              docker compose $COMPOSE_FILES $compose_args logs --tail=200 "$service" || true
+              exit 1
             }
 
             ensure_evolution_database() {
@@ -258,7 +465,7 @@ jobs:
               fi
 
               echo "[deploy] Ensuring PostgreSQL database evolution exists"
-              docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS up -d db
+              docker compose $COMPOSE_FILES up -d db
               wait_for_postgres
               EVOLUTION_DB_EXISTS="$(
                 docker compose -f docker-compose.yml exec -T db \
@@ -271,19 +478,16 @@ jobs:
               fi
             }
 
-            BUILD_TARGETS="web"
-            DEPLOY_SERVICES="web email-worker low-cards-worker"
-            if [ "$ENABLE_WHATSAPP_EVOLUTION" = "true" ]; then
-              BUILD_TARGETS="$BUILD_TARGETS evolution-api"
-              DEPLOY_SERVICES="$DEPLOY_SERVICES evolution-api"
-            fi
-            if [ "$AFFILIATION_VIDEO_WORKER_ENABLED" = "true" ]; then
-              BUILD_TARGETS="$BUILD_TARGETS affiliation-video-worker"
-              DEPLOY_SERVICES="$DEPLOY_SERVICES affiliation-video-worker"
-            fi
+            echo "[deploy] change_flags app_runtime=${APP_RUNTIME_CHANGED} runtime_config=${RUNTIME_CONFIG_CHANGED} video_worker=${VIDEO_WORKER_CHANGED} evolution=${EVOLUTION_CHANGED}"
+            echo "[deploy] rollout_flags app_runtime=${APP_RUNTIME_ROLLOUT_NEEDED} migrate=${MIGRATE}"
+            log_memory_snapshot "before_db"
 
-            MIGRATE='${{ github.event.inputs.MIGRATE || 'false' }}'
-            echo "[deploy] MIGRATE=${MIGRATE}"
+            docker compose $COMPOSE_FILES up -d db
+            wait_for_postgres
+            ensure_evolution_database
+
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+            log_memory_snapshot "after_db"
 
             if [ "$MIGRATE" = "true" ]; then
               echo "[migrate] MIGRATE=true: starting Postgres service only"
@@ -293,10 +497,6 @@ jobs:
                 echo "[migrate] POSTGRES_PASSWORD is empty. Set the GitHub secret and re-run."
                 exit 1
               fi
-
-              docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS up -d db
-
-              wait_for_postgres
 
               SQLITE_SOURCE="$(pwd)/data/app.db"
               if [ ! -f "$SQLITE_SOURCE" ]; then
@@ -313,165 +513,55 @@ jobs:
                 -v "$SQLITE_SOURCE:/tmp/app.db:ro" \
                 dimitri/pgloader:latest \
                 pgloader "sqlite:///tmp/app.db" "postgresql://assonam:${POSTGRES_PASSWORD}@db:5432/assonam"
-
-              echo "[migrate] Repairing common SQLite->Postgres schema issues (booleans + id sequences/defaults)"
-              psql_exec() {
-                docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS exec -T db psql -U assonam -d assonam -v ON_ERROR_STOP=1 -c "$1"
-              }
-              psql_query() {
-                docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS exec -T db psql -U assonam -d assonam -At -v ON_ERROR_STOP=1 -c "$1"
-              }
-              repair_bool_col() {
-                table_name="$1"
-                column_name="$2"
-                default_sql="$3"
-                exists="$(psql_query "SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='${table_name}' AND column_name='${column_name}' LIMIT 1;")"
-                if [ "$exists" = "1" ]; then
-                  echo "[migrate] Repair boolean ${table_name}.${column_name}"
-                  psql_exec "ALTER TABLE public.${table_name} ALTER COLUMN ${column_name} DROP DEFAULT;
-                  ALTER TABLE public.${table_name} ALTER COLUMN ${column_name} TYPE boolean USING CASE
-                    WHEN ${column_name} IS NULL THEN NULL
-                    WHEN lower(trim(${column_name}::text)) IN ('1','t','true','y','yes','on') THEN TRUE
-                    ELSE FALSE
-                  END;
-                  ALTER TABLE public.${table_name} ALTER COLUMN ${column_name} SET DEFAULT ${default_sql};"
-                fi
-              }
-              repair_id_sequence() {
-                table_name="$1"
-                exists="$(psql_query "SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='${table_name}' AND column_name='id' AND data_type IN ('integer','bigint') LIMIT 1;")"
-                if [ "$exists" = "1" ]; then
-                  echo "[migrate] Repair id sequence for ${table_name}"
-                  psql_exec "CREATE SEQUENCE IF NOT EXISTS public.${table_name}_id_seq;
-                  ALTER TABLE public.${table_name} ALTER COLUMN id SET DEFAULT nextval('public.${table_name}_id_seq'::regclass);
-                  ALTER SEQUENCE public.${table_name}_id_seq OWNED BY public.${table_name}.id;
-                  SELECT setval('public.${table_name}_id_seq'::regclass, COALESCE((SELECT MAX(id) + 1 FROM public.${table_name}), 1), false);"
-                fi
-              }
-
-              repair_bool_col organizations is_active TRUE
-              repair_bool_col organizations wallet_is_test_prefix FALSE
-              repair_bool_col admin_users is_active TRUE
-              repair_bool_col members is_manual FALSE
-              repair_bool_col integration_api_keys is_active TRUE
-
-              for table_name in organizations admin_users card_batches members org_admin_tokens card_movements member_documents tokens operation_logs member_payments integration_api_keys ingest_rate_limits onboarding_tours; do
-                repair_id_sequence "$table_name"
-              done
-
-              echo "[migrate] Import complete. Verifying DATABASE_URL is not SQLite before restarting the app"
-              if [ -z "${DATABASE_URL:-}" ]; then
-                echo "[migrate] DATABASE_URL is empty. Set it to the Postgres URL and re-run."
-                exit 1
-              fi
-              if echo "$DATABASE_URL" | grep -qi "sqlite"; then
-                echo "[migrate] DATABASE_URL is still SQLite. Set it to Postgres and re-run."
-                exit 1
-              fi
-
-              echo "[deploy] Building images with Docker cache: $BUILD_TARGETS"
-              docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS build $BUILD_TARGETS
-
-              echo "[migrate] Running Alembic migrations on Postgres before app restart"
-              docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS run --rm web alembic upgrade head
             fi
 
-            ensure_evolution_database
+            if [ "$APP_RUNTIME_CHANGED" = "true" ]; then
+              echo "[deploy] Pulling refreshed app-runtime image"
+              docker compose $COMPOSE_FILES --profile ops pull web email-worker low-cards-worker migrate
+              log_memory_snapshot "after_app_pull"
 
-            if [ "$MIGRATE" != "true" ]; then
-              echo "[deploy] Building images with Docker cache: $BUILD_TARGETS"
-              docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS build $BUILD_TARGETS
+              echo "[deploy] Running Alembic migrations from pulled runtime image"
+              docker compose $COMPOSE_FILES --profile ops run --rm --no-deps migrate
+              log_memory_snapshot "after_migrate"
             fi
 
-            echo "[deploy] Running Alembic migrations on Postgres"
-            docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS up -d db
-            wait_for_postgres
-            docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS run --rm web alembic upgrade head
+            if [ "$APP_RUNTIME_ROLLOUT_NEEDED" = "true" ]; then
+              echo "[deploy] Rolling out app-runtime services"
+              docker compose $COMPOSE_FILES up -d --no-deps web
+              wait_for_service_ready "" web 120
+              docker compose $COMPOSE_FILES up -d --no-deps email-worker low-cards-worker
+              wait_for_service_ready "" email-worker 120
+              wait_for_service_ready "" low-cards-worker 120
+              log_memory_snapshot "after_app_rollout"
+            else
+              echo "[deploy] Skipping app-runtime rollout; no app image or compose changes detected."
+            fi
 
-            echo "[deploy] Recreating runtime services: $DEPLOY_SERVICES"
-            docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS up -d --remove-orphans $DEPLOY_SERVICES
+            if [ "$AFFILIATION_VIDEO_WORKER_ENABLED" = "true" ] && [ "$VIDEO_WORKER_CHANGED" = "true" ]; then
+              echo "[deploy] Pulling refreshed affiliation-video-worker image"
+              docker compose $COMPOSE_FILES --profile video-worker pull affiliation-video-worker
+              docker compose $COMPOSE_FILES --profile video-worker up -d --no-deps affiliation-video-worker
+              log_memory_snapshot "after_video_rollout"
+            fi
 
             if [ "$AFFILIATION_VIDEO_WORKER_ENABLED" = "true" ]; then
-              echo "[deploy] Sanity check: waiting up to 90s for affiliation-video-worker health"
-              WORKER_CID=""
-              for i in $(seq 1 10); do
-                WORKER_CID="$(docker compose $COMPOSE_FILES --profile video-worker ps -q affiliation-video-worker || true)"
-                if [ -n "$WORKER_CID" ]; then
-                  break
-                fi
-                sleep 1
-              done
+              wait_for_service_ready "--profile video-worker" affiliation-video-worker 120
+            fi
 
-              if [ -z "$WORKER_CID" ]; then
-                echo "::error::affiliation-video-worker container id not found after deploy"
-                docker compose $COMPOSE_FILES --profile video-worker ps || true
-                docker compose $COMPOSE_FILES --profile video-worker logs --tail=200 affiliation-video-worker || true
-                docker compose $COMPOSE_FILES logs --tail=200 web || true
-                exit 1
-              fi
-
-              WORKER_STATUS="starting"
-              for i in $(seq 1 90); do
-                WORKER_STATUS="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$WORKER_CID" 2>/dev/null || true)"
-                if [ "$WORKER_STATUS" = "healthy" ]; then
-                  break
-                fi
-                if [ "$WORKER_STATUS" = "unhealthy" ] || [ "$WORKER_STATUS" = "exited" ] || [ "$WORKER_STATUS" = "dead" ]; then
-                  break
-                fi
-                sleep 1
-              done
-
-              if [ "$WORKER_STATUS" != "healthy" ]; then
-                echo "::error::affiliation-video-worker not healthy after 90s (status=$WORKER_STATUS)"
-                docker compose $COMPOSE_FILES --profile video-worker ps || true
-                docker compose $COMPOSE_FILES --profile video-worker logs --tail=200 affiliation-video-worker || true
-                docker compose $COMPOSE_FILES logs --tail=200 web || true
-                exit 1
-              fi
-              echo "[deploy] affiliation-video-worker healthy (cid=$WORKER_CID)"
+            if [ "$ENABLE_WHATSAPP_EVOLUTION" = "true" ] && [ "$EVOLUTION_CHANGED" = "true" ]; then
+              echo "[deploy] Pulling refreshed evolution-api image"
+              docker compose $COMPOSE_FILES pull evolution-api
+              docker compose $COMPOSE_FILES up -d --no-deps evolution-api
+              log_memory_snapshot "after_evolution_rollout"
             fi
 
             if [ "$ENABLE_WHATSAPP_EVOLUTION" = "true" ]; then
-              echo "[deploy] Sanity check: waiting up to 120s for evolution-api health"
-              EVOLUTION_CID=""
-              for i in $(seq 1 10); do
-                EVOLUTION_CID="$(docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS ps -q evolution-api || true)"
-                if [ -n "$EVOLUTION_CID" ]; then
-                  break
-                fi
-                sleep 1
-              done
-
-              if [ -z "$EVOLUTION_CID" ]; then
-                echo "::error::evolution-api container id not found after deploy"
-                docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS ps || true
-                docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS logs --tail=200 evolution-api || true
-                exit 1
-              fi
-
-              EVOLUTION_STATUS="starting"
-              for i in $(seq 1 120); do
-                EVOLUTION_STATUS="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$EVOLUTION_CID" 2>/dev/null || true)"
-                if [ "$EVOLUTION_STATUS" = "healthy" ]; then
-                  break
-                fi
-                if [ "$EVOLUTION_STATUS" = "unhealthy" ] || [ "$EVOLUTION_STATUS" = "exited" ] || [ "$EVOLUTION_STATUS" = "dead" ]; then
-                  break
-                fi
-                sleep 1
-              done
-
-              if [ "$EVOLUTION_STATUS" != "healthy" ]; then
-                echo "::error::evolution-api not healthy after 120s (status=$EVOLUTION_STATUS)"
-                docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS ps || true
-                docker compose $COMPOSE_FILES $COMPOSE_PROFILE_ARGS logs --tail=200 evolution-api || true
-                exit 1
-              fi
-
-              echo "[deploy] evolution-api healthy (cid=$EVOLUTION_CID)"
+              wait_for_service_ready "" evolution-api 180
               docker compose $COMPOSE_FILES exec -T web python -c "import json, os, urllib.request; root = urllib.request.urlopen('http://evolution-api:8080/', timeout=10); verify_req = urllib.request.Request('http://evolution-api:8080/verify-creds', method='POST', headers={'apikey': os.environ['EVOLUTION_API_KEY']}); verify = urllib.request.urlopen(verify_req, timeout=10); print(json.dumps({'root_status': root.status, 'verify_status': verify.status, 'verify_body': json.loads(verify.read().decode())}))"
             fi
-            echo "[deploy] Pruning images"
-            docker image prune -f || true
 
+            docker compose $COMPOSE_FILES ps
+            sleep 60
+            log_memory_snapshot "post_deploy_60s"
+            sleep 120
+            log_memory_snapshot "post_deploy_180s"

@@ -1,3 +1,60 @@
+## Plan (Deploy memory / OOM hardening - Mar 28, 2026)
+- [x] Analizzare workflow deploy, compose e Dockerfile per identificare i punti a massimo consumo RAM e le build/container non necessarie sul server
+- [x] Spostare il build pesante delle immagini da Hetzner a GitHub Actions con publish su GHCR e tagging per branch/SHA
+- [x] Ridurre il deploy server-side a pull + migration + restart mirato dei soli servizi cambiati
+- [x] Introdurre gating per app-runtime, video-worker ed evolution-image in base ai path cambiati
+- [x] Aggiungere limiti Node heap, snapshot memoria durante build/deploy e documentazione operativa su swap e rollout sicuro
+- [x] Rieseguire verifiche locali su compose/test e documentare la review finale
+
+## Review (Deploy memory / OOM hardening - Mar 28, 2026)
+- Root cause principale confermata per ispezione: il deploy precedente costruiva sul server l'immagine `web` con `tsc -b && vite build` e spesso anche `affiliation-video-worker`, introducendo picchi RAM concorrenti e container temporanei aggiuntivi per migration/health checks.
+- In `.github/workflows/deploy-hetzner.yml` ho sostituito il path `build on server` con due job: `build-images` su GitHub Actions che pubblica immagini su GHCR e `deploy` che su Hetzner fa solo `pull`, migration dedicata e restart seriale dei servizi necessari.
+- Il deploy ora usa gating per path: `app_runtime`, `runtime_config`, `video_worker`, `evolution`, cosi i componenti opzionali non vengono rebuildati o riavviati su modifiche non correlate.
+- In `docker-compose.yml` ho introdotto immagini parametrizzate (`APP_RUNTIME_IMAGE`, `AFFILIATION_VIDEO_WORKER_IMAGE`), il service `migrate` sotto profilo `ops`, il pass-through di `SUMUP_CREDENTIALS_ENCRYPTION_KEY` e `mem_limit` per worker/servizi opzionali. In `docker-compose.evolution-lite.yml` l'immagine `evolution-api` diventa parametrizzabile e ha limite memoria dedicato.
+- In `Dockerfile` e `Dockerfile.affiliation-video-worker` ho impostato `NODE_OPTIONS=--max-old-space-size=1536` per ridurre il rischio di OOM nei due build stage Node piu costosi.
+- La documentazione e stata aggiornata in `DEPLOY.md` e `ENV_REQUIRED.md` con il nuovo flusso GHCR pull-based, il secret `SUMUP_CREDENTIALS_ENCRYPTION_KEY`, i tag immagine deploy-managed e le mitigazioni operative consigliate (swap 8G, `vm.swappiness=10`, snapshot memoria e ordine rollout).
+- Verifiche eseguite: parsing YAML del workflow OK, `docker compose -f docker-compose.yml -f docker-compose.evolution-lite.yml --profile ops --profile video-worker config` OK, `python -m pytest -q tests/test_membership_payments_sumup.py tests/test_org_admin_manual_payment.py tests/test_member_card_verification.py tests/test_payment_method_join.py` OK (`18 passed`).
+
+## Plan (ASSONAM SumUp quota associativa per associazione - Mar 27, 2026)
+- [x] Estendere schema/modelli con configurazione payment per organization, tabella `membership_payments` e nuovi campi payment/card su `members`
+- [x] Implementare service centrale SumUp con cifratura chiave, create checkout, verify checkout, webhook idempotente e fulfillment solo server-side
+- [x] Aggiungere API super-admin/public/org-admin per setup payment, create-checkout, status polling e pagamento manuale coerente
+- [x] Aggiornare frontend super-admin, wizard iscrizione, pagina esito pagamento e scheda socio org-admin
+- [x] Aggiungere test mirati su setup, checkout, webhook, expired, manual payment e verifica tessera
+- [x] Eseguire verifiche locali, poi aggiornare review finale con file toccati, flusso e rischi residui minimi
+
+## Review (ASSONAM SumUp quota associativa per associazione - Mar 27, 2026)
+- Ho esteso il dominio dati in `app/models.py` con configurazione payment per associazione (`payment_provider`, `payment_required_before_card`, importo/valuta/label, metadata SumUp cifrati) e con i nuovi flag pagamento/tessera su `Member`; la migration dedicata e `alembic/versions/r1s2u3m4u5p6_add_sumup_membership_payments.py`.
+- Ho introdotto `app/services/membership_payments.py` come servizio centrale: cifratura/decrittazione della API key merchant con una sola env applicativa globale, verify della chiave via SumUp, creazione hosted checkout, verify server-side del checkout, sync stato pagamento e sync badge tessera.
+- Il vincolo principale richiesto e rispettato: il fulfillment resta nel path webhook. `POST /api/webhooks/sumup` verifica sempre il checkout reale via API SumUp prima di segnare `completed`; il polling `GET /api/public/membership-payments/{payment_id}/status` e read-only e non esegue side effects.
+- I checkout `expired`, `failed` e `cancelled` non vengono riusati: in `app/routes/membership_payments.py` l'endpoint `POST /api/public/orgs/{slug}/membership-payment/create-checkout` verifica l'ultimo pagamento pending e crea un nuovo hosted checkout quando il precedente e in stato terminale non pagato.
+- Le chiavi SumUp per associazione restano solo nel DB/backend: setup super-admin via `app/routes/super_admin.py`, UI dedicata in `frontend/src/pages/super-admin/components/OrganizationManageModal.tsx`, nessuna chiave per org in env, nessuna key completa restituita al frontend dopo il salvataggio.
+- Il wizard socio in `frontend/src/pages/Iscrizione.tsx` mostra un solo percorso quando la feature e attiva: spariscono contanti/bonifico/lista metodi e resta solo il riepilogo quota con bottone configurato `Paga con carta`; per le org senza feature il flusso legacy resta invariato.
+- Ho aggiunto la pagina esito `frontend/src/pages/IscrizionePagamentoEsito.tsx`, il blocco `Pagamenti` nella scheda socio org-admin e il badge pagamento nella verifica tessera pubblica (`Pagata` / `Pagamento non registrato`) in `app/routes/public.py` e `frontend/src/pages/org-admin/OrgAdminMemberDetail.tsx`.
+- Il pagamento manuale org-admin continua a funzionare ma non forza l'emissione tessera se il workflow non e pronto: aggiorna `membership_payments`, `member.payment_status` e il badge tessera, lasciando invariati i gate di approvazione/documenti.
+- Verifiche completate: `python -m pytest -q tests/test_membership_payments_sumup.py tests/test_org_admin_manual_payment.py tests/test_member_card_verification.py tests/test_payment_method_join.py` (`18 passed`), `npm --prefix frontend run typecheck` OK, `npm --prefix frontend run build` OK.
+- Rischi residui minimi: serve configurare in runtime la sola env globale di cifratura credenziali applicative e il webhook SumUp verso `POST /api/webhooks/sumup`; non sono necessari secret/env per singola associazione.
+
+## Plan (ASSONAM admin magic-link debug/fix - Mar 25, 2026)
+- [x] Mappare il flusso completo `POST /api/org-admin/auth/magic-link` fino a token, enqueue email e worker, confrontandolo con un flusso email funzionante
+- [x] Verificare su Hetzner processi, container e log backend/worker per richieste magic link admin e individuare il punto esatto di interruzione
+- [x] Identificare la root cause primaria e gli eventuali altri silent failure nella stessa area
+- [x] Applicare una fix minima e robusta con logging strutturato nei punti chiave del flusso magic link admin
+- [x] Aggiungere o estendere test mirati per normalizzazione email, blocchi espliciti e invio enqueue
+- [x] Eseguire verifiche locali e live senza toccare gli altri flussi email, poi documentare review, comandi usati e rischio residuo
+
+## Review (ASSONAM admin magic-link debug/fix - Mar 25, 2026)
+- Flusso mappato: `POST /api/org-admin/auth/magic-link` in `app/routes/org_admin.py` fa solo rate limit IP, lookup admin, creazione `OrgAdminToken`, `enqueue_email(...)` su `email_outbox`; l'invio reale avviene via `email-worker`. Non esistono cooldown/dedup specifici sul magic link admin oltre al rate limiter IP.
+- Confronto con il flusso member in `app/routes/member.py`: il member login normalizza `trim + lower` e cerca con `lower(email)`, mentre il magic link org-admin in produzione usava `AdminUser.email == email` senza normalizzazione e senza logging sui branch di blocco.
+- Verifica live su Hetzner `157.90.31.105`: alcune richieste magic link apparivano nei log solo come `org_admin.magic_link_requested` senza `Generated org-admin magic link` e senza righe nuove in `email_outbox`, confermando stop prima di `enqueue_email`.
+- Root cause primaria confermata: input email con spazi/maiuscole non matchava l'admin attivo (`edoardo.buffa@outlook.it`) per via del lookup esatto; root cause secondaria emersa nello stesso punto: admin inattivo (`megaurto@hotmail.it`, `is_active=false`) veniva scartato in silenzio con `200 OK` anti-enumeration e nessun motivo nei log.
+- Fix minima applicata in `app/routes/org_admin.py`: normalizzazione email server-side, lookup deterministico con `lower(trim(AdminUser.email))`, selezione esplicita del primo admin eleggibile e blocchi con reason code (`admin_not_found`, `admin_inactive`, `admin_deleted`, `admin_missing_org`, `empty_email`, `admin_not_eligible`).
+- Logging aggiunto nei punti chiave: richiesta ricevuta, esito normalizzazione, lookup + candidati, admin selezionato, token creato, enqueue start/end, completamento richiesta, exception completa, piu logging sul verify del token.
+- Test aggiunti in `tests/test_email_flows.py` per: normalizzazione email org-admin con maiuscole/spazi e blocco logged `admin_inactive` senza enqueue.
+- Verifiche locali completate: `python -m py_compile app/routes/org_admin.py tests/test_email_flows.py`; `python -m pytest -q tests/test_email_flows.py -k "org_admin_magic_link or org_admin_inactive_magic_link"`; `python -m pytest -q tests/test_email_flows.py::test_member_magic_link_flow`; `python -m pytest -q tests/test_association_email_sender.py -k "mailtrap_transport_is_used_for_association_mode or smtp_transport_still_used_for_system_mode"`.
+- Deploy live eseguito copiando `app/routes/org_admin.py` su Hetzner e rebuildando il solo container `web`.
+- Smoke live post-deploy: `ivanobuffa234@gmail.com` enqueue+send OK, `cw_4447413@hotmail.com` enqueue+send OK, `Edoardo.Buffa@Outlook.it` con spazi/maiuscole enqueue+send OK (`email_outbox.id=5a361fac-101c-473e-a295-5224e5726cdc`), `megaurto@hotmail.it` bloccato con log esplicito `block_reason=admin_inactive` e senza nuova riga `email_outbox`.
+
 ## Plan (ASSONAM org admin UX/UI + request decision flow - Mar 20, 2026)
 - [x] Mappare i colli di bottiglia su org admin, con focus su WhatsApp workspace, forms responses e prenotazioni
 - [x] Estendere backend e schema con stato richiesta `pending/confirmed/rejected`, audit review e template WhatsApp di conferma/rigetto
