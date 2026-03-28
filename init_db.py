@@ -416,7 +416,7 @@ def init_db():
                     """
                     UPDATE forms
                        SET form_type = CASE
-                            WHEN COALESCE(booking_enabled, create_booking, 0) = 1 THEN 'booking'
+                            WHEN COALESCE(booking_enabled, create_booking, FALSE) THEN 'booking'
                             ELSE COALESCE(NULLIF(trim(form_type), ''), 'generic')
                        END
                      WHERE form_type IS NULL
@@ -429,7 +429,7 @@ def init_db():
                     """
                     UPDATE forms
                        SET booking_enabled = CASE
-                            WHEN booking_enabled IS NULL THEN COALESCE(create_booking, 0)
+                            WHEN booking_enabled IS NULL THEN COALESCE(create_booking, FALSE)
                             ELSE booking_enabled
                        END
                      WHERE booking_enabled IS NULL
