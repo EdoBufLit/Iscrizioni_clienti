@@ -635,7 +635,7 @@ def init_db():
             text(
                 """
                 UPDATE organizations
-                   SET communications_enabled = 0
+                   SET communications_enabled = FALSE
                  WHERE communications_enabled IS NULL
                 """
             )
@@ -644,7 +644,7 @@ def init_db():
             text(
                 """
                 UPDATE organizations
-                   SET require_membership_document = 0
+                   SET require_membership_document = FALSE
                  WHERE require_membership_document IS NULL
                 """
             )
