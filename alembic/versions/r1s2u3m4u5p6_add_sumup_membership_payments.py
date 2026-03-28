@@ -92,7 +92,12 @@ def upgrade() -> None:
     if not _column_exists("members", "payment_required"):
         with op.batch_alter_table("members") as batch_op:
             batch_op.add_column(
-                sa.Column("payment_required", sa.Boolean(), nullable=False, server_default="0")
+                sa.Column(
+                    "payment_required",
+                    sa.Boolean(),
+                    nullable=False,
+                    server_default=sa.false(),
+                )
             )
             batch_op.add_column(
                 sa.Column(
@@ -104,7 +109,12 @@ def upgrade() -> None:
             )
             batch_op.add_column(sa.Column("payment_completed_at", sa.DateTime(timezone=True), nullable=True))
             batch_op.add_column(
-                sa.Column("card_is_paid", sa.Boolean(), nullable=False, server_default="0")
+                sa.Column(
+                    "card_is_paid",
+                    sa.Boolean(),
+                    nullable=False,
+                    server_default=sa.false(),
+                )
             )
             batch_op.add_column(sa.Column("card_paid_at", sa.DateTime(timezone=True), nullable=True))
             batch_op.add_column(sa.Column("card_payment_status", sa.String(), nullable=True))
@@ -182,10 +192,10 @@ def upgrade() -> None:
         sa.text(
             """
             UPDATE members
-               SET payment_required = COALESCE(payment_required, 0),
+               SET payment_required = COALESCE(payment_required, FALSE),
                    payment_status = COALESCE(NULLIF(trim(payment_status), ''), 'not_required'),
                    card_is_paid = CASE
-                       WHEN card_is_paid IS NULL THEN 0
+                       WHEN card_is_paid IS NULL THEN FALSE
                        ELSE card_is_paid
                    END
             """
