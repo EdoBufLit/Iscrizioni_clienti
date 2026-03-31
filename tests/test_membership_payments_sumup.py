@@ -288,6 +288,80 @@ def test_sumup_webhook_verifies_checkout_before_completion_and_is_idempotent(cli
     assert member.status == MemberStatus.ACTIVE
 
 
+def test_sumup_webhook_queues_standard_card_email_and_status_exposes_card_page(
+    client, db, monkeypatch
+):
+    org = _build_sumup_org(db, f"sumup-ready-{uuid.uuid4().hex[:8]}")
+    batch = CardBatch(org_id=org.id, start_no=900, end_no=910, next_no=900)
+    db.add(batch)
+    member = Member(
+        org_id=org.id,
+        first_name="Ready",
+        last_name="Member",
+        email=f"ready-{uuid.uuid4().hex[:8]}@example.com",
+        password_hash=get_password_hash("Pass1234!"),
+        status=MemberStatus.PENDING_CARDS,
+        decision_at=datetime.utcnow(),
+        decision_by_admin_id=1,
+        payment_required=True,
+        payment_status=MembershipPaymentStatus.PENDING.value,
+        signup_ip="127.0.0.1",
+        signup_user_agent="pytest",
+    )
+    db.add(member)
+    db.flush()
+    payment = MembershipPayment(
+        org_id=org.id,
+        socio_id=member.id,
+        provider="sumup",
+        amount=Decimal("25.00"),
+        currency="EUR",
+        status=MembershipPaymentStatus.PENDING.value,
+        source="sumup",
+        checkout_reference=f"ready-ref-{uuid.uuid4().hex[:8]}",
+        sumup_checkout_id="ready-checkout",
+    )
+    db.add(payment)
+    db.commit()
+    db.refresh(payment)
+
+    monkeypatch.setattr(
+        "app.routes.membership_payments.verify_sumup_checkout",
+        lambda org_arg, payment_arg: {"status": "PAID", "id": payment_arg.sumup_checkout_id},
+    )
+
+    email_calls: list[dict[str, object]] = []
+
+    def fake_queue_member_card_email(db_arg, request_arg, member_id, **kwargs):
+        email_calls.append({"member_id": member_id, **kwargs})
+        return {"sent": False, "queued": True, "reason": "queued", "outbox_id": "outbox-1"}
+
+    monkeypatch.setattr(
+        "app.services.membership_payments.queue_member_card_email",
+        fake_queue_member_card_email,
+    )
+
+    webhook = client.post("/api/webhooks/sumup", json={"id": "ready-checkout"})
+    assert webhook.status_code == 200, webhook.text
+    assert len(email_calls) == 1
+    assert email_calls[0]["member_id"] == member.id
+    assert email_calls[0]["require_approved_document"] is False
+    assert email_calls[0]["email_type"] == "member_card_active"
+    assert f"/associazioni/{org.slug}/tessera?card_token=" in str(
+        email_calls[0]["card_view_url_override"]
+    )
+
+    status_response = client.get(f"/api/public/membership-payments/{payment.id}/status")
+    assert status_response.status_code == 200, status_response.text
+    payload = status_response.json()
+    assert payload["payment_status"] == MembershipPaymentStatus.COMPLETED.value
+    assert payload["card_status"] == "issued"
+    assert payload["active_card_page_url"]
+    assert f"/associazioni/{org.slug}/tessera?card_token=" in payload["active_card_page_url"]
+    assert payload["card_download_url"].endswith(".pdf")
+    assert payload["card_wallet_google_url"].endswith("/wallet/google")
+
+
 def test_join_submit_legacy_endpoint_is_blocked_when_online_payment_required(client, db):
     org = _build_sumup_org(db, f"sumup-join-{uuid.uuid4().hex[:8]}")
     payload = build_join_submit_data(

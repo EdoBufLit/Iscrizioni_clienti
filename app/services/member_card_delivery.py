@@ -25,6 +25,10 @@ from app.utils import generate_token, hash_token
 
 logger = logging.getLogger(__name__)
 
+_PUBLIC_MEMBER_CARD_VIEW_TEMPLATE = (
+    "/associazioni/{org_slug}/tessera?card_token={card_token}&status={status}&wallet=1"
+)
+
 
 def _resolve_org_logo_disk_path(org: Organization | None) -> str | None:
     if org is None:
@@ -87,6 +91,46 @@ def _build_card_links(member: Member, backend_base_url: str) -> tuple[str, str, 
     return token, verification_url, download_url
 
 
+def _build_frontend_card_page_url(
+    *,
+    frontend_base_url: str,
+    org_slug: str,
+    card_token: str,
+    status: str = "issued",
+) -> str:
+    path = _PUBLIC_MEMBER_CARD_VIEW_TEMPLATE.format(
+        org_slug=org_slug,
+        card_token=card_token,
+        status=status,
+    )
+    normalized_path = path if path.startswith("/") else f"/{path}"
+    return f"{frontend_base_url.rstrip('/')}{normalized_path}"
+
+
+def build_member_card_access_payload(
+    *,
+    member: Member,
+    org: Organization,
+    backend_base_url: str,
+    frontend_base_url: str,
+    card_page_status: str = "issued",
+) -> dict[str, str]:
+    token, verification_url, download_url = _build_card_links(member, backend_base_url)
+    return {
+        "card_verification_token": token,
+        "card_verification_url": verification_url,
+        "card_download_url": download_url,
+        "card_wallet_apple_url": f"{backend_base_url}/api/cards/{token}/wallet/apple",
+        "card_wallet_google_url": f"{backend_base_url}/api/cards/{token}/wallet/google",
+        "active_card_page_url": _build_frontend_card_page_url(
+            frontend_base_url=frontend_base_url,
+            org_slug=org.slug,
+            card_token=token,
+            status=card_page_status,
+        ),
+    }
+
+
 def _build_member_magic_link(db: Session, member_id: int, frontend_base_url: str) -> str:
     token_str = generate_token()
     token = Token(
@@ -111,11 +155,19 @@ def _enqueue_member_card_ready_email(
     dedupe_key: str | None = None,
     header_title: str = "La tua tessera ASSO.N.A.M. è pronta",
     header_subtitle: str = "Il tuo documento è stato verificato e la tua tessera socio è ora disponibile.",
+    card_view_url_override: str | None = None,
 ) -> str | None:
     if not member.email:
         return None
 
-    _token, verification_url, download_url = _build_card_links(member, backend_base_url)
+    access_payload = build_member_card_access_payload(
+        member=member,
+        org=org,
+        backend_base_url=backend_base_url,
+        frontend_base_url=frontend_base_url,
+    )
+    verification_url = access_payload["card_verification_url"]
+    download_url = access_payload["card_download_url"]
     club_display_name = resolve_club_display_name(org) or org.name
     assonam_logo_url = resolve_assonam_logo_url(
         frontend_base_url=frontend_base_url,
@@ -139,7 +191,11 @@ def _enqueue_member_card_ready_email(
         wallet_add_url = f"{frontend_base_url.rstrip('/')}/wallet/google/add"
         if member.email:
             wallet_add_url = f"{wallet_add_url}?email={quote_plus(member.email)}"
-    card_view_url = f"{frontend_base_url.rstrip('/')}/dashboard"
+    card_view_url = (
+        (card_view_url_override or "").strip()
+        or access_payload["active_card_page_url"]
+        or f"{frontend_base_url.rstrip('/')}/dashboard"
+    )
     statute_url = f"{frontend_base_url.rstrip('/')}/dashboard/documenti"
 
     card_image_bytes: bytes | None = None
@@ -309,6 +365,7 @@ def queue_member_card_email(
     require_approved_document: bool = False,
     email_type: str = "member_card_manual_send",
     dedupe_key_prefix: str = "member_card_manual_send",
+    card_view_url_override: str | None = None,
 ) -> dict[str, object]:
     member_query = db.query(Member).filter(Member.id == member_id)
     try:
@@ -360,6 +417,7 @@ def queue_member_card_email(
             dedupe_key=f"{dedupe_key_prefix}:{member.id}:{member.card_year}:{member.card_no}",
             header_title="La tua tessera ASSO.N.A.M. è disponibile",
             header_subtitle="Ti inviamo di nuovo il riepilogo della tua tessera socio e i link utili per consultarla o scaricarla.",
+            card_view_url_override=card_view_url_override,
         )
     except Exception:
         logger.exception(

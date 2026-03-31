@@ -14,6 +14,8 @@ export default function IscrizionePagamentoEsito() {
   const [status, setStatus] = useState<MembershipPaymentStatusResponse | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [error, setError] = useState<string | null>(null);
+  const readyCardUrl =
+    status?.is_paid && status.card_status === "issued" ? status.active_card_page_url : null;
 
   useEffect(() => {
     if (!Number.isFinite(paymentId) || paymentId <= 0) {
@@ -52,18 +54,28 @@ export default function IscrizionePagamentoEsito() {
     };
   }, [paymentId]);
 
-  const title =
-    loadState === "error"
-      ? "Verifica pagamento non disponibile"
-      : status?.is_paid
-        ? "Pagamento riuscito"
-        : status?.payment_status === "failed"
-          ? "Pagamento non riuscito"
-          : status?.payment_status === "cancelled"
-            ? "Pagamento annullato"
-            : status?.payment_status === "expired"
-              ? "Checkout scaduto"
-              : "Verifica pagamento in corso";
+  useEffect(() => {
+    if (!readyCardUrl) return;
+    const timer = window.setTimeout(() => {
+      window.location.replace(readyCardUrl);
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [readyCardUrl]);
+
+  let title = "Verifica pagamento in corso";
+  if (loadState === "error") {
+    title = "Verifica pagamento non disponibile";
+  } else if (readyCardUrl) {
+    title = "Tessera pronta";
+  } else if (status?.is_paid) {
+    title = "Pagamento riuscito";
+  } else if (status?.payment_status === "failed") {
+    title = "Pagamento non riuscito";
+  } else if (status?.payment_status === "cancelled") {
+    title = "Pagamento annullato";
+  } else if (status?.payment_status === "expired") {
+    title = "Checkout scaduto";
+  }
 
   return (
     <section className="signup-wizard-shell py-16 md:py-20">
@@ -76,7 +88,10 @@ export default function IscrizionePagamentoEsito() {
             {title}
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-base leading-8 text-slate-500">
-            {error || status?.message || "Stiamo attendendo la conferma dal backend."}
+            {error ||
+              (readyCardUrl
+                ? "Pagamento confermato. Ti stiamo reindirizzando alla tua tessera."
+                : status?.message || "Stiamo attendendo la conferma dal backend.")}
           </p>
 
           <div className="mt-8 rounded-[1.6rem] border border-slate-200 bg-slate-50/70 px-6 py-5 text-left">
@@ -91,6 +106,11 @@ export default function IscrizionePagamentoEsito() {
           </div>
 
           <div className="mt-8 flex flex-wrap justify-center gap-3">
+            {readyCardUrl ? (
+              <a className="btn-primary" href={readyCardUrl}>
+                Apri la tua tessera
+              </a>
+            ) : null}
             {status?.can_retry ? (
               <button
                 type="button"

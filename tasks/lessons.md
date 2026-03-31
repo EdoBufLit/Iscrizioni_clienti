@@ -177,4 +177,5 @@ ext_no, storico eleased_at), poi implemento solo regole esplicite e dimostrabil
 
 - Mar 28, 2026: se un deploy fallisce per timeout/OOM non devo attribuirlo subito a un memory leak runtime. Prima devo separare build, migration e rollout, misurare i picchi RAM del percorso di deploy e spostare fuori dal server le build pesanti che possono saturare il nodo anche quando il runtime resta stabile.
 - Mar 28, 2026: quando implemento secret per-organization salvati nel DB, devo distinguere in modo esplicito tra `secret applicativo globale di cifratura` e `secret business inserito dal Super Admin`. Non devo mai presentare la chiave globale di cifratura come se fosse la key merchant dell'associazione.
+- Mar 31, 2026: se un nuovo flusso di pagamento emette comunque la tessera finale gia prevista dal prodotto, non devo introdurre una pagina post-payment parallela con UX ridotta. Devo riusare la stessa destinazione finale, gli stessi link pubblici e la stessa mail tessera del flusso standard per evitare esperienze divergenti.
 

@@ -1713,6 +1713,12 @@ export type MembershipPaymentStatusResponse = {
   card_status: string;
   message: string;
   can_retry: boolean;
+  active_card_page_url?: string | null;
+  card_verification_token?: string | null;
+  card_verification_url?: string | null;
+  card_download_url?: string | null;
+  card_wallet_apple_url?: string | null;
+  card_wallet_google_url?: string | null;
 };
 
 export async function fetchMembershipPaymentStatus(

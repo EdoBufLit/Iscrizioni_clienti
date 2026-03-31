@@ -392,13 +392,14 @@ async def create_membership_payment_checkout(
 
 @router.get("/api/public/membership-payments/{payment_id}/status")
 def get_membership_payment_status(
+    request: Request,
     payment_id: int,
     db: Session = Depends(get_db),
 ):
     payment = db.query(MembershipPayment).filter(MembershipPayment.id == payment_id).first()
     if not payment:
         raise HTTPException(status_code=404, detail="Pagamento non trovato.")
-    return build_membership_payment_status_payload(payment)
+    return build_membership_payment_status_payload(payment, request=request)
 
 
 @router.post("/api/webhooks/sumup")

@@ -28,7 +28,10 @@ from app.models import (
     OrganizationPaymentProvider,
 )
 from app.services.card_allocation import allocate_next_card
-from app.services.member_card_delivery import maybe_send_member_card_ready_email
+from app.services.member_card_delivery import (
+    build_member_card_access_payload,
+    queue_member_card_email,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -373,7 +376,24 @@ def maybe_fulfill_member_card(
 
     if request is not None:
         try:
-            maybe_send_member_card_ready_email(db, request, member.id)
+            backend_base_url = (settings.BASE_URL or str(request.base_url)).rstrip("/")
+            frontend_base_url = (settings.FRONTEND_URL or backend_base_url).rstrip("/")
+            access_payload = build_member_card_access_payload(
+                member=member,
+                org=org,
+                backend_base_url=backend_base_url,
+                frontend_base_url=frontend_base_url,
+            )
+            queue_member_card_email(
+                db,
+                request,
+                member.id,
+                require_active=True,
+                require_approved_document=False,
+                email_type="member_card_active",
+                dedupe_key_prefix="member_card_active",
+                card_view_url_override=access_payload["active_card_page_url"],
+            )
         except Exception:
             logger.exception(
                 "membership_payment_card_email_failed member_id=%s org_id=%s",
@@ -511,6 +531,8 @@ def apply_manual_membership_payment(
 
 def build_membership_payment_status_payload(
     payment: MembershipPayment,
+    *,
+    request: Request | None = None,
 ) -> dict[str, Any]:
     member = payment.member
     is_paid = payment_status_is_paid(payment.status)
@@ -534,13 +556,25 @@ def build_membership_payment_status_payload(
     else:
         message = "Pagamento in verifica."
 
-    return {
+    payload = {
         "payment_status": payment.status,
         "is_paid": is_paid,
         "card_status": card_status,
         "message": message,
         "can_retry": payment.status in RETRYABLE_MEMBERSHIP_STATUSES,
     }
+    if request is not None and member is not None and member.card_no is not None and member.card_year is not None:
+        backend_base_url = (settings.BASE_URL or str(request.base_url)).rstrip("/")
+        frontend_base_url = (settings.FRONTEND_URL or backend_base_url).rstrip("/")
+        payload.update(
+            build_member_card_access_payload(
+                member=member,
+                org=member.organization,
+                backend_base_url=backend_base_url,
+                frontend_base_url=frontend_base_url,
+            )
+        )
+    return payload
 
 
 def log_sumup_webhook_event(
@@ -605,4 +639,3 @@ def create_legacy_manual_member_payment(
     )
     db.add(legacy_payment)
     return legacy_payment
-

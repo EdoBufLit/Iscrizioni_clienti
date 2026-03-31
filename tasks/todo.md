@@ -3901,3 +3901,16 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - In `frontend/src/pages/org-admin/components/communications/MessagesComposerHub.tsx` ho aggiunto stato dedicato `deleteCampaignTarget`, modal di conferma e refresh della libreria dopo la delete; se la campagna eliminata e quella aperta nel builder, il flusso rientra automaticamente alla libreria.
 - In `frontend/src/lib/api.ts` ho aggiunto il client `deleteOrgAdminEmailCampaign(...)`; lato backend, `app/routes/org_admin.py` espone `DELETE /api/org-admin/communications/campaigns/{campaign_id}` con scope ristretto all'associazione dell'org admin autenticato.
 - Verifiche eseguite: `npm --prefix frontend run build` OK, `python -m py_compile app/routes/org_admin.py` OK, `python -m pytest -q tests/test_org_admin_communications.py -k delete_draft_campaign` OK.
+## Plan (SumUp post-payment page allineata al flusso tessera standard - Mar 31, 2026)
+- [x] Mappare il flusso SumUp post-webhook e il flusso auto-iscrizione standard per individuare i dati/link finali da riusare
+- [x] Estendere backend status/email delivery per esporre la stessa pagina tessera pubblica e inviare la mail tessera anche nel caso SumUp
+- [x] Aggiornare la pagina frontend post-payment per reindirizzare al percorso tessera standard invece di mostrare una pagina separata
+- [x] Eseguire test/build mirati e documentare la review finale
+
+## Review (SumUp post-payment page allineata al flusso tessera standard - Mar 31, 2026)
+- In `app/services/member_card_delivery.py` ho introdotto un helper condiviso che costruisce gli stessi link pubblici della tessera gia usati dal flusso standard: token verifica, download PDF, wallet e `active_card_page_url` verso `/associazioni/{org_slug}/tessera?...`.
+- Lo stesso service ora permette di forzare `card_view_url_override` nelle mail tessera; in questo modo il caso SumUp non punta piu a `/dashboard`, ma alla stessa pagina finale pubblica della tessera gia pronta.
+- In `app/services/membership_payments.py` il fulfillment da webhook SumUp non usa piu il path email che richiedeva documenti approvati: ora accoda `queue_member_card_email(... require_approved_document=False, email_type="member_card_active")`, mantenendo il webhook come unica fonte di fulfillment ma riallineando la consegna email al caso auto-iscrizione.
+- In `app/routes/membership_payments.py` e `frontend/src/lib/api.ts` lo status pubblico del pagamento espone ora anche i link tessera standard; `frontend/src/pages/IscrizionePagamentoEsito.tsx` usa `active_card_page_url` e reindirizza automaticamente alla pagina tessera standard appena la card risulta `issued`, lasciando solo uno stato transitorio minimo.
+- Ho aggiunto copertura mirata in `tests/test_membership_payments_sumup.py` per verificare che il webhook SumUp accodi la mail tessera standard e che l'endpoint status restituisca `active_card_page_url` e gli altri link tessera pubblici.
+- Verifiche eseguite: `python -m pytest -q tests/test_membership_payments_sumup.py tests/test_org_admin_manual_payment.py tests/test_member_card_verification.py tests/test_payment_method_join.py` OK (`19 passed`), `npm --prefix frontend run build` OK.
