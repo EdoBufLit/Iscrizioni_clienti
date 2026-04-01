@@ -247,11 +247,22 @@ def test_org_admin_card_email_and_pdf_are_scoped_and_work(client, db, drain_emai
         assert email_payload["queued"] is True
         assert email_payload["outbox_id"]
 
+        second_email_res = client.post(f"/api/org-admin/members/{member.id}/card-email")
+        assert second_email_res.status_code == 200, second_email_res.text
+        second_email_payload = second_email_res.json()
+        assert second_email_payload["ok"] is True
+        assert second_email_payload["queued"] is True
+        assert second_email_payload["outbox_id"]
+        assert second_email_payload["outbox_id"] != email_payload["outbox_id"]
+
         drain_email_outbox()
         captured = get_captured_emails()
-        assert len(captured) == 1
-        assert captured[0]["to"] == member.email
-        assert captured[0]["subject"] == f"La tua tessera {org.name}"
+        assert len(captured) == 2
+        assert [item["to"] for item in captured] == [member.email, member.email]
+        assert [item["subject"] for item in captured] == [
+            f"La tua tessera {org.name}",
+            f"La tua tessera {org.name}",
+        ]
 
         pdf_res = client.get(f"/api/org-admin/members/{member.id}/card.pdf")
         assert pdf_res.status_code == 200, pdf_res.text

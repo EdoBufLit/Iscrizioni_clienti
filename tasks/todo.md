@@ -1,3 +1,44 @@
+## Plan (ASSONAM org-admin member card email delivery regression - Apr 01, 2026)
+- [x] Verificare su Hetzner il flusso reale `POST /api/org-admin/members/{id}/card-email` distinguendo enqueue applicativo, stato `email_outbox` e worker SMTP
+- [x] Isolare la root cause confrontando i log live con il codice del delivery della tessera e con gli eventi del recovery/disco pieno
+- [x] Applicare il fix minimo sicuro, rieseguire invio/smoke check e documentare review finale
+
+## Review (ASSONAM org-admin member card email delivery regression - Apr 01, 2026)
+- Root cause confermata live su Hetzner: il bottone org-admin `POST /api/org-admin/members/{id}/card-email` rispondeva `200` e loggava `member.card_email.manual`, ma le richieste successive riusavano lo stesso `outbox_id` gia `sent` invece di creare una nuova mail.
+- Verifica DB live eseguita su `email_outbox`: il record `member_card_manual_send` per il socio testato risultava gia `sent`, e i click successivi restituivano lo stesso UUID senza alcun nuovo invio. Il worker SMTP era sano; il problema era nell'enqueue applicativo.
+- Bug individuato in `app/services/member_card_delivery.py`: il resend manuale usava un `dedupe_key` stabile (`member_card_manual_send:{member}:{anno}:{numero}`), e `enqueue_email(...)` quando trova una mail gia `sent` restituisce il record esistente invece di crearne uno nuovo.
+- Fix applicata: il path `queue_member_card_email(...)` ora non e piu deduplicato in modo stabile. Per il resend manuale genera una chiave univoca per chiamata; i flussi automatici/idempotenti (`member_card_ready`, `member_card_active`) restano invariati.
+- Regressione aggiunta in `tests/test_org_admin_member_profile_and_card_actions.py`: due click consecutivi sul bottone devono produrre due `outbox_id` distinti e due email catturate con subject `La tua tessera {org.name}`.
+- Verifiche locali: `python -m pytest -q tests/test_org_admin_member_profile_and_card_actions.py -k card_email_and_pdf_are_scoped_and_work` OK, `python -m pytest -q tests/test_integration_issue_member.py::test_issue_member_uses_custom_card_email_subject_template` OK, `python -m py_compile app/services/member_card_delivery.py tests/test_org_admin_member_profile_and_card_actions.py` OK.
+- Verifiche live: patch applicata in `/opt/assonam/app/app/services/member_card_delivery.py`, rebuild mirato `docker compose build web email-worker`, restart `docker compose up -d web email-worker`, poi `docker compose ps` con `web` up e `email-worker` healthy e smoke `https://assonam.it/` / `https://assonam.it/org-admin/login` entrambi `200`.
+- Nota: durante le verifiche locali un test legacy su `tests/test_document_workflow.py::test_document_approval_sends_card_email_once_for_active_member` continua ad aspettarsi il vecchio subject con `ASSO.N.A.M.`; non e una regressione di questo fix ma un'aspettativa obsoleta rispetto al nuovo default subject introdotto oggi.
+
+## Plan (Hetzner ASSONAM 500 post-fix mail subject - Apr 01, 2026)
+- [x] Verificare direttamente su Hetzner stato servizi/container e catturare il traceback reale del 500 dopo l'ultimo aggiornamento
+- [x] Identificare la root cause precisa del failure server-side e confrontarla con il diff appena deployato
+- [x] Applicare il fix minimo sicuro sul server/repo, rieseguire smoke check e documentare review finale
+
+## Review (Hetzner ASSONAM 500 post-fix mail subject - Apr 01, 2026)
+- Verifica live eseguita via SSH su `root@157.90.31.105`: il commit deployato sul server era effettivamente `27bf4fc`, quindi lo stesso del fix subject mail tessera.
+- Root cause confermata dai log `web`, `email-worker` e soprattutto `db`: il 500 non dipendeva dal cambio mail ma da PostgreSQL in recovery loop per `No space left on device` durante il checkpoint (`pg_logical/replorigin_checkpoint.tmp`), con filesystem `/dev/sda1` saturo al `100%`.
+- Saturazione individuata principalmente sotto `/var/lib/containerd` e nelle cache/immagini Docker inutilizzate, con journal systemd archiviato cresciuto fino a circa `2G`.
+- Intervento live eseguito in modo conservativo sul server: `docker builder prune -af`, `docker image prune -af` e `journalctl --vacuum-size=200M`. Dopo la bonifica il disco e sceso a circa `23%` uso (`28G` liberi).
+- Una volta liberato spazio, PostgreSQL ha completato il recovery ed e tornato `ready to accept connections`; ho poi eseguito `docker compose restart web email-worker` per riallineare i processi che avevano accumulato errori DB durante il loop di recovery.
+- Smoke check finali live OK: `docker compose ps` con `db`, `web`, `email-worker`, `low-cards-worker`, `affiliation-video-worker` healthy/up; `https://assonam.it/`, `https://assonam.it/org-admin/login`, `https://assonam.it/iscriviti`, `https://assonam.it/sitemap.xml` e `https://assonam.it/api/auth/whoami` hanno risposto `200`.
+- Conclusione: incidente infrastrutturale da disco pieno, non regressione applicativa del fix precedente. Rischio residuo: senza policy di log rotation / prune periodico Docker il problema puo ripresentarsi.
+
+## Plan (Repository-wide cybersecurity review refresh - Apr 01, 2026)
+- [x] Mappare configurazione security di base: env, settings, middleware, sessioni, CORS, static exposure e secret handling
+- [x] Analizzare superfici pubbliche e flussi sensibili: iscrizione soci, upload, magic link, integrazioni, webhook, pagamenti
+- [x] Analizzare piani privilegiati org-admin e super-admin: autenticazione, autorizzazione perimetro dati e funzioni ad alto impatto
+- [x] Rieseguire verifiche mirate (`tests/test_security_hardening_audit.py`) e documentare findings prioritizzati con mitigazioni
+
+## Review (Repository-wide cybersecurity review refresh - Apr 01, 2026)
+- Controlli positivi confermati: session cookie server-side con `same_site="strict"` e `https_only` in contesti HTTPS, CORS ristretto a `BASE_URL/FRONTEND_URL`, security headers globali, blocco upload privati su `/uploads`, verifica firma Twilio opzionale, rate limit DB-based sulle superfici pubbliche ingest/card verify e segregazione authZ su molte query org-admin/super-admin.
+- Finding ad alta priorita emersi dall'audit statico: login legacy super-admin senza rate limit, registrazione soci con password senza policy minima, token magic-link org-admin consumato in modo non atomico, logging di PII piena nei flussi signup, URL video affiliazione pubblici prevedibili e webhook SumUp senza verifica di firma/autenticita a livello trasporto.
+- Rischi residui secondari: CSP ancora debole (`unsafe-inline`), copertura CSRF concentrata solo su alcuni prefissi `/api/*`, asset SVG wallet pubblicamente servibili same-origin e alcuni endpoint legacy HTML che non beneficiano degli stessi hardening piu recenti del piano API moderno.
+- Verifiche eseguite: `python -m pytest -q tests/test_security_hardening_audit.py`, grep mirati su `app/config.py`, `app/main.py`, `app/middleware.py`, `app/routes/{member,join,org_admin,super_admin,admin,membership_payments,affiliation,whatsapp}.py`, `app/services/{accounting,affiliation_video,membership_payments,wallet_asset_upload}.py`.
+
 ## Plan (ASSONAM fix subject email tessera org-admin - Apr 01, 2026)
 - [x] Tracciare il flusso `POST /api/org-admin/members/{id}/card-email` fino al resolver del subject e confermare la causa del leak
 - [x] Rendere safe-by-default il subject della mail tessera, imponendo fallback `"La tua tessera {nome org}"` se la configurazione contiene un valore email o invalido

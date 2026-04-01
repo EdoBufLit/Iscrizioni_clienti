@@ -364,7 +364,7 @@ def queue_member_card_email(
     require_active: bool = True,
     require_approved_document: bool = False,
     email_type: str = "member_card_manual_send",
-    dedupe_key_prefix: str = "member_card_manual_send",
+    dedupe_key_prefix: str | None = None,
     card_view_url_override: str | None = None,
 ) -> dict[str, object]:
     member_query = db.query(Member).filter(Member.id == member_id)
@@ -407,6 +407,12 @@ def queue_member_card_email(
     frontend_base_url = _build_frontend_base_url(request)
 
     try:
+        if dedupe_key_prefix:
+            dedupe_key = f"{dedupe_key_prefix}:{member.id}:{member.card_year}:{member.card_no}"
+        else:
+            dedupe_key = (
+                f"member_card_manual_send:{member.id}:{member.card_year}:{member.card_no}:{generate_token()}"
+            )
         outbox_id = _enqueue_member_card_ready_email(
             db=db,
             member=member,
@@ -414,7 +420,7 @@ def queue_member_card_email(
             backend_base_url=backend_base_url,
             frontend_base_url=frontend_base_url,
             email_type=email_type,
-            dedupe_key=f"{dedupe_key_prefix}:{member.id}:{member.card_year}:{member.card_no}",
+            dedupe_key=dedupe_key,
             header_title="La tua tessera ASSO.N.A.M. è disponibile",
             header_subtitle="Ti inviamo di nuovo il riepilogo della tua tessera socio e i link utili per consultarla o scaricarla.",
             card_view_url_override=card_view_url_override,
