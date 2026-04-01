@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import logging
+import re
+
 from app.models import Organization
 
-_SUBJECT_FALLBACK_TEMPLATE = "La tua tessera {club_display_name}"
+logger = logging.getLogger(__name__)
+
+_SUBJECT_FALLBACK_TEMPLATE = "La tua tessera {org_name}"
+_EMAIL_LIKE_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _CLUB_DISPLAY_NAME_BY_SLUG_OVERRIDE = {
     # Customer-facing naming override requested for card rendering.
     "oasi-2": "Golden Age Club - Speakeasy",
@@ -35,6 +41,22 @@ def _normalize_tag_culture_name(value: str | None) -> str | None:
     if not cleaned:
         return cleaned
     return cleaned.replace("T.A.G.", "TAG")
+
+
+def _looks_like_email_address(value: str | None) -> bool:
+    cleaned = _normalize_text(value)
+    if not cleaned:
+        return False
+    return _EMAIL_LIKE_PATTERN.fullmatch(cleaned) is not None
+
+
+def sanitize_card_email_subject_template(value: str | None) -> str | None:
+    cleaned = _normalize_text(value)
+    if not cleaned:
+        return None
+    if _looks_like_email_address(cleaned):
+        return None
+    return cleaned
 
 
 def _is_absolute_url(value: str) -> bool:
@@ -72,21 +94,27 @@ def resolve_club_display_name(org: Organization | None) -> str:
 def resolve_card_email_subject(org: Organization | None) -> str:
     club_name = resolve_club_display_name(org)
     org_name = _normalize_text(getattr(org, "name", None) if org else None) or club_name
-    template = (
-        _normalize_text(getattr(org, "card_email_subject", None) if org else None)
-        or _SUBJECT_FALLBACK_TEMPLATE
-    )
+    template = sanitize_card_email_subject_template(
+        getattr(org, "card_email_subject", None) if org else None
+    ) or _SUBJECT_FALLBACK_TEMPLATE
     values = {
         "club_display_name": club_name or org_name,
         "org_name": org_name,
         "org": org_name,
     }
+    if template == _SUBJECT_FALLBACK_TEMPLATE and _looks_like_email_address(
+        getattr(org, "card_email_subject", None) if org else None
+    ):
+        logger.warning(
+            "Ignoring invalid card email subject that looks like an email address for org_id=%s",
+            getattr(org, "id", None) if org else None,
+        )
     try:
         rendered = template.format(**values)
     except Exception:
-        rendered = template
+        rendered = ""
     rendered = rendered.strip()
-    if rendered:
+    if rendered and "{" not in rendered and "}" not in rendered and not _looks_like_email_address(rendered):
         return rendered
     return _SUBJECT_FALLBACK_TEMPLATE.format(**values)
 

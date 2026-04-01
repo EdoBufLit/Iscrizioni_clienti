@@ -1,3 +1,15 @@
+## Plan (ASSONAM fix subject email tessera org-admin - Apr 01, 2026)
+- [x] Tracciare il flusso `POST /api/org-admin/members/{id}/card-email` fino al resolver del subject e confermare la causa del leak
+- [x] Rendere safe-by-default il subject della mail tessera, imponendo fallback `"La tua tessera {nome org}"` se la configurazione contiene un valore email o invalido
+- [x] Aggiungere una regressione test sul flusso org-admin e documentare review finale con verifiche eseguite
+
+## Review (ASSONAM fix subject email tessera org-admin - Apr 01, 2026)
+- Root cause confermata: il bottone `POST /api/org-admin/members/{id}/card-email` usa `queue_member_card_email(...)`, che delega il subject a `resolve_card_email_subject(org)`. Se `organizations.card_email_subject` contiene erroneamente un indirizzo email, quel valore veniva usato come oggetto della mail.
+- In `app/services/org_branding.py` ho reso il resolver safe-by-default: il fallback standard e ora `"La tua tessera {org_name}"`, i valori che sembrano indirizzi email vengono ignorati con warning applicativo e i template malformati/non renderizzati ricadono sul fallback pulito.
+- In `app/routes/super_admin.py` ho aggiunto la stessa sanitizzazione in create/update organizzazione, cosi nuovi salvataggi non possono piu persistere un indirizzo email nel campo `card_email_subject`.
+- Regressione aggiunta in `tests/test_org_admin_member_profile_and_card_actions.py`: il test simula proprio un `card_email_subject` sporco con un indirizzo email e verifica che la mail inviata da org-admin esca con subject `La tua tessera {org.name}`.
+- Verifiche eseguite: `python -m pytest -q tests/test_org_admin_member_profile_and_card_actions.py -k card_email_and_pdf_are_scoped_and_work`, `python -m pytest -q tests/test_integration_issue_member.py::test_issue_member_captures_html_email_with_verification_url tests/test_integration_issue_member.py::test_issue_member_uses_custom_card_email_subject_template`, `python -m py_compile app/services/org_branding.py app/routes/super_admin.py tests/test_org_admin_member_profile_and_card_actions.py`.
+
 ## Plan (Deploy memory / OOM hardening - Mar 28, 2026)
 - [x] Analizzare workflow deploy, compose e Dockerfile per identificare i punti a massimo consumo RAM e le build/container non necessarie sul server
 - [x] Spostare il build pesante delle immagini da Hetzner a GitHub Actions con publish su GHCR e tagging per branch/SHA

@@ -196,6 +196,7 @@ def test_org_admin_card_email_and_pdf_are_scoped_and_work(client, db, drain_emai
     try:
         suffix = uuid.uuid4().hex[:8]
         org = Organization(name=f"Card Org {suffix}", slug=f"card-org-{suffix}", is_active=True)
+        org.card_email_subject = f"owner-{suffix}@example.com"
         other_org = Organization(name=f"Card Other Org {suffix}", slug=f"card-other-org-{suffix}", is_active=True)
         db.add_all([org, other_org])
         db.commit()
@@ -250,6 +251,7 @@ def test_org_admin_card_email_and_pdf_are_scoped_and_work(client, db, drain_emai
         captured = get_captured_emails()
         assert len(captured) == 1
         assert captured[0]["to"] == member.email
+        assert captured[0]["subject"] == f"La tua tessera {org.name}"
 
         pdf_res = client.get(f"/api/org-admin/members/{member.id}/card.pdf")
         assert pdf_res.status_code == 200, pdf_res.text

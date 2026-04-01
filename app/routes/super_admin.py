@@ -78,6 +78,7 @@ from app.services.membership_payments import (
     serialize_super_admin_membership_payment_settings,
     verify_sumup_api_key,
 )
+from app.services.org_branding import sanitize_card_email_subject_template
 from app.services.card_lot_registry import (
     build_card_lots_workbook,
     find_batch_overlap,
@@ -1876,7 +1877,9 @@ def create_organization(
 
     normalized_name = _normalize_tag_culture(body.name) or body.name
     normalized_club_display_name = _normalize_tag_culture(body.club_display_name)
-    normalized_card_email_subject = _normalize_tag_culture(body.card_email_subject)
+    normalized_card_email_subject = sanitize_card_email_subject_template(
+        _normalize_tag_culture(body.card_email_subject)
+    )
 
     org = Organization(
         name=normalized_name,
@@ -2071,8 +2074,8 @@ def update_organization(
             update_data.get("club_display_name")
         )
     if "card_email_subject" in update_data:
-        update_data["card_email_subject"] = _normalize_tag_culture(
-            update_data.get("card_email_subject")
+        update_data["card_email_subject"] = sanitize_card_email_subject_template(
+            _normalize_tag_culture(update_data.get("card_email_subject"))
         )
     if "auto_approve_signup" in update_data:
         update_data["auto_approve_signup"] = bool(update_data["auto_approve_signup"])
