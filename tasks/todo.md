@@ -1,3 +1,18 @@
+## Plan (ORG ADMIN WhatsApp decision message completion - Apr 03, 2026)
+- [x] Correggere il contesto dei messaggi WhatsApp di conferma/rigetto con fallback dai campi del form e placeholder booking piu robusti
+- [x] Aggiungere lato API e frontend l'override opzionale del messaggio WhatsApp al momento della decisione admin, mantenendo il default/template configurato
+- [x] Estendere i test backend per coprire placeholder riempiti dal payload reale e custom message override, poi rieseguire typecheck frontend e aggiornare review/lesson
+
+## Review (ORG ADMIN WhatsApp decision message completion - Apr 03, 2026)
+- Il contesto dei messaggi WhatsApp di review ora non dipende solo dalla `Booking`: data, orario e numero persone vengono ricavati con fallback dal payload del form, dalla `booking_field_mapping`, da alias comuni (`data_prenotazione`, `fascia_oraria`, `coperti`, ecc.) e, se serve, da euristiche sui campi del builder.
+- In `app/services/whatsapp_automation.py` ho aggiunto i placeholder composti `{{slot_prenotazione}}`, `{{persone_prenotazione}}` e `{{riepilogo_prenotazione}}`, cosi i template booking non producono piu messaggi tronchi tipo `il ... alle ...` quando i dati arrivano dal form ma non sono ancora stati normalizzati in `booking`.
+- I default booking per submit/conferma/rigetto sono stati aggiornati per usare `{{nome_associazione}}` e il riepilogo prenotazione completo, invece di concatenare pezzi potenzialmente vuoti.
+- L'endpoint `PATCH /api/org-admin/forms/{form_id}/submissions/{submission_id}/status` ora accetta anche `whatsapp_message`: se l'org admin lo compila, viene inviato quel testo per quella singola decisione; se lo lascia vuoto, resta attivo il template configurato del form.
+- Nel frontend `Comunicazioni > Moduli > Risposte` e `Prenotazioni` ora usano un modal dedicato che mantiene il motivo di rigetto nell'audit e offre un textarea opzionale per il messaggio WhatsApp personalizzato, con supporto ai placeholder principali.
+- Verifiche eseguite:
+  - `pytest tests/test_forms_module.py::test_org_admin_can_review_form_submission_and_dispatch_whatsapp tests/test_forms_module.py::test_org_admin_review_whatsapp_uses_payload_fallbacks_and_custom_override -q`
+  - `npm --prefix frontend run typecheck`
+
 ## Plan (ORG ADMIN WhatsApp, inbox form e CTA campagne - Apr 03, 2026)
 - [x] Correggere la normalizzazione condivisa dei numeri WhatsApp e canonicalizzare i JID/chat id Evolution con default `+39`
 - [x] Rendere coerente l'invio WhatsApp post-review da `Moduli` e `Prenotazioni`, con secondo messaggio obbligatorio su conferma/rigetto

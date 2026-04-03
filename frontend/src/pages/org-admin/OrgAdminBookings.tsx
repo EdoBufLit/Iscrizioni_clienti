@@ -27,8 +27,8 @@ import {
 import { applySeo } from "../../lib/seo";
 import ConfirmModal from "../../components/ui/ConfirmModal";
 import ModalShell from "../../components/ui/ModalShell";
-import PromptModal from "../../components/ui/PromptModal";
 import Skeleton from "../../components/ui/Skeleton";
+import SubmissionDecisionModal from "../../components/ui/SubmissionDecisionModal";
 import { useToast } from "../../components/ui/ToastProvider";
 import { RoomFloorMap } from "../../components/bookings/RoomFloorMap";
 
@@ -138,6 +138,13 @@ function toneForStatus(status: string) {
     default:
       return "bg-slate-100 text-slate-600";
   }
+}
+
+function defaultBookingDecisionMessage(status: "confirmed" | "rejected") {
+  if (status === "confirmed") {
+    return "Ciao {{nome_contatto}}, la tua prenotazione per {{nome_associazione}} e confermata. Dettagli: {{riepilogo_prenotazione}}.";
+  }
+  return "Ciao {{nome_contatto}}, la tua prenotazione per {{nome_associazione}} non puo essere confermata. {{motivo_rigetto}}";
 }
 
 function requestStatusMeta(status: string | null | undefined) {
@@ -668,7 +675,11 @@ export default function OrgAdminBookings() {
     }
   }
 
-  async function handleLinkedRequestDecision(nextStatus: "pending" | "confirmed" | "rejected", reason?: string) {
+  async function handleLinkedRequestDecision(
+    nextStatus: "pending" | "confirmed" | "rejected",
+    reason?: string,
+    whatsappMessage?: string,
+  ) {
     if (!selectedBooking?.form_id || !selectedBooking?.submission_id) return;
     setRequestActionState("loading");
     setRequestActionError(null);
@@ -676,6 +687,7 @@ export default function OrgAdminBookings() {
       const response = await updateOrgAdminFormSubmissionStatus(selectedBooking.form_id, selectedBooking.submission_id, {
         status: nextStatus,
         reason: reason?.trim() || null,
+        whatsapp_message: whatsappMessage?.trim() || null,
       });
       const detail = await fetchOrgAdminBooking(selectedBooking.id);
       setSelectedBooking(detail.booking);
@@ -1218,18 +1230,21 @@ export default function OrgAdminBookings() {
           </div>
         </form>
       </ModalShell>
-      <ConfirmModal
+      <SubmissionDecisionModal
         open={requestConfirmOpen === "confirmed"}
+        mode="confirmed"
         title="Confermare la richiesta collegata?"
-        description="La richiesta passera a confermata e la prenotazione verra riallineata."
+        description="La richiesta passera a confermata e la prenotazione verra riallineata. Puoi lasciare il messaggio vuoto per usare il template configurato del form oppure personalizzarlo per questa singola risposta."
         confirmLabel="Conferma richiesta"
         confirmState={requestActionState}
+        defaultMessage={defaultBookingDecisionMessage("confirmed")}
+        error={requestActionError}
         onClose={() => {
           if (requestActionState === "loading") return;
           setRequestConfirmOpen(false);
           setRequestActionError(null);
         }}
-        onConfirm={() => void handleLinkedRequestDecision("confirmed")}
+        onConfirm={(values) => void handleLinkedRequestDecision("confirmed", undefined, values.whatsappMessage)}
       />
       <ConfirmModal
         open={requestConfirmOpen === "pending"}
@@ -1244,21 +1259,21 @@ export default function OrgAdminBookings() {
         }}
         onConfirm={() => void handleLinkedRequestDecision("pending")}
       />
-      <PromptModal
+      <SubmissionDecisionModal
         open={requestRejectOpen}
+        mode="rejected"
         title="Rigettare la richiesta collegata?"
-        description="Il motivo viene salvato nell'audit e mostrato nel riepilogo prenotazione."
-        label="Motivo del rigetto"
-        placeholder="Es. disponibilita esaurita o dati non sufficienti."
+        description="Il motivo viene salvato nell'audit e mostrato nel riepilogo prenotazione. Se vuoi, puoi anche personalizzare il messaggio WhatsApp di rigetto per questa singola risposta."
         confirmLabel="Rigetta richiesta"
         confirmState={requestActionState}
+        defaultMessage={defaultBookingDecisionMessage("rejected")}
         error={requestActionError}
         onClose={() => {
           if (requestActionState === "loading") return;
           setRequestRejectOpen(false);
           setRequestActionError(null);
         }}
-        onConfirm={(value) => void handleLinkedRequestDecision("rejected", value)}
+        onConfirm={(values) => void handleLinkedRequestDecision("rejected", values.reason, values.whatsappMessage)}
       />
     </div>
   );

@@ -171,8 +171,8 @@ def default_form_whatsapp_confirmation_template(form_type: Any, *, booking_enabl
     normalized_form_type = normalize_form_type(form_type, booking_enabled=booking_enabled)
     if booking_enabled or normalized_form_type == "booking":
         return (
-            "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} e stata confermata. "
-            "Ti aspettiamo il {{data_prenotazione}} alle {{orario_prenotazione}}."
+            "Ciao {{nome_contatto}}, la tua prenotazione per {{nome_associazione}} e stata confermata. "
+            "Dettagli: {{riepilogo_prenotazione}}."
         )
     return (
         "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} e stata confermata. "
@@ -184,7 +184,7 @@ def default_form_whatsapp_rejection_template(form_type: Any, *, booking_enabled:
     normalized_form_type = normalize_form_type(form_type, booking_enabled=booking_enabled)
     if booking_enabled or normalized_form_type == "booking":
         return (
-            "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} non puo essere confermata. "
+            "Ciao {{nome_contatto}}, la tua prenotazione per {{nome_associazione}} non puo essere confermata. "
             "{{motivo_rigetto}}"
         )
     return (

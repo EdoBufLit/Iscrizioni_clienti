@@ -16,6 +16,7 @@ from app.models import (
     WhatsAppAutomation,
     WhatsAppConnection,
 )
+from app.services.bookings import normalize_booking_field_mapping
 from app.services.email_templates import build_template_context, render_template_string
 from app.services.whatsapp_evolution import EvolutionApiError, EvolutionLiteClient, normalize_phone
 from app.services.whatsapp_sync import (
@@ -33,7 +34,7 @@ DEFAULT_FORM_SUBMISSION_WHATSAPP_TEMPLATE = (
 )
 DEFAULT_FORM_CONFIRMATION_WHATSAPP_TEMPLATE = (
     "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} e stata confermata. "
-    "Ti aspettiamo il {{data_prenotazione}} alle {{orario_prenotazione}}."
+    "Dettagli: {{riepilogo_prenotazione}}."
 )
 DEFAULT_FORM_REJECTION_WHATSAPP_TEMPLATE = (
     "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} non puo essere confermata. "
@@ -50,6 +51,9 @@ AVAILABLE_WHATSAPP_AUTOMATION_VARIABLES = [
     {"key": "data_prenotazione", "placeholder": "{{data_prenotazione}}", "label": "Data prenotazione"},
     {"key": "orario_prenotazione", "placeholder": "{{orario_prenotazione}}", "label": "Orario prenotazione"},
     {"key": "numero_persone", "placeholder": "{{numero_persone}}", "label": "Numero persone"},
+    {"key": "slot_prenotazione", "placeholder": "{{slot_prenotazione}}", "label": "Slot prenotazione"},
+    {"key": "persone_prenotazione", "placeholder": "{{persone_prenotazione}}", "label": "Persone prenotazione"},
+    {"key": "riepilogo_prenotazione", "placeholder": "{{riepilogo_prenotazione}}", "label": "Riepilogo prenotazione"},
 ]
 
 _WHATSAPP_FORM_PHONE_KEYS = (
@@ -69,6 +73,16 @@ _WHATSAPP_FORM_NAME_KEYS = (
     "full_name",
     "nome_e_cognome",
 )
+_BOOKING_FIELD_ALIASES: dict[str, tuple[str, ...]] = {
+    "booking_date": ("booking_date", "data_prenotazione", "giorno_prenotazione", "giorno", "data", "date"),
+    "booking_time": ("booking_time", "orario_prenotazione", "fascia_oraria", "ora", "orario", "time"),
+    "party_size": ("party_size", "numero_persone", "persone", "coperti", "partecipanti", "posti"),
+}
+_BOOKING_FIELD_HINTS: dict[str, tuple[str, ...]] = {
+    "booking_date": ("data", "giorno", "date"),
+    "booking_time": ("orario", "ora", "time"),
+    "party_size": ("persone", "coperti", "partecipanti", "posti"),
+}
 
 
 def prepare_form_submission_whatsapp_candidate(
@@ -344,6 +358,7 @@ def maybe_send_form_submission_decision_whatsapp_message(
     booking: Booking | None,
     decision_status: str,
     review_reason: str | None = None,
+    custom_message: str | None = None,
 ) -> dict[str, Any]:
     normalized_decision = str(decision_status or "").strip().lower()
     if normalized_decision not in {"confirmed", "rejected"}:
@@ -372,7 +387,7 @@ def maybe_send_form_submission_decision_whatsapp_message(
     if connection is None or connection.status != "connected":
         return {"sent": False, "reason": "connection_unavailable"}
 
-    template = _resolve_submission_decision_template(
+    template = custom_message or _resolve_submission_decision_template(
         form=form,
         decision_status=normalized_decision,
     )
@@ -414,6 +429,7 @@ def maybe_send_form_submission_decision_whatsapp_message(
         **send_result,
         "source": candidate["source"],
         "status": normalized_decision,
+        "template_source": "override" if custom_message else "default",
     }
 
 
@@ -428,6 +444,11 @@ def _build_form_submission_whatsapp_context(
     extra_context: dict[str, str] | None = None,
 ) -> dict[str, str]:
     payload = submission.payload_json if isinstance(submission.payload_json, dict) else {}
+    booking_details = _resolve_booking_details_from_submission(
+        form=form,
+        payload=payload,
+        booking=booking,
+    )
     contact_name = _resolve_contact_name(
         submission=submission,
         member=member,
@@ -443,9 +464,12 @@ def _build_form_submission_whatsapp_context(
             "nome_contatto": contact_name or "",
             "numero_whatsapp": phone_number or "",
             "id_richiesta": str(submission.id),
-            "data_prenotazione": booking.booking_date.isoformat() if booking and booking.booking_date else "",
-            "orario_prenotazione": booking.booking_time if booking and booking.booking_time else "",
-            "numero_persone": str(booking.party_size or "") if booking else "",
+            "data_prenotazione": booking_details["data_prenotazione"],
+            "orario_prenotazione": booking_details["orario_prenotazione"],
+            "numero_persone": booking_details["numero_persone"],
+            "slot_prenotazione": booking_details["slot_prenotazione"],
+            "persone_prenotazione": booking_details["persone_prenotazione"],
+            "riepilogo_prenotazione": booking_details["riepilogo_prenotazione"],
         },
     )
     if contact_name:
@@ -738,8 +762,8 @@ def _is_booking_form(form: Any) -> bool:
 def _default_submission_template(form: Any) -> str:
     if _is_booking_form(form):
         return (
-            "Ciao {{nome_contatto}}, abbiamo ricevuto la tua prenotazione per {{titolo_form}}. "
-            "Ti confermeremo al piu presto data e disponibilita."
+            "Ciao {{nome_contatto}}, abbiamo ricevuto la tua prenotazione per {{nome_associazione}} "
+            "con questi dettagli: {{riepilogo_prenotazione}}. Ti confermeremo al piu presto."
         )
     return DEFAULT_FORM_SUBMISSION_WHATSAPP_TEMPLATE
 
@@ -747,8 +771,8 @@ def _default_submission_template(form: Any) -> str:
 def _default_confirmation_template(form: Any) -> str:
     if _is_booking_form(form):
         return (
-            "Ciao {{nome_contatto}}, la tua prenotazione per {{titolo_form}} e confermata. "
-            "Ti aspettiamo il {{data_prenotazione}} alle {{orario_prenotazione}}."
+            "Ciao {{nome_contatto}}, la tua prenotazione per {{nome_associazione}} e confermata. "
+            "Dettagli: {{riepilogo_prenotazione}}."
         )
     return DEFAULT_FORM_CONFIRMATION_WHATSAPP_TEMPLATE
 
@@ -756,7 +780,136 @@ def _default_confirmation_template(form: Any) -> str:
 def _default_rejection_template(form: Any) -> str:
     if _is_booking_form(form):
         return (
-            "Ciao {{nome_contatto}}, la tua prenotazione per {{titolo_form}} non puo essere confermata. "
+            "Ciao {{nome_contatto}}, la tua prenotazione per {{nome_associazione}} non puo essere confermata. "
             "{{motivo_rigetto}}"
         )
     return DEFAULT_FORM_REJECTION_WHATSAPP_TEMPLATE
+
+
+def _resolve_booking_details_from_submission(
+    *,
+    form: Any,
+    payload: dict[str, Any],
+    booking: Booking | None,
+) -> dict[str, str]:
+    booking_date = (
+        booking.booking_date.isoformat()
+        if booking is not None and getattr(booking, "booking_date", None)
+        else _resolve_booking_payload_value(form=form, payload=payload, target="booking_date")
+    )
+    booking_time = (
+        str(getattr(booking, "booking_time", "") or "").strip()
+        if booking is not None
+        else ""
+    ) or _resolve_booking_payload_value(form=form, payload=payload, target="booking_time")
+    party_size = (
+        str(getattr(booking, "party_size", "") or "").strip()
+        if booking is not None
+        else ""
+    ) or _resolve_booking_payload_value(form=form, payload=payload, target="party_size")
+
+    is_booking = _is_booking_form(form)
+    slot_summary = _build_booking_slot_summary(
+        booking_date=booking_date,
+        booking_time=booking_time,
+        include_fallback=is_booking,
+    )
+    people_summary = _build_booking_people_summary(
+        party_size=party_size,
+        include_fallback=is_booking,
+    )
+    summary_parts = [part for part in (slot_summary, f"per {people_summary}" if people_summary else "") if part]
+
+    return {
+        "data_prenotazione": booking_date or ("data da confermare" if is_booking else ""),
+        "orario_prenotazione": booking_time or ("orario da confermare" if is_booking else ""),
+        "numero_persone": party_size,
+        "slot_prenotazione": slot_summary,
+        "persone_prenotazione": people_summary,
+        "riepilogo_prenotazione": " ".join(summary_parts).strip(),
+    }
+
+
+def _resolve_booking_payload_value(*, form: Any, payload: dict[str, Any], target: str) -> str:
+    mapping = normalize_booking_field_mapping(getattr(form, "booking_field_mapping", None) or {})
+    mapped_key = mapping.get(target)
+    if mapped_key:
+        mapped_value = _stringify_template_value(payload.get(mapped_key))
+        if mapped_value:
+            return mapped_value
+
+    for alias in _BOOKING_FIELD_ALIASES.get(target, ()):
+        alias_value = _stringify_template_value(payload.get(alias))
+        if alias_value:
+            return alias_value
+
+    hinted_fields = _find_form_fields_for_booking_target(form=form, target=target)
+    for field in hinted_fields:
+        field_key = str(getattr(field, "field_key", "") or "").strip()
+        if not field_key:
+            continue
+        field_value = _stringify_template_value(payload.get(field_key))
+        if field_value:
+            return field_value
+    return ""
+
+
+def _find_form_fields_for_booking_target(*, form: Any, target: str) -> list[FormField]:
+    fields = list(getattr(form, "fields", []) or [])
+    if not fields:
+        return []
+
+    typed_fields: list[FormField] = []
+    hinted_fields: list[FormField] = []
+    generic_fields: list[FormField] = []
+    for field in sorted(
+        fields,
+        key=lambda item: (
+            int(getattr(item, "sort_order", 0) or 0),
+            int(getattr(item, "id", 0) or 0),
+        ),
+    ):
+        field_type = str(getattr(field, "field_type", "") or "").strip().lower()
+        field_key = str(getattr(field, "field_key", "") or "").strip().lower()
+        field_label = str(getattr(field, "label", "") or "").strip().lower()
+        if target == "booking_date" and field_type == "date":
+            typed_fields.append(field)
+        elif target == "party_size" and field_type == "number":
+            typed_fields.append(field)
+        elif target == "booking_time" and field_type in {"short_text", "select", "radio"}:
+            generic_fields.append(field)
+
+        if any(token in field_key or token in field_label for token in _BOOKING_FIELD_HINTS.get(target, ())):
+            hinted_fields.append(field)
+        elif field_type in {"short_text", "number", "date", "select", "radio"}:
+            generic_fields.append(field)
+
+    ordered: list[FormField] = []
+    for candidate in hinted_fields + typed_fields + generic_fields:
+        if candidate not in ordered:
+            ordered.append(candidate)
+    return ordered
+
+
+def _build_booking_slot_summary(
+    *,
+    booking_date: str,
+    booking_time: str,
+    include_fallback: bool,
+) -> str:
+    if booking_date and booking_time:
+        return f"il {booking_date} alle {booking_time}"
+    if booking_date:
+        return f"il {booking_date}"
+    if booking_time:
+        return f"alle {booking_time}"
+    return "con data e orario da confermare" if include_fallback else ""
+
+
+def _build_booking_people_summary(*, party_size: str, include_fallback: bool) -> str:
+    normalized = str(party_size or "").strip()
+    if normalized:
+        if normalized == "1":
+            return "1 persona"
+        return f"{normalized} persone"
+    return "il numero di persone indicato nel modulo" if include_fallback else ""

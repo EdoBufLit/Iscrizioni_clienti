@@ -2,6 +2,8 @@
 - Quando introduco un flusso pagamenti con redirect frontend, il redirect o il polling non devono mai fare fulfillment: webhook provider + verify server-side devono restare l'unica fonte autorevole per `completed`, mentre il polling serve solo a mostrare stato e retry.
 # Lessons
 
+- Quando un messaggio automatico di conferma/rigetto dipende da dati inseriti nel form, il testo non deve mai leggere solo la `booking` persistita: servono fallback dal payload reale, placeholder compositi sicuri (`slot`/`riepilogo`) e un override per-decision opzionale nella UI di review.
+
 - Se in un workspace admin esiste gia una vista operativa primaria (es. inbox WhatsApp con QR/chat), una nuova capability secondaria (es. automazioni) non deve mai sostituirla: va introdotta come sottovista discreta, senza hero promozionali o blocchi marketing.
 - Se il cliente chiede una modifica UI in area gia live e il flusso implica rilascio, non chiudere dopo build/test locali: completare sempre push, deploy, migration eventuale e smoke check live prima di considerare il task finito.
 

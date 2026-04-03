@@ -123,6 +123,7 @@ from app.services.forms import (
     FORM_SUBMISSION_STATUS_PENDING,
     FORM_SUBMISSION_STATUS_REJECTED,
     get_form_for_org_admin,
+    normalize_form_whatsapp_template,
     normalize_submission_status,
     normalize_form_slug,
     serialize_form,
@@ -2122,6 +2123,7 @@ class UpsertAssociationFormFieldBody(BaseModel):
 class UpdateFormSubmissionStatusBody(BaseModel):
     status: str = Field(min_length=1, max_length=40)
     reason: Optional[str] = None
+    whatsapp_message: Optional[str] = None
 
 
 class UpdateBookingStatusBody(BaseModel):
@@ -6282,6 +6284,7 @@ def update_association_form_submission_status(
     previous_status = normalize_submission_status(submission.status)
     status_changed = next_status != previous_status
     normalized_reason = _normalize_optional_text(body.reason)
+    normalized_whatsapp_message = normalize_form_whatsapp_template(body.whatsapp_message)
 
     now = datetime.utcnow()
     submission.status = next_status
@@ -6327,6 +6330,7 @@ def update_association_form_submission_status(
                 booking=booking,
                 decision_status=next_status,
                 review_reason=submission.review_reason,
+                custom_message=normalized_whatsapp_message,
             )
         except Exception as exc:
             logger.exception(
@@ -6349,6 +6353,7 @@ def update_association_form_submission_status(
             "from_status": previous_status,
             "to_status": next_status,
             "reason": submission.review_reason,
+            "whatsapp_message_override": bool(normalized_whatsapp_message),
             "booking_id": booking.id if booking is not None else None,
             "whatsapp_result": whatsapp_result,
         },

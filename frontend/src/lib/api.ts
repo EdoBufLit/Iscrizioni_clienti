@@ -2106,6 +2106,7 @@ export async function updateOrgAdminFormSubmissionStatus(
   data: {
     status: "pending" | "confirmed" | "rejected";
     reason?: string | null;
+    whatsapp_message?: string | null;
   },
 ): Promise<{
   submission: AssociationFormSubmission;

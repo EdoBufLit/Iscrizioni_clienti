@@ -30,7 +30,7 @@ import { decodeField, encodeField, type BuilderField } from "../../components/fo
 import { FormPublicCanvas } from "../../components/forms/FormPublicCanvas";
 import { ImageUpload } from "../../components/forms/builder/ImageUpload";
 import ConfirmModal from "../../components/ui/ConfirmModal";
-import PromptModal from "../../components/ui/PromptModal";
+import SubmissionDecisionModal from "../../components/ui/SubmissionDecisionModal";
 import Skeleton from "../../components/ui/Skeleton";
 
 const inputClass =
@@ -112,25 +112,28 @@ const baseWhatsAppVariables: WhatsAppAutomationVariable[] = [
   { key: "data_prenotazione", label: "Data prenotazione", placeholder: "{{data_prenotazione}}", hint: "Valorizzata quando il form genera una booking." },
   { key: "orario_prenotazione", label: "Orario prenotazione", placeholder: "{{orario_prenotazione}}", hint: "Valorizzata quando il form genera una booking." },
   { key: "numero_persone", label: "Numero persone", placeholder: "{{numero_persone}}", hint: "Party size della prenotazione se disponibile." },
+  { key: "slot_prenotazione", label: "Slot prenotazione", placeholder: "{{slot_prenotazione}}", hint: "Data e orario gia composti, con fallback leggibile." },
+  { key: "persone_prenotazione", label: "Persone prenotazione", placeholder: "{{persone_prenotazione}}", hint: "Numero persone gia formattato in modo naturale." },
+  { key: "riepilogo_prenotazione", label: "Riepilogo prenotazione", placeholder: "{{riepilogo_prenotazione}}", hint: "Slot e numero persone in una singola variabile pronta." },
 ];
 
 function defaultWhatsAppTemplate(formType: AssociationFormType, bookingEnabled: boolean): string {
   if (bookingEnabled || formType === "booking") {
-    return "Ciao {{nome_contatto}}, la tua richiesta di prenotazione per {{titolo_form}} e stata registrata correttamente. Ti ricontatteremo presto.";
+    return "Ciao {{nome_contatto}}, abbiamo ricevuto la tua prenotazione per {{nome_associazione}} con questi dettagli: {{riepilogo_prenotazione}}. Ti ricontatteremo presto.";
   }
   return "Ciao {{nome_contatto}}, la tua richiesta tramite {{titolo_form}} e stata registrata correttamente. Ti ricontatteremo presto.";
 }
 
 function defaultWhatsAppConfirmationTemplate(formType: AssociationFormType, bookingEnabled: boolean): string {
   if (bookingEnabled || formType === "booking") {
-    return "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} e stata confermata. Ti aspettiamo il {{data_prenotazione}} alle {{orario_prenotazione}}.";
+    return "Ciao {{nome_contatto}}, la tua prenotazione per {{nome_associazione}} e stata confermata. Dettagli: {{riepilogo_prenotazione}}.";
   }
   return "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} e stata confermata. Ti ricontatteremo se serviranno altri dettagli.";
 }
 
 function defaultWhatsAppRejectionTemplate(formType: AssociationFormType, bookingEnabled: boolean): string {
   if (bookingEnabled || formType === "booking") {
-    return "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} non puo essere confermata. {{motivo_rigetto}}";
+    return "Ciao {{nome_contatto}}, la tua prenotazione per {{nome_associazione}} non puo essere confermata. {{motivo_rigetto}}";
   }
   return "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} e stata rigettata. {{motivo_rigetto}}";
 }
@@ -1228,6 +1231,7 @@ export function OrgAdminFormsWorkspace({
   async function handleSubmissionDecision(
     nextStatus: "pending" | "confirmed" | "rejected",
     reason?: string,
+    whatsappMessage?: string,
   ) {
     if (!selectedFormId || !selectedSubmission) return;
     setSubmissionActionState("loading");
@@ -1236,6 +1240,7 @@ export function OrgAdminFormsWorkspace({
       const response = await updateOrgAdminFormSubmissionStatus(selectedFormId, selectedSubmission.id, {
         status: nextStatus,
         reason: reason?.trim() || null,
+        whatsapp_message: whatsappMessage?.trim() || null,
       });
       syncSubmissionState(response.submission);
       setSubmissionActionState("success");
@@ -1274,6 +1279,27 @@ export function OrgAdminFormsWorkspace({
     } finally {
       window.setTimeout(() => setSubmissionActionState("idle"), 1200);
     }
+  }
+
+  function resolveDecisionMessagePlaceholder(status: "confirmed" | "rejected") {
+    const bookingEnabled = Boolean(
+      selectedForm?.booking_enabled ||
+      selectedForm?.create_booking ||
+      formDraft.booking_enabled ||
+      formDraft.create_booking,
+    );
+    if (status === "confirmed") {
+      return (
+        selectedForm?.whatsapp_confirmation_template ||
+        formDraft.whatsapp_confirmation_template ||
+        defaultWhatsAppConfirmationTemplate(formDraft.form_type, bookingEnabled)
+      );
+    }
+    return (
+      selectedForm?.whatsapp_rejection_template ||
+      formDraft.whatsapp_rejection_template ||
+      defaultWhatsAppRejectionTemplate(formDraft.form_type, bookingEnabled)
+    );
   }
 
   function handleCreateNewForm() {
@@ -2419,18 +2445,21 @@ export function OrgAdminFormsWorkspace({
           </div>
         </div>
       )}
-      <ConfirmModal
+      <SubmissionDecisionModal
         open={confirmActionOpen === "confirmed"}
+        mode="confirmed"
         title="Confermare la richiesta?"
-        description="La richiesta passera a confermata e, se disponibile, partira il messaggio WhatsApp automatico."
+        description="La richiesta passera a confermata. Puoi lasciare il messaggio vuoto per usare il template configurato del form oppure personalizzarlo per questa sola risposta."
         confirmLabel="Conferma richiesta"
         confirmState={submissionActionState}
+        defaultMessage={resolveDecisionMessagePlaceholder("confirmed")}
+        error={submissionActionError}
         onClose={() => {
           if (submissionActionState === "loading") return;
           setConfirmActionOpen(false);
           setSubmissionActionError(null);
         }}
-        onConfirm={() => void handleSubmissionDecision("confirmed")}
+        onConfirm={(values) => void handleSubmissionDecision("confirmed", undefined, values.whatsappMessage)}
       />
       <ConfirmModal
         open={confirmActionOpen === "pending"}
@@ -2445,21 +2474,21 @@ export function OrgAdminFormsWorkspace({
         }}
         onConfirm={() => void handleSubmissionDecision("pending")}
       />
-      <PromptModal
+      <SubmissionDecisionModal
         open={rejectActionOpen}
+        mode="rejected"
         title="Rigettare la richiesta?"
-        description="Inserisci un motivo chiaro: verra salvato nell'audit e puo essere riusato nel messaggio WhatsApp automatico."
-        label="Motivo del rigetto"
-        placeholder="Es. posti esauriti, dati incompleti, richiesta fuori finestra utile."
+        description="Il motivo viene salvato nell'audit. Se vuoi, puoi anche personalizzare il messaggio WhatsApp di rigetto per questa singola risposta."
         confirmLabel="Rigetta richiesta"
         confirmState={submissionActionState}
+        defaultMessage={resolveDecisionMessagePlaceholder("rejected")}
         error={submissionActionError}
         onClose={() => {
           if (submissionActionState === "loading") return;
           setRejectActionOpen(false);
           setSubmissionActionError(null);
         }}
-        onConfirm={(value) => void handleSubmissionDecision("rejected", value)}
+        onConfirm={(values) => void handleSubmissionDecision("rejected", values.reason, values.whatsappMessage)}
       />
       </div>
     </div>

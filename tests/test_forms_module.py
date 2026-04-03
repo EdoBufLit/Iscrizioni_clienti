@@ -968,6 +968,121 @@ def test_org_admin_can_review_form_submission_and_dispatch_whatsapp(client, db, 
         settings.ENABLE_WHATSAPP_EVOLUTION = original_enabled
 
 
+def test_org_admin_review_whatsapp_uses_payload_fallbacks_and_custom_override(client, db, monkeypatch):
+    original_enabled = settings.ENABLE_WHATSAPP_EVOLUTION
+    settings.ENABLE_WHATSAPP_EVOLUTION = True
+    try:
+        org, admin = _create_org_admin(db)
+        _login_org_admin(client, db, admin.id)
+        public_slug = f"review-fallback-{uuid.uuid4().hex[:6]}"
+
+        create_res = client.post(
+            "/api/org-admin/forms",
+            json={
+                "title": "Prenotazione cena",
+                "public_slug": public_slug,
+                "is_active": True,
+                "visibility": "public",
+                "form_type": "booking",
+                "booking_enabled": True,
+                "whatsapp_confirmation_template": "Default conferma: {{riepilogo_prenotazione}}.",
+                "whatsapp_rejection_template": "Default rigetto: {{motivo_rigetto}}. {{riepilogo_prenotazione}}.",
+                "booking_field_mapping": {
+                    "customer_name": "cliente_principale",
+                    "customer_phone": "telefono_cliente",
+                },
+            },
+        )
+        assert create_res.status_code == 201, create_res.text
+        form_id = create_res.json()["form"]["id"]
+
+        for index, field in enumerate(
+            [
+                {"field_type": "short_text", "label": "Cliente", "field_key": "cliente_principale"},
+                {"field_type": "phone", "label": "Telefono", "field_key": "telefono_cliente"},
+                {"field_type": "date", "label": "Giorno prenotazione", "field_key": "giorno_evento"},
+                {"field_type": "short_text", "label": "Fascia oraria", "field_key": "fascia_oraria"},
+                {"field_type": "number", "label": "Coperti previsti", "field_key": "coperti_previsti"},
+            ]
+        ):
+            field_res = client.post(
+                f"/api/org-admin/forms/{form_id}/fields",
+                json={**field, "is_required": True, "sort_order": index * 10},
+            )
+            assert field_res.status_code == 201, field_res.text
+
+        connection = get_or_create_connection(db, org)
+        connection.status = "connected"
+        connection.phone_number = "+393404244452"
+        db.commit()
+
+        sent_payloads: list[dict[str, str]] = []
+
+        class _FakeSendResult:
+            def __init__(self, message_id: str):
+                self.external_message_id = message_id
+                self.status = "sent"
+                self.raw = {"id": message_id, "status": "sent"}
+
+        def fake_send_text(self, instance_name: str, *, number: str, text: str):
+            sent_payloads.append({"instance_name": instance_name, "number": number, "text": text})
+            return _FakeSendResult(f"wamid-review-fallback-{uuid.uuid4().hex[:10]}")
+
+        monkeypatch.setattr(
+            "app.services.whatsapp_automation.EvolutionLiteClient.send_text",
+            fake_send_text,
+        )
+
+        submit_res = client.post(
+            f"/api/forms/{org.slug}/{public_slug}/submit",
+            json={
+                "cliente_principale": "Martina Sala",
+                "telefono_cliente": "339 2223344",
+                "giorno_evento": "2026-04-11",
+                "fascia_oraria": "21:00",
+                "coperti_previsti": 5,
+            },
+        )
+        assert submit_res.status_code == 200, submit_res.text
+        submission_id = submit_res.json()["submission"]["id"]
+
+        confirm_res = client.patch(
+            f"/api/org-admin/forms/{form_id}/submissions/{submission_id}/status",
+            json={
+                "status": "confirmed",
+                "whatsapp_message": (
+                    "Prenotazione confermata per {{nome_associazione}} {{slot_prenotazione}} "
+                    "per {{persone_prenotazione}}."
+                ),
+            },
+        )
+        assert confirm_res.status_code == 200, confirm_res.text
+        assert confirm_res.json()["whatsapp_result"]["sent"] is True
+        assert confirm_res.json()["whatsapp_result"]["template_source"] == "override"
+        assert len(sent_payloads) == 1
+        assert sent_payloads[0]["number"] == "+393392223344"
+        assert "il 2026-04-11 alle 21:00" in sent_payloads[0]["text"]
+        assert "per 5 persone" in sent_payloads[0]["text"]
+
+        pending_res = client.patch(
+            f"/api/org-admin/forms/{form_id}/submissions/{submission_id}/status",
+            json={"status": "pending"},
+        )
+        assert pending_res.status_code == 200, pending_res.text
+
+        reject_res = client.patch(
+            f"/api/org-admin/forms/{form_id}/submissions/{submission_id}/status",
+            json={"status": "rejected", "reason": "Posti terminati"},
+        )
+        assert reject_res.status_code == 200, reject_res.text
+        assert reject_res.json()["whatsapp_result"]["sent"] is True
+        assert len(sent_payloads) == 2
+        assert "Posti terminati" in sent_payloads[1]["text"]
+        assert "il 2026-04-11 alle 21:00 per 5 persone" in sent_payloads[1]["text"]
+    finally:
+        settings.ENABLE_WHATSAPP_EVOLUTION = original_enabled
+
+
 def test_legacy_form_submission_status_new_is_normalized_to_pending(client, db):
     org, admin = _create_org_admin(db)
     _login_org_admin(client, db, admin.id)
