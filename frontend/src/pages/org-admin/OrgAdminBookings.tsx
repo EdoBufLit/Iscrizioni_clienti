@@ -673,7 +673,7 @@ export default function OrgAdminBookings() {
     setRequestActionState("loading");
     setRequestActionError(null);
     try {
-      await updateOrgAdminFormSubmissionStatus(selectedBooking.form_id, selectedBooking.submission_id, {
+      const response = await updateOrgAdminFormSubmissionStatus(selectedBooking.form_id, selectedBooking.submission_id, {
         status: nextStatus,
         reason: reason?.trim() || null,
       });
@@ -686,15 +686,23 @@ export default function OrgAdminBookings() {
       setRequestConfirmOpen(false);
       setRequestRejectOpen(false);
       setRequestActionState("success");
+      let message = "Dettaglio prenotazione e stato richiesta aggiornati.";
+      if (response.whatsapp_result?.sent) {
+        message = "Dettaglio prenotazione aggiornato e messaggio WhatsApp inviato al socio.";
+      } else if (response.whatsapp_result?.error) {
+        message = "Dettaglio prenotazione aggiornato, ma il messaggio WhatsApp non e partito.";
+      } else if (response.whatsapp_result?.reason === "missing_phone") {
+        message = "Dettaglio prenotazione aggiornato. Nessun WhatsApp inviato: numero non disponibile.";
+      }
       showToast({
-        tone: "success",
+        tone: response.whatsapp_result?.error ? "info" : "success",
         title:
           nextStatus === "confirmed"
             ? "Richiesta confermata"
             : nextStatus === "rejected"
               ? "Richiesta rigettata"
               : "Richiesta riportata in attesa",
-        message: "Dettaglio prenotazione e stato richiesta aggiornati.",
+        message,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Errore aggiornamento richiesta collegata.";
@@ -1644,6 +1652,12 @@ function BookingDetailPanel(props: {
             </div>
           ) : null}
           <div className="mt-4 flex flex-wrap gap-3">
+            <a
+              className="btn-secondary !px-4 !py-2 !text-sm"
+              href={`/org-admin/comunicazioni?tab=moduli&formId=${props.selectedBooking.form_id}&formTab=responses`}
+            >
+              Apri in Moduli
+            </a>
             {props.selectedBooking.request_status !== "confirmed" ? (
               <button
                 type="button"

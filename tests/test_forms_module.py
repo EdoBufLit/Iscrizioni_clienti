@@ -456,7 +456,7 @@ def test_public_form_submit_sends_whatsapp_auto_reply_when_connected(client, db,
             f"/api/forms/{org.slug}/{public_slug}/submit",
             json={
                 "nome_cliente": "Giulia Bianchi",
-                "telefono": "+39 333 7654321",
+                "telefono": "333 7654321",
                 "data_prenotazione": "2026-03-25",
                 "orario_prenotazione": "20:30",
             },
@@ -557,7 +557,7 @@ def test_public_form_submit_sends_whatsapp_auto_reply_using_dynamic_phone_field_
             f"/api/forms/{org.slug}/{public_slug}/submit",
             json={
                 "nome": "Paola Verdi",
-                "telefono_3c52el": "+39 331 2223344",
+                "telefono_3c52el": "331 2223344",
             },
         )
         assert submit_res.status_code == 200, submit_res.text
@@ -655,7 +655,7 @@ def test_public_form_submit_runs_whatsapp_automation_rules(client, db, monkeypat
             f"/api/forms/{org.slug}/{public_slug}/submit",
             json={
                 "nome": "Luca Neri",
-                "telefono_3c52el": "+39 339 9988776",
+                "telefono_3c52el": "339 9988776",
             },
         )
         assert submit_res.status_code == 200, submit_res.text
@@ -908,7 +908,7 @@ def test_org_admin_can_review_form_submission_and_dispatch_whatsapp(client, db, 
             f"/api/forms/{org.slug}/{public_slug}/submit",
             json={
                 "nome_cliente": "Elena Neri",
-                "telefono": "+39 333 4567890",
+                "telefono": "333 4567890",
                 "data_prenotazione": "2026-03-29",
                 "orario_prenotazione": "20:15",
             },
@@ -941,6 +941,16 @@ def test_org_admin_can_review_form_submission_and_dispatch_whatsapp(client, db, 
         assert sent_payloads[0]["instance_name"] == f"assonam-org-{org.id}"
         assert sent_payloads[0]["number"] == "+393334567890"
         assert "Conferma per Prenotazione review" in sent_payloads[0]["text"]
+
+        pending_res = client.patch(
+            f"/api/org-admin/forms/{form_id}/submissions/{submission_id}/status",
+            json={"status": "pending"},
+        )
+        assert pending_res.status_code == 200, pending_res.text
+        assert pending_res.json()["submission"]["status"] == "pending"
+        assert pending_res.json()["whatsapp_result"]["sent"] is False
+        assert pending_res.json()["whatsapp_result"]["reason"] == "unchanged"
+        assert len(sent_payloads) == 1
 
         reject_res = client.patch(
             f"/api/org-admin/forms/{form_id}/submissions/{submission_id}/status",

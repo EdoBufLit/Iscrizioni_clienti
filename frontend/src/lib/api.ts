@@ -1018,6 +1018,12 @@ export type AssociationForm = {
   updated_at: string | null;
   field_count: number;
   submission_count: number;
+  submission_status_counts: {
+    total: number;
+    pending: number;
+    confirmed: number;
+    rejected: number;
+  };
   booking_count: number;
   fields: AssociationFormField[];
   whatsapp_automations?: OrgAdminWhatsAppAutomation[];

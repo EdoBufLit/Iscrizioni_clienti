@@ -323,10 +323,7 @@ def render_form_submission_whatsapp_template(
     organization: Organization | None,
     phone_number: str | None,
 ) -> str:
-    template = (
-        getattr(form, "whatsapp_auto_reply_template", None)
-        or DEFAULT_FORM_SUBMISSION_WHATSAPP_TEMPLATE
-    )
+    template = getattr(form, "whatsapp_auto_reply_template", None) or _default_submission_template(form)
     context = _build_form_submission_whatsapp_context(
         form=form,
         submission=submission,
@@ -469,14 +466,8 @@ def _build_form_submission_whatsapp_context(
 
 def _resolve_submission_decision_template(*, form: Any, decision_status: str) -> str:
     if decision_status == "confirmed":
-        return (
-            getattr(form, "whatsapp_confirmation_template", None)
-            or DEFAULT_FORM_CONFIRMATION_WHATSAPP_TEMPLATE
-        )
-    return (
-        getattr(form, "whatsapp_rejection_template", None)
-        or DEFAULT_FORM_REJECTION_WHATSAPP_TEMPLATE
-    )
+        return getattr(form, "whatsapp_confirmation_template", None) or _default_confirmation_template(form)
+    return getattr(form, "whatsapp_rejection_template", None) or _default_rejection_template(form)
 
 
 def _render_submission_decision_template(
@@ -737,3 +728,35 @@ def _stringify_template_value(value: Any) -> str:
     if isinstance(value, list):
         return ", ".join(str(item).strip() for item in value if str(item).strip())
     return str(value).strip()
+
+
+def _is_booking_form(form: Any) -> bool:
+    normalized_form_type = str(getattr(form, "form_type", "") or "").strip().lower()
+    return bool(getattr(form, "booking_enabled", False) or normalized_form_type == "booking")
+
+
+def _default_submission_template(form: Any) -> str:
+    if _is_booking_form(form):
+        return (
+            "Ciao {{nome_contatto}}, abbiamo ricevuto la tua prenotazione per {{titolo_form}}. "
+            "Ti confermeremo al piu presto data e disponibilita."
+        )
+    return DEFAULT_FORM_SUBMISSION_WHATSAPP_TEMPLATE
+
+
+def _default_confirmation_template(form: Any) -> str:
+    if _is_booking_form(form):
+        return (
+            "Ciao {{nome_contatto}}, la tua prenotazione per {{titolo_form}} e confermata. "
+            "Ti aspettiamo il {{data_prenotazione}} alle {{orario_prenotazione}}."
+        )
+    return DEFAULT_FORM_CONFIRMATION_WHATSAPP_TEMPLATE
+
+
+def _default_rejection_template(form: Any) -> str:
+    if _is_booking_form(form):
+        return (
+            "Ciao {{nome_contatto}}, la tua prenotazione per {{titolo_form}} non puo essere confermata. "
+            "{{motivo_rigetto}}"
+        )
+    return DEFAULT_FORM_REJECTION_WHATSAPP_TEMPLATE

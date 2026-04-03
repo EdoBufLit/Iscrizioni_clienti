@@ -417,11 +417,26 @@ def _serialize_template_summary(template: EmailTemplate | None) -> dict[str, Any
     }
 
 
+def _build_submission_status_counts(submissions: list[FormSubmission]) -> dict[str, int]:
+    counts = {
+        FORM_SUBMISSION_STATUS_PENDING: 0,
+        FORM_SUBMISSION_STATUS_CONFIRMED: 0,
+        FORM_SUBMISSION_STATUS_REJECTED: 0,
+    }
+    for submission in submissions:
+        normalized_status = normalize_submission_status(getattr(submission, "status", None))
+        counts[normalized_status] = counts.get(normalized_status, 0) + 1
+    counts["total"] = len(submissions)
+    return counts
+
+
 def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]:
     items = sorted(
         list(form.fields or []),
         key=lambda field: (int(field.sort_order or 0), int(field.id or 0)),
     )
+    submissions = list(form.submissions or [])
+    submission_status_counts = _build_submission_status_counts(submissions)
     whatsapp_automations = sorted(
         list(getattr(form, "whatsapp_automations", []) or []),
         key=lambda automation: (
@@ -474,7 +489,8 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
         "created_at": form.created_at.isoformat() if form.created_at else None,
         "updated_at": form.updated_at.isoformat() if form.updated_at else None,
         "field_count": len(items),
-        "submission_count": len(form.submissions or []),
+        "submission_count": len(submissions),
+        "submission_status_counts": submission_status_counts,
         "booking_count": len(form.bookings or []),
         "fields": [serialize_form_field(field) for field in items] if include_fields else [],
         "whatsapp_automations": [

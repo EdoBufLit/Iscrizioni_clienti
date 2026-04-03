@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   buildOrgAdminFormSubmissionsExportUrl,
   createOrgAdminForm,
@@ -140,6 +140,13 @@ const submissionStatusMeta: Record<string, { label: string; className: string }>
   confirmed: { label: "Confermata", className: "bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-200" },
   rejected: { label: "Rigettata", className: "bg-rose-50 text-rose-800 ring-1 ring-inset ring-rose-200" },
 };
+
+function normalizeEditorTab(value: string | null | undefined): EditorTab {
+  if (value === "builder" || value === "design" || value === "settings" || value === "responses") {
+    return value;
+  }
+  return "builder";
+}
 
 function submissionStatusLabel(status: string | null | undefined) {
   return submissionStatusMeta[(status || "").toLowerCase()] ?? {
@@ -338,6 +345,7 @@ export function OrgAdminFormsWorkspace({
   const { admin, loading: adminLoading } = useOrgAdmin();
   const { showToast } = useToast();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -371,6 +379,17 @@ export function OrgAdminFormsWorkspace({
   const [confirmActionOpen, setConfirmActionOpen] = useState<false | "confirmed" | "pending">(false);
   const [rejectActionOpen, setRejectActionOpen] = useState(false);
 
+  const requestedFormId = useMemo(() => {
+    const rawValue = searchParams.get("formId");
+    if (!rawValue) return null;
+    const parsedValue = Number(rawValue);
+    return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : null;
+  }, [searchParams]);
+  const requestedFormTab = useMemo(
+    () => normalizeEditorTab(searchParams.get("formTab")),
+    [searchParams],
+  );
+
   useEffect(() => {
     if (embedded) return;
     applySeo({
@@ -392,6 +411,27 @@ export function OrgAdminFormsWorkspace({
     }
     void loadForms();
   }, [adminLoading, admin, locked]);
+
+  useEffect(() => {
+    if (adminLoading || loading || locked || !requestedFormId) return;
+    if (!forms.some((item) => item.id === requestedFormId)) return;
+    if (selectedFormId !== requestedFormId) {
+      void openFormEditor(requestedFormId, { initialTab: requestedFormTab, syncQuery: false });
+      return;
+    }
+    if (activeTab !== requestedFormTab) {
+      setActiveTab(requestedFormTab);
+    }
+  }, [
+    activeTab,
+    adminLoading,
+    forms,
+    loading,
+    locked,
+    requestedFormId,
+    requestedFormTab,
+    selectedFormId,
+  ]);
 
   useEffect(() => {
     if (!selectedForm) {
@@ -586,6 +626,7 @@ export function OrgAdminFormsWorkspace({
   ]);
 
   function resetEditorState() {
+    syncWorkspaceQuery({ formId: null, formTab: null });
     setIsCreatingForm(false);
     setSelectedFormId(null);
     setSelectedForm(null);
@@ -602,15 +643,44 @@ export function OrgAdminFormsWorkspace({
     setRealPreviewOpen(false);
   }
 
-  async function openFormEditor(formId: number) {
+  function syncWorkspaceQuery({
+    formId,
+    formTab,
+  }: {
+    formId?: number | null;
+    formTab?: EditorTab | null;
+  }) {
+    const nextParams = new URLSearchParams(searchParams);
+    if (typeof formId === "number" && formId > 0) nextParams.set("formId", String(formId));
+    else nextParams.delete("formId");
+    if (formTab) nextParams.set("formTab", formTab);
+    else nextParams.delete("formTab");
+    setSearchParams(nextParams, { replace: true });
+  }
+
+  function handleEditorTabChange(nextTab: EditorTab) {
+    setActiveTab(nextTab);
+    if (selectedFormId) {
+      syncWorkspaceQuery({ formId: selectedFormId, formTab: nextTab });
+    }
+  }
+
+  async function openFormEditor(
+    formId: number,
+    options?: { initialTab?: EditorTab; syncQuery?: boolean },
+  ) {
     const detail = await fetchOrgAdminForm(formId);
+    const initialTab = options?.initialTab ?? "builder";
     setIsCreatingForm(false);
     setSelectedFormId(detail.form.id);
     setSelectedForm(detail.form);
     setBuilderDraftFields(decodeBuilderFields(detail.form));
     setForms((current) => current.map((item) => (item.id === detail.form.id ? detail.form : item)));
     setDeleteArmed(false);
-    setActiveTab("builder");
+    setActiveTab(initialTab);
+    if (options?.syncQuery !== false) {
+      syncWorkspaceQuery({ formId: detail.form.id, formTab: initialTab });
+    }
     return detail.form;
   }
 
@@ -628,7 +698,7 @@ export function OrgAdminFormsWorkspace({
         await openFormEditor(nextSelectedId);
       } else if (nextSelectedId === null) {
         resetEditorState();
-      } else if (!isEditorOpen) {
+      } else if (!isEditorOpen && !requestedFormId) {
         resetEditorState();
       }
     } catch (err) {
@@ -1207,6 +1277,7 @@ export function OrgAdminFormsWorkspace({
   }
 
   function handleCreateNewForm() {
+    syncWorkspaceQuery({ formId: null, formTab: null });
     setIsCreatingForm(true);
     setSelectedFormId(null);
     setSelectedForm(null);
@@ -2109,9 +2180,44 @@ export function OrgAdminFormsWorkspace({
                         {form.is_active ? 'Attivo' : 'Bozza'}
                       </span>
                     </div>
-                    <div className="mt-6 flex items-center justify-between text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 border-t border-slate-100 pt-4">
-                      <span>{form.submission_count} risposte</span>
-                      <span>{form.field_count} campi</span>
+                    <div className="mt-6 space-y-3 border-t border-slate-100 pt-4">
+                      <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">
+                        <span>{form.submission_status_counts?.total ?? form.submission_count} risposte</span>
+                        <span>{form.field_count} campi</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-[11px]">
+                        <span className="rounded-full bg-amber-50 px-2.5 py-1 font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">
+                          {form.submission_status_counts?.pending ?? 0} in attesa
+                        </span>
+                        <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-200">
+                          {form.submission_status_counts?.confirmed ?? 0} confermate
+                        </span>
+                        <span className="rounded-full bg-rose-50 px-2.5 py-1 font-semibold text-rose-800 ring-1 ring-inset ring-rose-200">
+                          {form.submission_status_counts?.rejected ?? 0} rigettate
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="btn-primary !px-4 !py-2 !text-sm"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void openFormEditor(form.id, { initialTab: "responses" });
+                          }}
+                        >
+                          Gestisci risposte
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-secondary !px-4 !py-2 !text-sm"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void openFormEditor(form.id, { initialTab: "builder" });
+                          }}
+                        >
+                          Apri builder
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -2222,7 +2328,7 @@ export function OrgAdminFormsWorkspace({
                 {editorTabs.map((tab) => (
                   <button
                     key={tab.key}
-                    onClick={() => setActiveTab(tab.key)}
+                    onClick={() => handleEditorTabChange(tab.key)}
                     className={`relative py-4 text-sm font-bold transition-colors ${
                       activeTab === tab.key 
                         ? "text-brand" 

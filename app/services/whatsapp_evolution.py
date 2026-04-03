@@ -96,18 +96,59 @@ def build_evolution_instance_name(org_id: int) -> str:
     return f"assonam-org-{int(org_id)}"
 
 
+def _split_whatsapp_identifier(value: str | None) -> tuple[str | None, str | None]:
+    cleaned = str(value or "").strip()
+    if not cleaned:
+        return None, None
+    if "@" not in cleaned:
+        return cleaned, None
+    local_part, domain = cleaned.split("@", 1)
+    return local_part.strip() or None, domain.strip().lower() or None
+
+
+def is_whatsapp_group_jid(value: str | None) -> bool:
+    _local_part, domain = _split_whatsapp_identifier(value)
+    return domain == "g.us"
+
+
+def _extract_phone_digits(value: str | None) -> tuple[str | None, bool]:
+    local_part, domain = _split_whatsapp_identifier(value)
+    if local_part is None:
+        return None, False
+    local_value = local_part.split(":", 1)[0].strip()
+    digits = "".join(ch for ch in local_value if ch.isdigit())
+    return (digits or None), domain is not None
+
+
 def normalize_phone(value: str | None) -> str | None:
     if value is None:
         return None
     cleaned = str(value).strip()
     if not cleaned:
         return None
-    if "@" in cleaned:
-        cleaned = cleaned.split("@", 1)[0]
-    digits = "".join(ch for ch in cleaned if ch.isdigit())
+    digits, is_jid = _extract_phone_digits(cleaned)
     if not digits:
         return None
-    return f"+{digits}"
+    if cleaned.startswith("+"):
+        return f"+{digits}"
+    if cleaned.startswith("00"):
+        intl_digits = digits[2:] if digits.startswith("00") else digits
+        return f"+{intl_digits}" if intl_digits else None
+    if is_jid or (len(digits) >= 11 and digits.startswith("39")):
+        return f"+{digits}"
+    return f"+39{digits}"
+
+
+def canonicalize_whatsapp_chat_id(value: str | None) -> str | None:
+    cleaned = str(value or "").strip()
+    if not cleaned:
+        return None
+    if is_whatsapp_group_jid(cleaned):
+        return cleaned
+    normalized_phone = normalize_phone(cleaned)
+    if normalized_phone is None:
+        return None
+    return f"{normalized_phone.lstrip('+')}@s.whatsapp.net"
 
 
 def resolve_connection_status(
@@ -304,7 +345,7 @@ def _parse_contact(payload: Any) -> EvolutionContact | None:
     if not isinstance(profile_pic_url, str) or not profile_pic_url.strip():
         profile_pic_url = None
     return EvolutionContact(
-        remote_jid=remote_jid.strip(),
+        remote_jid=canonicalize_whatsapp_chat_id(remote_jid) or remote_jid.strip(),
         display_name=display_name,
         phone_number=normalize_phone(remote_jid),
         profile_pic_url=profile_pic_url,
@@ -350,7 +391,7 @@ def _parse_chat(payload: Any) -> EvolutionChat | None:
     updated_at = _parse_timestamp_value(payload.get("updatedAt")) or _parse_timestamp_value(payload.get("windowStart"))
     last_message_at = _parse_timestamp_value(last_message.get("messageTimestamp")) or updated_at
     return EvolutionChat(
-        remote_jid=remote_jid.strip(),
+        remote_jid=canonicalize_whatsapp_chat_id(remote_jid) or remote_jid.strip(),
         display_name=display_name,
         updated_at=updated_at,
         last_message_text=_extract_text_preview(last_message),
@@ -368,7 +409,11 @@ def _parse_history_message(payload: Any) -> EvolutionHistoryMessage | None:
         remote_jid = None
     return EvolutionHistoryMessage(
         external_message_id=_extract_message_id(payload),
-        remote_jid=remote_jid.strip() if isinstance(remote_jid, str) and remote_jid.strip() else None,
+        remote_jid=(
+            canonicalize_whatsapp_chat_id(remote_jid) or remote_jid.strip()
+            if isinstance(remote_jid, str) and remote_jid.strip()
+            else None
+        ),
         created_at=_parse_timestamp_value(payload.get("messageTimestamp")),
         raw=payload,
     )

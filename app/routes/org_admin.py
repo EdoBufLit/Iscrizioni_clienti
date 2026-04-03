@@ -2871,6 +2871,10 @@ def preview_communication_template(
         fake=True,
         extra_context={
             "titolo_form": linked_form.title if linked_form is not None else "",
+            "link_form_collegato": build_linked_form_url(
+                association=admin.organization,
+                linked_form=linked_form,
+            ) or "",
         },
     )
     rendered = decorate_rendered_email(
@@ -3418,6 +3422,10 @@ def send_communications_builder_test(
         fake=True,
         extra_context={
             "titolo_form": linked_form.title if linked_form is not None else "",
+            "link_form_collegato": build_linked_form_url(
+                association=admin.organization,
+                linked_form=linked_form,
+            ) or "",
             "nome_evento": body.message_name or "",
         },
     )

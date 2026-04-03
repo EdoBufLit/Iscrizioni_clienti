@@ -141,8 +141,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     mjml: `
       <mj-section padding="12px 0 20px 0">
         <mj-column>
-          <mj-button background-color="#17494a" color="#ffffff" border-radius="6px" font-weight="700" href="{{link_iscrizione}}">Completa adesso</mj-button>
-          <mj-text color="#64748b" font-size="13px" line-height="20px" align="center" padding-top="8px">Se il pulsante non funziona, copia questo link nel browser: {{link_iscrizione}}</mj-text>
+          <mj-button background-color="#17494a" color="#ffffff" border-radius="6px" font-weight="700" href="{{link_form_collegato}}">Apri il modulo</mj-button>
+          <mj-text color="#64748b" font-size="13px" line-height="20px" align="center" padding-top="8px">Se il pulsante non funziona, copia questo link nel browser: {{link_form_collegato}}</mj-text>
         </mj-column>
       </mj-section>
     `,
@@ -246,7 +246,7 @@ export function getBuilderInitialMjml(templateType: OrgAdminEmailTemplateType): 
       title: "Le novita di {{nome_associazione}}",
       body: "Ciao {{nome_socio}}, ecco un riepilogo chiaro delle novita, degli aggiornamenti e delle prossime azioni utili.",
       cta: "Leggi l'aggiornamento",
-      link: "{{link_iscrizione}}",
+      link: "{{link_form_collegato}}",
     },
     event: {
       title: "Sei invitato al prossimo appuntamento",

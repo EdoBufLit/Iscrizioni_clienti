@@ -7,7 +7,7 @@ import pytest
 
 from app.config import settings
 from app.db import SessionLocal
-from app.models import AdminRole, AdminUser, OrgAdminToken, Organization, WhatsAppChat
+from app.models import AdminRole, AdminUser, OrgAdminToken, Organization, WhatsAppChat, WhatsAppMessage
 from app.services.whatsapp_evolution import EvolutionLiteClient
 from app.services.whatsapp_evolution import (
     EvolutionConnectionSnapshot,
@@ -166,7 +166,7 @@ def test_whatsapp_connect_send_and_disconnect(client, db, monkeypatch):
     outbound_res = client.post(
         "/api/org-admin/communications/whatsapp/outbound",
         json={
-            "number": "+39 333 1234567",
+            "number": "333 1234567",
             "display_name": "Mario Rossi",
             "text": "Primo contatto dal test",
         },
@@ -241,7 +241,7 @@ def test_whatsapp_contacts_and_draft_chat(client, db, monkeypatch):
 
     draft_res = client.post(
         "/api/org-admin/communications/whatsapp/draft-chat",
-        json={"number": "+39 333 1234567", "display_name": "Mario Rossi"},
+        json={"number": "333 1234567", "display_name": "Mario Rossi"},
     )
     assert draft_res.status_code == 200, draft_res.text
     draft_payload = draft_res.json()["chat"]
@@ -391,6 +391,97 @@ def test_internal_webhook_syncs_connection_messages_and_dedupes(client, db):
     chats_res_after_read = client.get("/api/org-admin/communications/whatsapp/chats")
     assert chats_res_after_read.status_code == 200, chats_res_after_read.text
     assert chats_res_after_read.json()["items"][0]["unread_count"] == 0
+
+
+def test_internal_webhook_merges_alias_chat_ids_and_prefers_better_contact_name(client, db):
+    org, admin = _create_org_admin(db, communications_enabled=True)
+    _login_org_admin(client, db, admin.id)
+    connection = get_or_create_connection(db, org)
+    connection.status = "connected"
+    connection.phone_number = "+393404244452"
+    db.commit()
+    db.refresh(connection)
+
+    alias_chat = WhatsAppChat(
+        org_id=org.id,
+        connection_id=connection.id,
+        external_chat_id="393338765432:18@s.whatsapp.net",
+        display_name="+393338765432",
+        last_message_text="Storico alias",
+        last_message_at=datetime(2026, 3, 18, 18, 5, 0),
+        unread_count=1,
+    )
+    db.add(alias_chat)
+    db.flush()
+    db.add(
+        WhatsAppMessage(
+            org_id=org.id,
+            connection_id=connection.id,
+            chat_id=alias_chat.id,
+            dedupe_key="legacy-alias-message",
+            direction="inbound",
+            status="sent",
+            sender_phone="+393338765432",
+            recipient_phone=connection.phone_number,
+            text_body="Messaggio storico",
+            sent_at=datetime(2026, 3, 18, 18, 5, 0),
+            created_at=datetime(2026, 3, 18, 18, 5, 0),
+        )
+    )
+    db.commit()
+
+    webhook_res = client.post(
+        "/api/internal/whatsapp/evolution",
+        json={
+            "event": "messages.upsert",
+            "instance": connection.instance_name,
+            "date_time": "2026-03-18T18:15:00Z",
+            "data": {
+                "messages": [
+                    {
+                        "key": {
+                            "id": "wamid-merged-1",
+                            "remoteJid": "393338765432@s.whatsapp.net",
+                            "fromMe": False,
+                        },
+                        "pushName": "Mario Rossi",
+                        "message": {"conversation": "Nuovo messaggio"},
+                        "messageTimestamp": 1773857700,
+                    }
+                ]
+            },
+        },
+        headers={"X-Evolution-ApiKey": settings.EVOLUTION_API_KEY},
+    )
+    assert webhook_res.status_code == 200, webhook_res.text
+
+    chats_res = client.get("/api/org-admin/communications/whatsapp/chats")
+    assert chats_res.status_code == 200, chats_res.text
+    chats_payload = chats_res.json()
+    assert chats_payload["total"] == 1
+    chat = chats_payload["items"][0]
+    assert chat["external_chat_id"] == "393338765432@s.whatsapp.net"
+    assert chat["display_name"] == "Mario Rossi"
+    assert chat["unread_count"] == 2
+
+    messages_res = client.get(f"/api/org-admin/communications/whatsapp/chats/{chat['id']}/messages")
+    assert messages_res.status_code == 200, messages_res.text
+    message_texts = [item["text_body"] for item in messages_res.json()["items"]]
+    assert "Messaggio storico" in message_texts
+    assert "Nuovo messaggio" in message_texts
+
+    verification_db = SessionLocal()
+    try:
+        merged_chats = (
+            verification_db.query(WhatsAppChat)
+            .filter(WhatsAppChat.connection_id == connection.id)
+            .all()
+        )
+        assert len(merged_chats) == 1
+        assert merged_chats[0].external_chat_id == "393338765432@s.whatsapp.net"
+        assert merged_chats[0].display_name == "Mario Rossi"
+    finally:
+        verification_db.close()
 
 
 def test_evolution_client_uses_lite_namespaced_paths(monkeypatch):

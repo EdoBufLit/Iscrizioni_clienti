@@ -22,6 +22,8 @@ from app.services.whatsapp_evolution import (
     EvolutionHistoryMessage,
     EvolutionSendTextResult,
     build_evolution_instance_name,
+    canonicalize_whatsapp_chat_id,
+    is_whatsapp_group_jid,
     normalize_phone,
     resolve_connection_status,
 )
@@ -172,10 +174,10 @@ def get_chat_for_connection(
 
 
 def build_external_chat_id_for_number(number: str) -> str:
-    normalized = normalize_phone(number)
-    if not normalized:
+    external_chat_id = canonicalize_whatsapp_chat_id(number)
+    if not external_chat_id:
         raise ValueError("Numero WhatsApp non valido.")
-    return f"{normalized.lstrip('+')}@s.whatsapp.net"
+    return external_chat_id
 
 
 def get_or_create_chat_for_number(
@@ -203,8 +205,8 @@ def sync_contacts_into_chats(
 ) -> list[WhatsAppChat]:
     synced: list[WhatsAppChat] = []
     for contact in contacts:
-        external_chat_id = (contact.remote_jid or "").strip()
-        if not external_chat_id or external_chat_id.endswith("@g.us"):
+        external_chat_id = canonicalize_whatsapp_chat_id(contact.remote_jid)
+        if not external_chat_id or is_whatsapp_group_jid(external_chat_id):
             continue
         display_name = contact.display_name or contact.phone_number or external_chat_id
         chat = _get_or_create_chat(
@@ -213,7 +215,7 @@ def sync_contacts_into_chats(
             external_chat_id=external_chat_id,
             display_name=display_name,
         )
-        if display_name and chat.display_name != display_name:
+        if _should_replace_display_name(chat.display_name, display_name):
             chat.display_name = display_name
         synced.append(chat)
     return synced
@@ -227,8 +229,8 @@ def sync_remote_chats_into_store(
 ) -> list[WhatsAppChat]:
     synced: list[WhatsAppChat] = []
     for remote_chat in chats:
-        external_chat_id = (remote_chat.remote_jid or "").strip()
-        if not external_chat_id or external_chat_id.endswith("@g.us"):
+        external_chat_id = canonicalize_whatsapp_chat_id(remote_chat.remote_jid)
+        if not external_chat_id or is_whatsapp_group_jid(external_chat_id):
             continue
         display_name = remote_chat.display_name or normalize_phone(external_chat_id) or external_chat_id
         chat = _get_or_create_chat(
@@ -237,7 +239,7 @@ def sync_remote_chats_into_store(
             external_chat_id=external_chat_id,
             display_name=display_name,
         )
-        if display_name and chat.display_name != display_name:
+        if _should_replace_display_name(chat.display_name, display_name):
             chat.display_name = display_name
         if remote_chat.last_message_text:
             chat.last_message_text = remote_chat.last_message_text
@@ -593,9 +595,10 @@ def _ingest_contact_batch(
         remote_jid = payload.get("remoteJid")
         if not isinstance(remote_jid, str) or not remote_jid.strip():
             continue
+        canonical_chat_id = canonicalize_whatsapp_chat_id(remote_jid) or remote_jid.strip()
         contacts.append(
             EvolutionContact(
-                remote_jid=remote_jid.strip(),
+                remote_jid=canonical_chat_id,
                 display_name=_extract_display_name(payload) or normalize_phone(remote_jid) or remote_jid.strip(),
                 phone_number=normalize_phone(remote_jid),
                 profile_pic_url=payload.get("profilePicUrl") if isinstance(payload.get("profilePicUrl"), str) else None,
@@ -616,7 +619,7 @@ def _ingest_chat_batch(
 ) -> None:
     for payload in _extract_chat_envelopes(data):
         external_chat_id = _extract_chat_id(payload)
-        if not external_chat_id or external_chat_id.endswith("@g.us"):
+        if not external_chat_id or is_whatsapp_group_jid(external_chat_id):
             continue
         display_name = _extract_display_name(payload)
         if not display_name:
@@ -670,11 +673,35 @@ def _get_or_create_chat(
     external_chat_id: str,
     display_name: str | None,
 ) -> WhatsAppChat:
+    normalized_external_chat_id = (
+        canonicalize_whatsapp_chat_id(external_chat_id)
+        if not is_whatsapp_group_jid(external_chat_id)
+        else (external_chat_id or "").strip() or None
+    )
+    if normalized_external_chat_id is None:
+        raise ValueError("Chat WhatsApp non valida.")
+
+    chat_candidates = _find_chat_candidates(
+        db,
+        connection=connection,
+        external_chat_id=normalized_external_chat_id,
+    )
+    primary_chat = _select_primary_chat(chat_candidates, preferred_external_chat_id=normalized_external_chat_id)
+    if primary_chat is not None:
+        if primary_chat.external_chat_id != normalized_external_chat_id:
+            primary_chat.external_chat_id = normalized_external_chat_id
+        alias_chats = [item for item in chat_candidates if item.id != primary_chat.id]
+        if alias_chats:
+            _merge_chat_aliases(db, primary_chat=primary_chat, alias_chats=alias_chats)
+        if _should_replace_display_name(primary_chat.display_name, display_name):
+            primary_chat.display_name = display_name
+        return primary_chat
+
     chat = (
         db.query(WhatsAppChat)
         .filter(
             WhatsAppChat.connection_id == connection.id,
-            WhatsAppChat.external_chat_id == external_chat_id,
+            WhatsAppChat.external_chat_id == normalized_external_chat_id,
         )
         .first()
     )
@@ -682,15 +709,109 @@ def _get_or_create_chat(
         chat = WhatsAppChat(
             org_id=connection.org_id,
             connection_id=connection.id,
-            external_chat_id=external_chat_id,
+            external_chat_id=normalized_external_chat_id,
             display_name=display_name,
         )
         db.add(chat)
         db.flush()
         return chat
-    if display_name and not chat.display_name:
+    if _should_replace_display_name(chat.display_name, display_name):
         chat.display_name = display_name
     return chat
+
+
+def _find_chat_candidates(
+    db: Session,
+    *,
+    connection: WhatsAppConnection,
+    external_chat_id: str,
+) -> list[WhatsAppChat]:
+    normalized_phone = normalize_phone(external_chat_id)
+    chats = (
+        db.query(WhatsAppChat)
+        .filter(WhatsAppChat.connection_id == connection.id)
+        .all()
+    )
+    if normalized_phone is None:
+        return [chat for chat in chats if chat.external_chat_id == external_chat_id]
+    return [
+        chat
+        for chat in chats
+        if normalize_phone(chat.external_chat_id) == normalized_phone
+    ]
+
+
+def _select_primary_chat(
+    chats: list[WhatsAppChat],
+    *,
+    preferred_external_chat_id: str,
+) -> WhatsAppChat | None:
+    if not chats:
+        return None
+    return sorted(
+        chats,
+        key=lambda chat: (
+            0 if chat.external_chat_id == preferred_external_chat_id else 1,
+            0 if chat.last_message_at is not None else 1,
+            -(chat.last_message_at.timestamp()) if chat.last_message_at is not None else 0.0,
+            chat.id,
+        ),
+    )[0]
+
+
+def _merge_chat_aliases(
+    db: Session,
+    *,
+    primary_chat: WhatsAppChat,
+    alias_chats: list[WhatsAppChat],
+) -> None:
+    for alias_chat in alias_chats:
+        (
+            db.query(WhatsAppMessage)
+            .filter(WhatsAppMessage.chat_id == alias_chat.id)
+            .update({WhatsAppMessage.chat_id: primary_chat.id}, synchronize_session=False)
+        )
+        if not primary_chat.last_message_at or (
+            alias_chat.last_message_at is not None and alias_chat.last_message_at > primary_chat.last_message_at
+        ):
+            primary_chat.last_message_at = alias_chat.last_message_at
+            primary_chat.last_message_text = alias_chat.last_message_text
+        primary_chat.unread_count = int(primary_chat.unread_count or 0) + int(alias_chat.unread_count or 0)
+        if _should_replace_display_name(primary_chat.display_name, alias_chat.display_name):
+            primary_chat.display_name = alias_chat.display_name
+        db.delete(alias_chat)
+    db.flush()
+
+
+def _display_name_quality(value: str | None) -> int:
+    cleaned = (value or "").strip()
+    if not cleaned:
+        return 0
+    if "@" in cleaned:
+        return 1
+    if normalize_phone(cleaned) == cleaned:
+        return 1
+    if any(ch.isalpha() for ch in cleaned):
+        return 4
+    if any(ch.isdigit() for ch in cleaned):
+        return 2
+    return 3
+
+
+def _should_replace_display_name(current: str | None, candidate: str | None) -> bool:
+    cleaned_candidate = (candidate or "").strip()
+    if not cleaned_candidate:
+        return False
+    cleaned_current = (current or "").strip()
+    if not cleaned_current:
+        return True
+    current_quality = _display_name_quality(cleaned_current)
+    candidate_quality = _display_name_quality(cleaned_candidate)
+    if candidate_quality != current_quality:
+        return candidate_quality > current_quality
+    if cleaned_candidate.lower() == cleaned_current.lower():
+        return False
+    return len(cleaned_candidate) > len(cleaned_current)
 
 
 def _touch_chat(
@@ -794,10 +915,10 @@ def _extract_chat_id(payload: dict[str, Any]) -> str | None:
     if isinstance(key, dict):
         remote_jid = key.get("remoteJid")
         if isinstance(remote_jid, str) and remote_jid.strip():
-            return remote_jid.strip()
+            return canonicalize_whatsapp_chat_id(remote_jid) or remote_jid.strip()
     for candidate in (payload.get("remoteJid"), payload.get("jid"), payload.get("chatId")):
         if isinstance(candidate, str) and candidate.strip():
-            return candidate.strip()
+            return canonicalize_whatsapp_chat_id(candidate) or candidate.strip()
     return None
 
 

@@ -152,6 +152,13 @@ AVAILABLE_TEMPLATE_VARIABLES = [
         "example": "Prenotazione tavolo",
     },
     {
+        "key": "link_form_collegato",
+        "placeholder": "{{link_form_collegato}}",
+        "label": "Link form collegato",
+        "description": "URL pubblico del form collegato alla campagna o al template.",
+        "example": "https://app.assonam.it/forms/golden-age-club/prenotazione-serata",
+    },
+    {
         "key": "email_destinatario",
         "placeholder": "{{email_destinatario}}",
         "label": "Email destinatario",
@@ -624,6 +631,7 @@ def build_template_context(
         "stato_prenotazione": "",
         "messaggio_org": "",
         "titolo_form": "",
+        "link_form_collegato": "",
         "email_destinatario": recipient_email,
     }
     for key, value in (extra_context or {}).items():
@@ -729,8 +737,6 @@ def decorate_rendered_email(
         cta_url = raw_cta_url or str(rendered.context.get("link_rinnovo") or "")
     elif cta_kind == "custom":
         cta_url = raw_cta_url
-    elif linked_form_url:
-        cta_url = linked_form_url
     cta_label = resolved_design["cta_label"]
     if not cta_label and cta_url:
         if cta_kind == "renewal":

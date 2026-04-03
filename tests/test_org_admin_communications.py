@@ -168,6 +168,7 @@ def test_org_admin_template_library_seed_duplicate_preview_and_archive(client, d
     placeholders = {item["placeholder"] for item in variables_res.json()["items"]}
     assert "{{nome_socio}}" in placeholders
     assert "{{link_rinnovo}}" in placeholders
+    assert "{{link_form_collegato}}" in placeholders
 
     preview_res = client.post(
         "/api/org-admin/communications/templates/preview",
@@ -620,6 +621,52 @@ def test_org_admin_campaign_can_be_scheduled_with_design_and_linked_form(client,
         settings.EMAIL_MODE = original_mode
         settings.MAIL_FROM_DOMAIN = original_domain
         clear_captured_emails()
+
+
+def test_template_preview_uses_explicit_linked_form_placeholder_without_auto_footer_cta(client, db):
+    org, admin = _create_org_admin(db, communications_enabled=True)
+    _login_org_admin(client, db, admin.id)
+
+    form_res = client.post(
+        "/api/org-admin/forms",
+        json={
+            "title": "Modulo CTA esplicita",
+            "public_slug": f"modulo-cta-esplicita-{uuid.uuid4().hex[:6]}",
+            "is_active": True,
+            "visibility": "public",
+        },
+    )
+    assert form_res.status_code == 201, form_res.text
+    linked_form = form_res.json()["form"]
+
+    explicit_preview_res = client.post(
+        "/api/org-admin/communications/templates/preview",
+        json={
+            "subject": "Preview con form",
+            "compiled_html": (
+                "<div><p>Apri il modulo dal bottone principale.</p>"
+                "<a href='{{link_form_collegato}}'>Vai al form</a></div>"
+            ),
+            "linked_form_id": linked_form["id"],
+        },
+    )
+    assert explicit_preview_res.status_code == 200, explicit_preview_res.text
+    explicit_preview = explicit_preview_res.json()["preview"]["body_html"] or ""
+    assert linked_form["public_path"] in explicit_preview
+    assert "Apri modulo:" not in explicit_preview
+
+    plain_preview_res = client.post(
+        "/api/org-admin/communications/templates/preview",
+        json={
+            "subject": "Preview senza CTA decorata",
+            "compiled_html": "<div><p>Solo contenuto editoriale.</p></div>",
+            "linked_form_id": linked_form["id"],
+        },
+    )
+    assert plain_preview_res.status_code == 200, plain_preview_res.text
+    plain_preview = plain_preview_res.json()["preview"]["body_html"] or ""
+    assert "Apri modulo:" not in plain_preview
+    assert linked_form["public_path"] not in plain_preview
 
 
 def test_org_admin_campaign_selected_members_requires_non_empty_list(client, db):

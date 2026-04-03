@@ -1,3 +1,20 @@
+## Plan (ORG ADMIN WhatsApp, inbox form e CTA campagne - Apr 03, 2026)
+- [x] Correggere la normalizzazione condivisa dei numeri WhatsApp e canonicalizzare i JID/chat id Evolution con default `+39`
+- [x] Rendere coerente l'invio WhatsApp post-review da `Moduli` e `Prenotazioni`, con secondo messaggio obbligatorio su conferma/rigetto
+- [x] Rimuovere la CTA automatica footer dalle campagne/template e introdurre `{{link_form_collegato}}` nel contesto email, preview e builder
+- [x] Rendere esplicita la gestione risposte in `Comunicazioni > Moduli` con deep-link `formId` + `formTab=responses`, CTA visibili e ponte dal dettaglio prenotazione
+- [x] Eseguire test backend/frontend mirati, aggiornare la checklist con esito reale e aggiungere review finale
+
+## Review (ORG ADMIN WhatsApp, inbox form e CTA campagne - Apr 03, 2026)
+- Normalizzazione WhatsApp unificata in backend: i numeri senza prefisso internazionale ora assumono `+39`, mentre i JID 1:1 Evolution vengono canonicalizzati in `<digits>@s.whatsapp.net`; questo evita sia l'errore `338... -> +33...` sia l'apertura di chat duplicate per alias tipo `:device@s.whatsapp.net`.
+- La inbox Evolution ora mergea le chat legacy equivalenti sullo stesso numero, riallinea i messaggi alla chat canonica e aggiorna il `display_name` quando arriva un nome migliore (`pushName`/`profileName`) invece di lasciare il fallback numerico.
+- Il flusso review e rimasto centralizzato su `PATCH /forms/{form_id}/submissions/{submission_id}/status`: conferma e rigetto continuano a generare il secondo messaggio WhatsApp al socio, e lo stesso esito viene ora riflesso meglio anche dall'area `Prenotazioni`.
+- Le campagne/template non aggiungono piu automaticamente il bottone footer solo perche esiste un `linked_form_id`; il link al form e ora esplicito tramite `{{link_form_collegato}}`, disponibile in variabili, preview, send-test e campagne reali.
+- `Comunicazioni > Moduli` ora espone contatori `pending/confermate/rigettate`, CTA `Gestisci risposte`, deep-link `formId` + `formTab=responses` e un ponte diretto dal dettaglio prenotazione verso la review del modulo.
+- Verifiche eseguite:
+  - `pytest tests/test_forms_module.py::test_public_form_submit_sends_whatsapp_auto_reply_when_connected tests/test_forms_module.py::test_public_form_submit_sends_whatsapp_auto_reply_using_dynamic_phone_field_key tests/test_forms_module.py::test_public_form_submit_runs_whatsapp_automation_rules tests/test_forms_module.py::test_org_admin_can_review_form_submission_and_dispatch_whatsapp tests/test_org_admin_whatsapp.py::test_whatsapp_connect_send_and_disconnect tests/test_org_admin_whatsapp.py::test_whatsapp_contacts_and_draft_chat tests/test_org_admin_whatsapp.py::test_internal_webhook_merges_alias_chat_ids_and_prefers_better_contact_name tests/test_org_admin_communications.py::test_org_admin_template_library_seed_duplicate_preview_and_archive tests/test_org_admin_communications.py::test_template_preview_uses_explicit_linked_form_placeholder_without_auto_footer_cta`
+  - `npm --prefix frontend run typecheck`
+
 ## Plan (ASSONAM org-admin member card email delivery regression - Apr 01, 2026)
 - [x] Verificare su Hetzner il flusso reale `POST /api/org-admin/members/{id}/card-email` distinguendo enqueue applicativo, stato `email_outbox` e worker SMTP
 - [x] Isolare la root cause confrontando i log live con il codice del delivery della tessera e con gli eventi del recovery/disco pieno

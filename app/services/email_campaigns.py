@@ -15,6 +15,7 @@ from app.models import EmailCampaign, EmailCampaignRecipient, Form, Member, Orga
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 from app.services.email_templates import (
+    build_linked_form_url,
     decorate_rendered_email,
     normalize_email_design,
     render_template_content,
@@ -559,6 +560,10 @@ def send_campaign(
             member=recipient.member,
             extra_context={
                 "titolo_form": campaign.linked_form.title if campaign.linked_form is not None else "",
+                "link_form_collegato": build_linked_form_url(
+                    association=organization,
+                    linked_form=campaign.linked_form,
+                ) or "",
             },
         )
         rendered_content = decorate_rendered_email(
