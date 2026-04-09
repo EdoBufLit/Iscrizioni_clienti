@@ -3999,3 +3999,19 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - In `app/routes/membership_payments.py` e `frontend/src/lib/api.ts` lo status pubblico del pagamento espone ora anche i link tessera standard; `frontend/src/pages/IscrizionePagamentoEsito.tsx` usa `active_card_page_url` e reindirizza automaticamente alla pagina tessera standard appena la card risulta `issued`, lasciando solo uno stato transitorio minimo.
 - Ho aggiunto copertura mirata in `tests/test_membership_payments_sumup.py` per verificare che il webhook SumUp accodi la mail tessera standard e che l'endpoint status restituisca `active_card_page_url` e gli altri link tessera pubblici.
 - Verifiche eseguite: `python -m pytest -q tests/test_membership_payments_sumup.py tests/test_org_admin_manual_payment.py tests/test_member_card_verification.py tests/test_payment_method_join.py` OK (`19 passed`), `npm --prefix frontend run build` OK.
+
+## Plan (Public signup social preview + UTF-8 fix - Apr 09, 2026)
+- [x] Mappare il rendering reale della route pubblica `/associazioni/{slug}/iscrizione`, del fallback SPA e dei resolver logo/meta per capire dove iniettare meta server-rendered senza toccare la homepage
+- [x] Correggere UTF-8/meta base nel layout HTML condiviso e ripulire le stringhe mojibake rilevanti (`â€“`, `Â`, `â€™`, ecc.) nei file coinvolti dal rendering pubblico
+- [x] Implementare meta dinamici server-rendered per le pagine iscrizione organizzazione-specifiche con fallback immagine ASSONAM e lasciare invariati i tag homepage
+- [x] Aggiungere o aggiornare test/verifiche mirate sul page source/meta e documentare review finale in `tasks/todo.md`
+
+## Review (Public signup social preview + UTF-8 fix - Apr 09, 2026)
+- Ho aggiunto in `app/routes/public.py` una route server-rendered dedicata per `/associazioni/{slug}/iscrizione`: legge la shell SPA `index.html`, forza `<meta charset="UTF-8" />` e sostituisce nel page source i meta richiesti (`title`, `description`, `og:*`, `twitter:*`, canonical) con valori dinamici per organizzazione, cosi crawler WhatsApp/Facebook/Telegram vedono il contenuto corretto senza dipendere da JavaScript.
+- Il contenuto dinamico usa esattamente `Iscriviti ora a {org.name}` e `Tesseramento online {org.name}`. `og:image` e `twitter:image` puntano prima al logo org (`/api/organizations/{slug}/logo` o fallback branding esistente), e in assenza di immagine usano il fallback ASSONAM `/logo.jpg`.
+- In `frontend/index.html` ho mantenuto i tag homepage generici, ma ho rimosso le stringhe mojibake (`Â`, `â€”`, `contabilitÃ `) sostituendole con testo semplice e sicuro; il file resta con charset UTF-8 esplicito.
+- In `frontend/src/lib/seo.ts` ho aggiunto l'opzione `appendSiteName` e in `frontend/src/pages/Iscrizione.tsx` ho allineato anche il meta update lato client dopo hydration agli stessi valori richiesti dal backend, evitando drift tra page source e DOM runtime.
+- Ho cercato nei sorgenti i pattern rotti richiesti (`â€“`, `Â`, `â€™`, `Ã`, `â€”`): nei file sorgente coinvolti dal rendering pubblico il problema reale era concentrato nella shell `frontend/index.html`, che ora e corretta. Le occorrenze restanti trovate dal grep erano solo nelle asserzioni del nuovo test.
+- Verifiche eseguite:
+  - `python -m pytest -q tests/test_public_signup_meta.py tests/test_spa_static_files.py`
+  - `npm --prefix frontend run build`

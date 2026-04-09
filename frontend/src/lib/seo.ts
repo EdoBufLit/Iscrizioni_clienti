@@ -7,6 +7,7 @@ export type SeoPayload = {
   noindex?: boolean;
   ogType?: "website" | "article";
   imagePath?: string;
+  appendSiteName?: boolean;
   structuredData?: JsonLdObject | JsonLdObject[];
 };
 
@@ -82,11 +83,12 @@ export const applySeo = ({
   noindex = false,
   ogType = "website",
   imagePath = DEFAULT_IMAGE_PATH,
+  appendSiteName = true,
   structuredData,
 }: SeoPayload): void => {
   const canonical = toAbsoluteUrl(normalizeCanonicalPath(canonicalPath ?? window.location.pathname));
   const imageUrl = toAbsoluteUrl(imagePath);
-  const fullTitle = withBrandSuffix(title);
+  const fullTitle = appendSiteName ? withBrandSuffix(title) : title;
   const robots = noindex ? "noindex,nofollow" : "index,follow";
 
   document.documentElement.lang = "it";

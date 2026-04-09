@@ -3,6 +3,8 @@ import io
 import base64
 import logging
 import os
+import re
+from pathlib import Path
 from datetime import datetime
 from time import monotonic
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -65,6 +67,117 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 _PLATFORM_STATS_CACHE_TTL_SECONDS = 60.0
 _platform_stats_cache: dict[str, object] = {"expires_at": 0.0, "payload": None}
+_TITLE_TAG_RE = re.compile(r"<title>.*?</title>", flags=re.IGNORECASE | re.DOTALL)
+_CHARSET_META_RE = re.compile(
+    r"<meta[^>]+charset=[\"']?[^\"'>\s]+[\"']?[^>]*>",
+    flags=re.IGNORECASE,
+)
+
+
+def _normalize_meta_text(value: str | None) -> str:
+    return " ".join((value or "").split()).strip()
+
+
+def _resolve_frontend_base_url(request: Request) -> str:
+    configured_base = (settings.FRONTEND_URL or "").strip().rstrip("/")
+    if configured_base:
+        return configured_base
+    return str(request.base_url).rstrip("/")
+
+
+def _resolve_assonam_social_image_url(
+    *, frontend_base_url: str | None = None, backend_base_url: str | None = None
+) -> str:
+    if (frontend_base_url or "").strip():
+        return f"{frontend_base_url.rstrip('/')}/logo.jpg"
+    if (backend_base_url or "").strip():
+        return f"{backend_base_url.rstrip('/')}/logo.jpg"
+    return "/logo.jpg"
+
+
+def _load_spa_index_html() -> str:
+    candidate_paths = [
+        Path(os.getenv("SPA_DIR", "frontend/dist")) / "index.html",
+        Path("frontend/index.html"),
+    ]
+    for candidate in candidate_paths:
+        if candidate.is_file():
+            return candidate.read_text(encoding="utf-8")
+    raise HTTPException(status_code=503, detail="Frontend HTML shell not available.")
+
+
+def _upsert_title_tag(document: str, title: str) -> str:
+    title_tag = f"<title>{html.escape(title)}</title>"
+    if _TITLE_TAG_RE.search(document):
+        return _TITLE_TAG_RE.sub(title_tag, document, count=1)
+    return document.replace("</head>", f"    {title_tag}\n  </head>", 1)
+
+
+def _upsert_meta_tag(document: str, attr: str, key: str, content: str) -> str:
+    pattern = re.compile(
+        rf"<meta[^>]+{attr}=[\"']{re.escape(key)}[\"'][^>]*>",
+        flags=re.IGNORECASE,
+    )
+    meta_tag = (
+        f'<meta {attr}="{html.escape(key, quote=True)}" '
+        f'content="{html.escape(content, quote=True)}" />'
+    )
+    if pattern.search(document):
+        return pattern.sub(meta_tag, document, count=1)
+    return document.replace("</head>", f"    {meta_tag}\n  </head>", 1)
+
+
+def _upsert_canonical_link(document: str, href: str) -> str:
+    pattern = re.compile(
+        r"<link[^>]+rel=[\"']canonical[\"'][^>]*>",
+        flags=re.IGNORECASE,
+    )
+    link_tag = f'<link rel="canonical" href="{html.escape(href, quote=True)}" />'
+    if pattern.search(document):
+        return pattern.sub(link_tag, document, count=1)
+    return document.replace("</head>", f"    {link_tag}\n  </head>", 1)
+
+
+def _upsert_charset_tag(document: str) -> str:
+    charset_tag = '<meta charset="UTF-8" />'
+    if _CHARSET_META_RE.search(document):
+        return _CHARSET_META_RE.sub(charset_tag, document, count=1)
+    return document.replace("<head>", f"<head>\n    {charset_tag}", 1)
+
+
+def _render_signup_spa_html(
+    *,
+    request: Request,
+    org: Organization,
+) -> str:
+    frontend_base = _resolve_frontend_base_url(request)
+    backend_base = _get_backend_base_url(request)
+    org_name = _normalize_meta_text(getattr(org, "name", None)) or (
+        _normalize_meta_text(resolve_club_display_name(org)) or "associazione"
+    )
+    title = f"Iscriviti ora a {org_name}"
+    description = f"Tesseramento online {org_name}"
+    page_url = str(request.url)
+    image_url = resolve_card_logo_url(org, base_url=frontend_base) or _resolve_assonam_social_image_url(
+        frontend_base_url=frontend_base,
+        backend_base_url=backend_base,
+    )
+
+    document = _load_spa_index_html()
+    document = _upsert_charset_tag(document)
+    document = _upsert_title_tag(document, title)
+    document = _upsert_meta_tag(document, "name", "description", description)
+    document = _upsert_meta_tag(document, "property", "og:title", title)
+    document = _upsert_meta_tag(document, "property", "og:description", description)
+    document = _upsert_meta_tag(document, "property", "og:image", image_url)
+    document = _upsert_meta_tag(document, "property", "og:url", page_url)
+    document = _upsert_meta_tag(document, "property", "og:type", "website")
+    document = _upsert_meta_tag(document, "name", "twitter:card", "summary_large_image")
+    document = _upsert_meta_tag(document, "name", "twitter:title", title)
+    document = _upsert_meta_tag(document, "name", "twitter:description", description)
+    document = _upsert_meta_tag(document, "name", "twitter:image", image_url)
+    document = _upsert_canonical_link(document, page_url)
+    return document
 
 
 # ── Legacy HTML redirects ─────────────────────────────────────────
@@ -91,6 +204,30 @@ def associazioni_detail(request: Request, slug: str, db: Session = Depends(get_d
         return RedirectResponse(url="/associazioni")
 
     return RedirectResponse(url=f"/associazioni/{slug}")
+
+
+@router.get("/associazioni/{slug}/iscrizione", response_class=HTMLResponse)
+def associazioni_signup_page(
+    request: Request,
+    slug: str,
+    db: Session = Depends(get_db),
+):
+    org = (
+        db.query(Organization)
+        .filter(
+            Organization.slug == slug,
+            Organization.deleted_at.is_(None),
+            Organization.is_active.is_(True),
+        )
+        .first()
+    )
+    if not org:
+        return RedirectResponse(url="/associazioni")
+
+    return HTMLResponse(
+        content=_render_signup_spa_html(request=request, org=org),
+        media_type="text/html; charset=utf-8",
+    )
 
 
 # ── Public JSON API ───────────────────────────────────────────────

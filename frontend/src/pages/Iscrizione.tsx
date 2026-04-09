@@ -439,9 +439,11 @@ const Iscrizione = () => {
   useEffect(() => {
     if (!org) return;
     applySeo({
-      title: `Iscrizione a ${org.name}`,
-      description: `Compila il modulo per richiedere l'iscrizione a ${org.name}. Iscrizione digitale guidata su ASSO.N.A.M.`,
+      title: `Iscriviti ora a ${org.name}`,
+      description: `Tesseramento online ${org.name}`,
       canonicalPath: `/associazioni/${slug}/iscrizione`,
+      imagePath: org.logo_url || "/logo.jpg",
+      appendSiteName: false,
       noindex: true,
     });
   }, [org, slug]);
