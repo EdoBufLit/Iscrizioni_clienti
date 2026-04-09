@@ -4015,3 +4015,15 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Verifiche eseguite:
   - `python -m pytest -q tests/test_public_signup_meta.py tests/test_spa_static_files.py`
   - `npm --prefix frontend run build`
+
+## Plan (Display name pubblico org ovunque - Apr 09, 2026)
+- [x] Verificare dove il pubblico usa ancora `Organization.name` invece di `club_display_name` / `resolve_club_display_name`, con check anche live su Hetzner
+- [x] Correggere preview signup server-rendered e ricerca elenco associazioni per usare il nome visualizzato come sorgente primaria
+- [x] Aggiungere regressioni test su signup meta e search pubblico, poi verificare localmente e confrontare il dato live sul server
+
+## Review (Display name pubblico org ovunque - Apr 09, 2026)
+- Root cause trovata in `app/routes/public.py`: la route server-rendered `/associazioni/{slug}/iscrizione` prendeva ancora `org.name` prima del branding resolver, quindi WhatsApp mostrava il nome legacy anche quando il campo `club_display_name` era stato aggiornato da super-admin.
+- Nello stesso file l'endpoint pubblico `GET /api/organizations` serializzava gia il nome visualizzato, ma la ricerca `?q=` filtrava solo su `Organization.name`; per questo un utente poteva non trovare l'associazione cercando il nome visualizzato dalla barra pubblica.
+- Ho corretto entrambi i punti: preview/meta signup ora usano prima `resolve_club_display_name(org)`, mentre la ricerca pubblica filtra su `Organization.name OR Organization.club_display_name` e ordina per nome visualizzato con `coalesce(club_display_name, name)`.
+- Ho interrogato anche il server Hetzner: il branch live e gia `feat/redesign-landing-wizard` al commit `dbb28f7`, quindi il problema segnalato e davvero un gap applicativo su `club_display_name`, non un deploy vecchio.
+- Ho aggiunto regressioni in `tests/test_public_signup_meta.py` per coprire sia il caso `name != club_display_name` nella pagina sorgente della signup sia la ricerca pubblica per `club_display_name`.

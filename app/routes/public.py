@@ -9,7 +9,7 @@ from datetime import datetime
 from time import monotonic
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse, FileResponse, Response, HTMLResponse
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 from app.db import get_db
 from app.models import (
@@ -152,8 +152,8 @@ def _render_signup_spa_html(
 ) -> str:
     frontend_base = _resolve_frontend_base_url(request)
     backend_base = _get_backend_base_url(request)
-    org_name = _normalize_meta_text(getattr(org, "name", None)) or (
-        _normalize_meta_text(resolve_club_display_name(org)) or "associazione"
+    org_name = _normalize_meta_text(resolve_club_display_name(org)) or (
+        _normalize_meta_text(getattr(org, "name", None)) or "associazione"
     )
     title = f"Iscriviti ora a {org_name}"
     description = f"Tesseramento online {org_name}"
@@ -185,12 +185,20 @@ def _render_signup_spa_html(
 
 @router.get("/associazioni")
 def list_associazioni(request: Request, q: str = None, db: Session = Depends(get_db)):
-    query = db.query(Organization).order_by(Organization.name)
+    display_name_order = func.lower(
+        func.coalesce(Organization.club_display_name, Organization.name)
+    )
+    query = db.query(Organization).order_by(display_name_order, Organization.id)
 
     if q:
         # Simple case-insensitive search
         search = f"%{q}%"
-        query = query.filter(Organization.name.ilike(search))
+        query = query.filter(
+            or_(
+                Organization.name.ilike(search),
+                Organization.club_display_name.ilike(search),
+            )
+        )
 
     orgs = query.all()
 
@@ -339,15 +347,23 @@ def _ensure_form_is_visible(form, member: Member | None) -> None:
 @router.get("/api/organizations")
 def api_list_organizations(q: str = None, db: Session = Depends(get_db)):
     # Only active organizations
+    display_name_order = func.lower(
+        func.coalesce(Organization.club_display_name, Organization.name)
+    )
     query = (
         db.query(Organization)
         .filter(Organization.is_active == True)
-        .order_by(Organization.name)
+        .order_by(display_name_order, Organization.id)
     )
 
     if q:
         search = f"%{q}%"
-        query = query.filter(Organization.name.ilike(search))
+        query = query.filter(
+            or_(
+                Organization.name.ilike(search),
+                Organization.club_display_name.ilike(search),
+            )
+        )
 
     orgs = query.all()
     return [_org_to_dict_summary(o) for o in orgs]

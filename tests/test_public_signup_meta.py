@@ -104,3 +104,71 @@ def test_public_signup_page_prefers_org_logo_for_social_image(client):
         f'<meta name="twitter:image" content="{expected_logo_url}" />'
         in response.text
     )
+
+
+def test_public_signup_page_prefers_club_display_name_over_legacy_name(client):
+    slug = "meta-display-name-org"
+    db = SessionLocal()
+    try:
+        org = db.query(Organization).filter(Organization.slug == slug).first()
+        if org is None:
+            org = Organization(
+                name="Legacy Name APS",
+                slug=slug,
+                club_display_name="FRUTTA E VERDURA CLUB",
+                privacy_version="v1",
+                is_active=True,
+            )
+            db.add(org)
+        else:
+            org.name = "Legacy Name APS"
+            org.club_display_name = "FRUTTA E VERDURA CLUB"
+            org.privacy_version = org.privacy_version or "v1"
+            org.deleted_at = None
+            org.is_active = True
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get(f"/associazioni/{slug}/iscrizione")
+
+    assert response.status_code == 200
+    assert "<title>Iscriviti ora a FRUTTA E VERDURA CLUB</title>" in response.text
+    assert (
+        '<meta name="description" content="Tesseramento online FRUTTA E VERDURA CLUB" />'
+        in response.text
+    )
+    assert "Legacy Name APS" not in response.text
+
+
+def test_public_organizations_search_matches_club_display_name(client):
+    slug = "search-display-name-org"
+    db = SessionLocal()
+    try:
+        org = db.query(Organization).filter(Organization.slug == slug).first()
+        if org is None:
+            org = Organization(
+                name="Nome Legacy Search",
+                slug=slug,
+                club_display_name="FRUTTA E VERDURA CLUB",
+                privacy_version="v1",
+                is_active=True,
+            )
+            db.add(org)
+        else:
+            org.name = "Nome Legacy Search"
+            org.club_display_name = "FRUTTA E VERDURA CLUB"
+            org.privacy_version = org.privacy_version or "v1"
+            org.deleted_at = None
+            org.is_active = True
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/api/organizations?q=verdura")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert any(item["slug"] == slug for item in payload), payload
+    matched = next(item for item in payload if item["slug"] == slug)
+    assert matched["name"] == "FRUTTA E VERDURA CLUB"

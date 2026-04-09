@@ -182,3 +182,4 @@ ext_no, storico eleased_at), poi implemento solo regole esplicite e dimostrabil
 - Mar 31, 2026: se un nuovo flusso di pagamento emette comunque la tessera finale gia prevista dal prodotto, non devo introdurre una pagina post-payment parallela con UX ridotta. Devo riusare la stessa destinazione finale, gli stessi link pubblici e la stessa mail tessera del flusso standard per evitare esperienze divergenti.
 
 - Quando l'utente corregge un workflow di review dicendo che dopo la decisione admin deve partire una seconda comunicazione al destinatario, trattare submit iniziale e post-review come eventi distinti obbligatori e coprirli entrambi nei test.
+- Se esiste un `club_display_name` / nome visualizzato tenant, tutte le superfici pubbliche user-facing devono usare quella sorgente come primaria: page source SEO, preview social, payload elenco pubblico e filtri di ricerca non devono leggere solo `Organization.name`.
