@@ -185,8 +185,17 @@ const MembersTable = memo(function MembersTable({
                       )}
                     </td>
                     <td className={`${tdClass} tabular-nums`}>
-                      {m.card_number ?? m.card_no ?? "-"}
-                      {m.card_year ? ` / ${m.card_year}` : ""}
+                      <div className="flex flex-col gap-1">
+                        <span>
+                          {m.card_number ?? m.card_no ?? "-"}
+                          {m.card_year ? ` / ${m.card_year}` : ""}
+                        </span>
+                        {m.membership_type_label ? (
+                          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-500">
+                            {m.membership_type_label}
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
                     <td className={`${tdClass} tabular-nums`}>
                       {m.joined_at

@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   fetchOrgAdminMembers,
+  fetchOrgAdminMembershipSettings,
+  patchOrgAdminMembershipSettings,
   AuthError,
   type OrgAdminMember,
+  type OrgAdminMembershipSettings,
 } from "../../lib/api";
 import { useOrgAdmin } from "./OrgAdminLayout";
 import CreateMemberModal from "./components/CreateMemberModal";
@@ -61,6 +64,10 @@ const OrgAdminMembers = () => {
 
   const [members, setMembers] = useState<OrgAdminMember[]>([]);
   const [total, setTotal] = useState(0);
+  const [summaryTotal, setSummaryTotal] = useState(0);
+  const [issuedMembersCount, setIssuedMembersCount] = useState(0);
+  const [membershipSettings, setMembershipSettings] = useState<OrgAdminMembershipSettings | null>(null);
+  const [savingMembershipSettings, setSavingMembershipSettings] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -75,7 +82,20 @@ const OrgAdminMembers = () => {
   const [showModal, setShowModal] = useState(false);
   const [searchResetKey, setSearchResetKey] = useState(0);
   const [successMessage, setSuccessMessage] = useState("");
+  const [membershipSettingsError, setMembershipSettingsError] = useState("");
   const [createdMemberId, setCreatedMemberId] = useState<number | null>(null);
+
+  const loadMembershipSettings = useCallback(async () => {
+    if (adminLoading || !admin) return;
+    try {
+      const settings = await fetchOrgAdminMembershipSettings();
+      setMembershipSettings(settings);
+    } catch (err) {
+      if (err instanceof AuthError) {
+        navigate("/org-admin/login", { replace: true });
+      }
+    }
+  }, [adminLoading, admin, navigate]);
 
   const loadMembers = useCallback(async () => {
     if (adminLoading || !admin) {
@@ -98,6 +118,8 @@ const OrgAdminMembers = () => {
       });
       setMembers(response.items);
       setTotal(response.total);
+      setSummaryTotal(response.summary?.total_theoretical_membership_fees ?? 0);
+      setIssuedMembersCount(response.summary?.issued_members_count ?? 0);
     } catch (err) {
       if (err instanceof AuthError) {
         navigate("/org-admin/login", { replace: true });
@@ -112,6 +134,10 @@ const OrgAdminMembers = () => {
   useEffect(() => {
     void loadMembers();
   }, [loadMembers]);
+
+  useEffect(() => {
+    void loadMembershipSettings();
+  }, [loadMembershipSettings]);
 
   const isLoading = adminLoading || loading;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -164,6 +190,41 @@ const OrgAdminMembers = () => {
       navigate(`/org-admin/soci/${memberId}`);
     },
     [navigate]
+  );
+
+  const handleMembershipSettingsSubmit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const data = new FormData(form);
+      setMembershipSettingsError("");
+      setSavingMembershipSettings(true);
+      try {
+        const payload = {
+          membership_fee_amount: Number(data.get("membership_fee_amount") || 0) || undefined,
+          membership_fee_currency: String(data.get("membership_fee_currency") || "").trim() || undefined,
+          temporary_membership_fee_amount: membershipSettings?.custom_membership_types_enabled
+            ? Number(data.get("temporary_membership_fee_amount") || 0) || undefined
+            : undefined,
+          temporary_membership_duration_value: membershipSettings?.custom_membership_types_enabled
+            ? Number(data.get("temporary_membership_duration_value") || 0) || undefined
+            : undefined,
+          temporary_membership_duration_unit: membershipSettings?.custom_membership_types_enabled
+            ? (String(data.get("temporary_membership_duration_unit") || "").trim() as "hours" | "days")
+            : undefined,
+        };
+        const response = await patchOrgAdminMembershipSettings(payload);
+        setMembershipSettings(response.settings);
+        setSuccessMessage("Impostazioni tessera aggiornate.");
+      } catch (err) {
+        setMembershipSettingsError(
+          err instanceof Error ? err.message : "Errore aggiornamento impostazioni tessera."
+        );
+      } finally {
+        setSavingMembershipSettings(false);
+      }
+    },
+    [membershipSettings]
   );
 
   return (
@@ -234,6 +295,123 @@ const OrgAdminMembers = () => {
           )}
         </div>
       )}
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.7fr)]">
+        <div className="surface-strong p-5">
+          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-neutral-400">
+            Riepilogo tessere
+          </p>
+          <div className="mt-4 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-sm font-medium text-neutral-500">Totale teorico tessere</p>
+              <p className="mt-2 text-4xl font-black tracking-tight text-neutral-900">
+                € {summaryTotal.toFixed(2)}
+              </p>
+              <p className="mt-2 text-sm text-neutral-500">
+                {issuedMembersCount} tessere emesse considerate nel totale.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-neutral-200 bg-white/80 px-4 py-3 text-sm text-neutral-600">
+              <p className="font-semibold text-neutral-900">Regola di conteggio</p>
+              <p className="mt-1">
+                Il totale resta storico: usa lo snapshot del socio e include anche le temporanee ormai scadute.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <form className="surface-strong p-5" onSubmit={handleMembershipSettingsSubmit}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-neutral-400">
+                Impostazioni tessera
+              </p>
+              <h3 className="mt-2 text-lg font-bold text-neutral-900">Prezzi e durata</h3>
+            </div>
+            {membershipSettings?.custom_membership_types_enabled ? (
+              <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-700">
+                Annuale + Temporanea
+              </span>
+            ) : (
+              <span className="inline-flex items-center rounded-full border border-neutral-200 bg-neutral-100 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-neutral-600">
+                Solo annuale
+              </span>
+            )}
+          </div>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">
+              Prezzo annuale
+              <input
+                className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                type="number"
+                step="0.01"
+                min="0.01"
+                name="membership_fee_amount"
+                defaultValue={membershipSettings?.membership_fee_amount ?? ""}
+              />
+            </label>
+            <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">
+              Valuta
+              <input
+                className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm uppercase text-neutral-900 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                type="text"
+                name="membership_fee_currency"
+                maxLength={8}
+                defaultValue={membershipSettings?.membership_fee_currency ?? "EUR"}
+              />
+            </label>
+            {membershipSettings?.custom_membership_types_enabled ? (
+              <>
+                <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">
+                  Prezzo temporanea
+                  <input
+                    className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    name="temporary_membership_fee_amount"
+                    defaultValue={membershipSettings?.temporary_membership_fee_amount ?? ""}
+                  />
+                </label>
+                <div className="grid grid-cols-[minmax(0,1fr)_140px] gap-3">
+                  <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">
+                    Durata temporanea
+                    <input
+                      className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                      type="number"
+                      min="1"
+                      name="temporary_membership_duration_value"
+                      defaultValue={membershipSettings?.temporary_membership_duration_value ?? 1}
+                    />
+                  </label>
+                  <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">
+                    Unita
+                    <select
+                      className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                      name="temporary_membership_duration_unit"
+                      defaultValue={membershipSettings?.temporary_membership_duration_unit ?? "days"}
+                    >
+                      <option value="days">Giorni</option>
+                      <option value="hours">Ore</option>
+                    </select>
+                  </label>
+                </div>
+              </>
+            ) : null}
+          </div>
+
+          {membershipSettingsError ? (
+            <p className="mt-4 text-sm text-red-600">{membershipSettingsError}</p>
+          ) : null}
+
+          <div className="mt-5 flex justify-end">
+            <button type="submit" className="btn-primary" disabled={savingMembershipSettings}>
+              {savingMembershipSettings ? "Salvataggio..." : "Salva impostazioni"}
+            </button>
+          </div>
+        </form>
+      </div>
 
       <div className="surface-strong p-3 sm:p-4">
         <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-center">
@@ -310,6 +488,7 @@ const OrgAdminMembers = () => {
         open={showModal}
         onClose={() => setShowModal(false)}
         onCreated={handleCreated}
+        membershipSettings={membershipSettings}
       />
     </div>
   );

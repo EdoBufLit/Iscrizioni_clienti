@@ -31,7 +31,16 @@ def _login_org_admin(client, db, admin_id: int):
 
 def test_org_admin_can_update_member_profile_and_audit_fields(client, db):
     suffix = uuid.uuid4().hex[:8]
-    org = Organization(name=f"Profile Org {suffix}", slug=f"profile-org-{suffix}", is_active=True)
+    org = Organization(
+        name=f"Profile Org {suffix}",
+        slug=f"profile-org-{suffix}",
+        is_active=True,
+        custom_membership_types_enabled=True,
+        membership_fee_amount=30,
+        temporary_membership_fee_amount=12,
+        temporary_membership_duration_value=2,
+        temporary_membership_duration_unit="days",
+    )
     db.add(org)
     db.commit()
     db.refresh(org)
@@ -75,6 +84,8 @@ def test_org_admin_can_update_member_profile_and_audit_fields(client, db):
         "birth_place": "Roma",
         "birth_place_code": "H501",
         "fiscal_code": fiscal_code,
+        "membership_type": "temporary",
+        "membership_fee_snapshot": 18,
         "internal_notes": "Correzione anagrafica da org admin",
     }
 
@@ -86,12 +97,18 @@ def test_org_admin_can_update_member_profile_and_audit_fields(client, db):
     assert data["email"] == payload["email"]
     assert data["birth_place"] == "Roma"
     assert data["fiscal_code"] == fiscal_code
+    assert data["membership_type"] == "temporary"
+    assert data["membership_fee_snapshot"] == 18.0
+    assert data["valid_until"] is not None
 
     db.refresh(member)
     assert member.first_name == "Marco"
     assert member.last_name == "Bianchi"
     assert member.email == payload["email"]
     assert member.internal_notes == payload["internal_notes"]
+    assert member.membership_type == "temporary"
+    assert float(member.membership_fee_snapshot) == 18.0
+    assert member.valid_until is not None
 
     audit_row = (
         db.query(OperationLog)
@@ -109,6 +126,8 @@ def test_org_admin_can_update_member_profile_and_audit_fields(client, db):
     assert "first_name" in changed_fields
     assert "email" in changed_fields
     assert "fiscal_code" in changed_fields
+    assert "membership_type" in changed_fields
+    assert "membership_fee_snapshot" in changed_fields
 
 
 def test_org_admin_profile_update_rejects_duplicate_email_and_other_org_access(client, db):

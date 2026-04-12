@@ -342,6 +342,10 @@ def init_db():
             conn, "members", "deleted_by_admin_id", "INTEGER REFERENCES admin_users(id)"
         )
         _add_column_if_missing(conn, "members", "card_year", "INTEGER")
+        _add_column_if_missing(conn, "members", "membership_type", "TEXT")
+        _add_column_if_missing(conn, "members", "valid_from", "DATETIME")
+        _add_column_if_missing(conn, "members", "valid_until", "DATETIME")
+        _add_column_if_missing(conn, "members", "membership_fee_snapshot", "NUMERIC(10,2)")
         _add_column_if_missing(conn, "members", "member_type", "TEXT")
         _add_column_if_missing(conn, "members", "internal_notes", "TEXT")
         _add_column_if_missing(conn, "members", "is_manual", "INTEGER DEFAULT 0")
@@ -497,10 +501,31 @@ def init_db():
                 conn, "organizations", "membership_fee_amount", "NUMERIC(10,2)"
             )
             _add_column_if_missing(
+                conn, "organizations", "temporary_membership_fee_amount", "NUMERIC(10,2)"
+            )
+            _add_column_if_missing(
                 conn,
                 "organizations",
                 "membership_fee_currency",
                 "TEXT DEFAULT 'EUR'",
+            )
+            _add_column_if_missing(
+                conn,
+                "organizations",
+                "custom_membership_types_enabled",
+                "INTEGER DEFAULT 0",
+            )
+            _add_column_if_missing(
+                conn,
+                "organizations",
+                "temporary_membership_duration_value",
+                "INTEGER",
+            )
+            _add_column_if_missing(
+                conn,
+                "organizations",
+                "temporary_membership_duration_unit",
+                "TEXT",
             )
             _add_column_if_missing(
                 conn,
@@ -569,6 +594,38 @@ def init_db():
                    SET signup_source = 'assonam_form'
                  WHERE signup_source IS NULL
                     OR trim(signup_source) = ''
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE members
+                   SET membership_fee_snapshot = (
+                       COALESCE(
+                           (
+                               SELECT mp.amount
+                                 FROM membership_payments mp
+                                WHERE mp.socio_id = members.id
+                                  AND lower(COALESCE(mp.status, '')) IN ('completed', 'manual_completed')
+                                ORDER BY COALESCE(mp.confirmed_at, mp.created_at) DESC, mp.id DESC
+                                LIMIT 1
+                           ),
+                           (
+                               SELECT CAST(mpay.amount_cents AS NUMERIC) / 100.0
+                                 FROM member_payments mpay
+                                WHERE mpay.member_id = members.id
+                                ORDER BY COALESCE(mpay.paid_at, mpay.created_at) DESC, mpay.id DESC
+                                LIMIT 1
+                           ),
+                           (
+                               SELECT org.membership_fee_amount
+                                 FROM organizations org
+                                WHERE org.id = members.org_id
+                           )
+                       )
+                   )
+                 WHERE membership_fee_snapshot IS NULL
                 """
             )
         )
@@ -646,6 +703,33 @@ def init_db():
                 UPDATE organizations
                    SET require_membership_document = FALSE
                  WHERE require_membership_document IS NULL
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE organizations
+                   SET custom_membership_types_enabled = FALSE
+                 WHERE custom_membership_types_enabled IS NULL
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE organizations
+                   SET membership_fee_currency = 'EUR'
+                 WHERE membership_fee_currency IS NULL
+                    OR trim(membership_fee_currency) = ''
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS ix_members_valid_until
+                    ON members (valid_until)
                 """
             )
         )

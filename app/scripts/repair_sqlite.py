@@ -71,6 +71,10 @@ def repair_db():
             ("statute_updated_at", "DATETIME"),
             ("privacy_version", "VARCHAR"),
             ("numbering_scope_id", "INTEGER REFERENCES numbering_scopes(id)"),
+            ("temporary_membership_fee_amount", "NUMERIC(10,2)"),
+            ("custom_membership_types_enabled", "BOOLEAN DEFAULT 0"),
+            ("temporary_membership_duration_value", "INTEGER"),
+            ("temporary_membership_duration_unit", "VARCHAR"),
         ]
         ensure_columns(cursor, "organizations", org_columns)
 
@@ -82,6 +86,10 @@ def repair_db():
             ("deleted_at", "DATETIME"),
             ("deleted_by_admin_id", "INTEGER REFERENCES admin_users(id)"),
             ("numbering_scope_id", "INTEGER REFERENCES numbering_scopes(id)"),
+            ("membership_type", "VARCHAR"),
+            ("valid_from", "DATETIME"),
+            ("valid_until", "DATETIME"),
+            ("membership_fee_snapshot", "NUMERIC(10,2)"),
         ]
         ensure_columns(cursor, "members", member_columns)
 
@@ -124,6 +132,36 @@ def repair_db():
                 cursor.execute("UPDATE members SET status = 'pending_cards' WHERE status = 'PENDING_CARDS'")
                 cursor.execute("UPDATE members SET status = 'active' WHERE status = 'ACTIVE'")
                 cursor.execute("UPDATE members SET status = 'rejected' WHERE status = 'REJECTED'")
+                cursor.execute(
+                    """
+                    UPDATE members
+                       SET membership_fee_snapshot = (
+                           COALESCE(
+                               (
+                                   SELECT mp.amount
+                                     FROM membership_payments mp
+                                    WHERE mp.socio_id = members.id
+                                      AND lower(COALESCE(mp.status, '')) IN ('completed', 'manual_completed')
+                                    ORDER BY COALESCE(mp.confirmed_at, mp.created_at) DESC, mp.id DESC
+                                    LIMIT 1
+                               ),
+                               (
+                                   SELECT CAST(mpay.amount_cents AS NUMERIC) / 100.0
+                                     FROM member_payments mpay
+                                    WHERE mpay.member_id = members.id
+                                    ORDER BY COALESCE(mpay.paid_at, mpay.created_at) DESC, mpay.id DESC
+                                    LIMIT 1
+                               ),
+                               (
+                                   SELECT org.membership_fee_amount
+                                     FROM organizations org
+                                    WHERE org.id = members.org_id
+                               )
+                           )
+                       )
+                     WHERE membership_fee_snapshot IS NULL
+                    """
+                )
                 conn.commit()
                 print("Data normalization complete.")
             else:

@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import ModalShell from "../../../components/ui/ModalShell";
 import {
+  type OrgAdminMembershipSettings,
   searchMunicipalities,
   type MunicipalitySearchItem,
   type OrgAdminMemberDetail,
@@ -14,6 +15,7 @@ import {
 type EditMemberProfileModalProps = {
   open: boolean;
   member: OrgAdminMemberDetail | null;
+  membershipSettings?: OrgAdminMembershipSettings | null;
   saving: boolean;
   error?: string | null;
   onClose: () => void;
@@ -29,6 +31,8 @@ type FormState = {
   birth_place: string;
   birth_place_code: string;
   fiscal_code: string;
+  membership_type: "annual" | "temporary";
+  membership_fee_snapshot: string;
   internal_notes: string;
 };
 
@@ -43,12 +47,35 @@ const EMPTY_FORM: FormState = {
   birth_place: "",
   birth_place_code: "",
   fiscal_code: "",
+  membership_type: "annual",
+  membership_fee_snapshot: "",
   internal_notes: "",
 };
 
-function buildFormState(member: OrgAdminMemberDetail | null): FormState {
+function buildFormState(
+  member: OrgAdminMemberDetail | null,
+  membershipSettings?: OrgAdminMembershipSettings | null,
+): FormState {
+  const defaultMembershipType =
+    member?.membership_type === "temporary" ? "temporary" : "annual";
+  const defaultMembershipFee =
+    member?.membership_fee_snapshot != null
+      ? String(member.membership_fee_snapshot)
+      : defaultMembershipType === "temporary"
+        ? membershipSettings?.temporary_membership_fee_amount != null
+          ? String(membershipSettings.temporary_membership_fee_amount)
+          : ""
+        : membershipSettings?.membership_fee_amount != null
+          ? String(membershipSettings.membership_fee_amount)
+          : "";
   if (!member) {
-    return EMPTY_FORM;
+    return {
+      ...EMPTY_FORM,
+      membership_fee_snapshot:
+        membershipSettings?.membership_fee_amount != null
+          ? String(membershipSettings.membership_fee_amount)
+          : "",
+    };
   }
   return {
     first_name: member.first_name ?? "",
@@ -59,6 +86,8 @@ function buildFormState(member: OrgAdminMemberDetail | null): FormState {
     birth_place: member.birth_place ?? "",
     birth_place_code: member.birth_place_code ?? "",
     fiscal_code: member.fiscal_code ?? "",
+    membership_type: defaultMembershipType,
+    membership_fee_snapshot: defaultMembershipFee,
     internal_notes: member.internal_notes ?? "",
   };
 }
@@ -71,6 +100,7 @@ const inputClass =
 const EditMemberProfileModal = memo(function EditMemberProfileModal({
   open,
   member,
+  membershipSettings,
   saving,
   error,
   onClose,
@@ -87,12 +117,12 @@ const EditMemberProfileModal = memo(function EditMemberProfileModal({
     if (!open) {
       return;
     }
-    setForm(buildFormState(member));
+    setForm(buildFormState(member, membershipSettings));
     setFieldErrors({});
     setMunicipalitySuggestions([]);
     setMunicipalityError("");
     setShowMunicipalitySuggestions(false);
-  }, [member, open]);
+  }, [member, membershipSettings, open]);
 
   useEffect(() => {
     if (!open) {
@@ -211,6 +241,14 @@ const EditMemberProfileModal = memo(function EditMemberProfileModal({
         ? normalizeCodiceFiscale(form.fiscal_code).slice(0, 16)
         : null,
       internal_notes: form.internal_notes.trim() || null,
+      membership_type:
+        membershipSettings?.custom_membership_types_enabled
+          ? form.membership_type
+          : undefined,
+      membership_fee_snapshot:
+        membershipSettings?.custom_membership_types_enabled && form.membership_fee_snapshot.trim()
+          ? Number(form.membership_fee_snapshot)
+          : null,
     });
   };
 
@@ -397,6 +435,64 @@ const EditMemberProfileModal = memo(function EditMemberProfileModal({
             disabled={saving}
           />
         </div>
+
+        {membershipSettings?.custom_membership_types_enabled ? (
+          <div className="grid gap-6 md:grid-cols-2">
+            <div>
+              <label className={labelClass} htmlFor="member-membership-type">
+                Tipo tessera
+              </label>
+              <select
+                id="member-membership-type"
+                className={inputClass}
+                value={form.membership_type}
+                onChange={(event) => {
+                  const nextType = event.target.value === "temporary" ? "temporary" : "annual";
+                  setForm((prev) => ({
+                    ...prev,
+                    membership_type: nextType,
+                    membership_fee_snapshot:
+                      prev.membership_fee_snapshot.trim() !== ""
+                        ? prev.membership_fee_snapshot
+                        : nextType === "temporary"
+                          ? membershipSettings.temporary_membership_fee_amount != null
+                            ? String(membershipSettings.temporary_membership_fee_amount)
+                            : ""
+                          : membershipSettings.membership_fee_amount != null
+                            ? String(membershipSettings.membership_fee_amount)
+                            : "",
+                  }));
+                }}
+                disabled={saving}
+              >
+                <option value="annual">Annuale</option>
+                <option value="temporary">Temporanea</option>
+              </select>
+              <p className={helperTextClass}>
+                La durata della tessera temporanea segue la regola generale impostata nella pagina Soci.
+              </p>
+            </div>
+            <div>
+              <label className={labelClass} htmlFor="member-membership-fee">
+                Importo tessera
+              </label>
+              <input
+                id="member-membership-fee"
+                className={inputClass}
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={form.membership_fee_snapshot}
+                onChange={(event) => updateField("membership_fee_snapshot", event.target.value)}
+                placeholder="Es. 30.00"
+                disabled={saving}
+              />
+              <p className={helperTextClass}>
+                Snapshot usato nel totale teorico tessere per questo socio.
+              </p>
+            </div>
+          </div>
+        ) : null}
 
         {error ? (
           <div className="rounded-xl border border-red-200/70 bg-red-50 px-4 py-3 text-sm text-red-700">

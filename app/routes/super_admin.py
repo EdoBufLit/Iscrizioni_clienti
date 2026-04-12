@@ -42,7 +42,12 @@ from app.middleware import auth_limiter, get_client_ip
 from app import audit
 from app.services.association_delete import delete_association_and_release_range
 from app.services.low_cards_alerts import run_low_cards_alert_job
-from app.services.member_activity import get_member_lifecycle_status, is_member_active
+from app.services.member_activity import (
+    get_member_lifecycle_status,
+    is_member_active,
+    member_active_filters,
+    member_expired_filters,
+)
 from app.services.member_maintenance import expire_and_purge_members
 from app.services.org_admin_notifications import (
     notify_org_admins_about_accounting_document,
@@ -244,6 +249,9 @@ def _serialize_organization_row(
         "require_membership_document": bool(
             getattr(org, "require_membership_document", False)
         ),
+        "custom_membership_types_enabled": bool(
+            getattr(org, "custom_membership_types_enabled", False)
+        ),
         "accounting_enabled": bool(org.accounting_enabled),
         "communications_enabled": bool(org.communications_enabled),
         "card_min": card_min,
@@ -410,6 +418,7 @@ class CreateOrganization(BaseModel):
     auto_approve_signup: bool = False
     require_membership_document: bool = False
     accounting_enabled: bool = False
+    custom_membership_types_enabled: bool = False
     numbering_mode: Optional[Literal["shared_assonam", "dedicated"]] = None
 
 
@@ -435,6 +444,7 @@ class PatchOrganization(BaseModel):
     require_membership_document: Optional[bool] = None
     accounting_enabled: Optional[bool] = None
     communications_enabled: Optional[bool] = None
+    custom_membership_types_enabled: Optional[bool] = None
 
 
 class PatchOrganizationNumbering(BaseModel):
@@ -1396,7 +1406,6 @@ def super_admin_member_registry(
     _require_super_admin(request, db)
 
     current_time = datetime.utcnow()
-    current_year = current_time.year
     status_filter = (status or "").strip().lower()
     search_term = (q or "").strip()
 
@@ -1421,12 +1430,7 @@ def super_admin_member_registry(
         )
 
     if status_filter == "active":
-        query = query.filter(
-            Member.status == "active",
-            Member.card_no.isnot(None),
-            Member.card_year.isnot(None),
-            Member.card_year >= current_year,
-        )
+        query = query.filter(*member_active_filters(now=current_time))
     elif status_filter == "pending":
         query = query.filter(
             Member.status.in_(["pending_verification", "pending_docs", "pending_cards"])
@@ -1434,12 +1438,7 @@ def super_admin_member_registry(
     elif status_filter == "rejected":
         query = query.filter(Member.status == "rejected")
     elif status_filter == "expired":
-        query = query.filter(
-            or_(
-                Member.status == "expired",
-                and_(Member.card_year.isnot(None), Member.card_year < current_year),
-            )
-        )
+        query = query.filter(*member_expired_filters(now=current_time))
 
     total = query.count()
 
@@ -1485,12 +1484,7 @@ def super_admin_member_registry(
     kpis = {
         "total": int(base_counts_query.count()),
         "active": int(
-            base_counts_query.filter(
-                Member.status == "active",
-                Member.card_no.isnot(None),
-                Member.card_year.isnot(None),
-                Member.card_year >= current_year,
-            ).count()
+            base_counts_query.filter(*member_active_filters(now=current_time)).count()
         ),
         "pending": int(
             base_counts_query.filter(
@@ -1498,12 +1492,7 @@ def super_admin_member_registry(
             ).count()
         ),
         "expired": int(
-            base_counts_query.filter(
-                or_(
-                    Member.status == "expired",
-                    and_(Member.card_year.isnot(None), Member.card_year < current_year),
-                )
-            ).count()
+            base_counts_query.filter(*member_expired_filters(now=current_time)).count()
         ),
         "rejected": int(base_counts_query.filter(Member.status == "rejected").count()),
     }
@@ -1902,6 +1891,7 @@ def create_organization(
         auto_approve_signup=body.auto_approve_signup,
         require_membership_document=body.require_membership_document,
         accounting_enabled=body.accounting_enabled,
+        custom_membership_types_enabled=body.custom_membership_types_enabled,
         created_by_admin_id=admin.id,
     )
     db.add(org)
@@ -2087,6 +2077,10 @@ def update_organization(
         update_data["accounting_enabled"] = bool(update_data["accounting_enabled"])
     if "communications_enabled" in update_data:
         update_data["communications_enabled"] = bool(update_data["communications_enabled"])
+    if "custom_membership_types_enabled" in update_data:
+        update_data["custom_membership_types_enabled"] = bool(
+            update_data["custom_membership_types_enabled"]
+        )
 
     for key, value in update_data.items():
         setattr(org, key, value)

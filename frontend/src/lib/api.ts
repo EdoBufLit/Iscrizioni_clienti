@@ -29,12 +29,17 @@ export type MemberProfile = {
   card_no: number | null;
   card_status?: string | null;
   card_year?: number | null;
+  membership_type?: "annual" | "temporary" | null;
+  membership_type_label?: string | null;
+  valid_until?: string | null;
   card_verification_url?: string | null;
   card?: {
     number: number | null;
     status: string | null;
     year: number | null;
     verification_url: string | null;
+    membership_type?: "annual" | "temporary" | null;
+    valid_until?: string | null;
   } | null;
   joined_at: string | null;
   organization: {
@@ -116,6 +121,20 @@ export type OrganizationDetail = {
     amount: number | null;
     currency: string | null;
     button_label: string | null;
+    custom_types_enabled?: boolean;
+    temporary_amount?: number | null;
+    temporary_duration_value?: number;
+    temporary_duration_unit?: "hours" | "days";
+  };
+  membership_config?: {
+    custom_types_enabled: boolean;
+    available_types: Array<"annual" | "temporary">;
+    annual_fee_amount: number | null;
+    temporary_fee_amount: number | null;
+    currency: string | null;
+    temporary_duration_value: number;
+    temporary_duration_unit: "hours" | "days";
+    temporary_duration_label: string;
   };
 };
 
@@ -297,6 +316,7 @@ export async function joinOrganization(
     accepted_statute_version: string | null;
     accept_privacy: boolean;
     payment_method: "CASH" | "BONIFICO";
+    membership_type?: "annual" | "temporary";
     id_document?: File | null;
   },
 ): Promise<{
@@ -328,6 +348,7 @@ export async function joinOrganization(
   }
   body.append("accept_privacy", String(data.accept_privacy));
   body.append("payment_method", data.payment_method);
+  if (data.membership_type) body.append("membership_type", data.membership_type);
   body.append("client_version", clientVersion);
 
   if (data.id_document) {
@@ -637,6 +658,25 @@ export type OrgAdminOrganizationDetail = {
     selected_mode: "system" | "association";
     fallback_used: boolean;
   };
+  membership_config?: {
+    custom_types_enabled: boolean;
+    available_types: Array<"annual" | "temporary">;
+    annual_fee_amount: number | null;
+    temporary_fee_amount: number | null;
+    currency: string | null;
+    temporary_duration_value: number;
+    temporary_duration_unit: "hours" | "days";
+    temporary_duration_label: string;
+  };
+};
+
+export type OrgAdminMembershipSettings = {
+  custom_membership_types_enabled: boolean;
+  membership_fee_amount: number | null;
+  temporary_membership_fee_amount: number | null;
+  membership_fee_currency: string | null;
+  temporary_membership_duration_value: number;
+  temporary_membership_duration_unit: "hours" | "days";
 };
 
 export type OrgAdminCommunicationSettings = {
@@ -1249,6 +1289,30 @@ export async function fetchOrgAdminOrganization(): Promise<OrgAdminOrganizationD
   return res.json();
 }
 
+export async function fetchOrgAdminMembershipSettings(): Promise<OrgAdminMembershipSettings> {
+  const res = await fetch("/api/org-admin/organization/membership-settings");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error("Failed to fetch membership settings");
+  return res.json();
+}
+
+export async function patchOrgAdminMembershipSettings(data: {
+  membership_fee_amount?: number | null;
+  temporary_membership_fee_amount?: number | null;
+  membership_fee_currency?: string | null;
+  temporary_membership_duration_value?: number | null;
+  temporary_membership_duration_unit?: "hours" | "days" | null;
+}): Promise<{ ok: boolean; settings: OrgAdminMembershipSettings }> {
+  const res = await fetch("/api/org-admin/organization/membership-settings", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore salvataggio impostazioni tessera"));
+  return res.json();
+}
+
 export async function patchOrgAdminOrganization(data: {
   name?: string;
   description?: string;
@@ -1675,6 +1739,7 @@ export async function createMembershipPaymentCheckout(
     accept_statute: boolean;
     accepted_statute_version: string | null;
     accept_privacy: boolean;
+    membership_type?: "annual" | "temporary";
     id_document?: File | null;
   },
 ): Promise<{ payment_id: number; hosted_checkout_url: string }> {
@@ -1694,6 +1759,7 @@ export async function createMembershipPaymentCheckout(
     body.append("accepted_statute_version", data.accepted_statute_version);
   }
   body.append("accept_privacy", String(data.accept_privacy));
+  if (data.membership_type) body.append("membership_type", data.membership_type);
   if (data.id_document) {
     body.append("id_document", data.id_document);
   }
@@ -2895,6 +2961,11 @@ export type OrgAdminMember = {
   card_no: number | null;
   card_number: number | null;
   card_year?: number | null;
+  membership_type?: "annual" | "temporary" | null;
+  membership_type_label?: string | null;
+  valid_from?: string | null;
+  valid_until?: string | null;
+  membership_fee_snapshot?: number | null;
   joined_at: string | null;
   docs_count: number;
   is_paid?: boolean;
@@ -2908,6 +2979,10 @@ export type OrgAdminMember = {
 export type OrgAdminMembersResponse = {
   items: OrgAdminMember[];
   total: number;
+  summary?: {
+    total_theoretical_membership_fees: number;
+    issued_members_count: number;
+  };
 };
 
 export type CreateOrgAdminMemberInput = {
@@ -2919,6 +2994,8 @@ export type CreateOrgAdminMemberInput = {
   payment_method?: "CASH" | "BONIFICO";
   joined_at?: string;
   member_type?: string;
+  membership_type?: "annual" | "temporary";
+  membership_fee_snapshot?: number | null;
   internal_notes?: string;
   is_manual?: boolean;
   send_access_email?: boolean;
@@ -2937,6 +3014,11 @@ export type OrgAdminMemberCreated = {
   status: string | null;
   joined_at: string | null;
   member_type: string | null;
+  membership_type?: "annual" | "temporary" | null;
+  membership_type_label?: string | null;
+  valid_from?: string | null;
+  valid_until?: string | null;
+  membership_fee_snapshot?: number | null;
   internal_notes: string | null;
   is_manual: boolean;
   email_sent: boolean;
@@ -3023,6 +3105,11 @@ export type OrgAdminMemberDetail = {
   card_no?: number | null;
   card_number?: number | null;
   card_year?: number | null;
+  membership_type?: "annual" | "temporary" | null;
+  membership_type_label?: string | null;
+  valid_from?: string | null;
+  valid_until?: string | null;
+  membership_fee_snapshot?: number | null;
   card_token?: string | null;
   card_verification_url?: string | null;
   joined_at?: string | null;
@@ -3050,6 +3137,8 @@ export type UpdateOrgAdminMemberProfileInput = {
   birth_place?: string | null;
   birth_place_code?: string | null;
   fiscal_code?: string | null;
+  membership_type?: "annual" | "temporary";
+  membership_fee_snapshot?: number | null;
   internal_notes?: string | null;
 };
 
@@ -3258,6 +3347,7 @@ export type SuperAdminOrganization = {
   province: string | null;
   auto_approve_signup?: boolean;
   require_membership_document?: boolean;
+  custom_membership_types_enabled?: boolean;
   accounting_enabled?: boolean;
   communications_enabled?: boolean;
   card_min: number | null;
@@ -4494,6 +4584,7 @@ export async function createSuperAdminOrganization(data: {
   is_active?: boolean;
   auto_approve_signup?: boolean;
   require_membership_document?: boolean;
+  custom_membership_types_enabled?: boolean;
   accounting_enabled?: boolean;
   numbering_mode?: "shared_assonam" | "dedicated";
 }): Promise<SuperAdminOrganization> {
@@ -4520,6 +4611,7 @@ export async function patchSuperAdminOrganization(
     is_active?: boolean;
     auto_approve_signup?: boolean;
     require_membership_document?: boolean;
+    custom_membership_types_enabled?: boolean;
     accounting_enabled?: boolean;
     communications_enabled?: boolean;
   },
@@ -4540,8 +4632,12 @@ export type SuperAdminMembershipPaymentSettings = {
   payment_required_before_card: boolean;
   membership_payment_label: string | null;
   membership_fee_amount: number | null;
+  temporary_membership_fee_amount?: number | null;
   membership_fee_currency: string | null;
   payment_button_label: string | null;
+  custom_membership_types_enabled?: boolean;
+  temporary_membership_duration_value?: number;
+  temporary_membership_duration_unit?: "hours" | "days";
   sumup_enabled: boolean;
   sumup_api_key_configured: boolean;
   sumup_api_key_last4: string | null;

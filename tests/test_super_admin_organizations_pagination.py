@@ -131,3 +131,30 @@ def test_super_admin_organizations_searches_name_slug_and_email(client, db):
         f"{prefix}-slug-{search_term}",
         f"{prefix}-email-match",
     }
+
+
+def test_super_admin_can_enable_custom_membership_types_per_organization(client):
+    _login_super_admin(client)
+    suffix = uuid.uuid4().hex[:8]
+
+    create_res = client.post(
+        "/api/super-admin/organizations",
+        json={
+            "name": f"Membership Org {suffix}",
+            "slug": f"membership-org-{suffix}",
+            "email": f"membership-org-{suffix}@example.com",
+            "privacy_version": "v1",
+            "custom_membership_types_enabled": True,
+        },
+    )
+    assert create_res.status_code == 200, create_res.text
+    created = create_res.json()
+    assert created["custom_membership_types_enabled"] is True
+
+    patch_res = client.patch(
+        f"/api/super-admin/organizations/{created['id']}",
+        json={"custom_membership_types_enabled": False},
+    )
+    assert patch_res.status_code == 200, patch_res.text
+    patched = patch_res.json()
+    assert patched["custom_membership_types_enabled"] is False

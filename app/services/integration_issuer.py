@@ -26,6 +26,10 @@ from app.services.card_allocation import allocate_next_card, release_card_number
 from app.services.card_verification import build_card_verification_token
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
+from app.services.member_membership import (
+    membership_type_label,
+    resolve_member_membership_type,
+)
 from app.services.org_branding import (
     resolve_assonam_logo_url,
     resolve_card_email_subject,
@@ -527,6 +531,9 @@ def issue_member_from_integration(
         try:
             from app.services.card_image import generate_card_image_bytes
 
+            membership_label = membership_type_label(
+                resolve_member_membership_type(member)
+            )
             card_image_bytes = generate_card_image_bytes(
                 member_full_name=full_name,
                 organization_name=org.name,
@@ -535,6 +542,7 @@ def issue_member_from_integration(
                 card_number=member.card_no,
                 card_year=member.card_year,
                 card_status="attiva",
+                membership_type_label=membership_label,
                 org_logo_path=_resolve_org_logo_disk_path(org),
                 assonam_logo_path=_resolve_assonam_disk_path(),
             )

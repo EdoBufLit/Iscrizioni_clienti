@@ -47,6 +47,13 @@ from app.services.membership_payments import (
     update_payment_state_from_sumup,
     verify_sumup_checkout,
 )
+from app.services.member_membership import (
+    MEMBERSHIP_TYPE_ANNUAL,
+    apply_membership_defaults,
+    normalize_membership_type,
+    organization_allows_custom_membership_types,
+    organization_membership_fee_amount,
+)
 from app.utils import save_upload_file
 
 logger = logging.getLogger(__name__)
@@ -98,6 +105,7 @@ async def _upsert_member_for_checkout(
     phone: str,
     fiscal_code: str,
     password: str | None,
+    membership_type: str | None,
     accept_statute: bool,
     accepted_statute_version: str | None,
     accept_privacy: bool,
@@ -107,6 +115,16 @@ async def _upsert_member_for_checkout(
         raise HTTPException(status_code=400, detail="E necessario accettare lo statuto per procedere.")
     if not accept_privacy:
         raise HTTPException(status_code=400, detail="E necessario accettare l'informativa privacy.")
+
+    requested_membership_type = normalize_membership_type(membership_type)
+    if (
+        requested_membership_type == "temporary"
+        and not organization_allows_custom_membership_types(org)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="La tessera temporanea non e disponibile per questa associazione.",
+        )
 
     normalized_email = email.strip().lower()
     birth_date_value = _parse_birth_date(birth_date)
@@ -207,6 +225,16 @@ async def _upsert_member_for_checkout(
         db.add(member)
         db.flush()
 
+    apply_membership_defaults(
+        member=member,
+        org=org,
+        membership_type=requested_membership_type,
+        reference_time=datetime.utcnow(),
+        membership_fee_snapshot=organization_membership_fee_amount(
+            org, requested_membership_type
+        ),
+    )
+
     if id_document:
         sub_path = f"{org.id}/{member.id}"
         rel_path_id, size_id, sha_id = await save_upload_file(
@@ -268,6 +296,7 @@ async def create_membership_payment_checkout(
     phone: str = Form(...),
     fiscal_code: str = Form(...),
     password: Optional[str] = Form(None),
+    membership_type: Optional[str] = Form(None),
     accept_statute: bool = Form(...),
     accepted_statute_version: Optional[str] = Form(None),
     accept_privacy: bool = Form(...),
@@ -293,6 +322,7 @@ async def create_membership_payment_checkout(
         phone=phone,
         fiscal_code=fiscal_code,
         password=password,
+        membership_type=membership_type,
         accept_statute=accept_statute,
         accepted_statute_version=accepted_statute_version,
         accept_privacy=accept_privacy,
@@ -329,12 +359,16 @@ async def create_membership_payment_checkout(
                     "hosted_checkout_url": latest_payment.hosted_checkout_url,
                 }
 
+    selected_membership_type = normalize_membership_type(membership_type)
     payment = MembershipPayment(
         org_id=org.id,
         socio_id=member.id,
         provider="sumup",
         payment_reason=normalize_membership_payment_reason(org),
-        amount=Decimal(org.membership_fee_amount).quantize(Decimal("0.01")),
+        amount=(
+            organization_membership_fee_amount(org, selected_membership_type)
+            or Decimal(org.membership_fee_amount).quantize(Decimal("0.01"))
+        ),
         currency=org.membership_fee_currency,
         status=MembershipPaymentStatus.PENDING.value,
         source=MembershipPaymentSource.SUMUP.value,

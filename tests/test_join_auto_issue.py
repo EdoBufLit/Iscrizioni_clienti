@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 
 import pytest
@@ -424,3 +424,51 @@ def test_manual_review_signup_uses_manual_review_email_template(client, db, drai
     finally:
         settings.EMAIL_MODE = previous_email_mode
         clear_captured_emails()
+
+
+def test_public_signup_can_issue_temporary_membership_when_enabled(client, db):
+    slug = f"temp-signup-{uuid.uuid4().hex[:8]}"
+    org = _ensure_org(db, slug, with_batch=True)
+    org.custom_membership_types_enabled = True
+    org.membership_fee_amount = 30
+    org.temporary_membership_fee_amount = 10
+    org.temporary_membership_duration_value = 4
+    org.temporary_membership_duration_unit = "hours"
+    db.commit()
+    db.refresh(org)
+
+    detail_res = client.get(f"/api/organizations/{org.slug}")
+    assert detail_res.status_code == 200, detail_res.text
+    detail_payload = detail_res.json()
+    assert detail_payload["membership_config"]["custom_types_enabled"] is True
+    assert detail_payload["membership_config"]["temporary_duration_value"] == 4
+    assert detail_payload["membership_config"]["temporary_duration_unit"] == "hours"
+
+    email = f"temp-signup-{uuid.uuid4().hex[:8]}@example.com"
+    payload = build_join_submit_data(
+        first_name="Tessa",
+        last_name="Temp",
+        email=email,
+        payment_method="BONIFICO",
+        accept_statute="true",
+        accept_privacy="true",
+    )
+    payload["membership_type"] = "temporary"
+    response = client.post(
+        f"/api/join/{org.slug}/submit",
+        data=payload,
+    )
+    assert response.status_code == 200, response.text
+
+    member = (
+        db.query(Member)
+        .filter(Member.org_id == org.id, Member.email == email)
+        .order_by(Member.id.desc())
+        .first()
+    )
+    assert member is not None
+    assert member.membership_type == "temporary"
+    assert float(member.membership_fee_snapshot) == 10.0
+    assert member.valid_from is not None
+    assert member.valid_until is not None
+    assert member.valid_until - member.valid_from == timedelta(hours=4)

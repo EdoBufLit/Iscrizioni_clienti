@@ -39,6 +39,7 @@ def expire_and_purge_members(
         db.query(Member)
         .filter(
             Member.deleted_at.is_(None),
+            Member.valid_until.is_(None),
             Member.card_year.isnot(None),
             Member.card_year < current_time.year,
         )

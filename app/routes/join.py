@@ -31,6 +31,12 @@ from app.services.member_cleanup import (
     purge_deleted_members_permanently,
 )
 from app.services.member_activity import is_member_active
+from app.services.member_membership import (
+    apply_membership_defaults,
+    normalize_membership_type,
+    organization_allows_custom_membership_types,
+    organization_membership_fee_amount,
+)
 from app.services.membership_payments import organization_requires_membership_payment
 from app.services.municipalities import (
     get_municipality_by_code,
@@ -371,6 +377,7 @@ def api_join_start(
     fiscal_code: str = Form(...),
     accept_statute: bool = Form(...),
     accept_privacy: bool = Form(...),
+    membership_type: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     join_limiter.check(get_client_ip(request))
@@ -382,6 +389,15 @@ def api_join_start(
     if not org.is_active:
         raise HTTPException(
             status_code=400, detail="L'associazione non è attualmente attiva."
+        )
+    requested_membership_type = normalize_membership_type(membership_type)
+    if (
+        requested_membership_type == "temporary"
+        and not organization_allows_custom_membership_types(org)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="La tessera temporanea non e disponibile per questa associazione.",
         )
     if organization_requires_membership_payment(org):
         raise HTTPException(
@@ -652,6 +668,7 @@ async def api_join_submit_multipart(
     accepted_statute_version: Optional[str] = Form(None),
     accept_privacy: bool = Form(...),
     payment_method: Optional[str] = Form(None),
+    membership_type: Optional[str] = Form(None),
     client_version: Optional[str] = Form(None),
     accepted_privacy_version: Optional[str] = Form(None),  # Usually implied by org
     id_document: Optional[UploadFile] = File(None),
@@ -678,6 +695,15 @@ async def api_join_submit_multipart(
     if not org.is_active:
         raise HTTPException(
             status_code=400, detail="L'associazione non è attualmente attiva."
+        )
+    requested_membership_type = normalize_membership_type(membership_type)
+    if (
+        requested_membership_type == "temporary"
+        and not organization_allows_custom_membership_types(org)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="La tessera temporanea non e disponibile per questa associazione.",
         )
     if organization_requires_membership_payment(org):
         raise HTTPException(
@@ -792,6 +818,15 @@ async def api_join_submit_multipart(
             member.payment_method = normalized_payment_method
             member.signup_ip = client_ip
             member.signup_user_agent = request_user_agent
+            apply_membership_defaults(
+                member=member,
+                org=org,
+                membership_type=requested_membership_type,
+                reference_time=datetime.utcnow(),
+                membership_fee_snapshot=organization_membership_fee_amount(
+                    org, requested_membership_type
+                ),
+            )
 
             # Remove old documents (files + DB rows)
             old_docs = (
@@ -836,6 +871,15 @@ async def api_join_submit_multipart(
             )
             db.add(member)
             db.flush()
+            apply_membership_defaults(
+                member=member,
+                org=org,
+                membership_type=requested_membership_type,
+                reference_time=datetime.utcnow(),
+                membership_fee_snapshot=organization_membership_fee_amount(
+                    org, requested_membership_type
+                ),
+            )
 
         sub_path = f"{org.id}/{member.id}"
 

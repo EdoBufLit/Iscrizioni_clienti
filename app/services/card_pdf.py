@@ -179,6 +179,7 @@ def _draw_front(
     card_number: int,
     card_year: int,
     card_status: str,
+    membership_type_label: str | None = None,
     org_logo_path: str | None,
     assonam_logo_path: str | None,
 ) -> None:
@@ -249,12 +250,17 @@ def _draw_front(
     c.setFillColor(_GOLD_BRT)
     c.setFont("Helvetica-Bold", 26)
     c.drawString(x + 18, hdr_y, str(card_year))
+    is_temporary = (membership_type_label or "").strip().lower() == "temporanea"
+    if is_temporary:
+        c.setFillColor(_CREAM)
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(x + 18, hdr_y - 12, "TEMPORANEA")
 
     # Status badge
     ok = card_status == "attiva"
     c.setFillColor(_STATUS_OK if ok else _STATUS_ERR)
     c.setFont("Helvetica-Bold", 8)
-    c.drawString(x + 18, hdr_y - 16, "ATTIVA" if ok else "NON ATTIVA")
+    c.drawString(x + 18, hdr_y - (28 if is_temporary else 16), "ATTIVA" if ok else "NON ATTIVA")
 
     # ── Body ──
     body_y = y + h * 0.44
@@ -294,6 +300,8 @@ def _draw_back(
     card_year: int,
     card_status: str,
     verification_url: str,
+    membership_type_label: str | None = None,
+    valid_until_text: str | None = None,
 ) -> None:
     x, y, w, h = _CARD_X, _CARD_Y, _CARD_W, _CARD_H
 
@@ -324,6 +332,8 @@ def _draw_back(
     rows = [
         ("N. Tessera", str(card_number), True),
         ("Anno", str(card_year), True),
+        ("Tipo", membership_type_label or "Annuale", False),
+        ("Scadenza", valid_until_text or "-", False),
         ("Stato", "Attiva" if card_status == "attiva" else "Non attiva", False),
         ("Socio", (member_full_name or "—")[:28], False),
         ("Associazione", (organization_name or "—")[:28], False),
@@ -356,6 +366,8 @@ def generate_card_pdf_bytes(
     verification_url: str,
     org_logo_path: str | None,
     assonam_logo_path: str | None,
+    membership_type_label: str | None = None,
+    valid_until_text: str | None = None,
 ) -> bytes:
     """Generate a 2-page PDF (front + back) in bordeaux theme."""
     buf = io.BytesIO()
@@ -371,6 +383,7 @@ def generate_card_pdf_bytes(
         card_number=card_number,
         card_year=card_year,
         card_status=card_status,
+        membership_type_label=membership_type_label,
         org_logo_path=org_logo_path,
         assonam_logo_path=assonam_logo_path,
     )
@@ -385,6 +398,8 @@ def generate_card_pdf_bytes(
         card_year=card_year,
         card_status=card_status,
         verification_url=verification_url,
+        membership_type_label=membership_type_label,
+        valid_until_text=valid_until_text,
     )
     c.showPage()
     c.save()

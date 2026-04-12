@@ -12,7 +12,7 @@ from sqlalchemy import func, or_, case, and_, select, cast, String
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timedelta, date
 from decimal import Decimal
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, TypeAdapter
 
 from fastapi import UploadFile, File
@@ -180,9 +180,26 @@ from app.services.municipalities import (
     normalize_municipality_text,
 )
 from app.services.member_activity import (
+    member_expired_filters,
     get_member_lifecycle_status,
     is_member_active,
     member_active_filters,
+)
+from app.services.member_membership import (
+    MEMBERSHIP_TYPE_ANNUAL,
+    apply_membership_defaults,
+    membership_amount_to_float,
+    membership_type_label,
+    normalize_membership_type,
+    normalize_temporary_duration_unit,
+    organization_allows_custom_membership_types,
+    organization_membership_fee_amount,
+    resolve_member_membership_type,
+    resolve_member_valid_from,
+    resolve_member_valid_until,
+    resolve_temporary_duration,
+    serialize_membership_configuration,
+    quantize_membership_amount,
 )
 from app.services.member_card_delivery import (
     maybe_send_member_card_ready_email,
@@ -481,6 +498,14 @@ def _member_card_pdf_bytes(member: Member, request: Request) -> bytes:
             verification_url=verification_url,
             org_logo_path=_resolve_org_logo_disk_path(organization),
             assonam_logo_path=_resolve_assonam_disk_path(),
+            membership_type_label=membership_type_label(
+                resolve_member_membership_type(member)
+            ),
+            valid_until_text=(
+                resolve_member_valid_until(member).strftime("%d/%m/%Y %H:%M")
+                if resolve_member_valid_until(member)
+                else None
+            ),
         )
     except HTTPException:
         raise
@@ -609,6 +634,21 @@ def _serialize_org_admin_organization(
         "wallet_effective_title_override": wallet_defaults["wallet_title_override"],
         "system_email_sender": communications_settings["system_email_sender"],
         "association_email_sender": communications_settings["association_email_sender"],
+        "membership_config": serialize_membership_configuration(org),
+    }
+
+
+def _serialize_org_membership_settings(org: Organization) -> dict[str, object]:
+    duration_value, duration_unit = resolve_temporary_duration(org)
+    return {
+        "custom_membership_types_enabled": organization_allows_custom_membership_types(org),
+        "membership_fee_amount": membership_amount_to_float(org.membership_fee_amount),
+        "temporary_membership_fee_amount": membership_amount_to_float(
+            getattr(org, "temporary_membership_fee_amount", None)
+        ),
+        "membership_fee_currency": getattr(org, "membership_fee_currency", "EUR"),
+        "temporary_membership_duration_value": duration_value,
+        "temporary_membership_duration_unit": duration_unit,
     }
 
 
@@ -1309,6 +1349,8 @@ class CreateMemberBody(BaseModel):
     payment_method: Optional[str] = None
     joined_at: Optional[date] = None
     member_type: Optional[str] = None
+    membership_type: Optional[Literal["annual", "temporary"]] = None
+    membership_fee_snapshot: Optional[float] = Field(default=None, gt=0)
     internal_notes: Optional[str] = None
     is_manual: bool = True
     send_access_email: bool = False
@@ -1324,6 +1366,8 @@ class UpdateMemberProfileBody(BaseModel):
     birth_place: Optional[str] = None
     birth_place_code: Optional[str] = None
     fiscal_code: Optional[str] = None
+    membership_type: Optional[Literal["annual", "temporary"]] = None
+    membership_fee_snapshot: Optional[float] = Field(default=None, gt=0)
     internal_notes: Optional[str] = None
 
 
@@ -1465,6 +1509,23 @@ def _build_org_member_detail_payload(
         "card_no": member.card_no,
         "card_number": member.card_no,
         "card_year": member.card_year,
+        "membership_type": resolve_member_membership_type(member),
+        "membership_type_label": membership_type_label(
+            resolve_member_membership_type(member)
+        ),
+        "valid_from": (
+            resolve_member_valid_from(member).isoformat()
+            if resolve_member_valid_from(member)
+            else None
+        ),
+        "valid_until": (
+            resolve_member_valid_until(member).isoformat()
+            if resolve_member_valid_until(member)
+            else None
+        ),
+        "membership_fee_snapshot": membership_amount_to_float(
+            getattr(member, "membership_fee_snapshot", None)
+        ),
         "card_token": card_token,
         "card_verification_url": card_verification_url,
         "joined_at": member.joined_at.isoformat() if member.joined_at else None,
@@ -1924,6 +1985,16 @@ class PatchOrgOrganization(BaseModel):
     wallet_is_test_prefix: Optional[bool] = None
 
 
+class PatchOrgMembershipSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    membership_fee_amount: Optional[float] = Field(default=None, gt=0)
+    temporary_membership_fee_amount: Optional[float] = Field(default=None, gt=0)
+    membership_fee_currency: Optional[str] = Field(default=None, min_length=1, max_length=8)
+    temporary_membership_duration_value: Optional[int] = Field(default=None, ge=1, le=8760)
+    temporary_membership_duration_unit: Optional[Literal["hours", "days"]] = None
+
+
 class PutOrgCommunicationSettings(BaseModel):
     sender_email_local_part: Optional[str] = None
     email_from_name_override: Optional[str] = None
@@ -2188,6 +2259,78 @@ def get_organization_detail(
 
     org = admin.organization
     return _serialize_org_admin_organization(request, org)
+
+
+@router.get("/organization/membership-settings")
+def get_org_membership_settings(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return _serialize_org_membership_settings(admin.organization)
+
+
+@router.patch("/organization/membership-settings")
+def patch_org_membership_settings(
+    request: Request,
+    body: PatchOrgMembershipSettings,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    org = admin.organization
+    updates = body.model_dump(exclude_unset=True)
+    changed_fields: dict[str, object] = {}
+
+    if "membership_fee_amount" in updates:
+        org.membership_fee_amount = quantize_membership_amount(updates["membership_fee_amount"])
+        changed_fields["membership_fee_amount"] = membership_amount_to_float(org.membership_fee_amount)
+
+    if "membership_fee_currency" in updates:
+        currency = str(updates["membership_fee_currency"] or "").strip().upper()
+        if not currency:
+            raise HTTPException(status_code=422, detail="Valuta quota obbligatoria.")
+        org.membership_fee_currency = currency
+        changed_fields["membership_fee_currency"] = currency
+
+    if organization_allows_custom_membership_types(org):
+        if "temporary_membership_fee_amount" in updates:
+            org.temporary_membership_fee_amount = quantize_membership_amount(
+                updates["temporary_membership_fee_amount"]
+            )
+            changed_fields["temporary_membership_fee_amount"] = membership_amount_to_float(
+                org.temporary_membership_fee_amount
+            )
+        if "temporary_membership_duration_value" in updates:
+            org.temporary_membership_duration_value = int(updates["temporary_membership_duration_value"])
+            changed_fields["temporary_membership_duration_value"] = org.temporary_membership_duration_value
+        if "temporary_membership_duration_unit" in updates:
+            org.temporary_membership_duration_unit = normalize_temporary_duration_unit(
+                updates["temporary_membership_duration_unit"]
+            )
+            changed_fields["temporary_membership_duration_unit"] = org.temporary_membership_duration_unit
+
+    db.add(org)
+    db.commit()
+    db.refresh(org)
+
+    audit.log_operation(
+        db,
+        action="org.membership_settings.update",
+        entity_type="organization",
+        entity_id=org.id,
+        actor_admin_id=admin.id,
+        actor_role="org_admin",
+        metadata=changed_fields,
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    return {"ok": True, "settings": _serialize_org_membership_settings(org)}
 
 
 @router.get("/shared-documents")
@@ -4460,7 +4603,6 @@ def list_org_members(
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     current_time = datetime.utcnow()
-    current_year = current_time.year
     status_filter = (status or "").strip().lower()
 
     query = db.query(Member).filter(
@@ -4509,10 +4651,7 @@ def list_org_members(
         elif status_filter in {"suspended", "rejected"}:
             query = query.filter(Member.status == MemberStatus.REJECTED)
         elif status_filter == "expired":
-            query = query.filter(
-                Member.card_year.isnot(None),
-                Member.card_year < current_year,
-            )
+            query = query.filter(*member_expired_filters(now=current_time))
         elif status_filter != "all":
             query = query.filter(Member.status == status)
 
@@ -4641,6 +4780,22 @@ def list_org_members(
         )
         membership_latest = {r[0]: r[1] for r in membership_rows}
 
+    summary_row = (
+        db.query(
+            func.coalesce(func.sum(Member.membership_fee_snapshot), 0),
+            func.count(Member.id),
+        )
+        .filter(
+            Member.org_id == admin.org_id,
+            Member.deleted_at.is_(None),
+            Member.card_no.isnot(None),
+            Member.card_year.isnot(None),
+        )
+        .one()
+    )
+    summary_total = summary_row[0]
+    summary_issued_count = int(summary_row[1] or 0)
+
     return {
         "items": [
             {
@@ -4654,6 +4809,23 @@ def list_org_members(
                 "card_no": m.card_no,
                 "card_number": m.card_no,
                 "card_year": m.card_year,
+                "membership_type": resolve_member_membership_type(m),
+                "membership_type_label": membership_type_label(
+                    resolve_member_membership_type(m)
+                ),
+                "valid_from": (
+                    resolve_member_valid_from(m).isoformat()
+                    if resolve_member_valid_from(m)
+                    else None
+                ),
+                "valid_until": (
+                    resolve_member_valid_until(m).isoformat()
+                    if resolve_member_valid_until(m)
+                    else None
+                ),
+                "membership_fee_snapshot": membership_amount_to_float(
+                    getattr(m, "membership_fee_snapshot", None)
+                ),
                 "joined_at": m.joined_at.isoformat() if m.joined_at else None,
                 "created_at": m.joined_at.isoformat()
                 if m.joined_at
@@ -4682,6 +4854,11 @@ def list_org_members(
             for m in members
         ],
         "total": total,
+        "summary": {
+            "total_theoretical_membership_fees": membership_amount_to_float(summary_total)
+            or 0.0,
+            "issued_members_count": summary_issued_count,
+        },
     }
 
 
@@ -4712,6 +4889,15 @@ def create_org_member(
     member_type = body.member_type.strip() if body.member_type else None
     if member_type == "":
         member_type = None
+    membership_type = normalize_membership_type(body.membership_type)
+    if (
+        membership_type == "temporary"
+        and not organization_allows_custom_membership_types(admin.organization)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="La tessera temporanea non e abilitata per la tua associazione.",
+        )
     internal_notes = body.internal_notes.strip() if body.internal_notes else None
     if internal_notes == "":
         internal_notes = None
@@ -4761,6 +4947,13 @@ def create_org_member(
 
     db.add(member)
     db.flush()
+    apply_membership_defaults(
+        member=member,
+        org=admin.organization,
+        membership_type=membership_type,
+        reference_time=joined_at,
+        membership_fee_snapshot=body.membership_fee_snapshot,
+    )
 
     email_sent = False
     email_status = "not_requested"
@@ -4798,6 +4991,23 @@ def create_org_member(
         "status": member.status.value if member.status else None,
         "joined_at": member.joined_at.isoformat() if member.joined_at else None,
         "member_type": member.member_type,
+        "membership_type": resolve_member_membership_type(member),
+        "membership_type_label": membership_type_label(
+            resolve_member_membership_type(member)
+        ),
+        "valid_from": (
+            resolve_member_valid_from(member).isoformat()
+            if resolve_member_valid_from(member)
+            else None
+        ),
+        "valid_until": (
+            resolve_member_valid_until(member).isoformat()
+            if resolve_member_valid_until(member)
+            else None
+        ),
+        "membership_fee_snapshot": membership_amount_to_float(
+            getattr(member, "membership_fee_snapshot", None)
+        ),
         "internal_notes": member.internal_notes,
         "is_manual": member.is_manual,
         "email_sent": email_sent,
@@ -4872,6 +5082,20 @@ def update_member_profile(
         birth_place_code=body.birth_place_code,
     )
     internal_notes = _normalize_optional_text(body.internal_notes)
+    membership_type = normalize_membership_type(body.membership_type)
+    if (
+        membership_type == "temporary"
+        and not organization_allows_custom_membership_types(admin.organization)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="La tessera temporanea non e abilitata per la tua associazione.",
+        )
+    membership_fee_snapshot = (
+        quantize_membership_amount(body.membership_fee_snapshot)
+        if body.membership_fee_snapshot is not None
+        else None
+    )
 
     if email:
         existing = (
@@ -4908,6 +5132,20 @@ def update_member_profile(
     apply_change("birth_place_code", birth_place_code)
     apply_change("fiscal_code", fiscal_code)
     apply_change("internal_notes", internal_notes)
+
+    current_membership_type = resolve_member_membership_type(member)
+    if body.membership_type is not None and current_membership_type != membership_type:
+        apply_membership_defaults(
+            member=member,
+            org=admin.organization,
+            membership_type=membership_type,
+            reference_time=member.joined_at or datetime.utcnow(),
+            membership_fee_snapshot=membership_fee_snapshot,
+        )
+        changed_fields.extend(["membership_type", "valid_from", "valid_until", "membership_fee_snapshot"])
+    elif membership_fee_snapshot is not None and member.membership_fee_snapshot != membership_fee_snapshot:
+        member.membership_fee_snapshot = membership_fee_snapshot
+        changed_fields.append("membership_fee_snapshot")
 
     if not changed_fields:
         return _build_org_member_detail_payload(

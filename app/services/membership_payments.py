@@ -28,6 +28,14 @@ from app.models import (
     OrganizationPaymentProvider,
 )
 from app.services.card_allocation import allocate_next_card
+from app.services.member_membership import (
+    MEMBERSHIP_TYPE_ANNUAL,
+    apply_membership_defaults,
+    membership_amount_to_float,
+    organization_allows_custom_membership_types,
+    organization_membership_fee_amount,
+    resolve_temporary_duration,
+)
 from app.services.member_card_delivery import (
     build_member_card_access_payload,
     queue_member_card_email,
@@ -134,8 +142,13 @@ def serialize_public_membership_payment(org: Organization | None) -> dict[str, A
             "amount": None,
             "currency": None,
             "button_label": None,
+            "custom_types_enabled": False,
+            "temporary_amount": None,
+            "temporary_duration_value": 1,
+            "temporary_duration_unit": "days",
         }
     amount = getattr(org, "membership_fee_amount", None)
+    temporary_duration_value, temporary_duration_unit = resolve_temporary_duration(org)
     return {
         "enabled": organization_has_sumup_config(org),
         "required": organization_requires_membership_payment(org),
@@ -143,6 +156,12 @@ def serialize_public_membership_payment(org: Organization | None) -> dict[str, A
         "amount": float(amount) if amount is not None else None,
         "currency": getattr(org, "membership_fee_currency", None),
         "button_label": getattr(org, "payment_button_label", None),
+        "custom_types_enabled": organization_allows_custom_membership_types(org),
+        "temporary_amount": membership_amount_to_float(
+            getattr(org, "temporary_membership_fee_amount", None)
+        ),
+        "temporary_duration_value": temporary_duration_value,
+        "temporary_duration_unit": temporary_duration_unit,
     }
 
 
@@ -158,6 +177,14 @@ def serialize_super_admin_membership_payment_settings(org: Organization) -> dict
         "membership_fee_amount": float(amount) if amount is not None else None,
         "membership_fee_currency": getattr(org, "membership_fee_currency", "EUR"),
         "payment_button_label": getattr(org, "payment_button_label", "Paga con carta"),
+        "temporary_membership_fee_amount": membership_amount_to_float(
+            getattr(org, "temporary_membership_fee_amount", None)
+        ),
+        "custom_membership_types_enabled": bool(
+            getattr(org, "custom_membership_types_enabled", False)
+        ),
+        "temporary_membership_duration_value": resolve_temporary_duration(org)[0],
+        "temporary_membership_duration_unit": resolve_temporary_duration(org)[1],
         "sumup_enabled": bool(getattr(org, "sumup_enabled", False)),
         "sumup_api_key_configured": bool(getattr(org, "sumup_api_key_encrypted", None)),
         "sumup_api_key_last4": getattr(org, "sumup_api_key_last4", None),
@@ -372,6 +399,27 @@ def maybe_fulfill_member_card(
         member.card_year = datetime.utcnow().year
     if not member.joined_at:
         member.joined_at = datetime.utcnow()
+    if not getattr(member, "membership_type", None):
+        apply_membership_defaults(
+            member=member,
+            org=org,
+            membership_type=MEMBERSHIP_TYPE_ANNUAL,
+            reference_time=member.joined_at,
+            membership_fee_snapshot=getattr(member, "membership_fee_snapshot", None),
+        )
+    elif getattr(member, "membership_fee_snapshot", None) is None or (
+        getattr(member, "membership_type", None) == "temporary"
+        and getattr(member, "valid_until", None) is None
+    ):
+        apply_membership_defaults(
+            member=member,
+            org=org,
+            membership_type=getattr(member, "membership_type", None),
+            reference_time=getattr(member, "valid_from", None) or member.joined_at,
+            membership_fee_snapshot=getattr(member, "membership_fee_snapshot", None),
+        )
+    if getattr(member, "valid_from", None) is None:
+        member.valid_from = member.joined_at
     member.status = MemberStatus.ACTIVE
 
     if request is not None:

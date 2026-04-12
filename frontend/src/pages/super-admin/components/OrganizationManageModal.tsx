@@ -46,6 +46,7 @@ type ModalFormData = {
   is_active: boolean;
   auto_approve_signup: boolean;
   require_membership_document: boolean;
+  custom_membership_types_enabled: boolean;
   accounting_enabled: boolean;
   numbering_mode: "shared_assonam" | "dedicated";
   from_no: string;
@@ -89,6 +90,7 @@ const createInitialFormData = (): ModalFormData => ({
   is_active: true,
   auto_approve_signup: false,
   require_membership_document: false,
+  custom_membership_types_enabled: false,
   accounting_enabled: false,
   numbering_mode: "shared_assonam",
   from_no: "",
@@ -294,6 +296,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
       card_logo_url: selectedOrg.card_logo_url ?? "",
       auto_approve_signup: Boolean(selectedOrg.auto_approve_signup),
       require_membership_document: Boolean(selectedOrg.require_membership_document),
+      custom_membership_types_enabled: Boolean(selectedOrg.custom_membership_types_enabled),
       accounting_enabled: Boolean(selectedOrg.accounting_enabled),
       numbering_mode:
         selectedOrg.numbering_mode === "dedicated" ? "dedicated" : "shared_assonam",
@@ -454,6 +457,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
           is_active: formData.is_active,
           auto_approve_signup: formData.auto_approve_signup,
           require_membership_document: formData.require_membership_document,
+          custom_membership_types_enabled: formData.custom_membership_types_enabled,
           accounting_enabled: formData.accounting_enabled,
           numbering_mode: formData.numbering_mode,
         };
@@ -487,6 +491,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
           card_logo_url: normalizeOptionalString(formData.card_logo_url),
           auto_approve_signup: formData.auto_approve_signup,
           require_membership_document: formData.require_membership_document,
+          custom_membership_types_enabled: formData.custom_membership_types_enabled,
           accounting_enabled: formData.accounting_enabled,
         });
         const requiresPayment = membershipPaymentFormData.payment_required_before_card;
@@ -1458,6 +1463,28 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                     <p className="mt-1 text-xs text-neutral-500">
                       Se attivo, il socio dovrà caricare il documento nella pagina pubblica di iscrizione.
                       Se disattivato, il documento resta facoltativo come ora.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-4 flex items-start gap-3 border-t border-neutral-200 pt-4">
+                  <input
+                    id="custom_membership_types_enabled"
+                    type="checkbox"
+                    className="mt-0.5 rounded border-gray-300 text-brand focus:ring-brand"
+                    checked={formData.custom_membership_types_enabled}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        custom_membership_types_enabled: e.target.checked,
+                      }))
+                    }
+                  />
+                  <div>
+                    <label htmlFor="custom_membership_types_enabled" className="text-sm font-medium text-neutral-800">
+                      Abilita tipi tessera personalizzati
+                    </label>
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Se attivo, l&apos;associazione puÃ² usare tessera annuale e temporanea. Se disattivo, resta tutto annuale come oggi.
                     </p>
                   </div>
                 </div>

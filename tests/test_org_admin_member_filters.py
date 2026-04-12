@@ -202,3 +202,93 @@ def test_org_admin_member_filters(client, db):
     by_email = {i["email"]: i for i in items}
     assert by_email["m1@example.com"]["signup_source"] == SignupSource.ADMIN.value
     assert by_email["m2@example.com"]["signup_source"] == SignupSource.PIENISSIMO.value
+
+
+def test_org_admin_members_summary_uses_snapshot_and_expired_temporary_cards(client, db):
+    suffix = datetime.utcnow().strftime("%H%M%S%f")
+    org = Organization(
+        name="Summary Org",
+        slug=f"summary-org-{suffix}",
+        is_active=True,
+        membership_fee_amount=99,
+        temporary_membership_fee_amount=15,
+        custom_membership_types_enabled=True,
+    )
+    db.add(org)
+    db.commit()
+    db.refresh(org)
+
+    admin = AdminUser(
+        email=f"summary-admin-{suffix}@example.com",
+        role=AdminRole.ORG_ADMIN,
+        org_id=org.id,
+        is_active=True,
+    )
+    db.add(admin)
+    db.commit()
+    db.refresh(admin)
+
+    current_year = datetime.utcnow().year
+    active_member = Member(
+        org_id=org.id,
+        first_name="Anna",
+        last_name="Annuale",
+        email="summary-active@example.com",
+        status=MemberStatus.ACTIVE,
+        card_no=12001,
+        card_year=current_year,
+        joined_at=datetime.utcnow(),
+        membership_type="annual",
+        membership_fee_snapshot=30,
+    )
+    expired_temporary = Member(
+        org_id=org.id,
+        first_name="Tina",
+        last_name="Temporary",
+        email="summary-temp@example.com",
+        status=MemberStatus.ACTIVE,
+        card_no=12002,
+        card_year=current_year,
+        joined_at=datetime.utcnow(),
+        membership_type="temporary",
+        membership_fee_snapshot=10,
+        valid_from=datetime.utcnow() - timedelta(days=2),
+        valid_until=datetime.utcnow() - timedelta(hours=2),
+    )
+    pending_without_card = Member(
+        org_id=org.id,
+        first_name="Paolo",
+        last_name="Pending",
+        email="summary-pending@example.com",
+        status=MemberStatus.PENDING_DOCS,
+        joined_at=datetime.utcnow(),
+        membership_type="annual",
+        membership_fee_snapshot=200,
+    )
+    missing_snapshot = Member(
+        org_id=org.id,
+        first_name="Nina",
+        last_name="NoSnapshot",
+        email="summary-nosnapshot@example.com",
+        status=MemberStatus.ACTIVE,
+        card_no=12003,
+        card_year=current_year,
+        joined_at=datetime.utcnow(),
+        membership_type="annual",
+        membership_fee_snapshot=None,
+    )
+    db.add_all([active_member, expired_temporary, pending_without_card, missing_snapshot])
+    db.commit()
+
+    _login_org_admin(client, db, admin.id)
+
+    members_res = client.get("/api/org-admin/members")
+    assert members_res.status_code == 200, members_res.text
+    payload = members_res.json()
+    assert payload["summary"]["total_theoretical_membership_fees"] == 40.0
+    assert payload["summary"]["issued_members_count"] == 3
+
+    expired_res = client.get("/api/org-admin/members?status=expired")
+    assert expired_res.status_code == 200, expired_res.text
+    expired_items = expired_res.json()["items"]
+    assert any(item["email"] == "summary-temp@example.com" for item in expired_items)

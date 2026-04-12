@@ -12,6 +12,8 @@ export type MemberCardPreviewData = {
   cardNumber?: string | number | null;
   cardStatus?: string | null;
   cardYear?: string | number | null;
+  membershipTypeLabel?: string | null;
+  validUntil?: string | null;
   verificationUrl?: string | null;
 };
 
@@ -62,7 +64,7 @@ export const isMemberCardPreviewData = (value: unknown): value is MemberCardPrev
   const stringFields = [
     "firstName", "lastName", "fullName", "clubDisplayName",
     "organizationSlug", "organizationName", "organizationLogoUrl",
-    "cardStatus", "verificationUrl",
+    "cardStatus", "verificationUrl", "membershipTypeLabel", "validUntil",
   ];
   const stringsOk = stringFields.every((field) => {
     const fieldValue = data[field];
@@ -125,6 +127,8 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
   const organizationLabel = clubDisplayName !== EMPTY ? clubDisplayName : organizationName;
   const cardNumber = toDisplayCardNumber(cardData.cardNumber);
   const cardYear = toDisplayYear(cardData.cardYear) || getCurrentCardYearLabel();
+  const membershipTypeLabel = toSafeText(cardData.membershipTypeLabel).toUpperCase();
+  const validUntil = toSafeText(cardData.validUntil);
   const qrImageUrl = useMemo(() => toQrImageUrl(cardData.verificationUrl), [cardData.verificationUrl]);
   const verificationUrl = cardData.verificationUrl?.trim() ? cardData.verificationUrl.trim() : null;
 
@@ -248,6 +252,11 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
                   >
                     {cardYear}
                   </span>
+                  {membershipTypeLabel === "TEMPORANEA" ? (
+                    <span className="mt-2 inline-flex w-fit items-center rounded-full border border-[#d4b45c]/40 bg-[#d4b45c]/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[#f6e7b6]">
+                      TEMPORANEA
+                    </span>
+                  ) : null}
                 </span>
 
                 {/* ASSONAM logo — always visible, with contrast plate */}
@@ -298,6 +307,11 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
                   <span className="mt-0.5 block font-mono text-base font-bold tracking-[0.12em] text-[#d4b45c] sm:text-lg">
                     {cardNumber}
                   </span>
+                  {validUntil ? (
+                    <span className="mt-1 block text-[10px] font-medium uppercase tracking-[0.12em] text-[#c9a8b0]">
+                      Scade {new Date(validUntil).toLocaleDateString("it-IT")}
+                    </span>
+                  ) : null}
                 </span>
                 {/* Decorative gold chip */}
                 <span className="mb-0.5 flex-shrink-0">
@@ -386,6 +400,20 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
                   <span className="text-[0.58rem] font-semibold uppercase tracking-[0.16em] text-[#c9a8b0]">Anno</span>
                   <span className="text-xs font-semibold text-[#d4b45c] sm:text-sm">{cardYear}</span>
                 </span>
+                {membershipTypeLabel ? (
+                  <span className="flex items-baseline justify-between gap-3">
+                    <span className="text-[0.58rem] font-semibold uppercase tracking-[0.16em] text-[#c9a8b0]">Tipo</span>
+                    <span className="text-xs font-semibold text-[#fdf6e3]/85 sm:text-sm">{membershipTypeLabel}</span>
+                  </span>
+                ) : null}
+                {validUntil ? (
+                  <span className="flex items-baseline justify-between gap-3">
+                    <span className="text-[0.58rem] font-semibold uppercase tracking-[0.16em] text-[#c9a8b0]">Scadenza</span>
+                    <span className="text-xs font-semibold text-[#fdf6e3]/85 sm:text-sm">
+                      {new Date(validUntil).toLocaleDateString("it-IT")}
+                    </span>
+                  </span>
+                ) : null}
               </span>
             </span>
           </span>

@@ -16,6 +16,11 @@ from app.config import settings
 from app.models import Member, Organization
 from app.services.card_verification import build_card_verification_token
 from app.services.member_activity import is_member_active
+from app.services.member_membership import (
+    membership_type_label,
+    resolve_member_membership_type,
+    resolve_member_valid_until,
+)
 from app.services.org_branding import (
     resolve_assonam_logo_url,
     resolve_card_logo_url,
@@ -328,6 +333,14 @@ def _build_generic_object_payload(*, member: Member, class_id: str, object_id: s
     card_year = int(member.card_year or datetime.utcnow().year)
     card_number = int(member.card_no or 0)
     member_state = _member_state(member)
+    membership_type = resolve_member_membership_type(member)
+    membership_label = membership_type_label(membership_type)
+    valid_until = resolve_member_valid_until(member)
+    validity_label = (
+        valid_until.strftime("%d/%m/%Y %H:%M")
+        if valid_until is not None
+        else str(card_year)
+    )
 
     assonam_logo_url = resolve_assonam_logo_url(
         frontend_base_url=frontend_base_url,
@@ -348,7 +361,9 @@ def _build_generic_object_payload(*, member: Member, class_id: str, object_id: s
         "state": member_state,
         "cardTitle": _localized_string(card_title),
         "header": _localized_string(full_name),
-        "subheader": _localized_string(f"Tessera {card_year} - n. {card_number}"),
+        "subheader": _localized_string(
+            f"Tessera {card_year} - n. {card_number} - {membership_label}"
+        ),
         "hexBackgroundColor": resolve_wallet_bg_color(org),
         "textModulesData": [
             {
@@ -364,7 +379,12 @@ def _build_generic_object_payload(*, member: Member, class_id: str, object_id: s
             {
                 "id": "validity",
                 "header": "Validita",
-                "body": str(card_year),
+                "body": validity_label,
+            },
+            {
+                "id": "membership_type",
+                "header": "Tipo tessera",
+                "body": membership_label,
             },
             {
                 "id": "email",

@@ -1,5 +1,6 @@
 import pytest
 from datetime import datetime, timedelta
+import uuid
 
 from app.db import SessionLocal
 from app.models import AdminUser, AdminRole, Organization, Member, OrgAdminToken, SignupSource
@@ -129,3 +130,78 @@ def test_super_admin_cannot_create_member(client):
     )
     assert res.status_code == 401
     client.post("/api/super-admin/auth/logout")
+
+
+def test_org_admin_can_manage_membership_settings_and_create_temporary_member(client, db):
+    suffix = uuid.uuid4().hex[:8]
+    org = Organization(
+        name=f"Temporary Org {suffix}",
+        slug=f"temporary-org-{suffix}",
+        is_active=True,
+        membership_fee_amount=30,
+        temporary_membership_fee_amount=10,
+        custom_membership_types_enabled=True,
+        temporary_membership_duration_value=6,
+        temporary_membership_duration_unit="hours",
+    )
+    db.add(org)
+    db.commit()
+    db.refresh(org)
+
+    admin = AdminUser(
+        email=f"temporary-admin-{suffix}@example.com",
+        role=AdminRole.ORG_ADMIN,
+        org_id=org.id,
+        is_active=True,
+    )
+    db.add(admin)
+    db.commit()
+    db.refresh(admin)
+
+    _login_org_admin(client, db, admin.id)
+
+    get_res = client.get("/api/org-admin/organization/membership-settings")
+    assert get_res.status_code == 200, get_res.text
+    assert get_res.json()["custom_membership_types_enabled"] is True
+    assert get_res.json()["temporary_membership_duration_value"] == 6
+
+    patch_res = client.patch(
+        "/api/org-admin/organization/membership-settings",
+        json={
+            "membership_fee_amount": 32,
+            "temporary_membership_fee_amount": 12,
+            "temporary_membership_duration_value": 8,
+            "temporary_membership_duration_unit": "hours",
+        },
+    )
+    assert patch_res.status_code == 200, patch_res.text
+    patched = patch_res.json()["settings"]
+    assert patched["membership_fee_amount"] == 32.0
+    assert patched["temporary_membership_fee_amount"] == 12.0
+    assert patched["temporary_membership_duration_value"] == 8
+    assert patched["temporary_membership_duration_unit"] == "hours"
+
+    payload = {
+        "first_name": "Marta",
+        "last_name": "Temporanea",
+        "email": f"marta-{suffix}@example.com",
+        "joined_at": "2026-04-12",
+        "is_manual": True,
+        "membership_type": "temporary",
+    }
+    res = client.post("/api/org-admin/members", json=payload)
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert data["membership_type"] == "temporary"
+    assert data["membership_type_label"] == "Temporanea"
+    assert data["membership_fee_snapshot"] == 12.0
+    assert data["valid_from"] is not None
+    assert data["valid_until"] is not None
+
+    member = db.query(Member).filter(Member.id == data["id"]).first()
+    assert member is not None
+    assert member.membership_type == "temporary"
+    assert float(member.membership_fee_snapshot) == 12.0
+    assert member.valid_from is not None
+    assert member.valid_until is not None
+    assert member.valid_until - member.valid_from == timedelta(hours=8)

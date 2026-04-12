@@ -4,11 +4,13 @@ import {
   AuthError,
   createManualPayment,
   fetchOrgAdminMemberDetail,
+  fetchOrgAdminMembershipSettings,
   sendOrgAdminMemberCardEmail,
   updateOrgAdminMemberProfile,
   type OrgAdminMemberActivity,
   type OrgAdminMemberDetail,
   type OrgAdminMemberDocument,
+  type OrgAdminMembershipSettings,
   type UpdateOrgAdminMemberProfileInput,
 } from "../../lib/api";
 import { MemberCardPreview } from "../../components/cards/MemberCardPreview";
@@ -36,6 +38,7 @@ export default function OrgAdminMemberDetail() {
   const { showToast } = useToast();
   const { admin } = useOrgAdmin();
   const [member, setMember] = useState<OrgAdminMemberDetail | null>(null);
+  const [membershipSettings, setMembershipSettings] = useState<OrgAdminMembershipSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"details" | "activity">("details");
@@ -175,6 +178,7 @@ export default function OrgAdminMemberDetail() {
 
   useEffect(() => {
     void fetchMember();
+    void loadMembershipSettings();
   }, [id]);
 
   const fetchMember = async () => {
@@ -515,6 +519,17 @@ export default function OrgAdminMemberDetail() {
     }
   };
 
+  const loadMembershipSettings = async () => {
+    try {
+      const data = await fetchOrgAdminMembershipSettings();
+      setMembershipSettings(data);
+    } catch (err) {
+      if (err instanceof AuthError) {
+        navigate("/org-admin/login", { replace: true });
+      }
+    }
+  };
+
   const [downloadingDocId, setDownloadingDocId] = useState<number | null>(null);
 
   const handleDownloadDoc = async (doc: OrgAdminMemberDocument) => {
@@ -662,6 +677,8 @@ export default function OrgAdminMemberDetail() {
     cardNumber,
     cardStatus: member.status,
     cardYear: member.card_year ?? null,
+    membershipTypeLabel: member.membership_type_label ?? null,
+    validUntil: member.valid_until ?? null,
     verificationUrl: member.card_verification_url ?? null,
   };
 
@@ -930,7 +947,7 @@ export default function OrgAdminMemberDetail() {
               </button>
             </div>
 
-            <div className="mt-4 grid gap-3 rounded-2xl border border-neutral-200 bg-white/80 p-4 text-sm text-neutral-700 sm:grid-cols-2">
+            <div className="mt-4 grid gap-3 rounded-2xl border border-neutral-200 bg-white/80 p-4 text-sm text-neutral-700 sm:grid-cols-2 xl:grid-cols-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">Numero tessera</p>
                 <p className="mt-1 font-mono text-base font-semibold text-neutral-900">
@@ -942,6 +959,18 @@ export default function OrgAdminMemberDetail() {
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">Data iscrizione</p>
                 <p className="mt-1 font-medium text-neutral-900">
                   {member.joined_at ? new Date(member.joined_at).toLocaleDateString("it-IT") : "-"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">Tipo tessera</p>
+                <p className="mt-1 font-medium text-neutral-900">
+                  {member.membership_type_label ?? "Annuale"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">Scadenza reale</p>
+                <p className="mt-1 font-medium text-neutral-900">
+                  {member.valid_until ? new Date(member.valid_until).toLocaleString("it-IT") : "-"}
                 </p>
               </div>
             </div>
@@ -1061,6 +1090,7 @@ export default function OrgAdminMemberDetail() {
       <EditMemberProfileModal
         open={editModalOpen}
         member={member}
+        membershipSettings={membershipSettings}
         saving={profileSaving}
         error={profileError}
         onClose={() => {

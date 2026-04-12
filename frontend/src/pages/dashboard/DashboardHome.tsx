@@ -55,6 +55,8 @@ type MemberCardProfileCompat = {
   assigned_card_number?: string | number | null;
   activated_at?: string | null;
   valid_from?: string | null;
+  valid_until?: string | null;
+  membership_type_label?: string | null;
   card_status?: string | null;
   card_year?: string | number | null;
   card_verification_url?: string | null;
@@ -98,6 +100,8 @@ const buildMemberCardDataFromProfile = (
       null,
     cardStatus: card?.status ?? compat.card_status ?? profile.status ?? null,
     cardYear: card?.year ?? compat.card_year ?? null,
+    membershipTypeLabel: compat.membership_type_label ?? null,
+    validUntil: compat.valid_until ?? null,
     verificationUrl: card?.verification_url ?? compat.card_verification_url ?? null,
   };
 };

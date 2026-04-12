@@ -45,6 +45,7 @@ const secondaryActionClass =
   "signup-wizard-secondary inline-flex items-center justify-center gap-2 rounded-[1.2rem] px-5 py-3 text-base font-medium";
 
 type FormData = {
+  membershipType: "annual" | "temporary";
   nome: string;
   cognome: string;
   dataNascita: string;
@@ -62,6 +63,7 @@ type FormData = {
 };
 
 const initial: FormData = {
+  membershipType: "annual",
   nome: "",
   cognome: "",
   dataNascita: "",
@@ -541,12 +543,22 @@ const Iscrizione = () => {
   const associationName = org?.name ?? "questa associazione";
   const membershipDocumentRequired = Boolean(org?.require_membership_document);
   const membershipPaymentConfig = org?.membership_payment;
+  const membershipConfig = org?.membership_config;
+  const customMembershipTypesEnabled = Boolean(membershipConfig?.custom_types_enabled);
   const membershipPaymentRequired = Boolean(membershipPaymentConfig?.required);
   const membershipPaymentAmount = membershipPaymentConfig?.amount ?? null;
   const membershipPaymentCurrency = membershipPaymentConfig?.currency ?? "EUR";
   const membershipPaymentLabel = membershipPaymentConfig?.label || "Quota associativa";
   const membershipPaymentButtonLabel =
     membershipPaymentConfig?.button_label || "Paga con carta";
+  const selectedMembershipType = form.membershipType;
+  const selectedMembershipTypeLabel =
+    selectedMembershipType === "temporary" ? "Tessera temporanea" : "Tessera annuale";
+  const selectedMembershipFee =
+    selectedMembershipType === "temporary"
+      ? membershipConfig?.temporary_fee_amount ?? membershipPaymentConfig?.temporary_amount ?? null
+      : membershipConfig?.annual_fee_amount ?? membershipPaymentAmount;
+  const temporaryDurationLabel = membershipConfig?.temporary_duration_label ?? "1 giorno";
   const fiscalCodeValidation = validateCodiceFiscale({
     fiscalCode: form.codiceFiscale,
     firstName: form.nome,
@@ -716,6 +728,7 @@ const Iscrizione = () => {
           accept_statute: form.statuto,
           accepted_statute_version: org?.has_statute ? org.statute_version || null : null,
           accept_privacy: form.privacy,
+          membership_type: form.membershipType,
           id_document: form.documentoIdentita,
         });
         window.location.assign(checkout.hosted_checkout_url);
@@ -736,6 +749,7 @@ const Iscrizione = () => {
         accepted_statute_version: org?.has_statute ? org.statute_version || null : null,
         accept_privacy: form.privacy,
         payment_method: form.modalitaPagamento as "CASH" | "BONIFICO",
+        membership_type: form.membershipType,
         id_document: form.documentoIdentita,
       });
 
@@ -941,6 +955,80 @@ const Iscrizione = () => {
               >
                 {step === 1 ? (
                   <>
+                    {customMembershipTypesEnabled ? (
+                      <div className="signup-wizard-card px-6 py-7 md:px-10 md:py-10">
+                        <CardHeader
+                          iconPath="M4.5 12.75l6 6 9-13.5M4.5 6.75h15M4.5 17.25h9"
+                          title="Scegli la tessera"
+                          description="Seleziona il tipo di tessera prima di completare l'iscrizione. La durata della temporanea segue la regola generale impostata dall'associazione."
+                        />
+
+                        <div className="mt-8 grid gap-4 md:grid-cols-2">
+                          {[
+                            {
+                              value: "annual" as const,
+                              title: "Tessera annuale",
+                              description: "Valida secondo la gestione standard della piattaforma.",
+                              fee: membershipConfig?.annual_fee_amount ?? membershipPaymentAmount,
+                              extra: null,
+                            },
+                            {
+                              value: "temporary" as const,
+                              title: "Tessera temporanea",
+                              description: "Pensata per accessi brevi o occasionali.",
+                              fee:
+                                membershipConfig?.temporary_fee_amount ??
+                                membershipPaymentConfig?.temporary_amount ??
+                                null,
+                              extra: `Durata: ${temporaryDurationLabel}`,
+                            },
+                          ].map((option) => {
+                            const active = form.membershipType === option.value;
+                            return (
+                              <button
+                                key={option.value}
+                                type="button"
+                                onClick={() => updateField("membershipType", option.value)}
+                                className={`rounded-[1.8rem] border px-6 py-6 text-left transition ${
+                                  active
+                                    ? "border-indigo-500 bg-indigo-50/70 shadow-[0_18px_40px_-34px_rgba(79,70,229,0.45)]"
+                                    : "border-slate-200 bg-white hover:border-indigo-200 hover:bg-slate-50"
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-4">
+                                  <div>
+                                    <p className="text-lg font-semibold text-slate-950">{option.title}</p>
+                                    <p className="mt-2 text-sm leading-7 text-slate-500">{option.description}</p>
+                                  </div>
+                                  <span
+                                    className={`mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full border ${
+                                      active
+                                        ? "border-indigo-500 bg-indigo-500 text-white"
+                                        : "border-slate-300 bg-white text-transparent"
+                                    }`}
+                                  >
+                                    {iconFor("m5 13 4 4L19 7", "h-4 w-4")}
+                                  </span>
+                                </div>
+                                <div className="mt-5 flex flex-wrap items-center gap-3 text-sm">
+                                  <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-700">
+                                    {option.fee != null
+                                      ? `${option.fee.toFixed(2)} ${membershipPaymentCurrency}`
+                                      : "Importo da definire"}
+                                  </span>
+                                  {option.extra ? (
+                                    <span className="rounded-full bg-amber-50 px-3 py-1 font-medium text-amber-700">
+                                      {option.extra}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
+
                     <div className="signup-wizard-card px-6 py-7 md:px-10 md:py-10">
                       <CardHeader
                         iconPath="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"
@@ -1363,23 +1451,38 @@ const Iscrizione = () => {
                             Riepilogo contatti
                           </p>
                           <dl className="mt-7 space-y-5">
+                            <SummaryItem
+                              label="Tipo tessera"
+                              value={selectedMembershipTypeLabel}
+                              muted={!selectedMembershipTypeLabel}
+                            />
                             <SummaryItem label="Indirizzo email" value={form.email || "-"} muted={!form.email} />
                             <SummaryItem label="Numero di telefono" value={form.telefono || "-"} muted={!form.telefono} />
+                            {selectedMembershipType === "temporary" ? (
+                              <SummaryItem
+                                label="Durata temporanea"
+                                value={temporaryDurationLabel}
+                              />
+                            ) : null}
                             {membershipPaymentRequired ? (
                               <>
                                 <SummaryItem
                                   label="Cosa stai pagando"
-                                  value={membershipPaymentLabel}
-                                  muted={!membershipPaymentLabel}
+                                  value={
+                                    selectedMembershipType === "temporary"
+                                      ? "Quota tessera temporanea"
+                                      : membershipPaymentLabel
+                                  }
+                                  muted={false}
                                 />
                                 <SummaryItem
                                   label="Importo"
                                   value={
-                                    membershipPaymentAmount != null
-                                      ? `${membershipPaymentAmount.toFixed(2)} ${membershipPaymentCurrency}`
+                                    selectedMembershipFee != null
+                                      ? `${selectedMembershipFee.toFixed(2)} ${membershipPaymentCurrency}`
                                       : "-"
                                   }
-                                  muted={membershipPaymentAmount == null}
+                                  muted={selectedMembershipFee == null}
                                 />
                               </>
                             ) : (
@@ -1420,10 +1523,14 @@ const Iscrizione = () => {
                             Per completare l&apos;iscrizione è necessario effettuare il pagamento online.
                           </p>
                           <div className="mt-5 rounded-[1.4rem] border border-white/80 bg-white px-5 py-4 shadow-[0_18px_40px_-32px_rgba(79,70,229,0.35)]">
-                            <p className="text-sm text-slate-500">{membershipPaymentLabel}</p>
+                            <p className="text-sm text-slate-500">
+                              {selectedMembershipType === "temporary"
+                                ? "Quota tessera temporanea"
+                                : membershipPaymentLabel}
+                            </p>
                             <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
-                              {membershipPaymentAmount != null
-                                ? `${membershipPaymentAmount.toFixed(2)} ${membershipPaymentCurrency}`
+                              {selectedMembershipFee != null
+                                ? `${selectedMembershipFee.toFixed(2)} ${membershipPaymentCurrency}`
                                 : "-"}
                             </p>
                           </div>

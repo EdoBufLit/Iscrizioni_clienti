@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -190,3 +190,35 @@ def test_member_card_download_page_and_wallet_placeholder_endpoints(client, db):
     google_res = client.get(f"/api/cards/{token}/wallet/google")
     assert google_res.status_code == 404
     assert google_res.json()["detail"] == "Wallet non configurato"
+
+
+def test_temporary_member_card_verification_exposes_real_expiry_and_type(client, db):
+    org, member = _ensure_active_member(db)
+    valid_until = datetime.utcnow().replace(microsecond=0) + timedelta(hours=6)
+    member.membership_type = "temporary"
+    member.valid_from = datetime.utcnow().replace(microsecond=0)
+    member.valid_until = valid_until
+    db.commit()
+    db.refresh(member)
+
+    token = build_card_verification_token(
+        member_id=member.id,
+        org_id=org.id,
+        card_number=member.card_no,
+        card_year=member.card_year,
+    )
+
+    verify_res = client.get(f"/api/cards/verify/{token}")
+    assert verify_res.status_code == 200, verify_res.text
+    payload = verify_res.json()
+    assert payload["valid"] is True
+    assert payload["card"]["membership_type"] == "temporary"
+    assert payload["card"]["valid_until"] is not None
+
+    html_res = client.get(
+        f"/api/cards/verify/{token}",
+        headers={"Accept": "text/html"},
+    )
+    assert html_res.status_code == 200
+    assert "Tipo tessera:</strong> Temporanea" in html_res.text
+    assert "Scadenza reale" in html_res.text

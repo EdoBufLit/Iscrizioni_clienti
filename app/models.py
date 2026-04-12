@@ -67,6 +67,16 @@ class MembershipPaymentSource(str, enum.Enum):
     MANUAL = "manual"
 
 
+class MembershipType(str, enum.Enum):
+    ANNUAL = "annual"
+    TEMPORARY = "temporary"
+
+
+class TemporaryMembershipDurationUnit(str, enum.Enum):
+    HOURS = "hours"
+    DAYS = "days"
+
+
 class SafeMemberStatusType(TypeDecorator):
     """Stores MemberStatus as plain strings; normalises legacy uppercase values on read."""
 
@@ -306,9 +316,15 @@ class Organization(Base):
     )
     membership_payment_label = Column(String, nullable=True)
     membership_fee_amount = Column(Numeric(10, 2), nullable=True)
+    temporary_membership_fee_amount = Column(Numeric(10, 2), nullable=True)
     membership_fee_currency = Column(
         String, nullable=False, default="EUR", server_default="EUR"
     )
+    custom_membership_types_enabled = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    temporary_membership_duration_value = Column(Integer, nullable=True)
+    temporary_membership_duration_unit = Column(String, nullable=True)
     payment_button_label = Column(
         String, nullable=False, default="Paga con carta", server_default="Paga con carta"
     )
@@ -1679,6 +1695,10 @@ class Member(Base):
 
     card_no = Column(Integer, nullable=True)
     card_year = Column(Integer, nullable=True)
+    membership_type = Column(String, nullable=True)
+    valid_from = Column(DateTime, nullable=True)
+    valid_until = Column(DateTime, nullable=True, index=True)
+    membership_fee_snapshot = Column(Numeric(10, 2), nullable=True)
     batch_id = Column(Integer, ForeignKey("card_batches.id"), nullable=True)
     numbering_scope_id = Column(
         Integer, ForeignKey("numbering_scopes.id"), nullable=True, index=True

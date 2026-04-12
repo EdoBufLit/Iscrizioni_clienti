@@ -4027,3 +4027,38 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Ho corretto entrambi i punti: preview/meta signup ora usano prima `resolve_club_display_name(org)`, mentre la ricerca pubblica filtra su `Organization.name OR Organization.club_display_name` e ordina per nome visualizzato con `coalesce(club_display_name, name)`.
 - Ho interrogato anche il server Hetzner: il branch live e gia `feat/redesign-landing-wizard` al commit `dbb28f7`, quindi il problema segnalato e davvero un gap applicativo su `club_display_name`, non un deploy vecchio.
 - Ho aggiunto regressioni in `tests/test_public_signup_meta.py` per coprire sia il caso `name != club_display_name` nella pagina sorgente della signup sia la ricerca pubblica per `club_display_name`.
+
+## Plan (Diagnosi Arcigallo non visibile nel pubblico - Apr 09, 2026)
+- [x] Verificare se l'org viene restituita dall'API pubblica live e quali filtri usa il backend per l'elenco associazioni
+- [x] Leggere lo stato reale dell'organizzazione sul database live per distinguere tra ricerca rotta e org esclusa per stato
+- [x] Documentare la causa con riferimento a route pubbliche e stato live dell'org
+
+## Review (Diagnosi Arcigallo non visibile nel pubblico - Apr 09, 2026)
+- Sul live `GET /api/organizations?q=arcigallo` restituisce `[]`, quindi il problema non e nella barra di ricerca frontend ma nell'esclusione lato backend.
+- In [app/routes/public.py](/C:/Users/edoar/OneDrive/Desktop/CODE/iscrizioni%20clienti/Iscrizioni_clienti/app/routes/public.py) l'elenco pubblico filtra solo organizzazioni attive; la signup/detail pubblica filtrano anche `deleted_at is null`.
+- Verifica diretta sul database live Hetzner per `organizations.id = 33`: `name = Arcigallo`, `club_display_name = Club Arcigallo`, `slug = arcigallo`, `is_active = false`, `deleted_at = 2026-02-27 19:06:41+00`.
+- Quindi Arcigallo non compare sul sito pubblico perche risulta archiviata/inattiva; il badge `ARCHIVIATA` che si vede nel super admin e coerente con questa esclusione.
+
+## Plan (ASSONAM membership types + riepilogo Soci - Apr 11, 2026)
+- [x] Estendere schema/migration/bootstrap con flag associazione, prezzi/durata temporanea globale e campi socio (`membership_type`, `valid_from`, `valid_until`, `membership_fee_snapshot`) con backfill non distruttivo
+- [x] Aggiornare service/backend per validita tessera, riepilogo economico, setup super admin/org admin e flussi signup/payment/manual member mantenendo backward compatibility
+- [x] Aggiornare frontend super admin, org admin Soci e wizard Iscrizione con scelta annuale/temporanea, settings durata globale e card riepilogo
+- [x] Adeguare preview/PDF/verifica/wallet per label `TEMPORANEA` e scadenza reale, poi eseguire test/build mirati e documentare review finale
+
+## Review (ASSONAM membership types + riepilogo Soci - Apr 12, 2026)
+- Ho introdotto il flag per-associazione `custom_membership_types_enabled` con default `false`, esposto solo nel setup `SUPER ADMIN > Associazioni`, insieme ai nuovi campi organizzazione per prezzo temporaneo e durata globale (`hours` / `days`). La migration e `alembic/versions/m2n3o4p5q6r7_add_membership_types_and_fee_snapshots.py`; `init_db.py` e `app/scripts/repair_sqlite.py` sono stati allineati per bootstrap/repair SQLite.
+- Sul modello socio ho aggiunto `membership_type`, `valid_from`, `valid_until`, `membership_fee_snapshot`. Il backfill iniziale valorizza `membership_fee_snapshot` senza sovrascrivere valori esistenti, con precedenza da pagamenti membership, poi pagamenti manuali legacy, poi quota annuale dell’associazione al momento della migration.
+- La logica di validita ora usa `valid_until` come fonte di verita quando presente e ricade su `card_year` per i record legacy. Ho centralizzato i predicati in `app/services/member_activity.py` e riallineato org admin, super admin, maintenance, wallet, verify, PDF e card image per evitare drift tra annuale legacy e temporanea.
+- `ORG ADMIN > Soci` ora espone in alto una summary card con `Totale teorico tessere`, calcolato sull’intera associazione usando solo `membership_fee_snapshot` dei soci con tessera emessa (`card_no` + `card_year`). Il totale include anche temporanee scadute e non usa fallback runtime al prezzo corrente dell’associazione.
+- L’org admin ha un endpoint dedicato `GET/PATCH /api/org-admin/organization/membership-settings` per quota annuale, quota temporanea e durata globale delle temporanee. Quando il flag e spento i campi temporanei restano nascosti/non modificabili.
+- Il wizard pubblico di iscrizione e il checkout membership supportano la scelta `Annuale` / `Temporanea` solo se il flag associazione e attivo. Nel caso temporaneo il backend calcola `valid_until` dalla regola globale org-admin e blocca la scelta se l’associazione non ha la feature attiva.
+- Nella UI sono stati aggiornati:
+- `frontend/src/pages/super-admin/components/OrganizationManageModal.tsx` per il toggle super admin.
+- `frontend/src/pages/org-admin/OrgAdminMembers.tsx` per summary card e pannello impostazioni membership.
+- `frontend/src/pages/org-admin/components/CreateMemberModal.tsx` e `frontend/src/pages/org-admin/components/EditMemberProfileModal.tsx` per tipo tessera e snapshot per-socio quando consentiti.
+- `frontend/src/pages/Iscrizione.tsx` per la scelta pubblica annuale/temporanea con riepilogo coerente.
+- `frontend/src/components/cards/MemberCardPreview.tsx`, `app/services/card_image.py`, `app/services/card_pdf.py`, `app/routes/public.py` e `app/services/google_wallet.py` per mostrare label `TEMPORANEA` e scadenza reale dove applicabile.
+- Verifiche eseguite:
+- `python -m pytest -q tests/test_org_admin_manual_member.py tests/test_org_admin_member_filters.py tests/test_join_auto_issue.py tests/test_member_card_verification.py tests/test_org_admin_member_profile_and_card_actions.py tests/test_super_admin_organizations_pagination.py`
+- `python -m py_compile app/routes/join.py app/routes/org_admin.py app/routes/super_admin.py app/routes/public.py app/routes/member.py app/services/member_activity.py app/services/member_card_delivery.py app/services/integration_issuer.py app/services/card_pdf.py`
+- `npm --prefix frontend run build`

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
+from sqlalchemy import and_, or_
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.models import Member, MemberStatus
+from app.services.member_membership import is_member_membership_expired
 
 MEMBER_INACTIVE_REASON_DELETED = "deleted"
 MEMBER_INACTIVE_REASON_EXPIRED = "expired"
@@ -28,16 +29,6 @@ def _normalize_member_status(status: object) -> str:
     if status is None:
         return ""
     return str(status).strip().lower()
-
-
-def _is_expired(card_year: Optional[int], now: datetime) -> bool:
-    if card_year is None:
-        return False
-    try:
-        parsed_year = int(card_year)
-    except (TypeError, ValueError):
-        return True
-    return parsed_year < now.year
 
 
 def get_member_inactive_reason(member: Member | None, now: datetime | None = None) -> str:
@@ -69,7 +60,7 @@ def get_member_inactive_reason(member: Member | None, now: datetime | None = Non
     if member_card_year is None:
         return MEMBER_INACTIVE_REASON_NOT_APPROVED
 
-    if _is_expired(member_card_year, current_time):
+    if is_member_membership_expired(member, now=current_time):
         return MEMBER_INACTIVE_REASON_EXPIRED
 
     return ""
@@ -105,5 +96,22 @@ def member_active_filters(now: datetime | None = None) -> tuple[ColumnElement[bo
         Member.status == MemberStatus.ACTIVE,
         Member.card_no.isnot(None),
         Member.card_year.isnot(None),
-        Member.card_year >= current_time.year,
+        or_(
+            and_(Member.valid_until.isnot(None), Member.valid_until >= current_time),
+            and_(Member.valid_until.is_(None), Member.card_year >= current_time.year),
+        ),
+    )
+
+
+def member_expired_filters(now: datetime | None = None) -> tuple[ColumnElement[bool], ...]:
+    current_time = now or datetime.utcnow()
+    return (
+        Member.deleted_at.is_(None),
+        Member.card_no.isnot(None),
+        Member.card_year.isnot(None),
+        or_(
+            Member.status == MemberStatus.EXPIRED,
+            and_(Member.valid_until.isnot(None), Member.valid_until < current_time),
+            and_(Member.valid_until.is_(None), Member.card_year < current_time.year),
+        ),
     )

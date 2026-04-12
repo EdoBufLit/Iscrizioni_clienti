@@ -50,6 +50,13 @@ from app.services.member_activity import (
     get_member_inactive_reason,
     member_inactive_reason_label,
 )
+from app.services.member_membership import (
+    membership_type_badge_label,
+    membership_type_label,
+    resolve_member_membership_type,
+    resolve_member_valid_until,
+    serialize_membership_configuration,
+)
 from app.services.org_branding import (
     resolve_assonam_logo_url,
     resolve_card_logo_url,
@@ -283,6 +290,7 @@ def _org_to_dict_detail(org: Organization) -> dict:
             getattr(org, "require_membership_document", False)
         ),
         "membership_payment": serialize_public_membership_payment(org),
+        "membership_config": serialize_membership_configuration(org),
     }
 
 
@@ -771,6 +779,8 @@ def _render_card_status_html(
     member_last_name: str | None,
     card_number: int | None,
     card_year: int | None,
+    membership_type_text: str | None,
+    valid_until_text: str | None,
     checked_at: datetime,
     payment_label: str,
     payment_tone: str,
@@ -785,6 +795,8 @@ def _render_card_status_html(
         html.escape(str(card_number)) if card_number is not None else "N/D"
     )
     safe_card_year = html.escape(str(card_year)) if card_year is not None else "N/D"
+    safe_membership_type = html.escape((membership_type_text or "Annuale").strip() or "Annuale")
+    safe_valid_until = html.escape((valid_until_text or "").strip())
     safe_reason = html.escape(reason_label)
     safe_payment_label = html.escape(payment_label)
     json_link = f"/api/cards/verify/{token}?format=json"
@@ -811,6 +823,8 @@ def _render_card_status_html(
         <p style="margin:18px 0 0 0;font-size:15px;"><strong>Associazione:</strong> {safe_org}</p>
         <p style="margin:8px 0 0 0;font-size:15px;"><strong>Socio:</strong> {safe_member}</p>
         <p style="margin:8px 0 0 0;font-size:15px;"><strong>Tessera:</strong> {safe_card_number} / {safe_card_year}</p>
+        <p style="margin:8px 0 0 0;font-size:15px;"><strong>Tipo tessera:</strong> {safe_membership_type}</p>
+        {f'<p style="margin:8px 0 0 0;font-size:15px;"><strong>Scadenza reale:</strong> {safe_valid_until}</p>' if safe_valid_until else ''}
         <p style="margin:14px 0 0 0;">
           <span style="display:inline-flex;align-items:center;border-radius:999px;padding:8px 14px;font-size:13px;font-weight:700;background:{payment_tone};color:#10253f;">
             Stato pagamento: {safe_payment_label}
@@ -845,6 +859,8 @@ def _render_card_download_html(
     member_last_name: str | None,
     card_number: int | None,
     card_year: int | None,
+    membership_type_text: str | None,
+    valid_until_text: str | None,
     verification_url: str,
     download_url: str,
     assonam_logo_url: str,
@@ -863,6 +879,8 @@ def _render_card_download_html(
         html.escape(str(card_number)) if card_number is not None else "N/D"
     )
     safe_card_year = html.escape(str(card_year)) if card_year is not None else "N/D"
+    safe_membership_type = html.escape((membership_type_text or "Annuale").strip() or "Annuale")
+    safe_valid_until = html.escape((valid_until_text or "").strip())
     safe_checked_at = html.escape(checked_at.strftime("%d/%m/%Y %H:%M UTC"))
     safe_verify_url = html.escape(verification_url)
     safe_download_url = html.escape(download_url)
@@ -953,6 +971,7 @@ def _render_card_download_html(
           <div>
             <p style="margin:0;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#c6a04f;">Tessera socio</p>
             <p style="margin:4px 0 0;font-size:32px;font-weight:700;color:#d4b45c;">{safe_card_year}</p>
+            {f'<p style="margin:8px 0 0;font-size:12px;font-weight:800;letter-spacing:0.18em;text-transform:uppercase;color:#f6e7b6;">TEMPORANEA</p>' if safe_membership_type.lower() == 'temporanea' else ''}
             <p style="margin:8px 0 0;font-size:13px;color:{status_tone};font-weight:700;">{status_title}</p>
           </div>
           <div style="display:flex;align-items:center;gap:10px;margin-left:auto;">
@@ -975,6 +994,12 @@ def _render_card_download_html(
       </section>
 
       {non_active_block}
+
+      <section style="margin-top:18px;background:#ffffff;border:1px solid #dce5e3;border-radius:18px;padding:16px 18px;">
+        <p style="margin:0;font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:#526a67;font-weight:700;">Dettagli tessera</p>
+        <p style="margin:10px 0 0;font-size:15px;color:#123330;"><strong>Tipo tessera:</strong> {safe_membership_type}</p>
+        {f'<p style="margin:8px 0 0;font-size:15px;color:#123330;"><strong>Scadenza reale:</strong> {safe_valid_until}</p>' if safe_valid_until else ''}
+      </section>
 
       <section style="margin-top:18px;background:#ffffff;border:1px solid #dce5e3;border-radius:18px;padding:16px 16px 20px;text-align:center;">
         {qr_block}
@@ -1017,6 +1042,8 @@ def verify_member_card(request: Request, token: str, db: Session = Depends(get_d
                 member_last_name=None,
                 card_number=None,
                 card_year=None,
+                membership_type_text=None,
+                valid_until_text=None,
                 checked_at=checked_at,
                 payment_label="Pagamento non registrato",
                 payment_tone="#fee2e2",
@@ -1065,6 +1092,8 @@ def verify_member_card(request: Request, token: str, db: Session = Depends(get_d
     organization_display_name = resolve_club_display_name(organization) or (
         organization.name if organization else None
     )
+    membership_type = resolve_member_membership_type(member)
+    valid_until = resolve_member_valid_until(member)
     is_paid = bool(member and payment_status_is_paid(member.payment_status))
     payment_label = "Pagata" if is_paid else "Pagamento non registrato"
     payment_tone = "#dcfce7" if is_paid else "#fee2e2"
@@ -1075,6 +1104,8 @@ def verify_member_card(request: Request, token: str, db: Session = Depends(get_d
             "number": card_number,
             "status": card_status,
             "year": card_year,
+            "membership_type": membership_type,
+            "valid_until": valid_until.isoformat() if valid_until else None,
         },
         "member": {
             "first_name": member.first_name if member else None,
@@ -1107,6 +1138,10 @@ def verify_member_card(request: Request, token: str, db: Session = Depends(get_d
             member_last_name=member.last_name if member else None,
             card_number=card_number,
             card_year=card_year,
+            membership_type_text=membership_type_label(membership_type),
+            valid_until_text=(
+                valid_until.strftime("%d/%m/%Y %H:%M") if valid_until else None
+            ),
             checked_at=checked_at,
             payment_label=payment_label,
             payment_tone=payment_tone,
@@ -1174,6 +1209,8 @@ def download_member_card(token: str, request: Request, db: Session = Depends(get
     )
     card_logo_url = resolve_card_logo_url(organization, base_url=backend_base)
     club_display_name = resolve_club_display_name(organization)
+    membership_type = resolve_member_membership_type(member)
+    valid_until = resolve_member_valid_until(member)
 
     html_content = _render_card_download_html(
         token=token,
@@ -1187,6 +1224,10 @@ def download_member_card(token: str, request: Request, db: Session = Depends(get
         member_last_name=member.last_name if member else None,
         card_number=card_number,
         card_year=card_year,
+        membership_type_text=membership_type_label(membership_type),
+        valid_until_text=(
+            valid_until.strftime("%d/%m/%Y %H:%M") if valid_until else None
+        ),
         verification_url=verification_url,
         download_url=download_url,
         assonam_logo_url=assonam_logo_url,
@@ -1302,6 +1343,8 @@ def download_card_pdf(token: str, request: Request, db: Session = Depends(get_db
     )
     org_logo_path = _resolve_logo_disk_path(organization)
     assonam_logo_path = _resolve_assonam_disk_path()
+    membership_type = resolve_member_membership_type(member)
+    valid_until = resolve_member_valid_until(member)
 
     try:
         pdf_bytes = generate_card_pdf_bytes(
@@ -1319,6 +1362,10 @@ def download_card_pdf(token: str, request: Request, db: Session = Depends(get_db
             verification_url=verification_url,
             org_logo_path=org_logo_path,
             assonam_logo_path=assonam_logo_path,
+            membership_type_label=membership_type_label(membership_type),
+            valid_until_text=(
+                valid_until.strftime("%d/%m/%Y %H:%M") if valid_until else None
+            ),
         )
     except Exception as exc:
         logger.exception("Card PDF generation failed.")
@@ -1384,6 +1431,7 @@ def card_image_png(token: str, request: Request, db: Session = Depends(get_db)):
     )
     org_logo_path = _resolve_logo_disk_path(organization)
     assonam_logo_path = _resolve_assonam_disk_path()
+    membership_type = resolve_member_membership_type(member)
 
     try:
         png_bytes = generate_card_image_bytes(
@@ -1398,6 +1446,7 @@ def card_image_png(token: str, request: Request, db: Session = Depends(get_db)):
             card_number=card_number or 0,
             card_year=card_year or 0,
             card_status=card_status,
+            membership_type_label=membership_type_label(membership_type),
             org_logo_path=org_logo_path,
             assonam_logo_path=assonam_logo_path,
         )

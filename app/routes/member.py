@@ -18,6 +18,11 @@ from app.services.google_wallet import (
 )
 from app.services.member_activity import get_member_inactive_reason, is_card_active, is_member_active
 from app.services.member_cleanup import cleanup_deleted_member_traces, purge_deleted_members_permanently
+from app.services.member_membership import (
+    membership_type_label,
+    resolve_member_membership_type,
+    resolve_member_valid_until,
+)
 from app.services.org_branding import resolve_card_logo_url, resolve_club_display_name
 from app import audit
 import os
@@ -615,6 +620,8 @@ def api_auth_me(request: Request, db: Session = Depends(get_db)):
     card_status = "attiva" if is_card_active(member, now=datetime.utcnow()) else "non_attiva"
     organization_club_display_name = resolve_club_display_name(org) if org else None
     organization_card_logo_url = resolve_card_logo_url(org, base_url=backend_base) if org else None
+    membership_type = resolve_member_membership_type(member)
+    valid_until = resolve_member_valid_until(member)
 
     return {
         "id": member.id,
@@ -628,6 +635,9 @@ def api_auth_me(request: Request, db: Session = Depends(get_db)):
         "card_no": member.card_no,
         "card_status": card_status,
         "card_year": card_year,
+        "membership_type": membership_type,
+        "membership_type_label": membership_type_label(membership_type),
+        "valid_until": valid_until.isoformat() if valid_until else None,
         "card_verification_url": verification_url,
         "card": {
             "number": member.card_no,

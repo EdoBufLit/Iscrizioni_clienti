@@ -94,6 +94,7 @@ def generate_card_image_bytes(
     card_number: int,
     card_year: int,
     card_status: str,
+    membership_type_label: str | None = None,
     org_logo_path: str | None,
     assonam_logo_path: str | None,
 ) -> bytes:
@@ -149,12 +150,17 @@ def generate_card_image_bytes(
         (28, 28), "TESSERA SOCIO", font=_load_font(18, bold=True), fill=(*_GOLD, 205)
     )
     draw.text((28, 52), str(card_year), font=_load_font(60, bold=True), fill=_GOLD_BRT)
+    if (membership_type_label or "").strip().lower() == "temporanea":
+        draw.text((28, 118), "TEMPORANEA", font=_load_font(18, bold=True), fill=_CREAM)
 
     is_active = card_status == "attiva"
     status_color = _GREEN if is_active else _RED
     status_label = "ATTIVA" if is_active else "NON ATTIVA"
     draw.text(
-        (28, 124), status_label, font=_load_font(20, bold=True), fill=status_color
+        (28, 148 if (membership_type_label or "").strip().lower() == "temporanea" else 124),
+        status_label,
+        font=_load_font(20, bold=True),
+        fill=status_color,
     )
 
     # Body

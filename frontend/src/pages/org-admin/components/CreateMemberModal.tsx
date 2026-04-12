@@ -2,6 +2,7 @@ import { FormEvent, memo, useEffect, useState } from "react";
 import {
   createOrgAdminMember,
   type CreateOrgAdminMemberInput,
+  type OrgAdminMembershipSettings,
 } from "../../../lib/api";
 
 type CreatedMember = {
@@ -16,6 +17,7 @@ type CreateMemberModalProps = {
   open: boolean;
   onClose: () => void;
   onCreated: (created: CreatedMember) => void;
+  membershipSettings?: OrgAdminMembershipSettings | null;
 };
 
 const todayIsoDate = () => new Date().toISOString().slice(0, 10);
@@ -24,17 +26,43 @@ const CreateMemberModal = memo(function CreateMemberModal({
   open,
   onClose,
   onCreated,
+  membershipSettings,
 }: CreateMemberModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [joinedAtDefault, setJoinedAtDefault] = useState(todayIsoDate);
+  const [membershipType, setMembershipType] = useState<"annual" | "temporary">("annual");
+  const [membershipFeeSnapshot, setMembershipFeeSnapshot] = useState("");
 
   useEffect(() => {
     if (!open) return;
     setSubmitError("");
     setIsSubmitting(false);
     setJoinedAtDefault(todayIsoDate());
+    setMembershipType("annual");
+    setMembershipFeeSnapshot(
+      membershipSettings?.membership_fee_amount != null
+        ? String(membershipSettings.membership_fee_amount)
+        : ""
+    );
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !membershipSettings?.custom_membership_types_enabled) {
+      return;
+    }
+    const nextDefault =
+      membershipType === "temporary"
+        ? membershipSettings.temporary_membership_fee_amount
+        : membershipSettings.membership_fee_amount;
+    setMembershipFeeSnapshot(nextDefault != null ? String(nextDefault) : "");
+  }, [
+    membershipSettings?.custom_membership_types_enabled,
+    membershipSettings?.membership_fee_amount,
+    membershipSettings?.temporary_membership_fee_amount,
+    membershipType,
+    open,
+  ]);
 
   const handleCreateMember = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -66,6 +94,8 @@ const CreateMemberModal = memo(function CreateMemberModal({
       .toUpperCase();
     const joinedAt = String(data.get("joined_at") ?? "").trim();
     const memberType = String(data.get("member_type") ?? "").trim();
+    const membershipType = String(data.get("membership_type") ?? "").trim();
+    const membershipFeeSnapshot = String(data.get("membership_fee_snapshot") ?? "").trim();
     const internalNotes = String(data.get("internal_notes") ?? "").trim();
 
     if (email) payload.email = email;
@@ -76,6 +106,12 @@ const CreateMemberModal = memo(function CreateMemberModal({
     }
     if (joinedAt) payload.joined_at = joinedAt;
     if (memberType) payload.member_type = memberType;
+    if (membershipType === "annual" || membershipType === "temporary") {
+      payload.membership_type = membershipType;
+    }
+    if (membershipFeeSnapshot) {
+      payload.membership_fee_snapshot = Number(membershipFeeSnapshot);
+    }
     if (internalNotes) payload.internal_notes = internalNotes;
 
     if (payload.send_access_email && !payload.email) {
@@ -243,6 +279,44 @@ const CreateMemberModal = memo(function CreateMemberModal({
               name="member_type"
             />
           </div>
+
+          {membershipSettings?.custom_membership_types_enabled ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label className="block text-xs font-medium text-neutral-600">
+                  Tipo tessera
+                </label>
+                <select
+                  className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                  name="membership_type"
+                  value={membershipType}
+                  onChange={(event) =>
+                    setMembershipType(event.target.value === "temporary" ? "temporary" : "annual")
+                  }
+                >
+                  <option value="annual">Annuale</option>
+                  <option value="temporary">Temporanea</option>
+                </select>
+                <p className="mt-1 text-xs text-neutral-500">
+                  La durata della temporanea segue la regola generale impostata nella pagina Soci.
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-600">
+                  Importo tessera
+                </label>
+                <input
+                  className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  name="membership_fee_snapshot"
+                  value={membershipFeeSnapshot}
+                  onChange={(event) => setMembershipFeeSnapshot(event.target.value)}
+                />
+              </div>
+            </div>
+          ) : null}
 
           <div>
             <label className="block text-xs font-medium text-neutral-600">
