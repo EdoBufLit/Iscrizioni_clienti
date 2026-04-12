@@ -290,167 +290,163 @@ const OrgAdminMembers = () => {
               className="text-xs font-bold uppercase tracking-widest text-emerald-700 hover:text-emerald-900 transition-colors"
               onClick={() => navigate(`/org-admin/soci/${createdMemberId}`)}
             >
-              Vedi profilo →
+              Vedi profilo
             </button>
           )}
         </div>
       )}
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.82fr)]">
-        <div className="surface-strong overflow-hidden p-0">
-          <div className="flex flex-col gap-3 border-b border-neutral-200/70 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-neutral-400">
-                Riepilogo tessere
-              </p>
-              <h3 className="mt-2 text-lg font-bold text-neutral-900">Totale teorico in evidenza</h3>
-              <p className="mt-1 max-w-2xl text-sm text-neutral-500">
-                Vista storica delle tessere emesse, utile per leggere subito il peso economico del tesseramento.
-              </p>
-            </div>
-            <span className="inline-flex items-center rounded-full border border-brand/15 bg-brand/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-brand">
-              Storico e stabile
-            </span>
+      <div className="grid gap-8 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+        <div className="space-y-6">
+          <h3 className="px-2 text-[clamp(2.15rem,3vw,3.4rem)] font-normal tracking-tight text-neutral-950">
+            Riepilogo Tessere
+          </h3>
+
+          <div className="rounded-[2rem] border border-neutral-200 bg-white px-8 py-10 shadow-[0_22px_45px_-32px_rgba(15,23,42,0.28)]">
+            <p className="text-center text-[clamp(2rem,2.5vw,2.8rem)] font-normal tracking-tight text-neutral-950">
+              Totale teorico in evidenza
+            </p>
+            <p className="mt-8 text-center text-[clamp(4.8rem,9vw,8.5rem)] font-black leading-none tracking-[-0.08em] text-brand">
+              &euro; {summaryTotal.toFixed(2)}
+            </p>
           </div>
-          <div className="px-5 py-5">
-            <div className="rounded-[28px] border border-brand/15 bg-gradient-to-br from-white via-white to-brand/5 p-5 shadow-[0_18px_45px_-32px_rgba(15,118,110,0.45)]">
-              <p className="text-sm font-semibold text-neutral-500">Totale teorico tessere</p>
-              <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="text-5xl font-black tracking-tight text-neutral-900">
-                € {summaryTotal.toFixed(2)}
-              </p>
-                  <p className="mt-3 max-w-md text-sm leading-6 text-neutral-600">
-                    Somma teorica delle tessere emesse, senza dipendere dal prezzo corrente dell'associazione.
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-white/80 bg-white/90 px-4 py-3 shadow-sm">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-400">
-                    Tessere emesse
-                  </p>
-                  <p className="mt-1 text-2xl font-black tracking-tight text-neutral-900">{issuedMembersCount}</p>
-                </div>
+
+          <div className="rounded-[2rem] border border-neutral-200 bg-white px-8 py-8 shadow-[0_22px_45px_-32px_rgba(15,23,42,0.28)]">
+            <div className="flex items-end justify-between gap-6">
+              <div>
+                <p className="text-[clamp(1.65rem,2.1vw,2.2rem)] font-normal tracking-tight text-neutral-950">
+                  Tessere emesse
+                </p>
+                <p className="mt-3 text-5xl font-normal leading-none tracking-tight text-neutral-950">
+                  {issuedMembersCount}
+                </p>
+              </div>
+              <div className="flex h-16 w-16 items-center justify-center text-neutral-500">
+                <svg
+                  className="h-11 w-11"
+                  viewBox="0 0 48 48"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="9" y="12" width="26" height="18" rx="4" />
+                  <path d="M14 19h16" />
+                  <path d="M14 24h9" />
+                  <path d="M18 30.5 31.5 35 39 30.5V19a4 4 0 0 0-4-4h-4" />
+                </svg>
               </div>
             </div>
           </div>
         </div>
 
-        <form className="surface-strong p-5" onSubmit={handleMembershipSettingsSubmit}>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-neutral-400">
-                Impostazioni tessera
-              </p>
-              <h3 className="mt-2 text-lg font-bold text-neutral-900">Prezzi e durata</h3>
-              <p className="mt-1 text-sm text-neutral-500">
-                Aggiorna il listino mostrato all'iscrizione e la regola generale delle tessere temporanee.
-              </p>
-            </div>
-            {membershipSettings?.custom_membership_types_enabled ? (
-              <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-700">
-                Annuale + Temporanea
-              </span>
-            ) : (
-              <span className="inline-flex items-center rounded-full border border-neutral-200 bg-neutral-100 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-neutral-600">
-                Solo annuale
-              </span>
-            )}
-          </div>
+        <div className="space-y-6">
+          <h3 className="px-2 text-[clamp(2.15rem,3vw,3.4rem)] font-normal tracking-tight text-neutral-950">
+            Impostazioni Tessera
+          </h3>
 
-          <div className="mt-5 space-y-4">
-            <div className="rounded-2xl border border-neutral-200/80 bg-neutral-50/60 p-4">
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-neutral-400">Listino principale</p>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">
-              Prezzo annuale
-              <input
-                className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
-                type="number"
-                step="0.01"
-                min="0.01"
-                name="membership_fee_amount"
-                defaultValue={membershipSettings?.membership_fee_amount ?? ""}
-              />
-            </label>
-            <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">
-              Valuta
-              <input
-                className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm uppercase text-neutral-900 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
-                type="text"
-                name="membership_fee_currency"
-                maxLength={8}
-                defaultValue={membershipSettings?.membership_fee_currency ?? "EUR"}
-              />
-            </label>
-              </div>
-            </div>
-            {membershipSettings?.custom_membership_types_enabled ? (
-              <div className="rounded-2xl border border-amber-200/80 bg-amber-50/40 p-4">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-amber-700">
-                      Regola tessera temporanea
-                    </p>
-                    <p className="mt-1 text-sm text-neutral-600">
-                      Questa durata vale per tutte le tessere temporanee emesse dall'associazione.
-                    </p>
-                  </div>
-                  <span className="inline-flex items-center rounded-full bg-white/90 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-700">
-                    Default 1 giorno
-                  </span>
-                </div>
-                <div className="mt-4 grid gap-4">
-                <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">
-                  Prezzo temporanea
-                  <input
-                    className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    name="temporary_membership_fee_amount"
-                    defaultValue={membershipSettings?.temporary_membership_fee_amount ?? ""}
-                  />
-                </label>
-                <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_168px] sm:items-end">
-                  <label className="block text-xs font-semibold uppercase tracking-[0.12em] leading-relaxed text-neutral-500">
-                    Durata temporanea
+          <form
+            className="rounded-[2rem] border border-neutral-200 bg-white px-8 py-8 shadow-[0_22px_45px_-32px_rgba(15,23,42,0.28)]"
+            onSubmit={handleMembershipSettingsSubmit}
+          >
+            <div className="space-y-8">
+              <section>
+                <h4 className="text-[clamp(1.8rem,2.1vw,2.45rem)] font-normal tracking-tight text-neutral-950">
+                  Listino Principale
+                </h4>
+                <div className="mt-6 grid gap-5 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="text-[1.05rem] font-normal tracking-tight text-neutral-950">
+                      Prezzo Annuale
+                    </span>
                     <input
-                      className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                      className="mt-2 h-12 w-full rounded-[1rem] border border-neutral-300 bg-white px-4 text-[1.05rem] text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
                       type="number"
-                      min="1"
-                      name="temporary_membership_duration_value"
-                      defaultValue={membershipSettings?.temporary_membership_duration_value ?? 1}
+                      step="0.01"
+                      min="0.01"
+                      name="membership_fee_amount"
+                      defaultValue={membershipSettings?.membership_fee_amount ?? ''}
                     />
                   </label>
-                  <label className="block text-xs font-semibold uppercase tracking-[0.12em] leading-relaxed text-neutral-500">
-                    Unita
-                    <select
-                      className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
-                      name="temporary_membership_duration_unit"
-                      defaultValue={membershipSettings?.temporary_membership_duration_unit ?? "days"}
-                    >
-                      <option value="days">Giorni</option>
-                      <option value="hours">Ore</option>
-                    </select>
+                  <label className="block">
+                    <span className="text-[1.05rem] font-normal tracking-tight text-neutral-950">Valuta</span>
+                    <input
+                      className="mt-2 h-12 w-full rounded-[1rem] border border-neutral-300 bg-white px-4 text-[1.05rem] uppercase text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
+                      type="text"
+                      name="membership_fee_currency"
+                      maxLength={8}
+                      defaultValue={membershipSettings?.membership_fee_currency ?? 'EUR'}
+                    />
                   </label>
                 </div>
-                </div>
-              </div>
+              </section>
+
+              {membershipSettings?.custom_membership_types_enabled ? (
+                <section className="border-t border-neutral-200 pt-7">
+                  <h4 className="text-[clamp(1.8rem,2.1vw,2.45rem)] font-normal tracking-tight text-neutral-950">
+                    Regola Tessera Temporanea
+                  </h4>
+                  <div className="mt-6 space-y-5">
+                    <label className="block">
+                      <span className="text-[1.05rem] font-normal tracking-tight text-neutral-950">
+                        Prezzo Temporanea
+                      </span>
+                      <input
+                        className="mt-2 h-12 w-full rounded-[1rem] border border-neutral-300 bg-white px-4 text-[1.05rem] text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        name="temporary_membership_fee_amount"
+                        defaultValue={membershipSettings?.temporary_membership_fee_amount ?? ''}
+                      />
+                    </label>
+                    <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_minmax(220px,0.8fr)]">
+                      <label className="block">
+                        <span className="text-[1.05rem] font-normal tracking-tight text-neutral-950">
+                          Durata Temporanea
+                        </span>
+                        <input
+                          className="mt-2 h-12 w-full rounded-[1rem] border border-neutral-300 bg-white px-4 text-[1.05rem] text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
+                          type="number"
+                          min="1"
+                          name="temporary_membership_duration_value"
+                          defaultValue={membershipSettings?.temporary_membership_duration_value ?? 1}
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-[1.05rem] font-normal tracking-tight text-neutral-950">Unita</span>
+                        <select
+                          className="mt-2 h-12 w-full rounded-[1rem] border border-neutral-300 bg-white px-4 text-[1.05rem] text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
+                          name="temporary_membership_duration_unit"
+                          defaultValue={membershipSettings?.temporary_membership_duration_unit ?? 'days'}
+                        >
+                          <option value="days">Giorni</option>
+                          <option value="hours">Ore</option>
+                        </select>
+                      </label>
+                    </div>
+                  </div>
+                </section>
+              ) : null}
+            </div>
+
+            {membershipSettingsError ? (
+              <p className="mt-5 text-sm text-red-600">{membershipSettingsError}</p>
             ) : null}
-          </div>
 
-          {membershipSettingsError ? (
-            <p className="mt-4 text-sm text-red-600">{membershipSettingsError}</p>
-          ) : null}
-
-          <div className="mt-5 flex justify-end">
-            <button type="submit" className="btn-primary" disabled={savingMembershipSettings}>
-              {savingMembershipSettings ? "Salvataggio..." : "Salva impostazioni"}
-            </button>
-          </div>
-        </form>
+            <div className="mt-6 flex justify-end">
+              <button
+                type="submit"
+                className="inline-flex h-12 items-center justify-center rounded-[1rem] bg-brand px-6 text-[1.05rem] font-medium text-white shadow-[0_16px_30px_-18px_rgba(15,118,110,0.55)] transition hover:bg-brand/95 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={savingMembershipSettings}
+              >
+                {savingMembershipSettings ? 'Salvataggio...' : 'Salva impostazioni'}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-
       <div className="surface-strong p-3 sm:p-4">
         <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-center">
           <div className="flex-1 min-w-0">
@@ -533,3 +529,4 @@ const OrgAdminMembers = () => {
 };
 
 export default OrgAdminMembers;
+

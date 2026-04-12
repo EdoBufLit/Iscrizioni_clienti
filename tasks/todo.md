@@ -22,6 +22,19 @@
 - La tessera temporanea mantiene solo le informazioni utili: descrizione breve e badge `Durata: ...`.
 - Verifica eseguita: `npm --prefix frontend run build` OK.
 
+## Plan (ORG ADMIN Soci top section redesign from reference - Apr 12, 2026)
+- [x] Riallineare la fascia alta di `ORG ADMIN > Soci` al reference fornito, eliminando copy e micro-elementi accessori
+- [x] Ridisegnare KPI `Totale teorico` e card `Tessere emesse` con la stessa gerarchia del mockup
+- [x] Ridisegnare il pannello `Impostazioni Tessera` con sezioni pulite e nessuna descrizione superflua
+- [x] Rieseguire la build frontend e documentare l'esito reale
+
+## Review (ORG ADMIN Soci top section redesign from reference - Apr 12, 2026)
+- In [OrgAdminMembers.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\OrgAdminMembers.tsx) ho riscritto l'intera fascia alta di `Soci` per aderire al mockup: due colonne nette, titoli grandi `Riepilogo Tessere` / `Impostazioni Tessera`, card bianche semplici e nessun testo accessorio.
+- Il lato sinistro ora ha due sole card: una con `Totale teorico in evidenza` e importo grande centrato, una con `Tessere emesse` e icona a destra, come nel reference.
+- Il lato destro ora usa un'unica card impostazioni con solo i titoli `Listino Principale` e `Regola Tessera Temporanea`, separati da un divider, senza badge, descrizioni o label decorative residue.
+- Ho mantenuto la logica esistente: la sezione temporanea continua a mostrarsi solo quando `custom_membership_types_enabled` e attivo.
+- Verifica eseguita: `npm --prefix frontend run build` OK.
+
 ## Plan (ORG ADMIN WhatsApp decision message completion - Apr 03, 2026)
 - [x] Correggere il contesto dei messaggi WhatsApp di conferma/rigetto con fallback dai campi del form e placeholder booking piu robusti
 - [x] Aggiungere lato API e frontend l'override opzionale del messaggio WhatsApp al momento della decisione admin, mantenendo il default/template configurato
