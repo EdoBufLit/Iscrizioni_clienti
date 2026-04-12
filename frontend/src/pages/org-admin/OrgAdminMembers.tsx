@@ -296,37 +296,55 @@ const OrgAdminMembers = () => {
         </div>
       )}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.7fr)]">
-        <div className="surface-strong p-5">
-          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-neutral-400">
-            Riepilogo tessere
-          </p>
-          <div className="mt-4 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.82fr)]">
+        <div className="surface-strong overflow-hidden p-0">
+          <div className="flex flex-col gap-3 border-b border-neutral-200/70 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-sm font-medium text-neutral-500">Totale teorico tessere</p>
-              <p className="mt-2 text-4xl font-black tracking-tight text-neutral-900">
-                € {summaryTotal.toFixed(2)}
+              <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-neutral-400">
+                Riepilogo tessere
               </p>
-              <p className="mt-2 text-sm text-neutral-500">
-                {issuedMembersCount} tessere emesse considerate nel totale.
+              <h3 className="mt-2 text-lg font-bold text-neutral-900">Totale teorico in evidenza</h3>
+              <p className="mt-1 max-w-2xl text-sm text-neutral-500">
+                Vista storica delle tessere emesse, utile per leggere subito il peso economico del tesseramento.
               </p>
             </div>
-            <div className="rounded-2xl border border-neutral-200 bg-white/80 px-4 py-3 text-sm text-neutral-600">
-              <p className="font-semibold text-neutral-900">Regola di conteggio</p>
-              <p className="mt-1">
-                Il totale resta storico: usa lo snapshot del socio e include anche le temporanee ormai scadute.
+            <span className="inline-flex items-center rounded-full border border-brand/15 bg-brand/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-brand">
+              Storico e stabile
+            </span>
+          </div>
+          <div className="px-5 py-5">
+            <div className="rounded-[28px] border border-brand/15 bg-gradient-to-br from-white via-white to-brand/5 p-5 shadow-[0_18px_45px_-32px_rgba(15,118,110,0.45)]">
+              <p className="text-sm font-semibold text-neutral-500">Totale teorico tessere</p>
+              <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-5xl font-black tracking-tight text-neutral-900">
+                € {summaryTotal.toFixed(2)}
               </p>
+                  <p className="mt-3 max-w-md text-sm leading-6 text-neutral-600">
+                    Somma teorica delle tessere emesse, senza dipendere dal prezzo corrente dell'associazione.
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-white/80 bg-white/90 px-4 py-3 shadow-sm">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-400">
+                    Tessere emesse
+                  </p>
+                  <p className="mt-1 text-2xl font-black tracking-tight text-neutral-900">{issuedMembersCount}</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         <form className="surface-strong p-5" onSubmit={handleMembershipSettingsSubmit}>
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-neutral-400">
                 Impostazioni tessera
               </p>
               <h3 className="mt-2 text-lg font-bold text-neutral-900">Prezzi e durata</h3>
+              <p className="mt-1 text-sm text-neutral-500">
+                Aggiorna il listino mostrato all'iscrizione e la regola generale delle tessere temporanee.
+              </p>
             </div>
             {membershipSettings?.custom_membership_types_enabled ? (
               <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-700">
@@ -339,7 +357,10 @@ const OrgAdminMembers = () => {
             )}
           </div>
 
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <div className="mt-5 space-y-4">
+            <div className="rounded-2xl border border-neutral-200/80 bg-neutral-50/60 p-4">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-neutral-400">Listino principale</p>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">
               Prezzo annuale
               <input
@@ -361,8 +382,24 @@ const OrgAdminMembers = () => {
                 defaultValue={membershipSettings?.membership_fee_currency ?? "EUR"}
               />
             </label>
+              </div>
+            </div>
             {membershipSettings?.custom_membership_types_enabled ? (
-              <>
+              <div className="rounded-2xl border border-amber-200/80 bg-amber-50/40 p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-amber-700">
+                      Regola tessera temporanea
+                    </p>
+                    <p className="mt-1 text-sm text-neutral-600">
+                      Questa durata vale per tutte le tessere temporanee emesse dall'associazione.
+                    </p>
+                  </div>
+                  <span className="inline-flex items-center rounded-full bg-white/90 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-700">
+                    Default 1 giorno
+                  </span>
+                </div>
+                <div className="mt-4 grid gap-4">
                 <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">
                   Prezzo temporanea
                   <input
@@ -374,8 +411,8 @@ const OrgAdminMembers = () => {
                     defaultValue={membershipSettings?.temporary_membership_fee_amount ?? ""}
                   />
                 </label>
-                <div className="grid grid-cols-[minmax(0,1fr)_140px] gap-3">
-                  <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">
+                <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_168px] sm:items-end">
+                  <label className="block text-xs font-semibold uppercase tracking-[0.12em] leading-relaxed text-neutral-500">
                     Durata temporanea
                     <input
                       className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
@@ -385,7 +422,7 @@ const OrgAdminMembers = () => {
                       defaultValue={membershipSettings?.temporary_membership_duration_value ?? 1}
                     />
                   </label>
-                  <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">
+                  <label className="block text-xs font-semibold uppercase tracking-[0.12em] leading-relaxed text-neutral-500">
                     Unita
                     <select
                       className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
@@ -397,7 +434,8 @@ const OrgAdminMembers = () => {
                     </select>
                   </label>
                 </div>
-              </>
+                </div>
+              </div>
             ) : null}
           </div>
 

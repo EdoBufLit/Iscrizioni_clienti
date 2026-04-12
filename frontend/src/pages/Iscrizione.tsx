@@ -968,7 +968,7 @@ const Iscrizione = () => {
                             {
                               value: "annual" as const,
                               title: "Tessera annuale",
-                              description: "Valida secondo la gestione standard della piattaforma.",
+                              description: "",
                               fee: membershipConfig?.annual_fee_amount ?? membershipPaymentAmount,
                               extra: null,
                             },
@@ -998,7 +998,9 @@ const Iscrizione = () => {
                                 <div className="flex items-start justify-between gap-4">
                                   <div>
                                     <p className="text-lg font-semibold text-slate-950">{option.title}</p>
-                                    <p className="mt-2 text-sm leading-7 text-slate-500">{option.description}</p>
+                                    {option.description ? (
+                                      <p className="mt-2 text-sm leading-7 text-slate-500">{option.description}</p>
+                                    ) : null}
                                   </div>
                                   <span
                                     className={`mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full border ${
@@ -1010,18 +1012,20 @@ const Iscrizione = () => {
                                     {iconFor("m5 13 4 4L19 7", "h-4 w-4")}
                                   </span>
                                 </div>
-                                <div className="mt-5 flex flex-wrap items-center gap-3 text-sm">
-                                  <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-700">
-                                    {option.fee != null
-                                      ? `${option.fee.toFixed(2)} ${membershipPaymentCurrency}`
-                                      : "Importo da definire"}
-                                  </span>
-                                  {option.extra ? (
-                                    <span className="rounded-full bg-amber-50 px-3 py-1 font-medium text-amber-700">
-                                      {option.extra}
-                                    </span>
-                                  ) : null}
-                                </div>
+                                {option.fee != null || option.extra ? (
+                                  <div className="mt-5 flex flex-wrap items-center gap-3 text-sm">
+                                    {option.fee != null ? (
+                                      <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-700">
+                                        {`${option.fee.toFixed(2)} ${membershipPaymentCurrency}`}
+                                      </span>
+                                    ) : null}
+                                    {option.extra ? (
+                                      <span className="rounded-full bg-amber-50 px-3 py-1 font-medium text-amber-700">
+                                        {option.extra}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                ) : null}
                               </button>
                             );
                           })}

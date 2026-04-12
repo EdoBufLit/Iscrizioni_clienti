@@ -1,3 +1,27 @@
+## Plan (ORG ADMIN Soci summary visual refinement - Apr 12, 2026)
+- [x] Rendere piu evidente il riepilogo economico in alto nella pagina Soci senza rompere il visual language esistente
+- [x] Correggere il layout desktop del pannello impostazioni tessera evitando l'accavallamento tra `Durata temporanea` e il selettore unita
+- [x] Rieseguire la build frontend e documentare l'esito reale nella review
+
+## Review (ORG ADMIN Soci summary visual refinement - Apr 12, 2026)
+- Il box `Riepilogo tessere` in [OrgAdminMembers.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\OrgAdminMembers.tsx) ora ha una gerarchia piu netta: header esplicito, badge `Storico e stabile`, KPI principale piu evidente e contatore `Tessere emesse` separato.
+- La regola di conteggio non e piu un box anonimo accanto al totale: e stata resa piu leggibile con una card laterale dedicata e microcopy piu chiaro su cosa entra davvero nel totale.
+- Il pannello `Prezzi e durata` e stato spezzato in due gruppi: `Listino principale` e `Regola tessera temporanea`. Questo evita che `Durata temporanea` e il selettore `Unita` si schiaccino nella stessa mezza colonna sul desktop.
+- La durata temporanea ora vive in una sezione full-width all'interno della card destra, con grid `durata + unita` dedicata e `leading-relaxed` sulle label per eliminare l'accavallamento visto nello screenshot.
+- Verifica eseguita: `npm --prefix frontend run build` OK.
+
+## Plan (Membership UI copy simplification - Apr 12, 2026)
+- [x] Rimuovere completamente il blocco `Regola di conteggio` dalla summary in ORG ADMIN > Soci
+- [x] Semplificare il selettore tessera nel wizard pubblico togliendo copy e placeholder non richiesti
+- [x] Rieseguire la build frontend e aggiornare la review con l'esito reale
+
+## Review (Membership UI copy simplification - Apr 12, 2026)
+- In [OrgAdminMembers.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\OrgAdminMembers.tsx) ho rimosso del tutto il blocco `Regola di conteggio`: nella summary resta solo il KPI principale con il contatore `Tessere emesse`.
+- In [Iscrizione.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\Iscrizione.tsx) la card `Tessera annuale` non mostra piu la descrizione `Valida secondo la gestione standard...`.
+- Nello stesso selettore ho eliminato il placeholder `Importo da definire`: il badge prezzo compare solo se l'importo esiste davvero; se non esiste, non viene mostrato nulla.
+- La tessera temporanea mantiene solo le informazioni utili: descrizione breve e badge `Durata: ...`.
+- Verifica eseguita: `npm --prefix frontend run build` OK.
+
 ## Plan (ORG ADMIN WhatsApp decision message completion - Apr 03, 2026)
 - [x] Correggere il contesto dei messaggi WhatsApp di conferma/rigetto con fallback dai campi del form e placeholder booking piu robusti
 - [x] Aggiungere lato API e frontend l'override opzionale del messaggio WhatsApp al momento della decisione admin, mantenendo il default/template configurato
