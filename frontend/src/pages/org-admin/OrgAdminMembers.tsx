@@ -296,34 +296,34 @@ const OrgAdminMembers = () => {
         </div>
       )}
 
-      <div className="grid gap-8 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-        <div className="space-y-6">
-          <h3 className="px-2 text-[clamp(2.15rem,3vw,3.4rem)] font-normal tracking-tight text-neutral-950">
+      <div className="grid gap-7 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+        <div className="space-y-5">
+          <h3 className="px-2 text-[clamp(1.85rem,2.35vw,2.9rem)] font-normal tracking-tight text-neutral-950">
             Riepilogo Tessere
           </h3>
 
-          <div className="rounded-[2rem] border border-neutral-200 bg-white px-8 py-10 shadow-[0_22px_45px_-32px_rgba(15,23,42,0.28)]">
-            <p className="text-center text-[clamp(2rem,2.5vw,2.8rem)] font-normal tracking-tight text-neutral-950">
+          <div className="rounded-[1.75rem] border border-neutral-200 bg-white px-7 py-8 shadow-[0_22px_45px_-32px_rgba(15,23,42,0.28)]">
+            <p className="text-center text-[clamp(1.7rem,2.05vw,2.35rem)] font-normal tracking-tight text-neutral-950">
               Totale teorico in evidenza
             </p>
-            <p className="mt-8 text-center text-[clamp(4.8rem,9vw,8.5rem)] font-black leading-none tracking-[-0.08em] text-brand">
+            <p className="mt-7 text-center text-[clamp(4.15rem,7.4vw,7.1rem)] font-black leading-none tracking-[-0.08em] text-brand">
               &euro; {summaryTotal.toFixed(2)}
             </p>
           </div>
 
-          <div className="rounded-[2rem] border border-neutral-200 bg-white px-8 py-8 shadow-[0_22px_45px_-32px_rgba(15,23,42,0.28)]">
+          <div className="rounded-[1.75rem] border border-neutral-200 bg-white px-7 py-7 shadow-[0_22px_45px_-32px_rgba(15,23,42,0.28)]">
             <div className="flex items-end justify-between gap-6">
               <div>
-                <p className="text-[clamp(1.65rem,2.1vw,2.2rem)] font-normal tracking-tight text-neutral-950">
+                <p className="text-[clamp(1.4rem,1.75vw,1.9rem)] font-normal tracking-tight text-neutral-950">
                   Tessere emesse
                 </p>
-                <p className="mt-3 text-5xl font-normal leading-none tracking-tight text-neutral-950">
+                <p className="mt-3 text-[clamp(2.8rem,4vw,3.8rem)] font-normal leading-none tracking-tight text-neutral-950">
                   {issuedMembersCount}
                 </p>
               </div>
-              <div className="flex h-16 w-16 items-center justify-center text-neutral-500">
+              <div className="flex h-14 w-14 items-center justify-center text-neutral-500">
                 <svg
-                  className="h-11 w-11"
+                  className="h-10 w-10"
                   viewBox="0 0 48 48"
                   fill="none"
                   stroke="currentColor"
@@ -341,27 +341,27 @@ const OrgAdminMembers = () => {
           </div>
         </div>
 
-        <div className="space-y-6">
-          <h3 className="px-2 text-[clamp(2.15rem,3vw,3.4rem)] font-normal tracking-tight text-neutral-950">
+        <div className="space-y-5">
+          <h3 className="px-2 text-[clamp(1.85rem,2.35vw,2.9rem)] font-normal tracking-tight text-neutral-950">
             Impostazioni Tessera
           </h3>
 
           <form
-            className="rounded-[2rem] border border-neutral-200 bg-white px-8 py-8 shadow-[0_22px_45px_-32px_rgba(15,23,42,0.28)]"
+            className="rounded-[1.75rem] border border-neutral-200 bg-white px-7 py-7 shadow-[0_22px_45px_-32px_rgba(15,23,42,0.28)]"
             onSubmit={handleMembershipSettingsSubmit}
           >
-            <div className="space-y-8">
+            <div className="space-y-7">
               <section>
-                <h4 className="text-[clamp(1.8rem,2.1vw,2.45rem)] font-normal tracking-tight text-neutral-950">
+                <h4 className="text-[clamp(1.55rem,1.9vw,2.05rem)] font-normal tracking-tight text-neutral-950">
                   Listino Principale
                 </h4>
-                <div className="mt-6 grid gap-5 sm:grid-cols-2">
+                <div className="mt-5 grid gap-4 sm:grid-cols-2">
                   <label className="block">
-                    <span className="text-[1.05rem] font-normal tracking-tight text-neutral-950">
+                    <span className="text-[0.98rem] font-normal tracking-tight text-neutral-950">
                       Prezzo Annuale
                     </span>
                     <input
-                      className="mt-2 h-12 w-full rounded-[1rem] border border-neutral-300 bg-white px-4 text-[1.05rem] text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
+                      className="mt-2 h-11 w-full rounded-[0.95rem] border border-neutral-300 bg-white px-4 text-[1rem] text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
                       type="number"
                       step="0.01"
                       min="0.01"
@@ -370,9 +370,9 @@ const OrgAdminMembers = () => {
                     />
                   </label>
                   <label className="block">
-                    <span className="text-[1.05rem] font-normal tracking-tight text-neutral-950">Valuta</span>
+                    <span className="text-[0.98rem] font-normal tracking-tight text-neutral-950">Valuta</span>
                     <input
-                      className="mt-2 h-12 w-full rounded-[1rem] border border-neutral-300 bg-white px-4 text-[1.05rem] uppercase text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
+                      className="mt-2 h-11 w-full rounded-[0.95rem] border border-neutral-300 bg-white px-4 text-[1rem] uppercase text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
                       type="text"
                       name="membership_fee_currency"
                       maxLength={8}
@@ -383,17 +383,17 @@ const OrgAdminMembers = () => {
               </section>
 
               {membershipSettings?.custom_membership_types_enabled ? (
-                <section className="border-t border-neutral-200 pt-7">
-                  <h4 className="text-[clamp(1.8rem,2.1vw,2.45rem)] font-normal tracking-tight text-neutral-950">
+                <section className="border-t border-neutral-200 pt-6">
+                  <h4 className="text-[clamp(1.55rem,1.9vw,2.05rem)] font-normal tracking-tight text-neutral-950">
                     Regola Tessera Temporanea
                   </h4>
-                  <div className="mt-6 space-y-5">
+                  <div className="mt-5 space-y-4">
                     <label className="block">
-                      <span className="text-[1.05rem] font-normal tracking-tight text-neutral-950">
+                      <span className="text-[0.98rem] font-normal tracking-tight text-neutral-950">
                         Prezzo Temporanea
                       </span>
                       <input
-                        className="mt-2 h-12 w-full rounded-[1rem] border border-neutral-300 bg-white px-4 text-[1.05rem] text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
+                        className="mt-2 h-11 w-full rounded-[0.95rem] border border-neutral-300 bg-white px-4 text-[1rem] text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
                         type="number"
                         step="0.01"
                         min="0.01"
@@ -401,13 +401,13 @@ const OrgAdminMembers = () => {
                         defaultValue={membershipSettings?.temporary_membership_fee_amount ?? ''}
                       />
                     </label>
-                    <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_minmax(220px,0.8fr)]">
+                    <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(220px,0.8fr)]">
                       <label className="block">
-                        <span className="text-[1.05rem] font-normal tracking-tight text-neutral-950">
+                        <span className="text-[0.98rem] font-normal tracking-tight text-neutral-950">
                           Durata Temporanea
                         </span>
                         <input
-                          className="mt-2 h-12 w-full rounded-[1rem] border border-neutral-300 bg-white px-4 text-[1.05rem] text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
+                          className="mt-2 h-11 w-full rounded-[0.95rem] border border-neutral-300 bg-white px-4 text-[1rem] text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
                           type="number"
                           min="1"
                           name="temporary_membership_duration_value"
@@ -415,9 +415,9 @@ const OrgAdminMembers = () => {
                         />
                       </label>
                       <label className="block">
-                        <span className="text-[1.05rem] font-normal tracking-tight text-neutral-950">Unita</span>
+                        <span className="text-[0.98rem] font-normal tracking-tight text-neutral-950">Unita</span>
                         <select
-                          className="mt-2 h-12 w-full rounded-[1rem] border border-neutral-300 bg-white px-4 text-[1.05rem] text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
+                          className="mt-2 h-11 w-full rounded-[0.95rem] border border-neutral-300 bg-white px-4 text-[1rem] text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
                           name="temporary_membership_duration_unit"
                           defaultValue={membershipSettings?.temporary_membership_duration_unit ?? 'days'}
                         >
@@ -435,10 +435,10 @@ const OrgAdminMembers = () => {
               <p className="mt-5 text-sm text-red-600">{membershipSettingsError}</p>
             ) : null}
 
-            <div className="mt-6 flex justify-end">
+            <div className="mt-5 flex justify-end">
               <button
                 type="submit"
-                className="inline-flex h-12 items-center justify-center rounded-[1rem] bg-brand px-6 text-[1.05rem] font-medium text-white shadow-[0_16px_30px_-18px_rgba(15,118,110,0.55)] transition hover:bg-brand/95 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-11 items-center justify-center rounded-[0.95rem] bg-brand px-6 text-[1rem] font-medium text-white shadow-[0_16px_30px_-18px_rgba(15,118,110,0.55)] transition hover:bg-brand/95 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={savingMembershipSettings}
               >
                 {savingMembershipSettings ? 'Salvataggio...' : 'Salva impostazioni'}

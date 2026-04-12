@@ -47,6 +47,17 @@
 - Ho mantenuto invariati i campi dominio esistenti: modulo, evento, destinatario, sorgente numero, campo telefono/numero manuale, nome template, corpo template e stato attivo.
 - Verifica eseguita: `npm --prefix frontend run build` OK. Resta il warning gia noto sui chunk Vite sopra soglia, non introdotto da questo cambio.
 
+## Plan (ORG ADMIN Soci section scale correction - Apr 12, 2026)
+- [x] Rivedere la scala visiva della fascia alta `Riepilogo Tessere / Impostazioni Tessera` rispetto al resto della dashboard
+- [x] Ridurre di circa il 15% titoli, KPI e superfici senza cambiare struttura o gerarchia
+- [x] Rieseguire la build frontend e documentare l'esito reale nella review
+
+## Review (ORG ADMIN Soci section scale correction - Apr 12, 2026)
+- In [OrgAdminMembers.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\OrgAdminMembers.tsx) ho lasciato invariata la composizione `Riepilogo Tessere / Impostazioni Tessera`, ma ho ridotto la scala complessiva del blocco per riportarla piu vicina al resto della dashboard.
+- I titoli sezione, i sottotitoli interni, il valore KPI e il contatore `Tessere emesse` sono stati ridotti di circa il 10-15%, insieme a padding, raggi delle card, icona e altezza dei controlli form.
+- Il risultato resta leggermente piu presente del resto della pagina, ma non ha piu la percezione di blocco oversized o "hero" staccato dal resto dell'area org-admin.
+- Verifica eseguita: `npm --prefix frontend run build` OK. Resta solo il warning Vite gia noto sui chunk sopra soglia.
+
 ## Plan (ORG ADMIN WhatsApp decision message completion - Apr 03, 2026)
 - [x] Correggere il contesto dei messaggi WhatsApp di conferma/rigetto con fallback dai campi del form e placeholder booking piu robusti
 - [x] Aggiungere lato API e frontend l'override opzionale del messaggio WhatsApp al momento della decisione admin, mantenendo il default/template configurato
