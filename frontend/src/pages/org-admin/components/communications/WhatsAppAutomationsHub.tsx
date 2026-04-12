@@ -12,11 +12,20 @@ import Skeleton from "../../../../components/ui/Skeleton";
 import { useToast } from "../../../../components/ui/ToastProvider";
 
 type Props = { communicationsLocked: boolean };
+type AutomationWizardStep = "origin" | "delivery" | "template" | "review";
 
-const inputClass =
-  "mt-2 w-full rounded-[1.05rem] border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand/60 focus:ring-2 focus:ring-brand/15";
-const labelClass = "block text-sm font-semibold text-neutral-800";
-const cardClass = "rounded-[1.75rem] border border-neutral-200 bg-white p-6 shadow-[0_18px_48px_rgba(15,23,42,0.05)]";
+const fieldClass =
+  "mt-2 h-14 w-full rounded-[1.15rem] border border-[#3a4b54] bg-[#15232b] px-4 text-sm text-[#f5f7f8] placeholder:text-[#7f8f98] outline-none transition focus:border-[#25d366] focus:ring-2 focus:ring-[#25d366]/20 disabled:cursor-not-allowed disabled:opacity-60";
+const textareaClass =
+  "mt-2 min-h-[180px] w-full rounded-[1.15rem] border border-[#3a4b54] bg-[#15232b] px-4 py-4 text-sm text-[#f5f7f8] placeholder:text-[#7f8f98] outline-none transition focus:border-[#25d366] focus:ring-2 focus:ring-[#25d366]/20 disabled:cursor-not-allowed disabled:opacity-60";
+const labelClass = "block text-sm font-medium text-[#d8e2e7]";
+
+const wizardSteps: Array<{ key: AutomationWizardStep; label: string }> = [
+  { key: "origin", label: "Origine" },
+  { key: "delivery", label: "Invio" },
+  { key: "template", label: "Template" },
+  { key: "review", label: "Conferma" },
+];
 
 function emptyAutomationDraft() {
   return {
@@ -35,6 +44,25 @@ function emptyAutomationDraft() {
   };
 }
 
+function triggerLabel(value: string): string {
+  if (value === "booking_created") return "Prenotazione creata";
+  if (value === "request_received") return "Richiesta ricevuta";
+  return "Invio del modulo";
+}
+
+function recipientLabel(value: string): string {
+  if (value === "member") return "Socio collegato";
+  if (value === "admin") return "Segreteria";
+  if (value === "custom") return "Numero manuale";
+  return "Contatto che compila il form";
+}
+
+function phoneSourceLabel(value: string): string {
+  if (value === "member_phone") return "Telefono socio salvato";
+  if (value === "custom") return "Numero manuale";
+  return "Campo telefono del form";
+}
+
 function buildAutomationSummary(
   automation: Pick<
     OrgAdminWhatsAppAutomation,
@@ -42,13 +70,13 @@ function buildAutomationSummary(
   >,
 ): string {
   const formLabel = automation.form?.title || "questo flusso";
-  const triggerLabel =
+  const triggerCopy =
     automation.trigger_event === "booking_created"
       ? "viene creata una prenotazione"
       : automation.trigger_event === "request_received"
         ? "arriva una richiesta"
         : "un utente invia il modulo";
-  const recipientLabel =
+  const recipientCopy =
     automation.recipient_type === "member"
       ? "al socio collegato"
       : automation.recipient_type === "admin"
@@ -56,13 +84,123 @@ function buildAutomationSummary(
         : automation.recipient_type === "custom"
           ? "al numero manuale"
           : "al contatto che compila il form";
-  const phoneLabel =
+  const phoneCopy =
     automation.phone_source === "member_phone"
-      ? "usando il telefono già salvato in anagrafica"
+      ? "usando il telefono gia salvato"
       : automation.phone_source === "custom"
         ? `usando il numero ${automation.custom_phone || "manuale"}`
-        : `usando il campo ${automation.phone_field_key || "Telefono"} del modulo`;
-  return `Quando ${triggerLabel} per "${formLabel}", ASSONAM invia automaticamente il template "${automation.template_name}" ${recipientLabel}, ${phoneLabel}.`;
+        : `usando il campo ${automation.phone_field_key || "Telefono"}`;
+  return `Quando ${triggerCopy} per "${formLabel}", ASSONAM invia il template "${automation.template_name}" ${recipientCopy}, ${phoneCopy}.`;
+}
+
+function StepButton(props: {
+  index: number;
+  label: string;
+  active: boolean;
+  done: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={props.onClick}
+      className={`flex min-w-[140px] items-center gap-3 rounded-[1.35rem] border px-4 py-3 text-left transition ${
+        props.active
+          ? "border-[#25d366] bg-[#1b2d36] text-white"
+          : props.done
+            ? "border-[#284550] bg-[#132028] text-[#d8e2e7]"
+            : "border-[#24333b] bg-[#111b21] text-[#8ea0aa] hover:border-[#36505c] hover:text-[#dfe8ec]"
+      }`}
+    >
+      <span
+        className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+          props.active
+            ? "bg-[#25d366] text-[#0b141a]"
+            : props.done
+              ? "bg-[#233138] text-[#dff7d7]"
+              : "bg-[#1b2a33] text-[#8ea0aa]"
+        }`}
+      >
+        {props.done && !props.active ? "✓" : props.index + 1}
+      </span>
+      <span className="text-sm font-semibold">{props.label}</span>
+    </button>
+  );
+}
+
+function RuleCard(props: {
+  automation: OrgAdminWhatsAppAutomation;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={props.onSelect}
+      className={`min-h-[156px] rounded-[1.8rem] border p-5 text-left transition ${
+        props.selected
+          ? "border-[#25d366]/50 bg-[#111b21] text-white shadow-[0_18px_50px_rgba(11,20,26,0.22)]"
+          : "border-[#e7e2d8] bg-white text-[#0f171c] hover:border-[#d2c8b7] hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)]"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className={`truncate text-lg font-semibold ${props.selected ? "text-white" : "text-[#0f171c]"}`}>{props.automation.name}</p>
+          <p className={`mt-1 text-sm ${props.selected ? "text-[#8ea0aa]" : "text-[#6d787e]"}`}>
+            {props.automation.form?.title || "Form non collegato"}
+          </p>
+        </div>
+        <span
+          className={`shrink-0 rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${
+            props.automation.is_active
+              ? props.selected
+                ? "bg-[#1f3a32] text-[#7af0a8]"
+                : "bg-[#ecfff2] text-[#14824a]"
+              : props.selected
+                ? "bg-[#1d2930] text-[#9eb1ba]"
+                : "bg-[#f3f4f6] text-[#5f6871]"
+          }`}
+        >
+          {props.automation.is_active ? "Attiva" : "Bozza"}
+        </span>
+      </div>
+      <div className={`mt-6 grid gap-3 text-sm ${props.selected ? "text-[#d8e2e7]" : "text-[#26353d]"}`}>
+        <div>
+          <p className={`text-[11px] uppercase tracking-[0.18em] ${props.selected ? "text-[#7f8f98]" : "text-[#8a948d]"}`}>Evento</p>
+          <p className="mt-1 font-medium">{triggerLabel(props.automation.trigger_event)}</p>
+        </div>
+        <div>
+          <p className={`text-[11px] uppercase tracking-[0.18em] ${props.selected ? "text-[#7f8f98]" : "text-[#8a948d]"}`}>Template</p>
+          <p className="mt-1 font-medium">{props.automation.template_name}</p>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function NewRuleCard(props: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={props.onClick}
+      className="flex min-h-[156px] flex-col justify-between rounded-[1.8rem] border border-dashed border-[#d8cfbf] bg-[#fbf8f1] p-5 text-left text-[#0f171c] transition hover:border-[#c4b59f] hover:bg-white"
+    >
+      <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#111b21] text-2xl text-white">+</span>
+      <div>
+        <p className="text-lg font-semibold">Nuova regola</p>
+        <p className="mt-1 text-sm text-[#6d787e]">Crea una nuova automazione WhatsApp.</p>
+      </div>
+    </button>
+  );
+}
+
+function ReviewItem(props: { label: string; value: string }) {
+  return (
+    <div className="rounded-[1.25rem] border border-[#263740] bg-[#15232b] p-4">
+      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#7f8f98]">{props.label}</p>
+      <p className="mt-2 text-sm leading-6 text-[#edf2f4]">{props.value}</p>
+    </div>
+  );
 }
 
 export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
@@ -72,6 +210,8 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
   const [forms, setForms] = useState<AssociationForm[]>([]);
   const [automations, setAutomations] = useState<OrgAdminWhatsAppAutomation[]>([]);
   const [draft, setDraft] = useState(emptyAutomationDraft());
+  const [activeStep, setActiveStep] = useState<AutomationWizardStep>("origin");
+
   const selectedForm = useMemo(
     () => forms.find((form) => form.id === draft.form_id) ?? null,
     [forms, draft.form_id],
@@ -80,6 +220,8 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
     () => (selectedForm?.fields || []).filter((field) => field.field_type === "phone"),
     [selectedForm],
   );
+  const activeIndex = wizardSteps.findIndex((step) => step.key === activeStep);
+  const selectedAutomationCount = automations.filter((item) => item.is_active).length;
 
   async function loadData(preselectedFormId?: number | null) {
     setLoading(true);
@@ -94,7 +236,11 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
         setDraft((prev) => ({ ...prev, form_id: preselectedFormId }));
       }
     } catch (err) {
-      showToast({ title: "Errore", message: err instanceof Error ? err.message : "Errore caricamento automazioni WhatsApp.", tone: "error" });
+      showToast({
+        title: "Errore",
+        message: err instanceof Error ? err.message : "Errore caricamento automazioni WhatsApp.",
+        tone: "error",
+      });
     } finally {
       setLoading(false);
     }
@@ -104,6 +250,22 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
     const formId = Number(searchParams.get("formId") || 0) || null;
     void loadData(formId);
   }, [searchParams]);
+
+  useEffect(() => {
+    if (draft.phone_source !== "form_field") return;
+    if (!draft.phone_field_key) return;
+    if (phoneFieldOptions.some((field) => field.field_key === draft.phone_field_key)) return;
+    setDraft((prev) => ({ ...prev, phone_field_key: "" }));
+  }, [draft.phone_field_key, draft.phone_source, phoneFieldOptions]);
+
+  function beginNewRule() {
+    const formId = Number(searchParams.get("formId") || 0) || null;
+    setDraft({
+      ...emptyAutomationDraft(),
+      form_id: formId || null,
+    });
+    setActiveStep("origin");
+  }
 
   function hydrateFromAutomation(automation: OrgAdminWhatsAppAutomation) {
     setDraft({
@@ -120,11 +282,16 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
       template_body: automation.template_body,
       is_active: automation.is_active,
     });
+    setActiveStep("origin");
   }
 
   async function saveAutomation() {
-    if (!draft.name.trim() || !draft.template_name.trim() || !draft.template_body.trim()) {
-      showToast({ title: "Campi mancanti", message: "Nome automazione, nome template e messaggio sono obbligatori.", tone: "error" });
+    if (!isStepReady("origin") || !isStepReady("delivery") || !isStepReady("template")) {
+      showToast({
+        title: "Campi mancanti",
+        message: "Completa tutti gli step prima di salvare la regola.",
+        tone: "error",
+      });
       return;
     }
     try {
@@ -146,187 +313,404 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
         : await createOrgAdminWhatsAppAutomation(payload);
       await loadData(draft.form_id);
       hydrateFromAutomation(result.automation);
-      showToast({ title: draft.id ? "Automazione aggiornata" : "Automazione creata", message: "La regola WhatsApp è stata salvata.", tone: "success" });
+      setActiveStep("review");
+      showToast({
+        title: draft.id ? "Automazione aggiornata" : "Automazione creata",
+        message: "La regola WhatsApp e stata salvata.",
+        tone: "success",
+      });
     } catch (err) {
-      showToast({ title: "Errore", message: err instanceof Error ? err.message : "Errore salvataggio automazione WhatsApp.", tone: "error" });
+      showToast({
+        title: "Errore",
+        message: err instanceof Error ? err.message : "Errore salvataggio automazione WhatsApp.",
+        tone: "error",
+      });
     }
+  }
+
+  function isStepReady(step: AutomationWizardStep): boolean {
+    if (step === "origin") {
+      return Boolean(draft.form_id) && Boolean(draft.name.trim());
+    }
+    if (step === "delivery") {
+      if (!draft.recipient_type || !draft.phone_source) return false;
+      if (draft.phone_source === "form_field" && !draft.phone_field_key) return false;
+      if (draft.phone_source === "custom" && !draft.custom_phone.trim()) return false;
+      return true;
+    }
+    if (step === "template") {
+      return Boolean(draft.template_name.trim()) && Boolean(draft.template_body.trim());
+    }
+    return true;
+  }
+
+  function nextStep() {
+    const current = wizardSteps[activeIndex];
+    if (!current || !isStepReady(current.key)) {
+      showToast({
+        title: "Completa questo step",
+        message: "Inserisci i dati richiesti prima di continuare.",
+        tone: "error",
+      });
+      return;
+    }
+    const next = wizardSteps[Math.min(activeIndex + 1, wizardSteps.length - 1)];
+    setActiveStep(next.key);
+  }
+
+  function previousStep() {
+    const next = wizardSteps[Math.max(activeIndex - 1, 0)];
+    setActiveStep(next.key);
   }
 
   if (loading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-20 w-full rounded-[1.75rem]" />
-        <Skeleton className="h-80 w-full rounded-[1.75rem]" />
+        <Skeleton className="h-28 w-full rounded-[1.85rem]" />
+        <Skeleton className="h-[620px] w-full rounded-[2rem]" />
       </div>
     );
   }
 
+  const reviewSummary = buildAutomationSummary({
+    form: selectedForm
+      ? {
+          id: selectedForm.id,
+          title: selectedForm.title,
+          public_slug: selectedForm.public_slug,
+          public_path: selectedForm.public_path || "",
+        }
+      : null,
+    trigger_event: draft.trigger_event,
+    recipient_type: draft.recipient_type,
+    phone_source: draft.phone_source,
+    phone_field_key: draft.phone_field_key || null,
+    custom_phone: draft.custom_phone || null,
+    template_name: draft.template_name || "questo template",
+  });
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-neutral-200 pb-4">
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-[#e7e0d3] pb-5">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Automazioni WhatsApp</p>
-          <h2 className="mt-2 text-2xl font-bold tracking-tight text-neutral-900">Regole collegate ai form</h2>
-          <p className="mt-2 max-w-2xl text-sm text-neutral-600">
-            Configura evento, destinatario, numero e template senza toccare l'inbox.
-          </p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#8a948d]">Automazioni WhatsApp</p>
+          <h2 className="mt-2 text-[2rem] font-semibold tracking-tight text-[#111827]">Regole collegate ai form</h2>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="rounded-[1rem] border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-600">
-            <strong className="text-neutral-900">{automations.length}</strong> regole
+          <div className="rounded-full border border-[#e4ded0] bg-white px-4 py-2 text-sm text-[#46555d]">
+            <strong className="text-[#111827]">{automations.length}</strong> regole
           </div>
-          <div className="rounded-[1rem] border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-600">
-            <strong className="text-neutral-900">{automations.filter((item) => item.is_active).length}</strong> attive
+          <div className="rounded-full border border-[#e4ded0] bg-white px-4 py-2 text-sm text-[#46555d]">
+            <strong className="text-[#111827]">{selectedAutomationCount}</strong> attive
           </div>
-          <button className="btn-secondary" type="button" onClick={() => setDraft(emptyAutomationDraft())}>
-            Nuova regola
-          </button>
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.9fr)]">
-        <section className="space-y-4">
-          <div className={cardClass}>
-            <div className="flex items-start justify-between gap-4 border-b border-neutral-200 pb-5">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Elenco regole</p>
-                <h3 className="mt-2 text-2xl font-bold tracking-tight text-neutral-900">Automazioni configurate</h3>
-                <p className="mt-2 text-sm text-neutral-600">Apri una regola esistente o prepara una nuova configurazione dal pannello laterale.</p>
-              </div>
-            </div>
-
-            <div className="mt-6 space-y-3">
-              {automations.length === 0 ? (
-                <div className="rounded-[1.4rem] border border-dashed border-neutral-200 bg-neutral-50 p-6 text-sm text-neutral-500">
-                  Nessuna automazione WhatsApp configurata. Crea la prima regola per collegare in modo esplicito modulo, evento e numero destinatario.
-                </div>
-              ) : (
-                automations.map((automation) => (
-                  <button
-                    key={automation.id}
-                    type="button"
-                    onClick={() => hydrateFromAutomation(automation)}
-                    className={`w-full rounded-[1.4rem] border p-5 text-left transition ${
-                      draft.id === automation.id
-                        ? "border-emerald-300 bg-emerald-50"
-                        : "border-neutral-200 bg-white hover:border-neutral-300"
-                    }`}
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-neutral-900">{automation.name}</p>
-                        <p className="mt-1 text-xs text-neutral-500">{automation.form?.title || "Origine non collegata"}</p>
-                      </div>
-                      <span className={`rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] ${automation.is_active ? "bg-emerald-100 text-emerald-700" : "bg-neutral-100 text-neutral-600"}`}>
-                        {automation.is_active ? "Attiva" : "Inattiva"}
-                      </span>
-                    </div>
-                    <p className="mt-4 text-sm leading-6 text-neutral-600">{buildAutomationSummary(automation)}</p>
-                  </button>
-                ))
-              )}
-            </div>
+      <section className="space-y-4">
+        <div className="grid gap-4 xl:grid-cols-[repeat(3,minmax(0,1fr))_minmax(220px,0.86fr)]">
+          {automations.map((automation) => (
+            <RuleCard
+              key={automation.id}
+              automation={automation}
+              selected={draft.id === automation.id}
+              onSelect={() => hydrateFromAutomation(automation)}
+            />
+          ))}
+          <NewRuleCard onClick={beginNewRule} />
+        </div>
+        {automations.length === 0 ? (
+          <div className="rounded-[1.6rem] border border-dashed border-[#d9cfbf] bg-[#fbf8f1] px-5 py-4 text-sm text-[#6d787e]">
+            Nessuna regola configurata.
           </div>
-        </section>
+        ) : null}
+      </section>
 
-        <aside className="space-y-6 xl:sticky xl:top-28 xl:self-start">
-          <section className={cardClass}>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Configurazione</p>
-            <h3 className="mt-2 text-xl font-semibold text-neutral-900">{draft.id ? "Modifica regola" : "Nuova regola"}</h3>
-            <div className="mt-5 space-y-4">
-              <label className={labelClass}>
-                Da quale modulo parte questo messaggio?
-                <select className={inputClass} disabled={communicationsLocked} value={draft.form_id ?? ""} onChange={(event) => setDraft((prev) => ({ ...prev, form_id: event.target.value ? Number(event.target.value) : null }))}>
-                  <option value="">Seleziona un form pubblico</option>
-                  {forms.map((form) => (
-                    <option key={form.id} value={form.id}>{form.title}</option>
-                  ))}
-                </select>
-              </label>
-              <label className={labelClass}>
-                Quando deve essere inviato?
-                <select className={inputClass} disabled={communicationsLocked} value={draft.trigger_event} onChange={(event) => setDraft((prev) => ({ ...prev, trigger_event: event.target.value }))}>
-                  <option value="form_submitted">Invio del modulo</option>
-                  <option value="booking_created">Prenotazione creata</option>
-                  <option value="request_received">Richiesta ricevuta</option>
-                </select>
-              </label>
-              <label className={labelClass}>
-                A chi deve arrivare?
-                <select className={inputClass} disabled={communicationsLocked} value={draft.recipient_type} onChange={(event) => setDraft((prev) => ({ ...prev, recipient_type: event.target.value }))}>
-                  <option value="submitter">Al contatto che compila il form</option>
-                  <option value="member">Al socio collegato</option>
-                  <option value="admin">Alla segreteria</option>
-                  <option value="custom">A un numero manuale</option>
-                </select>
-              </label>
-              <label className={labelClass}>
-                Quale numero deve usare?
-                <select className={inputClass} disabled={communicationsLocked} value={draft.phone_source} onChange={(event) => setDraft((prev) => ({ ...prev, phone_source: event.target.value }))}>
-                  <option value="form_field">Numero inserito nel modulo</option>
-                  <option value="member_phone">Telefono socio già salvato</option>
-                  <option value="custom">Numero manuale</option>
-                </select>
-              </label>
-              {draft.phone_source === "form_field" ? (
+      <section className="rounded-[2rem] border border-[#203038] bg-[#111b21] p-5 shadow-[0_28px_72px_rgba(11,20,26,0.18)] md:p-7">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#203038] pb-5">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#7f8f98]">Configurazione</p>
+            <h3 className="mt-2 text-[1.85rem] font-semibold tracking-tight text-white">
+              {draft.id ? "Modifica regola" : "Nuova regola"}
+            </h3>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {wizardSteps.map((step, index) => (
+              <StepButton
+                key={step.key}
+                index={index}
+                label={step.label}
+                active={activeStep === step.key}
+                done={index < activeIndex}
+                onClick={() => setActiveStep(step.key)}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_320px]">
+          <div className="rounded-[1.7rem] border border-[#203038] bg-[#0f171c] p-5 md:p-6">
+            {activeStep === "origin" ? (
+              <div className="grid gap-5">
                 <label className={labelClass}>
-                  Campo telefono del modulo
-                  <select className={inputClass} disabled={communicationsLocked} value={draft.phone_field_key} onChange={(event) => setDraft((prev) => ({ ...prev, phone_field_key: event.target.value }))}>
-                    <option value="">Seleziona un campo telefono</option>
-                    {phoneFieldOptions.map((field) => (
-                      <option key={field.id} value={field.field_key}>{field.label}</option>
+                  Modulo
+                  <select
+                    className={fieldClass}
+                    disabled={communicationsLocked}
+                    value={draft.form_id ?? ""}
+                    onChange={(event) =>
+                      setDraft((prev) => ({ ...prev, form_id: event.target.value ? Number(event.target.value) : null }))
+                    }
+                  >
+                    <option value="">Seleziona un form pubblico</option>
+                    {forms.map((form) => (
+                      <option key={form.id} value={form.id}>
+                        {form.title}
+                      </option>
                     ))}
                   </select>
                 </label>
-              ) : null}
-              {draft.phone_source === "custom" ? (
+
+                <div className="grid gap-5 md:grid-cols-2">
+                  <label className={labelClass}>
+                    Evento
+                    <select
+                      className={fieldClass}
+                      disabled={communicationsLocked}
+                      value={draft.trigger_event}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, trigger_event: event.target.value }))}
+                    >
+                      <option value="form_submitted">Invio del modulo</option>
+                      <option value="booking_created">Prenotazione creata</option>
+                      <option value="request_received">Richiesta ricevuta</option>
+                    </select>
+                  </label>
+
+                  <label className={labelClass}>
+                    Nome interno
+                    <input
+                      className={fieldClass}
+                      disabled={communicationsLocked}
+                      value={draft.name}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value }))}
+                      placeholder="Conferma iscrizione"
+                    />
+                  </label>
+                </div>
+              </div>
+            ) : null}
+
+            {activeStep === "delivery" ? (
+              <div className="grid gap-5">
+                <div className="grid gap-5 md:grid-cols-2">
+                  <label className={labelClass}>
+                    Destinatario
+                    <select
+                      className={fieldClass}
+                      disabled={communicationsLocked}
+                      value={draft.recipient_type}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, recipient_type: event.target.value }))}
+                    >
+                      <option value="submitter">Contatto che compila il form</option>
+                      <option value="member">Socio collegato</option>
+                      <option value="admin">Segreteria</option>
+                      <option value="custom">Numero manuale</option>
+                    </select>
+                  </label>
+
+                  <label className={labelClass}>
+                    Numero da usare
+                    <select
+                      className={fieldClass}
+                      disabled={communicationsLocked}
+                      value={draft.phone_source}
+                      onChange={(event) =>
+                        setDraft((prev) => ({
+                          ...prev,
+                          phone_source: event.target.value,
+                          phone_field_key: event.target.value === "form_field" ? prev.phone_field_key : "",
+                          custom_phone: event.target.value === "custom" ? prev.custom_phone : "",
+                        }))
+                      }
+                    >
+                      <option value="form_field">Campo telefono del form</option>
+                      <option value="member_phone">Telefono socio salvato</option>
+                      <option value="custom">Numero manuale</option>
+                    </select>
+                  </label>
+                </div>
+
+                {draft.phone_source === "form_field" ? (
+                  <label className={labelClass}>
+                    Campo telefono
+                    <select
+                      className={fieldClass}
+                      disabled={communicationsLocked}
+                      value={draft.phone_field_key}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, phone_field_key: event.target.value }))}
+                    >
+                      <option value="">Seleziona un campo telefono</option>
+                      {phoneFieldOptions.map((field) => (
+                        <option key={field.id} value={field.field_key}>
+                          {field.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+
+                {draft.phone_source === "custom" ? (
+                  <label className={labelClass}>
+                    Numero manuale
+                    <input
+                      className={fieldClass}
+                      disabled={communicationsLocked}
+                      value={draft.custom_phone}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, custom_phone: event.target.value }))}
+                      placeholder="+393331234567"
+                    />
+                  </label>
+                ) : null}
+              </div>
+            ) : null}
+
+            {activeStep === "template" ? (
+              <div className="grid gap-5">
                 <label className={labelClass}>
-                  Numero manuale (E.164)
-                  <input className={inputClass} disabled={communicationsLocked} value={draft.custom_phone} onChange={(event) => setDraft((prev) => ({ ...prev, custom_phone: event.target.value }))} placeholder="+393331234567" />
+                  Nome template
+                  <input
+                    className={fieldClass}
+                    disabled={communicationsLocked}
+                    value={draft.template_name}
+                    onChange={(event) => setDraft((prev) => ({ ...prev, template_name: event.target.value }))}
+                    placeholder="Conferma prenotazione"
+                  />
                 </label>
-              ) : null}
-              <label className={labelClass}>
-                Quale template WhatsApp deve usare?
-                <input className={inputClass} disabled={communicationsLocked} value={draft.template_name} onChange={(event) => setDraft((prev) => ({ ...prev, template_name: event.target.value }))} placeholder="Conferma prenotazione evento" />
-              </label>
-              <label className={labelClass}>
-                Messaggio template
-                <textarea className={`${inputClass} min-h-[140px]`} disabled={communicationsLocked} value={draft.template_body} onChange={(event) => setDraft((prev) => ({ ...prev, template_body: event.target.value }))} placeholder="Ciao {{nome_socio}}, abbiamo ricevuto la tua richiesta..." />
-              </label>
-              <label className={labelClass}>
-                Nome interno regola
-                <input className={inputClass} disabled={communicationsLocked} value={draft.name} onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value }))} placeholder="WhatsApp conferma form evento" />
-              </label>
-              <label className="flex items-center gap-3 text-sm font-medium text-neutral-700">
-                <input type="checkbox" className="rounded border-neutral-300 text-brand" checked={draft.is_active} onChange={(event) => setDraft((prev) => ({ ...prev, is_active: event.target.checked }))} />
-                Automazione attiva
-              </label>
+
+                <label className={labelClass}>
+                  Messaggio
+                  <textarea
+                    className={textareaClass}
+                    disabled={communicationsLocked}
+                    value={draft.template_body}
+                    onChange={(event) => setDraft((prev) => ({ ...prev, template_body: event.target.value }))}
+                    placeholder="Ciao {{nome_socio}}, abbiamo ricevuto la tua richiesta..."
+                  />
+                </label>
+
+                <label className="inline-flex items-center gap-3 text-sm font-medium text-[#d8e2e7]">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-[#50636d] bg-[#15232b] text-[#25d366]"
+                    checked={draft.is_active}
+                    onChange={(event) => setDraft((prev) => ({ ...prev, is_active: event.target.checked }))}
+                  />
+                  Regola attiva
+                </label>
+              </div>
+            ) : null}
+
+            {activeStep === "review" ? (
+              <div className="grid gap-4">
+                <ReviewItem label="Regola" value={draft.name || "Senza nome"} />
+                <ReviewItem label="Modulo" value={selectedForm?.title || "Nessun modulo"} />
+                <ReviewItem label="Evento" value={triggerLabel(draft.trigger_event)} />
+                <ReviewItem label="Destinatario" value={recipientLabel(draft.recipient_type)} />
+                <ReviewItem
+                  label="Numero"
+                  value={
+                    draft.phone_source === "form_field"
+                      ? `${phoneSourceLabel(draft.phone_source)}${draft.phone_field_key ? `: ${draft.phone_field_key}` : ""}`
+                      : draft.phone_source === "custom"
+                        ? draft.custom_phone || "Numero manuale"
+                        : phoneSourceLabel(draft.phone_source)
+                  }
+                />
+                <ReviewItem label="Template" value={draft.template_name || "Nessun template"} />
+                <ReviewItem label="Messaggio" value={draft.template_body || "Nessun messaggio"} />
+              </div>
+            ) : null}
+          </div>
+
+          <aside className="rounded-[1.7rem] border border-[#203038] bg-[#0f171c] p-5">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#7f8f98]">Preview</p>
+            <div className="mt-4 rounded-[1.4rem] border border-[#243740] bg-[#111b21] p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-base font-semibold text-white">{draft.template_name || "Template WhatsApp"}</p>
+                  <p className="mt-1 text-sm text-[#8ea0aa]">{selectedForm?.title || "Form pubblico"}</p>
+                </div>
+                <span
+                  className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${
+                    draft.is_active ? "bg-[#1f3a32] text-[#7af0a8]" : "bg-[#1d2930] text-[#9eb1ba]"
+                  }`}
+                >
+                  {draft.is_active ? "Attiva" : "Bozza"}
+                </span>
+              </div>
+              <div className="mt-5 space-y-3 text-sm text-[#d8e2e7]">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-[#7f8f98]">Evento</p>
+                  <p className="mt-1">{triggerLabel(draft.trigger_event)}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-[#7f8f98]">Destinatario</p>
+                  <p className="mt-1">{recipientLabel(draft.recipient_type)}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-[#7f8f98]">Numero</p>
+                  <p className="mt-1">{phoneSourceLabel(draft.phone_source)}</p>
+                </div>
+              </div>
             </div>
-            <div className="mt-6 rounded-[1.4rem] border border-neutral-200 bg-neutral-50 p-4">
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Riassunto naturale</p>
-              <p className="mt-3 text-sm leading-6 text-neutral-700">
-                {buildAutomationSummary({
-                  form: selectedForm ? { id: selectedForm.id, title: selectedForm.title, public_slug: selectedForm.public_slug, public_path: selectedForm.public_path || "" } : null,
-                  trigger_event: draft.trigger_event,
-                  recipient_type: draft.recipient_type,
-                  phone_source: draft.phone_source,
-                  phone_field_key: draft.phone_field_key || null,
-                  custom_phone: draft.custom_phone || null,
-                  template_name: draft.template_name || "questo template",
-                })}
-              </p>
+
+            <div className="mt-4 rounded-[1.4rem] border border-[#243740] bg-[#111b21] p-4">
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#7f8f98]">Messaggio</p>
+              <p className="mt-3 text-sm leading-7 text-[#d8e2e7]">{draft.template_body || reviewSummary}</p>
             </div>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <button className="btn-primary" type="button" disabled={communicationsLocked} onClick={() => void saveAutomation()}>
+          </aside>
+        </div>
+
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[#203038] pt-5">
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              className="inline-flex min-h-[3.3rem] items-center justify-center rounded-[1.15rem] border border-[#2b3c44] px-5 text-sm font-medium text-[#d8e2e7] transition hover:border-[#3b5662] hover:bg-[#15232b] disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={beginNewRule}
+            >
+              Reset
+            </button>
+            <button
+              type="button"
+              className="inline-flex min-h-[3.3rem] items-center justify-center rounded-[1.15rem] border border-[#2b3c44] px-5 text-sm font-medium text-[#d8e2e7] transition hover:border-[#3b5662] hover:bg-[#15232b] disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={previousStep}
+              disabled={activeIndex === 0}
+            >
+              Indietro
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {activeStep !== "review" ? (
+              <button
+                type="button"
+                className="inline-flex min-h-[3.3rem] items-center justify-center rounded-[1.15rem] bg-[#25d366] px-6 text-sm font-semibold text-[#0b141a] transition hover:bg-[#33dc72] disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={nextStep}
+                disabled={communicationsLocked}
+              >
+                Continua
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="inline-flex min-h-[3.3rem] items-center justify-center rounded-[1.15rem] bg-[#25d366] px-6 text-sm font-semibold text-[#0b141a] transition hover:bg-[#33dc72] disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => void saveAutomation()}
+                disabled={communicationsLocked}
+              >
                 {draft.id ? "Salva automazione" : "Crea automazione"}
               </button>
-              <button className="btn-secondary" type="button" onClick={() => setDraft(emptyAutomationDraft())}>
-                Reset
-              </button>
-            </div>
-          </section>
-        </aside>
-      </div>
+            )}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

@@ -35,6 +35,18 @@
 - Ho mantenuto la logica esistente: la sezione temporanea continua a mostrarsi solo quando `custom_membership_types_enabled` e attivo.
 - Verifica eseguita: `npm --prefix frontend run build` OK.
 
+## Plan (ORG ADMIN WhatsApp Automazioni wizard redesign - Apr 12, 2026)
+- [x] Riallineare la vista `WhatsApp > Automazioni` alla grammatica visiva della workspace WhatsApp, con card regole in alto e senza copy accessorio
+- [x] Sostituire il form laterale lungo con un wizard a step mantenendo invariata la logica di creazione/modifica automazioni
+- [x] Rieseguire la build frontend e documentare l'esito reale nella review
+
+## Review (ORG ADMIN WhatsApp Automazioni wizard redesign - Apr 12, 2026)
+- In [WhatsAppAutomationsHub.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\components\communications\WhatsAppAutomationsHub.tsx) ho sostituito il layout chiaro a due colonne con una schermata coerente con il workspace WhatsApp: card regole in alto, superfici scure essenziali e nessun box descrittivo superfluo.
+- Le regole gia create ora stanno in alto come card compatte selezionabili; la card `Nuova regola` vive nello stesso grid e apre subito il wizard senza riportare l'utente a un pannello laterale tecnico.
+- La creazione/modifica e diventata un wizard a step (`Origine`, `Invio`, `Template`, `Conferma`) con progressione esplicita, validazione minima per step e riepilogo finale pulito, ma senza cambiare API, payload o logica di salvataggio.
+- Ho mantenuto invariati i campi dominio esistenti: modulo, evento, destinatario, sorgente numero, campo telefono/numero manuale, nome template, corpo template e stato attivo.
+- Verifica eseguita: `npm --prefix frontend run build` OK. Resta il warning gia noto sui chunk Vite sopra soglia, non introdotto da questo cambio.
+
 ## Plan (ORG ADMIN WhatsApp decision message completion - Apr 03, 2026)
 - [x] Correggere il contesto dei messaggi WhatsApp di conferma/rigetto con fallback dai campi del form e placeholder booking piu robusti
 - [x] Aggiungere lato API e frontend l'override opzionale del messaggio WhatsApp al momento della decisione admin, mantenendo il default/template configurato
