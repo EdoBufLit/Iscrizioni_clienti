@@ -72,6 +72,20 @@
 - Durante la verifica ho rimosso una helper TypeScript rimasta inutilizzata (`insertDecisionTemplateVariable`) per far tornare pulita la build del frontend.
 - Verifica eseguita: `npm --prefix frontend run build` OK. Resta solo il warning Vite gia noto sui chunk grandi, non introdotto da questo redesign.
 
+## Plan (ORG ADMIN Campagne wizard stepper + CTA liberi - Apr 12, 2026)
+- [x] Verificare il wizard `Campagne` e il builder Grapes per capire dove abilitare click sugli step e modifica libera dei link CTA
+- [x] Rendere cliccabili gli step numerati mantenendo i bottoni `Indietro` e `Avanti`
+- [x] Aggiungere nel builder un pannello contestuale per il bottone selezionato con URL libero/placeholder, applicabile anche a CTA aggiunti dopo
+- [x] Rieseguire la build frontend e documentare l'esito reale nella review
+
+## Review (ORG ADMIN Campagne wizard stepper + CTA liberi - Apr 12, 2026)
+- In [MessagesComposerHub.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\components\communications\MessagesComposerHub.tsx) lo stepper del wizard ora supporta anche il click diretto sui cerchi numerati, senza rimuovere i bottoni `Indietro` e `Avanti`; la stessa UX vale sia per campagne sia per modelli.
+- Nello stesso file `WizardHero` ora renderizza anche eyebrow, titolo e descrizione del flusso, cosi il componente resta coerente e non lascia props inutilizzate che bloccherebbero la build TypeScript.
+- In [GrapesEmailBuilder.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\components\communications\GrapesEmailBuilder.tsx) ho aggiunto un pannello contestuale che appare quando selezioni un bottone nel canvas: permette di modificare testo CTA e `href` liberamente.
+- Il pannello CTA non e limitato al bottone iniziale del template: funziona su qualsiasi `mj-button` selezionato, inclusi quelli aggiunti dopo dal blocco `Bottone CTA`, e accetta sia URL liberi sia placeholder link come `{{link_documento}}` o `{{link_form_collegato}}`.
+- In [grapes-email-builder.css](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\components\communications\grapes-email-builder.css) ho aggiunto lo stile del nuovo pannello contestuale nella rail destra, mantenendo il resto della grammatica visiva del builder.
+- Verifica eseguita: `npm --prefix frontend run build` OK. Resta solo il warning Vite gia noto sui chunk grandi, non introdotto da questo refinement.
+
 ## Plan (ORG ADMIN WhatsApp decision message completion - Apr 03, 2026)
 - [x] Correggere il contesto dei messaggi WhatsApp di conferma/rigetto con fallback dai campi del form e placeholder booking piu robusti
 - [x] Aggiungere lato API e frontend l'override opzionale del messaggio WhatsApp al momento della decisione admin, mantenendo il default/template configurato

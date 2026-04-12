@@ -38,6 +38,11 @@ type GrapesEmailBuilderProps = {
 
 type RailTab = "blocks" | "media" | "variables";
 
+type SelectedButtonState = {
+  label: string;
+  href: string;
+};
+
 const railTabs: Array<{ key: RailTab; label: string }> = [
   { key: "blocks", label: "Blocchi" },
   { key: "media", label: "Media" },
@@ -71,6 +76,7 @@ export function GrapesEmailBuilder({
   const hostRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<Editor | null>(null);
+  const selectedButtonComponentRef = useRef<any>(null);
   const onChangeRef = useRef(onChange);
   const syncTimerRef = useRef<number | null>(null);
   const [ready, setReady] = useState(false);
@@ -78,8 +84,13 @@ export function GrapesEmailBuilder({
   const [railTab, setRailTab] = useState<RailTab>("blocks");
   const [assetBusyId, setAssetBusyId] = useState<number | null>(null);
   const [uploadingAsset, setUploadingAsset] = useState(false);
+  const [selectedButton, setSelectedButton] = useState<SelectedButtonState | null>(null);
   const { showToast } = useToast();
   const sortedAssets = useMemo(() => sortAssetsByDate(assets), [assets]);
+  const linkVariables = useMemo(
+    () => variables.filter((item) => item.placeholder.includes("link_") || item.placeholder.includes("url")),
+    [variables],
+  );
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -182,12 +193,40 @@ export function GrapesEmailBuilder({
       syncTimerRef.current = window.setTimeout(emitSnapshot, 220);
     };
 
+    const readButtonState = (component: any): SelectedButtonState | null => {
+      if (!component) return null;
+      const name = String(component.getName?.() || component.get?.("type") || component.get?.("tagName") || "").toLowerCase();
+      const isButton = name.includes("button");
+      if (!isButton) return null;
+      const attrs = component.getAttributes?.() || {};
+      return {
+        label: String(component.get?.("content") || ""),
+        href: String(attrs.href || ""),
+      };
+    };
+
+    const syncSelectedButton = (component: any) => {
+      const next = readButtonState(component);
+      selectedButtonComponentRef.current = next ? component : null;
+      setSelectedButton(next);
+    };
+
     editor.on("load", () => {
       setReady(true);
       currentSetDevice("desktop");
       emitSnapshot();
     });
     editor.on("update", scheduleSync);
+    editor.on("component:selected", syncSelectedButton);
+    editor.on("component:deselected", () => {
+      selectedButtonComponentRef.current = null;
+      setSelectedButton(null);
+    });
+    editor.on("component:update", () => {
+      if (selectedButtonComponentRef.current) {
+        syncSelectedButton(selectedButtonComponentRef.current);
+      }
+    });
 
     const currentSetDevice = (next: "desktop" | "mobile") => {
       editor.setDevice(next === "mobile" ? "Mobile" : "Desktop");
@@ -243,6 +282,20 @@ export function GrapesEmailBuilder({
       }
     });
     showToast({ tone: "success", message: `${block.label} aggiunto al messaggio.` });
+  }
+
+  function updateSelectedButtonLabel(value: string) {
+    const component = selectedButtonComponentRef.current;
+    if (!component) return;
+    component.set("content", value);
+    setSelectedButton((current) => (current ? { ...current, label: value } : current));
+  }
+
+  function updateSelectedButtonHref(value: string) {
+    const component = selectedButtonComponentRef.current;
+    if (!component) return;
+    component.addAttributes({ href: value });
+    setSelectedButton((current) => (current ? { ...current, href: value } : current));
   }
 
   function insertVariable(placeholder: string) {
@@ -362,6 +415,46 @@ export function GrapesEmailBuilder({
         </div>
 
         <aside className="builder-rail">
+          {selectedButton ? (
+            <div className="builder-selection-card">
+              <div>
+                <p className="builder-selection-card__eyebrow">Bottone selezionato</p>
+                <p className="builder-selection-card__title">CTA con link libero</p>
+              </div>
+              <label className="builder-selection-card__label">
+                Testo bottone
+                <input
+                  className="builder-selection-card__input"
+                  value={selectedButton.label}
+                  onChange={(event) => updateSelectedButtonLabel(event.target.value)}
+                  placeholder="Es. Scarica il documento"
+                />
+              </label>
+              <label className="builder-selection-card__label">
+                Link o documento
+                <input
+                  className="builder-selection-card__input"
+                  value={selectedButton.href}
+                  onChange={(event) => updateSelectedButtonHref(event.target.value)}
+                  placeholder="https://... oppure {{link_documento}}"
+                />
+              </label>
+              {linkVariables.length ? (
+                <div className="builder-selection-card__chips">
+                  {linkVariables.map((item) => (
+                    <button
+                      key={item.placeholder}
+                      type="button"
+                      className="builder-selection-card__chip"
+                      onClick={() => updateSelectedButtonHref(item.placeholder)}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <div className="builder-rail__tabs">
             {railTabs.map((tab) => (
               <button

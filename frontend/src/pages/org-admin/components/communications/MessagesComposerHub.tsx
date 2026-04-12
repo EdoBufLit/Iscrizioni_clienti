@@ -243,20 +243,30 @@ function StatusBadge({ value }: { value: string | null | undefined }) {
 }
 
 function WizardHero({
+  eyebrow,
+  title,
+  description,
   steps,
   activeStep,
+  onStepSelect,
 }: {
   eyebrow: string;
   title: string;
   description: string;
   steps: Array<{ key: string; label: string }>;
   activeStep: string;
+  onStepSelect?: (stepKey: string) => void;
 }) {
   const activeIndex = Math.max(0, steps.findIndex((step) => step.key === activeStep));
 
   return (
     <section className="rounded-[1.6rem] border border-[#ddd4c3] bg-[#fbfaf6] px-4 py-5 md:px-6">
       <div className="mx-auto max-w-5xl">
+        <div className="mb-6 max-w-3xl">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#7a6647]">{eyebrow}</p>
+          <h2 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-slate-950 md:text-[2rem]">{title}</h2>
+          <p className="mt-3 text-sm leading-6 text-slate-500 md:text-[15px]">{description}</p>
+        </div>
         <div className="relative px-2">
           <div className="absolute left-[10%] right-[10%] top-6 hidden h-[2px] rounded-full bg-[#e4dbc9] md:block" />
           <div
@@ -270,20 +280,26 @@ function WizardHero({
               const active = index === activeIndex;
               const complete = index < activeIndex;
               return (
-                <div key={step.key} className="flex flex-col items-center text-center">
+                <button
+                  key={step.key}
+                  type="button"
+                  className="flex flex-col items-center text-center"
+                  onClick={() => onStepSelect?.(step.key)}
+                  disabled={!onStepSelect}
+                >
                   <div
-                    className={`relative z-[1] flex h-12 w-12 items-center justify-center rounded-full border text-base font-semibold ${
+                    className={`relative z-[1] flex h-12 w-12 items-center justify-center rounded-full border text-base font-semibold transition ${
                       active || complete
                         ? "border-[#17494a] bg-[#17494a] text-white shadow-[0_16px_30px_rgba(23,73,74,0.18)]"
                         : "border-[#ded6c8] bg-white text-slate-400"
-                    }`}
+                    } ${onStepSelect ? "hover:-translate-y-0.5 hover:border-[#17494a] hover:text-[#17494a]" : ""}`}
                   >
                     {index + 1}
                   </div>
-                  <p className={`mt-3 text-sm font-semibold ${active || complete ? "text-slate-900" : "text-slate-400"}`}>
+                  <p className={`mt-3 text-sm font-semibold transition ${active || complete ? "text-slate-900" : "text-slate-400"} ${onStepSelect ? "hover:text-slate-900" : ""}`}>
                     {step.label}
                   </p>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -1038,6 +1054,7 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
             description="Scegli il tipo, parti da una base sensata, lavora nel builder centrale e salva un template davvero riusabile."
             steps={templateSteps.map((step) => ({ key: step.key, label: step.label }))}
             activeStep={templateStep}
+            onStepSelect={(stepKey) => setTemplateStep(stepKey as TemplateStep)}
           />
 
           {templateStep === "type" ? (
@@ -1224,6 +1241,7 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
             description="Il flusso campagne torna ordinato: tipo messaggio, template di partenza, builder centrale, preview e azioni finali."
             steps={campaignSteps.map((step) => ({ key: step.key, label: step.label }))}
             activeStep={campaignStep}
+            onStepSelect={(stepKey) => setCampaignStep(stepKey as CampaignStep)}
           />
           {campaignStep === "type" ? (
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_360px]">
