@@ -58,6 +58,20 @@
 - Il risultato resta leggermente piu presente del resto della pagina, ma non ha piu la percezione di blocco oversized o "hero" staccato dal resto dell'area org-admin.
 - Verifica eseguita: `npm --prefix frontend run build` OK. Resta solo il warning Vite gia noto sui chunk sopra soglia.
 
+## Plan (ORG ADMIN Form pubblici detail redesign - Apr 12, 2026)
+- [x] Analizzare il dettaglio form pubblico attuale e il reference fornito per riallineare header, tab e tab `Impostazioni`
+- [x] Ridisegnare la shell del singolo form con header compatto, barra azioni e tab-card simili al mockup mantenendo invariata la logica
+- [x] Ricomporre il tab `Impostazioni` in una struttura piu vicina al reference, con automazioni core, accesso/comportamento e pannello WhatsApp avanzato
+- [x] Rieseguire la build frontend e documentare l'esito reale nella review
+
+## Review (ORG ADMIN Form pubblici detail redesign - Apr 12, 2026)
+- In [OrgAdminForms.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\OrgAdminForms.tsx) ho ridisegnato l'intera shell del dettaglio form per avvicinarla al reference: header compatto con stato pubblicazione, azioni primarie `Preview` / `Save Changes`, barra secondaria `Campaign Integrations` e navigazione a tab-card.
+- Il layout editor ora usa quattro tab-card essenziali (`Structure`, `Style`, `Settings`, `Automations`) con stato attivo evidenziato, mantenendo invariati routing, stato locale e logica di salvataggio del form.
+- Il tab `Settings` e stato ricomposto in tre blocchi piu netti: `Core Automations` a sinistra, `Form Behavior & Access` a destra e pannello scuro `WhatsApp Automatic (Advanced)` in basso, senza il vecchio pannello laterale lungo.
+- Ho mantenuto il wiring esistente dei campi: link pubblico, URL personalizzato, visibilita, toggle pagina attiva, email notifica, automazioni email/WhatsApp/admin e template avanzati continuano a usare lo stesso `formDraft`.
+- Durante la verifica ho rimosso una helper TypeScript rimasta inutilizzata (`insertDecisionTemplateVariable`) per far tornare pulita la build del frontend.
+- Verifica eseguita: `npm --prefix frontend run build` OK. Resta solo il warning Vite gia noto sui chunk grandi, non introdotto da questo redesign.
+
 ## Plan (ORG ADMIN WhatsApp decision message completion - Apr 03, 2026)
 - [x] Correggere il contesto dei messaggi WhatsApp di conferma/rigetto con fallback dai campi del form e placeholder booking piu robusti
 - [x] Aggiungere lato API e frontend l'override opzionale del messaggio WhatsApp al momento della decisione admin, mantenendo il default/template configurato

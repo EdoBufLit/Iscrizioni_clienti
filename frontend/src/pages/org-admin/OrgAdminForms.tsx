@@ -62,6 +62,39 @@ const editorTabs: Array<{ key: EditorTab; label: string; hint: string }> = [
   { key: "responses", label: "Risposte", hint: "Invii ricevuti" },
 ];
 
+function editorTabIcon(tab: EditorTab) {
+  if (tab === "builder") {
+    return (
+      <svg className="h-[1.05rem] w-[1.05rem]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <rect x="4" y="5" width="16" height="14" rx="2.5" />
+        <path d="M9 5v14M4 10.5h16" />
+      </svg>
+    );
+  }
+  if (tab === "design") {
+    return (
+      <svg className="h-[1.05rem] w-[1.05rem]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M4 20h4l10-10-4-4L4 16v4Z" />
+        <path d="m12.5 7.5 4 4" />
+      </svg>
+    );
+  }
+  if (tab === "settings") {
+    return (
+      <svg className="h-[1.05rem] w-[1.05rem]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M12 8.5A3.5 3.5 0 1 0 12 15.5A3.5 3.5 0 1 0 12 8.5Z" />
+        <path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a1 1 0 0 1 0 1.4l-1.2 1.2a1 1 0 0 1-1.4 0l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a1 1 0 0 1-1 1h-1.7a1 1 0 0 1-1-1v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a1 1 0 0 1-1.4 0l-1.2-1.2a1 1 0 0 1 0-1.4l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a1 1 0 0 1-1-1v-1.7a1 1 0 0 1 1-1h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a1 1 0 0 1 0-1.4l1.2-1.2a1 1 0 0 1 1.4 0l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9V4a1 1 0 0 1 1-1h1.7a1 1 0 0 1 1 1v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a1 1 0 0 1 1.4 0l1.2 1.2a1 1 0 0 1 0 1.4l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6h.2a1 1 0 0 1 1 1v1.7a1 1 0 0 1-1 1h-.2a1 1 0 0 0-.9.6Z" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="h-[1.05rem] w-[1.05rem]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M6 7.5h12M6 12h12M6 16.5h8" />
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+    </svg>
+  );
+}
+
 const pageStyleOptions: Array<{
   value: PageStyleOption;
   label: string;
@@ -780,18 +813,6 @@ export function OrgAdminFormsWorkspace({
     }));
   }
 
-  function insertDecisionTemplateVariable(
-    target: "whatsapp_confirmation_template" | "whatsapp_rejection_template",
-    placeholder: string,
-  ) {
-    setFormDraft((current) => ({
-      ...current,
-      [target]: String(current[target] || "").trim()
-        ? `${String(current[target] || "")} ${placeholder}`
-        : placeholder,
-    }));
-  }
-
   function syncBookingFieldMapping(target: BookingMappingTarget, fieldKey: string) {
     setFormDraft((current) => ({
       ...current,
@@ -1499,372 +1520,295 @@ export function OrgAdminFormsWorkspace({
   );
 
   const automationsTab = (
-    <div className="grid gap-6 lg:grid-cols-[1fr_1fr] h-[calc(100vh-280px)] overflow-y-auto custom-scrollbar pb-10">
-      <div className="space-y-6">
-        <div className="rounded-[1.4rem] border border-neutral-200 bg-white p-6 shadow-sm">
-          <h3 className="text-sm font-semibold text-neutral-900 mb-1">Automazioni collegate</h3>
-          <p className="text-xs text-neutral-500 mb-5">Qui vedi subito quali automazioni partono da questo form e dove configurarle.</p>
-          <div className="space-y-3">
+    <div className="space-y-5 overflow-y-auto custom-scrollbar pb-10">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+        <section className="rounded-[1.45rem] border border-[#e6dccb] bg-white p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.18)]">
+          <div className="border-b border-[#efe8db] pb-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8a948d]">Core Automations</p>
+          </div>
+          <div className="mt-4 space-y-3">
             {automationConnectionRows.map((row) => (
-              <div key={row.key} className="rounded-[1.1rem] border border-neutral-200 bg-neutral-50 px-4 py-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-neutral-900">{row.label}</p>
-                    <p className="mt-1 text-xs leading-5 text-neutral-500">{row.description}</p>
+              <div key={row.key} className="rounded-[1rem] border border-[#ece5d8] bg-[#fcfbf7] px-4 py-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-[#182126]">{row.label}</p>
+                    <p className="mt-1 text-[11px] leading-5 text-[#728087]">{row.description}</p>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className={`rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] ${row.enabled ? "bg-emerald-100 text-emerald-700" : "bg-neutral-200 text-neutral-600"}`}>
-                      {row.enabled ? "ON" : "OFF"}
-                    </span>
-                    <button type="button" className="btn-secondary !py-2 !px-3 !text-xs" onClick={row.action}>
-                      Configura
-                    </button>
-                  </div>
+                  <span
+                    className={`inline-flex shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${
+                      row.enabled ? "bg-[#e9fff0] text-[#0d8a4d]" : "bg-[#f1f2f4] text-[#707780]"
+                    }`}
+                  >
+                    {row.enabled ? "ON" : "OFF"}
+                  </span>
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-[0.9rem] border border-[#d9d2c6] bg-white px-3 py-2 text-xs font-medium text-[#182126] transition hover:border-[#bfb5a3] hover:bg-[#f9f7f1]"
+                    onClick={row.action}
+                  >
+                    Configure
+                    <svg className="h-3.5 w-3.5 text-[#6f7b80]" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="m7 5 5 5-5 5" />
+                    </svg>
+                  </button>
                 </div>
               </div>
             ))}
           </div>
-          {connectedWhatsAppAutomations.length > 0 ? (
-            <div className="mt-5 rounded-[1.1rem] border border-emerald-200 bg-emerald-50 px-4 py-4">
-              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-700">Relazione WhatsApp</p>
-              <div className="mt-3 space-y-2">
-                {connectedWhatsAppAutomations.map((automation) => (
-                  <p key={automation.id} className="text-sm leading-6 text-emerald-900">
-                    Quando un utente invia il modulo "{selectedForm?.title || "modulo"}", ASSONAM invia automaticamente il template "{automation.template_name}" usando{" "}
-                    {automation.phone_source === "custom"
-                      ? `il numero ${automation.custom_phone || "manuale"}`
-                      : automation.phone_source === "member_phone"
-                        ? "il telefono socio già salvato"
-                        : `il campo ${automation.phone_field_key || "Telefono"}`}.
-                  </p>
-                ))}
+        </section>
+
+        <section className="rounded-[1.45rem] border border-[#e6dccb] bg-white p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.18)]">
+          <div className="border-b border-[#efe8db] pb-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8a948d]">Form Behavior & Access</p>
+          </div>
+
+          <div className="mt-4 space-y-4">
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Public Link</label>
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  className="h-11 flex-1 rounded-[0.95rem] border border-[#ddd5c9] bg-white px-4 text-sm text-[#182126] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/12"
+                  readOnly
+                  value={selectedFormUrl || publicUrl || ""}
+                  placeholder="Salva per generare il link"
+                />
+                <button
+                  type="button"
+                  className="inline-flex h-11 items-center justify-center rounded-[0.95rem] bg-[#0f5e5d] px-4 text-sm font-semibold text-white transition hover:bg-[#0c4d4d] disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => void copyPublicLink(selectedFormUrl || publicUrl)}
+                  disabled={!selectedFormUrl && !publicUrl}
+                >
+                  Copy
+                </button>
               </div>
             </div>
-          ) : null}
-        </div>
 
-        <div className="rounded-[1.25rem] border border-neutral-200 bg-white p-6 shadow-sm">
-          <h3 className="text-sm font-semibold text-neutral-900 mb-1">Pubblicazione e Accesso</h3>
-          <p className="text-xs text-neutral-500 mb-5">Gestisci la visibilità del form.</p>
-          
-          <div className="space-y-5">
-            <div className="p-4 rounded-xl bg-neutral-50/50 border border-neutral-100">
-               <label className={labelClass}>Link pubblico</label>
-               <div className="flex items-center gap-2 mt-2">
-                 <input className={inputClass} readOnly value={selectedFormUrl || publicUrl || ""} placeholder="Salva per generare il link" />
-                 <button className="btn-secondary whitespace-nowrap !py-2.5" onClick={() => void copyPublicLink(selectedFormUrl || publicUrl)} disabled={!selectedFormUrl && !publicUrl}>Copia</button>
-               </div>
-            </div>
-            
-            <label className={labelClass}>
-              Personalizza parte finale URL (Slug)
-              <input className={inputClass} disabled={locked} value={formDraft.public_slug} onChange={(event) => syncFormDraft("public_slug", derivePublicSlug(event.target.value))} placeholder="es: iscrizione-corso" />
+            <label className="block">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Personalize URL</span>
+              <input
+                className="mt-2 h-11 w-full rounded-[0.95rem] border border-[#ddd5c9] bg-white px-4 text-sm text-[#182126] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/12"
+                disabled={locked}
+                value={formDraft.public_slug}
+                onChange={(event) => syncFormDraft("public_slug", derivePublicSlug(event.target.value))}
+                placeholder="iscrizione-corso"
+              />
             </label>
 
-            <div className="pt-2">
-              <label className="flex items-center justify-between cursor-pointer group">
-                <span className="text-sm font-medium text-neutral-800">Pagina pubblica attiva</span>
-                <div className="relative flex items-center justify-center">
-                  <input type="checkbox" disabled={locked} checked={formDraft.is_active} onChange={(event) => syncFormDraft("is_active", event.target.checked)} className="peer sr-only" />
-                  <div className="w-10 h-6 bg-neutral-200 rounded-full peer-checked:bg-emerald-500 transition-colors"></div>
-                  <div className="absolute left-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4 shadow-sm"></div>
-                </div>
+            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
+              <label className="block">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Visibility</span>
+                <select
+                  className="mt-2 h-11 w-full rounded-[0.95rem] border border-[#ddd5c9] bg-white px-4 text-sm text-[#182126] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/12"
+                  disabled={locked}
+                  value={formDraft.visibility}
+                  onChange={(event) => syncFormDraft("visibility", event.target.value as AssociationFormVisibility)}
+                >
+                  <option value="public">Public: [All]</option>
+                  <option value="members_only">Members only</option>
+                </select>
               </label>
+
+              <div className="rounded-[1rem] border border-[#ece5d8] bg-[#fcfbf7] px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Page Active</p>
+                    <p className="mt-1 text-sm font-medium text-[#182126]">{formDraft.is_active ? "ON" : "OFF"}</p>
+                  </div>
+                  <label className="relative inline-flex cursor-pointer items-center">
+                    <input
+                      type="checkbox"
+                      disabled={locked}
+                      checked={formDraft.is_active}
+                      onChange={(event) => syncFormDraft("is_active", event.target.checked)}
+                      className="peer sr-only"
+                    />
+                    <span className="h-6 w-11 rounded-full bg-[#d6d6d6] transition peer-checked:bg-[#0f5e5d]" />
+                    <span className="absolute left-1 h-4 w-4 rounded-full bg-white transition peer-checked:translate-x-5" />
+                  </label>
+                </div>
+              </div>
             </div>
 
             <div>
-               <label className={labelClass}>
-                 Visibilità: Chi può compilare?
-                 <select className={inputClass} disabled={locked} value={formDraft.visibility} onChange={(event) => syncFormDraft("visibility", event.target.value as AssociationFormVisibility)}>
-                   <option value="public">Pubblico (Tutti)</option>
-                   <option value="members_only">Solo soci registrati</option>
-                 </select>
-               </label>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-[1.25rem] border border-neutral-200 bg-white p-6 shadow-sm">
-          <h3 className="text-sm font-semibold text-neutral-900 mb-4">Comportamento invio</h3>
-          <div className="space-y-4">
-            <label className={labelClass}>
-              Email segreteria per notifiche (opzionale)
+              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Notification Emails</label>
               <input
-                className={inputClass}
+                className="mt-2 h-11 w-full rounded-[0.95rem] border border-[#ddd5c9] bg-white px-4 text-sm text-[#182126] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/12"
                 type="email"
                 disabled={locked}
                 value={formDraft.notification_email}
                 onChange={(event) => syncFormDraft("notification_email", event.target.value)}
+                placeholder="Aggiungi email address"
               />
-            </label>
-            <div className="space-y-3 pt-2">
-              <label className="flex items-center gap-2 text-sm text-neutral-700">
-                <input type="checkbox" disabled={locked} checked={formDraft.notify_admin_on_submit} onChange={(event) => syncFormDraft("notify_admin_on_submit", event.target.checked)} className="rounded border-neutral-300 text-brand" />
-                Invia notifica automatica admin
-              </label>
-              <label className="flex items-center gap-2 text-sm text-neutral-700">
-                <input type="checkbox" disabled={locked} checked={formDraft.send_user_confirmation} onChange={(event) => syncFormDraft("send_user_confirmation", event.target.checked)} className="rounded border-neutral-300 text-brand" />
-                Invia email di conferma all'utente
-              </label>
-              <label className="flex items-center gap-2 text-sm text-neutral-700">
-                <input type="checkbox" disabled={locked} checked={formDraft.allow_multiple_submissions} onChange={(event) => syncFormDraft("allow_multiple_submissions", event.target.checked)} className="rounded border-neutral-300 text-brand" />
-                Consenti invii multipli dallo stesso utente
-              </label>
             </div>
+
+            <div className="rounded-[1rem] border border-[#ece5d8] bg-[#fcfbf7] px-4 py-4">
+              <div className="grid gap-2 text-sm text-[#182126]">
+                <label className="inline-flex items-center gap-2">
+                  <input type="checkbox" disabled={locked} checked={formDraft.notify_admin_on_submit} onChange={(event) => syncFormDraft("notify_admin_on_submit", event.target.checked)} className="rounded border-neutral-300 text-brand" />
+                  Admin Notification
+                </label>
+                <label className="inline-flex items-center gap-2">
+                  <input type="checkbox" disabled={locked} checked={formDraft.send_user_confirmation} onChange={(event) => syncFormDraft("send_user_confirmation", event.target.checked)} className="rounded border-neutral-300 text-brand" />
+                  User Confirmation
+                </label>
+                <label className="inline-flex items-center gap-2">
+                  <input type="checkbox" disabled={locked} checked={formDraft.allow_multiple_submissions} onChange={(event) => syncFormDraft("allow_multiple_submissions", event.target.checked)} className="rounded border-neutral-300 text-brand" />
+                  Multi Submission
+                </label>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section className="rounded-[1.55rem] border border-[#0c4d4d] bg-[#0f5e5d] p-5 text-white shadow-[0_24px_60px_-30px_rgba(15,94,93,0.45)]">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold">WhatsApp Automatic (Advanced)</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/80">
+              {formDraft.whatsapp_auto_reply_enabled ? "ON" : "OFF"}
+            </span>
+            <label className="relative inline-flex cursor-pointer items-center">
+              <input
+                type="checkbox"
+                disabled={locked}
+                checked={formDraft.whatsapp_auto_reply_enabled}
+                onChange={(event) => toggleWhatsAppAutoReply(event.target.checked)}
+                className="peer sr-only"
+              />
+              <span className="h-6 w-11 rounded-full bg-white/25 transition peer-checked:bg-white/40" />
+              <span className="absolute left-1 h-4 w-4 rounded-full bg-white transition peer-checked:translate-x-5" />
+            </label>
           </div>
         </div>
 
-        <div className="rounded-[1.4rem] border border-neutral-200 bg-white p-6 shadow-sm">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-semibold text-neutral-900">WhatsApp automatico</h3>
-                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-700">
-                  Sperimentale
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-neutral-500">
-                Questa e la risposta rapida legacy del form. Le nuove regole in "Automazioni collegate" qui sopra vengono configurate in Comunicazioni {" > "} WhatsApp e usano il numero definito nella singola regola.
-              </p>
-            </div>
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-neutral-700">
-              <div className="relative flex items-center justify-center">
-                <input
-                  type="checkbox"
-                  disabled={locked}
-                  checked={formDraft.whatsapp_auto_reply_enabled}
-                  onChange={(event) => toggleWhatsAppAutoReply(event.target.checked)}
-                  className="peer sr-only"
-                />
-                <div className="h-6 w-10 rounded-full bg-neutral-200 transition-colors peer-checked:bg-brand"></div>
-                <div className="absolute left-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-4"></div>
-              </div>
-            </label>
-          </div>
-
-          <div className="mt-5 space-y-4">
-            <div className="rounded-xl border border-amber-100 bg-amber-50/70 p-4 text-xs text-amber-900">
-              Questo invio rapido parte solo se `ENABLE_WHATSAPP_EVOLUTION` e attivo, l'associazione ha una sessione WhatsApp connessa e il form contiene un vero campo telefono compilato oppure il socio associato ha un telefono.
-            </div>
-
-            <label className={labelClass}>
-              Template messaggio
-              <textarea
-                className={`${inputClass} min-h-[150px] resize-y`}
+        <div className="mt-4">
+          <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/78">Message Template</label>
+          <textarea
+            className="mt-2 min-h-[144px] w-full rounded-[1rem] border border-[#0b4040] bg-white px-4 py-3 text-sm text-[#182126] outline-none transition focus:border-white/50 focus:ring-2 focus:ring-white/20"
+            disabled={locked || !formDraft.whatsapp_auto_reply_enabled}
+            value={formDraft.whatsapp_auto_reply_template}
+            onChange={(event) => syncFormDraft("whatsapp_auto_reply_template", event.target.value)}
+            placeholder={defaultWhatsAppTemplate(formDraft.form_type, Boolean(formDraft.booking_enabled || formDraft.create_booking))}
+          />
+          <div className="mt-3 flex flex-wrap gap-2">
+            {whatsappAutomationVariables.slice(0, 8).map((variable) => (
+              <button
+                key={variable.placeholder}
+                type="button"
+                className="rounded-[0.8rem] border border-white/25 bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/16 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={locked || !formDraft.whatsapp_auto_reply_enabled}
-                value={formDraft.whatsapp_auto_reply_template}
-                onChange={(event) => syncFormDraft("whatsapp_auto_reply_template", event.target.value)}
-                placeholder={defaultWhatsAppTemplate(formDraft.form_type, Boolean(formDraft.booking_enabled || formDraft.create_booking))}
-              />
-            </label>
+                onClick={() => insertWhatsAppVariable(variable.placeholder)}
+              >
+                {variable.placeholder}
+              </button>
+            ))}
+          </div>
+        </div>
 
-            <div className="flex flex-wrap gap-2">
+        <div className="mt-5 grid gap-4 xl:grid-cols-2">
+          <div className="rounded-[1rem] border border-[#0b4040] bg-white p-4 text-[#182126]">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold">Confirm Message</p>
               <button
                 type="button"
-                className="btn-secondary !px-4 !py-2 !text-sm"
-                disabled={locked || !formDraft.whatsapp_auto_reply_enabled}
+                className="inline-flex h-9 items-center justify-center rounded-[0.8rem] bg-[#0f5e5d] px-4 text-xs font-semibold text-white transition hover:bg-[#0c4d4d]"
+                disabled={locked}
                 onClick={() =>
                   syncFormDraft(
-                    "whatsapp_auto_reply_template",
-                    defaultWhatsAppTemplate(formDraft.form_type, Boolean(formDraft.booking_enabled || formDraft.create_booking)),
+                    "whatsapp_confirmation_template",
+                    defaultWhatsAppConfirmationTemplate(
+                      formDraft.form_type,
+                      Boolean(formDraft.booking_enabled || formDraft.create_booking),
+                    ),
                   )
                 }
               >
-                Carica template base
+                Use base
               </button>
+            </div>
+            <textarea
+              className="mt-3 min-h-[144px] w-full rounded-[0.95rem] border border-[#ddd5c9] bg-white px-4 py-3 text-sm text-[#182126] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/12"
+              disabled={locked}
+              value={formDraft.whatsapp_confirmation_template}
+              onChange={(event) => syncFormDraft("whatsapp_confirmation_template", event.target.value)}
+              placeholder={defaultWhatsAppConfirmationTemplate(
+                formDraft.form_type,
+                Boolean(formDraft.booking_enabled || formDraft.create_booking),
+              )}
+            />
+          </div>
+
+          <div className="rounded-[1rem] border border-[#0b4040] bg-white p-4 text-[#182126]">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold">Reject Message</p>
               <button
                 type="button"
-                className="btn-secondary !px-4 !py-2 !text-sm"
-                disabled={locked || !formDraft.whatsapp_auto_reply_enabled}
-                onClick={() => syncFormDraft("whatsapp_auto_reply_template", "")}
+                className="inline-flex h-9 items-center justify-center rounded-[0.8rem] bg-[#0f5e5d] px-4 text-xs font-semibold text-white transition hover:bg-[#0c4d4d]"
+                disabled={locked}
+                onClick={() =>
+                  syncFormDraft(
+                    "whatsapp_rejection_template",
+                    defaultWhatsAppRejectionTemplate(
+                      formDraft.form_type,
+                      Boolean(formDraft.booking_enabled || formDraft.create_booking),
+                    ),
+                  )
+                }
               >
-                Svuota
+                Use base
               </button>
             </div>
-
-            <div className="space-y-3 rounded-xl border border-neutral-200 bg-neutral-50/70 p-4">
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-neutral-500">Variabili rapide</p>
-                <p className="mt-1 text-xs text-neutral-500">
-                  Puoi usare sia le variabili di sistema sia direttamente le `field_key` dei campi del form.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {whatsappAutomationVariables.map((variable) => (
-                  <button
-                    key={variable.placeholder}
-                    type="button"
-                    className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={locked || !formDraft.whatsapp_auto_reply_enabled}
-                    onClick={() => insertWhatsAppVariable(variable.placeholder)}
-                    title={variable.hint}
-                  >
-                    {variable.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-[1.2rem] border border-neutral-200 bg-neutral-50/70 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-neutral-900">Template WhatsApp decisione richiesta</p>
-                  <p className="mt-1 text-xs leading-5 text-neutral-500">
-                    Questi messaggi partono quando l'org admin conferma o rigetta una richiesta.
-                  </p>
-                </div>
-                <span className="rounded-full bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-500 ring-1 ring-inset ring-neutral-200">
-                  Nuovo flusso
-                </span>
-              </div>
-
-              <div className="mt-4 grid gap-4 xl:grid-cols-2">
-                <div className="rounded-[1rem] border border-neutral-200 bg-white p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-neutral-900">Messaggio conferma</p>
-                      <p className="mt-1 text-xs text-neutral-500">Inviato quando la richiesta viene approvata.</p>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn-secondary btn-sm"
-                      disabled={locked}
-                      onClick={() =>
-                        syncFormDraft(
-                          "whatsapp_confirmation_template",
-                          defaultWhatsAppConfirmationTemplate(
-                            formDraft.form_type,
-                            Boolean(formDraft.booking_enabled || formDraft.create_booking),
-                          ),
-                        )
-                      }
-                    >
-                      Usa base
-                    </button>
-                  </div>
-                  <textarea
-                    className={`${inputClass} min-h-[160px] resize-y`}
-                    disabled={locked}
-                    value={formDraft.whatsapp_confirmation_template}
-                    onChange={(event) => syncFormDraft("whatsapp_confirmation_template", event.target.value)}
-                    placeholder={defaultWhatsAppConfirmationTemplate(
-                      formDraft.form_type,
-                      Boolean(formDraft.booking_enabled || formDraft.create_booking),
-                    )}
-                  />
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {whatsappAutomationVariables.map((variable) => (
-                      <button
-                        key={`confirm-${variable.placeholder}`}
-                        type="button"
-                        className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-100"
-                        disabled={locked}
-                        onClick={() => insertDecisionTemplateVariable("whatsapp_confirmation_template", variable.placeholder)}
-                      >
-                        {variable.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded-[1rem] border border-neutral-200 bg-white p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-neutral-900">Messaggio rigetto</p>
-                      <p className="mt-1 text-xs text-neutral-500">Puoi usare anche la variabile <code>{"{{motivo_rigetto}}"}</code>.</p>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn-secondary btn-sm"
-                      disabled={locked}
-                      onClick={() =>
-                        syncFormDraft(
-                          "whatsapp_rejection_template",
-                          defaultWhatsAppRejectionTemplate(
-                            formDraft.form_type,
-                            Boolean(formDraft.booking_enabled || formDraft.create_booking),
-                          ),
-                        )
-                      }
-                    >
-                      Usa base
-                    </button>
-                  </div>
-                  <textarea
-                    className={`${inputClass} min-h-[160px] resize-y`}
-                    disabled={locked}
-                    value={formDraft.whatsapp_rejection_template}
-                    onChange={(event) => syncFormDraft("whatsapp_rejection_template", event.target.value)}
-                    placeholder={defaultWhatsAppRejectionTemplate(
-                      formDraft.form_type,
-                      Boolean(formDraft.booking_enabled || formDraft.create_booking),
-                    )}
-                  />
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 transition hover:border-rose-300 hover:bg-rose-100"
-                      disabled={locked}
-                      onClick={() => insertDecisionTemplateVariable("whatsapp_rejection_template", "{{motivo_rigetto}}")}
-                    >
-                      Motivo rigetto
-                    </button>
-                    {whatsappAutomationVariables.map((variable) => (
-                      <button
-                        key={`reject-${variable.placeholder}`}
-                        type="button"
-                        className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-100"
-                        disabled={locked}
-                        onClick={() => insertDecisionTemplateVariable("whatsapp_rejection_template", variable.placeholder)}
-                      >
-                        {variable.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <textarea
+              className="mt-3 min-h-[144px] w-full rounded-[0.95rem] border border-[#ddd5c9] bg-white px-4 py-3 text-sm text-[#182126] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/12"
+              disabled={locked}
+              value={formDraft.whatsapp_rejection_template}
+              onChange={(event) => syncFormDraft("whatsapp_rejection_template", event.target.value)}
+              placeholder={defaultWhatsAppRejectionTemplate(
+                formDraft.form_type,
+                Boolean(formDraft.booking_enabled || formDraft.create_booking),
+              )}
+            />
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="space-y-6">
-        <div className="rounded-[1.25rem] border border-neutral-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
+      <div className="grid gap-5 xl:grid-cols-2">
+        <section className="rounded-[1.35rem] border border-neutral-200 bg-white p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.16)]">
+          <div className="flex items-center justify-between gap-4">
             <h3 className="text-sm font-semibold text-neutral-900">Integrazione Prenotazioni</h3>
-            <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer group">
-              <div className="relative flex items-center justify-center">
-                <input type="checkbox" disabled={locked} checked={formDraft.booking_enabled} onChange={(event) => syncFormDraft("booking_enabled", event.target.checked)} className="peer sr-only" />
-                <div className="w-10 h-6 bg-neutral-200 rounded-full peer-checked:bg-brand transition-colors"></div>
-                <div className="absolute left-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4 shadow-sm"></div>
-              </div>
+            <label className="relative inline-flex cursor-pointer items-center">
+              <input type="checkbox" disabled={locked} checked={formDraft.booking_enabled} onChange={(event) => syncFormDraft("booking_enabled", event.target.checked)} className="peer sr-only" />
+              <span className="h-6 w-11 rounded-full bg-neutral-200 transition peer-checked:bg-brand" />
+              <span className="absolute left-1 h-4 w-4 rounded-full bg-white transition peer-checked:translate-x-5" />
             </label>
           </div>
-
-          {formDraft.booking_enabled && (
-            <div className="space-y-4 pt-4 border-t border-neutral-100">
-              <div className="space-y-3">
-                <label className="flex items-center gap-2 text-sm text-neutral-700">
+          {formDraft.booking_enabled ? (
+            <div className="mt-4 space-y-4">
+              <div className="grid gap-2 text-sm text-neutral-700">
+                <label className="inline-flex items-center gap-2">
                   <input type="checkbox" disabled={locked} checked={formDraft.booking_requires_manual_confirmation} onChange={(event) => syncFormDraft("booking_requires_manual_confirmation", event.target.checked)} className="rounded border-neutral-300 text-brand" />
-                  Richiede conferma manuale prenotazione
+                  Richiede conferma manuale
                 </label>
-                <label className="flex items-center gap-2 text-sm text-neutral-700">
+                <label className="inline-flex items-center gap-2">
                   <input type="checkbox" disabled={locked} checked={formDraft.booking_notification_enabled} onChange={(event) => syncFormDraft("booking_notification_enabled", event.target.checked)} className="rounded border-neutral-300 text-brand" />
-                  Invia email di stato booking
+                  Invia email stato booking
                 </label>
-                <label className="flex items-center gap-2 text-sm text-neutral-700">
+                <label className="inline-flex items-center gap-2">
                   <input type="checkbox" disabled={locked} checked={formDraft.booking_auto_assign_enabled} onChange={(event) => syncFormDraft("booking_auto_assign_enabled", event.target.checked)} className="rounded border-neutral-300 text-brand" />
-                  Assegna automaticamente il primo tavolo libero compatibile
+                  Auto assegna tavolo
                 </label>
               </div>
-
-              <div className="space-y-3 bg-neutral-50/50 p-4 rounded-xl border border-neutral-100">
-                <h4 className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-3">Mappatura campi (Data, Ora, ecc.)</h4>
+              <div className="space-y-3 rounded-[1rem] border border-neutral-200 bg-neutral-50 p-4">
                 {bookingMappingTargets.map((target) => (
-                  <div key={target.key} className="flex flex-col xl:flex-row xl:items-center gap-2">
-                    <span className="text-[13px] font-medium text-neutral-700 xl:w-1/3">{target.label}</span>
+                  <div key={target.key} className="grid gap-2 md:grid-cols-[170px_minmax(0,1fr)] md:items-center">
+                    <span className="text-xs font-medium text-neutral-700">{target.label}</span>
                     <select
-                      className={`${inputClass} !py-2 !mt-0 xl:w-2/3`}
+                      className={`${inputClass} !mt-0 !py-2`}
                       disabled={locked || bookingMappingFieldOptions.length === 0}
                       value={formDraft.booking_field_mapping[target.key] || ""}
                       onChange={(event) => syncBookingFieldMapping(target.key, event.target.value)}
@@ -1880,12 +1824,12 @@ export function OrgAdminFormsWorkspace({
                 ))}
               </div>
             </div>
-          )}
-        </div>
-        
-        <div className="rounded-[1.25rem] border border-neutral-200 bg-white p-6 shadow-sm">
-          <h3 className="text-sm font-semibold text-neutral-900 mb-4">Personalizzazione Email (Avanzate)</h3>
-          <div className="space-y-4">
+          ) : null}
+        </section>
+
+        <section className="rounded-[1.35rem] border border-neutral-200 bg-white p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.16)]">
+          <h3 className="text-sm font-semibold text-neutral-900">Personalizzazione Email</h3>
+          <div className="mt-4 space-y-4">
             <label className={labelClass}>
               Template notifica admin
               <select className={inputClass} disabled={locked} value={formDraft.admin_notification_template_id ?? ""} onChange={(event) => syncFormDraft("admin_notification_template_id", event.target.value ? Number(event.target.value) : null)}>
@@ -1901,11 +1845,10 @@ export function OrgAdminFormsWorkspace({
               </select>
             </label>
           </div>
-        </div>
+        </section>
       </div>
     </div>
   );
-
   const responsesTab = (
     <div className="space-y-6">
       <div className="admin-toolbar">
@@ -2268,126 +2211,148 @@ export function OrgAdminFormsWorkspace({
         )}
 
         {isEditorOpen && (
-          <section className={`flex flex-col min-h-screen bg-neutral-50`}>
-            {/* Header Moderno */}
-            <div className="sticky top-0 z-50 bg-white border-b border-neutral-200 px-4 md:px-8 py-3 shrink-0 flex flex-col gap-4 md:flex-row md:items-center md:justify-between shadow-sm">
-              <div className="flex items-center gap-4">
-                <button 
-                  onClick={resetEditorState}
-                  className="w-10 h-10 flex items-center justify-center rounded-full bg-neutral-50 border border-neutral-200 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 transition-colors"
-                  title="Torna alla lista"
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                </button>
-                <div>
-                  <div className="flex items-center gap-3">
-                    <h2 className="text-lg font-bold tracking-tight text-neutral-900">
-                      {selectedFormId ? formDraft.title || selectedForm?.title || "Senza titolo" : "Nuova pagina form"}
-                    </h2>
-                    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest shadow-sm ring-1 ring-inset ${formDraft.is_active ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-amber-200'}`}>
-                      {formDraft.is_active ? 'Pubblicato' : 'Bozza'}
-                    </span>
+          <section className="space-y-5 rounded-[1.7rem] border border-[#e7dfd1] bg-[#fbf8f2] p-4 md:p-6">
+            <div className="rounded-[1.5rem] border border-[#eadfce] bg-white px-5 py-4 shadow-[0_18px_36px_-28px_rgba(15,23,42,0.18)]">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex items-start gap-3">
+                  <button
+                    onClick={resetEditorState}
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-[1rem] border border-[#ded5c8] bg-[#faf7ef] text-[#5d6a70] transition hover:border-[#c7baa8] hover:text-[#182126]"
+                    title="Torna alla lista"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                    </svg>
+                  </button>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-[1.35rem] font-semibold tracking-tight text-[#182126]">
+                        {selectedFormId ? formDraft.title || selectedForm?.title || "Senza titolo" : "Nuovo form"}
+                      </h2>
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${formDraft.is_active ? "bg-[#edf9ef] text-[#137847]" : "bg-[#f7f0da] text-[#9b6b09]"}`}>
+                        {formDraft.is_active ? "Published" : "Bozza"}
+                      </span>
+                    </div>
+                    {selectedFormUrl ? (
+                      <a
+                        href={selectedFormUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-[#0f5e5d] hover:underline"
+                      >
+                        {selectedFormUrl}
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </a>
+                    ) : null}
                   </div>
-                  {selectedFormUrl && (
-                    <a href={selectedFormUrl} target="_blank" rel="noreferrer" className="text-[11px] font-medium text-brand hover:underline mt-0.5 inline-flex items-center gap-1 opacity-80 hover:opacity-100 transition-opacity">
-                      {selectedFormUrl} <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                    </a>
-                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-[0.95rem] border border-[#d9d2c6] bg-white px-4 text-sm font-medium text-[#182126] transition hover:border-[#c4b9a8] hover:bg-[#faf7ef]"
+                    onClick={() => setRealPreviewOpen(true)}
+                  >
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+                      <path d="M1.5 12S5.5 5.5 12 5.5 22.5 12 22.5 12 18.5 18.5 12 18.5 1.5 12 1.5 12Z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                    Preview
+                  </button>
+                  <button
+                    className="inline-flex h-10 items-center justify-center rounded-[0.95rem] bg-[#0f5e5d] px-4 text-sm font-semibold text-white transition hover:bg-[#0c4d4d] disabled:cursor-not-allowed disabled:opacity-60"
+                    type="button"
+                    onClick={() => void handleSaveForm()}
+                    disabled={savingForm || locked}
+                  >
+                    {savingForm ? "Saving..." : "Save Changes"}
+                  </button>
                 </div>
               </div>
-              
-              <div className="flex items-center gap-3">
-                <button className={`btn-ghost !px-4 !py-2 !text-sm ${formDraft.is_active ? '!text-neutral-600' : '!text-emerald-600 hover:!bg-emerald-50'}`} type="button" onClick={() => syncFormDraft('is_active', !formDraft.is_active)} disabled={locked}>
-                  {formDraft.is_active ? "Sospendi (Rendi Bozza)" : "Pubblica Form"}
-                </button>
-                <button 
-                  type="button"
-                  className="btn-secondary !px-4 !py-2 !text-sm" 
-                  onClick={() => setRealPreviewOpen(true)}
-                >
-                  Anteprima reale
-                </button>
-                <button className="btn-primary shadow-lg !px-6 !py-2" type="button" onClick={() => void handleSaveForm()} disabled={savingForm || locked}>
-                  {savingForm ? "Salvataggio..." : "Salva Modifiche"}
-                </button>
-              </div>
-            </div>
 
-            {selectedFormId && (
-              <div className="border-b border-neutral-200 bg-white px-4 md:px-8 py-4">
-                <div className="rounded-[1.5rem] border border-neutral-200 bg-neutral-50 px-5 py-4">
-                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              {selectedFormId ? (
+                <div className="mt-4 border-t border-[#eee7db] pt-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div>
-                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Comunicazioni collegate</p>
-                      <p className="mt-2 text-sm font-semibold text-neutral-900">Usa questo modulo in una campagna</p>
-                      <p className="mt-1 text-sm text-neutral-500">Rafforza il collegamento mentale tra form pubblico e invito email: il pulsante nell’email aprirà questa pagina nel browser.</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8a948d]">Campaign Integrations</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <a className="btn-primary !px-4 !py-2 !text-sm" href={`/org-admin/communications?tab=campagne&mode=create&intent=form_invite&formId=${selectedFormId}`}>
-                        Crea invito email
+                      <a
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-[0.95rem] border border-[#d9d2c6] bg-white px-4 text-sm font-medium text-[#182126] transition hover:border-[#c4b9a8] hover:bg-[#faf7ef]"
+                        href={`/org-admin/communications?tab=campagne&mode=create&intent=form_invite&formId=${selectedFormId}`}
+                      >
+                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+                          <rect x="3.75" y="6" width="16.5" height="12" rx="2.25" />
+                          <path d="M4.5 7l7.05 5.1a.75.75 0 00.9 0L19.5 7" />
+                        </svg>
+                        Create Email Invitation
                       </a>
                       <button
                         type="button"
-                        className="btn-secondary !px-4 !py-2 !text-sm"
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-[0.95rem] border border-[#d9d2c6] bg-white px-4 text-sm font-medium text-[#182126] transition hover:border-[#c4b9a8] hover:bg-[#faf7ef]"
                         onClick={() => {
                           if (!selectedFormUrl) return;
                           navigator.clipboard.writeText(selectedFormUrl);
-                          showToast({ title: "Link copiato", message: "Il link pubblico del modulo è stato copiato negli appunti.", tone: "success" });
+                          showToast({ title: "Link copiato", message: "Il link pubblico del modulo e stato copiato negli appunti.", tone: "success" });
                         }}
                       >
-                        Copia link pubblico
+                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+                          <rect x="9" y="9" width="10" height="10" rx="2" />
+                          <rect x="5" y="5" width="10" height="10" rx="2" />
+                        </svg>
+                        Copy Public Link
                       </button>
-                      {selectedFormUrl && (
-                        <a className="btn-secondary !px-4 !py-2 !text-sm" href={selectedFormUrl} target="_blank" rel="noreferrer">
-                          Anteprima pagina pubblica
-                        </a>
-                      )}
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
+              ) : null}
+            </div>
 
-            {/* Navigation Tabs */}
-            <div className="border-b border-neutral-200 bg-white px-4 md:px-8 shrink-0 flex items-center justify-between shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] z-40">
-              <div className="flex gap-6 overflow-x-auto no-scrollbar">
-                {editorTabs.map((tab) => (
-                  <button
-                    key={tab.key}
-                    onClick={() => handleEditorTabChange(tab.key)}
-                    className={`relative py-4 text-sm font-bold transition-colors ${
-                      activeTab === tab.key 
-                        ? "text-brand" 
-                        : "text-neutral-500 hover:text-neutral-800"
-                    }`}
-                  >
-                    {tab.label}
-                    {activeTab === tab.key && (
-                      <span className="absolute bottom-0 left-0 right-0 h-[3px] bg-brand rounded-t-full"></span>
-                    )}
-                  </button>
-                ))}
-              </div>
-              {selectedForm && (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {editorTabs.map((tab) => (
                 <button
-                  className="text-xs font-bold text-red-500 hover:text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors"
+                  key={tab.key}
+                  type="button"
+                  onClick={() => handleEditorTabChange(tab.key)}
+                  className={`rounded-[1.15rem] border px-4 py-4 text-left transition ${
+                    activeTab === tab.key
+                      ? "border-[#0f5e5d] bg-[#0f5e5d] text-white shadow-[0_18px_36px_-24px_rgba(15,94,93,0.45)]"
+                      : "border-[#e5dccd] bg-white text-[#182126] hover:border-[#cdbfa8] hover:bg-[#faf7ef]"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={`inline-flex h-9 w-9 items-center justify-center rounded-[0.95rem] ${activeTab === tab.key ? "bg-white/12 text-white" : "bg-[#f4efe4] text-[#425359]"}`}>
+                      {editorTabIcon(tab.key)}
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold">{tab.label}</p>
+                      <p className={`mt-1 text-[11px] ${activeTab === tab.key ? "text-white/72" : "text-[#7a8485]"}`}>{tab.hint}</p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-end">
+              {selectedForm ? (
+                <button
+                  className="rounded-[0.95rem] border border-rose-200 bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-rose-600 transition hover:bg-rose-50"
                   type="button"
                   onClick={handleDeleteForm}
                   disabled={locked}
                 >
-                  {deleteArmed ? "Clicca di nuovo per confermare eliminazione" : "Elimina form"}
+                  {deleteArmed ? "Conferma elimina form" : "Elimina form"}
                 </button>
-              )}
+              ) : null}
             </div>
 
-            {/* Tab Content */}
-            <div className="flex-1 p-4 md:p-8 overflow-hidden h-full">
-
+            <div className="overflow-hidden">
               {activeTab === "builder" ? builderTab : null}
               {activeTab === "design" ? designTab : null}
               {activeTab === "settings" ? automationsTab : null}
               {activeTab === "responses" ? responsesTab : null}
-              
             </div>
           </section>
         )}
