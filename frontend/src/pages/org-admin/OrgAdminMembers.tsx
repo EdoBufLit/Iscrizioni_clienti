@@ -1,9 +1,8 @@
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   fetchOrgAdminMembers,
   fetchOrgAdminMembershipSettings,
-  patchOrgAdminMembershipSettings,
   AuthError,
   type OrgAdminMember,
   type OrgAdminMembershipSettings,
@@ -64,10 +63,7 @@ const OrgAdminMembers = () => {
 
   const [members, setMembers] = useState<OrgAdminMember[]>([]);
   const [total, setTotal] = useState(0);
-  const [summaryTotal, setSummaryTotal] = useState(0);
-  const [issuedMembersCount, setIssuedMembersCount] = useState(0);
   const [membershipSettings, setMembershipSettings] = useState<OrgAdminMembershipSettings | null>(null);
-  const [savingMembershipSettings, setSavingMembershipSettings] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -82,7 +78,6 @@ const OrgAdminMembers = () => {
   const [showModal, setShowModal] = useState(false);
   const [searchResetKey, setSearchResetKey] = useState(0);
   const [successMessage, setSuccessMessage] = useState("");
-  const [membershipSettingsError, setMembershipSettingsError] = useState("");
   const [createdMemberId, setCreatedMemberId] = useState<number | null>(null);
 
   const loadMembershipSettings = useCallback(async () => {
@@ -118,8 +113,6 @@ const OrgAdminMembers = () => {
       });
       setMembers(response.items);
       setTotal(response.total);
-      setSummaryTotal(response.summary?.total_theoretical_membership_fees ?? 0);
-      setIssuedMembersCount(response.summary?.issued_members_count ?? 0);
     } catch (err) {
       if (err instanceof AuthError) {
         navigate("/org-admin/login", { replace: true });
@@ -192,41 +185,6 @@ const OrgAdminMembers = () => {
     [navigate]
   );
 
-  const handleMembershipSettingsSubmit = useCallback(
-    async (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      const form = event.currentTarget;
-      const data = new FormData(form);
-      setMembershipSettingsError("");
-      setSavingMembershipSettings(true);
-      try {
-        const payload = {
-          membership_fee_amount: Number(data.get("membership_fee_amount") || 0) || undefined,
-          membership_fee_currency: String(data.get("membership_fee_currency") || "").trim() || undefined,
-          temporary_membership_fee_amount: membershipSettings?.custom_membership_types_enabled
-            ? Number(data.get("temporary_membership_fee_amount") || 0) || undefined
-            : undefined,
-          temporary_membership_duration_value: membershipSettings?.custom_membership_types_enabled
-            ? Number(data.get("temporary_membership_duration_value") || 0) || undefined
-            : undefined,
-          temporary_membership_duration_unit: membershipSettings?.custom_membership_types_enabled
-            ? (String(data.get("temporary_membership_duration_unit") || "").trim() as "hours" | "days")
-            : undefined,
-        };
-        const response = await patchOrgAdminMembershipSettings(payload);
-        setMembershipSettings(response.settings);
-        setSuccessMessage("Impostazioni tessera aggiornate.");
-      } catch (err) {
-        setMembershipSettingsError(
-          err instanceof Error ? err.message : "Errore aggiornamento impostazioni tessera."
-        );
-      } finally {
-        setSavingMembershipSettings(false);
-      }
-    },
-    [membershipSettings]
-  );
-
   return (
     <div className="container-shell py-10 space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -296,157 +254,6 @@ const OrgAdminMembers = () => {
         </div>
       )}
 
-      <div className="grid gap-7 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-        <div className="space-y-5">
-          <h3 className="px-2 text-[clamp(1.85rem,2.35vw,2.9rem)] font-normal tracking-tight text-neutral-950">
-            Riepilogo Tessere
-          </h3>
-
-          <div className="rounded-[1.75rem] border border-neutral-200 bg-white px-7 py-8 shadow-[0_22px_45px_-32px_rgba(15,23,42,0.28)]">
-            <p className="text-center text-[clamp(1.7rem,2.05vw,2.35rem)] font-normal tracking-tight text-neutral-950">
-              Totale teorico in evidenza
-            </p>
-            <p className="mt-7 text-center text-[clamp(4.15rem,7.4vw,7.1rem)] font-black leading-none tracking-[-0.08em] text-brand">
-              &euro; {summaryTotal.toFixed(2)}
-            </p>
-          </div>
-
-          <div className="rounded-[1.75rem] border border-neutral-200 bg-white px-7 py-7 shadow-[0_22px_45px_-32px_rgba(15,23,42,0.28)]">
-            <div className="flex items-end justify-between gap-6">
-              <div>
-                <p className="text-[clamp(1.4rem,1.75vw,1.9rem)] font-normal tracking-tight text-neutral-950">
-                  Tessere emesse
-                </p>
-                <p className="mt-3 text-[clamp(2.8rem,4vw,3.8rem)] font-normal leading-none tracking-tight text-neutral-950">
-                  {issuedMembersCount}
-                </p>
-              </div>
-              <div className="flex h-14 w-14 items-center justify-center text-neutral-500">
-                <svg
-                  className="h-10 w-10"
-                  viewBox="0 0 48 48"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.4"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <rect x="9" y="12" width="26" height="18" rx="4" />
-                  <path d="M14 19h16" />
-                  <path d="M14 24h9" />
-                  <path d="M18 30.5 31.5 35 39 30.5V19a4 4 0 0 0-4-4h-4" />
-                </svg>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-5">
-          <h3 className="px-2 text-[clamp(1.85rem,2.35vw,2.9rem)] font-normal tracking-tight text-neutral-950">
-            Impostazioni Tessera
-          </h3>
-
-          <form
-            className="rounded-[1.75rem] border border-neutral-200 bg-white px-7 py-7 shadow-[0_22px_45px_-32px_rgba(15,23,42,0.28)]"
-            onSubmit={handleMembershipSettingsSubmit}
-          >
-            <div className="space-y-7">
-              <section>
-                <h4 className="text-[clamp(1.55rem,1.9vw,2.05rem)] font-normal tracking-tight text-neutral-950">
-                  Listino Principale
-                </h4>
-                <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                  <label className="block">
-                    <span className="text-[0.98rem] font-normal tracking-tight text-neutral-950">
-                      Prezzo Annuale
-                    </span>
-                    <input
-                      className="mt-2 h-11 w-full rounded-[0.95rem] border border-neutral-300 bg-white px-4 text-[1rem] text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
-                      type="number"
-                      step="0.01"
-                      min="0.01"
-                      name="membership_fee_amount"
-                      defaultValue={membershipSettings?.membership_fee_amount ?? ''}
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="text-[0.98rem] font-normal tracking-tight text-neutral-950">Valuta</span>
-                    <input
-                      className="mt-2 h-11 w-full rounded-[0.95rem] border border-neutral-300 bg-white px-4 text-[1rem] uppercase text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
-                      type="text"
-                      name="membership_fee_currency"
-                      maxLength={8}
-                      defaultValue={membershipSettings?.membership_fee_currency ?? 'EUR'}
-                    />
-                  </label>
-                </div>
-              </section>
-
-              {membershipSettings?.custom_membership_types_enabled ? (
-                <section className="border-t border-neutral-200 pt-6">
-                  <h4 className="text-[clamp(1.55rem,1.9vw,2.05rem)] font-normal tracking-tight text-neutral-950">
-                    Regola Tessera Temporanea
-                  </h4>
-                  <div className="mt-5 space-y-4">
-                    <label className="block">
-                      <span className="text-[0.98rem] font-normal tracking-tight text-neutral-950">
-                        Prezzo Temporanea
-                      </span>
-                      <input
-                        className="mt-2 h-11 w-full rounded-[0.95rem] border border-neutral-300 bg-white px-4 text-[1rem] text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        name="temporary_membership_fee_amount"
-                        defaultValue={membershipSettings?.temporary_membership_fee_amount ?? ''}
-                      />
-                    </label>
-                    <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(220px,0.8fr)]">
-                      <label className="block">
-                        <span className="text-[0.98rem] font-normal tracking-tight text-neutral-950">
-                          Durata Temporanea
-                        </span>
-                        <input
-                          className="mt-2 h-11 w-full rounded-[0.95rem] border border-neutral-300 bg-white px-4 text-[1rem] text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
-                          type="number"
-                          min="1"
-                          name="temporary_membership_duration_value"
-                          defaultValue={membershipSettings?.temporary_membership_duration_value ?? 1}
-                        />
-                      </label>
-                      <label className="block">
-                        <span className="text-[0.98rem] font-normal tracking-tight text-neutral-950">Unita</span>
-                        <select
-                          className="mt-2 h-11 w-full rounded-[0.95rem] border border-neutral-300 bg-white px-4 text-[1rem] text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
-                          name="temporary_membership_duration_unit"
-                          defaultValue={membershipSettings?.temporary_membership_duration_unit ?? 'days'}
-                        >
-                          <option value="days">Giorni</option>
-                          <option value="hours">Ore</option>
-                        </select>
-                      </label>
-                    </div>
-                  </div>
-                </section>
-              ) : null}
-            </div>
-
-            {membershipSettingsError ? (
-              <p className="mt-5 text-sm text-red-600">{membershipSettingsError}</p>
-            ) : null}
-
-            <div className="mt-5 flex justify-end">
-              <button
-                type="submit"
-                className="inline-flex h-11 items-center justify-center rounded-[0.95rem] bg-brand px-6 text-[1rem] font-medium text-white shadow-[0_16px_30px_-18px_rgba(15,118,110,0.55)] transition hover:bg-brand/95 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={savingMembershipSettings}
-              >
-                {savingMembershipSettings ? 'Salvataggio...' : 'Salva impostazioni'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
       <div className="surface-strong p-3 sm:p-4">
         <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-center">
           <div className="flex-1 min-w-0">
