@@ -298,6 +298,9 @@ class Organization(Base):
     require_membership_document = Column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    adults_only_banner_enabled = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     communications_enabled = Column(
         Boolean, nullable=False, default=False, server_default="false"
     )

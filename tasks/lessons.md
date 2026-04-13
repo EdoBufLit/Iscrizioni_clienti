@@ -79,6 +79,7 @@
 - L'etichetta Google Wallet "[SOLO TEST]" non è generata dal codice app: resta finché issuer/class non sono approvati in produzione da Google Wallet.
 - Se l'utente corregge esplicitamente il focus (es. 'no intendo questo' con un nuovo prompt), fermarsi sul thread precedente e riallinearsi subito al nuovo scope prima di rispondere o fare push.
 - Se uno stepper numerato in un wizard sembra interattivo, la UX deve consentire anche il click diretto sugli step oltre ai bottoni `Indietro`/`Avanti`; e nei builder email i CTA non devono essere implicitamente vincolati al form collegato se l'utente si aspetta URL liberi per ogni bottone.
+- Se un utente segnala "push fallito" con screenshot di CI/CD o server, verificare subito `git ls-remote` e lo stato del branch live: distinguere sempre tra `git push` riuscito e deploy fallito per infrastruttura (es. disco pieno) prima di rispondere.
 - Per evidenze UI con header/footer `sticky` o `fixed`, non usare screenshot `full_page` come prova finale: Playwright puo duplicare i layer durante lo stitching e far sembrare elementi in mezzo alla pagina. Usare screenshot viewport normale o disattivare temporaneamente lo sticky durante la cattura.
 - Se una nuova capability operativa dipende da un dato configurabile lato super-admin (es. numero WhatsApp alert associazione), non fermarsi a model/API: nella stessa PR va esposta anche nella UI di gestione esistente, altrimenti la feature resta non operativa.
 - Per Twilio Studio Flow via SDK Python, `executions.create()` richiede sempre `to` e `from_` top-level: i `parameters` servono solo come variabili del Flow e non sostituiscono gli argomenti obbligatori della create.
@@ -192,3 +193,4 @@ ext_no, storico eleased_at), poi implemento solo regole esplicite e dimostrabil
 
 - Quando l'utente corregge un workflow di review dicendo che dopo la decisione admin deve partire una seconda comunicazione al destinatario, trattare submit iniziale e post-review come eventi distinti obbligatori e coprirli entrambi nei test.
 - Se esiste un `club_display_name` / nome visualizzato tenant, tutte le superfici pubbliche user-facing devono usare quella sorgente come primaria: page source SEO, preview social, payload elenco pubblico e filtri di ricerca non devono leggere solo `Organization.name`.
+- Se un feature flag pubblico comunica anche una regola business vincolante (es. `solo maggiorenni`), non basta mostrare il banner: nello stesso task devo implementare anche la validazione lato frontend e il blocco lato backend sugli endpoint reali.

@@ -289,6 +289,9 @@ def _org_to_dict_detail(org: Organization) -> dict:
         "require_membership_document": bool(
             getattr(org, "require_membership_document", False)
         ),
+        "adults_only_banner_enabled": bool(
+            getattr(org, "adults_only_banner_enabled", False)
+        ),
         "membership_payment": serialize_public_membership_payment(org),
         "membership_config": serialize_membership_configuration(org),
     }

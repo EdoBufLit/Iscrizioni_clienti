@@ -19,6 +19,7 @@ REQUIRED_ORG_COLUMNS = {
     "card_logo_url",
     "auto_approve_signup",
     "require_membership_document",
+    "adults_only_banner_enabled",
     "stripe_connected_account_id",
     "stripe_platform_subscription_status",
     "stripe_platform_subscription_id",

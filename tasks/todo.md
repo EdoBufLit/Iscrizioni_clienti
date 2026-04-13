@@ -86,6 +86,24 @@
 - In [grapes-email-builder.css](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\components\communications\grapes-email-builder.css) ho aggiunto lo stile del nuovo pannello contestuale nella rail destra, mantenendo il resto della grammatica visiva del builder.
 - Verifica eseguita: `npm --prefix frontend run build` OK. Resta solo il warning Vite gia noto sui chunk grandi, non introdotto da questo refinement.
 
+## Plan (Diagnosi push/deploy branch feat-redesign-landing-wizard - Apr 12, 2026)
+- [x] Verificare se i commit `693907c` e `d85ddda` sono realmente presenti su `origin/feat-redesign-landing-wizard`
+- [x] Collegarsi al server Hetzner e controllare branch live, spazio disco, stato container e causa del failure mostrato negli screenshot
+- [x] Liberare spazio in modo sicuro, riallineare il branch server e rieseguire un rollout mirato dei servizi runtime
+- [x] Documentare l'esito reale distinguendo tra push GitHub riuscito e deploy server-side fallito
+
+## Review (Diagnosi push/deploy branch feat-redesign-landing-wizard - Apr 12, 2026)
+- Verifica locale conclusiva: il `git push` non era fallito. `git ls-remote` su `origin/feat-redesign-landing-wizard` puntava gia a `d85ddda`, quindi sia `693907c` (`Redesign public forms editor workspace`) sia `d85ddda` (`Improve campaign wizard step navigation`) erano presenti su GitHub.
+- Diagnosi live su Hetzner (`root@157.90.31.105`): il branch server era fermo a `693907c`, il filesystem `/` era al `100%` e i log coincidevano con gli screenshot utente: `no space left on device` durante `docker extract` del worker video e durante `git unpack-objects`.
+- Root cause: accumulo di immagini Docker dangling molto pesanti sul branch (`app-runtime` da ~554MB, `evolution-api` da ~901MB, `affiliation-video-worker` da ~2.28GB ripetuti piu volte). `docker system df -v` mostrava diversi layer non piu referenziati ma ancora residenti.
+- Fix applicato live: `docker image prune -af`, `docker builder prune -af` e `journalctl --vacuum-time=7d`. Spazio recuperato: circa `6.5GB`; stato finale disco: `/dev/sda1` passato da `100%` a `26%` usato con circa `27GB` liberi.
+- Dopo il cleanup, il server ha eseguito con successo `git fetch` e `git pull --ff-only`, portando `/opt/assonam/app` a `d85ddda`.
+- Ho poi eseguito un rollout mirato dei servizi runtime rilevanti (`docker compose pull web email-worker low-cards-worker` e `docker compose up -d --no-deps web email-worker low-cards-worker`), evitando di toccare il video worker oltre il necessario per questa fix.
+- Verifiche live finali:
+- `docker compose ps`: `web`, `email-worker`, `low-cards-worker`, `db`, `affiliation-video-worker`, `evolution-api` tutti `Up`; `email-worker` e `low-cards-worker` tornati `healthy`.
+- `curl -I http://127.0.0.1:8000/`: `HTTP/1.1 200 OK`.
+- `git log --oneline -n 5` in `/opt/assonam/app`: testa del branch live su `d85ddda`.
+
 ## Plan (ORG ADMIN WhatsApp decision message completion - Apr 03, 2026)
 - [x] Correggere il contesto dei messaggi WhatsApp di conferma/rigetto con fallback dai campi del form e placeholder booking piu robusti
 - [x] Aggiungere lato API e frontend l'override opzionale del messaggio WhatsApp al momento della decisione admin, mantenendo il default/template configurato
@@ -4150,3 +4168,62 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - `python -m pytest -q tests/test_org_admin_manual_member.py tests/test_org_admin_member_filters.py tests/test_join_auto_issue.py tests/test_member_card_verification.py tests/test_org_admin_member_profile_and_card_actions.py tests/test_super_admin_organizations_pagination.py`
 - `python -m py_compile app/routes/join.py app/routes/org_admin.py app/routes/super_admin.py app/routes/public.py app/routes/member.py app/services/member_activity.py app/services/member_card_delivery.py app/services/integration_issuer.py app/services/card_pdf.py`
 - `npm --prefix frontend run build`
+
+## Plan (ORG ADMIN WhatsApp automazioni light mode compatibility - Apr 13, 2026)
+- [x] Individuare nel workspace `Comunicazioni > WhatsApp > Automazioni` le superfici hardcoded dark che ignorano il theme switch del sito
+- [x] Convertire il wizard e le card automazioni a un tema light-first compatibile con il theme switch gia esistente del sito
+- [x] Eseguire la build frontend e documentare nella review l'esito reale del fix
+
+## Review (ORG ADMIN WhatsApp automazioni light mode compatibility - Apr 13, 2026)
+- In `frontend/src/pages/org-admin/components/communications/WhatsAppAutomationsHub.tsx` ho rimosso la shell dark-only introdotta nel redesign del wizard: il pannello `Configurazione`, la sidebar `Preview`, le card review e i controlli ora sono light-first invece di usare superfici `#111b21 / #0f171c`.
+- Gli input, textarea e select ora usano classi coerenti con il layer tema del progetto (`theme-input` + utility `bg-white`, `border-neutral-200`, `text-slate-*`), cosi in light mode la vista torna chiara e in dark mode continua a passare dal compatibility layer globale gia definito in `frontend/src/theme.css`.
+- Ho riallineato anche stepper, card automazioni selezionate, stato `Attiva/Bozza`, card `Nuova regola` e toolbar finale ai token neutrali del resto dell'area riservata, mantenendo solo l'accento verde WhatsApp come colore funzionale.
+- Verifica eseguita: `npm --prefix frontend run build` OK. Resta solo il warning Vite gia noto sui chunk sopra soglia, non introdotto da questo fix.
+
+## Plan (ORG ADMIN spostamento riepilogo tessere da Soci a Tessere - Apr 13, 2026)
+- [x] Analizzare il wiring attuale di `Riepilogo Tessere` e `Impostazioni Tessera` tra `OrgAdminMembers.tsx` e `OrgAdminCards.tsx`
+- [x] Rimuovere il banner oversized dalla pagina `Soci` e rimontare gli stessi blocchi nella pagina `Tessere` con scala piu compatta
+- [x] Eseguire la build frontend e documentare nella review l'esito reale del refactor
+
+## Review (ORG ADMIN spostamento riepilogo tessere da Soci a Tessere - Apr 13, 2026)
+- In `frontend/src/pages/org-admin/OrgAdminMembers.tsx` ho rimosso completamente il blocco `Riepilogo Tessere / Impostazioni Tessera`: la pagina `Soci` torna focalizzata su header, filtri, tabella e modal di creazione socio.
+- Nello stesso file ho lasciato solo il caricamento delle `membershipSettings` realmente necessarie al modal `Aggiungi socio`, eliminando stato e handler non piu usati dal vecchio banner per non lasciare dead code TypeScript.
+- In `frontend/src/pages/org-admin/OrgAdminCards.tsx` ho spostato il riepilogo economico e il form impostazioni in alto nella pagina `Tessere`, accanto ai dati magazzino gia esistenti.
+- Il blocco spostato e stato anche ridotto di scala: titoli piu piccoli, card piu compatte, KPI meno oversized e campi form piu densi. Il risultato resta leggibile ma non ha piu l'effetto hero gigante visto nello screenshot.
+- Per mantenere la logica invariata, `Tessere` ora carica anche `fetchOrgAdminMembershipSettings()` e un fetch minimo `fetchOrgAdminMembers({ limit: 1, offset: 0 })` solo per leggere `summary.total_theoretical_membership_fees` e `issued_members_count`, senza introdurre API nuove.
+- Verifica eseguita: `npm --prefix frontend run build` OK. Resta solo il warning Vite gia noto sui chunk sopra soglia, non introdotto da questo refactor.
+
+## Plan (Super Admin toggle banner maggiorenni signup - Apr 13, 2026)
+- [x] Mappare setup associazione super-admin e rendering signup pubblica per individuare il punto minimo di aggancio del nuovo flag
+- [x] Aggiungere il flag per-associazione nel backend/API super-admin e mantenerlo coerente con bootstrap/migration
+- [x] Esporre il toggle nel setup associazione e mostrare il banner maggiorenni nella pagina iscrizione solo quando attivo
+- [x] Eseguire verifiche reali e documentare la review finale con esito build/test
+
+## Review (Super Admin toggle banner maggiorenni signup - Apr 13, 2026)
+- Ho aggiunto il nuovo flag per-associazione `adults_only_banner_enabled` sul modello `Organization`, con migration dedicata in `alembic/versions/n3o4p5q6r7s8_add_org_adults_only_banner_flag.py` e allineamento anche di `init_db.py`, `app/schema_validation.py` e `app/scripts/repair_sqlite.py` per bootstrap e repair SQLite.
+- In `app/routes/super_admin.py` il flag e ora esposto nella lista/patch/create organizzazioni, seguendo lo stesso pattern gia usato per `auto_approve_signup` e `require_membership_document`.
+- In `frontend/src/pages/super-admin/components/OrganizationManageModal.tsx` il setup della singola associazione espone il checkbox `Attiva banner maggiorenni` con descrizione esplicita; il valore viene caricato dall'organizzazione selezionata e salvato correttamente via PATCH.
+- In `app/routes/public.py` e `frontend/src/lib/api.ts` il dettaglio pubblico organizzazione espone il nuovo boolean, cosi `frontend/src/pages/Iscrizione.tsx` puo mostrare un avviso solo quando il flag e attivo.
+- Il banner pubblico e stato aggiunto in alto nel wizard iscrizione, subito sotto l'hero: usa superficie chiara con accento rosso, icona informativa e testo `Iscrizione consentita solo ai maggiori di 18 anni.`, restando visibile ma senza interrompere il flusso.
+- Verifiche eseguite:
+- `python - <<PY ... py_compile ... PY` su `app/models.py`, `app/routes/super_admin.py`, `app/routes/public.py`, `app/schema_validation.py`, `app/scripts/repair_sqlite.py`, `init_db.py`, `alembic/versions/n3o4p5q6r7s8_add_org_adults_only_banner_flag.py` OK
+- `npm --prefix frontend run build` OK
+
+## Plan (Signup maggiorenni - blocco under 18 con flag attivo - Apr 13, 2026)
+- [x] Estendere il flag maggiorenni con una regola di validazione età minima condivisa tra iscrizione standard e checkout pagamento
+- [x] Aggiornare il wizard pubblico per mostrare subito l'errore sulla data di nascita quando il flag e attivo e l'età e inferiore a 18 anni
+- [x] Eseguire test/build mirati e documentare review finale
+
+## Review (Signup maggiorenni - blocco under 18 con flag attivo - Apr 13, 2026)
+- In `app/routes/join.py` ho aggiunto l'helper condiviso `ensure_adults_only_age_requirement(...)`: quando `adults_only_banner_enabled` e attivo, il backend rifiuta le date di nascita che non raggiungono i 18 anni compiuti alla data corrente con errore `Iscrizione consentita solo ai maggiori di 18 anni.`.
+- Lo stesso controllo viene applicato sia nel submit iscrizione classico `/api/join/{org_slug}/submit` sia nel checkout online SumUp in `app/routes/membership_payments.py`, cosi il flag non resta aggirabile cambiando percorso.
+- In `frontend/src/pages/Iscrizione.tsx` il campo `Data di nascita` ora riceve anche la regola client-side: se il flag e attivo imposta `max` alla data limite per i maggiorenni, mostra hint esplicito con la data massima consentita e segnala subito errore se viene inserita una data minorenne.
+- Il banner rosso introdotto prima resta visibile in alto; in piu adesso la regola è realmente enforced e non solo comunicata.
+- Ho aggiunto test mirati in `tests/test_adults_only_signup.py` per coprire:
+- esposizione del flag nel dettaglio pubblico organizzazione;
+- rifiuto under-18 sul submit standard;
+- rifiuto under-18 sul checkout pagamento online.
+- Verifiche eseguite:
+- `python -m pytest -q tests/test_adults_only_signup.py` OK (`3 passed`)
+- `py_compile` OK su `app/routes/join.py`, `app/routes/membership_payments.py`, `tests/test_adults_only_signup.py`
+- `npm --prefix frontend run build` OK

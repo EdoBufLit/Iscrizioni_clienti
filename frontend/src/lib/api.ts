@@ -114,6 +114,7 @@ export type OrganizationDetail = {
   has_statute: boolean;
   privacy_version?: string;
   require_membership_document: boolean;
+  adults_only_banner_enabled?: boolean;
   membership_payment?: {
     enabled: boolean;
     required: boolean;
@@ -3347,6 +3348,7 @@ export type SuperAdminOrganization = {
   province: string | null;
   auto_approve_signup?: boolean;
   require_membership_document?: boolean;
+  adults_only_banner_enabled?: boolean;
   custom_membership_types_enabled?: boolean;
   accounting_enabled?: boolean;
   communications_enabled?: boolean;
@@ -4584,6 +4586,7 @@ export async function createSuperAdminOrganization(data: {
   is_active?: boolean;
   auto_approve_signup?: boolean;
   require_membership_document?: boolean;
+  adults_only_banner_enabled?: boolean;
   custom_membership_types_enabled?: boolean;
   accounting_enabled?: boolean;
   numbering_mode?: "shared_assonam" | "dedicated";
@@ -4611,6 +4614,7 @@ export async function patchSuperAdminOrganization(
     is_active?: boolean;
     auto_approve_signup?: boolean;
     require_membership_document?: boolean;
+    adults_only_banner_enabled?: boolean;
     custom_membership_types_enabled?: boolean;
     accounting_enabled?: boolean;
     communications_enabled?: boolean;

@@ -249,6 +249,9 @@ def _serialize_organization_row(
         "require_membership_document": bool(
             getattr(org, "require_membership_document", False)
         ),
+        "adults_only_banner_enabled": bool(
+            getattr(org, "adults_only_banner_enabled", False)
+        ),
         "custom_membership_types_enabled": bool(
             getattr(org, "custom_membership_types_enabled", False)
         ),
@@ -417,6 +420,7 @@ class CreateOrganization(BaseModel):
     is_active: bool = True
     auto_approve_signup: bool = False
     require_membership_document: bool = False
+    adults_only_banner_enabled: bool = False
     accounting_enabled: bool = False
     custom_membership_types_enabled: bool = False
     numbering_mode: Optional[Literal["shared_assonam", "dedicated"]] = None
@@ -442,6 +446,7 @@ class PatchOrganization(BaseModel):
     is_active: Optional[bool] = None
     auto_approve_signup: Optional[bool] = None
     require_membership_document: Optional[bool] = None
+    adults_only_banner_enabled: Optional[bool] = None
     accounting_enabled: Optional[bool] = None
     communications_enabled: Optional[bool] = None
     custom_membership_types_enabled: Optional[bool] = None
@@ -1890,6 +1895,7 @@ def create_organization(
         is_active=body.is_active,
         auto_approve_signup=body.auto_approve_signup,
         require_membership_document=body.require_membership_document,
+        adults_only_banner_enabled=body.adults_only_banner_enabled,
         accounting_enabled=body.accounting_enabled,
         custom_membership_types_enabled=body.custom_membership_types_enabled,
         created_by_admin_id=admin.id,
@@ -2072,6 +2078,10 @@ def update_organization(
     if "require_membership_document" in update_data:
         update_data["require_membership_document"] = bool(
             update_data["require_membership_document"]
+        )
+    if "adults_only_banner_enabled" in update_data:
+        update_data["adults_only_banner_enabled"] = bool(
+            update_data["adults_only_banner_enabled"]
         )
     if "accounting_enabled" in update_data:
         update_data["accounting_enabled"] = bool(update_data["accounting_enabled"])

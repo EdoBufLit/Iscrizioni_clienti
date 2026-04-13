@@ -137,6 +137,27 @@ def _parse_birth_date(raw_value: str | None) -> date:
         ) from exc
 
 
+def _adult_cutoff_date(reference_date: date | None = None) -> date:
+    today = reference_date or date.today()
+    try:
+        return today.replace(year=today.year - 18)
+    except ValueError:
+        return today.replace(month=2, day=28, year=today.year - 18)
+
+
+def ensure_adults_only_age_requirement(
+    org: Organization,
+    birth_date_value: date,
+) -> None:
+    if not bool(getattr(org, "adults_only_banner_enabled", False)):
+        return
+    if birth_date_value > _adult_cutoff_date():
+        raise HTTPException(
+            status_code=400,
+            detail="Iscrizione consentita solo ai maggiori di 18 anni.",
+        )
+
+
 def _resolve_birth_municipality(
     *, birth_place: str | None, birth_place_code: str | None
 ) -> dict:
@@ -724,6 +745,7 @@ async def api_join_submit_multipart(
     client_ip = get_client_ip(request)
     normalized_email = email.strip().lower()
     birth_date_value = _parse_birth_date(birth_date)
+    ensure_adults_only_age_requirement(org, birth_date_value)
     normalized_gender = _normalize_gender(gender)
     municipality = _resolve_birth_municipality(
         birth_place=birth_place,

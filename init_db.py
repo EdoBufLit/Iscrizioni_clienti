@@ -677,6 +677,9 @@ def init_db():
             conn, "organizations", "require_membership_document", "INTEGER DEFAULT 0"
         )
         _add_column_if_missing(
+            conn, "organizations", "adults_only_banner_enabled", "INTEGER DEFAULT 0"
+        )
+        _add_column_if_missing(
             conn, "organizations", "accounting_enabled", "INTEGER DEFAULT 0"
         )
         _add_column_if_missing(
@@ -703,6 +706,15 @@ def init_db():
                 UPDATE organizations
                    SET require_membership_document = FALSE
                  WHERE require_membership_document IS NULL
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE organizations
+                   SET adults_only_banner_enabled = FALSE
+                 WHERE adults_only_banner_enabled IS NULL
                 """
             )
         )

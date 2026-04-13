@@ -24,6 +24,7 @@ from app.models import (
     SignupSource,
 )
 from app.routes.join import (
+    ensure_adults_only_age_requirement,
     _normalize_gender,
     _parse_birth_date,
     _resolve_birth_municipality,
@@ -128,6 +129,7 @@ async def _upsert_member_for_checkout(
 
     normalized_email = email.strip().lower()
     birth_date_value = _parse_birth_date(birth_date)
+    ensure_adults_only_age_requirement(org, birth_date_value)
     normalized_gender = _normalize_gender(gender)
     municipality = _resolve_birth_municipality(
         birth_place=birth_place,

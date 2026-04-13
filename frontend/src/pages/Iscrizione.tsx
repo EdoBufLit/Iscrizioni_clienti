@@ -83,11 +83,15 @@ const initial: FormData = {
 function validateStep1(
   f: FormData,
   requireOnlinePayment: boolean,
+  adultsOnlyEnabled: boolean,
 ): Record<string, string> {
   const e: Record<string, string> = {};
   if (!f.nome.trim()) e.nome = "Il campo nome e obbligatorio.";
   if (!f.cognome.trim()) e.cognome = "Il campo cognome e obbligatorio.";
   if (!f.dataNascita) e.dataNascita = "Inserisci la data di nascita.";
+  else if (adultsOnlyEnabled && !isAtLeast18YearsOld(f.dataNascita)) {
+    e.dataNascita = "Per questa associazione l'iscrizione e consentita solo ai maggiori di 18 anni.";
+  }
   if (!f.sesso) e.sesso = "Seleziona il sesso.";
   if (!f.comuneNascita.trim()) {
     e.comuneNascita = "Il comune di nascita e obbligatorio.";
@@ -146,6 +150,18 @@ function formatDateDisplay(value: string): string {
   const [year, month, day] = value.split("-");
   if (!year || !month || !day) return value;
   return `${day}/${month}/${year}`;
+}
+
+function getAdultBirthDateLimit(referenceDate = new Date()): string {
+  const cutoff = new Date(referenceDate);
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setFullYear(cutoff.getFullYear() - 18);
+  return cutoff.toISOString().slice(0, 10);
+}
+
+function isAtLeast18YearsOld(value: string, referenceDate = new Date()): boolean {
+  if (!value) return false;
+  return value <= getAdultBirthDateLimit(referenceDate);
 }
 
 function iconFor(path: string, className = "h-5 w-5") {
@@ -542,6 +558,8 @@ const Iscrizione = () => {
 
   const associationName = org?.name ?? "questa associazione";
   const membershipDocumentRequired = Boolean(org?.require_membership_document);
+  const adultsOnlyBannerEnabled = Boolean(org?.adults_only_banner_enabled);
+  const adultBirthDateLimit = getAdultBirthDateLimit();
   const membershipPaymentConfig = org?.membership_payment;
   const membershipConfig = org?.membership_config;
   const customMembershipTypesEnabled = Boolean(membershipConfig?.custom_types_enabled);
@@ -576,6 +594,12 @@ const Iscrizione = () => {
     fiscalCodeValidation.isFormallyValid &&
     fiscalCodeValidation.matchesExpected === false
       ? "Il codice fiscale inserito non coincide con quello calcolato dai dati anagrafici. Puoi correggerlo manualmente se necessario."
+      : "";
+  const liveAdultsOnlyBirthDateError =
+    adultsOnlyBannerEnabled &&
+    form.dataNascita &&
+    !isAtLeast18YearsOld(form.dataNascita)
+      ? "Per questa associazione l'iscrizione e consentita solo ai maggiori di 18 anni."
       : "";
 
   const updateField = (field: keyof FormData, value: string | boolean | File | null) => {
@@ -673,7 +697,11 @@ const Iscrizione = () => {
   const goNext = () => {
     let newErrors: Record<string, string> = {};
     if (step === 1) {
-      newErrors = validateStep1(form, membershipPaymentRequired);
+      newErrors = validateStep1(
+        form,
+        membershipPaymentRequired,
+        adultsOnlyBannerEnabled,
+      );
     } else if (step === 2) {
       newErrors = validateStep2(form, Boolean(org?.has_statute), membershipDocumentRequired);
     }
@@ -923,6 +951,22 @@ const Iscrizione = () => {
             </p>
           </header>
 
+          {adultsOnlyBannerEnabled ? (
+            <div className="mx-auto mt-8 max-w-3xl rounded-[1.8rem] border border-rose-200 bg-[linear-gradient(135deg,rgba(255,241,242,0.98),rgba(255,255,255,0.96))] px-5 py-5 text-left shadow-[0_24px_50px_-38px_rgba(225,29,72,0.5)] md:px-7 md:py-6">
+              <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+                  {iconFor("M12 8.5h.01M11 12h1v4h1m-8 3.25h14a2.25 2.25 0 0 0 2.25-2.25v-10.5A2.25 2.25 0 0 0 19 4.25H5A2.25 2.25 0 0 0 2.75 6.5V17A2.25 2.25 0 0 0 5 19.25Z", "h-6 w-6")}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-lg font-semibold text-slate-950">Avviso importante</p>
+                  <p className="mt-2 text-base leading-7 text-slate-700">
+                    Iscrizione consentita solo ai maggiori di 18 anni.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           <div className="mt-12 md:mt-14">
             <StepIndicator current={step} progress={progress} shouldReduceMotion={shouldReduceMotion} />
           </div>
@@ -1062,8 +1106,15 @@ const Iscrizione = () => {
                         <TextField
                           id="dataNascita"
                           label="Data di nascita"
-                          error={errors.dataNascita}
+                          error={errors.dataNascita || liveAdultsOnlyBirthDateError}
+                          hint={
+                            adultsOnlyBannerEnabled
+                              ? `Sono ammessi solo maggiorenni. Data massima consentita: ${formatDateDisplay(adultBirthDateLimit)}`
+                              : undefined
+                          }
+                          hintTone={adultsOnlyBannerEnabled ? "warning" : "muted"}
                           type="date"
+                          max={adultsOnlyBannerEnabled ? adultBirthDateLimit : undefined}
                           value={form.dataNascita}
                           onChange={handleText("dataNascita")}
                         />

@@ -46,6 +46,7 @@ type ModalFormData = {
   is_active: boolean;
   auto_approve_signup: boolean;
   require_membership_document: boolean;
+  adults_only_banner_enabled: boolean;
   custom_membership_types_enabled: boolean;
   accounting_enabled: boolean;
   numbering_mode: "shared_assonam" | "dedicated";
@@ -90,6 +91,7 @@ const createInitialFormData = (): ModalFormData => ({
   is_active: true,
   auto_approve_signup: false,
   require_membership_document: false,
+  adults_only_banner_enabled: false,
   custom_membership_types_enabled: false,
   accounting_enabled: false,
   numbering_mode: "shared_assonam",
@@ -296,6 +298,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
       card_logo_url: selectedOrg.card_logo_url ?? "",
       auto_approve_signup: Boolean(selectedOrg.auto_approve_signup),
       require_membership_document: Boolean(selectedOrg.require_membership_document),
+      adults_only_banner_enabled: Boolean(selectedOrg.adults_only_banner_enabled),
       custom_membership_types_enabled: Boolean(selectedOrg.custom_membership_types_enabled),
       accounting_enabled: Boolean(selectedOrg.accounting_enabled),
       numbering_mode:
@@ -457,6 +460,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
           is_active: formData.is_active,
           auto_approve_signup: formData.auto_approve_signup,
           require_membership_document: formData.require_membership_document,
+          adults_only_banner_enabled: formData.adults_only_banner_enabled,
           custom_membership_types_enabled: formData.custom_membership_types_enabled,
           accounting_enabled: formData.accounting_enabled,
           numbering_mode: formData.numbering_mode,
@@ -491,6 +495,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
           card_logo_url: normalizeOptionalString(formData.card_logo_url),
           auto_approve_signup: formData.auto_approve_signup,
           require_membership_document: formData.require_membership_document,
+          adults_only_banner_enabled: formData.adults_only_banner_enabled,
           custom_membership_types_enabled: formData.custom_membership_types_enabled,
           accounting_enabled: formData.accounting_enabled,
         });
@@ -1419,7 +1424,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
               </div>
               <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-neutral-600">
-                  Modulo documenti
+                  Iscrizione e documenti
                 </p>
                 <div className="mt-3 flex items-start gap-3">
                   <input
@@ -1463,6 +1468,29 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                     <p className="mt-1 text-xs text-neutral-500">
                       Se attivo, il socio dovrà caricare il documento nella pagina pubblica di iscrizione.
                       Se disattivato, il documento resta facoltativo come ora.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-4 flex items-start gap-3 border-t border-neutral-200 pt-4">
+                  <input
+                    id="adults_only_banner_enabled"
+                    type="checkbox"
+                    className="mt-0.5 rounded border-gray-300 text-brand focus:ring-brand"
+                    checked={formData.adults_only_banner_enabled}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        adults_only_banner_enabled: e.target.checked,
+                      }))
+                    }
+                  />
+                  <div>
+                    <label htmlFor="adults_only_banner_enabled" className="text-sm font-medium text-neutral-800">
+                      Attiva banner maggiorenni
+                    </label>
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Se attivo, nella pagina pubblica di iscrizione compare un avviso evidente che indica che
+                      l&apos;iscrizione e consentita solo ai maggiori di 18 anni.
                     </p>
                   </div>
                 </div>
