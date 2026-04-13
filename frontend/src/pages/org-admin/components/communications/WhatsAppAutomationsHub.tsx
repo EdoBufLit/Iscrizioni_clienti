@@ -15,10 +15,10 @@ type Props = { communicationsLocked: boolean };
 type AutomationWizardStep = "origin" | "delivery" | "template" | "review";
 
 const fieldClass =
-  "mt-2 h-14 w-full rounded-[1.15rem] border border-[#3a4b54] bg-[#15232b] px-4 text-sm text-[#f5f7f8] placeholder:text-[#7f8f98] outline-none transition focus:border-[#25d366] focus:ring-2 focus:ring-[#25d366]/20 disabled:cursor-not-allowed disabled:opacity-60";
+  "theme-input mt-2 h-14 w-full rounded-[1.15rem] border border-neutral-200 bg-white px-4 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#25d366] focus:ring-4 focus:ring-[#25d366]/10 disabled:cursor-not-allowed disabled:opacity-60";
 const textareaClass =
-  "mt-2 min-h-[180px] w-full rounded-[1.15rem] border border-[#3a4b54] bg-[#15232b] px-4 py-4 text-sm text-[#f5f7f8] placeholder:text-[#7f8f98] outline-none transition focus:border-[#25d366] focus:ring-2 focus:ring-[#25d366]/20 disabled:cursor-not-allowed disabled:opacity-60";
-const labelClass = "block text-sm font-medium text-[#d8e2e7]";
+  "theme-input mt-2 min-h-[180px] w-full rounded-[1.15rem] border border-neutral-200 bg-white px-4 py-4 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#25d366] focus:ring-4 focus:ring-[#25d366]/10 disabled:cursor-not-allowed disabled:opacity-60";
+const labelClass = "block text-sm font-medium text-slate-800";
 
 const wizardSteps: Array<{ key: AutomationWizardStep; label: string }> = [
   { key: "origin", label: "Origine" },
@@ -106,19 +106,19 @@ function StepButton(props: {
       onClick={props.onClick}
       className={`flex min-w-[140px] items-center gap-3 rounded-[1.35rem] border px-4 py-3 text-left transition ${
         props.active
-          ? "border-[#25d366] bg-[#1b2d36] text-white"
+          ? "border-[#25d366]/60 bg-[#25d366] text-[#0b141a] shadow-[0_14px_28px_rgba(37,211,102,0.18)]"
           : props.done
-            ? "border-[#284550] bg-[#132028] text-[#d8e2e7]"
-            : "border-[#24333b] bg-[#111b21] text-[#8ea0aa] hover:border-[#36505c] hover:text-[#dfe8ec]"
+            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+            : "border-neutral-200 bg-white text-slate-500 hover:border-neutral-300 hover:bg-neutral-50 hover:text-slate-900"
       }`}
     >
       <span
         className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
           props.active
-            ? "bg-[#25d366] text-[#0b141a]"
+            ? "bg-white/30 text-[#0b141a]"
             : props.done
-              ? "bg-[#233138] text-[#dff7d7]"
-              : "bg-[#1b2a33] text-[#8ea0aa]"
+              ? "bg-white text-emerald-700"
+              : "bg-neutral-100 text-slate-500"
         }`}
       >
         {props.done && !props.active ? "✓" : props.index + 1}
@@ -139,38 +139,34 @@ function RuleCard(props: {
       onClick={props.onSelect}
       className={`min-h-[156px] rounded-[1.8rem] border p-5 text-left transition ${
         props.selected
-          ? "border-[#25d366]/50 bg-[#111b21] text-white shadow-[0_18px_50px_rgba(11,20,26,0.22)]"
-          : "border-[#e7e2d8] bg-white text-[#0f171c] hover:border-[#d2c8b7] hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)]"
+          ? "border-[#25d366]/45 bg-emerald-50 text-slate-950 shadow-[0_18px_40px_rgba(15,23,42,0.08)]"
+          : "border-neutral-200 bg-white text-slate-900 hover:border-neutral-300 hover:bg-neutral-50 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)]"
       }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className={`truncate text-lg font-semibold ${props.selected ? "text-white" : "text-[#0f171c]"}`}>{props.automation.name}</p>
-          <p className={`mt-1 text-sm ${props.selected ? "text-[#8ea0aa]" : "text-[#6d787e]"}`}>
+          <p className={`truncate text-lg font-semibold ${props.selected ? "text-slate-950" : "text-slate-900"}`}>{props.automation.name}</p>
+          <p className={`mt-1 text-sm ${props.selected ? "text-slate-600" : "text-slate-500"}`}>
             {props.automation.form?.title || "Form non collegato"}
           </p>
         </div>
         <span
           className={`shrink-0 rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${
             props.automation.is_active
-              ? props.selected
-                ? "bg-[#1f3a32] text-[#7af0a8]"
-                : "bg-[#ecfff2] text-[#14824a]"
-              : props.selected
-                ? "bg-[#1d2930] text-[#9eb1ba]"
-                : "bg-[#f3f4f6] text-[#5f6871]"
+              ? "bg-emerald-100 text-emerald-700"
+              : "bg-neutral-100 text-neutral-600"
           }`}
         >
           {props.automation.is_active ? "Attiva" : "Bozza"}
         </span>
       </div>
-      <div className={`mt-6 grid gap-3 text-sm ${props.selected ? "text-[#d8e2e7]" : "text-[#26353d]"}`}>
+      <div className="mt-6 grid gap-3 text-sm text-slate-700">
         <div>
-          <p className={`text-[11px] uppercase tracking-[0.18em] ${props.selected ? "text-[#7f8f98]" : "text-[#8a948d]"}`}>Evento</p>
+          <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Evento</p>
           <p className="mt-1 font-medium">{triggerLabel(props.automation.trigger_event)}</p>
         </div>
         <div>
-          <p className={`text-[11px] uppercase tracking-[0.18em] ${props.selected ? "text-[#7f8f98]" : "text-[#8a948d]"}`}>Template</p>
+          <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Template</p>
           <p className="mt-1 font-medium">{props.automation.template_name}</p>
         </div>
       </div>
@@ -183,12 +179,12 @@ function NewRuleCard(props: { onClick: () => void }) {
     <button
       type="button"
       onClick={props.onClick}
-      className="flex min-h-[156px] flex-col justify-between rounded-[1.8rem] border border-dashed border-[#d8cfbf] bg-[#fbf8f1] p-5 text-left text-[#0f171c] transition hover:border-[#c4b59f] hover:bg-white"
+      className="flex min-h-[156px] flex-col justify-between rounded-[1.8rem] border border-dashed border-neutral-200 bg-neutral-50 p-5 text-left text-slate-900 transition hover:border-neutral-300 hover:bg-white"
     >
-      <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#111b21] text-2xl text-white">+</span>
+      <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#25d366] text-2xl text-[#0b141a]">+</span>
       <div>
         <p className="text-lg font-semibold">Nuova regola</p>
-        <p className="mt-1 text-sm text-[#6d787e]">Crea una nuova automazione WhatsApp.</p>
+        <p className="mt-1 text-sm text-slate-500">Crea una nuova automazione WhatsApp.</p>
       </div>
     </button>
   );
@@ -196,9 +192,9 @@ function NewRuleCard(props: { onClick: () => void }) {
 
 function ReviewItem(props: { label: string; value: string }) {
   return (
-    <div className="rounded-[1.25rem] border border-[#263740] bg-[#15232b] p-4">
-      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#7f8f98]">{props.label}</p>
-      <p className="mt-2 text-sm leading-6 text-[#edf2f4]">{props.value}</p>
+    <div className="rounded-[1.25rem] border border-neutral-200 bg-neutral-50 p-4">
+      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">{props.label}</p>
+      <p className="mt-2 text-sm leading-6 text-slate-800">{props.value}</p>
     </div>
   );
 }
@@ -391,17 +387,17 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-[#e7e0d3] pb-5">
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-neutral-200 pb-5">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#8a948d]">Automazioni WhatsApp</p>
-          <h2 className="mt-2 text-[2rem] font-semibold tracking-tight text-[#111827]">Regole collegate ai form</h2>
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Automazioni WhatsApp</p>
+          <h2 className="mt-2 text-[2rem] font-semibold tracking-tight text-slate-950">Regole collegate ai form</h2>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="rounded-full border border-[#e4ded0] bg-white px-4 py-2 text-sm text-[#46555d]">
-            <strong className="text-[#111827]">{automations.length}</strong> regole
+          <div className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm text-slate-500">
+            <strong className="text-slate-900">{automations.length}</strong> regole
           </div>
-          <div className="rounded-full border border-[#e4ded0] bg-white px-4 py-2 text-sm text-[#46555d]">
-            <strong className="text-[#111827]">{selectedAutomationCount}</strong> attive
+          <div className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm text-slate-500">
+            <strong className="text-slate-900">{selectedAutomationCount}</strong> attive
           </div>
         </div>
       </div>
@@ -419,17 +415,17 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
           <NewRuleCard onClick={beginNewRule} />
         </div>
         {automations.length === 0 ? (
-          <div className="rounded-[1.6rem] border border-dashed border-[#d9cfbf] bg-[#fbf8f1] px-5 py-4 text-sm text-[#6d787e]">
+          <div className="rounded-[1.6rem] border border-dashed border-neutral-200 bg-neutral-50 px-5 py-4 text-sm text-slate-500">
             Nessuna regola configurata.
           </div>
         ) : null}
       </section>
 
-      <section className="rounded-[2rem] border border-[#203038] bg-[#111b21] p-5 shadow-[0_28px_72px_rgba(11,20,26,0.18)] md:p-7">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#203038] pb-5">
+      <section className="rounded-[2rem] border border-neutral-200 bg-white p-5 shadow-[0_22px_60px_rgba(15,23,42,0.06)] md:p-7">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 pb-5">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#7f8f98]">Configurazione</p>
-            <h3 className="mt-2 text-[1.85rem] font-semibold tracking-tight text-white">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Configurazione</p>
+            <h3 className="mt-2 text-[1.85rem] font-semibold tracking-tight text-slate-950">
               {draft.id ? "Modifica regola" : "Nuova regola"}
             </h3>
           </div>
@@ -448,7 +444,7 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
         </div>
 
         <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_320px]">
-          <div className="rounded-[1.7rem] border border-[#203038] bg-[#0f171c] p-5 md:p-6">
+          <div className="rounded-[1.7rem] border border-neutral-200 bg-neutral-50 p-5 md:p-6">
             {activeStep === "origin" ? (
               <div className="grid gap-5">
                 <label className={labelClass}>
@@ -597,10 +593,10 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
                   />
                 </label>
 
-                <label className="inline-flex items-center gap-3 text-sm font-medium text-[#d8e2e7]">
+                <label className="inline-flex items-center gap-3 text-sm font-medium text-slate-700">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 rounded border-[#50636d] bg-[#15232b] text-[#25d366]"
+                    className="h-4 w-4 rounded border-neutral-300 bg-white text-[#25d366]"
                     checked={draft.is_active}
                     onChange={(event) => setDraft((prev) => ({ ...prev, is_active: event.target.checked }))}
                   />
@@ -631,57 +627,57 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
             ) : null}
           </div>
 
-          <aside className="rounded-[1.7rem] border border-[#203038] bg-[#0f171c] p-5">
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#7f8f98]">Preview</p>
-            <div className="mt-4 rounded-[1.4rem] border border-[#243740] bg-[#111b21] p-4">
+          <aside className="rounded-[1.7rem] border border-neutral-200 bg-neutral-50 p-5">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Preview</p>
+            <div className="mt-4 rounded-[1.4rem] border border-neutral-200 bg-white p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-base font-semibold text-white">{draft.template_name || "Template WhatsApp"}</p>
-                  <p className="mt-1 text-sm text-[#8ea0aa]">{selectedForm?.title || "Form pubblico"}</p>
+                  <p className="text-base font-semibold text-slate-900">{draft.template_name || "Template WhatsApp"}</p>
+                  <p className="mt-1 text-sm text-slate-500">{selectedForm?.title || "Form pubblico"}</p>
                 </div>
                 <span
                   className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${
-                    draft.is_active ? "bg-[#1f3a32] text-[#7af0a8]" : "bg-[#1d2930] text-[#9eb1ba]"
+                    draft.is_active ? "bg-emerald-100 text-emerald-700" : "bg-neutral-100 text-neutral-600"
                   }`}
                 >
                   {draft.is_active ? "Attiva" : "Bozza"}
                 </span>
               </div>
-              <div className="mt-5 space-y-3 text-sm text-[#d8e2e7]">
+              <div className="mt-5 space-y-3 text-sm text-slate-700">
                 <div>
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-[#7f8f98]">Evento</p>
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Evento</p>
                   <p className="mt-1">{triggerLabel(draft.trigger_event)}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-[#7f8f98]">Destinatario</p>
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Destinatario</p>
                   <p className="mt-1">{recipientLabel(draft.recipient_type)}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-[#7f8f98]">Numero</p>
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Numero</p>
                   <p className="mt-1">{phoneSourceLabel(draft.phone_source)}</p>
                 </div>
               </div>
             </div>
 
-            <div className="mt-4 rounded-[1.4rem] border border-[#243740] bg-[#111b21] p-4">
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#7f8f98]">Messaggio</p>
-              <p className="mt-3 text-sm leading-7 text-[#d8e2e7]">{draft.template_body || reviewSummary}</p>
+            <div className="mt-4 rounded-[1.4rem] border border-neutral-200 bg-white p-4">
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Messaggio</p>
+              <p className="mt-3 text-sm leading-7 text-slate-700">{draft.template_body || reviewSummary}</p>
             </div>
           </aside>
         </div>
 
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[#203038] pt-5">
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-neutral-200 pt-5">
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
-              className="inline-flex min-h-[3.3rem] items-center justify-center rounded-[1.15rem] border border-[#2b3c44] px-5 text-sm font-medium text-[#d8e2e7] transition hover:border-[#3b5662] hover:bg-[#15232b] disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex min-h-[3.3rem] items-center justify-center rounded-[1.15rem] border border-neutral-200 bg-white px-5 text-sm font-medium text-slate-700 transition hover:border-neutral-300 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={beginNewRule}
             >
               Reset
             </button>
             <button
               type="button"
-              className="inline-flex min-h-[3.3rem] items-center justify-center rounded-[1.15rem] border border-[#2b3c44] px-5 text-sm font-medium text-[#d8e2e7] transition hover:border-[#3b5662] hover:bg-[#15232b] disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex min-h-[3.3rem] items-center justify-center rounded-[1.15rem] border border-neutral-200 bg-white px-5 text-sm font-medium text-slate-700 transition hover:border-neutral-300 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={previousStep}
               disabled={activeIndex === 0}
             >
