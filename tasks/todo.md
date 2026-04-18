@@ -4227,3 +4227,17 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - `python -m pytest -q tests/test_adults_only_signup.py` OK (`3 passed`)
 - `py_compile` OK su `app/routes/join.py`, `app/routes/membership_payments.py`, `tests/test_adults_only_signup.py`
 - `npm --prefix frontend run build` OK
+
+## Plan (Comunicazioni campaign invio + semplificazione impostazioni form - Apr 18, 2026)
+- [x] Individuare i componenti dello step finale `Invio` campagne e della sezione `Impostazioni` form per capire dove rimuovere preview e blocchi WhatsApp ridondanti
+- [x] Correggere il layout dello step `Invio` rimuovendo la preview finale e centrando le azioni `Bozza` e `Invio`
+- [x] Semplificare `Comunicazioni > Form > Impostazioni` rimuovendo la sezione WhatsApp ridondante e traducendo le stringhe residue in italiano
+- [x] Eseguire build frontend e documentare review finale
+
+## Review (Comunicazioni campaign invio + semplificazione impostazioni form - Apr 18, 2026)
+- In `frontend/src/pages/org-admin/components/communications/MessagesComposerHub.tsx` ho rimosso del tutto la preview dallo step finale `Invio` del wizard campagne: la vista ora mostra solo le due card azione `Bozza pronta` e `Invio immediato`, centrate e con larghezza controllata, senza il layout spezzato visto nello screenshot.
+- Nello stesso flusso la preview resta dove ha senso, cioe nello step precedente `Preview`; l'ultimo step torna a essere solo un passaggio decisionale pulito prima del salvataggio o dell'invio.
+- In `frontend/src/pages/org-admin/OrgAdminForms.tsx` ho semplificato il tab `Impostazioni` del dettaglio form rimuovendo l'intero blocco WhatsApp avanzato e anche la colonna `Core Automations`, che risultavano ridondanti rispetto a `Comunicazioni > WhatsApp > Automazioni`.
+- La sezione impostazioni residua ora e focalizzata su accesso e notifiche: link pubblico, slug, visibilita, stato pagina, email notifiche e toggle essenziali.
+- Ho tradotto in italiano le etichette rimaste in quell'area, inclusi `Link pubblico`, `Copia`, `Personalizza URL`, `Visibilita`, `Pagina attiva`, `Email notifiche`, `Notifica segreteria`, `Conferma utente` e `Invii multipli`.
+- Verifica eseguita: `npm --prefix frontend run build` OK. Resta solo il warning Vite gia noto sui chunk grandi.

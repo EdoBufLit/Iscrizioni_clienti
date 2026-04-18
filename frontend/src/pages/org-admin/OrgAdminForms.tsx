@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import {
   buildOrgAdminFormSubmissionsExportUrl,
   createOrgAdminForm,
@@ -47,13 +47,6 @@ type BookingMappingTarget =
   | "booking_time"
   | "party_size"
   | "notes";
-
-type WhatsAppAutomationVariable = {
-  key: string;
-  label: string;
-  placeholder: string;
-  hint: string;
-};
 
 const editorTabs: Array<{ key: EditorTab; label: string; hint: string }> = [
   { key: "builder", label: "Struttura", hint: "Campi e layout" },
@@ -134,28 +127,6 @@ const bookingMappingTargets: Array<{ key: BookingMappingTarget; label: string; h
   { key: "party_size", label: "Numero persone", hint: "Dimensione gruppo o coperti." },
   { key: "notes", label: "Note", hint: "Richieste speciali o dettagli utili." },
 ];
-
-const baseWhatsAppVariables: WhatsAppAutomationVariable[] = [
-  { key: "nome_contatto", label: "Nome contatto", placeholder: "{{nome_contatto}}", hint: "Nome ricavato da form, prenotazione o socio associato." },
-  { key: "nome_associazione", label: "Nome associazione", placeholder: "{{nome_associazione}}", hint: "Nome dell'associazione." },
-  { key: "titolo_form", label: "Titolo form", placeholder: "{{titolo_form}}", hint: "Titolo del modulo che ha generato la richiesta." },
-  { key: "id_richiesta", label: "ID richiesta", placeholder: "{{id_richiesta}}", hint: "ID interno della submission." },
-  { key: "email_destinatario", label: "Email destinatario", placeholder: "{{email_destinatario}}", hint: "Email del submitter se disponibile." },
-  { key: "numero_whatsapp", label: "Numero WhatsApp", placeholder: "{{numero_whatsapp}}", hint: "Numero a cui ASSONAM inviera il messaggio." },
-  { key: "data_prenotazione", label: "Data prenotazione", placeholder: "{{data_prenotazione}}", hint: "Valorizzata quando il form genera una booking." },
-  { key: "orario_prenotazione", label: "Orario prenotazione", placeholder: "{{orario_prenotazione}}", hint: "Valorizzata quando il form genera una booking." },
-  { key: "numero_persone", label: "Numero persone", placeholder: "{{numero_persone}}", hint: "Party size della prenotazione se disponibile." },
-  { key: "slot_prenotazione", label: "Slot prenotazione", placeholder: "{{slot_prenotazione}}", hint: "Data e orario gia composti, con fallback leggibile." },
-  { key: "persone_prenotazione", label: "Persone prenotazione", placeholder: "{{persone_prenotazione}}", hint: "Numero persone gia formattato in modo naturale." },
-  { key: "riepilogo_prenotazione", label: "Riepilogo prenotazione", placeholder: "{{riepilogo_prenotazione}}", hint: "Slot e numero persone in una singola variabile pronta." },
-];
-
-function defaultWhatsAppTemplate(formType: AssociationFormType, bookingEnabled: boolean): string {
-  if (bookingEnabled || formType === "booking") {
-    return "Ciao {{nome_contatto}}, abbiamo ricevuto la tua prenotazione per {{nome_associazione}} con questi dettagli: {{riepilogo_prenotazione}}. Ti ricontatteremo presto.";
-  }
-  return "Ciao {{nome_contatto}}, la tua richiesta tramite {{titolo_form}} e stata registrata correttamente. Ti ricontatteremo presto.";
-}
 
 function defaultWhatsAppConfirmationTemplate(formType: AssociationFormType, bookingEnabled: boolean): string {
   if (bookingEnabled || formType === "booking") {
@@ -380,7 +351,6 @@ export function OrgAdminFormsWorkspace({
 }: OrgAdminFormsWorkspaceProps) {
   const { admin, loading: adminLoading } = useOrgAdmin();
   const { showToast } = useToast();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [loading, setLoading] = useState(true);
@@ -595,71 +565,6 @@ export function OrgAdminFormsWorkspace({
     [submissions],
   );
   const selectedSubmissionStatus = submissionStatusLabel(selectedSubmission?.status);
-  const whatsappAutomationVariables = useMemo<WhatsAppAutomationVariable[]>(
-    () => [
-      ...baseWhatsAppVariables,
-      ...sortedFields.map((field) => ({
-        key: field.field_key,
-        label: field.label,
-        placeholder: `{{${field.field_key}}}`,
-        hint: "Valore inviato dall'utente in questo campo del form.",
-      })),
-    ],
-    [sortedFields],
-  );
-  const connectedWhatsAppAutomations = useMemo(
-    () => selectedForm?.whatsapp_automations || [],
-    [selectedForm?.whatsapp_automations],
-  );
-  const automationConnectionRows = useMemo(() => {
-    const rows = [
-      {
-        key: "email_confirmation",
-        label: "Email confirmation",
-        description: formDraft.send_user_confirmation
-          ? "Conferma utente via email attiva."
-          : "Nessuna conferma email utente attiva.",
-        enabled: Boolean(formDraft.send_user_confirmation),
-        action: () => setActiveTab("settings"),
-      },
-      {
-        key: "whatsapp_confirmation",
-        label: "WhatsApp confirmation",
-        description: connectedWhatsAppAutomations.length
-          ? connectedWhatsAppAutomations[0]
-            ? `Regola attiva: ${connectedWhatsAppAutomations[0].template_name}.`
-            : "Regola WhatsApp collegata."
-          : "Nessuna regola WhatsApp collegata a questo form.",
-        enabled: connectedWhatsAppAutomations.some((item) => item.is_active),
-        action: () => navigate(`/org-admin/comunicazioni?tab=whatsapp&formId=${selectedFormId ?? ""}`),
-      },
-      {
-        key: "admin_notification",
-        label: "Admin notification",
-        description: formDraft.notify_admin_on_submit
-          ? "La segreteria riceve una notifica o un riepilogo."
-          : "Nessuna notifica admin automatica.",
-        enabled: Boolean(formDraft.notify_admin_on_submit),
-        action: () => setActiveTab("settings"),
-      },
-      {
-        key: "reminder",
-        label: "Reminder",
-        description: connectedWhatsAppAutomations.some((item) => item.trigger_event === "booking_created")
-          ? "Esiste almeno una regola collegata al momento della prenotazione."
-          : "Nessun reminder collegato.",
-        enabled: connectedWhatsAppAutomations.some((item) => item.is_active && item.trigger_event === "booking_created"),
-        action: () => navigate(`/org-admin/comunicazioni?tab=whatsapp&formId=${selectedFormId ?? ""}`),
-      },
-    ];
-    return rows;
-  }, [
-    connectedWhatsAppAutomations,
-    formDraft.notify_admin_on_submit,
-    formDraft.send_user_confirmation,
-    navigate,
-    selectedFormId,
-  ]);
 
   function resetEditorState() {
     syncWorkspaceQuery({ formId: null, formTab: null });
@@ -791,26 +696,6 @@ export function OrgAdminFormsWorkspace({
       }
       return next;
     });
-  }
-
-  function toggleWhatsAppAutoReply(enabled: boolean) {
-    setFormDraft((current) => ({
-      ...current,
-      whatsapp_auto_reply_enabled: enabled,
-      whatsapp_auto_reply_template:
-        enabled && !current.whatsapp_auto_reply_template.trim()
-          ? defaultWhatsAppTemplate(current.form_type, Boolean(current.booking_enabled || current.create_booking))
-          : current.whatsapp_auto_reply_template,
-    }));
-  }
-
-  function insertWhatsAppVariable(placeholder: string) {
-    setFormDraft((current) => ({
-      ...current,
-      whatsapp_auto_reply_template: current.whatsapp_auto_reply_template.trim()
-        ? `${current.whatsapp_auto_reply_template} ${placeholder}`
-        : placeholder,
-    }));
   }
 
   function syncBookingFieldMapping(target: BookingMappingTarget, fieldKey: string) {
@@ -1505,7 +1390,7 @@ export function OrgAdminFormsWorkspace({
 
       <div className="rounded-[1.25rem] border border-neutral-200 bg-neutral-100 overflow-hidden shadow-inner flex flex-col h-full">
         <div className="bg-white/80 px-4 py-2 border-b border-neutral-200 backdrop-blur-md flex items-center justify-between z-10 shrink-0">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Live Preview</span>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Anteprima live</span>
           <div className="flex gap-1.5">
              <div className="w-2.5 h-2.5 rounded-full bg-red-400"></div>
              <div className="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
@@ -1521,52 +1406,15 @@ export function OrgAdminFormsWorkspace({
 
   const automationsTab = (
     <div className="space-y-5 overflow-y-auto custom-scrollbar pb-10">
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+      <div>
         <section className="rounded-[1.45rem] border border-[#e6dccb] bg-white p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.18)]">
           <div className="border-b border-[#efe8db] pb-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8a948d]">Core Automations</p>
-          </div>
-          <div className="mt-4 space-y-3">
-            {automationConnectionRows.map((row) => (
-              <div key={row.key} className="rounded-[1rem] border border-[#ece5d8] bg-[#fcfbf7] px-4 py-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-[#182126]">{row.label}</p>
-                    <p className="mt-1 text-[11px] leading-5 text-[#728087]">{row.description}</p>
-                  </div>
-                  <span
-                    className={`inline-flex shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${
-                      row.enabled ? "bg-[#e9fff0] text-[#0d8a4d]" : "bg-[#f1f2f4] text-[#707780]"
-                    }`}
-                  >
-                    {row.enabled ? "ON" : "OFF"}
-                  </span>
-                </div>
-                <div className="mt-3 flex justify-end">
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-2 rounded-[0.9rem] border border-[#d9d2c6] bg-white px-3 py-2 text-xs font-medium text-[#182126] transition hover:border-[#bfb5a3] hover:bg-[#f9f7f1]"
-                    onClick={row.action}
-                  >
-                    Configure
-                    <svg className="h-3.5 w-3.5 text-[#6f7b80]" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
-                      <path d="m7 5 5 5-5 5" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="rounded-[1.45rem] border border-[#e6dccb] bg-white p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.18)]">
-          <div className="border-b border-[#efe8db] pb-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8a948d]">Form Behavior & Access</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8a948d]">Accesso e notifiche</p>
           </div>
 
           <div className="mt-4 space-y-4">
             <div>
-              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Public Link</label>
+              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Link pubblico</label>
               <div className="mt-2 flex items-center gap-2">
                 <input
                   className="h-11 flex-1 rounded-[0.95rem] border border-[#ddd5c9] bg-white px-4 text-sm text-[#182126] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/12"
@@ -1580,13 +1428,13 @@ export function OrgAdminFormsWorkspace({
                   onClick={() => void copyPublicLink(selectedFormUrl || publicUrl)}
                   disabled={!selectedFormUrl && !publicUrl}
                 >
-                  Copy
+                  Copia
                 </button>
               </div>
             </div>
 
             <label className="block">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Personalize URL</span>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Personalizza URL</span>
               <input
                 className="mt-2 h-11 w-full rounded-[0.95rem] border border-[#ddd5c9] bg-white px-4 text-sm text-[#182126] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/12"
                 disabled={locked}
@@ -1598,23 +1446,23 @@ export function OrgAdminFormsWorkspace({
 
             <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
               <label className="block">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Visibility</span>
+                <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Visibilità</span>
                 <select
                   className="mt-2 h-11 w-full rounded-[0.95rem] border border-[#ddd5c9] bg-white px-4 text-sm text-[#182126] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/12"
                   disabled={locked}
                   value={formDraft.visibility}
                   onChange={(event) => syncFormDraft("visibility", event.target.value as AssociationFormVisibility)}
                 >
-                  <option value="public">Public: [All]</option>
-                  <option value="members_only">Members only</option>
+                  <option value="public">Pubblico</option>
+                  <option value="members_only">Solo soci</option>
                 </select>
               </label>
 
               <div className="rounded-[1rem] border border-[#ece5d8] bg-[#fcfbf7] px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Page Active</p>
-                    <p className="mt-1 text-sm font-medium text-[#182126]">{formDraft.is_active ? "ON" : "OFF"}</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Pagina attiva</p>
+                    <p className="mt-1 text-sm font-medium text-[#182126]">{formDraft.is_active ? "Attiva" : "Disattiva"}</p>
                   </div>
                   <label className="relative inline-flex cursor-pointer items-center">
                     <input
@@ -1632,14 +1480,14 @@ export function OrgAdminFormsWorkspace({
             </div>
 
             <div>
-              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Notification Emails</label>
+              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Email notifiche</label>
               <input
                 className="mt-2 h-11 w-full rounded-[0.95rem] border border-[#ddd5c9] bg-white px-4 text-sm text-[#182126] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/12"
                 type="email"
                 disabled={locked}
                 value={formDraft.notification_email}
                 onChange={(event) => syncFormDraft("notification_email", event.target.value)}
-                placeholder="Aggiungi email address"
+                placeholder="Es. segreteria@associazione.it"
               />
             </div>
 
@@ -1647,135 +1495,21 @@ export function OrgAdminFormsWorkspace({
               <div className="grid gap-2 text-sm text-[#182126]">
                 <label className="inline-flex items-center gap-2">
                   <input type="checkbox" disabled={locked} checked={formDraft.notify_admin_on_submit} onChange={(event) => syncFormDraft("notify_admin_on_submit", event.target.checked)} className="rounded border-neutral-300 text-brand" />
-                  Admin Notification
+                  Notifica segreteria
                 </label>
                 <label className="inline-flex items-center gap-2">
                   <input type="checkbox" disabled={locked} checked={formDraft.send_user_confirmation} onChange={(event) => syncFormDraft("send_user_confirmation", event.target.checked)} className="rounded border-neutral-300 text-brand" />
-                  User Confirmation
+                  Conferma utente
                 </label>
                 <label className="inline-flex items-center gap-2">
                   <input type="checkbox" disabled={locked} checked={formDraft.allow_multiple_submissions} onChange={(event) => syncFormDraft("allow_multiple_submissions", event.target.checked)} className="rounded border-neutral-300 text-brand" />
-                  Multi Submission
+                  Invii multipli
                 </label>
               </div>
             </div>
           </div>
         </section>
       </div>
-
-      <section className="rounded-[1.55rem] border border-[#0c4d4d] bg-[#0f5e5d] p-5 text-white shadow-[0_24px_60px_-30px_rgba(15,94,93,0.45)]">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold">WhatsApp Automatic (Advanced)</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/80">
-              {formDraft.whatsapp_auto_reply_enabled ? "ON" : "OFF"}
-            </span>
-            <label className="relative inline-flex cursor-pointer items-center">
-              <input
-                type="checkbox"
-                disabled={locked}
-                checked={formDraft.whatsapp_auto_reply_enabled}
-                onChange={(event) => toggleWhatsAppAutoReply(event.target.checked)}
-                className="peer sr-only"
-              />
-              <span className="h-6 w-11 rounded-full bg-white/25 transition peer-checked:bg-white/40" />
-              <span className="absolute left-1 h-4 w-4 rounded-full bg-white transition peer-checked:translate-x-5" />
-            </label>
-          </div>
-        </div>
-
-        <div className="mt-4">
-          <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/78">Message Template</label>
-          <textarea
-            className="mt-2 min-h-[144px] w-full rounded-[1rem] border border-[#0b4040] bg-white px-4 py-3 text-sm text-[#182126] outline-none transition focus:border-white/50 focus:ring-2 focus:ring-white/20"
-            disabled={locked || !formDraft.whatsapp_auto_reply_enabled}
-            value={formDraft.whatsapp_auto_reply_template}
-            onChange={(event) => syncFormDraft("whatsapp_auto_reply_template", event.target.value)}
-            placeholder={defaultWhatsAppTemplate(formDraft.form_type, Boolean(formDraft.booking_enabled || formDraft.create_booking))}
-          />
-          <div className="mt-3 flex flex-wrap gap-2">
-            {whatsappAutomationVariables.slice(0, 8).map((variable) => (
-              <button
-                key={variable.placeholder}
-                type="button"
-                className="rounded-[0.8rem] border border-white/25 bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/16 disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={locked || !formDraft.whatsapp_auto_reply_enabled}
-                onClick={() => insertWhatsAppVariable(variable.placeholder)}
-              >
-                {variable.placeholder}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-4 xl:grid-cols-2">
-          <div className="rounded-[1rem] border border-[#0b4040] bg-white p-4 text-[#182126]">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold">Confirm Message</p>
-              <button
-                type="button"
-                className="inline-flex h-9 items-center justify-center rounded-[0.8rem] bg-[#0f5e5d] px-4 text-xs font-semibold text-white transition hover:bg-[#0c4d4d]"
-                disabled={locked}
-                onClick={() =>
-                  syncFormDraft(
-                    "whatsapp_confirmation_template",
-                    defaultWhatsAppConfirmationTemplate(
-                      formDraft.form_type,
-                      Boolean(formDraft.booking_enabled || formDraft.create_booking),
-                    ),
-                  )
-                }
-              >
-                Use base
-              </button>
-            </div>
-            <textarea
-              className="mt-3 min-h-[144px] w-full rounded-[0.95rem] border border-[#ddd5c9] bg-white px-4 py-3 text-sm text-[#182126] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/12"
-              disabled={locked}
-              value={formDraft.whatsapp_confirmation_template}
-              onChange={(event) => syncFormDraft("whatsapp_confirmation_template", event.target.value)}
-              placeholder={defaultWhatsAppConfirmationTemplate(
-                formDraft.form_type,
-                Boolean(formDraft.booking_enabled || formDraft.create_booking),
-              )}
-            />
-          </div>
-
-          <div className="rounded-[1rem] border border-[#0b4040] bg-white p-4 text-[#182126]">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold">Reject Message</p>
-              <button
-                type="button"
-                className="inline-flex h-9 items-center justify-center rounded-[0.8rem] bg-[#0f5e5d] px-4 text-xs font-semibold text-white transition hover:bg-[#0c4d4d]"
-                disabled={locked}
-                onClick={() =>
-                  syncFormDraft(
-                    "whatsapp_rejection_template",
-                    defaultWhatsAppRejectionTemplate(
-                      formDraft.form_type,
-                      Boolean(formDraft.booking_enabled || formDraft.create_booking),
-                    ),
-                  )
-                }
-              >
-                Use base
-              </button>
-            </div>
-            <textarea
-              className="mt-3 min-h-[144px] w-full rounded-[0.95rem] border border-[#ddd5c9] bg-white px-4 py-3 text-sm text-[#182126] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/12"
-              disabled={locked}
-              value={formDraft.whatsapp_rejection_template}
-              onChange={(event) => syncFormDraft("whatsapp_rejection_template", event.target.value)}
-              placeholder={defaultWhatsAppRejectionTemplate(
-                formDraft.form_type,
-                Boolean(formDraft.booking_enabled || formDraft.create_booking),
-              )}
-            />
-          </div>
-        </div>
-      </section>
 
       <div className="grid gap-5 xl:grid-cols-2">
         <section className="rounded-[1.35rem] border border-neutral-200 bg-white p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.16)]">
@@ -2302,7 +2036,7 @@ export function OrgAdminFormsWorkspace({
                           <rect x="9" y="9" width="10" height="10" rx="2" />
                           <rect x="5" y="5" width="10" height="10" rx="2" />
                         </svg>
-                        Copy Public Link
+                        Copia link pubblico
                       </button>
                     </div>
                   </div>

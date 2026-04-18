@@ -1384,9 +1384,9 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
           ) : null}
 
           {campaignStep === "action" ? (
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_420px]">
-              <section className={`${panelClass} space-y-4`}>
-                <div className="grid gap-4 md:grid-cols-2">
+            <div className="flex justify-center">
+              <section className={`${panelClass} w-full max-w-4xl space-y-4`}>
+                <div className="mx-auto grid max-w-3xl gap-4 md:grid-cols-2">
                   <div className={subtlePanelClass}>
                     <p className="text-sm font-semibold text-slate-900">Bozza pronta</p>
                     <p className="mt-2 text-sm leading-6 text-slate-500">Salva la campagna e torna in libreria.</p>
@@ -1403,9 +1403,6 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                   </div>
                 </div>
               </section>
-              <aside className={`${panelClass} space-y-4`}>
-                <PreviewFrame html={previewState?.bodyHtml} device="mobile" emptyMessage="La mini preview finale compare qui dopo il render." />
-              </aside>
             </div>
           ) : null}
 
