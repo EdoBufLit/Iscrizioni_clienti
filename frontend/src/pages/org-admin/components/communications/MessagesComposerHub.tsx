@@ -56,7 +56,11 @@ import {
   getTemplateTypeLabel,
 } from "./emailBuilder";
 
-type MessagesHubProps = { communicationsLocked: boolean };
+type MessagesHubProps = {
+  communicationsLocked: boolean;
+  forcedSubtab?: Subtab | null;
+  hideSubtabNav?: boolean;
+};
 type Subtab = "campaigns" | "templates";
 type ViewState =
   | { kind: "library" }
@@ -404,10 +408,30 @@ function MemberPicker({
   );
 }
 
-export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
+function formatLibraryDate(value: string | null | undefined): string {
+  if (!value) return "non disponibile";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString("it-IT", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export function MessagesHub({
+  communicationsLocked,
+  forcedSubtab = null,
+  hideSubtabNav = false,
+}: MessagesHubProps) {
   const [searchParams] = useSearchParams();
   const { showToast } = useToast();
-  const [subtab, setSubtab] = useState<Subtab>(searchParams.get("tab") === "modelli" ? "templates" : "campaigns");
+  const [subtab, setSubtab] = useState<Subtab>(() => {
+    if (forcedSubtab) return forcedSubtab;
+    return searchParams.get("tab") === "modelli" ? "templates" : "campaigns";
+  });
   const [view, setView] = useState<ViewState>({ kind: "library" });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -482,6 +506,14 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
   }, [refreshLibrary]);
 
   useEffect(() => {
+    if (forcedSubtab) {
+      setSubtab(forcedSubtab);
+      return;
+    }
+  }, [forcedSubtab]);
+
+  useEffect(() => {
+    if (forcedSubtab) return;
     if (searchParams.get("tab") === "modelli") {
       setSubtab("templates");
       return;
@@ -489,13 +521,13 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
     if (searchParams.get("tab") === "campagne") {
       setSubtab("campaigns");
     }
-  }, [searchParams]);
+  }, [forcedSubtab, searchParams]);
 
   useEffect(() => {
     if (loading) return;
     if (searchParams.get("mode") !== "create") return;
     const linkedFormId = searchParams.get("formId") ? Number(searchParams.get("formId")) : null;
-    setSubtab("campaigns");
+    setSubtab(forcedSubtab ?? "campaigns");
     setCampaignStep("type");
     setCampaignDraft(emptyCampaignDraft(Number.isFinite(linkedFormId) ? linkedFormId : null));
     setView({ kind: "campaign-builder", campaignId: null });
@@ -645,7 +677,7 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
       }
       setPreviewState(null);
       setView({ kind: "template-builder", templateId });
-      setSubtab("templates");
+      setSubtab(forcedSubtab ?? "templates");
     } catch (error) {
       showToast({
         tone: "error",
@@ -678,7 +710,7 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
       }
       setPreviewState(null);
       setView({ kind: "campaign-builder", campaignId });
-      setSubtab("campaigns");
+      setSubtab(forcedSubtab ?? "campaigns");
     } catch (error) {
       showToast({
         tone: "error",
@@ -1425,35 +1457,37 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
   return (
     <>
       <div className="space-y-6">
-        <div className="flex flex-wrap justify-end gap-3">
-          <div className="inline-flex rounded-[1rem] border border-[#ddd4c3] bg-[#f6f2e8] p-1">
-            <button
-              className={`rounded-[0.8rem] px-4 py-2 text-sm font-semibold transition ${
-                subtab === "campaigns" ? "bg-[#17494a] text-white shadow-sm" : "text-[#31484a] hover:bg-white"
-              }`}
-              type="button"
-              onClick={() => setSubtab("campaigns")}
-            >
-              Campagne
-            </button>
-            <button
-              className={`rounded-[0.8rem] px-4 py-2 text-sm font-semibold transition ${
-                subtab === "templates" ? "bg-[#17494a] text-white shadow-sm" : "text-[#31484a] hover:bg-white"
-              }`}
-              type="button"
-              onClick={() => setSubtab("templates")}
-            >
-              Modelli
-            </button>
+        {!hideSubtabNav ? (
+          <div className="flex flex-wrap justify-end gap-3">
+            <div className="inline-flex rounded-[1rem] border border-[#ddd4c3] bg-[#f6f2e8] p-1">
+              <button
+                className={`rounded-[0.8rem] px-4 py-2 text-sm font-semibold transition ${
+                  subtab === "campaigns" ? "bg-[#17494a] text-white shadow-sm" : "text-[#31484a] hover:bg-white"
+                }`}
+                type="button"
+                onClick={() => setSubtab("campaigns")}
+              >
+                Campagne
+              </button>
+              <button
+                className={`rounded-[0.8rem] px-4 py-2 text-sm font-semibold transition ${
+                  subtab === "templates" ? "bg-[#17494a] text-white shadow-sm" : "text-[#31484a] hover:bg-white"
+                }`}
+                type="button"
+                onClick={() => setSubtab("templates")}
+              >
+                Modelli
+              </button>
+            </div>
           </div>
-        </div>
+        ) : null}
 
         {subtab === "templates" ? (
           <section className={`${panelClass} space-y-5`}>
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7a6647]">Libreria modelli</p>
-                <h3 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-slate-950">Template riusabili dell'organizzazione</h3>
+                <h3 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-slate-950">Modelli email riusabili</h3>
               </div>
               <button className="btn-primary" type="button" disabled={communicationsLocked} onClick={() => void openTemplateBuilder(null)}>
                 Nuovo modello
@@ -1480,34 +1514,51 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
               </label>
               <div className={`${subtlePanelClass} flex items-center justify-between`}>
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#7a6647]">Totale</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#7a6647]">Modelli visibili</p>
                   <p className="mt-2 text-2xl font-semibold text-slate-950">{templateOptions.length}</p>
                 </div>
               </div>
             </div>
-            <div className="grid gap-4">
-              {templateOptions.map((template) => (
-                <div key={template.id} className="rounded-[1.3rem] border border-[#e5dccd] bg-[#fbfaf6] p-5">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="max-w-2xl">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <TemplateTypeBadge value={template.template_type} />
-                        <StatusBadge value={template.editor_status} />
-                        <span className="inline-flex rounded-full border border-[#dfd6c7] px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                          {template.is_system ? "Sistema" : "Org"}
-                        </span>
-                      </div>
-                      <h4 className="mt-4 text-lg font-semibold text-slate-950">{template.name}</h4>
-                      <p className="mt-2 text-sm leading-6 text-slate-500">{template.subject}</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button className="btn-secondary" type="button" onClick={() => void openTemplateBuilder(template.id)}>Apri</button>
-                      <button className="btn-ghost" type="button" onClick={() => void handleDuplicateTemplate(template.id)}>Duplica</button>
-                      {!template.is_system ? <button className="btn-ghost text-red-600" type="button" onClick={() => setDeleteTemplateTarget(template)}>Elimina</button> : null}
-                    </div>
-                  </div>
+            <div className="overflow-hidden rounded-[1.3rem] border border-[#e5dccd] bg-white">
+              {templateOptions.length === 0 ? (
+                <div className="px-5 py-10 text-center text-sm text-slate-500">
+                  Nessun modello trovato con questi filtri.
                 </div>
-              ))}
+              ) : (
+                <div className="divide-y divide-[#eee7db]">
+                  {templateOptions.map((template) => (
+                    <div key={template.id} className="flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <TemplateTypeBadge value={template.template_type} />
+                          <StatusBadge value={template.editor_status} />
+                          <span className="inline-flex rounded-full border border-[#dfd6c7] px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                            {template.is_system ? "Sistema" : "Associazione"}
+                          </span>
+                        </div>
+                        <div className="mt-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                          <div className="min-w-0">
+                            <h4 className="truncate text-base font-semibold text-slate-950">{template.name}</h4>
+                            <p className="mt-1 truncate text-sm text-slate-500">{template.subject || "Oggetto non impostato"}</p>
+                          </div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                            Aggiornato {formatLibraryDate(template.updated_at)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2 lg:justify-end">
+                        <button className="btn-secondary" type="button" onClick={() => void openTemplateBuilder(template.id)}>Apri</button>
+                        <button className="btn-ghost" type="button" onClick={() => void handleDuplicateTemplate(template.id)}>Duplica</button>
+                        {!template.is_system ? (
+                          <button className="btn-ghost text-red-600" type="button" onClick={() => setDeleteTemplateTarget(template)}>
+                            Elimina
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </section>
         ) : null}
@@ -1517,7 +1568,7 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7a6647]">Campagne</p>
-                <h3 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-slate-950">Bozze, invii e revisioni</h3>
+                <h3 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-slate-950">Invii, bozze e revisioni</h3>
               </div>
               <button className="btn-primary" type="button" disabled={communicationsLocked} onClick={() => void openCampaignBuilder(null)}>
                 Nuova campagna
@@ -1525,8 +1576,8 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
             </div>
             <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
               <div className={subtlePanelClass}>
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#7a6647]">Stato invii</p>
-                <p className="mt-2 text-sm leading-6 text-slate-500">Riapri una bozza, controlla un invio programmato o verifica una campagna gia spedita.</p>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#7a6647]">Coda campagne</p>
+                <p className="mt-2 text-sm leading-6 text-slate-500">Riapri una bozza, controlla un invio programmato o verifica una campagna già spedita.</p>
               </div>
               <label className={labelClass}>
                 Filtro stato

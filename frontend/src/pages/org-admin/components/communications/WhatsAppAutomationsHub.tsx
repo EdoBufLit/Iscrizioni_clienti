@@ -12,7 +12,7 @@ import Skeleton from "../../../../components/ui/Skeleton";
 import { useToast } from "../../../../components/ui/ToastProvider";
 
 type Props = { communicationsLocked: boolean };
-type AutomationWizardStep = "origin" | "delivery" | "template" | "review";
+type AutomationWizardStep = "origin" | "delivery" | "template";
 
 const fieldClass =
   "theme-input mt-2 h-14 w-full rounded-[1.15rem] border border-neutral-200 bg-white px-4 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#25d366] focus:ring-4 focus:ring-[#25d366]/10 disabled:cursor-not-allowed disabled:opacity-60";
@@ -23,8 +23,7 @@ const labelClass = "block text-sm font-medium text-slate-800";
 const wizardSteps: Array<{ key: AutomationWizardStep; label: string }> = [
   { key: "origin", label: "Origine" },
   { key: "delivery", label: "Invio" },
-  { key: "template", label: "Template" },
-  { key: "review", label: "Conferma" },
+  { key: "template", label: "Messaggio" },
 ];
 
 function emptyAutomationDraft() {
@@ -190,15 +189,6 @@ function NewRuleCard(props: { onClick: () => void }) {
   );
 }
 
-function ReviewItem(props: { label: string; value: string }) {
-  return (
-    <div className="rounded-[1.25rem] border border-neutral-200 bg-neutral-50 p-4">
-      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">{props.label}</p>
-      <p className="mt-2 text-sm leading-6 text-slate-800">{props.value}</p>
-    </div>
-  );
-}
-
 export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
   const { showToast } = useToast();
   const [searchParams] = useSearchParams();
@@ -309,7 +299,7 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
         : await createOrgAdminWhatsAppAutomation(payload);
       await loadData(draft.form_id);
       hydrateFromAutomation(result.automation);
-      setActiveStep("review");
+      setActiveStep("template");
       showToast({
         title: draft.id ? "Automazione aggiornata" : "Automazione creata",
         message: "La regola WhatsApp e stata salvata.",
@@ -337,7 +327,7 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
     if (step === "template") {
       return Boolean(draft.template_name.trim()) && Boolean(draft.template_body.trim());
     }
-    return true;
+    return false;
   }
 
   function nextStep() {
@@ -605,30 +595,10 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
               </div>
             ) : null}
 
-            {activeStep === "review" ? (
-              <div className="grid gap-4">
-                <ReviewItem label="Regola" value={draft.name || "Senza nome"} />
-                <ReviewItem label="Modulo" value={selectedForm?.title || "Nessun modulo"} />
-                <ReviewItem label="Evento" value={triggerLabel(draft.trigger_event)} />
-                <ReviewItem label="Destinatario" value={recipientLabel(draft.recipient_type)} />
-                <ReviewItem
-                  label="Numero"
-                  value={
-                    draft.phone_source === "form_field"
-                      ? `${phoneSourceLabel(draft.phone_source)}${draft.phone_field_key ? `: ${draft.phone_field_key}` : ""}`
-                      : draft.phone_source === "custom"
-                        ? draft.custom_phone || "Numero manuale"
-                        : phoneSourceLabel(draft.phone_source)
-                  }
-                />
-                <ReviewItem label="Template" value={draft.template_name || "Nessun template"} />
-                <ReviewItem label="Messaggio" value={draft.template_body || "Nessun messaggio"} />
-              </div>
-            ) : null}
           </div>
 
           <aside className="rounded-[1.7rem] border border-neutral-200 bg-neutral-50 p-5">
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Preview</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Riepilogo</p>
             <div className="mt-4 rounded-[1.4rem] border border-neutral-200 bg-white p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -685,7 +655,7 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
             </button>
           </div>
           <div className="flex flex-wrap gap-3">
-            {activeStep !== "review" ? (
+            {activeStep !== "template" ? (
               <button
                 type="button"
                 className="inline-flex min-h-[3.3rem] items-center justify-center rounded-[1.15rem] bg-[#25d366] px-6 text-sm font-semibold text-[#0b141a] transition hover:bg-[#33dc72] disabled:cursor-not-allowed disabled:opacity-50"

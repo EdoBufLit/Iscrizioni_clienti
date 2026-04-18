@@ -4241,3 +4241,19 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - La sezione impostazioni residua ora e focalizzata su accesso e notifiche: link pubblico, slug, visibilita, stato pagina, email notifiche e toggle essenziali.
 - Ho tradotto in italiano le etichette rimaste in quell'area, inclusi `Link pubblico`, `Copia`, `Personalizza URL`, `Visibilita`, `Pagina attiva`, `Email notifiche`, `Notifica segreteria`, `Conferma utente` e `Invii multipli`.
 - Verifica eseguita: `npm --prefix frontend run build` OK. Resta solo il warning Vite gia noto sui chunk grandi.
+
+## Plan (Workspace Comunicazioni unificato - Apr 18, 2026)
+- [x] Riallineare la shell `Org Admin > Comunicazioni` con una subnav compatta, naming coerente e microcopy interamente in italiano
+- [x] Ridisegnare `Panoramica` come home operativa piu utile, con KPI, stato canali e azioni contestuali
+- [x] Separare davvero `Campagne` e `Modelli`, densificare le liste e alleggerire i wizard email
+- [x] Rendere `WhatsApp` coerente col resto del workspace: frame light, inbox dark solo interna, copy pulita e connessione/QR piu chiari
+- [x] Semplificare `Automazioni WhatsApp`, `Form pubblici` embedded e `Impostazioni email` con gerarchia e CTA coerenti
+- [x] Eseguire build frontend e documentare review finale con esito reale
+
+## Review (Workspace Comunicazioni unificato - Apr 18, 2026)
+- Shell `Comunicazioni` semplificata con tab top-level compatti e separazione reale tra `Campagne`, `Modelli`, `Form pubblici`, `WhatsApp` ed `Email`.
+- `Panoramica` trasformata in home operativa con KPI, next actions e riepilogo del mittente effettivo.
+- `MessagesComposerHub` adattato al nuovo shell con supporto a subtab forzati; lista modelli alleggerita e piu densa.
+- `WhatsApp` riportato in cornice light-first con copy meno rumorosa; automazioni ridotte a 3 step con review laterale.
+- `Form pubblici` ed `Email` ripuliti da label inglesi nelle aree toccate e resi piu guidati.
+- Verifica eseguita: `npm --prefix frontend run build` OK il 18 Apr 2026. Rimane solo il warning Vite gia noto sui chunk grandi.

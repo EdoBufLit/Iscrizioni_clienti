@@ -31,7 +31,6 @@ export function EmailSendingSettings({ communicationsLocked }: EmailSendingSetti
 
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<OrgAdminCommunicationSettings | null>(null);
-  
   const [settingsForm, setSettingsForm] = useState({
     sender_email_local_part: "",
     email_from_name_override: "",
@@ -39,7 +38,6 @@ export function EmailSendingSettings({ communicationsLocked }: EmailSendingSetti
   });
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
-  
   const [testEmail, setTestEmail] = useState("");
   const [testSending, setTestSending] = useState(false);
 
@@ -58,8 +56,8 @@ export function EmailSendingSettings({ communicationsLocked }: EmailSendingSetti
         });
       })
       .catch((err) => {
-        if (!cancelled) {
-          if (err instanceof AuthError) navigate("/org-admin/login", { replace: true });
+        if (!cancelled && err instanceof AuthError) {
+          navigate("/org-admin/login", { replace: true });
         }
       })
       .finally(() => {
@@ -76,7 +74,7 @@ export function EmailSendingSettings({ communicationsLocked }: EmailSendingSetti
     if (settingsSaving || communicationsLocked) return;
     setSettingsSaving(true);
     setSettingsSaved(false);
-    
+
     try {
       const response = await putOrgAdminCommunicationSettings({
         sender_email_local_part: normalizeText(settingsForm.sender_email_local_part),
@@ -131,6 +129,13 @@ export function EmailSendingSettings({ communicationsLocked }: EmailSendingSetti
   };
 
   const moduleActive = Boolean(settings?.communications_enabled);
+  const effectiveSenderName = settingsForm.email_from_name_override.trim() || admin?.organization?.name || "ASSONAM";
+  const effectiveLocalPart = settingsForm.sender_email_local_part.trim() || settings?.sender_email_local_part || `org-${admin?.organization?.id || "x"}`;
+  const effectiveDomain = settings?.mail_from_domain || null;
+  const effectiveSenderAddress = effectiveDomain
+    ? `${effectiveLocalPart}@${effectiveDomain}`
+    : settings?.system_email_sender?.from_email || "noreply@assonam.it";
+  const effectiveReplyTo = settingsForm.reply_to_email.trim() || settings?.reply_to_email || effectiveSenderAddress;
 
   if (loading) {
     return <Skeleton className="h-96 w-full rounded-[1.75rem]" />;
@@ -139,11 +144,11 @@ export function EmailSendingSettings({ communicationsLocked }: EmailSendingSetti
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
       <div className="space-y-6">
-        <form className="rounded-[1.25rem] bg-white p-8 ring-1 ring-inset ring-slate-200/60 shadow-sm" onSubmit={handleSaveSettings}>
-          <div className="border-b border-slate-100 pb-6 mb-8">
-            <h2 className="text-2xl font-light tracking-tight text-slate-900">Configurazione Mittente</h2>
+        <form className="rounded-[1.25rem] bg-white p-8 shadow-sm ring-1 ring-inset ring-slate-200/60" onSubmit={handleSaveSettings}>
+          <div className="mb-8 border-b border-slate-100 pb-6">
+            <h2 className="text-2xl font-light tracking-tight text-slate-900">Mittente email</h2>
             <p className="mt-2 text-sm text-slate-500">
-              Gestisci le informazioni con cui i tuoi soci riceveranno le email.
+              Definisci come comparirà il mittente delle comunicazioni inviate dall'associazione.
             </p>
           </div>
 
@@ -151,7 +156,7 @@ export function EmailSendingSettings({ communicationsLocked }: EmailSendingSetti
             <div className="grid gap-6 md:grid-cols-2">
               <div>
                 <label className={labelClass}>
-                  Nome visibile (Mittente)
+                  Nome mittente
                   <input
                     className={inputClass}
                     disabled={communicationsLocked}
@@ -163,11 +168,12 @@ export function EmailSendingSettings({ communicationsLocked }: EmailSendingSetti
                     placeholder={admin?.organization?.name || "Il nome della tua associazione"}
                   />
                 </label>
-                <p className="mt-2 text-[11px] text-slate-500">Es: "Segreteria Associazione"</p>
+                <p className="mt-2 text-[11px] text-slate-500">Esempio: "Segreteria Associazione"</p>
               </div>
+
               <div>
                 <label className={labelClass}>
-                  Parte iniziale dell'email (Local part)
+                  Indirizzo mittente
                   <input
                     className={inputClass}
                     disabled={communicationsLocked}
@@ -179,13 +185,15 @@ export function EmailSendingSettings({ communicationsLocked }: EmailSendingSetti
                     placeholder="info"
                   />
                 </label>
-                <p className="mt-2 text-[11px] text-slate-500">Es: "info" per generare info@dominio.it</p>
+                <p className="mt-2 text-[11px] text-slate-500">
+                  Inserisci solo la parte prima di @. Esempio: "info" per ottenere info@dominio.it.
+                </p>
               </div>
             </div>
 
             <div>
               <label className={labelClass}>
-                Indirizzo per le risposte (Reply-To)
+                Email per le risposte
                 <input
                   className={inputClass}
                   type="email"
@@ -198,7 +206,9 @@ export function EmailSendingSettings({ communicationsLocked }: EmailSendingSetti
                   placeholder="segreteria@associazione.it"
                 />
               </label>
-              <p className="mt-2 text-[11px] text-slate-500">Se lasciato vuoto, le risposte andranno all'indirizzo mittente.</p>
+              <p className="mt-2 text-[11px] text-slate-500">
+                Se lasciato vuoto, le risposte andranno allo stesso indirizzo mittente.
+              </p>
             </div>
           </div>
 
@@ -233,17 +243,33 @@ export function EmailSendingSettings({ communicationsLocked }: EmailSendingSetti
               {moduleActive ? "Attivo e funzionante" : "Non attivo"}
             </span>
           </div>
-          {!moduleActive && (
-            <p className="mt-4 text-sm text-slate-600 leading-relaxed">
+          {!moduleActive ? (
+            <p className="mt-4 text-sm leading-relaxed text-slate-600">
               Contatta ASSONAM per abilitare il modulo comunicazioni e l'invio di email.
             </p>
-          )}
+          ) : null}
         </div>
 
-        <form className="rounded-[1.25rem] bg-white p-8 ring-1 ring-inset ring-slate-200/60 shadow-sm" onSubmit={handleSendTestEmail}>
+        <div className="rounded-[1.25rem] bg-white p-8 shadow-sm ring-1 ring-inset ring-slate-200/60">
+          <h3 className="text-lg font-medium text-slate-900">Anteprima mittente</h3>
+          <div className="mt-5 space-y-4 rounded-[1.1rem] bg-slate-50 p-5 ring-1 ring-inset ring-slate-200/60">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Da</p>
+              <p className="mt-2 break-all text-sm font-medium text-slate-900">
+                {effectiveSenderName} &lt;{effectiveSenderAddress}&gt;
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Rispondi a</p>
+              <p className="mt-2 break-all text-sm font-medium text-slate-900">{effectiveReplyTo}</p>
+            </div>
+          </div>
+        </div>
+
+        <form className="rounded-[1.25rem] bg-white p-8 shadow-sm ring-1 ring-inset ring-slate-200/60" onSubmit={handleSendTestEmail}>
           <h3 className="text-lg font-medium text-slate-900">Prova l'invio</h3>
-          <p className="mt-2 text-sm text-slate-500 mb-6">Invia un'email di test per verificare che tutto funzioni.</p>
-          
+          <p className="mb-6 mt-2 text-sm text-slate-500">Invia un'email di test per verificare che tutto funzioni.</p>
+
           <div className="space-y-6">
             <label className={labelClass}>
               Email di destinazione
@@ -257,7 +283,7 @@ export function EmailSendingSettings({ communicationsLocked }: EmailSendingSetti
                 required
               />
             </label>
-            
+
             <button className="btn-secondary w-full !rounded-full py-3" type="submit" disabled={testSending || communicationsLocked || !testEmail}>
               {testSending ? "Invio in corso..." : "Invia email di test"}
             </button>

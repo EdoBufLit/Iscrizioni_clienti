@@ -1511,10 +1511,11 @@ export function OrgAdminFormsWorkspace({
         </section>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-2">
+      <div className={`grid gap-5 ${formDraft.form_type === "booking" || formDraft.booking_enabled ? "xl:grid-cols-2" : ""}`}>
+        {formDraft.form_type === "booking" || formDraft.booking_enabled ? (
         <section className="rounded-[1.35rem] border border-neutral-200 bg-white p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.16)]">
           <div className="flex items-center justify-between gap-4">
-            <h3 className="text-sm font-semibold text-neutral-900">Integrazione Prenotazioni</h3>
+            <h3 className="text-sm font-semibold text-neutral-900">Prenotazioni</h3>
             <label className="relative inline-flex cursor-pointer items-center">
               <input type="checkbox" disabled={locked} checked={formDraft.booking_enabled} onChange={(event) => syncFormDraft("booking_enabled", event.target.checked)} className="peer sr-only" />
               <span className="h-6 w-11 rounded-full bg-neutral-200 transition peer-checked:bg-brand" />
@@ -1560,9 +1561,10 @@ export function OrgAdminFormsWorkspace({
             </div>
           ) : null}
         </section>
+        ) : null}
 
         <section className="rounded-[1.35rem] border border-neutral-200 bg-white p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.16)]">
-          <h3 className="text-sm font-semibold text-neutral-900">Personalizzazione Email</h3>
+          <h3 className="text-sm font-semibold text-neutral-900">Notifiche email</h3>
           <div className="mt-4 space-y-4">
             <label className={labelClass}>
               Template notifica admin
@@ -1630,7 +1632,7 @@ export function OrgAdminFormsWorkspace({
               <p className="admin-eyebrow">Lista richieste</p>
               <h4 className="mt-2 text-lg font-semibold text-neutral-950">Inbox form</h4>
             </div>
-            <span className="status-badge status-badge--pending">{submissionSummary.pending} pending</span>
+            <span className="status-badge status-badge--pending">{submissionSummary.pending} in attesa</span>
           </div>
           <div className="max-h-[58vh] overflow-y-auto">
             {submissionsLoading ? (
@@ -1800,7 +1802,7 @@ export function OrgAdminFormsWorkspace({
                         setConfirmActionOpen("pending");
                       }}
                     >
-                      Riporta a pending
+                      Riporta in attesa
                     </button>
                   ) : null}
                 </div>
@@ -1964,7 +1966,7 @@ export function OrgAdminFormsWorkspace({
                         {selectedFormId ? formDraft.title || selectedForm?.title || "Senza titolo" : "Nuovo form"}
                       </h2>
                       <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${formDraft.is_active ? "bg-[#edf9ef] text-[#137847]" : "bg-[#f7f0da] text-[#9b6b09]"}`}>
-                        {formDraft.is_active ? "Published" : "Bozza"}
+                        {formDraft.is_active ? "Pubblicato" : "Bozza"}
                       </span>
                     </div>
                     {selectedFormUrl ? (
@@ -1993,7 +1995,7 @@ export function OrgAdminFormsWorkspace({
                       <path d="M1.5 12S5.5 5.5 12 5.5 22.5 12 22.5 12 18.5 18.5 12 18.5 1.5 12 1.5 12Z" />
                       <circle cx="12" cy="12" r="3" />
                     </svg>
-                    Preview
+                    Anteprima
                   </button>
                   <button
                     className="inline-flex h-10 items-center justify-center rounded-[0.95rem] bg-[#0f5e5d] px-4 text-sm font-semibold text-white transition hover:bg-[#0c4d4d] disabled:cursor-not-allowed disabled:opacity-60"
@@ -2001,7 +2003,7 @@ export function OrgAdminFormsWorkspace({
                     onClick={() => void handleSaveForm()}
                     disabled={savingForm || locked}
                   >
-                    {savingForm ? "Saving..." : "Save Changes"}
+                    {savingForm ? "Salvataggio..." : "Salva modifiche"}
                   </button>
                 </div>
               </div>
@@ -2010,7 +2012,7 @@ export function OrgAdminFormsWorkspace({
                 <div className="mt-4 border-t border-[#eee7db] pt-4">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8a948d]">Campaign Integrations</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8a948d]">Integrazioni campagne</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <a
@@ -2021,7 +2023,7 @@ export function OrgAdminFormsWorkspace({
                           <rect x="3.75" y="6" width="16.5" height="12" rx="2.25" />
                           <path d="M4.5 7l7.05 5.1a.75.75 0 00.9 0L19.5 7" />
                         </svg>
-                        Create Email Invitation
+                        Crea invito email
                       </a>
                       <button
                         type="button"
@@ -2163,8 +2165,8 @@ export function OrgAdminFormsWorkspace({
       <ConfirmModal
         open={confirmActionOpen === "pending"}
         title="Riportare la richiesta in attesa?"
-        description="La review verra azzerata e la richiesta tornera nello stato pending."
-        confirmLabel="Riporta a pending"
+        description="La review verrà azzerata e la richiesta tornerà nello stato in attesa."
+        confirmLabel="Riporta in attesa"
         confirmState={submissionActionState}
         onClose={() => {
           if (submissionActionState === "loading") return;
