@@ -1511,8 +1511,7 @@ export function OrgAdminFormsWorkspace({
         </section>
       </div>
 
-      <div className={`grid gap-5 ${formDraft.form_type === "booking" || formDraft.booking_enabled ? "xl:grid-cols-2" : ""}`}>
-        {formDraft.form_type === "booking" || formDraft.booking_enabled ? (
+      <div className="grid gap-5 xl:grid-cols-2">
         <section className="rounded-[1.35rem] border border-neutral-200 bg-white p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.16)]">
           <div className="flex items-center justify-between gap-4">
             <h3 className="text-sm font-semibold text-neutral-900">Prenotazioni</h3>
@@ -1561,7 +1560,6 @@ export function OrgAdminFormsWorkspace({
             </div>
           ) : null}
         </section>
-        ) : null}
 
         <section className="rounded-[1.35rem] border border-neutral-200 bg-white p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.16)]">
           <h3 className="text-sm font-semibold text-neutral-900">Notifiche email</h3>

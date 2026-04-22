@@ -1,3 +1,15 @@
+## Plan (Diagnosi collegamento Comunicazioni/Form -> Prenotazioni - Apr 23, 2026)
+- [x] Mappare UI e routing attuali tra `ORG ADMIN > Comunicazioni > Form pubblici`, dettaglio form e pagina `Prenotazioni`
+- [x] Verificare se il collegamento visuale/configurativo booking e stato rimosso, spostato o nascosto da condizioni frontend
+- [x] Controllare backend e servizi del flusso `submit form -> review org admin -> conferma/rigetto -> prenotazione automatica`
+- [x] Documentare causa reale, impatto e fix minimo consigliato; applicarlo se il problema e nel codice locale
+
+## Review (Diagnosi collegamento Comunicazioni/Form -> Prenotazioni - Apr 23, 2026)
+- Root cause trovata in [OrgAdminForms.tsx](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni clienti\Iscrizioni_clienti\frontend\src\pages\org-admin\OrgAdminForms.tsx): il pannello `Prenotazioni` nella tab `Impostazioni` era stato reso condizionale (`form_type === "booking" || booking_enabled`) nel commit successivo al refactor del 18 Apr 2026. Per i form generici nuovi il blocco spariva del tutto, quindi non esisteva piu alcun entry point UI per attivare `booking_enabled` e configurare il mapping verso `Prenotazioni`.
+- Il backend invece risultava ancora integro: [public.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni%20clienti\Iscrizioni_clienti\app\routes\public.py) continua a creare la `booking` al submit pubblico tramite `create_booking_from_form_submission(...)`; [bookings.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni%20clienti\Iscrizioni_clienti\app\services\bookings.py) crea ancora la prenotazione se `booking_enabled/create_booking` e attivo; [org_admin.py](C:\Users\edoar\OneDrive\Desktop\CODE\iscrizioni%20clienti\Iscrizioni_clienti\app\routes\org_admin.py) continua a sincronizzare review richiesta e stato booking su conferma/rigetto.
+- Ho applicato il fix minimo sicuro: il pannello `Prenotazioni` in `Comunicazioni > Form pubblici > Impostazioni` e tornato sempre visibile, come nella versione precedente, lasciando invariata la logica di toggle e mapping dei campi.
+- Verifica eseguita: `npm --prefix frontend run build` OK.
+
 ## Plan (ORG ADMIN Soci summary visual refinement - Apr 12, 2026)
 - [x] Rendere piu evidente il riepilogo economico in alto nella pagina Soci senza rompere il visual language esistente
 - [x] Correggere il layout desktop del pannello impostazioni tessera evitando l'accavallamento tra `Durata temporanea` e il selettore unita
