@@ -17,7 +17,7 @@ type CommunicationsOverviewProps = {
 function StatCard(props: { label: string; value: string | number; detail: string }) {
   const { label, value, detail } = props;
   return (
-    <div className="rounded-[1.25rem] bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60 transition-all hover:bg-slate-100/50">
+    <div className="rounded-lg bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60 transition-colors hover:bg-slate-100/50">
       <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">{label}</p>
       <p className="mt-3 text-4xl font-light tracking-tight text-slate-900">{value}</p>
       <p className="mt-2 text-sm leading-6 text-slate-500">{detail}</p>
@@ -38,16 +38,16 @@ function QuickActionCard(props: {
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="group rounded-[1.4rem] border border-slate-200 bg-white p-6 text-left transition-all duration-300 hover:border-slate-300 hover:shadow-[0_18px_32px_rgba(15,23,42,0.08)] disabled:cursor-not-allowed disabled:opacity-50"
+      className="group rounded-lg border border-slate-200 bg-white p-6 text-left transition-colors duration-200 hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
     >
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-base font-semibold text-slate-900">{title}</p>
           <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
         </div>
-        <span className="text-xl font-light text-slate-300 transition-transform group-hover:translate-x-1">&rarr;</span>
+        <span className="text-xl font-light text-slate-300">&rarr;</span>
       </div>
-      <div className="mt-5 inline-flex rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
+      <div className="mt-5 inline-flex rounded-md bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
         {cta}
       </div>
     </button>
@@ -129,9 +129,9 @@ export function CommunicationsOverview({
   if (loading) {
     return (
       <div className="grid gap-5">
-        <Skeleton className="h-20 w-full rounded-[1.75rem]" />
-        <Skeleton className="h-36 w-full rounded-[1.75rem]" />
-        <Skeleton className="h-24 w-full rounded-[1.75rem]" />
+        <Skeleton className="h-20 w-full rounded-xl" />
+        <Skeleton className="h-36 w-full rounded-xl" />
+        <Skeleton className="h-24 w-full rounded-xl" />
       </div>
     );
   }
@@ -202,12 +202,12 @@ export function CommunicationsOverview({
           </div>
         </div>
 
-        <div className="rounded-[1.5rem] bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60">
+        <div className="rounded-lg bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Navigazione consigliata</p>
           <div className="mt-4 space-y-3 text-sm text-slate-600">
             <button
               type="button"
-              className="flex w-full items-center justify-between rounded-[1rem] bg-white px-4 py-3 text-left ring-1 ring-inset ring-slate-200 transition hover:ring-slate-300"
+              className="flex w-full items-center justify-between rounded-md bg-white px-4 py-3 text-left ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300"
               onClick={() => onTabChange("modelli")}
             >
               <span>Rivedi i modelli riusabili</span>
@@ -215,7 +215,7 @@ export function CommunicationsOverview({
             </button>
             <button
               type="button"
-              className="flex w-full items-center justify-between rounded-[1rem] bg-white px-4 py-3 text-left ring-1 ring-inset ring-slate-200 transition hover:ring-slate-300"
+              className="flex w-full items-center justify-between rounded-md bg-white px-4 py-3 text-left ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300"
               onClick={() => onTabChange("moduli")}
             >
               <span>Gestisci link pubblici e notifiche</span>
@@ -224,7 +224,7 @@ export function CommunicationsOverview({
             {whatsappEnabled ? (
               <button
                 type="button"
-                className="flex w-full items-center justify-between rounded-[1rem] bg-white px-4 py-3 text-left ring-1 ring-inset ring-slate-200 transition hover:ring-slate-300"
+                className="flex w-full items-center justify-between rounded-md bg-white px-4 py-3 text-left ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300"
                 onClick={() => onTabChange("whatsapp")}
               >
                 <span>Controlla inbox e regole collegate ai form</span>
@@ -236,7 +236,7 @@ export function CommunicationsOverview({
       </section>
 
       {senderInfo ? (
-        <section className="rounded-[1.5rem] bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60">
+        <section className="rounded-lg bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="min-w-0">
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Mittente effettivo</p>

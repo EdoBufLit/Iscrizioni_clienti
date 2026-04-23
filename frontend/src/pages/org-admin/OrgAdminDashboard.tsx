@@ -16,11 +16,12 @@ const CARD_META: {
   description: string;
   icon: string;
   format: (v: number | null) => string;
+  href?: string;
 }[] = [
   {
-    key: "members_count",
-    label: "Soci totali",
-    description: "Iscritti all'associazione.",
+    key: "active_members_count",
+    label: "Soci attivi",
+    description: "Soci con tessera emessa e valida.",
     icon: "M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128H5.228A2.25 2.25 0 0 1 3 16.878v-.003c0-1.113.285-2.16.786-3.07m0 0a9.337 9.337 0 0 1 4.121-.952 9.38 9.38 0 0 1 2.625.372M15.97 13.856a9.337 9.337 0 0 1 4.121-.952M12.534 7.828a3.175 3.175 0 1 1-5.196 0m5.196 0a3 3 0 1 0-5.196 0M19.5 9.375a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z",
     format: (v) => String(v ?? 0),
   },
@@ -33,10 +34,11 @@ const CARD_META: {
   },
   {
     key: "pending_requests_count",
-    label: "Richieste in corso",
-    description: "In attesa di completamento o verifica.",
+    label: "Richieste in verifica",
+    description: "Non ancora approvate e senza tessera.",
     icon: "M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
     format: (v) => (v === null ? "N/D" : String(v)),
+    href: "/org-admin/soci?status=pending_verification",
   },
   {
     key: "documents_pending_review",
@@ -198,11 +200,8 @@ const OrgAdminDashboard = () => {
             const isCards = card.key === "cards_remaining";
             const exhausted =
               isCards && value === 0 && metrics?.cards_total != null;
-            return (
-              <div
-                key={card.key}
-                className={`surface p-7 flex flex-col justify-between group transition-all ${exhausted ? "border-red-200 bg-red-50/50" : ""}`}
-              >
+            const cardContent = (
+              <>
                 <div>
                   <div
                     className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-300 ${
@@ -258,9 +257,36 @@ const OrgAdminDashboard = () => {
                     </div>
                   </div>
                 )}
+              </>
+            );
+            const className = `surface p-7 flex flex-col justify-between group transition-all ${
+              exhausted ? "border-red-200 bg-red-50/50" : ""
+            }`;
+            if (card.href) {
+              return (
+                <Link key={card.key} to={card.href} className={`${className} hover:border-brand/30 hover:no-underline`}>
+                  {cardContent}
+                </Link>
+              );
+            }
+            return (
+              <div
+                key={card.key}
+                className={className}
+              >
+                {cardContent}
               </div>
             );
           })}
+        </div>
+      )}
+
+      {!isLoading && !metricsError && metrics && (
+        <div className="rounded-lg border border-brand/15 bg-brand/5 px-4 py-3 text-sm leading-6 text-brand-dark">
+          <span className="font-semibold">Conteggio operativo:</span>{" "}
+          {metrics.members_count} include {metrics.active_members_count ?? metrics.cards_used ?? 0} soci attivi con tessera
+          e {metrics.pending_requests_count ?? 0} richieste non ancora approvate. Le richieste non consumano tessere finche
+          non vengono approvate.
         </div>
       )}
 

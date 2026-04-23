@@ -142,6 +142,7 @@ def test_org_metrics_and_csv_exclude_legacy_expired_and_rejected_members(client,
     assert metrics_res.status_code == 200, metrics_res.text
     metrics = metrics_res.json()
     assert metrics["members_count"] == 2
+    assert metrics["active_members_count"] == 1
     assert metrics["pending_requests_count"] == 1
 
     csv_res = client.get("/api/org-admin/members.csv")

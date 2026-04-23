@@ -1,3 +1,18 @@
+## Plan (Org admin conteggi, Comunicazioni e WhatsApp names - Apr 23, 2026)
+- [x] Esporre e usare metriche separate per soci attivi, richieste in verifica e totale operativo senza cambiare la formula esistente
+- [x] Chiarire dashboard e pagina Tessere con confronto tra tessere emesse, richieste senza tessera e totale anagrafiche/richieste
+- [x] Correggere la sync WhatsApp per evitare che il nome profilo dell'account collegato diventi display name delle chat
+- [x] Sostituire i mock WhatsApp frontend con le API reali gia presenti e migliorare responsive/layout inbox
+- [x] Densificare la shell Comunicazioni con header/tab piu professionali e meno card arrotondate
+- [x] Eseguire test backend mirati, build frontend e documentare review finale
+
+## Review (Org admin conteggi, Comunicazioni e WhatsApp names - Apr 23, 2026)
+- Metriche: `/api/org-admin/metrics` espone anche `active_members_count`; dashboard rinomina il KPI in `Soci attivi`, mantiene `Richieste in verifica` cliccabile verso `/org-admin/soci?status=pending_verification` e aggiunge microcopy che spiega il totale operativo. La pagina `Tessere` mostra il confronto tra tessere emesse, richieste senza tessera e anagrafiche/richieste totali.
+- WhatsApp backend: la sync non usa piu `pushName/profileName` outbound o valori uguali al profilo/numero della connessione come `display_name`; in quel caso il fallback e il numero del contatto. Le chat esistenti con nome profilo vengono ripulite alla lettura lista chat e i contatti reali possono sostituire il fallback numerico.
+- WhatsApp frontend: `WhatsAppHub` usa le API reali per contatti, draft chat e start chat; la UI e una split-view stabile lista/thread su desktop e passa a viste separate su mobile, senza altezza fragile `h-[calc(100dvh-27rem)]`.
+- UI Comunicazioni: shell, Panoramica, Email, WhatsApp e Automazioni hanno header/tab piu compatti, radius ridotti, hover stabili e colori piu allineati al design system.
+- Verifiche eseguite: `python -m py_compile app/routes/org_admin.py app/routes/whatsapp_evolution.py app/services/whatsapp_sync.py` OK; `python -m pytest -q tests/test_org_admin_whatsapp.py tests/test_join_and_org_metrics_legacy_members.py` OK (`14 passed`, solo warning deprecazione esistenti); `npm --prefix frontend run build` OK con warning Vite preesistente su chunk grandi.
+
 ## Plan (Diagnosi collegamento Comunicazioni/Form -> Prenotazioni - Apr 23, 2026)
 - [x] Mappare UI e routing attuali tra `ORG ADMIN > Comunicazioni > Form pubblici`, dettaglio form e pagina `Prenotazioni`
 - [x] Verificare se il collegamento visuale/configurativo booking e stato rimosso, spostato o nascosto da condizioni frontend

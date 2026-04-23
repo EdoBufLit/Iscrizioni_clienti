@@ -4,12 +4,16 @@ import {
   connectOrgAdminWhatsApp,
   disconnectOrgAdminWhatsApp,
   fetchOrgAdminWhatsAppChats,
+  fetchOrgAdminWhatsAppContacts,
   fetchOrgAdminWhatsAppConnection,
   fetchOrgAdminWhatsAppMessages,
   fetchOrgAdminWhatsAppQr,
+  openOrgAdminWhatsAppDraftChat,
   sendOrgAdminWhatsAppMessage,
+  startOrgAdminWhatsAppChat,
   type OrgAdminWhatsAppChat,
   type OrgAdminWhatsAppConnection,
+  type OrgAdminWhatsAppContact,
   type OrgAdminWhatsAppMessage,
 } from "../../../../lib/api";
 import { useToast } from "../../../../components/ui/ToastProvider";
@@ -123,7 +127,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
   const [threadLoading, setThreadLoading] = useState(false);
   const [connection, setConnection] = useState<OrgAdminWhatsAppConnection>(emptyConnection());
   const [chats, setChats] = useState<OrgAdminWhatsAppChat[]>([]);
-  const [contacts, setContacts] = useState<any[]>([]);
+  const [contacts, setContacts] = useState<OrgAdminWhatsAppContact[]>([]);
   const [messages, setMessages] = useState<OrgAdminWhatsAppMessage[]>([]);
   const [selectedChatId, setSelectedChatId] = useState<number | null>(null);
   const [composerText, setComposerText] = useState("");
@@ -133,6 +137,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
   const [sidebarQuery, setSidebarQuery] = useState("");
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>("all");
   const [showNewChatPanel, setShowNewChatPanel] = useState(false);
+  const [mobileThreadOpen, setMobileThreadOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const contactByJid = useMemo(
@@ -228,10 +233,13 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
   }
 
   async function loadContacts(_options?: { connected?: boolean; hydrateSidebar?: boolean }) {
-    // Note: fetchOrgAdminWhatsAppContacts was removed to fix TypeScript errors.
-    // Set an empty array until a real endpoint is available.
-    setContacts([]);
-    return [];
+    if (connection.status !== "connected" && !_options?.connected) {
+      setContacts([]);
+      return [];
+    }
+    const response = await fetchOrgAdminWhatsAppContacts();
+    setContacts(response.items);
+    return response.items;
   }
 
   async function loadMessages(chatId: number, options?: { silent?: boolean }) {
@@ -382,24 +390,18 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
     setBusy("open-chat");
     setError(null);
     try {
-      // NOTE: openOrgAdminWhatsAppDraftChat is not available.
-      // We simulate creating a draft local chat instead.
-      const pseudoId = Date.now();
-      const mockChat: OrgAdminWhatsAppChat = {
-        id: pseudoId,
-        external_chat_id: trimmedNumber,
-        display_name: input.displayName?.trim() || trimmedNumber,
-        last_message_at: null,
-        last_message_text: null,
-        unread_count: 0,
-      };
-      setChats((prev) => [mockChat, ...prev]);
-      setSelectedChatId(pseudoId);
+      const response = await openOrgAdminWhatsAppDraftChat({
+        number: trimmedNumber,
+        display_name: input.displayName?.trim() || undefined,
+      });
+      setChats((prev) => [response.chat, ...prev.filter((chat) => chat.id !== response.chat.id)]);
+      setSelectedChatId(response.chat.id);
       setMessages([]);
       setShowNewChatPanel(false);
+      setMobileThreadOpen(true);
       showToast({
         title: "WhatsApp",
-        message: "Chat aperta. Puoi usare il composer come in una inbox.",
+        message: "Chat aperta.",
         tone: "success",
       });
     } catch (err) {
@@ -416,34 +418,19 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
     setBusy("start-chat");
     setError(null);
     try {
-      // NOTE: startOrgAdminWhatsAppChat is not available, simulate by adding a new message
-      // and reloading context or manually building it
-      const trimmedNumber = newChatNumber.trim();
-      const displayName = newChatName.trim() || trimmedNumber;
-      
-      const pseudoId = Date.now();
-      const mockChat: OrgAdminWhatsAppChat = {
-        id: pseudoId,
-        external_chat_id: trimmedNumber,
-        display_name: displayName,
-        last_message_at: new Date().toISOString(),
-        last_message_text: newChatText.trim(),
-        unread_count: 0,
-      };
-      
-      setChats((prev) => [mockChat, ...prev]);
-      setSelectedChatId(pseudoId);
-      
-      // We would ideally call an API to send the first message here if there was one
-      // For now we simulate
-      await sendOrgAdminWhatsAppMessage(pseudoId, newChatText.trim()).catch(() => {
-          // Ignore failures for mocked ID
+      const response = await startOrgAdminWhatsAppChat({
+        number: newChatNumber.trim(),
+        display_name: newChatName.trim() || undefined,
+        text: newChatText.trim(),
       });
-      
+      setChats((prev) => [response.chat, ...prev.filter((chat) => chat.id !== response.chat.id)]);
+      setSelectedChatId(response.chat.id);
+      setMessages([response.message]);
       setNewChatNumber("");
       setNewChatName("");
       setNewChatText("");
       setShowNewChatPanel(false);
+      setMobileThreadOpen(true);
       showToast({ title: "WhatsApp", message: "Conversazione avviata con successo.", tone: "success" });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Errore avvio nuova chat WhatsApp.";
@@ -477,6 +464,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
     if (item.chatId) {
       setSelectedChatId(item.chatId);
       await loadMessages(item.chatId);
+      setMobileThreadOpen(true);
       return;
     }
     await handleOpenDraftChat({
@@ -488,8 +476,8 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
   if (loading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-24 w-full rounded-[1rem]" />
-        <Skeleton className="h-[34rem] w-full rounded-[1rem]" />
+        <Skeleton className="h-24 w-full rounded-xl" />
+        <Skeleton className="h-[34rem] w-full rounded-xl" />
       </div>
     );
   }
@@ -497,8 +485,8 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
   const statusUi = statusCopy[connection.status];
 
   return (
-    <div className="flex h-[calc(100dvh-27rem)] min-h-[30rem] min-h-0 flex-col gap-4 overflow-hidden">
-      <div className="shrink-0 rounded-[1.25rem] border border-neutral-200 bg-white px-5 py-4 text-sm text-slate-700 shadow-sm">
+    <div className="flex min-h-[min(44rem,calc(100dvh-11rem))] flex-col gap-4 overflow-hidden pb-20 md:pb-0">
+      <div className="shrink-0 rounded-lg border border-neutral-200 bg-white px-5 py-4 text-sm text-slate-700 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">
             <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${lightStatusCopy[connection.status]}`}>
@@ -514,7 +502,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              className="rounded-full bg-[#17494a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#11393a] disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-60"
               onClick={() => void handleConnect()}
               disabled={communicationsLocked || busy === "connect" || busy === "disconnect"}
             >
@@ -522,7 +510,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
             </button>
             <button
               type="button"
-              className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-neutral-300 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-lg border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-neutral-300 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60"
               onClick={() => void handleDisconnect()}
               disabled={communicationsLocked || busy === "connect" || busy === "disconnect"}
             >
@@ -531,19 +519,19 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
           </div>
         </div>
         {connection.last_error ? (
-          <div className="mt-3 rounded-[1rem] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {connection.last_error}
           </div>
         ) : null}
         {error ? (
-          <div className="mt-3 rounded-[1rem] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {error}
           </div>
         ) : null}
       </div>
 
       {connection.status === "qr_required" ? (
-        <div className="max-h-[18rem] shrink-0 overflow-y-auto rounded-[1.25rem] border border-amber-200 bg-amber-50 p-5 text-slate-700 shadow-sm">
+        <div className="max-h-[18rem] shrink-0 overflow-y-auto rounded-lg border border-amber-200 bg-amber-50 p-5 text-slate-700 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-5">
             <div className="max-w-xl">
               <p className="text-base font-semibold text-slate-900">Scansiona il QR per completare il collegamento</p>
@@ -557,14 +545,14 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
               <img
                 src={connection.qr_code}
                 alt="QR WhatsApp"
-                className="h-56 w-56 rounded-[1.25rem] border border-amber-200 bg-white p-3 shadow-lg"
+                className="h-56 w-56 rounded-lg border border-amber-200 bg-white p-3 shadow-lg"
               />
             ) : connection.qr_code ? (
-              <div className="max-w-xl rounded-[1rem] border border-amber-200 bg-white px-4 py-3 text-xs text-slate-700">
+              <div className="max-w-xl rounded-lg border border-amber-200 bg-white px-4 py-3 text-xs text-slate-700">
                 <code className="break-all">{connection.qr_code}</code>
               </div>
             ) : (
-              <div className="rounded-[1rem] border border-amber-200 bg-white px-4 py-3 text-sm text-slate-700">
+              <div className="rounded-lg border border-amber-200 bg-white px-4 py-3 text-sm text-slate-700">
                 QR in aggiornamento...
               </div>
             )}
@@ -572,9 +560,9 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
         </div>
       ) : null}
 
-      <section className="min-h-0 flex-1 overflow-hidden rounded-[1rem] border border-neutral-200 bg-[#0b141a] shadow-sm">
+      <section className="min-h-0 flex-1 overflow-hidden rounded-lg border border-neutral-200 bg-[#0b141a] shadow-sm">
         <div className="grid h-full min-h-0 xl:grid-cols-[24rem,minmax(0,1fr)]">
-          <aside className="min-h-0 border-r border-[#203239] bg-[#111b21]">
+          <aside className={`${mobileThreadOpen ? "hidden xl:block" : "block"} min-h-0 border-r border-[#203239] bg-[#111b21]`}>
             <div className="flex h-full min-h-0 flex-col">
               <div className="border-b border-[#203239] px-5 py-4">
                 <div className="flex items-center justify-between gap-3">
@@ -630,7 +618,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
                 </div>
 
                 {showNewChatPanel ? (
-                  <div className="mt-4 rounded-[1.25rem] ring-1 ring-inset ring-[#2a3942] bg-[#0f171c] p-4">
+                  <div className="mt-4 rounded-lg ring-1 ring-inset ring-[#2a3942] bg-[#0f171c] p-4">
                     <p className="text-sm font-semibold text-[#f8f9fa]">Apri o avvia una nuova chat</p>
                     <div className="mt-3 space-y-3">
                       <input
@@ -639,7 +627,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
                         value={newChatNumber}
                         onChange={(event) => setNewChatNumber(event.target.value)}
                         placeholder="+39 340 1234567"
-                        className="w-full rounded-[1rem] ring-1 ring-inset ring-[#2a3942] bg-[#202c33] px-4 py-3 text-sm text-[#e9edef] outline-none placeholder:text-[#8696a0] focus:ring-2 focus:ring-inset focus:ring-[#1faa61]"
+                        className="w-full rounded-lg ring-1 ring-inset ring-[#2a3942] bg-[#202c33] px-4 py-3 text-sm text-[#e9edef] outline-none placeholder:text-[#8696a0] focus:ring-2 focus:ring-inset focus:ring-[#1faa61]"
                         disabled={communicationsLocked || connection.status !== "connected" || busy === "open-chat" || busy === "start-chat"}
                       />
                       <input
@@ -647,7 +635,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
                         value={newChatName}
                         onChange={(event) => setNewChatName(event.target.value)}
                         placeholder="Nome contatto opzionale"
-                        className="w-full rounded-[1rem] ring-1 ring-inset ring-[#2a3942] bg-[#202c33] px-4 py-3 text-sm text-[#e9edef] outline-none placeholder:text-[#8696a0] focus:ring-2 focus:ring-inset focus:ring-[#1faa61]"
+                        className="w-full rounded-lg ring-1 ring-inset ring-[#2a3942] bg-[#202c33] px-4 py-3 text-sm text-[#e9edef] outline-none placeholder:text-[#8696a0] focus:ring-2 focus:ring-inset focus:ring-[#1faa61]"
                         disabled={communicationsLocked || connection.status !== "connected" || busy === "open-chat" || busy === "start-chat"}
                       />
                       <textarea
@@ -656,7 +644,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
                         rows={3}
                         maxLength={4096}
                         placeholder="Messaggio iniziale opzionale se vuoi inviare subito"
-                        className="w-full rounded-[1rem] ring-1 ring-inset ring-[#2a3942] bg-[#202c33] px-4 py-3 text-sm text-[#e9edef] outline-none placeholder:text-[#8696a0] focus:ring-2 focus:ring-inset focus:ring-[#1faa61]"
+                        className="w-full rounded-lg ring-1 ring-inset ring-[#2a3942] bg-[#202c33] px-4 py-3 text-sm text-[#e9edef] outline-none placeholder:text-[#8696a0] focus:ring-2 focus:ring-inset focus:ring-[#1faa61]"
                         disabled={communicationsLocked || connection.status !== "connected" || busy === "open-chat" || busy === "start-chat"}
                       />
                       <div className="grid gap-2 sm:grid-cols-2">
@@ -712,7 +700,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
                     {canQuickOpenFromSearch && !sidebarItems.length ? (
                       <button
                         type="button"
-                        className="mx-2 mb-2 flex w-[calc(100%-1rem)] items-center gap-3 rounded-[1.25rem] ring-1 ring-inset ring-[#2a3942] bg-[#172229] px-4 py-3 text-left transition hover:ring-1 hover:ring-inset hover:ring-[#41525d] hover:bg-[#1b2a30]"
+                        className="mx-2 mb-2 flex w-[calc(100%-1rem)] items-center gap-3 rounded-lg ring-1 ring-inset ring-[#2a3942] bg-[#172229] px-4 py-3 text-left transition hover:ring-1 hover:ring-inset hover:ring-[#41525d] hover:bg-[#1b2a30]"
                         onClick={() =>
                           void handleOpenDraftChat({
                             number: sidebarQuery,
@@ -777,11 +765,21 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
             </div>
           </aside>
 
-          <div className="flex min-h-0 flex-col bg-[#0b141a]">
+          <div className={`${mobileThreadOpen ? "flex" : "hidden xl:flex"} min-h-0 flex-col bg-[#0b141a]`}>
             {selectedChat ? (
               <>
                 <header className="sticky top-0 z-10 flex shrink-0 items-center justify-between gap-4 border-b border-[#203239] bg-[#202c33] px-5 py-4">
                   <div className="flex min-w-0 items-center gap-3">
+                    <button
+                      type="button"
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full ring-1 ring-inset ring-[#2a3942] bg-[#1f2c33] text-[#d1d7db] xl:hidden"
+                      onClick={() => setMobileThreadOpen(false)}
+                      aria-label="Torna alle chat"
+                    >
+                      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
                     <Avatar label={selectedChat.display_name} imageUrl={selectedContact?.profile_pic_url ?? null} sizeClass="h-12 w-12" />
                     <div className="min-w-0">
                       <p className="truncate text-lg font-semibold text-[#f8f9fa]">{selectedChat.display_name}</p>
@@ -809,11 +807,11 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
                 >
                   {threadLoading ? (
                     <div className="space-y-4">
-                      <Skeleton className="h-20 w-3/5 rounded-[1.25rem]" />
-                      <Skeleton className="ml-auto h-20 w-1/2 rounded-[1.25rem]" />
+                      <Skeleton className="h-20 w-3/5 rounded-lg" />
+                      <Skeleton className="ml-auto h-20 w-1/2 rounded-lg" />
                     </div>
                   ) : messages.length === 0 ? (
-                    <div className="mx-auto mt-20 max-w-xl rounded-[1.25rem] ring-1 ring-inset ring-[#203239] bg-[#111b21]/85 px-6 py-8 text-center text-sm text-[#aebac1] shadow-xl">
+                    <div className="mx-auto mt-20 max-w-xl rounded-lg ring-1 ring-inset ring-[#203239] bg-[#111b21]/85 px-6 py-8 text-center text-sm text-[#aebac1] shadow-xl">
                       Nessun messaggio sincronizzato ancora in questo thread. Puoi iniziare a scrivere dal composer in basso.
                     </div>
                   ) : (
@@ -823,7 +821,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
                         return (
                           <div key={message.id} className={`flex ${outbound ? "justify-end" : "justify-start"}`}>
                             <div
-                              className={`max-w-[78%] rounded-[1.25rem] px-4 py-3 shadow-lg ${
+                              className={`max-w-[78%] rounded-lg px-4 py-3 shadow-lg ${
                                 outbound ? "bg-[#005c4b] text-[#f7fffd]" : "bg-[#202c33] text-[#e9edef]"
                               }`}
                             >
@@ -868,7 +866,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
                             ? "Scrivi un messaggio"
                             : "Connetti WhatsApp per rispondere"
                       }
-                      className="min-h-[3.5rem] flex-1 rounded-[1.25rem] ring-1 ring-inset ring-[#2a3942] bg-[#2a3942] px-5 py-4 text-sm text-[#e9edef] outline-none placeholder:text-[#8696a0] focus:ring-2 focus:ring-inset focus:ring-[#1faa61] disabled:cursor-not-allowed disabled:opacity-60"
+                      className="min-h-[3.5rem] flex-1 rounded-lg ring-1 ring-inset ring-[#2a3942] bg-[#2a3942] px-5 py-4 text-sm text-[#e9edef] outline-none placeholder:text-[#8696a0] focus:ring-2 focus:ring-inset focus:ring-[#1faa61] disabled:cursor-not-allowed disabled:opacity-60"
                       disabled={!selectedChat || communicationsLocked || connection.status !== "connected" || busy === "send"}
                     />
                     <button
@@ -892,7 +890,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
                   backgroundSize: "28px 28px, 100% 100%",
                 }}
               >
-                <div className="max-w-xl rounded-[1.25rem] ring-1 ring-inset ring-[#203239] bg-[#111b21]/85 px-8 py-10 shadow-xl">
+                <div className="max-w-xl rounded-lg ring-1 ring-inset ring-[#203239] bg-[#111b21]/85 px-8 py-10 shadow-xl">
                   <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#103629] text-2xl text-[#d1f4cc]">
                     WA
                   </div>

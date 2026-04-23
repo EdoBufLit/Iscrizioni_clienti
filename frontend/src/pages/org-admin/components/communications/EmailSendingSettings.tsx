@@ -16,7 +16,7 @@ type EmailSendingSettingsProps = {
 };
 
 const inputClass =
-  "mt-1 w-full rounded-[1.1rem] border border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-neutral-900/40 focus:ring-2 focus:ring-neutral-900/10";
+  "mt-1 w-full rounded-lg border border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-neutral-900/40 focus:ring-2 focus:ring-neutral-900/10";
 const labelClass = "block text-sm font-medium text-neutral-700";
 
 function normalizeText(value: string | null | undefined): string | null {
@@ -138,13 +138,13 @@ export function EmailSendingSettings({ communicationsLocked }: EmailSendingSetti
   const effectiveReplyTo = settingsForm.reply_to_email.trim() || settings?.reply_to_email || effectiveSenderAddress;
 
   if (loading) {
-    return <Skeleton className="h-96 w-full rounded-[1.75rem]" />;
+    return <Skeleton className="h-96 w-full rounded-xl" />;
   }
 
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
       <div className="space-y-6">
-        <form className="rounded-[1.25rem] bg-white p-8 shadow-sm ring-1 ring-inset ring-slate-200/60" onSubmit={handleSaveSettings}>
+        <form className="rounded-lg bg-white p-8 shadow-sm ring-1 ring-inset ring-slate-200/60" onSubmit={handleSaveSettings}>
           <div className="mb-8 border-b border-slate-100 pb-6">
             <h2 className="text-2xl font-light tracking-tight text-slate-900">Mittente email</h2>
             <p className="mt-2 text-sm text-slate-500">
@@ -230,7 +230,7 @@ export function EmailSendingSettings({ communicationsLocked }: EmailSendingSetti
       </div>
 
       <div className="space-y-6">
-        <div className="rounded-[1.25rem] bg-slate-50 p-8 ring-1 ring-inset ring-slate-200/60">
+        <div className="rounded-lg bg-slate-50 p-8 ring-1 ring-inset ring-slate-200/60">
           <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Stato del servizio</h3>
           <div className="mt-4">
             <span
@@ -250,9 +250,9 @@ export function EmailSendingSettings({ communicationsLocked }: EmailSendingSetti
           ) : null}
         </div>
 
-        <div className="rounded-[1.25rem] bg-white p-8 shadow-sm ring-1 ring-inset ring-slate-200/60">
+        <div className="rounded-lg bg-white p-8 shadow-sm ring-1 ring-inset ring-slate-200/60">
           <h3 className="text-lg font-medium text-slate-900">Anteprima mittente</h3>
-          <div className="mt-5 space-y-4 rounded-[1.1rem] bg-slate-50 p-5 ring-1 ring-inset ring-slate-200/60">
+          <div className="mt-5 space-y-4 rounded-lg bg-slate-50 p-5 ring-1 ring-inset ring-slate-200/60">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Da</p>
               <p className="mt-2 break-all text-sm font-medium text-slate-900">
@@ -266,7 +266,7 @@ export function EmailSendingSettings({ communicationsLocked }: EmailSendingSetti
           </div>
         </div>
 
-        <form className="rounded-[1.25rem] bg-white p-8 shadow-sm ring-1 ring-inset ring-slate-200/60" onSubmit={handleSendTestEmail}>
+        <form className="rounded-lg bg-white p-8 shadow-sm ring-1 ring-inset ring-slate-200/60" onSubmit={handleSendTestEmail}>
           <h3 className="text-lg font-medium text-slate-900">Prova l'invio</h3>
           <p className="mb-6 mt-2 text-sm text-slate-500">Invia un'email di test per verificare che tutto funzioni.</p>
 

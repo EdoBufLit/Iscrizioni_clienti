@@ -15,9 +15,9 @@ type Props = { communicationsLocked: boolean };
 type AutomationWizardStep = "origin" | "delivery" | "template";
 
 const fieldClass =
-  "theme-input mt-2 h-14 w-full rounded-[1.15rem] border border-neutral-200 bg-white px-4 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#25d366] focus:ring-4 focus:ring-[#25d366]/10 disabled:cursor-not-allowed disabled:opacity-60";
+  "theme-input mt-2 h-14 w-full rounded-lg border border-neutral-200 bg-white px-4 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-brand/60 focus:ring-4 focus:ring-brand/10 disabled:cursor-not-allowed disabled:opacity-60";
 const textareaClass =
-  "theme-input mt-2 min-h-[180px] w-full rounded-[1.15rem] border border-neutral-200 bg-white px-4 py-4 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#25d366] focus:ring-4 focus:ring-[#25d366]/10 disabled:cursor-not-allowed disabled:opacity-60";
+  "theme-input mt-2 min-h-[180px] w-full rounded-lg border border-neutral-200 bg-white px-4 py-4 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-brand/60 focus:ring-4 focus:ring-brand/10 disabled:cursor-not-allowed disabled:opacity-60";
 const labelClass = "block text-sm font-medium text-slate-800";
 
 const wizardSteps: Array<{ key: AutomationWizardStep; label: string }> = [
@@ -103,9 +103,9 @@ function StepButton(props: {
     <button
       type="button"
       onClick={props.onClick}
-      className={`flex min-w-[140px] items-center gap-3 rounded-[1.35rem] border px-4 py-3 text-left transition ${
+      className={`flex min-w-[140px] items-center gap-3 rounded-lg border px-4 py-3 text-left transition ${
         props.active
-          ? "border-[#25d366]/60 bg-[#25d366] text-[#0b141a] shadow-[0_14px_28px_rgba(37,211,102,0.18)]"
+          ? "border-brand bg-brand text-white shadow-sm"
           : props.done
             ? "border-emerald-200 bg-emerald-50 text-emerald-700"
             : "border-neutral-200 bg-white text-slate-500 hover:border-neutral-300 hover:bg-neutral-50 hover:text-slate-900"
@@ -114,7 +114,7 @@ function StepButton(props: {
       <span
         className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
           props.active
-            ? "bg-white/30 text-[#0b141a]"
+            ? "bg-white/20 text-white"
             : props.done
               ? "bg-white text-emerald-700"
               : "bg-neutral-100 text-slate-500"
@@ -136,10 +136,10 @@ function RuleCard(props: {
     <button
       type="button"
       onClick={props.onSelect}
-      className={`min-h-[156px] rounded-[1.8rem] border p-5 text-left transition ${
+      className={`min-h-[156px] rounded-lg border p-5 text-left transition ${
         props.selected
-          ? "border-[#25d366]/45 bg-emerald-50 text-slate-950 shadow-[0_18px_40px_rgba(15,23,42,0.08)]"
-          : "border-neutral-200 bg-white text-slate-900 hover:border-neutral-300 hover:bg-neutral-50 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)]"
+          ? "border-brand/35 bg-brand/5 text-slate-950"
+          : "border-neutral-200 bg-white text-slate-900 hover:border-neutral-300 hover:bg-neutral-50"
       }`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -178,9 +178,9 @@ function NewRuleCard(props: { onClick: () => void }) {
     <button
       type="button"
       onClick={props.onClick}
-      className="flex min-h-[156px] flex-col justify-between rounded-[1.8rem] border border-dashed border-neutral-200 bg-neutral-50 p-5 text-left text-slate-900 transition hover:border-neutral-300 hover:bg-white"
+      className="flex min-h-[156px] flex-col justify-between rounded-lg border border-dashed border-neutral-200 bg-neutral-50 p-5 text-left text-slate-900 transition hover:border-neutral-300 hover:bg-white"
     >
-      <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#25d366] text-2xl text-[#0b141a]">+</span>
+      <span className="inline-flex h-12 w-12 items-center justify-center rounded-md bg-brand text-2xl text-white">+</span>
       <div>
         <p className="text-lg font-semibold">Nuova regola</p>
         <p className="mt-1 text-sm text-slate-500">Crea una nuova automazione WhatsApp.</p>
@@ -352,8 +352,8 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
   if (loading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-28 w-full rounded-[1.85rem]" />
-        <Skeleton className="h-[620px] w-full rounded-[2rem]" />
+        <Skeleton className="h-28 w-full rounded-xl" />
+        <Skeleton className="h-[620px] w-full rounded-xl" />
       </div>
     );
   }
@@ -405,13 +405,13 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
           <NewRuleCard onClick={beginNewRule} />
         </div>
         {automations.length === 0 ? (
-          <div className="rounded-[1.6rem] border border-dashed border-neutral-200 bg-neutral-50 px-5 py-4 text-sm text-slate-500">
+          <div className="rounded-lg border border-dashed border-neutral-200 bg-neutral-50 px-5 py-4 text-sm text-slate-500">
             Nessuna regola configurata.
           </div>
         ) : null}
       </section>
 
-      <section className="rounded-[2rem] border border-neutral-200 bg-white p-5 shadow-[0_22px_60px_rgba(15,23,42,0.06)] md:p-7">
+      <section className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm md:p-7">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 pb-5">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Configurazione</p>
@@ -434,7 +434,7 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
         </div>
 
         <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_320px]">
-          <div className="rounded-[1.7rem] border border-neutral-200 bg-neutral-50 p-5 md:p-6">
+          <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-5 md:p-6">
             {activeStep === "origin" ? (
               <div className="grid gap-5">
                 <label className={labelClass}>
@@ -586,7 +586,7 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
                 <label className="inline-flex items-center gap-3 text-sm font-medium text-slate-700">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 rounded border-neutral-300 bg-white text-[#25d366]"
+                    className="h-4 w-4 rounded border-neutral-300 bg-white text-brand"
                     checked={draft.is_active}
                     onChange={(event) => setDraft((prev) => ({ ...prev, is_active: event.target.checked }))}
                   />
@@ -597,9 +597,9 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
 
           </div>
 
-          <aside className="rounded-[1.7rem] border border-neutral-200 bg-neutral-50 p-5">
+          <aside className="rounded-lg border border-neutral-200 bg-neutral-50 p-5">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Riepilogo</p>
-            <div className="mt-4 rounded-[1.4rem] border border-neutral-200 bg-white p-4">
+            <div className="mt-4 rounded-lg border border-neutral-200 bg-white p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-base font-semibold text-slate-900">{draft.template_name || "Template WhatsApp"}</p>
@@ -629,7 +629,7 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
               </div>
             </div>
 
-            <div className="mt-4 rounded-[1.4rem] border border-neutral-200 bg-white p-4">
+            <div className="mt-4 rounded-lg border border-neutral-200 bg-white p-4">
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Messaggio</p>
               <p className="mt-3 text-sm leading-7 text-slate-700">{draft.template_body || reviewSummary}</p>
             </div>
@@ -640,14 +640,14 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
-              className="inline-flex min-h-[3.3rem] items-center justify-center rounded-[1.15rem] border border-neutral-200 bg-white px-5 text-sm font-medium text-slate-700 transition hover:border-neutral-300 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex min-h-[3.3rem] items-center justify-center rounded-lg border border-neutral-200 bg-white px-5 text-sm font-medium text-slate-700 transition hover:border-neutral-300 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={beginNewRule}
             >
               Reset
             </button>
             <button
               type="button"
-              className="inline-flex min-h-[3.3rem] items-center justify-center rounded-[1.15rem] border border-neutral-200 bg-white px-5 text-sm font-medium text-slate-700 transition hover:border-neutral-300 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex min-h-[3.3rem] items-center justify-center rounded-lg border border-neutral-200 bg-white px-5 text-sm font-medium text-slate-700 transition hover:border-neutral-300 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={previousStep}
               disabled={activeIndex === 0}
             >
@@ -658,7 +658,7 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
             {activeStep !== "template" ? (
               <button
                 type="button"
-                className="inline-flex min-h-[3.3rem] items-center justify-center rounded-[1.15rem] bg-[#25d366] px-6 text-sm font-semibold text-[#0b141a] transition hover:bg-[#33dc72] disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex min-h-[3.3rem] items-center justify-center rounded-lg bg-brand px-6 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={nextStep}
                 disabled={communicationsLocked}
               >
@@ -667,7 +667,7 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
             ) : (
               <button
                 type="button"
-                className="inline-flex min-h-[3.3rem] items-center justify-center rounded-[1.15rem] bg-[#25d366] px-6 text-sm font-semibold text-[#0b141a] transition hover:bg-[#33dc72] disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex min-h-[3.3rem] items-center justify-center rounded-lg bg-brand px-6 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() => void saveAutomation()}
                 disabled={communicationsLocked}
               >

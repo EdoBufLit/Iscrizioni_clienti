@@ -4145,6 +4145,7 @@ def org_metrics(request: Request, db: Session = Depends(get_db)):
 
     return {
         "members_count": members_count,
+        "active_members_count": active_members_count,
         "cards_total": cards_total,
         "cards_used": cards_used,
         "cards_remaining": cards_remaining,

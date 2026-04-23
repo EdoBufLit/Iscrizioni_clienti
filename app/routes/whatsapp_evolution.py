@@ -17,6 +17,7 @@ from app.services.whatsapp_evolution import (
 )
 from app.services.whatsapp_sync import (
     apply_connection_snapshot,
+    cleanup_own_profile_chat_names,
     create_pending_outbound_message,
     finalize_outbound_send,
     get_chat_for_connection,
@@ -226,6 +227,8 @@ def list_whatsapp_chats(
         else:
             sync_remote_chats_into_store(db, connection=connection, chats=remote_chats)
             db.commit()
+    if cleanup_own_profile_chat_names(db, connection=connection):
+        db.commit()
     items = [serialize_chat(chat) for chat in list_chats_for_connection(db, connection=connection)]
     return {"items": items, "total": len(items)}
 

@@ -197,6 +197,21 @@ def get_or_create_chat_for_number(
     )
 
 
+def cleanup_own_profile_chat_names(db: Session, *, connection: WhatsAppConnection) -> int:
+    cleaned_count = 0
+    chats = (
+        db.query(WhatsAppChat)
+        .filter(WhatsAppChat.connection_id == connection.id)
+        .all()
+    )
+    for chat in chats:
+        if not _is_own_connection_display_name(connection, chat.display_name):
+            continue
+        chat.display_name = _fallback_chat_display_name(chat.external_chat_id)
+        cleaned_count += 1
+    return cleaned_count
+
+
 def sync_contacts_into_chats(
     db: Session,
     *,
@@ -208,7 +223,11 @@ def sync_contacts_into_chats(
         external_chat_id = canonicalize_whatsapp_chat_id(contact.remote_jid)
         if not external_chat_id or is_whatsapp_group_jid(external_chat_id):
             continue
-        display_name = contact.display_name or contact.phone_number or external_chat_id
+        display_name = _safe_chat_display_name(
+            connection,
+            contact.display_name or contact.phone_number or external_chat_id,
+            external_chat_id,
+        )
         chat = _get_or_create_chat(
             db,
             connection=connection,
@@ -232,7 +251,11 @@ def sync_remote_chats_into_store(
         external_chat_id = canonicalize_whatsapp_chat_id(remote_chat.remote_jid)
         if not external_chat_id or is_whatsapp_group_jid(external_chat_id):
             continue
-        display_name = remote_chat.display_name or normalize_phone(external_chat_id) or external_chat_id
+        display_name = _safe_chat_display_name(
+            connection,
+            remote_chat.display_name or normalize_phone(external_chat_id) or external_chat_id,
+            external_chat_id,
+        )
         chat = _get_or_create_chat(
             db,
             connection=connection,
@@ -599,7 +622,11 @@ def _ingest_contact_batch(
         contacts.append(
             EvolutionContact(
                 remote_jid=canonical_chat_id,
-                display_name=_extract_display_name(payload) or normalize_phone(remote_jid) or remote_jid.strip(),
+                display_name=_safe_chat_display_name(
+                    connection,
+                    _extract_display_name(payload) or normalize_phone(remote_jid) or remote_jid.strip(),
+                    canonical_chat_id,
+                ),
                 phone_number=normalize_phone(remote_jid),
                 profile_pic_url=payload.get("profilePicUrl") if isinstance(payload.get("profilePicUrl"), str) else None,
                 created_at=_parse_datetime(payload.get("createdAt")),
@@ -621,16 +648,21 @@ def _ingest_chat_batch(
         external_chat_id = _extract_chat_id(payload)
         if not external_chat_id or is_whatsapp_group_jid(external_chat_id):
             continue
-        display_name = _extract_display_name(payload)
-        if not display_name:
+        raw_display_name = _extract_display_name(payload)
+        if not raw_display_name:
             name = payload.get("name")
             if isinstance(name, str) and name.strip():
-                display_name = name.strip()
+                raw_display_name = name.strip()
+        display_name = _safe_chat_display_name(
+            connection,
+            raw_display_name,
+            external_chat_id,
+        )
         chat = _get_or_create_chat(
             db,
             connection=connection,
             external_chat_id=external_chat_id,
-            display_name=display_name or normalize_phone(external_chat_id) or external_chat_id,
+            display_name=display_name or _fallback_chat_display_name(external_chat_id),
         )
         unread_messages = payload.get("unreadMessages")
         if isinstance(unread_messages, int) and unread_messages >= 0:
@@ -680,6 +712,11 @@ def _get_or_create_chat(
     )
     if normalized_external_chat_id is None:
         raise ValueError("Chat WhatsApp non valida.")
+    safe_display_name = _safe_chat_display_name(
+        connection,
+        display_name,
+        normalized_external_chat_id,
+    )
 
     chat_candidates = _find_chat_candidates(
         db,
@@ -692,9 +729,9 @@ def _get_or_create_chat(
             primary_chat.external_chat_id = normalized_external_chat_id
         alias_chats = [item for item in chat_candidates if item.id != primary_chat.id]
         if alias_chats:
-            _merge_chat_aliases(db, primary_chat=primary_chat, alias_chats=alias_chats)
-        if _should_replace_display_name(primary_chat.display_name, display_name):
-            primary_chat.display_name = display_name
+            _merge_chat_aliases(db, connection=connection, primary_chat=primary_chat, alias_chats=alias_chats)
+        if _should_replace_display_name(primary_chat.display_name, safe_display_name):
+            primary_chat.display_name = safe_display_name
         return primary_chat
 
     chat = (
@@ -710,13 +747,13 @@ def _get_or_create_chat(
             org_id=connection.org_id,
             connection_id=connection.id,
             external_chat_id=normalized_external_chat_id,
-            display_name=display_name,
+            display_name=safe_display_name,
         )
         db.add(chat)
         db.flush()
         return chat
-    if _should_replace_display_name(chat.display_name, display_name):
-        chat.display_name = display_name
+    if _should_replace_display_name(chat.display_name, safe_display_name):
+        chat.display_name = safe_display_name
     return chat
 
 
@@ -762,6 +799,7 @@ def _select_primary_chat(
 def _merge_chat_aliases(
     db: Session,
     *,
+    connection: WhatsAppConnection,
     primary_chat: WhatsAppChat,
     alias_chats: list[WhatsAppChat],
 ) -> None:
@@ -777,10 +815,38 @@ def _merge_chat_aliases(
             primary_chat.last_message_at = alias_chat.last_message_at
             primary_chat.last_message_text = alias_chat.last_message_text
         primary_chat.unread_count = int(primary_chat.unread_count or 0) + int(alias_chat.unread_count or 0)
-        if _should_replace_display_name(primary_chat.display_name, alias_chat.display_name):
-            primary_chat.display_name = alias_chat.display_name
+        alias_display_name = _safe_chat_display_name(connection, alias_chat.display_name, alias_chat.external_chat_id)
+        if _should_replace_display_name(primary_chat.display_name, alias_display_name):
+            primary_chat.display_name = alias_display_name
         db.delete(alias_chat)
     db.flush()
+
+
+def _fallback_chat_display_name(external_chat_id: str | None) -> str:
+    return normalize_phone(external_chat_id) or (external_chat_id or "").strip() or "Contatto WhatsApp"
+
+
+def _is_own_connection_display_name(connection: WhatsAppConnection, value: str | None) -> bool:
+    cleaned = (value or "").strip()
+    if not cleaned:
+        return False
+    profile_name = (connection.profile_name or "").strip()
+    if profile_name and cleaned.casefold() == profile_name.casefold():
+        return True
+    own_phone = normalize_phone(connection.phone_number)
+    candidate_phone = normalize_phone(cleaned)
+    return bool(own_phone and candidate_phone and own_phone == candidate_phone)
+
+
+def _safe_chat_display_name(
+    connection: WhatsAppConnection,
+    candidate: str | None,
+    external_chat_id: str | None,
+) -> str:
+    cleaned_candidate = (candidate or "").strip()
+    if cleaned_candidate and not _is_own_connection_display_name(connection, cleaned_candidate):
+        return cleaned_candidate
+    return _fallback_chat_display_name(external_chat_id)
 
 
 def _display_name_quality(value: str | None) -> int:
@@ -850,7 +916,14 @@ def _build_message_context(
     recipient_phone = remote_phone if direction == "outbound" else connection.phone_number
     text_body = _extract_text_body(payload)
     created_at = _extract_message_timestamp(payload) or fallback_time
-    display_name = _extract_display_name(payload) or remote_phone or external_chat_id
+    if direction == "outbound":
+        display_name = remote_phone or external_chat_id
+    else:
+        display_name = _safe_chat_display_name(
+            connection,
+            _extract_display_name(payload) or remote_phone or external_chat_id,
+            external_chat_id,
+        )
     status = _normalize_message_status(_extract_update_status(payload))
     if event_name == "send.message" and status == "pending":
         status = "sent"

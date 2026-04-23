@@ -3,12 +3,14 @@ import { useNavigate } from "react-router-dom";
 import {
   fetchCardStock,
   fetchCardMovements,
+  fetchOrgAdminMetrics,
   fetchOrgAdminMembers,
   fetchOrgAdminMembershipSettings,
   patchOrgAdminMembershipSettings,
   AuthError,
   type CardStock,
   type CardMovement,
+  type OrgAdminMetrics,
   type OrgAdminMembershipSettings,
 } from "../../lib/api";
 import { useOrgAdmin } from "./OrgAdminLayout";
@@ -67,6 +69,7 @@ const OrgAdminCards = () => {
   const [movementsYear, setMovementsYear] = useState<number | null>(null);
   const [summaryTotal, setSummaryTotal] = useState(0);
   const [issuedMembersCount, setIssuedMembersCount] = useState(0);
+  const [metrics, setMetrics] = useState<OrgAdminMetrics | null>(null);
   const [membershipSettings, setMembershipSettings] = useState<OrgAdminMembershipSettings | null>(null);
   const [savingMembershipSettings, setSavingMembershipSettings] = useState(false);
   const [membershipSettingsError, setMembershipSettingsError] = useState("");
@@ -85,8 +88,9 @@ const OrgAdminCards = () => {
       fetchCardMovements(),
       fetchOrgAdminMembershipSettings(),
       fetchOrgAdminMembers({ limit: 1, offset: 0 }),
+      fetchOrgAdminMetrics(),
     ])
-      .then(([stockData, movData, settingsData, membersData]) => {
+      .then(([stockData, movData, settingsData, membersData, metricsData]) => {
         setStock(stockData);
         setMovements(movData.items);
         setMovementsTotal(movData.total);
@@ -94,6 +98,7 @@ const OrgAdminCards = () => {
         setMembershipSettings(settingsData);
         setSummaryTotal(membersData.summary?.total_theoretical_membership_fees ?? 0);
         setIssuedMembersCount(membersData.summary?.issued_members_count ?? 0);
+        setMetrics(metricsData);
       })
       .catch((err) => {
         if (err instanceof AuthError) {
@@ -138,6 +143,8 @@ const OrgAdminCards = () => {
   }
 
   const isLoading = adminLoading || loading;
+  const pendingWithoutCardCount = Math.max((metrics?.pending_requests_count ?? 0), 0);
+  const totalOperationalCount = metrics?.members_count ?? issuedMembersCount + pendingWithoutCardCount;
 
   return (
     <div className="container-shell py-10" data-tour="admin-cards">
@@ -192,6 +199,26 @@ const OrgAdminCards = () => {
                     <path d="M14 24h9" />
                     <path d="M18 30.5 31.5 35 39 30.5V19a4 4 0 0 0-4-4h-4" />
                   </svg>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-brand/20 bg-brand/5 px-4 py-3">
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-brand-dark">
+                Lettura conteggi
+              </p>
+              <div className="mt-3 grid gap-3 text-sm text-neutral-700 sm:grid-cols-3 xl:grid-cols-1">
+                <div>
+                  <span className="block text-xl font-semibold tabular-nums text-neutral-950">{issuedMembersCount}</span>
+                  <span>Tessere emesse</span>
+                </div>
+                <div>
+                  <span className="block text-xl font-semibold tabular-nums text-neutral-950">{pendingWithoutCardCount}</span>
+                  <span>Richieste senza tessera</span>
+                </div>
+                <div>
+                  <span className="block text-xl font-semibold tabular-nums text-neutral-950">{totalOperationalCount}</span>
+                  <span>Anagrafiche e richieste</span>
                 </div>
               </div>
             </div>

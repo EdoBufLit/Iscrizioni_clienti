@@ -401,6 +401,8 @@ def test_internal_webhook_merges_alias_chat_ids_and_prefers_better_contact_name(
     connection.phone_number = "+393404244452"
     db.commit()
     db.refresh(connection)
+    legacy_dedupe_key = f"legacy-alias-message-{org.id}"
+    merged_message_id = f"wamid-merged-{org.id}"
 
     alias_chat = WhatsAppChat(
         org_id=org.id,
@@ -418,7 +420,7 @@ def test_internal_webhook_merges_alias_chat_ids_and_prefers_better_contact_name(
             org_id=org.id,
             connection_id=connection.id,
             chat_id=alias_chat.id,
-            dedupe_key="legacy-alias-message",
+            dedupe_key=legacy_dedupe_key,
             direction="inbound",
             status="sent",
             sender_phone="+393338765432",
@@ -440,7 +442,7 @@ def test_internal_webhook_merges_alias_chat_ids_and_prefers_better_contact_name(
                 "messages": [
                     {
                         "key": {
-                            "id": "wamid-merged-1",
+                            "id": merged_message_id,
                             "remoteJid": "393338765432@s.whatsapp.net",
                             "fromMe": False,
                         },
@@ -482,6 +484,71 @@ def test_internal_webhook_merges_alias_chat_ids_and_prefers_better_contact_name(
         assert merged_chats[0].display_name == "Mario Rossi"
     finally:
         verification_db.close()
+
+
+def test_whatsapp_sync_does_not_use_own_profile_name_for_chats(client, db):
+    org, admin = _create_org_admin(db, communications_enabled=True)
+    _login_org_admin(client, db, admin.id)
+    connection = get_or_create_connection(db, org)
+    connection.status = "connected"
+    connection.phone_number = "+393404244452"
+    connection.profile_name = "Edoardo Oscar Buffa"
+    db.flush()
+    outbound_message_id = f"wamid-own-profile-outbound-{org.id}"
+    bad_chat = WhatsAppChat(
+        org_id=org.id,
+        connection_id=connection.id,
+        external_chat_id="393331234567@s.whatsapp.net",
+        display_name="Edoardo Oscar Buffa",
+    )
+    db.add(bad_chat)
+    db.commit()
+
+    outbound_res = client.post(
+        "/api/internal/whatsapp/evolution",
+        json={
+            "event": "send.message",
+            "instance": connection.instance_name,
+            "date_time": "2026-03-18T18:15:00Z",
+            "data": {
+                "key": {
+                    "id": outbound_message_id,
+                    "remoteJid": "393331234567@s.whatsapp.net",
+                    "fromMe": True,
+                },
+                "pushName": "Edoardo Oscar Buffa",
+                "message": {"conversation": "Messaggio inviato"},
+                "messageTimestamp": 1773857700,
+            },
+        },
+        headers={"X-Evolution-ApiKey": settings.EVOLUTION_API_KEY},
+    )
+    assert outbound_res.status_code == 200, outbound_res.text
+
+    chats_res = client.get("/api/org-admin/communications/whatsapp/chats")
+    assert chats_res.status_code == 200, chats_res.text
+    payload = chats_res.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["display_name"] == "+393331234567"
+
+    contact_res = client.post(
+        "/api/internal/whatsapp/evolution",
+        json={
+            "event": "contacts.upsert",
+            "instance": connection.instance_name,
+            "date_time": "2026-03-18T18:16:00Z",
+            "data": {
+                "remoteJid": "393331234567@s.whatsapp.net",
+                "pushName": "Mario Rossi",
+            },
+        },
+        headers={"X-Evolution-ApiKey": settings.EVOLUTION_API_KEY},
+    )
+    assert contact_res.status_code == 200, contact_res.text
+
+    chats_res = client.get("/api/org-admin/communications/whatsapp/chats")
+    assert chats_res.status_code == 200, chats_res.text
+    assert chats_res.json()["items"][0]["display_name"] == "Mario Rossi"
 
 
 def test_evolution_client_uses_lite_namespaced_paths(monkeypatch):

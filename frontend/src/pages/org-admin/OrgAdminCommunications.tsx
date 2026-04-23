@@ -138,16 +138,16 @@ export default function OrgAdminCommunications() {
     return (
       <div className="container-shell py-8 space-y-5">
         <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-96 w-full rounded-[2rem]" />
+        <Skeleton className="h-96 w-full rounded-xl" />
       </div>
     );
   }
 
   return (
-    <div className="container-shell py-8 space-y-6">
-      <section className="surface overflow-hidden">
+    <div className="container-shell py-8 space-y-5">
+      <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
         {communicationsLocked && (
-          <div className="mx-6 mt-6 rounded-[1.75rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900 md:mx-8">
+          <div className="mx-6 mt-6 rounded-lg border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900 md:mx-8">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-700">Modulo non attivo</p>
@@ -157,24 +157,32 @@ export default function OrgAdminCommunications() {
           </div>
         )}
 
-        <div className="px-6 pt-6 md:px-8">
-          <div className="flex flex-col gap-4 border-b border-neutral-200 pb-5 md:flex-row md:items-end md:justify-between">
-            <div className="max-w-3xl">
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Comunicazioni</p>
-              <h1 className="mt-2 text-[2rem] font-semibold tracking-tight text-slate-950">Workspace comunicazioni</h1>
-              <p className="mt-2 text-sm text-slate-500">
-                Campagne email, modelli, form pubblici, inbox WhatsApp e configurazione mittente in un unico flusso.
-              </p>
+        <div className="px-5 pt-5 md:px-6">
+          <div className="flex flex-col gap-4 border-b border-neutral-200 pb-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Comunicazioni</p>
+              <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">Centro messaggi</h1>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
+                <span className={`rounded-md border px-2.5 py-1 ${communicationsLocked ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+                  {communicationsLocked ? "Modulo bloccato" : "Modulo attivo"}
+                </span>
+                <span className={`rounded-md border px-2.5 py-1 ${whatsappEnabled ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-neutral-200 bg-neutral-50 text-neutral-600"}`}>
+                  WhatsApp {whatsappEnabled ? "attivo" : "non attivo"}
+                </span>
+                <span className="rounded-md border border-neutral-200 bg-neutral-50 px-2.5 py-1 text-neutral-600">
+                  Email configurabile
+                </span>
+              </div>
             </div>
             <div className="overflow-x-auto pb-1">
-              <div className="inline-flex min-w-max rounded-full border border-neutral-200 bg-neutral-50 p-1.5">
+              <div className="inline-flex min-w-max rounded-lg border border-neutral-200 bg-neutral-50 p-1">
                 {visibleTabs.map((tab) => (
                   <button
                     key={tab.key}
                     type="button"
-                    className={`rounded-full px-4 py-2.5 text-sm font-semibold transition ${
+                    className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
                       activeTab === tab.key
-                        ? "bg-[#17494a] text-white shadow-sm"
+                        ? "bg-brand text-white shadow-sm"
                         : "text-slate-600 hover:bg-white hover:text-slate-950"
                     }`}
                     onClick={() => selectTab(tab.key)}
@@ -187,7 +195,7 @@ export default function OrgAdminCommunications() {
           </div>
         </div>
 
-        <div className="px-6 py-8 md:px-8">
+        <div className="px-5 py-6 md:px-6">
           {activeTab === "panoramica" && (
             <CommunicationsOverview
               communicationsLocked={communicationsLocked}
@@ -222,7 +230,7 @@ export default function OrgAdminCommunications() {
           {activeTab === "whatsapp" && (
             whatsappEnabled ? (
               <div className="space-y-6">
-                <div className="flex flex-wrap items-center gap-3 border-b border-neutral-200 pb-4">
+                <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 pb-4">
                   {([
                     { key: "inbox", label: "Chat e connessione", hint: "QR code, stato sessione e inbox." },
                     { key: "automazioni", label: "Automazioni", hint: "Regole collegate ai form." },
@@ -231,9 +239,9 @@ export default function OrgAdminCommunications() {
                       key={item.key}
                       type="button"
                       onClick={() => selectWhatsAppView(item.key)}
-                      className={`rounded-[1rem] border px-4 py-2.5 text-left transition ${
+                      className={`rounded-lg border px-4 py-2.5 text-left transition ${
                         activeWhatsAppView === item.key
-                          ? "border-neutral-900 bg-neutral-900 text-white"
+                          ? "border-brand bg-brand text-white"
                           : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 hover:text-neutral-900"
                       }`}
                     >
@@ -252,7 +260,7 @@ export default function OrgAdminCommunications() {
                 )}
               </div>
             ) : (
-              <div className="rounded-[1.75rem] border border-dashed border-neutral-300 bg-neutral-50 px-6 py-10 text-sm text-neutral-600">
+              <div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 px-6 py-10 text-sm text-neutral-600">
                 WhatsApp non è ancora attivo per questa associazione. Quando la connessione sarà disponibile, qui vedrai le automazioni collegate ai form pubblici.
               </div>
             )

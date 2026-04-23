@@ -2805,6 +2805,7 @@ export async function uploadSuperAdminStatute(
 
 export type OrgAdminMetrics = {
   members_count: number;
+  active_members_count?: number | null;
   cards_total: number | null;
   cards_used: number | null;
   cards_remaining: number | null;
