@@ -1,3 +1,18 @@
+## Plan (Org admin light/dark mode audit - Apr 25, 2026)
+- [x] Mappare tutte le superfici org-admin e le regole CSS tema coinvolte, con focus su notifiche, tab attivi, KPI/icon badge, wizard, modali, builder e tabelle.
+- [x] Correggere il layer tema condiviso e le utility hardcoded che producono testo scuro su sfondo scuro o testo chiaro su sfondo chiaro.
+- [x] Applicare fix mirati ai componenti org-admin che bypassano i token globali, mantenendo invariati flussi/API.
+- [x] Eseguire typecheck/build frontend e smoke test light/dark su route org-admin critiche.
+- [x] Documentare in questa review superfici coperte, esito test e residui.
+
+## Review (Org admin light/dark mode audit - Apr 25, 2026)
+- Root cause: il bridge `.org-admin-v2` in `theme.css` forzava il workspace in light e sovrascriveva `text-white` dentro `.org-admin-content`, rompendo tab attivi, stepper e badge su sfondi scuri. Inoltre molte primitive org-admin usavano colori hex light-only.
+- Correzione: `frontend/src/index.css` ora rende `--oa-*` theme-aware, aggiorna shell/sidebar/topbar, KPI, action card, stepper, empty state, badge icona e popover notifiche usando token leggibili in light/dark.
+- Correzione: `frontend/src/theme.css` non forza piu l'area org-admin in light, preserva il testo bianco sugli stati selezionati, mappa colori semantici e copre utility legacy/arbitrarie (`bg-[#fb...]`, `text-[#...]`, purple, amber/rose/emerald ecc.) in dark mode.
+- Correzione mirata: `OrgAdminNotificationBell.tsx` usa classi semantiche per popover, header, lista, card, empty/loading state, evitando gradienti e colori hardcoded non tematizzati.
+- Verifiche: `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK con solo warning Vite gia noto sui chunk grandi.
+- Smoke visuale/contrasto autenticato su `http://127.0.0.1:8017`: dashboard, Comunicazioni > Campagne, Comunicazioni > WhatsApp automazioni, Soci, Tessere e popover Notifiche in light e dark. Esito OK; screenshot in `tasks/screenshots/org-admin-theme-smoke-20260425/`.
+
 ## Plan (Verify and push org admin structural rehaul - Apr 25, 2026)
 - [x] Controllare branch, remote e working tree per isolare i file da includere nel push.
 - [x] Rieseguire verifiche tecniche mirate prima del commit: frontend typecheck/build e test backend org-admin.

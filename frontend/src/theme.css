@@ -1348,6 +1348,12 @@ select:focus {
   background-color: color-mix(in srgb, var(--theme-brand) 18%, var(--theme-surface-solid)) !important;
 }
 
+:root[data-theme="dark"] .bg-purple-50,
+:root[data-theme="dark"] .bg-violet-50,
+:root[data-theme="dark"] .bg-fuchsia-50 {
+  background-color: color-mix(in srgb, #a78bfa 16%, var(--theme-surface-solid)) !important;
+}
+
 :root[data-theme="dark"] .border-emerald-200,
 :root[data-theme="dark"] .border-emerald-200\/50,
 :root[data-theme="dark"] .border-emerald-200\/60 {
@@ -1375,24 +1381,39 @@ select:focus {
   border-color: color-mix(in srgb, var(--theme-brand) 34%, var(--theme-border)) !important;
 }
 
+:root[data-theme="dark"] .text-emerald-800,
 :root[data-theme="dark"] .text-emerald-700 {
   color: color-mix(in srgb, var(--theme-success) 78%, white) !important;
 }
 
+:root[data-theme="dark"] .text-amber-800,
 :root[data-theme="dark"] .text-amber-700,
+:root[data-theme="dark"] .text-orange-800,
 :root[data-theme="dark"] .text-orange-700 {
   color: color-mix(in srgb, var(--theme-warning) 82%, white) !important;
 }
 
+:root[data-theme="dark"] .text-red-800,
 :root[data-theme="dark"] .text-red-700,
+:root[data-theme="dark"] .text-rose-800,
+:root[data-theme="dark"] .text-rose-700,
 :root[data-theme="dark"] .text-red-600 {
   color: color-mix(in srgb, var(--theme-danger) 80%, white) !important;
 }
 
+:root[data-theme="dark"] .text-blue-800,
 :root[data-theme="dark"] .text-blue-700,
+:root[data-theme="dark"] .text-sky-800,
 :root[data-theme="dark"] .text-sky-700,
+:root[data-theme="dark"] .text-cyan-800,
 :root[data-theme="dark"] .text-cyan-700 {
   color: color-mix(in srgb, var(--theme-brand) 82%, white) !important;
+}
+
+:root[data-theme="dark"] .text-purple-700,
+:root[data-theme="dark"] .text-violet-700,
+:root[data-theme="dark"] .text-fuchsia-700 {
+  color: color-mix(in srgb, #c4b5fd 86%, white) !important;
 }
 
 :root[data-theme="dark"] table tbody tr:nth-child(even) {
@@ -1409,28 +1430,35 @@ select:focus {
   }
 }
 
-/* Org admin keeps the 2026 operational light workspace regardless of the global theme cascade. */
+/* Org admin theme bridge: keep legacy utility-heavy screens readable in both modes. */
 .app-shell.org-admin-v2 {
-  background-color: #f8faf9 !important;
+  background-color: var(--oa-bg) !important;
   background-image: none !important;
   color: var(--oa-text) !important;
 }
 
 .org-admin-v2 .org-admin-content {
-  background-color: #f8faf9 !important;
+  background-color: var(--oa-bg) !important;
   background-image: none !important;
   color: var(--oa-text) !important;
 }
 
 .org-admin-v2 .org-admin-sidebar {
-  background-color: #ffffff !important;
+  background-color: var(--oa-panel) !important;
   background-image: none !important;
 }
 
 .org-admin-v2 .org-admin-sidebar__brand,
 .org-admin-v2 .org-admin-topbar {
-  color: #ffffff;
+  color: #ffffff !important;
 }
+
+.org-admin-v2 .org-admin-sidebar__brand,
+.org-admin-v2 .org-admin-sidebar__brand:hover,
+.org-admin-v2 .org-admin-sidebar__brand:focus-visible {
+  color: #ffffff !important;
+}
+
 
 .org-admin-v2 .org-admin-content .surface,
 .org-admin-v2 .org-admin-content .surface-strong,
@@ -1443,7 +1471,7 @@ select:focus {
 .org-admin-v2 .org-admin-content div.rounded-\[1\.6rem\],
 .org-admin-v2 .org-admin-content form.rounded-\[1\.4rem\] {
   border-color: var(--oa-line) !important;
-  background-color: #ffffff !important;
+  background-color: var(--oa-panel) !important;
   background-image: none !important;
   color: var(--oa-text) !important;
   box-shadow: var(--oa-shadow) !important;
@@ -1453,16 +1481,16 @@ select:focus {
 .org-admin-v2 .org-admin-content [class*="bg-neutral-900"],
 .org-admin-v2 .org-admin-content [class*="bg-slate-950"],
 .org-admin-v2 .org-admin-content [class*="bg-slate-900"] {
-  background-color: #ffffff !important;
+  background-color: var(--oa-brand) !important;
   background-image: none !important;
-  color: var(--oa-text) !important;
+  color: var(--oa-on-brand) !important;
 }
 
 .org-admin-v2 .org-admin-content [class*="bg-neutral-50"],
 .org-admin-v2 .org-admin-content [class*="bg-neutral-100"],
 .org-admin-v2 .org-admin-content [class*="bg-slate-50"],
 .org-admin-v2 .org-admin-content [class*="bg-slate-100"] {
-  background-color: #f6f8f7 !important;
+  background-color: var(--oa-panel-soft) !important;
   background-image: none !important;
 }
 
@@ -1472,7 +1500,6 @@ select:focus {
   border-color: var(--oa-line) !important;
 }
 
-.org-admin-v2 .org-admin-content [class*="text-white"],
 .org-admin-v2 .org-admin-content [class*="text-neutral-900"],
 .org-admin-v2 .org-admin-content [class*="text-slate-900"],
 .org-admin-v2 .org-admin-content [class*="text-slate-950"] {
@@ -1481,8 +1508,30 @@ select:focus {
 
 .org-admin-v2 .org-admin-content [class*="text-neutral-600"],
 .org-admin-v2 .org-admin-content [class*="text-neutral-500"],
+.org-admin-v2 .org-admin-content [class*="text-neutral-400"],
 .org-admin-v2 .org-admin-content [class*="text-slate-600"],
-.org-admin-v2 .org-admin-content [class*="text-slate-500"] {
+.org-admin-v2 .org-admin-content [class*="text-slate-500"],
+.org-admin-v2 .org-admin-content [class*="text-slate-400"] {
+  color: var(--oa-muted) !important;
+}
+
+.org-admin-v2 .org-admin-content [class*="text-brand"] {
+  color: var(--oa-brand-strong) !important;
+}
+
+:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="bg-[#fb"],
+:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="bg-[#f8"],
+:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="bg-[#f7"],
+:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="bg-[#f6"],
+:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="bg-[#f4"],
+:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="bg-[#ee"],
+:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="bg-[#ec"],
+:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="bg-[#ea"] {
+  background-color: var(--oa-panel-soft) !important;
+  background-image: none !important;
+}
+
+:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="text-[#"] {
   color: var(--oa-muted) !important;
 }
 
@@ -1490,12 +1539,12 @@ select:focus {
 .org-admin-v2 .org-admin-content .btn-success {
   background-color: var(--oa-brand) !important;
   background-image: none !important;
-  color: #ffffff !important;
+  color: var(--oa-on-brand) !important;
 }
 
 .org-admin-v2 .org-admin-content .btn-ghost,
 .org-admin-v2 .org-admin-content .btn-secondary {
-  background-color: #ffffff !important;
+  background-color: var(--oa-panel) !important;
   background-image: none !important;
   color: var(--oa-brand-strong) !important;
   border-color: var(--oa-line-strong) !important;

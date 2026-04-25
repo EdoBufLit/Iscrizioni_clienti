@@ -215,8 +215,8 @@ const OrgAdminNotificationBell = () => {
       </button>
 
       {open && (
-        <div className="fixed left-3 right-3 top-[calc(4rem+0.75rem)] z-[70] overflow-hidden rounded-[28px] border border-neutral-200 bg-white shadow-[0_40px_120px_-50px_rgba(15,23,42,0.45)] sm:absolute sm:left-auto sm:right-0 sm:top-[calc(100%+0.75rem)] sm:w-[min(92vw,26rem)]">
-          <div className="border-b border-neutral-100 bg-[radial-gradient(circle_at_top_right,rgba(15,118,110,0.08),transparent_45%),linear-gradient(180deg,rgba(248,250,252,0.95),rgba(255,255,255,0.98))] px-5 py-5">
+        <div className="org-admin-notification-popover fixed left-3 right-3 top-[calc(4rem+0.75rem)] z-[70] overflow-hidden rounded-[28px] border sm:absolute sm:left-auto sm:right-0 sm:top-[calc(100%+0.75rem)] sm:w-[min(92vw,26rem)]">
+          <div className="org-admin-notification-popover__header border-b px-5 py-5">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.26em] text-neutral-400">Notifiche</p>
@@ -239,11 +239,11 @@ const OrgAdminNotificationBell = () => {
             </div>
           )}
 
-          <div className="max-h-[min(28rem,calc(100vh-6.5rem))] overflow-auto p-3">
+          <div className="org-admin-notification-popover__list max-h-[min(28rem,calc(100vh-6.5rem))] overflow-auto p-3">
             {loading ? (
               <div className="space-y-3 p-2">
                 {[0, 1, 2].map((item) => (
-                  <div key={item} className="animate-pulse rounded-[1.25rem] border border-neutral-100 bg-neutral-50/70 px-4 py-4">
+                  <div key={item} className="org-admin-notification-loading animate-pulse rounded-[1.25rem] border px-4 py-4">
                     <div className="h-3 w-24 rounded bg-neutral-200" />
                     <div className="mt-3 h-4 w-40 rounded bg-neutral-200" />
                     <div className="mt-2 h-3 w-full rounded bg-neutral-100" />
@@ -251,7 +251,7 @@ const OrgAdminNotificationBell = () => {
                 ))}
               </div>
             ) : items.length === 0 ? (
-              <div className="rounded-[1.25rem] border border-dashed border-neutral-300 bg-neutral-50/70 px-5 py-10 text-center">
+              <div className="org-admin-notification-empty rounded-[1.25rem] border border-dashed px-5 py-10 text-center">
                 <p className="text-sm font-semibold text-neutral-500">Nessuna notifica disponibile.</p>
               </div>
             ) : (
@@ -259,10 +259,10 @@ const OrgAdminNotificationBell = () => {
                 {items.map((notification) => (
                   <div
                     key={notification.id}
-                    className={`w-full rounded-[1.25rem] border px-4 py-4 text-left transition ${
+                    className={`org-admin-notification-card w-full rounded-[1.25rem] border px-4 py-4 text-left transition ${
                       notification.is_read
-                        ? "border-neutral-200 bg-white hover:border-neutral-300"
-                        : "border-brand/20 bg-brand/5 shadow-[0_18px_50px_-40px_rgba(15,118,110,0.45)] hover:border-brand/40"
+                        ? ""
+                        : "is-unread shadow-[0_18px_50px_-40px_rgba(15,118,110,0.45)]"
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -275,8 +275,8 @@ const OrgAdminNotificationBell = () => {
                           onClick={() => void handleNotificationClick(notification)}
                           className="mt-3 block text-left"
                         >
-                          <h4 className="text-sm font-bold text-neutral-900">{notification.title}</h4>
-                          <p className="mt-2 text-sm font-medium leading-relaxed text-neutral-500">{notification.body}</p>
+                          <h4 className="org-admin-notification-card__title text-sm font-bold">{notification.title}</h4>
+                          <p className="org-admin-notification-card__body mt-2 text-sm font-medium leading-relaxed">{notification.body}</p>
                         </button>
                       </div>
                       <div className="flex shrink-0 items-start gap-2">
@@ -297,7 +297,7 @@ const OrgAdminNotificationBell = () => {
                         )}
                       </div>
                     </div>
-                    <div className="mt-4 flex items-center justify-between gap-3 text-[11px] font-semibold text-neutral-400">
+                    <div className="org-admin-notification-card__meta mt-4 flex items-center justify-between gap-3 text-[11px] font-semibold">
                       <span>{formatDateTime(notification.created_at)}</span>
                       <div className="flex items-center gap-3">
                         {!notification.is_read && (
