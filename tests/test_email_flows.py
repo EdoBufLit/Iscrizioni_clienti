@@ -152,6 +152,80 @@ def test_org_admin_magic_link_flow(client, drain_email_outbox):
     assert me_res.status_code == 200
     assert me_res.json()["email"] == email
 
+
+def test_org_admin_magic_link_normalizes_email_and_logs_flow(
+    client, drain_email_outbox, caplog
+):
+    caplog.set_level("INFO")
+    client.post(
+        "/api/super-admin/auth/login",
+        json={"email": "admin@assonam.it", "password": "admin"},
+    )
+
+    email = f"mixed.admin.{uuid.uuid4().hex[:8]}@example.com"
+    create_res = client.post(
+        "/api/super-admin/org-admins", json={"email": email, "org_id": 1}
+    )
+    assert create_res.status_code == 200
+    drain_email_outbox()
+    client.post("/api/super-admin/auth/logout")
+
+    clear_captured_emails()
+    caplog.clear()
+
+    res = client.post(
+        "/api/org-admin/auth/magic-link",
+        data={"email": f"  {email.upper()}  "},
+    )
+    assert res.status_code == 200
+    drain_email_outbox()
+
+    captured = get_captured_emails()
+    assert len(captured) == 1
+    assert captured[0]["to"] == email
+    assert "org_admin_magic_link_request_received" in caplog.text
+    assert "normalization_changed=True" in caplog.text
+    assert "org_admin_magic_link_send_enqueued" in caplog.text
+
+
+def test_org_admin_inactive_magic_link_is_logged_without_enqueue(
+    client, drain_email_outbox, caplog
+):
+    caplog.set_level("INFO")
+    client.post(
+        "/api/super-admin/auth/login",
+        json={"email": "admin@assonam.it", "password": "admin"},
+    )
+
+    email = f"inactive.admin.{uuid.uuid4().hex[:8]}@example.com"
+    create_res = client.post(
+        "/api/super-admin/org-admins", json={"email": email, "org_id": 1}
+    )
+    assert create_res.status_code == 200
+    admin_id = create_res.json()["id"]
+    drain_email_outbox()
+
+    db = SessionLocal()
+    try:
+        admin = db.query(AdminUser).filter(AdminUser.id == admin_id).first()
+        assert admin is not None
+        admin.is_active = False
+        db.commit()
+    finally:
+        db.close()
+
+    client.post("/api/super-admin/auth/logout")
+    clear_captured_emails()
+    caplog.clear()
+
+    res = client.post("/api/org-admin/auth/magic-link", data={"email": email})
+    assert res.status_code == 200
+    drain_email_outbox()
+
+    assert len(get_captured_emails()) == 0
+    assert "org_admin_magic_link_blocked" in caplog.text
+    assert "block_reason=admin_inactive" in caplog.text
+
 def test_org_admin_deleted_flow(client):
     # Login as super admin
     client.post("/api/super-admin/auth/login", json={"email": "admin@assonam.it", "password": "admin"})

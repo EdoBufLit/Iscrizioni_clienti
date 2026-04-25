@@ -77,12 +77,17 @@ function BuilderCanvas({
 
   return (
     <div className="flex flex-col gap-4">
+      <div className="rounded-[0.85rem] border border-slate-200 bg-white px-5 py-4 shadow-sm">
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Canvas modulo</p>
+        <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950">Informazioni pubbliche</h3>
+        <p className="mt-1 text-sm text-slate-500">Organizza sezioni, campi e consenso mantenendo l'ordine reale del form.</p>
+      </div>
       <div
         ref={setCanvasNodeRef}
-        className={`rounded-3xl border p-6 shadow-inner min-h-[60vh] transition-colors ${
+        className={`min-h-[60vh] rounded-[0.85rem] border p-6 shadow-sm transition-colors ${
           isCanvasDropTarget
-            ? "border-brand bg-brand/5 ring-2 ring-brand/20"
-            : "border-neutral-200 bg-neutral-50/50"
+            ? "border-brand bg-brand/5 ring-2 ring-brand/15"
+            : "border-slate-200 bg-[#fbfaf6]"
         }`}
       >
         <SortableContext items={items.map((item) => item.key)} strategy={verticalListSortingStrategy}>
@@ -91,11 +96,12 @@ function BuilderCanvas({
             onClick={() => setSelectedId(null)}
           >
             {items.length === 0 ? (
-              <div className="pointer-events-none w-full h-40 flex flex-col items-center justify-center border-2 border-dashed border-neutral-300 rounded-2xl bg-white text-neutral-400">
+              <div className="pointer-events-none flex h-44 w-full flex-col items-center justify-center rounded-[0.85rem] border border-dashed border-slate-300 bg-white text-slate-400">
                 <svg className="w-10 h-10 mb-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
                 </svg>
-                <p className="text-sm font-medium">Trascina qui un blocco per iniziare</p>
+                <p className="text-sm font-semibold text-slate-700">Trascina qui un campo per iniziare</p>
+                <p className="mt-1 text-xs text-slate-500">Il layout resta modificabile fino alla pubblicazione.</p>
               </div>
             ) : (
               items.map((field) => (
@@ -381,12 +387,12 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr_320px] gap-6 items-start">
-        {/* Left Column: Palette */}
-        <div className="flex flex-col gap-4 bg-white p-4 rounded-3xl border border-neutral-200 shadow-sm sticky top-6">
-          <div className="px-2 pb-2 border-b border-neutral-100">
-            <h3 className="text-sm font-bold text-neutral-900">Libreria Blocchi</h3>
-            <p className="text-[11px] font-medium text-neutral-500 mt-1">Trascina gli elementi nel canvas</p>
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[260px_minmax(0,1fr)_320px]">
+        <div className="sticky top-6 flex max-h-[85vh] flex-col gap-4 overflow-hidden rounded-[0.85rem] border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="border-b border-slate-100 px-1 pb-3">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Libreria campi</p>
+            <h3 className="mt-2 text-base font-semibold text-slate-950">Aggiungi al modulo</h3>
+            <p className="mt-1 text-xs leading-5 text-slate-500">Trascina campi, sezioni e blocchi di consenso nel canvas centrale.</p>
           </div>
           <div className="flex flex-col gap-2 max-h-[70vh] overflow-y-auto custom-scrollbar pr-2">
             {PALETTE_ITEMS.map((item) => (
@@ -404,8 +410,7 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
           lastKnownOverId={lastKnownOverId}
         />
 
-        {/* Right Column: Properties */}
-        <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm sticky top-6 max-h-[85vh] overflow-y-auto custom-scrollbar">
+        <div className="sticky top-6 max-h-[85vh] overflow-y-auto rounded-[0.85rem] border border-slate-200 bg-white p-5 shadow-sm custom-scrollbar">
           <PropertiesPanel
             selectedField={selectedField}
             onChange={handleUpdateSelected}

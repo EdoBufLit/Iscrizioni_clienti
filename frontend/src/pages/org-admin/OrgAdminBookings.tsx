@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   assignOrgAdminBookingTable,
   createOrgAdminBooking,
@@ -31,6 +32,7 @@ import Skeleton from "../../components/ui/Skeleton";
 import SubmissionDecisionModal from "../../components/ui/SubmissionDecisionModal";
 import { useToast } from "../../components/ui/ToastProvider";
 import { RoomFloorMap } from "../../components/bookings/RoomFloorMap";
+import { KpiCard, PageHeader, SectionPanel, StatusChip } from "./components/OrgAdminPrimitives";
 
 type SectionTab = "agenda" | "rooms" | "tables" | "map";
 
@@ -41,6 +43,11 @@ const sectionTabs: Array<{ key: SectionTab; label: string; hint: string }> = [
   { key: "tables", label: "Tavoli", hint: "Capienza e stato" },
   { key: "map", label: "Mappa sala", hint: "Piantina 2D" },
 ];
+
+function normalizeSection(value: string | null | undefined): SectionTab {
+  if (value === "rooms" || value === "tables" || value === "map" || value === "agenda") return value;
+  return "agenda";
+}
 
 const inputClass =
   "theme-input mt-1 w-full rounded-[1rem] px-3.5 py-2.5 text-sm";
@@ -244,9 +251,10 @@ function Toggle({
 
 export default function OrgAdminBookings() {
   const { showToast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [locked, setLocked] = useState(false);
-  const [section, setSection] = useState<SectionTab>("agenda");
+  const [section, setSectionState] = useState<SectionTab>(normalizeSection(searchParams.get("section")));
   const [agendaMonth, setAgendaMonth] = useState(firstDayOfMonthIso(todayIso()));
   const [mapDate, setMapDate] = useState(todayIso());
   const [mapTime, setMapTime] = useState("");
@@ -289,6 +297,22 @@ export default function OrgAdminBookings() {
     notes: ""
   });
   const [manualDraftTables, setManualDraftTables] = useState<AssociationRoomTable[]>([]);
+
+  const setSection = useCallback(
+    (nextSection: SectionTab) => {
+      setSectionState(nextSection);
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.set("section", nextSection);
+      setSearchParams(nextParams, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+
+  useEffect(() => {
+    const nextSection = normalizeSection(searchParams.get("section"));
+    setSectionState((current) => (current === nextSection ? current : nextSection));
+  }, [searchParams]);
+
   const syncMapWithBooking = useCallback(
     (booking: Pick<AssociationBooking, "room_id" | "table_id" | "booking_date" | "booking_time">) => {
       if (typeof booking.room_id === "number") {
@@ -439,9 +463,11 @@ export default function OrgAdminBookings() {
         fetchOrgAdminForms(),
         fetchOrgAdminRooms({ includeInactive: true }),
       ]);
-      setForms(formsResponse.items.filter((item) => item.booking_enabled));
-      setRooms(roomsResponse.items);
-      const firstRoom = roomsResponse.items[0] ?? null;
+      const nextForms = Array.isArray(formsResponse.items) ? formsResponse.items : [];
+      const nextRooms = Array.isArray(roomsResponse.items) ? roomsResponse.items : [];
+      setForms(nextForms.filter((item) => item.booking_enabled));
+      setRooms(nextRooms);
+      const firstRoom = nextRooms[0] ?? null;
       setSelectedRoomId(firstRoom?.id ?? null);
       setRoomDraft(firstRoom ? { id: firstRoom.id, name: firstRoom.name, is_active: firstRoom.is_active } : emptyRoomDraft());
       setTableDraft(emptyTableDraft(firstRoom?.id ?? null));
@@ -465,8 +491,9 @@ export default function OrgAdminBookings() {
         status: statusFilter || undefined,
         formId: formFilter || null,
       });
-      setListItems(response.items);
-      if (selectedBookingId && !response.items.some((item) => item.id === selectedBookingId)) {
+      const nextItems = Array.isArray(response.items) ? response.items : [];
+      setListItems(nextItems);
+      if (selectedBookingId && !nextItems.some((item) => item.id === selectedBookingId)) {
         setSelectedBookingId(null);
       }
     } catch (err) {
@@ -484,10 +511,12 @@ export default function OrgAdminBookings() {
         fetchOrgAdminRoomTables(roomId, { includeInactive: true }),
         fetchOrgAdminRoomMap(roomId, { date: mapDate, time: mapTime || null }),
       ]);
-      setRoomTables(tablesResponse.items);
-      setRoomMap(mapResponse);
-      setMapTables(mapResponse.tables);
-      if (tablesResponse.items[0] && !selectedMapTableId) setSelectedMapTableId(tablesResponse.items[0].id);
+      const nextRoomTables = Array.isArray(tablesResponse.items) ? tablesResponse.items : [];
+      const nextMapTables = Array.isArray(mapResponse.tables) ? mapResponse.tables : [];
+      setRoomTables(nextRoomTables);
+      setRoomMap({ ...mapResponse, tables: nextMapTables });
+      setMapTables(nextMapTables);
+      if (nextMapTables[0] && !selectedMapTableId) setSelectedMapTableId(nextMapTables[0].id);
     } catch (err) {
       showToast({
         tone: "error",
@@ -840,46 +869,44 @@ export default function OrgAdminBookings() {
   return (
     <div className="container-shell py-8 md:py-10">
       <div className="mx-auto max-w-[92rem] space-y-6">
-        <section className="bg-slate-50/50 rounded-[1.25rem] p-3 ring-1 ring-inset ring-slate-200/60">
-          <div className="grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] xl:items-center">
-            {/* Modern, horizontal, scrollable tab navigation without heavy borders */}
-            <nav className="flex gap-1 overflow-x-auto px-1 pb-1 scrollbar-hide">
+        <PageHeader
+          eyebrow="Prenotazioni"
+          title="Agenda prenotazioni"
+          subtitle="Visualizza, gestisci e organizza prenotazioni, sale e tavoli."
+          actions={
+            <button type="button" onClick={() => setIsCreatingManual(true)} className="btn-primary">
+              + Nuova prenotazione
+            </button>
+          }
+        />
+
+        <section className="rounded-[0.85rem] border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] xl:items-center">
+            <nav className="flex gap-1 overflow-x-auto rounded-[0.7rem] bg-slate-50 p-1 scrollbar-hide">
               {sectionTabs.map((tab) => (
                 <button
                   key={tab.key}
                   type="button"
                   onClick={() => setSection(tab.key)}
-                  className={`whitespace-nowrap rounded-full px-5 py-3 text-sm font-medium transition-all ${
-                    section === tab.key
-                      ? "bg-slate-900 text-white shadow-sm"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  className={`whitespace-nowrap rounded-[0.6rem] px-5 py-2.5 text-sm font-semibold transition ${
+                    section === tab.key ? "bg-brand text-white shadow-sm" : "text-slate-600 hover:bg-white hover:text-slate-900"
                   }`}
                 >
-                  <span className="block">{tab.label}</span>
-                  <span className={`block mt-0.5 text-[10px] uppercase tracking-wider ${section === tab.key ? "text-white/60" : "text-slate-500"}`}>{tab.hint}</span>
+                  {tab.label}
                 </button>
               ))}
             </nav>
             <div className="grid gap-3 sm:grid-cols-4">
-              <MetricBox label="Form booking" value={forms.length} />
-              <MetricBox label="Nel mese" value={monthOccupancy.total} />
-              <MetricBox label="Sale" value={rooms.length} />
-              <MetricBox label="Tavoli" value={roomMap?.totals.tables ?? roomTables.length} />
+              <KpiCard label="Form booking" value={forms.length} tone="success" />
+              <KpiCard label="Prenotazioni mese" value={monthOccupancy.total} tone="info" />
+              <KpiCard label="Da confermare" value={monthOccupancy.pending} tone="warning" />
+              <KpiCard label="Sale attive" value={rooms.filter((room) => room.is_active).length} tone="success" />
             </div>
           </div>
         </section>
 
         {section === "agenda" && (
           <div className="space-y-6">
-            <div className="flex justify-end">
-              <button 
-                type="button" 
-                onClick={() => setIsCreatingManual(true)} 
-                className="btn-primary"
-              >
-                + Nuova prenotazione
-              </button>
-            </div>
             <AgendaSection
               agendaMonth={agendaMonth}
               setAgendaMonth={setAgendaMonth}
@@ -1042,7 +1069,7 @@ export default function OrgAdminBookings() {
 
         {section === "map" && (
           <section className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_380px]">
-            <div className="surface-strong rounded-[1.25rem] p-6">
+            <SectionPanel title="Mappa sala" eyebrow="Workspace operativo">
               <div className="grid gap-3 md:grid-cols-3">
                 <Field label="Sala">
                   <select className={inputClass} value={selectedRoomId ?? ""} onChange={(event) => setSelectedRoomId(event.target.value ? Number(event.target.value) : null)}>
@@ -1058,10 +1085,10 @@ export default function OrgAdminBookings() {
                 </Field>
               </div>
               <div className="mt-6 grid gap-4 md:grid-cols-4">
-                <MetricBox label="Liberi" value={roomMap?.totals.free ?? 0} />
-                <MetricBox label="Riservati" value={roomMap?.totals.reserved ?? 0} />
-                <MetricBox label="Occupati" value={roomMap?.totals.occupied ?? 0} />
-                <MetricBox label="Fuori servizio" value={roomMap?.totals.out_of_service ?? 0} />
+                <KpiCard label="Sale" value={rooms.length} tone="success" />
+                <KpiCard label="Tavoli" value={roomMap?.totals.tables ?? roomTables.length} tone="info" />
+                <KpiCard label="Liberi" value={roomMap?.totals.free ?? 0} tone="success" />
+                <KpiCard label="Occupati" value={roomMap?.totals.occupied ?? 0} tone="danger" />
               </div>
               <div className="mt-6">
                 <RoomFloorMap
@@ -1073,7 +1100,7 @@ export default function OrgAdminBookings() {
                   onMoveTable={updateMapTablePosition}
                 />
               </div>
-            </div>
+            </SectionPanel>
             <aside className="space-y-4">
               <div className="surface-strong rounded-[1.25rem] p-5">
                 <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">Legenda</p>
@@ -1441,7 +1468,8 @@ function AgendaSection(props: {
             <MetricBox label="Servite" value={props.monthOccupancy.completed} />
           </div>
         </div>
-        <div className="rounded-[1.25rem] bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60 shadow-sm">
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
+        <SectionPanel className="p-5">
           <div className="grid grid-cols-7 gap-2 border-b ring-slate-200/60 px-2 pb-4">
             {["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"].map((label) => (
               <div key={label} className="px-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">{label}</div>
@@ -1456,10 +1484,17 @@ function AgendaSection(props: {
               const isSelected = dateKey === props.selectedCalendarDate;
 
               return (
-                <button
+                <div
                   key={dateKey}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => {
+                    props.setSelectedCalendarDate(dateKey);
+                    props.setSelectedBookingId(items[0]?.id ?? null);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
                     props.setSelectedCalendarDate(dateKey);
                     props.setSelectedBookingId(items[0]?.id ?? null);
                   }}
@@ -1525,15 +1560,49 @@ function AgendaSection(props: {
                       </>
                     )}
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>
+        </SectionPanel>
+        <SectionPanel title="Richieste del giorno" eyebrow={props.selectedCalendarDate ? formatDate(props.selectedCalendarDate) : "Seleziona una data"}>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-semibold text-slate-700">{props.activeDayItems.length} prenotazioni</span>
+              <StatusChip tone={props.monthOccupancy.pending ? "warning" : "success"}>{props.monthOccupancy.pending} da confermare</StatusChip>
+            </div>
+            <div className="max-h-[20rem] space-y-3 overflow-y-auto pr-1">
+              {props.activeDayItems.length === 0 ? (
+                <EmptyState message="Nessuna prenotazione per questo giorno." />
+              ) : (
+                props.activeDayItems.map((booking) => (
+                  <BookingCard key={booking.id} booking={booking} selected={props.selectedBookingId === booking.id} onSelect={(id) => props.setSelectedBookingId(id)} compact />
+                ))
+              )}
+            </div>
+            <BookingDetailPanel
+              selectedBooking={props.selectedBooking}
+              rooms={props.rooms}
+              assignmentRoomId={props.assignmentRoomId}
+              setAssignmentRoomId={props.setAssignmentRoomId}
+              assignmentTableId={props.assignmentTableId}
+              setAssignmentTableId={props.setAssignmentTableId}
+              assignmentTables={props.assignmentTables}
+              onStatusChange={props.onStatusChange}
+              onSaveAssignment={props.onSaveAssignment}
+              onClearAssignment={props.onClearAssignment}
+              requestActionState={props.requestActionState}
+              onOpenRequestConfirm={props.onOpenRequestConfirm}
+              onOpenRequestReject={props.onOpenRequestReject}
+              saving={props.saving}
+            />
+          </div>
+        </SectionPanel>
         </div>
       </section>
 
       <ModalShell
-        open={Boolean(props.selectedCalendarDate)}
+        open={false}
         onClose={() => {
           props.setSelectedCalendarDate(null);
           props.setSelectedBookingId(null);
@@ -1603,7 +1672,7 @@ function BookingDetailPanel(props: {
   saving: string;
 }) {
   if (!props.selectedBooking) {
-    return <div className="rounded-[1.25rem] bg-slate-50/50 p-8 text-center ring-1 ring-inset ring-slate-200/60 border-dashed text-sm text-slate-500">Seleziona una prenotazione dal popup per vedere dettaglio, stato e assegnazione tavolo.</div>;
+    return <div className="rounded-[0.85rem] border border-dashed border-slate-200 bg-slate-50/50 p-6 text-center text-sm text-slate-500">Seleziona una prenotazione dal calendario per vedere dettaglio, stato e assegnazione tavolo.</div>;
   }
 
   const requestMeta = requestStatusMeta(props.selectedBooking.request_status);

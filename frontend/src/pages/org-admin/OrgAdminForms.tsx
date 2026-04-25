@@ -32,6 +32,7 @@ import { ImageUpload } from "../../components/forms/builder/ImageUpload";
 import ConfirmModal from "../../components/ui/ConfirmModal";
 import SubmissionDecisionModal from "../../components/ui/SubmissionDecisionModal";
 import Skeleton from "../../components/ui/Skeleton";
+import { EmptyState, KpiCard, SectionPanel, StatusChip } from "./components/OrgAdminPrimitives";
 
 const inputClass =
   "mt-1 w-full rounded-[1.1rem] border border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-neutral-900/40 focus:ring-2 focus:ring-neutral-900/10";
@@ -162,6 +163,14 @@ function submissionStatusLabel(status: string | null | undefined) {
   };
 }
 
+function submissionTone(status: string | null | undefined): "success" | "warning" | "danger" | "muted" {
+  const normalized = (status || "pending").toLowerCase();
+  if (normalized === "confirmed") return "success";
+  if (normalized === "rejected") return "danger";
+  if (normalized === "pending") return "warning";
+  return "muted";
+}
+
 function slugifyKey(value: string): string {
   return value
     .normalize("NFD")
@@ -194,9 +203,15 @@ function formatDateTime(value: string | null | undefined): string {
 }
 
 function stringifySubmissionValue(value: unknown): string {
-  if (Array.isArray(value)) return value.join(", ");
+  if (Array.isArray(value)) return value.map((item) => stringifySubmissionValue(item)).join(", ");
   if (typeof value === "boolean") return value ? "Si" : "No";
   if (value === null || value === undefined || value === "") return "-";
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const label = record.name || record.filename || record.file_name || record.original_name || record.download_url || record.url;
+    if (label) return String(label);
+    return JSON.stringify(record);
+  }
   return String(value);
 }
 
@@ -548,6 +563,17 @@ export function OrgAdminFormsWorkspace({
       value,
     }));
   }, [selectedForm?.fields, selectedSubmission?.payload_json]);
+  const selectedSubmissionAttachmentEntries = useMemo(
+    () =>
+      selectedSubmissionEntries.filter((entry) => {
+        const value = entry.value;
+        if (typeof value === "string") return /\.(pdf|png|jpe?g|docx?|xlsx?)($|\?)/i.test(value);
+        if (Array.isArray(value)) return value.some((item) => typeof item === "object" && item !== null);
+        if (typeof value === "object" && value !== null) return "name" in value || "filename" in value || "download_url" in value || "url" in value;
+        return false;
+      }),
+    [selectedSubmissionEntries],
+  );
   const submissionSummary = useMemo(
     () =>
       submissions.reduce(
@@ -1585,7 +1611,7 @@ export function OrgAdminFormsWorkspace({
   );
   const responsesTab = (
     <div className="space-y-6">
-      <div className="admin-toolbar">
+      <SectionPanel className="p-5">
         <div>
           <p className="admin-eyebrow">Workflow richieste</p>
           <h3 className="mt-2 text-2xl font-semibold tracking-tight text-neutral-950">Risposte e decisioni</h3>
@@ -1598,39 +1624,24 @@ export function OrgAdminFormsWorkspace({
             Scarica CSV
           </a>
         ) : null}
-      </div>
+      </SectionPanel>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <div className="admin-stat">
-          <span className="admin-stat__label">Totale richieste</span>
-          <span className="admin-stat__value">{submissionSummary.total}</span>
-        </div>
-        <div className="admin-stat">
-          <span className="admin-stat__label">In attesa</span>
-          <span className="admin-stat__value">{submissionSummary.pending}</span>
-        </div>
-        <div className="admin-stat">
-          <span className="admin-stat__label">Confermate</span>
-          <span className="admin-stat__value">{submissionSummary.confirmed}</span>
-        </div>
-        <div className="admin-stat">
-          <span className="admin-stat__label">Rigettate</span>
-          <span className="admin-stat__value">{submissionSummary.rejected}</span>
-        </div>
-        <div className="admin-stat">
-          <span className="admin-stat__label">Con booking</span>
-          <span className="admin-stat__value">{submissionSummary.booking}</span>
-        </div>
+        <KpiCard label="Totale richieste" value={submissionSummary.total} hint="Tutte le risposte ricevute" tone="info" />
+        <KpiCard label="In attesa" value={submissionSummary.pending} hint="Da decidere" tone="warning" />
+        <KpiCard label="Confermate" value={submissionSummary.confirmed} hint="Richieste approvate" tone="success" />
+        <KpiCard label="Rigettate" value={submissionSummary.rejected} hint="Non accettate" tone="danger" />
+        <KpiCard label="Con booking" value={submissionSummary.booking} hint="Prenotazioni collegate" tone="info" />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(340px,0.92fr)_minmax(0,1.35fr)] xl:items-start">
-        <div className="admin-panel min-h-[36rem] overflow-hidden">
+      <div className="grid gap-5 xl:grid-cols-[330px_minmax(0,1fr)_320px] xl:items-start">
+        <SectionPanel className="min-h-[36rem] overflow-hidden p-0">
           <div className="admin-panel__header">
             <div>
               <p className="admin-eyebrow">Lista richieste</p>
               <h4 className="mt-2 text-lg font-semibold text-neutral-950">Inbox form</h4>
             </div>
-            <span className="status-badge status-badge--pending">{submissionSummary.pending} in attesa</span>
+            <StatusChip tone="warning">{submissionSummary.pending} in attesa</StatusChip>
           </div>
           <div className="max-h-[58vh] overflow-y-auto">
             {submissionsLoading ? (
@@ -1640,12 +1651,10 @@ export function OrgAdminFormsWorkspace({
                 <Skeleton className="h-24 w-full rounded-xl" />
               </div>
             ) : submissions.length === 0 ? (
-              <div className="admin-empty-state">
-                <p className="text-base font-semibold text-neutral-900">Nessuna risposta ricevuta</p>
-                <p className="mt-2 text-sm text-neutral-500">
-                  Quando arriveranno nuove richieste le vedrai qui con stato, audit e azioni rapide.
-                </p>
-              </div>
+              <EmptyState
+                title="Nessuna risposta ricevuta"
+                description="Quando arriveranno nuove richieste le vedrai qui con stato, audit e azioni rapide."
+              />
             ) : (
               <div className="divide-y divide-neutral-200">
                 {submissions.map((submission) => {
@@ -1699,9 +1708,9 @@ export function OrgAdminFormsWorkspace({
               </div>
             )}
           </div>
-        </div>
+        </SectionPanel>
 
-        <div className="admin-panel admin-panel--soft sticky top-6">
+        <SectionPanel className="sticky top-6">
           <div className="admin-panel__header">
             <div>
               <p className="admin-eyebrow">Dettaglio risposta</p>
@@ -1752,58 +1761,19 @@ export function OrgAdminFormsWorkspace({
               ) : null}
 
               <div className="rounded-xl border border-neutral-200 bg-white p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Azioni rapide</p>
-                    <p className="mt-1 text-sm text-neutral-500">
-                      Conferma, rigetta o riporta la richiesta in attesa senza uscire dal dettaglio.
-                    </p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Documenti allegati</p>
+                {selectedSubmissionAttachmentEntries.length ? (
+                  <div className="mt-3 grid gap-2">
+                    {selectedSubmissionAttachmentEntries.map((entry) => (
+                      <div key={entry.key} className="rounded-[0.8rem] border border-dashed border-slate-200 bg-slate-50 px-3 py-2">
+                        <p className="text-xs font-semibold text-slate-900">{entry.label}</p>
+                        <p className="mt-1 break-words text-xs text-slate-500">{stringifySubmissionValue(entry.value)}</p>
+                      </div>
+                    ))}
                   </div>
-                  {submissionActionState === "loading" ? (
-                    <span className="text-xs font-semibold text-neutral-500">Aggiornamento in corso...</span>
-                  ) : null}
-                </div>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  {selectedSubmission.available_actions.confirm ? (
-                    <button
-                      type="button"
-                      className="btn-success"
-                      disabled={submissionActionState === "loading"}
-                      onClick={() => {
-                        setSubmissionActionError(null);
-                        setConfirmActionOpen("confirmed");
-                      }}
-                    >
-                      Conferma richiesta
-                    </button>
-                  ) : null}
-                  {selectedSubmission.available_actions.reject ? (
-                    <button
-                      type="button"
-                      className="btn-danger"
-                      disabled={submissionActionState === "loading"}
-                      onClick={() => {
-                        setSubmissionActionError(null);
-                        setRejectActionOpen(true);
-                      }}
-                    >
-                      Rigetta richiesta
-                    </button>
-                  ) : null}
-                  {selectedSubmission.available_actions.set_pending ? (
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      disabled={submissionActionState === "loading"}
-                      onClick={() => {
-                        setSubmissionActionError(null);
-                        setConfirmActionOpen("pending");
-                      }}
-                    >
-                      Riporta in attesa
-                    </button>
-                  ) : null}
-                </div>
+                ) : (
+                  <p className="mt-2 text-sm text-neutral-500">Nessun allegato rilevato in questa risposta.</p>
+                )}
               </div>
 
               {selectedSubmission.review_reason ? (
@@ -1825,14 +1795,97 @@ export function OrgAdminFormsWorkspace({
               </div>
             </div>
           ) : (
-            <div className="admin-empty-state">
-              <p className="text-base font-semibold text-neutral-900">Seleziona una richiesta</p>
-              <p className="mt-2 text-sm text-neutral-500">
-                A destra vedrai dati inviati, stato corrente, storico review e azioni disponibili.
-              </p>
-            </div>
+            <EmptyState
+              title="Seleziona una richiesta"
+              description="Nel dettaglio vedrai dati inviati, stato corrente, documenti e booking collegato."
+            />
           )}
-        </div>
+        </SectionPanel>
+
+        <SectionPanel className="sticky top-6" title="Audit e azioni" eyebrow="Controllo operativo">
+          {selectedSubmission ? (
+            <div className="space-y-5">
+              <div className="rounded-[0.85rem] border border-slate-200 bg-white p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-semibold text-slate-900">Stato richiesta</span>
+                  <StatusChip tone={submissionTone(selectedSubmission.status)}>{selectedSubmissionStatus.label}</StatusChip>
+                </div>
+                <div className="mt-4 space-y-3 border-l border-slate-200 pl-4 text-sm">
+                  <div>
+                    <p className="font-semibold text-slate-900">Richiesta ricevuta</p>
+                    <p className="text-slate-500">{formatDateTime(selectedSubmission.submitted_at)}</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-900">Review</p>
+                    <p className="text-slate-500">
+                      {selectedSubmission.reviewed_by?.email || "In attesa di decisione"}
+                      {selectedSubmission.reviewed_at ? ` - ${formatDateTime(selectedSubmission.reviewed_at)}` : ""}
+                    </p>
+                  </div>
+                  {selectedSubmission.booking ? (
+                    <div>
+                      <p className="font-semibold text-slate-900">Booking collegato</p>
+                      <p className="text-slate-500">
+                        {selectedSubmission.booking.booking_date || "Data da definire"}
+                        {selectedSubmission.booking.booking_time ? ` - ${selectedSubmission.booking.booking_time}` : ""}
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="rounded-[0.85rem] border border-slate-200 bg-white p-4">
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Azioni rapide</p>
+                <div className="mt-4 grid gap-2">
+                  {selectedSubmission.available_actions.confirm ? (
+                    <button
+                      type="button"
+                      className="btn-success w-full justify-center"
+                      disabled={submissionActionState === "loading"}
+                      onClick={() => {
+                        setSubmissionActionError(null);
+                        setConfirmActionOpen("confirmed");
+                      }}
+                    >
+                      Conferma richiesta
+                    </button>
+                  ) : null}
+                  {selectedSubmission.available_actions.reject ? (
+                    <button
+                      type="button"
+                      className="btn-danger w-full justify-center"
+                      disabled={submissionActionState === "loading"}
+                      onClick={() => {
+                        setSubmissionActionError(null);
+                        setRejectActionOpen(true);
+                      }}
+                    >
+                      Rigetta richiesta
+                    </button>
+                  ) : null}
+                  {selectedSubmission.available_actions.set_pending ? (
+                    <button
+                      type="button"
+                      className="btn-secondary w-full justify-center"
+                      disabled={submissionActionState === "loading"}
+                      onClick={() => {
+                        setSubmissionActionError(null);
+                        setConfirmActionOpen("pending");
+                      }}
+                    >
+                      Riporta in attesa
+                    </button>
+                  ) : null}
+                  {submissionActionState === "loading" ? (
+                    <p className="text-center text-xs font-semibold text-slate-500">Aggiornamento in corso...</p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <EmptyState title="Nessuna richiesta selezionata" description="Seleziona una risposta dall'inbox per vedere audit e decisioni disponibili." />
+          )}
+        </SectionPanel>
       </div>
     </div>
   );

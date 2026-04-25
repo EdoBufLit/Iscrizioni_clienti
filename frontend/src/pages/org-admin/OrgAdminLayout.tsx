@@ -1,10 +1,10 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
+  AuthError,
   fetchOrgAdminMe,
   fetchVersion,
   orgAdminLogout,
-  AuthError,
   type OrgAdminProfile,
   type VersionInfo,
 } from "../../lib/api";
@@ -21,14 +21,214 @@ type OrgAdminCtx = {
   loading: boolean;
 };
 
+type IconName =
+  | "accounting"
+  | "billing"
+  | "calendar"
+  | "cards"
+  | "documents"
+  | "form"
+  | "home"
+  | "logout"
+  | "mail"
+  | "map"
+  | "message"
+  | "renew"
+  | "room"
+  | "send"
+  | "settings"
+  | "support"
+  | "table"
+  | "template"
+  | "users"
+  | "whatsapp";
+
+type NavLeaf = {
+  to: string;
+  label: string;
+  end?: boolean;
+  match?: string[];
+  icon: IconName;
+  hidden?: boolean;
+};
+
+type NavGroup = {
+  label?: string;
+  items: NavLeaf[];
+};
+
 const Ctx = createContext<OrgAdminCtx>({ admin: null, loading: true });
 export const useOrgAdmin = () => useContext(Ctx);
+
+function MiniIcon({ name, className = "h-4 w-4" }: { name: IconName; className?: string }) {
+  const common = {
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.9,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+  const paths: Record<IconName, ReactNode> = {
+    accounting: (
+      <>
+        <path d="M5 19V5h14v14" />
+        <path d="M8 9h8M8 13h3M14 13h2M8 16h3M14 16h2" />
+      </>
+    ),
+    billing: (
+      <>
+        <rect x="4" y="6" width="16" height="12" rx="2" />
+        <path d="M7 10h10M8 14h3" />
+      </>
+    ),
+    calendar: (
+      <>
+        <rect x="4" y="5.5" width="16" height="15" rx="2" />
+        <path d="M8 3.5v4M16 3.5v4M4 10h16" />
+      </>
+    ),
+    cards: (
+      <>
+        <rect x="4" y="7" width="16" height="11" rx="2" />
+        <path d="M4 10h16M8 14h4" />
+      </>
+    ),
+    documents: (
+      <>
+        <path d="M7 3h7l4 4v14H7V3Z" />
+        <path d="M14 3v5h5M10 13h6M10 17h5" />
+      </>
+    ),
+    form: (
+      <>
+        <rect x="5" y="4" width="14" height="16" rx="2" />
+        <path d="M9 8h6M9 12h6M9 16h3" />
+      </>
+    ),
+    home: (
+      <>
+        <path d="m4 10 8-6 8 6" />
+        <path d="M6.5 9.5V20h11V9.5" />
+        <path d="M10 20v-6h4v6" />
+      </>
+    ),
+    logout: (
+      <>
+        <path d="M10 6H6v12h4" />
+        <path d="M14 8l4 4-4 4M18 12H9" />
+      </>
+    ),
+    mail: (
+      <>
+        <rect x="4" y="6" width="16" height="12" rx="2" />
+        <path d="m4 8 8 6 8-6" />
+      </>
+    ),
+    map: (
+      <>
+        <path d="M9 18 4 20V6l5-2 6 2 5-2v14l-5 2-6-2Z" />
+        <path d="M9 4v14M15 6v14" />
+      </>
+    ),
+    message: (
+      <>
+        <path d="M5 5h14v10H8l-3 3V5Z" />
+        <path d="M8 9h8M8 12h5" />
+      </>
+    ),
+    renew: (
+      <>
+        <path d="M19 12a7 7 0 1 1-2-5" />
+        <path d="M19 5v5h-5" />
+      </>
+    ),
+    room: (
+      <>
+        <path d="M4 20h16" />
+        <path d="M6 20V6l8-2v16" />
+        <path d="M14 8h4v12" />
+        <path d="M10 12h.01" />
+      </>
+    ),
+    send: (
+      <>
+        <path d="m4 12 16-7-7 16-2-7-7-2Z" />
+        <path d="m11 14 3-3" />
+      </>
+    ),
+    settings: (
+      <>
+        <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" />
+        <path d="M19 12h2M3 12h2M12 3v2M12 19v2M18 6l-1.4 1.4M7.4 16.6 6 18M6 6l1.4 1.4M16.6 16.6 18 18" />
+      </>
+    ),
+    support: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M9.5 9a2.7 2.7 0 0 1 5 1.4c0 2-2.5 2.2-2.5 4" />
+        <path d="M12 18h.01" />
+      </>
+    ),
+    table: (
+      <>
+        <path d="M5 9h14" />
+        <path d="M7 9v10M17 9v10" />
+        <rect x="4" y="5" width="16" height="4" rx="1.5" />
+      </>
+    ),
+    template: (
+      <>
+        <rect x="5" y="4" width="14" height="16" rx="2" />
+        <path d="M8 8h8M8 12h8M8 16h5" />
+      </>
+    ),
+    users: (
+      <>
+        <path d="M16 19c0-2-1.8-3.5-4-3.5S8 17 8 19" />
+        <circle cx="12" cy="9" r="3" />
+        <path d="M19 18c0-1.4-1-2.6-2.4-3.1M17 7.5a2.5 2.5 0 0 1 0 5" />
+      </>
+    ),
+    whatsapp: (
+      <>
+        <path d="M7.5 19.5 4 20l.7-3.1A8 8 0 1 1 7.5 19.5Z" />
+        <path d="M9 8.5c.3 3 2.2 5 5.2 5.5l1-1.4-1.7-1-1 .7c-1.1-.5-1.9-1.3-2.4-2.4l.7-1-1-1.7L9 8.5Z" />
+      </>
+    ),
+  };
+
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true" {...common}>
+      {paths[name]}
+    </svg>
+  );
+}
+
+function profileInitials(value: string | null | undefined) {
+  const parts = (value || "Admin").split(/[\s@._-]+/).filter(Boolean);
+  return `${parts[0]?.[0] || "A"}${parts[1]?.[0] || ""}`.toUpperCase();
+}
+
+function isSidebarItemActive(item: NavLeaf, location: ReturnType<typeof useLocation>) {
+  if (item.match?.some((path) => location.pathname.startsWith(path))) return true;
+  const [itemPath, itemSearch = ""] = item.to.split("?");
+  if (item.end) return location.pathname === itemPath;
+  if (!location.pathname.startsWith(itemPath)) return false;
+  if (!itemSearch) return true;
+  const targetParams = new URLSearchParams(itemSearch);
+  const currentParams = new URLSearchParams(location.search);
+  for (const [key, value] of targetParams.entries()) {
+    if (currentParams.get(key) !== value) return false;
+  }
+  return true;
+}
 
 const OrgAdminLayout = () => {
   const [admin, setAdmin] = useState<OrgAdminProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [ver, setVer] = useState<VersionInfo | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
   const { capabilities } = useStatePlatformCapabilities();
 
   useEffect(() => {
@@ -52,28 +252,53 @@ const OrgAdminLayout = () => {
     navigate("/org-admin/login", { replace: true });
   };
 
-  const navItems = useMemo(() => {
-    const items = [
-      { to: "/org-admin", label: "Panoramica", end: true },
-      { to: "/org-admin/inviti", label: "Inviti", end: false },
-      { to: "/org-admin/soci", label: "Soci", end: false },
-      { to: "/org-admin/tessere", label: "Tessere", end: false },
-      { to: "/org-admin/prenotazioni", label: "Prenotazioni", end: false },
-      { to: "/org-admin/comunicazioni", label: "Comunicazioni", end: false },
-      { to: "/org-admin/documenti", label: "Documenti", end: false },
-      { to: "/org-admin/associazione", label: "Associazione", end: false },
+  const navGroups = useMemo<NavGroup[]>(() => {
+    const accountingEnabled = Boolean(admin?.organization?.accounting_enabled);
+    const stripeEnabled = Boolean(capabilities?.stripeConnectDemoEnabled);
+
+    return [
+      { items: [{ to: "/org-admin", label: "Home", end: true, icon: "home" }] },
+      {
+        label: "Comunicazioni",
+        items: [
+          { to: "/org-admin/comunicazioni?tab=panoramica", label: "Panoramica", icon: "message" },
+          { to: "/org-admin/comunicazioni?tab=campagne", label: "Campagne", icon: "send" },
+          { to: "/org-admin/comunicazioni?tab=modelli", label: "Modelli", icon: "template" },
+          { to: "/org-admin/comunicazioni?tab=moduli", label: "Form pubblici", icon: "form" },
+          { to: "/org-admin/comunicazioni?tab=whatsapp", label: "WhatsApp", icon: "whatsapp" },
+          { to: "/org-admin/comunicazioni?tab=email", label: "Email", icon: "mail" },
+        ],
+      },
+      {
+        label: "Prenotazioni",
+        items: [
+          { to: "/org-admin/prenotazioni?section=agenda", label: "Agenda", icon: "calendar" },
+          { to: "/org-admin/prenotazioni?section=rooms", label: "Sale", icon: "room" },
+          { to: "/org-admin/prenotazioni?section=tables", label: "Tavoli", icon: "table" },
+          { to: "/org-admin/prenotazioni?section=map", label: "Mappa sala", icon: "map" },
+        ],
+      },
+      {
+        label: "Soci e tessere",
+        items: [
+          { to: "/org-admin/soci", label: "Soci", match: ["/org-admin/soci"], icon: "users" },
+          { to: "/org-admin/tessere", label: "Tessere", match: ["/org-admin/tessere"], icon: "cards" },
+          { to: "/org-admin/inviti", label: "Inviti", match: ["/org-admin/inviti"], icon: "renew" },
+        ],
+      },
+      {
+        label: "Contabilita",
+        items: [
+          { to: "/org-admin/contabilita", label: "Movimenti", match: ["/org-admin/contabilita"], icon: "accounting", hidden: !accountingEnabled },
+          { to: "/org-admin/documenti", label: "Documenti", match: ["/org-admin/documenti"], icon: "documents" },
+          { to: "/org-admin/billing", label: "Billing demo", match: ["/org-admin/billing"], icon: "billing", hidden: !stripeEnabled },
+        ],
+      },
+      {
+        label: "Impostazioni",
+        items: [{ to: "/org-admin/associazione", label: "Associazione", match: ["/org-admin/associazione"], icon: "settings" }],
+      },
     ];
-    if (admin?.organization?.accounting_enabled) {
-      items.splice(5, 0, { to: "/org-admin/contabilita", label: "Contabilità", end: false });
-    }
-    if (capabilities?.stripeConnectDemoEnabled) {
-      items.splice(items.length - 1, 0, {
-        to: "/org-admin/billing",
-        label: "Stripe Demo",
-        end: false,
-      });
-    }
-    return items;
   }, [admin?.organization?.accounting_enabled, capabilities?.stripeConnectDemoEnabled]);
 
   const mobilePrimaryNav = useMemo(
@@ -96,7 +321,7 @@ const OrgAdminLayout = () => {
     if (admin?.organization?.accounting_enabled) {
       items.splice(1, 0, {
         key: "accounting",
-        label: "Contabilità",
+        label: "Contabilita",
         to: "/org-admin/contabilita",
         activeMatch: ["/org-admin/contabilita"],
         icon: "chart" as const,
@@ -113,144 +338,112 @@ const OrgAdminLayout = () => {
     }
     items.push(
       { key: "site", label: "Torna al sito", to: "/", icon: "globe" as const },
-      {
-        key: "logout",
-        label: "Esci",
-        icon: "logout" as const,
-        tone: "danger" as const,
-        onSelect: handleLogout,
-      },
+      { key: "logout", label: "Esci", icon: "logout" as const, tone: "danger" as const, onSelect: handleLogout },
     );
     return items;
   }, [admin?.organization?.accounting_enabled, capabilities?.stripeConnectDemoEnabled]);
 
   return (
     <Ctx.Provider value={{ admin, loading }}>
-      <div className="app-shell min-h-screen">
-        {/* Header band */}
-        <header className="app-header sticky top-0 z-50 transition-all">
-          <div className="container-shell flex items-center justify-between h-16 md:h-20">
-            <div className="flex items-center gap-6">
-              <div className="hidden shrink-0 sm:block">
-                <Link to="/" className="flex items-center gap-3 transition-transform hover:scale-95 group">
-                  <img
-                    src={`${import.meta.env.BASE_URL}assonam-logo.svg`}
-                    alt="ASSONAM"
-                    className="h-8 md:h-10 w-auto"
-                  />
-                  <span className="font-display font-bold text-xl tracking-tight text-neutral-900 hidden lg:block group-hover:text-brand transition-colors">
-                    ASSONAM
-                  </span>
-                </Link>
-              </div>
-              <div className="min-w-0 flex-1 border-l border-neutral-200/60 pl-6 ml-2 hidden sm:block">
-                {loading ? (
-                  <div className="space-y-1.5">
-                    <Skeleton className="h-4 w-48" />
-                    <Skeleton className="h-3 w-64" />
-                  </div>
-                ) : admin ? (
-                  <div className="flex flex-col justify-center h-full">
-                    <div className="flex items-center gap-2.5">
-                      <h1 className="truncate text-base font-bold tracking-tight text-neutral-900 leading-none">
-                        {admin.organization?.name ?? "Gestione associazione"}
-                      </h1>
-                      <span className="inline-flex items-center rounded-full border border-brand/20 bg-brand/5 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-brand leading-none">
-                        Gestore locale
-                      </span>
+      <div className="app-shell org-admin-v2 min-h-screen">
+        <div className="org-admin-shell-grid">
+          <aside className="org-admin-sidebar hidden lg:flex">
+            <Link to="/org-admin" className="org-admin-sidebar__brand" aria-label="ASSONAM Org Admin">
+              <img src={`${import.meta.env.BASE_URL}assonam-logo.svg`} alt="ASSONAM" className="h-10 w-auto" />
+              <span className="org-admin-sidebar__brand-text" aria-hidden="true">
+                <span>ASSONAM</span>
+                <small>ORG ADMIN</small>
+              </span>
+            </Link>
+
+            <nav className="org-admin-sidebar__nav" aria-label="Navigazione area riservata">
+              {navGroups.map((group, groupIndex) => {
+                const visibleItems = group.items.filter((item) => !item.hidden);
+                if (visibleItems.length === 0) return null;
+                return (
+                  <div key={group.label ?? `primary-${groupIndex}`} className="org-admin-sidebar__group">
+                    {group.label ? <p className="org-admin-sidebar__group-label">{group.label}</p> : null}
+                    <div className="space-y-1">
+                      {visibleItems.map((item) => {
+                        const isActive = isSidebarItemActive(item, location);
+                        return (
+                          <NavLink
+                            key={item.to}
+                            to={item.to}
+                            end={item.end}
+                            className={() => `org-admin-sidebar__link ${isActive ? "org-admin-sidebar__link--active" : ""}`}
+                          >
+                            <MiniIcon name={item.icon} />
+                            <span>{item.label}</span>
+                          </NavLink>
+                        );
+                      })}
                     </div>
-                    <p className="truncate text-[11px] font-medium text-neutral-500 uppercase tracking-wide opacity-80 mt-1 leading-none">
-                      {admin.email}
-                    </p>
                   </div>
-                ) : (
-                  <h1 className="text-base font-bold tracking-tight text-neutral-900 uppercase tracking-widest leading-none">
-                    Gestione associazione
-                  </h1>
-                )}
-              </div>
-              
-              {/* Mobile Header Title */}
-              <div className="sm:hidden min-w-0 flex-1">
-                <div className="flex items-center gap-3">
-                  <Link to="/" className="shrink-0 transition-transform hover:scale-95">
-                    <img
-                      src={`${import.meta.env.BASE_URL}assonam-logo.svg`}
-                      alt="ASSONAM"
-                      className="h-8 w-auto"
-                    />
-                  </Link>
-                  <div className="w-px h-6 bg-neutral-200/60"></div>
-                  <h1 className="truncate text-sm font-bold tracking-tight text-neutral-900">
-                    {admin?.organization?.name ?? "Org Admin"}
-                  </h1>
+                );
+              })}
+            </nav>
+
+            <div className="org-admin-sidebar__footer">
+              <Link to="/" className="org-admin-sidebar__utility">
+                <MiniIcon name="support" />
+                <span>Sito pubblico</span>
+              </Link>
+              <button type="button" className="org-admin-sidebar__utility" onClick={handleLogout}>
+                <MiniIcon name="logout" />
+                <span>Esci</span>
+              </button>
+              {ver ? (
+                <p className="pt-4 text-[0.68rem] font-semibold leading-5 text-slate-500">
+                  ASSONAM Org Admin
+                  <br />
+                  v{ver.version}
+                  {ver.git_sha ? ` - ${ver.git_sha.slice(0, 7)}` : ""}
+                </p>
+              ) : null}
+            </div>
+          </aside>
+
+          <div className="min-w-0">
+            <header className="org-admin-topbar">
+              <div className="flex min-w-0 items-center gap-4">
+                <Link to="/org-admin" className="flex items-center lg:hidden">
+                  <img src={`${import.meta.env.BASE_URL}assonam-logo.svg`} alt="ASSONAM" className="h-9 w-auto" />
+                </Link>
+                <div className="hidden h-12 w-px bg-white/12 lg:block" />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h1 className="truncate text-base font-bold tracking-tight text-white">Area Riservata</h1>
+                  </div>
+                  <p className="truncate text-xs font-medium text-white/72">
+                    {loading ? "Sistema di gestione per associazioni" : admin?.organization?.name ?? "Sistema di gestione per associazioni"}
+                  </p>
                 </div>
               </div>
-            </div>
-            <div className="flex shrink-0 items-center gap-4">
-              <ThemeToggle />
-              {!loading && admin && <OrgAdminNotificationBell />}
-              {!loading && admin && <ReviewGuideButton className="hidden md:flex" />}
-              <Link className="link-muted hidden text-sm font-bold tracking-tight sm:block" to="/">
-                Sito pubblico
-              </Link>
-              <div className="app-divider hidden h-4 w-px sm:block" />
-              {!loading && admin && (
-                <button
-                  className="btn-ghost !px-4 !py-2 !text-xs font-bold uppercase tracking-wider"
-                  type="button"
-                  onClick={handleLogout}
-                >
-                  Esci
-                </button>
-              )}
-            </div>
+
+              <div className="flex shrink-0 items-center gap-3">
+                <ThemeToggle />
+                {!loading && admin && <OrgAdminNotificationBell />}
+                {!loading && admin && <ReviewGuideButton className="hidden xl:flex" />}
+                {!loading && admin ? (
+                  <div className="org-admin-topbar__profile">
+                    <span className="org-admin-topbar__avatar">{profileInitials(admin.email)}</span>
+                    <span className="hidden min-w-0 text-left md:block">
+                      <span className="block truncate text-xs font-bold text-white">{admin.email}</span>
+                      <span className="block truncate text-[0.68rem] font-medium text-white/62">Amministratore</span>
+                    </span>
+                  </div>
+                ) : (
+                  <Skeleton className="h-9 w-36 rounded-lg bg-white/12" />
+                )}
+              </div>
+            </header>
+
+            <main className="dashboard-mobile-safe org-admin-content animate-in fade-in duration-500 md:pb-0">
+              <Outlet />
+            </main>
           </div>
-
-          {/* Nav tabs */}
-          {!loading && admin && (
-            <div className="container-shell">
-              <nav className="hidden flex-wrap gap-6 pb-0 overflow-x-auto no-scrollbar md:flex">
-                {navItems.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end={item.end}
-                    className={({ isActive }) =>
-                      `relative whitespace-nowrap py-3 text-sm font-bold tracking-tight transition-colors ${
-                        isActive 
-                          ? "text-brand" 
-                          : "text-neutral-500 hover:text-neutral-900"
-                      }`
-                    }
-                  >
-                    {({ isActive }) => (
-                      <>
-                        {item.label}
-                        {isActive && (
-                          <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand rounded-t-full" />
-                        )}
-                      </>
-                    )}
-                  </NavLink>
-                ))}
-              </nav>
-            </div>
-          )}
-        </header>
-
-        {/* Content */}
-        <main className="dashboard-mobile-safe animate-in fade-in duration-500 md:pb-0">
-          <Outlet />
-        </main>
-
-        {/* Version footer */}
-        {ver && (
-          <footer className="container-shell pb-8 pt-12 text-[10px] font-bold uppercase tracking-widest text-neutral-400 md:pb-8">
-            Piattaforma ASSO.N.A.M. v{ver.version}
-            {ver.git_sha ? ` [${ver.git_sha.slice(0, 7)}]` : ""}
-          </footer>
-        )}
+        </div>
 
         {!loading && admin && (
           <MobileDashboardNav

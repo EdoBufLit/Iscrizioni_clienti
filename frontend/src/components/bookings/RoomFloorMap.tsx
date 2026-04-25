@@ -19,13 +19,13 @@ type DragState = {
 function occupancyTone(state: AssociationRoomTable["occupancy_state"]) {
   switch (state) {
     case "reserved":
-      return "from-amber-100 via-amber-50 to-white text-amber-900 ring-amber-300";
+      return "bg-[#fff2cf] text-[#493713] ring-[#f3b83f] border-[#f0a71f]";
     case "occupied":
-      return "from-emerald-100 via-emerald-50 to-white text-emerald-900 ring-emerald-300";
+      return "bg-[#ffd5d7] text-[#521b22] ring-[#ee5663] border-[#e54855]";
     case "out_of_service":
-      return "from-slate-300 via-slate-200 to-slate-100 text-slate-700 ring-slate-400";
+      return "bg-[#eef1f3] text-[#647184] ring-[#b9c3cc] border-[#b9c3cc]";
     default:
-      return "from-sky-100 via-white to-sky-50 text-slate-900 ring-sky-200";
+      return "bg-[#bfe8cd] text-[#103022] ring-[#61bf83] border-[#50aa72]";
   }
 }
 
@@ -98,16 +98,31 @@ export function RoomFloorMap({
 
       <div
         ref={containerRef}
-        className="relative min-h-[34rem] overflow-hidden rounded-[2rem] border border-slate-200 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.95),_rgba(241,245,249,0.92)_35%,_rgba(226,232,240,0.98))] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_28px_80px_rgba(15,23,42,0.08)]"
+        className="org-admin-floor-map relative min-h-[34rem] overflow-hidden rounded-[0.7rem] border border-slate-300 bg-[#ead8c3] p-6 shadow-[inset_0_0_0_8px_rgba(81,80,75,0.72),0_18px_38px_-28px_rgba(15,23,42,0.6)]"
       >
-        <div className="pointer-events-none absolute inset-0 opacity-70 [background-image:linear-gradient(to_right,rgba(148,163,184,0.12)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.12)_1px,transparent_1px)] [background-size:56px_56px]" />
-        <div className="pointer-events-none absolute inset-8 rounded-[1.6rem] border border-dashed border-slate-300/70" />
-        <div className="pointer-events-none absolute left-8 top-8 rounded-full bg-white/85 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 shadow-sm">
+        <div className="pointer-events-none absolute inset-0 opacity-75 [background-image:repeating-linear-gradient(0deg,rgba(255,255,255,0.15)_0,rgba(255,255,255,0.15)_1px,transparent_1px,transparent_38px),repeating-linear-gradient(90deg,rgba(120,91,57,0.11)_0,rgba(120,91,57,0.11)_1px,transparent_1px,transparent_76px)]" />
+        <div className="pointer-events-none absolute left-7 right-[58%] top-8 h-24 rounded-br-[2rem] border border-[#b9afa1] bg-[#f4eee6] shadow-[0_12px_24px_-20px_rgba(0,0,0,0.55)]">
+          <div className="absolute inset-x-7 top-10 h-8 rounded-full bg-white/88" />
+          <span className="absolute left-1/2 top-8 -translate-x-1/2 text-[0.72rem] font-black uppercase tracking-[0.08em] text-[#30383b]">Bar / Servizio</span>
+        </div>
+        <div className="pointer-events-none absolute right-12 top-7 grid grid-cols-3 gap-2">
+          {[0, 1, 2, 3, 4, 5].map((item) => (
+            <span key={item} className="h-10 w-12 rounded-sm border border-[#b9afa1] bg-[#f2f4f3] shadow-inner" />
+          ))}
+        </div>
+        <div className="pointer-events-none absolute bottom-0 left-1/2 h-12 w-24 -translate-x-1/2 border-x border-t border-[#8b8276] bg-[#f8faf9]/80" />
+        <div className="pointer-events-none absolute bottom-[-0.1rem] left-1/2 translate-x-[-50%] translate-y-full text-[0.72rem] font-black uppercase tracking-[0.08em] text-slate-700">
           Ingresso
         </div>
-        <div className="pointer-events-none absolute bottom-8 right-8 rounded-full bg-slate-950 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.22em] text-white shadow-lg">
-          Service / Staff
-        </div>
+        {[
+          "left-7 top-36",
+          "left-7 bottom-28",
+          "left-8 bottom-16",
+          "right-12 bottom-32",
+          "right-10 top-36",
+        ].map((position) => (
+          <span key={position} className={`pointer-events-none absolute ${position} h-10 w-10 rounded-full bg-[#4b8d45] shadow-[inset_0_-10px_0_rgba(0,0,0,0.12)]`} />
+        ))}
 
         {tables.length === 0 ? (
           <div className="relative z-10 mx-auto mt-28 max-w-md rounded-[1.8rem] border border-dashed border-slate-300 bg-white/80 px-6 py-10 text-center shadow-sm backdrop-blur">
@@ -142,7 +157,7 @@ export function RoomFloorMap({
                   offsetY: event.clientY - target.top,
                 });
               }}
-              className={`absolute z-10 flex flex-col items-center justify-center border bg-gradient-to-br px-3 text-center shadow-[0_18px_40px_rgba(15,23,42,0.14)] ring-1 transition ${
+              className={`absolute z-10 flex flex-col items-center justify-center border px-3 text-center shadow-[0_14px_22px_-18px_rgba(15,23,42,0.7)] ring-2 transition ${
                 shapeClass
               } ${occupancyTone(table.occupancy_state)} ${isSelected ? "scale-[1.03] border-slate-950 ring-slate-950" : "border-white/80 ring-transparent"} ${
                 editable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"

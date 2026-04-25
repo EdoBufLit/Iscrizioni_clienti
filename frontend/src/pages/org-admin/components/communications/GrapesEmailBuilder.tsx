@@ -74,6 +74,7 @@ export function GrapesEmailBuilder({
   onDeleteAsset,
 }: GrapesEmailBuilderProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const stylePanelRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<Editor | null>(null);
   const selectedButtonComponentRef = useRef<any>(null);
@@ -103,6 +104,8 @@ export function GrapesEmailBuilder({
       container: hostRef.current,
       height: "100%",
       width: "auto",
+      cssIcons: "",
+      telemetry: false,
       storageManager: false,
       fromElement: false,
       panels: { defaults: [] },
@@ -110,6 +113,7 @@ export function GrapesEmailBuilder({
       layerManager: { appendTo: undefined },
       selectorManager: { appendTo: undefined, componentFirst: true },
       styleManager: {
+        appendTo: stylePanelRef.current || undefined,
         sectors: [
           {
             name: "Typography",
@@ -403,58 +407,8 @@ export function GrapesEmailBuilder({
         </div>
       </div>
 
-      <div className="builder-workbench">
-        <div className={`builder-canvas ${disabled ? "builder-canvas--disabled" : ""}`}>
-          {!ready ? <div className="builder-canvas__loading">Caricamento editor...</div> : null}
-          <div ref={hostRef} className="builder-canvas__host" />
-          {disabled ? (
-            <div className="builder-canvas__overlay">
-              Modello di sistema in sola lettura. Duplicalo per modificarlo.
-            </div>
-          ) : null}
-        </div>
-
-        <aside className="builder-rail">
-          {selectedButton ? (
-            <div className="builder-selection-card">
-              <div>
-                <p className="builder-selection-card__eyebrow">Bottone selezionato</p>
-                <p className="builder-selection-card__title">CTA con link libero</p>
-              </div>
-              <label className="builder-selection-card__label">
-                Testo bottone
-                <input
-                  className="builder-selection-card__input"
-                  value={selectedButton.label}
-                  onChange={(event) => updateSelectedButtonLabel(event.target.value)}
-                  placeholder="Es. Scarica il documento"
-                />
-              </label>
-              <label className="builder-selection-card__label">
-                Link o documento
-                <input
-                  className="builder-selection-card__input"
-                  value={selectedButton.href}
-                  onChange={(event) => updateSelectedButtonHref(event.target.value)}
-                  placeholder="https://... oppure {{link_documento}}"
-                />
-              </label>
-              {linkVariables.length ? (
-                <div className="builder-selection-card__chips">
-                  {linkVariables.map((item) => (
-                    <button
-                      key={item.placeholder}
-                      type="button"
-                      className="builder-selection-card__chip"
-                      onClick={() => updateSelectedButtonHref(item.placeholder)}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
+      <div className="builder-workbench builder-workbench--three">
+        <aside className="builder-rail builder-rail--left">
           <div className="builder-rail__tabs">
             {railTabs.map((tab) => (
               <button
@@ -560,6 +514,74 @@ export function GrapesEmailBuilder({
               </div>
             </div>
           ) : null}
+        </aside>
+
+        <div className={`builder-canvas ${disabled ? "builder-canvas--disabled" : ""}`}>
+          {!ready ? <div className="builder-canvas__loading">Caricamento editor...</div> : null}
+          <div ref={hostRef} className="builder-canvas__host" />
+          {disabled ? (
+            <div className="builder-canvas__overlay">
+              Modello di sistema in sola lettura. Duplicalo per modificarlo.
+            </div>
+          ) : null}
+        </div>
+
+        <aside className="builder-rail builder-rail--right">
+          <div className="builder-properties-heading">
+            <p className="builder-selection-card__eyebrow">Proprieta blocco</p>
+            <p className="builder-selection-card__title">
+              {selectedButton ? "CTA selezionata" : "Seleziona un elemento"}
+            </p>
+            <p className="builder-rail__copy">
+              Modifica contenuto, stile e spaziatura del blocco selezionato nel canvas.
+            </p>
+          </div>
+
+          {selectedButton ? (
+            <div className="builder-selection-card">
+              <label className="builder-selection-card__label">
+                Testo bottone
+                <input
+                  className="builder-selection-card__input"
+                  value={selectedButton.label}
+                  onChange={(event) => updateSelectedButtonLabel(event.target.value)}
+                  placeholder="Es. Scarica il documento"
+                />
+              </label>
+              <label className="builder-selection-card__label">
+                Link o documento
+                <input
+                  className="builder-selection-card__input"
+                  value={selectedButton.href}
+                  onChange={(event) => updateSelectedButtonHref(event.target.value)}
+                  placeholder="https://... oppure {{link_documento}}"
+                />
+              </label>
+              {linkVariables.length ? (
+                <div className="builder-selection-card__chips">
+                  {linkVariables.map((item) => (
+                    <button
+                      key={item.placeholder}
+                      type="button"
+                      className="builder-selection-card__chip"
+                      onClick={() => updateSelectedButtonHref(item.placeholder)}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="builder-empty-state">
+              Clicca un testo, un'immagine o un bottone nel canvas per modificare le proprieta.
+            </div>
+          )}
+
+          <div className="builder-style-panel" ref={stylePanelRef} />
+          <button type="button" className="builder-delete-block" disabled>
+            Elimina blocco
+          </button>
         </aside>
       </div>
     </div>

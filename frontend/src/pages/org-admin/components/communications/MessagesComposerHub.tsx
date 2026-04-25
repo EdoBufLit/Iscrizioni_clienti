@@ -40,9 +40,8 @@ import {
   type OrgAdminMember,
 } from "../../../../lib/api";
 import { GrapesEmailBuilder } from "./GrapesEmailBuilder";
+import { KpiCard, SectionPanel, StatusChip, Stepper } from "../OrgAdminPrimitives";
 import {
-  CAMPAIGN_AUDIENCE_OPTIONS,
-  CAMPAIGN_RECIPIENT_MODE_OPTIONS,
   DEFAULT_CAMPAIGN_AUDIENCE,
   DEFAULT_EDITOR_STATUS,
   DEFAULT_RECIPIENT_MODE,
@@ -243,6 +242,104 @@ function StatusBadge({ value }: { value: string | null | undefined }) {
     <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] ${className}`}>
       {normalized === "draft" || normalized === "ready" ? getTemplateStatusLabel(normalized) : normalized || "-"}
     </span>
+  );
+}
+
+function CampaignTypeIcon({ value }: { value: OrgAdminEmailTemplateType }) {
+  const icon =
+    value === "event"
+      ? "▣"
+      : value === "renewal_reminder"
+        ? "↻"
+        : value === "booking_confirmation"
+          ? "✓"
+          : value === "generic_notice"
+            ? "↗"
+            : "✉";
+  return <span className="text-lg">{icon}</span>;
+}
+
+function CampaignSummaryPanel({
+  draft,
+  audienceEstimate,
+  selectedTemplateName,
+  activeForms,
+  onSave,
+  onContinue,
+  busy,
+  disabled,
+}: {
+  draft: CampaignDraft;
+  audienceEstimate: number | null;
+  selectedTemplateName: string;
+  activeForms: AssociationForm[];
+  onSave: () => void;
+  onContinue: () => void;
+  busy: string | null;
+  disabled: boolean;
+}) {
+  const linkedForm = activeForms.find((form) => form.id === draft.linkedFormId);
+  return (
+    <aside className="org-detail-panel sticky top-6 space-y-4">
+      <div className="org-detail-panel__header">
+        <div>
+          <p className="org-eyebrow">Riepilogo campagna</p>
+          <h3 className="org-detail-panel__title">{draft.name || "Nuova campagna"}</h3>
+        </div>
+        <StatusChip tone="warning">Bozza</StatusChip>
+      </div>
+
+      <KpiCard
+        label="Stima destinatari"
+        value={audienceEstimate ?? "-"}
+        hint={draft.recipientMode === "selected_members" ? "Soci selezionati manualmente" : "Calcolata sul segmento scelto"}
+        tone="success"
+        icon="◎"
+      />
+
+      <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
+        <div className="grid grid-cols-[2.4rem_minmax(0,1fr)] gap-3 p-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-[#0f5e5d]">
+            <CampaignTypeIcon value={draft.templateType} />
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-950">{getTemplateTypeLabel(draft.templateType)}</p>
+            <p className="mt-0.5 text-xs text-slate-500">Tipo campagna</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-[2.4rem_minmax(0,1fr)] gap-3 p-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-50 text-sky-700">▤</span>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-slate-950">{selectedTemplateName}</p>
+            <p className="mt-0.5 text-xs text-slate-500">Template selezionato</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-[2.4rem_minmax(0,1fr)] gap-3 p-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-700">◴</span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-950">{draft.scheduledAt ? "Programmata" : "Invio ora"}</p>
+            <p className="mt-0.5 text-xs text-slate-500">{draft.scheduledAt || "La campagna verra inviata manualmente."}</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-[2.4rem_minmax(0,1fr)] gap-3 p-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-50 text-slate-600">▣</span>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-slate-950">{linkedForm?.title || "Nessun form collegato"}</p>
+            <p className="mt-0.5 text-xs text-slate-500">Form collegato</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+        <button className="btn-secondary w-full" type="button" disabled={disabled || busy === "save-campaign"} onClick={onSave}>
+          {busy === "save-campaign" ? "Salvataggio..." : "Salva bozza"}
+        </button>
+        <button className="btn-primary w-full" type="button" onClick={onContinue}>
+          Continua →
+        </button>
+      </div>
+      <p className="text-center text-xs font-medium text-slate-500">Le modifiche restano nel wizard finche non salvi la bozza.</p>
+    </aside>
   );
 }
 
@@ -619,6 +716,10 @@ export function MessagesHub({
   }, [campaignDraft.templateType, templateDraft.templateType, templates, view.kind]);
 
   const activeForms = useMemo(() => forms.filter((form) => form.is_active), [forms]);
+  const selectedCampaignTemplateName = useMemo(() => {
+    if (!campaignDraft.sourceTemplateId) return "Base vuota guidata";
+    return templates.find((template) => template.id === campaignDraft.sourceTemplateId)?.name || "Template selezionato";
+  }, [campaignDraft.sourceTemplateId, templates]);
 
   async function refreshPreview(input: { subject: string; compiledHtml: string; linkedFormId: number | null }) {
     setPreviewLoading(true);
@@ -1244,11 +1345,28 @@ export function MessagesHub({
     return (
       <>
         <div className="space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <button className="btn-secondary" type="button" onClick={backToLibrary}>
-              Torna alla libreria
-            </button>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <div className="mb-3 flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
+                <button className="text-[#0f5e5d] hover:underline" type="button" onClick={backToLibrary}>
+                  Comunicazioni
+                </button>
+                <span>›</span>
+                <span>Campagne</span>
+                <span>›</span>
+                <span>{campaignDraft.id ? "Modifica campagna" : "Nuova campagna"}</span>
+              </div>
+              <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
+                {campaignDraft.id ? "Rifinisci campagna" : "Nuova campagna"}
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Crea una campagna email guidata in cinque passaggi, dal segmento fino all'invio.
+              </p>
+            </div>
             <div className="flex flex-wrap gap-3">
+              <button className="btn-secondary" type="button" onClick={backToLibrary}>
+                Esci
+              </button>
               {campaignDraft.id ? (
                 <button
                   className="btn-ghost text-red-600"
@@ -1267,73 +1385,137 @@ export function MessagesHub({
             </div>
           </div>
 
-          <WizardHero
-            eyebrow="Comunicazioni / Campagne"
-            title={campaignDraft.id ? "Rifinisci la campagna" : "Nuova campagna guidata"}
-            description="Il flusso campagne torna ordinato: tipo messaggio, template di partenza, builder centrale, preview e azioni finali."
-            steps={campaignSteps.map((step) => ({ key: step.key, label: step.label }))}
-            activeStep={campaignStep}
-            onStepSelect={(stepKey) => setCampaignStep(stepKey as CampaignStep)}
+          <Stepper
+            steps={[
+              { key: "type", label: "Tipo", hint: "Scegli obiettivo e destinatari" },
+              { key: "base", label: "Template", hint: "Scegli il modello" },
+              { key: "editor", label: "Builder", hint: "Personalizza contenuti" },
+              { key: "preview", label: "Anteprima", hint: "Verifica il risultato" },
+              { key: "action", label: "Invio", hint: "Programma o invia" },
+            ]}
+            active={campaignStep}
+            onSelect={(stepKey) => setCampaignStep(stepKey as CampaignStep)}
           />
           {campaignStep === "type" ? (
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_360px]">
-              <section className={`${panelClass} space-y-6`}>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <label className={`${labelClass} md:col-span-2`}>
-                    Nome interno campagna
-                    <input className={inputClass} value={campaignDraft.name} onChange={(event) => setCampaignDraft((prev) => ({ ...prev, name: event.target.value }))} placeholder="Es. Reminder rinnovo aprile" />
-                  </label>
-                  <label className={`${labelClass} md:col-span-2`}>
-                    Oggetto email
-                    <input className={inputClass} value={campaignDraft.subject} onChange={(event) => setCampaignDraft((prev) => ({ ...prev, subject: event.target.value }))} placeholder="Es. Ti ricordiamo il rinnovo quota" />
-                  </label>
-                  <label className={labelClass}>
-                    Form collegato
-                    <select className={inputClass} value={campaignDraft.linkedFormId ?? ""} onChange={(event) => setCampaignDraft((prev) => ({ ...prev, linkedFormId: event.target.value ? Number(event.target.value) : null }))}>
-                      <option value="">Nessun form</option>
-                      {activeForms.map((form) => (
-                        <option key={form.id} value={form.id}>{form.title}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className={labelClass}>
-                    Programmazione
-                    <input type="datetime-local" className={inputClass} value={campaignDraft.scheduledAt} onChange={(event) => setCampaignDraft((prev) => ({ ...prev, scheduledAt: event.target.value }))} />
-                  </label>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {TEMPLATE_TYPE_OPTIONS.map((option) => (
-                    <button key={option.value} type="button" className={`rounded-[1.25rem] border p-4 text-left transition ${campaignDraft.templateType === option.value ? "border-[#17494a] bg-[#eef7f7]" : "border-[#e4dccd] bg-[#fbfaf6] hover:border-[#cdbca2]"}`} onClick={() => setCampaignDraft((prev) => ({ ...prev, templateType: option.value }))}>
-                      <span className="text-sm font-semibold text-slate-950">{option.label}</span>
-                      <span className="mt-2 block text-sm leading-6 text-slate-500">{option.description}</span>
-                    </button>
-                  ))}
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  {CAMPAIGN_AUDIENCE_OPTIONS.map((option) => (
-                    <button key={option.value} type="button" className={`rounded-[1.2rem] border p-4 text-left transition ${campaignDraft.audienceType === option.value ? "border-[#17494a] bg-[#eef7f7]" : "border-[#e4dccd] bg-white hover:border-[#cdbca2]"}`} onClick={() => setCampaignDraft((prev) => ({ ...prev, audienceType: option.value }))}>
-                      <span className="text-sm font-semibold text-slate-950">{option.label}</span>
-                      <span className="mt-2 block text-sm leading-6 text-slate-500">{option.description}</span>
-                    </button>
-                  ))}
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  {CAMPAIGN_RECIPIENT_MODE_OPTIONS.map((option) => (
-                    <button key={option.value} type="button" className={`rounded-[1.2rem] border p-4 text-left transition ${campaignDraft.recipientMode === option.value ? "border-[#17494a] bg-[#eef7f7]" : "border-[#e4dccd] bg-white hover:border-[#cdbca2]"}`} onClick={() => setCampaignDraft((prev) => ({ ...prev, recipientMode: option.value }))}>
-                      <span className="text-sm font-semibold text-slate-950">{option.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </section>
-              <aside className={`${panelClass} space-y-4`}>
-                <div className={subtlePanelClass}>
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#7a6647]">Stima audience</p>
-                  <p className="mt-3 text-3xl font-semibold text-slate-950">{audienceEstimate ?? "-"}</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-500">
-                    {campaignDraft.recipientMode === "selected_members" ? "Conteggio basato sui soci selezionati." : "Stima calcolata sul segmento scelto."}
-                  </p>
-                </div>
-              </aside>
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+              <div className="space-y-5">
+                <SectionPanel title="Dettagli campagna">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className={labelClass}>
+                      Nome interno campagna
+                      <input className={inputClass} value={campaignDraft.name} onChange={(event) => setCampaignDraft((prev) => ({ ...prev, name: event.target.value }))} placeholder="Es. Newsletter Aprile 2026" />
+                    </label>
+                    <label className={labelClass}>
+                      Oggetto email
+                      <input className={inputClass} value={campaignDraft.subject} onChange={(event) => setCampaignDraft((prev) => ({ ...prev, subject: event.target.value }))} placeholder="Es. Tutte le novita e gli appuntamenti di Aprile" />
+                    </label>
+                    <label className={labelClass}>
+                      Form collegato <span className="font-normal text-slate-400">(opzionale)</span>
+                      <select className={inputClass} value={campaignDraft.linkedFormId ?? ""} onChange={(event) => setCampaignDraft((prev) => ({ ...prev, linkedFormId: event.target.value ? Number(event.target.value) : null }))}>
+                        <option value="">Seleziona un form</option>
+                        {activeForms.map((form) => (
+                          <option key={form.id} value={form.id}>{form.title}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-sm font-semibold text-slate-950">Programmazione</p>
+                      <div className="mt-3 grid gap-2">
+                        <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                          <input type="radio" checked={!campaignDraft.scheduledAt} onChange={() => setCampaignDraft((prev) => ({ ...prev, scheduledAt: "" }))} className="text-[#0f5e5d]" />
+                          Invia ora
+                        </label>
+                        <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                          <input type="radio" checked={Boolean(campaignDraft.scheduledAt)} onChange={() => setCampaignDraft((prev) => ({ ...prev, scheduledAt: prev.scheduledAt || new Date().toISOString().slice(0, 16) }))} className="text-[#0f5e5d]" />
+                          Programma per dopo
+                        </label>
+                        <input type="datetime-local" className={inputClass} value={campaignDraft.scheduledAt} onChange={(event) => setCampaignDraft((prev) => ({ ...prev, scheduledAt: event.target.value }))} />
+                      </div>
+                    </div>
+                  </div>
+                </SectionPanel>
+
+                <SectionPanel title="Tipo campagna" eyebrow="Scegli obiettivo principale">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                    {TEMPLATE_TYPE_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`relative rounded-xl border p-4 text-center transition ${
+                          campaignDraft.templateType === option.value
+                            ? "border-[#0f5e5d] bg-[#eef8f5] shadow-[0_18px_36px_-30px_rgba(15,94,93,0.5)]"
+                            : "border-slate-200 bg-white hover:border-[#a9bfbc]"
+                        }`}
+                        onClick={() => setCampaignDraft((prev) => ({ ...prev, templateType: option.value }))}
+                      >
+                        {campaignDraft.templateType === option.value ? (
+                          <span className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-[#0f5e5d] text-xs text-white">✓</span>
+                        ) : null}
+                        <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-[#0f5e5d]">
+                          <CampaignTypeIcon value={option.value} />
+                        </span>
+                        <span className="mt-3 block text-sm font-semibold text-slate-950">{option.label}</span>
+                        <span className="mt-1 block text-xs leading-5 text-slate-500">{option.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                </SectionPanel>
+
+                <SectionPanel title="Destinatari" eyebrow="Seleziona pubblico">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    {[
+                      { key: "active", label: "Tutti i soci attivi", hint: "Invia a tutti i soci con tessera attiva.", audience: "active_members" as const, mode: "all_members" as const, badge: "Consigliato" },
+                      { key: "expired", label: "Soci scaduti", hint: "Invia ai soci con tessera scaduta.", audience: "expired_members" as const, mode: "all_members" as const },
+                      { key: "renewal", label: "Rinnovi in scadenza", hint: "Invia ai soci con rinnovo prossimo.", audience: "renewal_due_members" as const, mode: "all_members" as const },
+                      { key: "custom", label: "Segmento personalizzato", hint: "Scegli un gruppo di soci personalizzato.", audience: campaignDraft.audienceType, mode: "selected_members" as const },
+                    ].map((option) => {
+                      const selected =
+                        option.mode === "selected_members"
+                          ? campaignDraft.recipientMode === "selected_members"
+                          : campaignDraft.recipientMode === "all_members" && campaignDraft.audienceType === option.audience;
+                      return (
+                        <button
+                          key={option.key}
+                          type="button"
+                          className={`relative rounded-xl border p-4 text-center transition ${
+                            selected
+                              ? "border-[#0f5e5d] bg-[#eef8f5] shadow-[0_18px_36px_-30px_rgba(15,94,93,0.5)]"
+                              : "border-slate-200 bg-white hover:border-[#a9bfbc]"
+                          }`}
+                          onClick={() =>
+                            setCampaignDraft((prev) => ({
+                              ...prev,
+                              recipientMode: option.mode,
+                              audienceType: option.mode === "selected_members" ? prev.audienceType : option.audience,
+                            }))
+                          }
+                        >
+                          {selected ? (
+                            <span className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-[#0f5e5d] text-xs text-white">✓</span>
+                          ) : null}
+                          <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-slate-50 text-slate-700">
+                            {option.key === "custom" ? "▽" : option.key === "renewal" ? "◷" : option.key === "expired" ? "!" : "◎"}
+                          </span>
+                          <span className="mt-3 block text-sm font-semibold text-slate-950">{option.label}</span>
+                          <span className="mt-1 block text-xs leading-5 text-slate-500">{option.hint}</span>
+                          {"badge" in option ? <StatusChip tone="success">{option.badge}</StatusChip> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </SectionPanel>
+              </div>
+
+              <CampaignSummaryPanel
+                draft={campaignDraft}
+                audienceEstimate={audienceEstimate}
+                selectedTemplateName={selectedCampaignTemplateName}
+                activeForms={activeForms}
+                busy={busy}
+                disabled={communicationsLocked}
+                onSave={() => void saveCampaign(false)}
+                onContinue={() => setCampaignStep("base")}
+              />
             </div>
           ) : null}
 

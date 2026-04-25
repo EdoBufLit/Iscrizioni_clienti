@@ -33,17 +33,17 @@ function PaletteItemCard({ item, style, attributes, listeners, nodeRef, isDraggi
       style={style}
       {...listeners}
       {...attributes}
-      className={`flex items-center gap-3 rounded-[1rem] border bg-white px-4 py-3 text-left transition-all ${
+      className={`flex items-center gap-3 rounded-[0.75rem] border bg-white px-4 py-3 text-left transition-all ${
         isDragging
           ? "border-brand shadow-lg ring-2 ring-brand/20 cursor-grabbing"
           : "border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 hover:shadow-sm cursor-grab"
       }`}
       type="button"
     >
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-sm font-bold text-neutral-600">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.7rem] bg-emerald-50 text-sm font-bold text-brand">
         {item.icon}
       </span>
-      <span className="text-sm font-medium text-neutral-700">{item.label}</span>
+      <span className="text-sm font-semibold text-slate-700">{item.label}</span>
     </button>
   );
 }

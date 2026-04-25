@@ -1,3 +1,56 @@
+## Plan (Verify and push org admin structural rehaul - Apr 25, 2026)
+- [x] Controllare branch, remote e working tree per isolare i file da includere nel push.
+- [x] Rieseguire verifiche tecniche mirate prima del commit: frontend typecheck/build e test backend org-admin.
+- [x] Rieseguire smoke visuale browser sulle superfici org-admin critiche prima del commit.
+- [x] Creare commit con soli file pertinenti al rehaul/verifiche, lasciando fuori cache, screenshot e file temporanei non tracciati.
+- [x] Pushare la branch corrente su `origin` e documentare commit/esito.
+
+## Review (Verify and push org admin structural rehaul - Apr 25, 2026)
+- Branch verificata: `feat/redesign-landing-wizard`; remote push: `origin`.
+- Verifiche tecniche OK: `npm --prefix frontend run typecheck`; `npm --prefix frontend run build` (solo warning Vite gia noto sui chunk grandi); `python -m pytest -q tests/test_org_admin_communications.py tests/test_forms_module.py tests/test_org_admin_member_filters.py tests/test_org_admin_manual_member.py tests/test_org_admin_card_lot_movements.py` (`39 passed`, soli warning deprecazione esistenti); `git diff --check` OK con soli warning CRLF.
+- Smoke visuale autenticato pre-push OK su backend locale `http://127.0.0.1:8017` con DB QA seedato: Comunicazioni panoramica, Nuova campagna, Builder email, Form lista, Builder form, Risposte form, Prenotazioni agenda, Mappa sala, Soci e Tessere. Risultato finale senza testi mancanti, errori console o risposte HTTP 4xx/5xx; evidenze locali in `tasks/screenshots/org-admin-visual-smoke-20260425-prepush-rerun2/`.
+- Durante lo smoke ho corretto la configurazione GrapesJS del builder email per disabilitare caricamento icone CDN e telemetry esterna bloccati dalla CSP; nessuna API, route, permesso o logo ASSONAM e stato modificato.
+- Staging previsto: solo file sorgente/test/docs pertinenti e `OrgAdminPrimitives.tsx`; cache, screenshot, DB temporanei e artefatti locali restano non tracciati.
+
+## Plan (Org admin structural rehaul remediation - Apr 24, 2026)
+- [x] Mappare e introdurre primitive condivise per il rehaul strutturale (`PageHeader`, `KpiCard`, `StatusChip`, `ActionCard`, `SectionPanel`, `Stepper`, `DetailPanel`, `EmptyState`) in `frontend/src/pages/org-admin/components/OrgAdminPrimitives.tsx`.
+- [x] Rifare `OrgAdminCommunications.tsx` e `components/communications/CommunicationsOverview.tsx` come dashboard operativa "Centro messaggi": CTA, tab, KPI, action cards, attivita recenti, navigazione consigliata e stato integrazioni.
+- [x] Rifare `components/communications/MessagesComposerHub.tsx` per nuova campagna: wizard a 5 step, form principale, card tipo/destinatari e sidebar "Riepilogo campagna" con azioni.
+- [x] Rifare `components/communications/GrapesEmailBuilder.tsx` e `grapes-email-builder.css` come builder email a 3 colonne reali: blocchi/dati a sinistra, canvas centrale, proprieta blocco a destra.
+- [x] Rifare `OrgAdminForms.tsx`, `components/forms/builder/FormBuilder.tsx` e `PropertiesPanel.tsx`: lista form operativa, header builder, tab coerenti, builder a 3 colonne e risposte master-detail con audit/azioni/documenti/booking.
+- [x] Rifare `OrgAdminBookings.tsx` e `components/bookings/RoomFloorMap.tsx`: agenda con KPI/calendario/colonna richieste/dettaglio, sale/tavoli coerenti, mappa sala come workspace con toolbar, legenda e pannello tavolo.
+- [x] Rifare `OrgAdminMembers.tsx` e `components/MembersTable.tsx`: KPI, filtri/search, tabella leggibile e master-detail laterale con tessera, attivita e azioni rapide.
+- [x] Rifare `OrgAdminCards.tsx`: gestione tessere/lotti con KPI, filtri, tabella tessere/movimenti, registro lotti, progress bar e regole emissione.
+- [x] Aggiornare `frontend/src/index.css`/`theme.css` solo a supporto delle nuove primitive, senza affidarsi a CSS globale come sostituto del redesign.
+- [x] Eseguire typecheck/build, smoke visuale sulle superfici minime richieste e documentare checklist pagina per pagina.
+
+## Review (Org admin structural rehaul remediation - Apr 24, 2026)
+- Primitive condivise create in `OrgAdminPrimitives.tsx` e usate sulle superfici ridisegnate; CSS globale limitato al supporto della shell/primitives e non usato come semplice reskin.
+- Comunicazioni panoramica: trasformata in dashboard "Centro messaggi" con CTA, tab, KPI, action cards, attivita recenti, navigazione consigliata e stato integrazioni.
+- Nuova campagna: trasformata in wizard a 5 step con form dati, card tipo campagna, card destinatari e sidebar riepilogo con stima destinatari/salva/continua.
+- Builder email: trasformato in editor a 3 colonne con blocchi/media/dati, canvas centrale e proprieta/stili a destra.
+- Form pubblici: lista form con metriche e azioni, builder form a 3 colonne, tab struttura/stile/impostazioni/risposte, risposte master-detail con KPI, inbox, dettaglio, audit/azioni, booking e allegati normalizzati.
+- Prenotazioni: agenda con KPI, calendario operativo, colonna richieste e dettaglio selezionato; corretta anche la semantica markup evitando bottoni annidati. Mappa sala come workspace con selettori, KPI, floor map, legenda e pannello tavolo.
+- Soci: pagina master-detail con KPI, filtri/search, tabella selezionabile, pannello profilo rapido, tessera, attivita e azioni reali.
+- Tessere: pagina gestione emissione/lotti con KPI, filtri, registro movimenti, registro lotti, progress bar, prossimo lotto automatico e regole quota.
+- Screenshot smoke salvati in `tasks/screenshots/org-admin-visual-smoke-20260424-structural-rehaul/`: panoramica, nuova campagna, builder email, lista form, builder form, risposte form, agenda, mappa, soci, tessere.
+- Verifiche finali: `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK con warning Vite preesistente sui chunk grandi; `python -m pytest -q tests/test_org_admin_communications.py tests/test_forms_module.py tests/test_org_admin_member_filters.py tests/test_org_admin_manual_member.py tests/test_org_admin_card_lot_movements.py` OK (`39 passed`, soli warning deprecazione esistenti).
+
+## Plan (Org admin visual QA pre-push - Apr 24, 2026)
+- [x] Eseguire una prima smoke visuale locale dell'area `/org-admin` su desktop/mobile con dati seedati
+- [x] Correggere i difetti di shell emersi dagli screenshot senza modificare il file/logo ASSONAM
+- [x] Ricostruire il frontend e rieseguire smoke visuale con onboarding tour disattivato
+- [x] Ispezionare screenshot rappresentativi di dashboard, wizard, builder, WhatsApp, prenotazioni, soci/tessere e mobile
+- [x] Rilanciare verifiche tecniche minime e documentare review finale prima di qualsiasi push
+
+## Review (Org admin visual QA pre-push - Apr 24, 2026)
+- Smoke visuale autenticato completato su istanza locale `http://127.0.0.1:8017` con DB seed dedicato e browser senza estensioni, dopo aver rilevato che un'estensione/policy Edge locale forzava una resa dark non proveniente dal CSS dell'app.
+- Screenshot finali salvati in `tasks/screenshots/org-admin-visual-smoke-20260424-final-light-noext/`: 26 viste tra dashboard, Comunicazioni, wizard campagne/form, builder, WhatsApp inbox/automazioni, Prenotazioni agenda/mappa, Soci, dettaglio socio, Tessere, Documenti, Contabilita, Inviti, Associazione, Billing, modali critiche e mobile.
+- Nessun overlay onboarding residuo nella passata finale; le superfici ispezionate risultano light workspace con topbar scura/sidebar chiara come nei mockup, senza modifiche al file logo ASSONAM.
+- Errori residui dello smoke circoscritti alla configurazione locale: `whatsapp/contacts` risponde `502` per provider Evolution abilitato senza `EVOLUTION_API_KEY`; `stripe-demo` risponde `404` per billing demo non abilitato nell'env/org seed. Le altre viste e wizard critici non hanno errori console/rete.
+- Durante lo smoke ho corretto solo dati seed invalidi nel DB temporaneo (`FormSubmission.status` e `Form.form_type`) per allinearli agli enum reali; nessuna logica applicativa e stata cambiata per mascherare quei dati.
+- Verifiche tecniche finali: `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK con warning Vite gia noto sui chunk grandi; `python -m pytest -q tests/test_org_admin_communications.py tests/test_org_admin_whatsapp.py tests/test_org_admin_member_filters.py tests/test_org_admin_manual_member.py tests/test_org_admin_member_profile_and_card_actions.py tests/test_org_admin_card_lot_movements.py` OK, 39 passed.
+
 ## Plan (Org admin conteggi, Comunicazioni e WhatsApp names - Apr 23, 2026)
 - [x] Esporre e usare metriche separate per soci attivi, richieste in verifica e totale operativo senza cambiare la formula esistente
 - [x] Chiarire dashboard e pagina Tessere con confronto tra tessere emesse, richieste senza tessera e totale anagrafiche/richieste
@@ -4284,3 +4337,20 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - `WhatsApp` riportato in cornice light-first con copy meno rumorosa; automazioni ridotte a 3 step con review laterale.
 - `Form pubblici` ed `Email` ripuliti da label inglesi nelle aree toccate e resi piu guidati.
 - Verifica eseguita: `npm --prefix frontend run build` OK il 18 Apr 2026. Rimane solo il warning Vite gia noto sui chunk grandi.
+## Plan (Rehaul completo Org Admin ASSONAM - Apr 24, 2026)
+- [x] Generare un mockup sheet GPT Image 2.0 per schermate org-admin non coperte dagli allegati, incluse dashboard, inviti, dettaglio socio, documenti, contabilita, impostazioni e sottowizard principali
+- [x] Introdurre una shell org-admin completa con sidebar raggruppata, topbar scura, profilo/notifiche e navigazione mobile senza cambiare auth/context/router
+- [x] Aggiungere primitive visuali condivise per page header, KPI, toolbar, table shell, side panel, wizard/stepper, stati e badge, riusando i flussi esistenti
+- [x] Applicare il redesign alle superfici top-level: dashboard, soci, dettaglio socio, tessere, prenotazioni, comunicazioni, inviti, documenti, contabilita, associazione e billing demo
+- [x] Applicare il redesign alle sottosezioni operative: wizard campagne/modelli, form builder e risposte, WhatsApp inbox/automazioni, prenotazioni agenda/mappa, modali e conferme
+- [x] Verificare typecheck/build frontend, test backend org-admin mirati e documentare review finale
+
+## Review (Rehaul completo Org Admin ASSONAM - Apr 24, 2026)
+- Mockup GPT Image 2.0 per schermate mancanti salvato in `tasks/screenshots/org-admin-missing-screens-mockup-20260424.png`.
+- Shell `/org-admin` ridisegnata con sidebar fissa raggruppata, topbar scura, profilo, notifiche, footer versione e navigazione mobile preservando auth, route, context, feature gate e logout.
+- Stile comune applicato in modo scoped sotto `.org-admin-v2`: superfici, KPI, toolbar, tabelle, badge, tab, modali/drawer, form, builder e stati ereditano la nuova grammatica senza cambiare handler/API.
+- Prenotazioni ora supporta deep link `?section=agenda|rooms|tables|map`; la mappa sala e stata riallineata al riferimento con floor-plan, stati colore, pannello tavolo e drag coordinate invariati.
+- Corretto un bug emerso dai test: le campagne schedulate con form collegato e CTA di design includono ora CTA e URL nel body inviato.
+- Logo e payoff ASSONAM non sono stati modificati; viene riusato `frontend/public/assonam-logo.svg` esistente.
+- Verifiche: `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK con warning chunk grandi gia noto; `python -m pytest -q tests/test_org_admin_communications.py tests/test_org_admin_whatsapp.py tests/test_org_admin_member_filters.py tests/test_org_admin_manual_member.py tests/test_org_admin_member_profile_and_card_actions.py tests/test_org_admin_card_lot_movements.py` OK, 39 passed.
+- Smoke browser autenticato eseguito successivamente su istanza locale seedata `http://127.0.0.1:8017`; screenshot e summary in `tasks/screenshots/org-admin-visual-smoke-20260424-final-light-noext/` coprono 26 superfici desktop/mobile incluse wizard, builder, modali, detail panel e mappa sala. Residui non bloccanti: `whatsapp/contacts` 502 per Evolution abilitato senza API key locale e `stripe-demo` 404 per billing demo non abilitato nell'env/org seed.

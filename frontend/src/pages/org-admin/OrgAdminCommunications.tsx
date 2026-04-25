@@ -10,6 +10,7 @@ import { PublicFormsHub } from "./components/communications/PublicFormsHub";
 import { EmailSendingSettings } from "./components/communications/EmailSendingSettings";
 import { WhatsAppHub } from "./components/communications/WhatsAppHub";
 import { WhatsAppAutomationsHub } from "./components/communications/WhatsAppAutomationsHub";
+import { PageHeader, StatusChip } from "./components/OrgAdminPrimitives";
 
 type WhatsAppView = "inbox" | "automazioni";
 
@@ -145,6 +146,38 @@ export default function OrgAdminCommunications() {
 
   return (
     <div className="container-shell py-8 space-y-5">
+      <PageHeader
+        eyebrow="Comunicazioni"
+        title="Centro messaggi"
+        subtitle="Gestisci campagne, modelli, form pubblici e canali di comunicazione in un workspace operativo."
+        actions={
+          <>
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={communicationsLocked}
+              onClick={() => {
+                const nextParams = new URLSearchParams(searchParams);
+                nextParams.set("tab", "campagne");
+                nextParams.set("mode", "create");
+                setSearchParams(nextParams, { replace: true });
+                setActiveTab("campagne");
+              }}
+            >
+              + Nuova campagna
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={communicationsLocked}
+              onClick={() => selectTab("moduli")}
+            >
+              + Nuovo form
+            </button>
+          </>
+        }
+      />
+
       <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
         {communicationsLocked && (
           <div className="mx-6 mt-6 rounded-lg border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900 md:mx-8">
@@ -160,18 +193,14 @@ export default function OrgAdminCommunications() {
         <div className="px-5 pt-5 md:px-6">
           <div className="flex flex-col gap-4 border-b border-neutral-200 pb-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Comunicazioni</p>
-              <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">Centro messaggi</h1>
-              <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
-                <span className={`rounded-md border px-2.5 py-1 ${communicationsLocked ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+              <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                <StatusChip tone={communicationsLocked ? "warning" : "success"}>
                   {communicationsLocked ? "Modulo bloccato" : "Modulo attivo"}
-                </span>
-                <span className={`rounded-md border px-2.5 py-1 ${whatsappEnabled ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-neutral-200 bg-neutral-50 text-neutral-600"}`}>
+                </StatusChip>
+                <StatusChip tone={whatsappEnabled ? "success" : "muted"}>
                   WhatsApp {whatsappEnabled ? "attivo" : "non attivo"}
-                </span>
-                <span className="rounded-md border border-neutral-200 bg-neutral-50 px-2.5 py-1 text-neutral-600">
-                  Email configurabile
-                </span>
+                </StatusChip>
+                <StatusChip tone="info">Email configurabile</StatusChip>
               </div>
             </div>
             <div className="overflow-x-auto pb-1">

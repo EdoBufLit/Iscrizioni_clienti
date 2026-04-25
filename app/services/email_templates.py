@@ -737,6 +737,8 @@ def decorate_rendered_email(
         cta_url = raw_cta_url or str(rendered.context.get("link_rinnovo") or "")
     elif cta_kind == "custom":
         cta_url = raw_cta_url
+    elif linked_form_url and (resolved_design["cta_label"] or resolved_design["cta_note"]):
+        cta_url = linked_form_url
     cta_label = resolved_design["cta_label"]
     if not cta_label and cta_url:
         if cta_kind == "renewal":

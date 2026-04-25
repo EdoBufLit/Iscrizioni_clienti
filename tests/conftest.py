@@ -11,6 +11,7 @@ os.environ["DATABASE_URL"] = "sqlite:///test_qa.db"
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-qa")
 os.environ.setdefault("BASE_URL", "http://localhost:8000")
 os.environ.setdefault("UPLOAD_DIR", "data/uploads")
+os.environ.setdefault("SUMUP_CREDENTIALS_ENCRYPTION_KEY", "test-sumup-encryption-key-32-bytes")
 os.environ.setdefault("AFFILIAZIONE_ENABLED", "true")
 os.environ.setdefault("ENABLE_STRIPE_CONNECT_DEMO", "true")
 for stripe_env in [

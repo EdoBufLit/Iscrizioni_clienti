@@ -41,7 +41,7 @@ function CanvasItemFrame({
       <div
         ref={nodeRef}
         style={style}
-        className="rounded-xl border-2 border-brand border-dashed bg-brand/5 h-20 w-full"
+        className="h-20 w-full rounded-[0.75rem] border-2 border-dashed border-brand bg-brand/5"
       />
     );
   }
@@ -49,13 +49,13 @@ function CanvasItemFrame({
   const renderContent = () => {
     switch (field.type) {
       case "section_title":
-        return <h3 className="text-xl font-serif font-bold text-neutral-900">{field.label || "Titolo Sezione"}</h3>;
+        return <h3 className="text-xl font-semibold text-slate-950">{field.label || "Titolo sezione"}</h3>;
       case "free_text":
-        return <p className="text-sm text-neutral-600">{field.helpText || "Aggiungi il tuo testo libero qui..."}</p>;
+        return <p className="text-sm leading-6 text-slate-600">{field.helpText || "Aggiungi il tuo testo libero qui..."}</p>;
       case "divider":
         return <hr className="border-t border-neutral-200 my-4" />;
       case "spacer":
-        return <div className="h-10 border border-dashed border-neutral-200/50 rounded-lg bg-neutral-50/30 flex items-center justify-center text-[10px] text-neutral-400 uppercase tracking-widest">Spazio vuoto</div>;
+        return <div className="flex h-10 items-center justify-center rounded-[0.65rem] border border-dashed border-slate-200/70 bg-slate-50 text-[10px] uppercase tracking-widest text-slate-400">Spazio vuoto</div>;
       default:
         return (
           <div className="flex flex-col gap-1 w-full">
@@ -64,7 +64,7 @@ function CanvasItemFrame({
                 {field.label} {field.required && <span className="text-red-500">*</span>}
               </span>
             )}
-            <div className="w-full rounded-[1.1rem] border border-black/10 bg-white px-3.5 py-2.5 text-sm text-neutral-400 pointer-events-none">
+            <div className="pointer-events-none w-full rounded-[0.72rem] border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-400">
               {field.placeholder || "..."}
             </div>
             {field.helpText && <span className="text-xs text-neutral-500 mt-1">{field.helpText}</span>}
@@ -77,7 +77,7 @@ function CanvasItemFrame({
     <div
       ref={nodeRef}
       style={style}
-      className={`group relative flex flex-col rounded-[1.2rem] bg-white transition-all cursor-pointer ${
+      className={`group relative flex flex-col rounded-[0.85rem] bg-white transition-all cursor-pointer ${
         isSelected
           ? "ring-2 ring-brand shadow-[0_4px_20px_rgba(15,118,110,0.15)] z-10"
           : "ring-1 ring-black/5 hover:ring-black/15 shadow-sm hover:shadow-md"

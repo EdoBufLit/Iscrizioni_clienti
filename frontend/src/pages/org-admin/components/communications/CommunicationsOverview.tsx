@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
-import { useOrgAdmin } from "../../OrgAdminLayout";
+import { useEffect, useMemo, useState } from "react";
 import Skeleton from "../../../../components/ui/Skeleton";
 import {
   fetchOrgAdminCommunicationSettings,
   fetchOrgAdminEmailCampaigns,
   fetchOrgAdminForms,
 } from "../../../../lib/api";
+import { useOrgAdmin } from "../../OrgAdminLayout";
+import { ActionCard, KpiCard, SectionPanel, StatusChip } from "../OrgAdminPrimitives";
 
 type CommunicationsOverviewProps = {
   onTabChange: (tab: "panoramica" | "campagne" | "modelli" | "moduli" | "whatsapp" | "invii" | "impostazioni") => void;
@@ -14,44 +15,19 @@ type CommunicationsOverviewProps = {
   whatsappEnabled: boolean;
 };
 
-function StatCard(props: { label: string; value: string | number; detail: string }) {
-  const { label, value, detail } = props;
-  return (
-    <div className="rounded-lg bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60 transition-colors hover:bg-slate-100/50">
-      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">{label}</p>
-      <p className="mt-3 text-4xl font-light tracking-tight text-slate-900">{value}</p>
-      <p className="mt-2 text-sm leading-6 text-slate-500">{detail}</p>
-    </div>
-  );
-}
-
-function QuickActionCard(props: {
+type RecentActivity = {
+  id: string;
+  icon: string;
   title: string;
-  description: string;
-  cta: string;
-  onClick: () => void;
-  disabled?: boolean;
-}) {
-  const { title, description, cta, onClick, disabled = false } = props;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="group rounded-lg border border-slate-200 bg-white p-6 text-left transition-colors duration-200 hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-base font-semibold text-slate-900">{title}</p>
-          <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
-        </div>
-        <span className="text-xl font-light text-slate-300">&rarr;</span>
-      </div>
-      <div className="mt-5 inline-flex rounded-md bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
-        {cta}
-      </div>
-    </button>
-  );
+  meta: string;
+  date?: string | null;
+};
+
+function formatDate(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
 export function CommunicationsOverview({
@@ -66,12 +42,16 @@ export function CommunicationsOverview({
     sentCampaigns: 0,
     drafts: 0,
     activeForms: 0,
+    totalForms: 0,
+    totalCampaigns: 0,
   });
   const [senderInfo, setSenderInfo] = useState<{
     fromHeader: string;
     replyTo: string | null;
     domainLabel: string;
+    configured: boolean;
   } | null>(null);
+  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,12 +67,37 @@ export function CommunicationsOverview({
 
         const campaigns = campaignData.items || [];
         const forms = formData.items || [];
+        const sentCampaigns = campaigns.filter((item: any) => ["sent", "partial_failed"].includes(String(item.status || "").toLowerCase()));
+        const draftCampaigns = campaigns.filter((item: any) => String(item.status || "").toLowerCase() === "draft");
+        const activeForms = forms.filter((item: any) => item.is_active);
 
         setStats({
-          sentCampaigns: campaigns.filter((item: any) => ["sent", "partial_failed"].includes(String(item.status || "").toLowerCase())).length,
-          drafts: campaigns.filter((item: any) => String(item.status || "").toLowerCase() === "draft").length,
-          activeForms: forms.filter((item: any) => item.is_active).length,
+          sentCampaigns: sentCampaigns.length,
+          drafts: draftCampaigns.length,
+          activeForms: activeForms.length,
+          totalForms: forms.length,
+          totalCampaigns: campaigns.length,
         });
+
+        const activities: RecentActivity[] = [
+          ...campaigns.slice(0, 3).map((item: any) => ({
+            id: `campaign-${item.id}`,
+            icon: "↗",
+            title: item.name || item.subject || "Campagna senza nome",
+            meta: `${item.status || "bozza"} · ${item.planned_recipient_count ?? item.recipient_count ?? 0} destinatari`,
+            date: item.sent_at || item.scheduled_at || item.created_at,
+          })),
+          ...forms.slice(0, 3).map((item: any) => ({
+            id: `form-${item.id}`,
+            icon: "▣",
+            title: item.title,
+            meta: `${item.submission_status_counts?.total ?? item.submission_count ?? 0} risposte · ${item.field_count ?? 0} campi`,
+            date: item.updated_at || item.created_at,
+          })),
+        ]
+          .sort((left, right) => new Date(right.date || 0).getTime() - new Date(left.date || 0).getTime())
+          .slice(0, 5);
+        setRecentActivities(activities);
 
         if (!settingsData) return;
 
@@ -107,6 +112,7 @@ export function CommunicationsOverview({
             fromHeader: `${fromName} <${fromEmail}>`,
             replyTo: settingsData.reply_to_email || null,
             domainLabel: domain || "Dominio configurato",
+            configured: true,
           });
           return;
         }
@@ -115,6 +121,7 @@ export function CommunicationsOverview({
           fromHeader: settingsData.system_email_sender?.from_header || settingsData.system_email_sender?.from_email || "noreply@assonam.it",
           replyTo: settingsData.system_email_sender?.reply_to || null,
           domainLabel: settingsData.mail_from_domain || "Mittente di sistema",
+          configured: Boolean(settingsData.system_email_sender?.from_email || settingsData.system_email_sender?.from_header),
         });
       })
       .finally(() => {
@@ -126,130 +133,138 @@ export function CommunicationsOverview({
     };
   }, [admin?.organization?.id, admin?.organization?.name]);
 
+  const integrationRows = useMemo(
+    () => [
+      { label: "Mail", detail: senderInfo?.domainLabel || "Mittente da configurare", status: senderInfo?.configured ? "Attiva" : "Da configurare", tone: senderInfo?.configured ? "success" : "warning" },
+      { label: "WhatsApp", detail: whatsappEnabled ? "Canale connesso o configurabile" : "Modulo non abilitato", status: whatsappEnabled ? "Attivo" : "Non attivo", tone: whatsappEnabled ? "success" : "muted" },
+      { label: "Automazioni", detail: `${stats.activeForms} form attivi disponibili`, status: stats.activeForms > 0 ? "Pronte" : "Nessun form", tone: stats.activeForms > 0 ? "info" : "muted" },
+      { label: "Comunicazioni", detail: communicationsLocked ? "Modulo bloccato" : "Workspace operativo", status: communicationsLocked ? "Bloccato" : "Attivo", tone: communicationsLocked ? "warning" : "success" },
+    ] as const,
+    [communicationsLocked, senderInfo, stats.activeForms, whatsappEnabled],
+  );
+
   if (loading) {
     return (
       <div className="grid gap-5">
-        <Skeleton className="h-20 w-full rounded-xl" />
-        <Skeleton className="h-36 w-full rounded-xl" />
-        <Skeleton className="h-24 w-full rounded-xl" />
+        <Skeleton className="h-28 w-full rounded-xl" />
+        <Skeleton className="h-40 w-full rounded-xl" />
+        <Skeleton className="h-60 w-full rounded-xl" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-10">
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-6">
-        <div className="max-w-3xl">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Panoramica comunicazioni</p>
-          <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">Cosa fare adesso</h2>
-          <p className="mt-2 text-sm text-slate-500">
-            La home del workspace tiene insieme campagne, modelli, form pubblici, WhatsApp e configurazione mittente.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <button type="button" className="btn-secondary !rounded-full !px-5" onClick={() => onTabChange("campagne")}>
-            Apri campagne
-          </button>
-          <button type="button" className="btn-secondary !rounded-full !px-5" onClick={() => onTabChange("impostazioni")}>
-            Configura email
-          </button>
-        </div>
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <KpiCard label="Campagne inviate" value={stats.sentCampaigns} hint="+ operative in archivio" tone="success" icon="↗" />
+        <KpiCard label="Bozze aperte" value={stats.drafts} hint={`${stats.totalCampaigns} campagne totali`} tone="info" icon="□" />
+        <KpiCard label="Form attivi" value={stats.activeForms} hint={`${stats.totalForms} form creati`} tone="success" icon="▣" />
+        <KpiCard label="Stato WhatsApp" value={whatsappEnabled ? "Attivo" : "No"} hint={whatsappEnabled ? "Connessione disponibile" : "Canale non attivo"} tone={whatsappEnabled ? "success" : "muted"} icon="◌" />
+        <KpiCard label="Email configurata" value={senderInfo?.configured ? "Si" : "No"} hint={senderInfo?.domainLabel || "Mittente da verificare"} tone={senderInfo?.configured ? "success" : "warning"} icon="✉" />
       </div>
 
-      <section>
-        <h3 className="mb-6 text-sm font-bold uppercase tracking-[0.15em] text-slate-400">Stato attuale</h3>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Campagne inviate" value={stats.sentCampaigns} detail="Invii conclusi o parzialmente completati." />
-          <StatCard label="Bozze aperte" value={stats.drafts} detail="Campagne ancora da rifinire o programmare." />
-          <StatCard label="Form attivi" value={stats.activeForms} detail="Moduli pubblici disponibili alla compilazione." />
-          <StatCard
-            label="Stato WhatsApp"
-            value={whatsappEnabled ? "Attivo" : "Non attivo"}
-            detail={
-              whatsappEnabled
-                ? "Inbox e automazioni sono disponibili nel workspace."
-                : "La sezione resta nascosta finché la funzione non viene abilitata."
-            }
-          />
-        </div>
-      </section>
-
-      <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <div>
-          <h3 className="mb-6 text-sm font-bold uppercase tracking-[0.15em] text-slate-400">Da fare ora</h3>
-          <div className="grid gap-4 md:grid-cols-3">
-            <QuickActionCard
-              title="Invia un invito a un form"
-              description="Crea una campagna collegata a un modulo pubblico già attivo o in preparazione."
-              cta="Apri campagne"
-              onClick={() => onQuickAction("form_invite")}
-              disabled={communicationsLocked}
-            />
-            <QuickActionCard
-              title="Comunica ai soci"
-              description="Prepara un invio generale partendo da un modello o da una nuova bozza."
-              cta="Nuova campagna"
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
+        <SectionPanel title="Cosa fare adesso">
+          <div className="grid gap-3 md:grid-cols-2">
+            <ActionCard
+              icon="↗"
+              title="Invia ai soci"
+              description="Crea una campagna per il segmento principale dei soci attivi."
+              cta="Crea campagna"
               onClick={() => onQuickAction("general")}
               disabled={communicationsLocked}
             />
-            <QuickActionCard
-              title="Ricorda un rinnovo"
-              description="Lancia una campagna di promemoria verso i soci con tessera da rinnovare."
-              cta="Promemoria rinnovo"
+            <ActionCard
+              icon="⏱"
+              title="Promemoria rinnovo"
+              description="Prepara un reminder verso chi deve rinnovare la tessera."
+              cta="Crea promemoria"
               onClick={() => onQuickAction("renewal")}
               disabled={communicationsLocked}
             />
+            <ActionCard
+              icon="▣"
+              title="Collega un form"
+              description="Crea un invito email a un modulo pubblico e traccia le risposte."
+              cta="Invito form"
+              onClick={() => onQuickAction("form_invite")}
+              disabled={communicationsLocked}
+            />
+            <ActionCard
+              icon="✉"
+              title="Configura mittente"
+              description="Controlla nome mittente, dominio e email di risposta."
+              cta="Apri email"
+              onClick={() => onTabChange("impostazioni")}
+            />
           </div>
-        </div>
+        </SectionPanel>
 
-        <div className="rounded-lg bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Navigazione consigliata</p>
-          <div className="mt-4 space-y-3 text-sm text-slate-600">
-            <button
-              type="button"
-              className="flex w-full items-center justify-between rounded-md bg-white px-4 py-3 text-left ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300"
-              onClick={() => onTabChange("modelli")}
-            >
-              <span>Rivedi i modelli riusabili</span>
-              <span className="font-semibold text-slate-900">Modelli</span>
-            </button>
-            <button
-              type="button"
-              className="flex w-full items-center justify-between rounded-md bg-white px-4 py-3 text-left ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300"
-              onClick={() => onTabChange("moduli")}
-            >
-              <span>Gestisci link pubblici e notifiche</span>
-              <span className="font-semibold text-slate-900">Form pubblici</span>
-            </button>
+        <SectionPanel title="Navigazione consigliata">
+          <div className="grid gap-3">
+            <ActionCard title="Modelli" description="Crea e gestisci messaggi riusabili." onClick={() => onTabChange("modelli")} />
+            <ActionCard title="Form pubblici" description="Raccogli iscrizioni, richieste e prenotazioni." onClick={() => onTabChange("moduli")} />
             {whatsappEnabled ? (
-              <button
-                type="button"
-                className="flex w-full items-center justify-between rounded-md bg-white px-4 py-3 text-left ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300"
-                onClick={() => onTabChange("whatsapp")}
-              >
-                <span>Controlla inbox e regole collegate ai form</span>
-                <span className="font-semibold text-slate-900">WhatsApp</span>
-              </button>
+              <ActionCard title="WhatsApp" description="Apri inbox e automazioni collegate ai form." onClick={() => onTabChange("whatsapp")} />
             ) : null}
+            <ActionCard title="Email" description="Verifica mittente e invia una mail di test." onClick={() => onTabChange("impostazioni")} />
           </div>
-        </div>
-      </section>
+        </SectionPanel>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
+        <SectionPanel title="Attività recenti">
+          {recentActivities.length ? (
+            <div className="divide-y divide-slate-100">
+              {recentActivities.map((activity) => (
+                <div key={activity.id} className="grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-3 py-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 font-bold text-[#0f5e5d]">{activity.icon}</span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-950">{activity.title}</p>
+                    <p className="mt-0.5 truncate text-xs text-slate-500">{activity.meta}</p>
+                  </div>
+                  <span className="text-xs font-medium text-slate-400">{formatDate(activity.date)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="org-empty-state">
+              <p className="org-empty-state__title">Nessuna attività recente</p>
+              <p className="org-empty-state__description">Le campagne inviate e i form aggiornati compariranno qui.</p>
+            </div>
+          )}
+        </SectionPanel>
+
+        <SectionPanel title="Stato integrazioni">
+          <div className="divide-y divide-slate-100">
+            {integrationRows.map((row) => (
+              <div key={row.label} className="flex items-center justify-between gap-3 py-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-950">{row.label}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">{row.detail}</p>
+                </div>
+                <StatusChip tone={row.tone}>{row.status}</StatusChip>
+              </div>
+            ))}
+          </div>
+        </SectionPanel>
+      </div>
 
       {senderInfo ? (
-        <section className="rounded-lg bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60">
+        <SectionPanel>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Mittente effettivo</p>
-              <p className="mt-3 break-all text-base font-medium text-slate-900">{senderInfo.fromHeader}</p>
-              <p className="mt-2 text-sm text-slate-500">
-                Risposte: {senderInfo.replyTo || "stesso indirizzo mittente"} • Dominio: {senderInfo.domainLabel}
+              <p className="org-eyebrow">Mittente effettivo</p>
+              <p className="mt-2 break-all text-sm font-semibold text-slate-950">{senderInfo.fromHeader}</p>
+              <p className="mt-1 text-sm text-slate-500">
+                Risposte: {senderInfo.replyTo || "stesso indirizzo mittente"} · Dominio: {senderInfo.domainLabel}
               </p>
             </div>
-            <button type="button" className="btn-secondary !rounded-full !text-sm !px-5" onClick={() => onTabChange("impostazioni")}>
-              Modifica impostazioni
+            <button type="button" className="btn-secondary" onClick={() => onTabChange("impostazioni")}>
+              Modifica email
             </button>
           </div>
-        </section>
+        </SectionPanel>
       ) : null}
     </div>
   );

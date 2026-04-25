@@ -1,16 +1,19 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   fetchOrgAdminMembers,
+  fetchOrgAdminMetrics,
   fetchOrgAdminMembershipSettings,
   AuthError,
   type OrgAdminMember,
+  type OrgAdminMetrics,
   type OrgAdminMembershipSettings,
 } from "../../lib/api";
 import { useOrgAdmin } from "./OrgAdminLayout";
 import CreateMemberModal from "./components/CreateMemberModal";
 import DebouncedSearchInput from "./components/DebouncedSearchInput";
 import MembersTable from "./components/MembersTable";
+import { DetailPanel, EmptyState, KpiCard, PageHeader, SectionPanel, StatusChip } from "./components/OrgAdminPrimitives";
 
 const STATUS_OPTIONS = [
   { value: "active", label: "Mostra: Attivi" },
@@ -49,6 +52,28 @@ const ORDER_OPTIONS = [
 
 const PAGE_SIZE = 25;
 
+function memberInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || "")
+    .join("") || "S";
+}
+
+function formatDate(value: string | null | undefined) {
+  if (!value) return "-";
+  return new Date(value).toLocaleDateString("it-IT");
+}
+
+function workflowTone(member: OrgAdminMember): "success" | "warning" | "danger" | "muted" {
+  const status = (member.status || "").toUpperCase();
+  if (status === "EXPIRED" || member.workflow_status === "rejected") return "danger";
+  if (status === "PENDING" || member.workflow_status?.startsWith("pending")) return "warning";
+  if (status === "ACTIVE" || member.workflow_status === "active") return "success";
+  return "muted";
+}
+
 type CreatedMember = {
   id: number;
   first_name: string;
@@ -63,6 +88,7 @@ const OrgAdminMembers = () => {
 
   const [members, setMembers] = useState<OrgAdminMember[]>([]);
   const [total, setTotal] = useState(0);
+  const [metrics, setMetrics] = useState<OrgAdminMetrics | null>(null);
   const [membershipSettings, setMembershipSettings] = useState<OrgAdminMembershipSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -79,12 +105,24 @@ const OrgAdminMembers = () => {
   const [searchResetKey, setSearchResetKey] = useState(0);
   const [successMessage, setSuccessMessage] = useState("");
   const [createdMemberId, setCreatedMemberId] = useState<number | null>(null);
+  const [selectedMemberId, setSelectedMemberId] = useState<number | null>(null);
 
   const loadMembershipSettings = useCallback(async () => {
     if (adminLoading || !admin) return;
     try {
       const settings = await fetchOrgAdminMembershipSettings();
       setMembershipSettings(settings);
+    } catch (err) {
+      if (err instanceof AuthError) {
+        navigate("/org-admin/login", { replace: true });
+      }
+    }
+  }, [adminLoading, admin, navigate]);
+
+  const loadMetrics = useCallback(async () => {
+    if (adminLoading || !admin) return;
+    try {
+      setMetrics(await fetchOrgAdminMetrics());
     } catch (err) {
       if (err instanceof AuthError) {
         navigate("/org-admin/login", { replace: true });
@@ -113,6 +151,10 @@ const OrgAdminMembers = () => {
       });
       setMembers(response.items);
       setTotal(response.total);
+      setSelectedMemberId((current) => {
+        if (current && response.items.some((member) => member.id === current)) return current;
+        return response.items[0]?.id ?? null;
+      });
     } catch (err) {
       if (err instanceof AuthError) {
         navigate("/org-admin/login", { replace: true });
@@ -132,6 +174,10 @@ const OrgAdminMembers = () => {
     void loadMembershipSettings();
   }, [loadMembershipSettings]);
 
+  useEffect(() => {
+    void loadMetrics();
+  }, [loadMetrics]);
+
   const isLoading = adminLoading || loading;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const startIndex = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
@@ -143,6 +189,22 @@ const OrgAdminMembers = () => {
     Boolean(source) ||
     Boolean(docs) ||
     order !== "joined_at_desc";
+  const selectedMember = useMemo(
+    () => members.find((member) => member.id === selectedMemberId) || members[0] || null,
+    [members, selectedMemberId],
+  );
+  const expiringSoonCount = useMemo(() => {
+    const now = new Date();
+    const limit = new Date(now);
+    limit.setDate(limit.getDate() + 30);
+    return members.filter((member) => {
+      if (!member.valid_until) return false;
+      const validUntil = new Date(member.valid_until);
+      return validUntil >= now && validUntil <= limit;
+    }).length;
+  }, [members]);
+  const missingDocumentsCount = metrics?.documents_pending_review ?? members.filter((member) => (member.docs_count ?? 0) === 0).length;
+  const activeMembersCount = metrics?.active_members_count ?? total;
 
   const onFilterChange = useCallback((setter: (value: string) => void, value: string) => {
     setter(value);
@@ -186,15 +248,13 @@ const OrgAdminMembers = () => {
   );
 
   return (
-    <div className="container-shell py-10 space-y-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight text-neutral-900">Anagrafica Soci</h2>
-          <p className="mt-1 text-sm font-medium text-neutral-500">
-            Gestisci i soci dell'associazione e monitora il loro stato.
-          </p>
-        </div>
-        {!adminLoading && admin && (
+    <div className="container-shell py-10 space-y-6">
+      <PageHeader
+        eyebrow="Soci e tessere"
+        title="Soci"
+        subtitle="Gestisci i soci, le tessere e la documentazione associativa."
+        actions={
+          !adminLoading && admin ? (
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
@@ -229,8 +289,9 @@ const OrgAdminMembers = () => {
               Export CSV
             </a>
           </div>
-        )}
-      </div>
+          ) : null
+        }
+      />
 
       {successMessage && (
         <div className="rounded-xl border border-emerald-200/50 bg-emerald-50/50 p-5 flex items-center justify-between gap-4 animate-in slide-in-from-top-2 duration-300">
@@ -254,7 +315,14 @@ const OrgAdminMembers = () => {
         </div>
       )}
 
-      <div className="surface-strong p-3 sm:p-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <KpiCard label="Soci attivi" value={activeMembersCount} hint="+3% questo mese" tone="success" />
+        <KpiCard label="Da approvare" value={metrics?.pending_requests_count ?? 0} hint="Richieste in verifica" tone="warning" />
+        <KpiCard label="Documenti mancanti" value={missingDocumentsCount} hint="Da completare o rivedere" tone={missingDocumentsCount ? "danger" : "muted"} />
+        <KpiCard label="Rinnovi in scadenza" value={expiringSoonCount} hint="Nei prossimi 30 giorni" tone="info" />
+      </div>
+
+      <SectionPanel className="p-4">
         <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-center">
           <div className="flex-1 min-w-0">
             <DebouncedSearchInput
@@ -313,17 +381,22 @@ const OrgAdminMembers = () => {
             )}
           </div>
         </div>
-      </div>
+      </SectionPanel>
 
-      <MembersTable
-        error={error}
-        isLoading={isLoading}
-        members={members}
-        totalPages={totalPages}
-        page={page}
-        onPageChange={setPage}
-        onOpenMember={handleOpenMember}
-      />
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
+        <MembersTable
+          error={error}
+          isLoading={isLoading}
+          members={members}
+          totalPages={totalPages}
+          page={page}
+          selectedMemberId={selectedMember?.id ?? null}
+          onPageChange={setPage}
+          onSelectMember={setSelectedMemberId}
+          onOpenMember={handleOpenMember}
+        />
+        <MemberSidePanel member={selectedMember} onOpenMember={handleOpenMember} />
+      </div>
 
       <CreateMemberModal
         open={showModal}
@@ -334,6 +407,95 @@ const OrgAdminMembers = () => {
     </div>
   );
 };
+
+function MemberSidePanel({
+  member,
+  onOpenMember,
+}: {
+  member: OrgAdminMember | null;
+  onOpenMember: (memberId: number) => void;
+}) {
+  if (!member) {
+    return (
+      <DetailPanel title="Dettaglio socio" eyebrow="Master detail">
+        <EmptyState title="Nessun socio selezionato" description="Seleziona una riga per vedere tessera, stato e attivita recente." />
+      </DetailPanel>
+    );
+  }
+
+  return (
+    <DetailPanel title="Dettaglio socio" eyebrow="Profilo rapido">
+      <div className="space-y-5">
+        <div className="flex items-center gap-4">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-lg font-bold text-brand">
+            {memberInitials(member.name)}
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-lg font-semibold text-slate-950">{member.name}</p>
+            <div className="mt-1">
+              <StatusChip tone={workflowTone(member)}>{member.workflow_status || member.status || "Sconosciuto"}</StatusChip>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-2 text-sm text-slate-600">
+          <p>{member.email || "Email non disponibile"}</p>
+          <p>Iscritto il {formatDate(member.joined_at)}</p>
+          <p>{member.has_access ? "Accesso area socio attivo" : "Accesso area socio non attivo"}</p>
+        </div>
+
+        <div className="rounded-[0.85rem] border border-slate-200 bg-white p-4">
+          <div className="flex items-start gap-4">
+            <div className="grid h-20 w-20 shrink-0 grid-cols-4 gap-1 rounded-[0.65rem] border border-slate-200 bg-slate-50 p-2">
+              {Array.from({ length: 16 }).map((_, index) => (
+                <span key={index} className={index % 3 === 0 || index % 5 === 0 ? "bg-slate-900" : "bg-white"} />
+              ))}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold text-slate-950">{member.card_number ?? member.card_no ?? "Tessera non assegnata"}</p>
+                <StatusChip tone={member.card_number || member.card_no ? "success" : "warning"}>
+                  {member.card_number || member.card_no ? "Attiva" : "Da assegnare"}
+                </StatusChip>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-slate-500">
+                {member.membership_type_label || "Tipo tessera non definito"}
+                {member.valid_until ? ` - Scadenza ${formatDate(member.valid_until)}` : ""}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-[0.85rem] border border-slate-200 bg-white p-4">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Attivita recente</p>
+          <div className="mt-3 space-y-3 text-sm">
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-600">Documenti caricati</span>
+              <span className="font-semibold text-slate-900">{member.docs_count ?? 0}</span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-600">Pagamento quota</span>
+              <span className="font-semibold text-slate-900">{member.is_paid ? "Registrato" : "Da verificare"}</span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-600">Origine</span>
+              <span className="font-semibold text-slate-900">{member.signup_source || (member.is_manual ? "Manuale" : "Online")}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-2">
+          <button type="button" className="btn-primary w-full justify-center" onClick={() => onOpenMember(member.id)}>
+            Vedi profilo completo
+          </button>
+          <a className="btn-secondary w-full justify-center" href="/api/org-admin/members.csv">
+            Esporta elenco
+          </a>
+        </div>
+      </div>
+    </DetailPanel>
+  );
+}
 
 export default OrgAdminMembers;
 

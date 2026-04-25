@@ -1408,3 +1408,95 @@ select:focus {
     background-position: -100% 50%;
   }
 }
+
+/* Org admin keeps the 2026 operational light workspace regardless of the global theme cascade. */
+.app-shell.org-admin-v2 {
+  background-color: #f8faf9 !important;
+  background-image: none !important;
+  color: var(--oa-text) !important;
+}
+
+.org-admin-v2 .org-admin-content {
+  background-color: #f8faf9 !important;
+  background-image: none !important;
+  color: var(--oa-text) !important;
+}
+
+.org-admin-v2 .org-admin-sidebar {
+  background-color: #ffffff !important;
+  background-image: none !important;
+}
+
+.org-admin-v2 .org-admin-sidebar__brand,
+.org-admin-v2 .org-admin-topbar {
+  color: #ffffff;
+}
+
+.org-admin-v2 .org-admin-content .surface,
+.org-admin-v2 .org-admin-content .surface-strong,
+.org-admin-v2 .org-admin-content .admin-panel,
+.org-admin-v2 .org-admin-content section.rounded-xl,
+.org-admin-v2 .org-admin-content section.rounded-\[1\.25rem\],
+.org-admin-v2 .org-admin-content div.rounded-\[1\.25rem\],
+.org-admin-v2 .org-admin-content div.rounded-\[1\.3rem\],
+.org-admin-v2 .org-admin-content div.rounded-\[1\.4rem\],
+.org-admin-v2 .org-admin-content div.rounded-\[1\.6rem\],
+.org-admin-v2 .org-admin-content form.rounded-\[1\.4rem\] {
+  border-color: var(--oa-line) !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+  color: var(--oa-text) !important;
+  box-shadow: var(--oa-shadow) !important;
+}
+
+.org-admin-v2 .org-admin-content [class*="bg-neutral-950"],
+.org-admin-v2 .org-admin-content [class*="bg-neutral-900"],
+.org-admin-v2 .org-admin-content [class*="bg-slate-950"],
+.org-admin-v2 .org-admin-content [class*="bg-slate-900"] {
+  background-color: #ffffff !important;
+  background-image: none !important;
+  color: var(--oa-text) !important;
+}
+
+.org-admin-v2 .org-admin-content [class*="bg-neutral-50"],
+.org-admin-v2 .org-admin-content [class*="bg-neutral-100"],
+.org-admin-v2 .org-admin-content [class*="bg-slate-50"],
+.org-admin-v2 .org-admin-content [class*="bg-slate-100"] {
+  background-color: #f6f8f7 !important;
+  background-image: none !important;
+}
+
+.org-admin-v2 .org-admin-content [class*="border-white"],
+.org-admin-v2 .org-admin-content [class*="border-neutral-200"],
+.org-admin-v2 .org-admin-content [class*="border-slate-200"] {
+  border-color: var(--oa-line) !important;
+}
+
+.org-admin-v2 .org-admin-content [class*="text-white"],
+.org-admin-v2 .org-admin-content [class*="text-neutral-900"],
+.org-admin-v2 .org-admin-content [class*="text-slate-900"],
+.org-admin-v2 .org-admin-content [class*="text-slate-950"] {
+  color: var(--oa-text) !important;
+}
+
+.org-admin-v2 .org-admin-content [class*="text-neutral-600"],
+.org-admin-v2 .org-admin-content [class*="text-neutral-500"],
+.org-admin-v2 .org-admin-content [class*="text-slate-600"],
+.org-admin-v2 .org-admin-content [class*="text-slate-500"] {
+  color: var(--oa-muted) !important;
+}
+
+.org-admin-v2 .org-admin-content .btn-primary,
+.org-admin-v2 .org-admin-content .btn-success {
+  background-color: var(--oa-brand) !important;
+  background-image: none !important;
+  color: #ffffff !important;
+}
+
+.org-admin-v2 .org-admin-content .btn-ghost,
+.org-admin-v2 .org-admin-content .btn-secondary {
+  background-color: #ffffff !important;
+  background-image: none !important;
+  color: var(--oa-brand-strong) !important;
+  border-color: var(--oa-line-strong) !important;
+}

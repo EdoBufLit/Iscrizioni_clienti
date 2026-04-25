@@ -34,7 +34,9 @@ type MembersTableProps = {
   members: OrgAdminMember[];
   totalPages: number;
   page: number;
+  selectedMemberId?: number | null;
   onPageChange: (nextPage: number) => void;
+  onSelectMember?: (memberId: number) => void;
   onOpenMember: (memberId: number) => void;
 };
 
@@ -44,7 +46,9 @@ const MembersTable = memo(function MembersTable({
   members,
   totalPages,
   page,
+  selectedMemberId,
   onPageChange,
+  onSelectMember,
   onOpenMember,
 }: MembersTableProps) {
   if (error) {
@@ -132,12 +136,14 @@ const MembersTable = memo(function MembersTable({
                 const sourceLower = sourceRaw.toLowerCase();
                 const isPienissimoIntegration =
                   sourceLower === "pienissimo" || sourceLower === "pienissimo_api";
+                const isSelected = selectedMemberId === m.id;
 
                 return (
                   <tr
                     key={m.id}
-                    className={`transition hover:bg-slate-50/70 ${
-                      i % 2 === 1 ? "bg-slate-50/50" : ""
+                    onClick={() => onSelectMember?.(m.id)}
+                    className={`cursor-pointer transition hover:bg-slate-50/70 ${
+                      isSelected ? "bg-emerald-50/70 ring-1 ring-inset ring-emerald-200" : i % 2 === 1 ? "bg-slate-50/50" : ""
                     }`}
                   >
                     <td className={`${tdClass} font-medium text-neutral-900`}>
@@ -206,7 +212,10 @@ const MembersTable = memo(function MembersTable({
                       <div className="flex justify-end">
                         <button
                           className="text-sm font-medium text-brand hover:text-brand-dark"
-                          onClick={() => onOpenMember(m.id)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onOpenMember(m.id);
+                          }}
                           data-testid={`member-open-${m.id}`}
                         >
                           Apri

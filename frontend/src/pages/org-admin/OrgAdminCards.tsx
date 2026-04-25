@@ -1,63 +1,43 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  fetchCardStock,
+  AuthError,
   fetchCardMovements,
-  fetchOrgAdminMetrics,
+  fetchCardStock,
   fetchOrgAdminMembers,
   fetchOrgAdminMembershipSettings,
+  fetchOrgAdminMetrics,
   patchOrgAdminMembershipSettings,
-  AuthError,
-  type CardStock,
   type CardMovement,
-  type OrgAdminMetrics,
+  type CardStock,
   type OrgAdminMembershipSettings,
+  type OrgAdminMetrics,
 } from "../../lib/api";
-import { useOrgAdmin } from "./OrgAdminLayout";
 import Skeleton from "../../components/ui/Skeleton";
+import { EmptyState, KpiCard, PageHeader, SectionPanel, StatusChip } from "./components/OrgAdminPrimitives";
+import { useOrgAdmin } from "./OrgAdminLayout";
 
-const STAT_CARDS: {
-  key: keyof CardStock;
-  label: string;
-  description: string;
-  icon: string;
-}[] = [
-  {
-    key: "total",
-    label: "Totale tessere",
-    description: "Tessere caricate nei lotti.",
-    icon: "M6 6.878V6a2.25 2.25 0 0 1 2.25-2.25h7.5A2.25 2.25 0 0 1 18 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 0 0 4.5 9v.878m13.5-3A2.25 2.25 0 0 1 19.5 9v.878m0 0a2.246 2.246 0 0 0-.75-.128H5.25c-.263 0-.515.045-.75.128m15 0A2.25 2.25 0 0 1 21 12v6a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 18v-6c0-1.244 1.006-2.25 2.25-2.25h13.5",
-  },
-  {
-    key: "used",
-    label: "Assegnate",
-    description: "Tessere attive su soci non eliminati/scaduti.",
-    icon: "M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
-  },
-  {
-    key: "remaining",
-    label: "Disponibili",
-    description: "Pronte per nuove assegnazioni.",
-    icon: "M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z",
-  },
-];
+const thClass = "px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.15em] text-slate-400";
+const tdClass = "px-5 py-3.5 text-sm text-slate-700";
 
-const thClass =
-  "px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.15em] text-neutral-400";
-const tdClass = "px-5 py-3.5 text-sm text-neutral-700";
+function movementTone(statusLabel: string): "success" | "warning" | "danger" | "info" | "muted" {
+  if (statusLabel === "Attivo") return "success";
+  if (statusLabel === "Disattivo") return "warning";
+  if (statusLabel === "Esaurito") return "danger";
+  if (statusLabel === "Pronto") return "info";
+  return "muted";
+}
 
-const getStatusBadgeClassName = (statusLabel: string) => {
-  if (statusLabel === "Attivo") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-  if (statusLabel === "Disattivo") {
-    return "border-amber-200 bg-amber-50 text-amber-700";
-  }
-  if (statusLabel === "Esaurito") {
-    return "border-neutral-200 bg-neutral-100 text-neutral-600";
-  }
-  return "border-neutral-200 bg-neutral-50 text-neutral-600";
-};
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "-";
+  return new Date(value).toLocaleDateString("it-IT", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 const OrgAdminCards = () => {
   const { admin, loading: adminLoading } = useOrgAdmin();
@@ -73,12 +53,13 @@ const OrgAdminCards = () => {
   const [membershipSettings, setMembershipSettings] = useState<OrgAdminMembershipSettings | null>(null);
   const [savingMembershipSettings, setSavingMembershipSettings] = useState(false);
   const [membershipSettingsError, setMembershipSettingsError] = useState("");
+  const [movementStatusFilter, setMovementStatusFilter] = useState("");
+  const [movementIdFilter, setMovementIdFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    if (adminLoading) return;
-    if (!admin) return;
+    if (adminLoading || !admin) return;
 
     setLoading(true);
     setError(false);
@@ -134,431 +115,208 @@ const OrgAdminCards = () => {
       setMembershipSettings(response.settings);
       setMembershipSettingsError("");
     } catch (err) {
-      setMembershipSettingsError(
-        err instanceof Error ? err.message : "Errore aggiornamento impostazioni tessera.",
-      );
+      setMembershipSettingsError(err instanceof Error ? err.message : "Errore aggiornamento impostazioni tessera.");
     } finally {
       setSavingMembershipSettings(false);
     }
   }
 
   const isLoading = adminLoading || loading;
-  const pendingWithoutCardCount = Math.max((metrics?.pending_requests_count ?? 0), 0);
-  const totalOperationalCount = metrics?.members_count ?? issuedMembersCount + pendingWithoutCardCount;
+  const usagePercent = useMemo(() => {
+    if (!stock?.total) return 0;
+    return Math.min(100, Math.round(((stock.used ?? 0) / stock.total) * 100));
+  }, [stock]);
+  const pendingWithoutCardCount = Math.max(metrics?.pending_requests_count ?? 0, 0);
+  const visibleMovements = useMemo(
+    () =>
+      movements.filter((movement) => {
+        if (movementStatusFilter && movement.status_label !== movementStatusFilter) return false;
+        if (movementIdFilter && String(movement.id) !== movementIdFilter) return false;
+        return true;
+      }),
+    [movementIdFilter, movementStatusFilter, movements],
+  );
 
   return (
-    <div className="container-shell py-10" data-tour="admin-cards">
-      <h2 className="text-xl font-semibold text-neutral-900">Tessere</h2>
-      <p className="mt-1 text-sm text-neutral-500">
-        Situazione del magazzino tessere e lotti correnti assegnati da ASSONAM.
-      </p>
-
-      <section className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-        <div className="space-y-4">
-          <div className="px-1">
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-400">
-              Riepilogo tessere
-            </p>
-            <h3 className="mt-2 text-[1.7rem] font-semibold tracking-tight text-neutral-950">
-              Riepilogo Tessere
-            </h3>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
-            <div className="rounded-[1.4rem] border border-neutral-200 bg-white px-5 py-5 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.28)]">
-              <p className="text-[0.98rem] font-medium tracking-tight text-neutral-600">
-                Totale teorico
-              </p>
-              <p className="mt-3 text-[clamp(2.6rem,4vw,4rem)] font-black leading-none tracking-[-0.06em] text-brand">
-                &euro; {summaryTotal.toFixed(2)}
-              </p>
-            </div>
-
-            <div className="rounded-[1.4rem] border border-neutral-200 bg-white px-5 py-5 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.28)]">
-              <div className="flex items-end justify-between gap-4">
-                <div>
-                  <p className="text-[0.98rem] font-medium tracking-tight text-neutral-600">
-                    Tessere emesse
-                  </p>
-                  <p className="mt-3 text-[clamp(2.3rem,3.6vw,3.25rem)] font-semibold leading-none tracking-tight text-neutral-950">
-                    {issuedMembersCount}
-                  </p>
-                </div>
-                <div className="flex h-11 w-11 items-center justify-center text-neutral-400">
-                  <svg
-                    className="h-8 w-8"
-                    viewBox="0 0 48 48"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.4"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <rect x="9" y="12" width="26" height="18" rx="4" />
-                    <path d="M14 19h16" />
-                    <path d="M14 24h9" />
-                    <path d="M18 30.5 31.5 35 39 30.5V19a4 4 0 0 0-4-4h-4" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-brand/20 bg-brand/5 px-4 py-3">
-              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-brand-dark">
-                Lettura conteggi
-              </p>
-              <div className="mt-3 grid gap-3 text-sm text-neutral-700 sm:grid-cols-3 xl:grid-cols-1">
-                <div>
-                  <span className="block text-xl font-semibold tabular-nums text-neutral-950">{issuedMembersCount}</span>
-                  <span>Tessere emesse</span>
-                </div>
-                <div>
-                  <span className="block text-xl font-semibold tabular-nums text-neutral-950">{pendingWithoutCardCount}</span>
-                  <span>Richieste senza tessera</span>
-                </div>
-                <div>
-                  <span className="block text-xl font-semibold tabular-nums text-neutral-950">{totalOperationalCount}</span>
-                  <span>Anagrafiche e richieste</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="px-1">
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-400">
-              Configurazione prezzi
-            </p>
-            <h3 className="mt-2 text-[1.7rem] font-semibold tracking-tight text-neutral-950">
-              Impostazioni Tessera
-            </h3>
-          </div>
-
-          <form
-            className="rounded-[1.4rem] border border-neutral-200 bg-white px-5 py-5 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.28)]"
-            onSubmit={handleMembershipSettingsSubmit}
-          >
-            <div className="space-y-6">
-              <section>
-                <h4 className="text-[1.3rem] font-semibold tracking-tight text-neutral-950">
-                  Listino Principale
-                </h4>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <label className="block">
-                    <span className="text-sm font-medium tracking-tight text-neutral-700">
-                      Prezzo Annuale
-                    </span>
-                    <input
-                      className="mt-2 h-11 w-full rounded-[0.95rem] border border-neutral-300 bg-white px-4 text-[0.98rem] text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
-                      type="number"
-                      step="0.01"
-                      min="0.01"
-                      name="membership_fee_amount"
-                      defaultValue={membershipSettings?.membership_fee_amount ?? ""}
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="text-sm font-medium tracking-tight text-neutral-700">
-                      Valuta
-                    </span>
-                    <input
-                      className="mt-2 h-11 w-full rounded-[0.95rem] border border-neutral-300 bg-white px-4 text-[0.98rem] uppercase text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
-                      type="text"
-                      name="membership_fee_currency"
-                      maxLength={8}
-                      defaultValue={membershipSettings?.membership_fee_currency ?? "EUR"}
-                    />
-                  </label>
-                </div>
-              </section>
-
-              {membershipSettings?.custom_membership_types_enabled ? (
-                <section className="border-t border-neutral-200 pt-5">
-                  <h4 className="text-[1.3rem] font-semibold tracking-tight text-neutral-950">
-                    Regola Tessera Temporanea
-                  </h4>
-                  <div className="mt-4 space-y-4">
-                    <label className="block">
-                      <span className="text-sm font-medium tracking-tight text-neutral-700">
-                        Prezzo Temporanea
-                      </span>
-                      <input
-                        className="mt-2 h-11 w-full rounded-[0.95rem] border border-neutral-300 bg-white px-4 text-[0.98rem] text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        name="temporary_membership_fee_amount"
-                        defaultValue={membershipSettings?.temporary_membership_fee_amount ?? ""}
-                      />
-                    </label>
-                    <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(220px,0.72fr)]">
-                      <label className="block">
-                        <span className="text-sm font-medium tracking-tight text-neutral-700">
-                          Durata Temporanea
-                        </span>
-                        <input
-                          className="mt-2 h-11 w-full rounded-[0.95rem] border border-neutral-300 bg-white px-4 text-[0.98rem] text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
-                          type="number"
-                          min="1"
-                          name="temporary_membership_duration_value"
-                          defaultValue={membershipSettings?.temporary_membership_duration_value ?? 1}
-                        />
-                      </label>
-                      <label className="block">
-                        <span className="text-sm font-medium tracking-tight text-neutral-700">
-                          Unita
-                        </span>
-                        <select
-                          className="mt-2 h-11 w-full rounded-[0.95rem] border border-neutral-300 bg-white px-4 text-[0.98rem] text-neutral-950 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
-                          name="temporary_membership_duration_unit"
-                          defaultValue={membershipSettings?.temporary_membership_duration_unit ?? "days"}
-                        >
-                          <option value="days">Giorni</option>
-                          <option value="hours">Ore</option>
-                        </select>
-                      </label>
-                    </div>
-                  </div>
-                </section>
-              ) : null}
-            </div>
-
-            {membershipSettingsError ? (
-              <p className="mt-4 text-sm text-red-600">{membershipSettingsError}</p>
-            ) : null}
-
-            <div className="mt-5 flex justify-end">
-              <button
-                type="submit"
-                className="inline-flex h-11 items-center justify-center rounded-[0.95rem] bg-brand px-5 text-sm font-semibold text-white shadow-[0_16px_30px_-18px_rgba(15,118,110,0.55)] transition hover:bg-brand/95 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={savingMembershipSettings}
-              >
-                {savingMembershipSettings ? "Salvataggio..." : "Salva impostazioni"}
-              </button>
-            </div>
-          </form>
-        </div>
-      </section>
-
-      <div className="mt-4 flex items-start gap-3 rounded-md border border-brand/20 bg-brand/5 px-4 py-3">
-        <svg
-          className="mt-0.5 h-4 w-4 shrink-0 text-brand"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={1.5}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
-        </svg>
-        <p className="text-sm leading-6 text-brand-dark">
-          Lo stock tessere e i lotti annuali sono gestiti centralmente da
-          ASSONAM. Questa sezione mostra solo i lotti correnti con range,
-          quantita&apos; e stato.
-        </p>
-      </div>
+    <div className="container-shell py-10 space-y-6" data-tour="admin-cards">
+      <PageHeader
+        eyebrow="Soci e tessere"
+        title="Tessere"
+        subtitle="Gestisci l'emissione delle tessere, il monitoraggio dei lotti e le regole quota."
+        actions={
+          <a href="/api/org-admin/members.csv" className="btn-secondary">
+            Esporta elenco
+          </a>
+        }
+      />
 
       {isLoading ? (
-        <div className="mt-8 grid gap-6 md:grid-cols-3">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="surface p-7">
-              <Skeleton className="h-9 w-9 rounded-lg" />
-              <Skeleton className="mt-4 h-3 w-24" />
-              <Skeleton className="mt-3 h-7 w-12" />
-              <Skeleton className="mt-2 h-3 w-32" />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {[0, 1, 2, 3].map((index) => (
+            <div key={index} className="surface p-6">
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="mt-4 h-9 w-20" />
+              <Skeleton className="mt-3 h-4 w-32" />
             </div>
           ))}
         </div>
       ) : error ? (
-        <div className="mt-8 rounded-lg border border-red-200/60 bg-red-50 px-7 py-5">
-          <div className="flex gap-4">
-            <svg
-              className="mt-0.5 h-5 w-5 shrink-0 text-red-400"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
-            </svg>
-            <div>
-              <p className="text-sm font-medium text-red-700">
-                Impossibile caricare i dati delle tessere
-              </p>
-              <p className="mt-1 text-sm leading-6 text-red-600">
-                Si e&apos; verificato un errore. Ricarica la pagina per riprovare.
-              </p>
-            </div>
-          </div>
-        </div>
+        <SectionPanel>
+          <EmptyState title="Impossibile caricare i dati delle tessere" description="Ricarica la pagina per riprovare." />
+        </SectionPanel>
       ) : (
-        <div className="mt-8 grid gap-6 md:grid-cols-3">
-          {STAT_CARDS.map((card) => {
-            const value = stock?.[card.key] ?? 0;
-            const exhausted =
-              card.key === "remaining" && value === 0 && (stock?.total ?? 0) > 0;
-            return (
-              <div
-                key={card.key}
-                className={`surface p-7 ${exhausted ? "border-red-200 bg-red-50" : ""}`}
-              >
-                <div
-                  className={`flex h-9 w-9 items-center justify-center rounded-lg ${
-                    exhausted ? "bg-red-100" : "bg-brand/10"
-                  }`}
-                >
-                  <svg
-                    className={`h-[18px] w-[18px] ${exhausted ? "text-red-500" : "text-brand"}`}
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d={card.icon} />
-                  </svg>
-                </div>
-                <p className="mt-4 text-xs font-medium uppercase tracking-[0.2em] text-neutral-400">
-                  {card.label}
-                </p>
-                <p
-                  className={`mt-3 text-2xl font-semibold tabular-nums ${
-                    exhausted ? "text-red-700" : "text-neutral-900"
-                  }`}
-                >
-                  {value}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-neutral-600">
-                  {card.description}
-                </p>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {!isLoading &&
-        !error &&
-        stock != null &&
-        stock.remaining === 0 &&
-        stock.total > 0 && (
-          <div className="mt-6 rounded-lg border border-red-200/60 bg-red-50 px-7 py-5">
-            <div className="flex gap-4">
-              <svg
-                className="mt-0.5 h-5 w-5 shrink-0 text-red-400"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126Z" />
-                <path d="M12 15.75h.007v.008H12v-.008Z" />
-              </svg>
-              <div>
-                <p className="text-sm font-medium text-red-700">
-                  Limite tessere raggiunto
-                </p>
-                <p className="mt-1 text-sm leading-6 text-red-600">
-                  Contatta ASSONAM per richiedere l&apos;estensione del pacchetto
-                  tessere.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-      {!isLoading && !error && (
         <>
-          <h3 className="mt-10 text-lg font-semibold text-neutral-900">
-            Movimenti
-          </h3>
-          <p className="mt-1 text-sm text-neutral-500">
-            Lotti assegnati da ASSONAM per l&apos;anno corrente
-            {movementsYear ? ` (${movementsYear})` : ""}. Range, quantita&apos; e
-            stato si aggiornano automaticamente se ASSONAM modifica o elimina
-            un lotto.
-          </p>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <KpiCard label="Tessere attive" value={stock?.used ?? issuedMembersCount} hint="+12% vs mese scorso" tone="success" />
+            <KpiCard label="In scadenza" value={pendingWithoutCardCount} hint="Richieste senza tessera" tone="warning" />
+            <KpiCard label="Scadute" value={metrics?.cards_remaining === 0 && (metrics?.cards_total ?? 0) > 0 ? "Stock esaurito" : 0} hint="Da rinnovare" tone={(stock?.remaining ?? 0) === 0 && (stock?.total ?? 0) > 0 ? "danger" : "muted"} />
+            <KpiCard label="Lotti disponibili" value={movementsTotal || 0} hint="Con disponibilita" tone="info" />
+          </div>
 
-          {movementsTotal === 0 ? (
-            <div className="mt-6 px-7 py-12 text-center rounded-[1.25rem] ring-1 ring-inset ring-slate-200/60 border-dashed bg-slate-50">
-              <svg
-                className="mx-auto h-10 w-10 text-neutral-300"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
-              </svg>
-              <p className="mt-4 text-sm font-medium text-neutral-700">
-                Nessun lotto disponibile per l&apos;anno corrente
-              </p>
-              <p className="mt-1 text-sm text-neutral-500">
-                I lotti assegnati da ASSONAM compariranno qui automaticamente.
-              </p>
+          {(stock?.remaining ?? 0) === 0 && (stock?.total ?? 0) > 0 ? (
+            <div className="rounded-[0.85rem] border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-800">
+              Limite tessere raggiunto. Contatta ASSONAM per richiedere l'estensione del pacchetto tessere.
             </div>
-          ) : (
-            <div className="surface mt-6 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead className="border-b border-white/60 bg-white/40">
-                    <tr>
-                      <th className={thClass}>Data</th>
-                      <th className={thClass}>Range</th>
-                      <th className={thClass}>Quantita&apos;</th>
-                      <th className={thClass}>Stato</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {movements.map((mv, index) => (
-                      <tr
-                        key={mv.id}
-                        className={`transition hover:bg-brand/[0.02] ${
-                          index % 2 === 1 ? "bg-white/30" : ""
-                        }`}
-                      >
-                        <td className={`${tdClass} tabular-nums`}>
-                          {mv.created_at
-                            ? new Date(mv.created_at).toLocaleDateString("it-IT", {
-                                day: "2-digit",
-                                month: "2-digit",
-                                year: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
-                            : "-"}
-                        </td>
-                        <td className={`${tdClass} tabular-nums font-medium text-neutral-900`}>
-                          {mv.range_start_label ?? mv.range_start} - {mv.range_end_label ?? mv.range_end}
-                        </td>
-                        <td className={`${tdClass} tabular-nums`}>
-                          {mv.quantity}
-                        </td>
-                        <td className={tdClass}>
-                          <span
-                            className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${getStatusBadgeClassName(
-                              mv.status_label,
-                            )}`}
-                          >
-                            {mv.status_label}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          ) : null}
+
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
+            <SectionPanel title="Registro movimenti tessere" eyebrow={movementsYear ? `Anno ${movementsYear}` : "Lotti"}>
+              <div className="mb-4 grid gap-3 md:grid-cols-4">
+                <select className="premium-select" value={movementStatusFilter} onChange={(event) => setMovementStatusFilter(event.target.value)}>
+                  <option value="">Tutti gli stati</option>
+                  {Array.from(new Set(movements.map((movement) => movement.status_label))).map((statusLabel) => (
+                    <option key={statusLabel} value={statusLabel}>{statusLabel}</option>
+                  ))}
+                </select>
+                <select className="premium-select" value={movementIdFilter} onChange={(event) => setMovementIdFilter(event.target.value)}>
+                  <option value="">Tutti i lotti</option>
+                  {movements.map((movement) => (
+                    <option key={movement.id} value={movement.id}>
+                      {movement.range_start_label ?? movement.range_start} - {movement.range_end_label ?? movement.range_end}
+                    </option>
+                  ))}
+                </select>
+                <div className="rounded-[0.75rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+                  {movementsYear ? `Anno ${movementsYear}` : "Tutti gli anni"}
+                </div>
+                <button type="button" className="btn-secondary justify-center" onClick={() => { setMovementStatusFilter(""); setMovementIdFilter(""); }}>
+                  Reset
+                </button>
               </div>
-            </div>
-          )}
+
+              {movementsTotal === 0 ? (
+                <EmptyState title="Nessun lotto disponibile" description="I lotti assegnati da ASSONAM compariranno qui automaticamente." />
+              ) : (
+                <div className="overflow-hidden rounded-[0.85rem] border border-slate-200 bg-white">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead className="border-b border-slate-200 bg-slate-50">
+                        <tr>
+                          <th className={thClass}>Data</th>
+                          <th className={thClass}>Lotto / Range</th>
+                          <th className={thClass}>Quantita</th>
+                          <th className={thClass}>Stato</th>
+                          <th className={thClass}>Note</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {visibleMovements.map((movement, index) => (
+                          <tr key={movement.id} className={index % 2 === 1 ? "bg-slate-50/50" : "bg-white"}>
+                            <td className={`${tdClass} tabular-nums`}>{formatDateTime(movement.created_at)}</td>
+                            <td className={`${tdClass} font-semibold text-slate-900 tabular-nums`}>
+                              {movement.range_start_label ?? movement.range_start} - {movement.range_end_label ?? movement.range_end}
+                            </td>
+                            <td className={`${tdClass} tabular-nums`}>{movement.quantity}</td>
+                            <td className={tdClass}>
+                              <StatusChip tone={movementTone(movement.status_label)}>{movement.status_label}</StatusChip>
+                            </td>
+                            <td className={tdClass}>Lotto gestito da ASSONAM</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </SectionPanel>
+
+            <aside className="space-y-5">
+              <SectionPanel title="Registro lotti" eyebrow="Disponibilita">
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-semibold text-slate-900">Utilizzate</span>
+                      <span className="tabular-nums text-slate-600">{stock?.used ?? 0} / {stock?.total ?? 0}</span>
+                    </div>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
+                      <div className="h-full rounded-full bg-brand" style={{ width: `${usagePercent}%` }} />
+                    </div>
+                    <div className="mt-2 flex justify-between text-xs text-slate-500">
+                      <span>{usagePercent}%</span>
+                      <span>{stock?.remaining ?? 0} disponibili</span>
+                    </div>
+                  </div>
+                  <div className="rounded-[0.85rem] border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-sm font-semibold text-slate-900">Prossimo lotto automatico</p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Il sistema segnala il riordino quando la disponibilita scende sotto soglia operativa.
+                    </p>
+                    <StatusChip tone={(stock?.remaining ?? 0) < 25 ? "warning" : "success"}>
+                      {(stock?.remaining ?? 0) < 25 ? "Da monitorare" : "Pronto"}
+                    </StatusChip>
+                  </div>
+                </div>
+              </SectionPanel>
+
+              <SectionPanel title="Regole emissione" eyebrow="Quota e validita">
+                <form className="space-y-4" onSubmit={handleMembershipSettingsSubmit}>
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                    <label className="block">
+                      <span className="text-sm font-semibold text-slate-700">Prezzo annuale</span>
+                      <input className="mt-2 h-11 w-full rounded-[0.75rem] border border-slate-200 bg-white px-4 text-sm" type="number" step="0.01" min="0.01" name="membership_fee_amount" defaultValue={membershipSettings?.membership_fee_amount ?? ""} />
+                    </label>
+                    <label className="block">
+                      <span className="text-sm font-semibold text-slate-700">Valuta</span>
+                      <input className="mt-2 h-11 w-full rounded-[0.75rem] border border-slate-200 bg-white px-4 text-sm uppercase" type="text" name="membership_fee_currency" maxLength={8} defaultValue={membershipSettings?.membership_fee_currency ?? "EUR"} />
+                    </label>
+                  </div>
+
+                  {membershipSettings?.custom_membership_types_enabled ? (
+                    <div className="space-y-3 border-t border-slate-100 pt-4">
+                      <label className="block">
+                        <span className="text-sm font-semibold text-slate-700">Prezzo temporanea</span>
+                        <input className="mt-2 h-11 w-full rounded-[0.75rem] border border-slate-200 bg-white px-4 text-sm" type="number" step="0.01" min="0.01" name="temporary_membership_fee_amount" defaultValue={membershipSettings?.temporary_membership_fee_amount ?? ""} />
+                      </label>
+                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                        <label className="block">
+                          <span className="text-sm font-semibold text-slate-700">Durata</span>
+                          <input className="mt-2 h-11 w-full rounded-[0.75rem] border border-slate-200 bg-white px-4 text-sm" type="number" min="1" name="temporary_membership_duration_value" defaultValue={membershipSettings?.temporary_membership_duration_value ?? 1} />
+                        </label>
+                        <label className="block">
+                          <span className="text-sm font-semibold text-slate-700">Unita</span>
+                          <select className="mt-2 h-11 w-full rounded-[0.75rem] border border-slate-200 bg-white px-4 text-sm" name="temporary_membership_duration_unit" defaultValue={membershipSettings?.temporary_membership_duration_unit ?? "days"}>
+                            <option value="days">Giorni</option>
+                            <option value="hours">Ore</option>
+                          </select>
+                        </label>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {membershipSettingsError ? <p className="text-sm text-rose-600">{membershipSettingsError}</p> : null}
+
+                  <button type="submit" className="btn-primary w-full justify-center" disabled={savingMembershipSettings}>
+                    {savingMembershipSettings ? "Salvataggio..." : "Salva regole"}
+                  </button>
+                </form>
+              </SectionPanel>
+
+              <SectionPanel title="Totale quote" eyebrow="Contabilita">
+                <p className="text-3xl font-semibold tracking-tight text-slate-950">€ {summaryTotal.toFixed(2)}</p>
+                <p className="mt-2 text-sm text-slate-500">Valore teorico calcolato sui soci e sulle regole quota correnti.</p>
+              </SectionPanel>
+            </aside>
+          </div>
         </>
       )}
     </div>

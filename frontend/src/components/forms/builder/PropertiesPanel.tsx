@@ -1,4 +1,4 @@
-import { BuilderField } from "./utils";
+import type { BuilderField } from "./utils";
 
 type Props = {
   selectedField: BuilderField | null;
@@ -7,18 +7,18 @@ type Props = {
 };
 
 const inputClass =
-  "mt-1 w-full rounded-[1rem] border border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20";
-const labelClass = "block text-[11px] font-bold uppercase tracking-[0.05em] text-neutral-500 mb-1";
+  "mt-1 w-full rounded-[0.72rem] border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20";
+const labelClass = "mb-1 block text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500";
 
 export function PropertiesPanel({ selectedField, onChange, locked }: Props) {
   if (!selectedField) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-center p-6 text-neutral-400">
-        <svg className="w-12 h-12 mb-4 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+      <div className="flex h-full min-h-[24rem] flex-col items-center justify-center p-6 text-center text-slate-400">
+        <svg className="mb-4 h-12 w-12 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6V4m0 2a2 2 0 1 0 0 4m0-4a2 2 0 1 1 0 4m-6 8a2 2 0 1 0 0-4m0 4a2 2 0 1 1 0-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 1 0 0-4m0 4a2 2 0 1 1 0-4m0 4v2m0-6V4" />
         </svg>
-        <p className="text-sm font-medium">Nessun blocco selezionato</p>
-        <p className="mt-1 text-xs">Clicca su un elemento nel canvas per modificarne le proprietà.</p>
+        <p className="text-sm font-semibold text-slate-700">Nessun campo selezionato</p>
+        <p className="mt-1 text-xs">Clicca un elemento nel canvas per modificarne le proprieta.</p>
       </div>
     );
   }
@@ -29,27 +29,26 @@ export function PropertiesPanel({ selectedField, onChange, locked }: Props) {
   const hasOptions = ["select", "radio", "checkbox"].includes(selectedField.type);
   const isStandardInput = !isStructural && !isTitle && !isFreeText;
 
-  const handleChange = (key: keyof BuilderField, value: any) => {
+  const handleChange = (key: keyof BuilderField, value: unknown) => {
     onChange({ ...selectedField, [key]: value });
   };
 
   return (
     <div className="space-y-6">
-      <div className="border-b border-neutral-100 pb-4">
-        <div className="inline-flex rounded-full bg-neutral-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-neutral-600">
-          Proprietà blocco
-        </div>
+      <div className="border-b border-slate-100 pb-4">
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Proprieta campo</p>
+        <h3 className="mt-2 text-base font-semibold text-slate-950">{selectedField.label || "Campo selezionato"}</h3>
       </div>
 
       <div className="space-y-5">
         {isStructural ? (
-          <div className="rounded-xl border border-dashed border-neutral-200 bg-neutral-50 p-4 text-center">
-            <p className="text-xs text-neutral-500">Questo elemento non ha proprietà configurabili.</p>
+          <div className="rounded-[0.75rem] border border-dashed border-slate-200 bg-slate-50 p-4 text-center">
+            <p className="text-xs text-slate-500">Questo elemento non ha proprieta configurabili.</p>
           </div>
         ) : (
           <>
             <div>
-              <label className={labelClass}>{isTitle ? "Testo Titolo" : "Etichetta (Label)"}</label>
+              <label className={labelClass}>{isTitle ? "Testo titolo" : "Etichetta"}</label>
               <input
                 className={inputClass}
                 disabled={locked}
@@ -73,7 +72,7 @@ export function PropertiesPanel({ selectedField, onChange, locked }: Props) {
 
             {(isStandardInput || isFreeText) && (
               <div>
-                <label className={labelClass}>{isFreeText ? "Testo libero" : "Testo di aiuto (Helper text)"}</label>
+                <label className={labelClass}>{isFreeText ? "Testo libero" : "Testo di aiuto"}</label>
                 <textarea
                   className={`${inputClass} min-h-[80px] resize-none`}
                   disabled={locked}
@@ -86,9 +85,9 @@ export function PropertiesPanel({ selectedField, onChange, locked }: Props) {
 
             {hasOptions && (
               <div>
-                <label className={labelClass}>Opzioni (separate da virgola)</label>
+                <label className={labelClass}>Opzioni</label>
                 <textarea
-                  className={`${inputClass} min-h-[80px] resize-none`}
+                  className={`${inputClass} min-h-[88px] resize-none`}
                   disabled={locked}
                   value={selectedField.optionsText}
                   onChange={(e) => handleChange("optionsText", e.target.value)}
@@ -99,7 +98,7 @@ export function PropertiesPanel({ selectedField, onChange, locked }: Props) {
 
             {isStandardInput && (
               <div className="pt-2">
-                <label className="flex items-center gap-3 cursor-pointer group">
+                <label className="group flex cursor-pointer items-center gap-3">
                   <div className="relative flex items-center justify-center">
                     <input
                       type="checkbox"
@@ -108,53 +107,44 @@ export function PropertiesPanel({ selectedField, onChange, locked }: Props) {
                       onChange={(e) => handleChange("required", e.target.checked)}
                       className="peer sr-only"
                     />
-                    <div className="w-10 h-6 bg-neutral-200 rounded-full peer-checked:bg-brand transition-colors"></div>
-                    <div className="absolute left-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4 shadow-sm"></div>
+                    <div className="h-6 w-10 rounded-full bg-slate-200 transition-colors peer-checked:bg-brand"></div>
+                    <div className="absolute left-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-4"></div>
                   </div>
-                  <span className="text-sm font-medium text-neutral-800">Campo obbligatorio</span>
+                  <span className="text-sm font-medium text-slate-800">Campo obbligatorio</span>
                 </label>
               </div>
             )}
           </>
         )}
 
-        <div className="border-t border-neutral-100 pt-5 space-y-5">
-          <h4 className="text-[11px] font-bold uppercase tracking-[0.05em] text-neutral-900">Aspetto Layout</h4>
-          
+        <div className="space-y-5 border-t border-slate-100 pt-5">
+          <h4 className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-900">Aspetto layout</h4>
+
           <div>
             <label className={labelClass}>Larghezza campo</label>
-            <div className="grid grid-cols-2 gap-2 mt-2">
-              <button
-                type="button"
-                disabled={locked}
-                onClick={() => handleChange("width", "100%")}
-                className={`rounded-xl border py-2.5 text-sm font-medium transition-all ${
-                  selectedField.width === "100%"
-                    ? "border-brand bg-brand/5 text-brand ring-1 ring-brand/20"
-                    : "border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50"
-                }`}
-              >
-                100%
-              </button>
-              <button
-                type="button"
-                disabled={locked}
-                onClick={() => handleChange("width", "50%")}
-                className={`rounded-xl border py-2.5 text-sm font-medium transition-all ${
-                  selectedField.width === "50%"
-                    ? "border-brand bg-brand/5 text-brand ring-1 ring-brand/20"
-                    : "border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50"
-                }`}
-              >
-                50%
-              </button>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {["100%", "50%"].map((width) => (
+                <button
+                  key={width}
+                  type="button"
+                  disabled={locked}
+                  onClick={() => handleChange("width", width)}
+                  className={`rounded-[0.72rem] border py-2.5 text-sm font-semibold transition-all ${
+                    selectedField.width === width
+                      ? "border-brand bg-brand/5 text-brand ring-1 ring-brand/20"
+                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  {width}
+                </button>
+              ))}
             </div>
           </div>
 
           {!isStructural && !isTitle && !isFreeText && (
             <div>
-              <label className="flex items-center justify-between cursor-pointer group">
-                <span className="text-sm font-medium text-neutral-800">Nascondi Etichetta (Label)</span>
+              <label className="group flex cursor-pointer items-center justify-between">
+                <span className="text-sm font-medium text-slate-800">Nascondi etichetta</span>
                 <div className="relative flex items-center justify-center">
                   <input
                     type="checkbox"
@@ -163,8 +153,8 @@ export function PropertiesPanel({ selectedField, onChange, locked }: Props) {
                     onChange={(e) => handleChange("hideLabel", e.target.checked)}
                     className="peer sr-only"
                   />
-                  <div className="w-10 h-6 bg-neutral-200 rounded-full peer-checked:bg-brand transition-colors"></div>
-                  <div className="absolute left-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4 shadow-sm"></div>
+                  <div className="h-6 w-10 rounded-full bg-slate-200 transition-colors peer-checked:bg-brand"></div>
+                  <div className="absolute left-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-4"></div>
                 </div>
               </label>
             </div>
