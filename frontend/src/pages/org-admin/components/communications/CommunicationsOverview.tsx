@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Skeleton from "../../../../components/ui/Skeleton";
 import {
   fetchOrgAdminCommunicationSettings,
@@ -6,7 +6,7 @@ import {
   fetchOrgAdminForms,
 } from "../../../../lib/api";
 import { useOrgAdmin } from "../../OrgAdminLayout";
-import { ActionCard, KpiCard, SectionPanel, StatusChip } from "../OrgAdminPrimitives";
+import { ActionCard, SectionPanel, StatusChip } from "../OrgAdminPrimitives";
 
 type CommunicationsOverviewProps = {
   onTabChange: (tab: "panoramica" | "campagne" | "modelli" | "moduli" | "whatsapp" | "invii" | "impostazioni") => void;
@@ -28,6 +28,132 @@ function formatDate(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return date.toLocaleDateString("it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+function formatUpdatedAt() {
+  return new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+}
+
+function KpiIcon({ name }: { name: "send" | "draft" | "form" | "whatsapp" | "mail" | "clock" | "check" }) {
+  const common = {
+    width: 22,
+    height: 22,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.9,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  if (name === "send") {
+    return (
+      <svg {...common}>
+        <path d="M21 3 10 14" />
+        <path d="m21 3-7 18-4-7-7-4 18-7Z" />
+      </svg>
+    );
+  }
+  if (name === "draft") {
+    return (
+      <svg {...common}>
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+        <path d="M14 2v6h6" />
+        <path d="M8 13h8" />
+        <path d="M8 17h5" />
+      </svg>
+    );
+  }
+  if (name === "form") {
+    return (
+      <svg {...common}>
+        <rect x="4" y="4" width="16" height="16" rx="2.5" />
+        <path d="M8 9h8" />
+        <path d="M8 13h3" />
+        <path d="M14 13h2" />
+        <path d="M8 17h8" />
+      </svg>
+    );
+  }
+  if (name === "whatsapp") {
+    return (
+      <svg {...common}>
+        <path d="M5.5 19.5 6.4 16A7.7 7.7 0 1 1 9 18.3Z" />
+        <path d="M9.4 8.8c.2-.5.4-.5.7-.5h.5c.2 0 .4.1.5.4l.7 1.6c.1.2 0 .4-.1.6l-.4.5c.6 1 1.4 1.8 2.5 2.3l.5-.5c.2-.2.4-.2.7-.1l1.5.7c.3.1.4.3.4.6v.5c0 .4-.2.6-.5.8-.6.3-1.8.3-3.1-.3-1.8-.8-3.5-2.4-4.3-4.2-.6-1.3-.5-2.4-.1-3Z" />
+      </svg>
+    );
+  }
+  if (name === "mail") {
+    return (
+      <svg {...common}>
+        <rect x="3.5" y="5.5" width="17" height="13" rx="2" />
+        <path d="m4 7 8 6 8-6" />
+      </svg>
+    );
+  }
+  if (name === "check") {
+    return (
+      <svg {...common} width={16} height={16}>
+        <path d="m4 12 4 4 12-12" />
+      </svg>
+    );
+  }
+  return (
+    <svg {...common} width={16} height={16}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  );
+}
+
+function CommunicationsKpiCard({
+  label,
+  value,
+  description,
+  icon,
+  tone,
+  footer,
+  badge,
+  badgeIcon,
+}: {
+  label: string;
+  value: ReactNode;
+  description: string;
+  icon: "send" | "draft" | "form" | "whatsapp" | "mail";
+  tone: "success" | "info" | "warning" | "muted";
+  footer: string;
+  badge?: string;
+  badgeIcon?: "check";
+}) {
+  return (
+    <article className={`comm-kpi-card comm-kpi-card--${tone}`}>
+      <div className="comm-kpi-card__top">
+        <span className="comm-kpi-card__icon">
+          <KpiIcon name={icon} />
+        </span>
+        <div className="comm-kpi-card__content">
+          <p className="comm-kpi-card__label">{label}</p>
+          <div className="comm-kpi-card__value-row">
+            <p className="comm-kpi-card__value">{value}</p>
+            {badge ? (
+              <span className="comm-kpi-card__badge">
+                {badge}
+                {badgeIcon ? <KpiIcon name={badgeIcon} /> : null}
+              </span>
+            ) : null}
+          </div>
+          <p className="comm-kpi-card__description">{description}</p>
+        </div>
+      </div>
+      <div className="comm-kpi-card__footer">
+        <span className="comm-kpi-card__updated">
+          <KpiIcon name="clock" />
+          {footer}
+        </span>
+      </div>
+    </article>
+  );
 }
 
 export function CommunicationsOverview({
@@ -143,6 +269,10 @@ export function CommunicationsOverview({
     [communicationsLocked, senderInfo, stats.activeForms, whatsappEnabled],
   );
 
+  const updatedAt = useMemo(() => formatUpdatedAt(), []);
+  const sentArchiveShare = stats.totalCampaigns > 0 ? Math.round((stats.sentCampaigns / stats.totalCampaigns) * 100) : 0;
+  const publishedFormsShare = stats.totalForms > 0 ? Math.round((stats.activeForms / stats.totalForms) * 100) : 0;
+
   if (loading) {
     return (
       <div className="grid gap-5">
@@ -155,12 +285,53 @@ export function CommunicationsOverview({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <KpiCard label="Campagne inviate" value={stats.sentCampaigns} hint="+ operative in archivio" tone="success" icon="↗" />
-        <KpiCard label="Bozze aperte" value={stats.drafts} hint={`${stats.totalCampaigns} campagne totali`} tone="info" icon="□" />
-        <KpiCard label="Form attivi" value={stats.activeForms} hint={`${stats.totalForms} form creati`} tone="success" icon="▣" />
-        <KpiCard label="Stato WhatsApp" value={whatsappEnabled ? "Attivo" : "No"} hint={whatsappEnabled ? "Connessione disponibile" : "Canale non attivo"} tone={whatsappEnabled ? "success" : "muted"} icon="◌" />
-        <KpiCard label="Email configurata" value={senderInfo?.configured ? "Si" : "No"} hint={senderInfo?.domainLabel || "Mittente da verificare"} tone={senderInfo?.configured ? "success" : "warning"} icon="✉" />
+      <div className="comm-kpi-grid">
+        <CommunicationsKpiCard
+          label="Campagne inviate"
+          value={stats.sentCampaigns}
+          description={`${stats.sentCampaigns} operative in archivio`}
+          icon="send"
+          tone="success"
+          footer={`Aggiornato oggi, ${updatedAt}`}
+          badge={sentArchiveShare > 0 ? `${sentArchiveShare}%` : undefined}
+        />
+        <CommunicationsKpiCard
+          label="Bozze aperte"
+          value={stats.drafts}
+          description={stats.drafts ? `${stats.totalCampaigns} campagne totali` : "Nessuna bozza in lavorazione"}
+          icon="draft"
+          tone="info"
+          footer={`Aggiornato oggi, ${updatedAt}`}
+          badge={stats.drafts ? `${stats.drafts}` : "-"}
+        />
+        <CommunicationsKpiCard
+          label="Form attivi"
+          value={stats.activeForms}
+          description={`${stats.totalForms} form creati`}
+          icon="form"
+          tone="success"
+          footer={`Aggiornato oggi, ${updatedAt}`}
+          badge={publishedFormsShare > 0 ? `${publishedFormsShare}% pubblicati` : undefined}
+        />
+        <CommunicationsKpiCard
+          label="Stato WhatsApp"
+          value={whatsappEnabled ? "Attivo" : "No"}
+          description={whatsappEnabled ? "Connessione disponibile" : "Canale non attivo"}
+          icon="whatsapp"
+          tone={whatsappEnabled ? "success" : "muted"}
+          footer={`Aggiornato oggi, ${updatedAt}`}
+          badge={whatsappEnabled ? "Operativo" : "Non attivo"}
+        />
+        <CommunicationsKpiCard
+          label="Email configurata"
+          value={senderInfo?.configured ? "Sì" : "No"}
+          description={senderInfo?.domainLabel || "Mittente da verificare"}
+          icon="mail"
+          tone={senderInfo?.configured ? "info" : "warning"}
+          footer={`Aggiornato oggi, ${updatedAt}`}
+          badge={senderInfo?.configured ? "Verificata" : "Da verificare"}
+          badgeIcon={senderInfo?.configured ? "check" : undefined}
+        />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">

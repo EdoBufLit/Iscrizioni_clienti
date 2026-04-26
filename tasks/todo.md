@@ -1,3 +1,30 @@
+## Plan (Communications overview KPI refinement - Apr 26, 2026)
+- [x] Isolare le KPI della tab Panoramica Comunicazioni senza modificare le card KPI condivise degli altri moduli.
+- [x] Sostituire icone testuali e gradienti generici con card operative a 5 colonne, icone SVG, separatore, meta di aggiornamento e badge/stato quando utile.
+- [x] Rendere il nuovo componente coerente con light/dark mode e responsive mobile/tablet.
+- [x] Eseguire typecheck/build frontend e smoke visuale mirato della tab Comunicazioni > Panoramica.
+- [x] Documentare esito e residui nella review.
+
+## Review (Communications overview KPI refinement - Apr 26, 2026)
+- Correzione: `CommunicationsOverview.tsx` non usa piu la `KpiCard` generica per la panoramica comunicazioni; ora monta una card dedicata con icone SVG, badge, footer aggiornamento e dati reali.
+- Correzione: `index.css` aggiunge lo stile `comm-kpi-*` con card piu sobrie, bordo leggero, icone quadrate, separatore footer, responsive 5/3/2/1 colonne e variante dark mode via token `--oa-*`.
+- Verifiche: `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK con solo warning Vite preesistente sui chunk grandi.
+- Smoke visuale/contrasto su `http://127.0.0.1:8017/org-admin/comunicazioni` in light e dark OK; screenshot in `tasks/screenshots/comm-kpi-smoke-20260426/`.
+
+## Plan (Production 500 recovery - Apr 26, 2026)
+- [x] Collegarsi al server Hetzner `157.90.31.105` e identificare container/log coinvolti.
+- [x] Verificare causa reale del 500 tra web, DB, worker e spazio disco.
+- [x] Liberare spazio senza toccare il volume Postgres e attendere recovery DB.
+- [x] Verificare HTTP pubblico, DB readiness, worker e assenza di nuovi 500.
+- [x] Documentare esito e root cause.
+
+## Review (Production 500 recovery - Apr 26, 2026)
+- Root cause: filesystem root al 100%; Postgres non riusciva a scrivere `pg_logical/replorigin_checkpoint.tmp` durante il checkpoint di recovery e restituiva `database system is in recovery mode`, causando 500 sulle route che leggono DB.
+- Intervento: eseguito cleanup conservativo su server (`journalctl --vacuum-size=100M`, truncate di `btmp`, `docker image prune -af`, `docker builder prune -af`) senza toccare il volume `app_pgdata`.
+- Risultato: spazio root passato da `100%` a `26%` usato (`27G` disponibili); Postgres tornato `accepting connections`; `app-email-worker-1` tornato `healthy`.
+- Verifica: `https://assonam.it/`, `https://assonam.it/org-admin`, `https://assonam.it/api/capabilities`, `https://assonam.it/api/auth/whoami` rispondono `200`; nessun nuovo `500` nei log web recenti.
+- Hardening: aggiunto cron root giornaliero `assonam docker cleanup` per prune immagini/build cache Docker inutilizzate oltre 72h e vacuum journal a 200M, senza prune volumi.
+
 ## Plan (Org admin light/dark mode audit - Apr 25, 2026)
 - [x] Mappare tutte le superfici org-admin e le regole CSS tema coinvolte, con focus su notifiche, tab attivi, KPI/icon badge, wizard, modali, builder e tabelle.
 - [x] Correggere il layer tema condiviso e le utility hardcoded che producono testo scuro su sfondo scuro o testo chiaro su sfondo chiaro.
