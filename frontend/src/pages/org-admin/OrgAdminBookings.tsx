@@ -32,11 +32,65 @@ import Skeleton from "../../components/ui/Skeleton";
 import SubmissionDecisionModal from "../../components/ui/SubmissionDecisionModal";
 import { useToast } from "../../components/ui/ToastProvider";
 import { RoomFloorMap } from "../../components/bookings/RoomFloorMap";
-import { KpiCard, PageHeader, SectionPanel, StatusChip } from "./components/OrgAdminPrimitives";
+import { KpiCard, PageHeader, SectionPanel } from "./components/OrgAdminPrimitives";
 
 type SectionTab = "agenda" | "rooms" | "tables" | "map";
+type DayStatusFilter = "all" | "pending" | "confirmed" | "seated" | "completed";
 
 const bookingStatuses = ["new", "pending", "confirmed", "seated", "completed", "cancelled", "no_show"];
+const dayStatusFilters: Array<{ key: DayStatusFilter; label: string }> = [
+  { key: "all", label: "Tutte" },
+  { key: "confirmed", label: "Confermata" },
+  { key: "pending", label: "In attesa" },
+  { key: "seated", label: "Seduta" },
+  { key: "completed", label: "Completata" },
+];
+
+const bookingStatusMeta: Record<string, { label: string; chipClass: string; dotClass: string; serviceLabel: string }> = {
+  new: {
+    label: "In attesa",
+    chipClass: "booking-status-chip booking-status-chip--pending",
+    dotClass: "booking-status-dot booking-status-dot--pending",
+    serviceLabel: "Nuova",
+  },
+  pending: {
+    label: "In attesa",
+    chipClass: "booking-status-chip booking-status-chip--pending",
+    dotClass: "booking-status-dot booking-status-dot--pending",
+    serviceLabel: "In attesa",
+  },
+  confirmed: {
+    label: "Confermata",
+    chipClass: "booking-status-chip booking-status-chip--confirmed",
+    dotClass: "booking-status-dot booking-status-dot--confirmed",
+    serviceLabel: "Confermata",
+  },
+  seated: {
+    label: "Seduta",
+    chipClass: "booking-status-chip booking-status-chip--seated",
+    dotClass: "booking-status-dot booking-status-dot--seated",
+    serviceLabel: "Seduta",
+  },
+  completed: {
+    label: "Completata",
+    chipClass: "booking-status-chip booking-status-chip--completed",
+    dotClass: "booking-status-dot booking-status-dot--completed",
+    serviceLabel: "Completata",
+  },
+  cancelled: {
+    label: "Cancellata",
+    chipClass: "booking-status-chip booking-status-chip--cancelled",
+    dotClass: "booking-status-dot booking-status-dot--cancelled",
+    serviceLabel: "Cancellata",
+  },
+  no_show: {
+    label: "No show",
+    chipClass: "booking-status-chip booking-status-chip--cancelled",
+    dotClass: "booking-status-dot booking-status-dot--cancelled",
+    serviceLabel: "No show",
+  },
+};
+
 const sectionTabs: Array<{ key: SectionTab; label: string; hint: string }> = [
   { key: "agenda", label: "Agenda", hint: "Prenotazioni e assegnazioni" },
   { key: "rooms", label: "Sale", hint: "Spazi disponibili" },
@@ -89,9 +143,61 @@ function formatWeekdayCell(value: Date) {
 }
 
 function formatStatusLabel(status: string) {
-  return status
+  return bookingStatusMeta[status]?.label ?? status
     .replace(/_/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatServiceStatusLabel(status: string) {
+  return bookingStatusMeta[status]?.serviceLabel ?? formatStatusLabel(status);
+}
+
+function serviceStatusButtonLabel(status: string) {
+  switch (status) {
+    case "new":
+      return "N";
+    case "pending":
+      return "A";
+    case "confirmed":
+      return "C";
+    case "seated":
+      return "S";
+    case "completed":
+      return "✓";
+    case "cancelled":
+      return "×";
+    case "no_show":
+      return "No show";
+    default:
+      return formatServiceStatusLabel(status);
+  }
+}
+
+function bookingStatusChipClass(status: string) {
+  return bookingStatusMeta[status]?.chipClass ?? "booking-status-chip booking-status-chip--neutral";
+}
+
+function bookingStatusDotClass(status: string) {
+  return bookingStatusMeta[status]?.dotClass ?? "booking-status-dot booking-status-dot--neutral";
+}
+
+function matchesDayStatusFilter(booking: AssociationBooking, filter: DayStatusFilter) {
+  if (filter === "all") return true;
+  if (filter === "pending") return booking.status === "pending" || booking.status === "new";
+  return booking.status === filter;
+}
+
+function initialsFromName(value: string | null | undefined) {
+  const parts = (value || "?").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+}
+
+function formatBookingTable(booking: Pick<AssociationBooking, "room" | "table">) {
+  if (booking.table?.name) return `Tavolo ${booking.table.name}`;
+  if (booking.room?.name) return booking.room.name;
+  return "Non assegnato";
 }
 
 function shiftMonth(value: string, delta: number) {
@@ -129,22 +235,6 @@ function toDateKey(value: Date) {
 
 function isSameMonth(date: Date, monthValue: string) {
   return toDateKey(date).startsWith(monthValue.slice(0, 7));
-}
-
-function toneForStatus(status: string) {
-  switch (status) {
-    case "confirmed":
-    case "completed":
-      return "bg-emerald-100 text-emerald-700";
-    case "pending":
-    case "new":
-      return "bg-amber-100 text-amber-700";
-    case "cancelled":
-    case "no_show":
-      return "bg-rose-100 text-rose-700";
-    default:
-      return "bg-slate-100 text-slate-600";
-  }
 }
 
 function defaultBookingDecisionMessage(status: "confirmed" | "rejected") {
@@ -1342,38 +1432,6 @@ function ManagementShell({ title, subtitle, main, side }: { title: string; subti
   );
 }
 
-function BookingCard({ booking, selected, onSelect, compact = false }: { booking: AssociationBooking; selected: boolean; onSelect: (id: number) => void; compact?: boolean }) {
-  return (
-    <button type="button" onClick={() => onSelect(booking.id)} className={`w-full rounded-[1.25rem] p-5 text-left transition-all ${selected ? "bg-slate-900 text-white shadow-md scale-[1.02]" : compact ? "bg-slate-50 ring-1 ring-inset ring-slate-200/60 hover:bg-slate-50" : "bg-slate-50 ring-1 ring-inset ring-slate-200/60 hover:-translate-y-1 hover:shadow-sm"}`}>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <h3 className="text-lg font-medium tracking-tight">{booking.customer_name}</h3>
-            <span className={`rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.2em] ${selected ? "bg-slate-50/20 text-white" : toneForStatus(booking.status)}`}>{formatStatusLabel(booking.status)}</span>
-          </div>
-          <p className={`mt-1.5 text-sm ${selected ? "text-slate-300" : "text-slate-500"}`}>{formatDateTime(booking.booking_date, booking.booking_time)}</p>
-        </div>
-        <div className={`rounded-full px-4 py-1.5 text-sm font-medium ${selected ? "bg-slate-50/10 text-white" : "bg-slate-100 text-slate-700"}`}>
-          {booking.party_size || "-"} pax
-        </div>
-      </div>
-      {!compact && (
-        <div className={`mt-6 grid gap-4 border-t pt-4 md:grid-cols-4 ${selected ? "border-white/10" : "border-slate-100"}`}>
-          <div><p className={`text-[10px] uppercase tracking-[0.2em] ${selected ? "text-slate-500" : "text-slate-500"}`}>Form</p><p className={`mt-1 text-sm font-medium ${selected ? "text-white" : "text-slate-900"}`}>{booking.source_form?.title || "N/D"}</p></div>
-          <div><p className={`text-[10px] uppercase tracking-[0.2em] ${selected ? "text-slate-500" : "text-slate-500"}`}>Contatto</p><p className={`mt-1 text-sm font-medium ${selected ? "text-white" : "text-slate-900"}`}>{booking.customer_email || booking.customer_phone || "N/D"}</p></div>
-          <div><p className={`text-[10px] uppercase tracking-[0.2em] ${selected ? "text-slate-500" : "text-slate-500"}`}>Sala</p><p className={`mt-1 text-sm font-medium ${selected ? "text-white" : "text-slate-900"}`}>{booking.room?.name || "Da assegnare"}</p></div>
-          <div><p className={`text-[10px] uppercase tracking-[0.2em] ${selected ? "text-slate-500" : "text-slate-500"}`}>Tavolo</p><p className={`mt-1 text-sm font-medium ${selected ? "text-white" : "text-slate-900"}`}>{booking.table?.name || "Da assegnare"}</p></div>
-        </div>
-      )}
-      {!compact && booking.notes_preview ? (
-        <div className={`mt-4 rounded-xl p-3 text-sm ${selected ? "bg-slate-50/5 text-slate-300" : "bg-slate-50 text-slate-600"}`}>
-          <p className="line-clamp-2">{booking.notes_preview}</p>
-        </div>
-      ) : null}
-    </button>
-  );
-}
-
 function AgendaSection(props: {
   agendaMonth: string;
   setAgendaMonth: (value: string) => void;
@@ -1406,16 +1464,19 @@ function AgendaSection(props: {
   onOpenRequestReject: (value: boolean) => void;
   saving: string;
 }) {
+  const [dayFilter, setDayFilter] = useState<DayStatusFilter>("all");
   const monthDate = new Date(`${props.agendaMonth}T00:00:00`);
   const monthIndex = Number.isNaN(monthDate.getTime()) ? new Date().getMonth() : monthDate.getMonth();
   const monthYear = Number.isNaN(monthDate.getTime()) ? new Date().getFullYear() : monthDate.getFullYear();
   const monthOptions = Array.from({ length: 12 }, (_, index) =>
     new Date(2026, index, 1).toLocaleDateString("it-IT", { month: "long" }),
   );
+  const dayPending = props.activeDayItems.filter((item) => item.status === "pending" || item.status === "new").length;
+  const dayCovers = props.activeDayItems.reduce((total, item) => total + (item.party_size || 0), 0);
+  const filteredDayItems = props.activeDayItems.filter((booking) => matchesDayStatusFilter(booking, dayFilter));
 
   return (
-    <>
-      <section className="space-y-8">
+    <section className="space-y-8">
         <div className="rounded-[1.25rem] bg-slate-50 p-8 ring-1 ring-inset ring-slate-200/60 shadow-sm">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between border-b border-slate-100 pb-8">
             <div>
@@ -1468,7 +1529,92 @@ function AgendaSection(props: {
             <MetricBox label="Servite" value={props.monthOccupancy.completed} />
           </div>
         </div>
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
+
+        {props.selectedCalendarDate ? (
+          <section className="booking-day-panel" aria-live="polite">
+            <header className="booking-day-panel__header">
+              <div>
+                <p className="booking-day-panel__eyebrow">{formatDate(props.selectedCalendarDate)}</p>
+                <h2 className="booking-day-panel__title">Prenotazioni</h2>
+              </div>
+              <button
+                type="button"
+                className="booking-day-panel__close"
+                aria-label="Chiudi dettaglio giornata"
+                onClick={() => {
+                  props.setSelectedCalendarDate(null);
+                  props.setSelectedBookingId(null);
+                }}
+              >
+                ×
+              </button>
+            </header>
+
+            <div className="booking-day-panel__stats">
+              <span>{props.activeDayItems.length} totali</span>
+              <span>{dayPending} da confermare</span>
+              <span>{dayCovers} coperti</span>
+            </div>
+
+            <div className="booking-day-panel__filters" role="tablist" aria-label="Filtra prenotazioni del giorno">
+              {dayStatusFilters.map((filter) => (
+                <button
+                  key={filter.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={dayFilter === filter.key}
+                  className={dayFilter === filter.key ? "is-active" : ""}
+                  onClick={() => setDayFilter(filter.key)}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="booking-day-list">
+              {filteredDayItems.length === 0 ? (
+                <EmptyState message="Nessuna prenotazione in questo filtro." />
+              ) : (
+                filteredDayItems.map((booking) => {
+                  const isExpanded = props.selectedBookingId === booking.id;
+                  const isDetailLoaded = props.selectedBooking?.id === booking.id;
+                  return (
+                    <DayBookingRow
+                      key={booking.id}
+                      booking={booking}
+                      expanded={isExpanded}
+                      selectedBooking={isDetailLoaded ? props.selectedBooking : null}
+                      onSelect={() => props.setSelectedBookingId(booking.id)}
+                      detail={
+                        isDetailLoaded ? (
+                          <BookingDetailPanel
+                            selectedBooking={props.selectedBooking}
+                            rooms={props.rooms}
+                            assignmentRoomId={props.assignmentRoomId}
+                            setAssignmentRoomId={props.setAssignmentRoomId}
+                            assignmentTableId={props.assignmentTableId}
+                            setAssignmentTableId={props.setAssignmentTableId}
+                            assignmentTables={props.assignmentTables}
+                            onStatusChange={props.onStatusChange}
+                            onSaveAssignment={props.onSaveAssignment}
+                            onClearAssignment={props.onClearAssignment}
+                            requestActionState={props.requestActionState}
+                            onOpenRequestConfirm={props.onOpenRequestConfirm}
+                            onOpenRequestReject={props.onOpenRequestReject}
+                            saving={props.saving}
+                          />
+                        ) : (
+                          <div className="booking-row-loading">Caricamento dettaglio...</div>
+                        )
+                      }
+                    />
+                  );
+                })
+              )}
+            </div>
+          </section>
+        ) : null}
+
         <SectionPanel className="p-5">
           <div className="grid grid-cols-7 gap-2 border-b ring-slate-200/60 px-2 pb-4">
             {["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"].map((label) => (
@@ -1498,26 +1644,20 @@ function AgendaSection(props: {
                     props.setSelectedCalendarDate(dateKey);
                     props.setSelectedBookingId(items[0]?.id ?? null);
                   }}
-                  className={`relative flex min-h-[140px] flex-col rounded-[1.25rem] p-4 text-left transition-all ${
-                    isSelected
-                      ? "bg-slate-900 text-white shadow-md scale-105 z-10"
-                      : isCurrentMonth
-                        ? "bg-slate-50 ring-1 ring-inset ring-slate-200/60 hover:-translate-y-1 hover:shadow-sm"
-                        : "bg-slate-50/50 text-slate-500 opacity-60 ring-1 ring-inset ring-slate-200/40 hover:opacity-100"
-                  }`}
+                  className={`booking-calendar-day ${isSelected ? "is-selected" : ""} ${isCurrentMonth ? "" : "is-outside"} ${items.length > 0 ? "has-bookings" : ""}`}
                 >
                   <div className="flex w-full items-start justify-between">
                     <div>
-                      <p className={`text-[9px] font-bold uppercase tracking-[0.2em] ${isSelected ? "text-slate-500" : "text-slate-500"}`}>{formatWeekdayCell(day)}</p>
-                      <p className={`mt-1 text-2xl font-light tracking-tight ${isSelected ? "text-white" : "text-slate-900"}`}>{day.getDate()}</p>
+                      <p className="booking-calendar-day__weekday">{formatWeekdayCell(day)}</p>
+                      <p className="booking-calendar-day__number">{day.getDate()}</p>
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       {isToday ? (
-                        <span className={`rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.2em] ${isSelected ? "bg-slate-50/20 text-white" : "bg-sky-100 text-sky-700"}`}>Oggi</span>
+                        <span className="booking-calendar-day__badge">Oggi</span>
                       ) : null}
                       {items.length > 0 && (
-                        <span className={`rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.2em] ${isSelected ? "bg-slate-50/20 text-white" : "bg-slate-100 text-slate-700"}`}>
-                          {items.length} pax
+                        <span className="booking-calendar-day__count">
+                          {items.length} pren.
                         </span>
                       )}
                     </div>
@@ -1525,7 +1665,7 @@ function AgendaSection(props: {
                   <div className="mt-4 w-full space-y-1.5 flex-1 flex flex-col justify-end">
                     {items.length === 0 ? (
                       <div className="flex items-center justify-center flex-1">
-                        <span className={`text-[10px] uppercase tracking-wider ${isSelected ? "text-white/40" : "text-slate-500"}`}>
+                        <span className="booking-calendar-day__empty">
                           Vuoto
                         </span>
                       </div>
@@ -1540,20 +1680,14 @@ function AgendaSection(props: {
                               props.setSelectedCalendarDate(dateKey);
                               props.setSelectedBookingId(booking.id);
                             }}
-                            className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-xs font-medium transition-all ${
-                              isSelected
-                                ? booking.id === props.selectedBookingId
-                                  ? "bg-slate-50 text-slate-900 shadow-sm"
-                                  : "bg-slate-50/10 text-white hover:bg-slate-50/20"
-                                : "bg-slate-50 text-slate-700 hover:bg-slate-100"
-                            }`}
+                            className={`booking-calendar-mini-row ${booking.id === props.selectedBookingId ? "is-active" : ""}`}
                           >
                             <span className="truncate pr-2 text-left">{booking.customer_name}</span>
-                            <span className={isSelected ? (booking.id === props.selectedBookingId ? "text-slate-500" : "text-white/60") : "text-slate-500"}>{(booking.booking_time || "00:00").slice(0, 5)}</span>
+                            <span>{(booking.booking_time || "00:00").slice(0, 5)}</span>
                           </button>
                         ))}
                         {items.length > 3 && (
-                          <p className={`mt-2 text-center text-[10px] font-bold uppercase tracking-[0.2em] ${isSelected ? "text-slate-500" : "text-slate-500"}`}>
+                          <p className="booking-calendar-day__more">
                             +{items.length - 3} altre
                           </p>
                         )}
@@ -1565,93 +1699,45 @@ function AgendaSection(props: {
             })}
           </div>
         </SectionPanel>
-        <SectionPanel title="Richieste del giorno" eyebrow={props.selectedCalendarDate ? formatDate(props.selectedCalendarDate) : "Seleziona una data"}>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-semibold text-slate-700">{props.activeDayItems.length} prenotazioni</span>
-              <StatusChip tone={props.monthOccupancy.pending ? "warning" : "success"}>{props.monthOccupancy.pending} da confermare</StatusChip>
-            </div>
-            <div className="max-h-[20rem] space-y-3 overflow-y-auto pr-1">
-              {props.activeDayItems.length === 0 ? (
-                <EmptyState message="Nessuna prenotazione per questo giorno." />
-              ) : (
-                props.activeDayItems.map((booking) => (
-                  <BookingCard key={booking.id} booking={booking} selected={props.selectedBookingId === booking.id} onSelect={(id) => props.setSelectedBookingId(id)} compact />
-                ))
-              )}
-            </div>
-            <BookingDetailPanel
-              selectedBooking={props.selectedBooking}
-              rooms={props.rooms}
-              assignmentRoomId={props.assignmentRoomId}
-              setAssignmentRoomId={props.setAssignmentRoomId}
-              assignmentTableId={props.assignmentTableId}
-              setAssignmentTableId={props.setAssignmentTableId}
-              assignmentTables={props.assignmentTables}
-              onStatusChange={props.onStatusChange}
-              onSaveAssignment={props.onSaveAssignment}
-              onClearAssignment={props.onClearAssignment}
-              requestActionState={props.requestActionState}
-              onOpenRequestConfirm={props.onOpenRequestConfirm}
-              onOpenRequestReject={props.onOpenRequestReject}
-              saving={props.saving}
-            />
-          </div>
-        </SectionPanel>
-        </div>
       </section>
+  );
+}
 
-      <ModalShell
-        open={false}
-        onClose={() => {
-          props.setSelectedCalendarDate(null);
-          props.setSelectedBookingId(null);
-        }}
-        title={props.selectedCalendarDate ? `Prenotazioni del ${formatDate(props.selectedCalendarDate)}` : "Dettaglio giornata"}
-        description={props.selectedCalendarDate ? props.activeDayItems.length > 0 ? `${props.activeDayItems.length} prenotazioni da gestire in questa giornata.` : "Questa giornata e ancora libera. Puoi usarla come controllo rapido del calendario." : undefined}
-        sizeClassName="max-w-6xl"
-        contentClassName="overflow-hidden p-0"
-      >
-        <div className="grid lg:grid-cols-[360px_minmax(0,1fr)] bg-slate-50 min-h-[600px]">
-          <div className="bg-slate-50 border-b ring-slate-200/60 lg:border-b-0 lg:border-r p-6 overflow-y-auto max-h-[80vh]">
-            <div className="flex items-center justify-between gap-4 pb-6 border-b border-slate-100">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Giornata</p>
-                <p className="mt-1 text-2xl font-light tracking-tight text-slate-900">{props.selectedCalendarDate ? formatDate(props.selectedCalendarDate) : "Nessuna data"}</p>
-              </div>
-              <div className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600">{props.activeDayItems.length} pren.</div>
-            </div>
-            <div className="mt-6 space-y-3">
-              {props.activeDayItems.length === 0 ? (
-                <EmptyState message="Nessuna prenotazione per questo giorno." />
-              ) : (
-                props.activeDayItems.map((booking) => (
-                  <BookingCard key={booking.id} booking={booking} selected={props.selectedBookingId === booking.id} onSelect={(id) => props.setSelectedBookingId(id)} compact />
-                ))
-              )}
-            </div>
-          </div>
-          <div className="p-8 lg:p-10 overflow-y-auto max-h-[80vh]">
-            <BookingDetailPanel
-              selectedBooking={props.selectedBooking}
-              rooms={props.rooms}
-              assignmentRoomId={props.assignmentRoomId}
-              setAssignmentRoomId={props.setAssignmentRoomId}
-              assignmentTableId={props.assignmentTableId}
-              setAssignmentTableId={props.setAssignmentTableId}
-              assignmentTables={props.assignmentTables}
-              onStatusChange={props.onStatusChange}
-              onSaveAssignment={props.onSaveAssignment}
-              onClearAssignment={props.onClearAssignment}
-              requestActionState={props.requestActionState}
-              onOpenRequestConfirm={props.onOpenRequestConfirm}
-              onOpenRequestReject={props.onOpenRequestReject}
-              saving={props.saving}
-            />
-          </div>
-        </div>
-      </ModalShell>
-    </>
+function DayBookingRow({
+  booking,
+  expanded,
+  selectedBooking,
+  onSelect,
+  detail,
+}: {
+  booking: AssociationBooking;
+  expanded: boolean;
+  selectedBooking: AssociationBooking | null;
+  onSelect: () => void;
+  detail: React.ReactNode;
+}) {
+  return (
+    <article className={`booking-day-row ${expanded ? "is-expanded" : ""}`}>
+      <button type="button" className="booking-day-row__summary" onClick={onSelect} aria-expanded={expanded}>
+        <span className="booking-day-row__avatar">{initialsFromName(booking.customer_name)}</span>
+        <span className="booking-day-row__main">
+          <span className="booking-day-row__name">{booking.customer_name}</span>
+          <span className="booking-day-row__meta">
+            {(booking.booking_time || "--:--").slice(0, 5)} · {formatBookingTable(booking)}
+          </span>
+          {expanded && selectedBooking ? (
+            <span className="booking-day-row__contact">{selectedBooking.customer_email || selectedBooking.customer_phone || "Contatto non disponibile"}</span>
+          ) : null}
+        </span>
+        <span className="booking-day-row__side">
+          <span className={bookingStatusDotClass(booking.status)} aria-hidden="true" />
+          <span className={bookingStatusChipClass(booking.status)}>{formatStatusLabel(booking.status)}</span>
+          <span className="booking-day-row__pax">◎ {booking.party_size || "-"} pax</span>
+        </span>
+        <span className="booking-day-row__chevron" aria-hidden="true">⌄</span>
+      </button>
+      {expanded ? <div className="booking-day-row__expanded">{detail}</div> : null}
+    </article>
   );
 }
 
@@ -1686,7 +1772,7 @@ function BookingDetailPanel(props: {
             <p className="mt-2 text-2xl font-light tracking-tight text-slate-900">{props.selectedBooking.customer_name}</p>
             <p className="mt-1 text-sm text-slate-500">{props.selectedBooking.customer_email || props.selectedBooking.customer_phone || "Contatto non disponibile"}</p>
           </div>
-          <span className={`rounded-full px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] ${toneForStatus(props.selectedBooking.status)}`}>{formatStatusLabel(props.selectedBooking.status)}</span>
+          <span className={bookingStatusChipClass(props.selectedBooking.status)}>{formatStatusLabel(props.selectedBooking.status)}</span>
         </div>
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-inset ring-slate-200/60 text-sm text-slate-700">
@@ -1778,22 +1864,36 @@ function BookingDetailPanel(props: {
 
       <div className="rounded-[1.25rem] bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60 shadow-sm">
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-4">Stato servizio</p>
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        <div className="booking-service-status-grid">
           {bookingStatuses.map((status) => (
             <button 
               key={status} 
               type="button" 
               onClick={() => props.onStatusChange(status)} 
               disabled={props.saving === "booking-status"} 
-              className={`rounded-full px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] transition-all ${
-                props.selectedBooking?.status === status 
-                  ? "bg-slate-900 text-white shadow-sm" 
-                  : "bg-slate-50 text-slate-600 ring-1 ring-inset ring-slate-200/60 hover:bg-slate-100 hover:text-slate-900"
+              aria-pressed={props.selectedBooking?.status === status}
+              aria-label={formatServiceStatusLabel(status)}
+              title={formatServiceStatusLabel(status)}
+              className={`booking-service-status-button ${status === "no_show" ? "is-wide" : ""} ${
+                props.selectedBooking?.status === status ? "is-active" : ""
               }`}
             >
-              {formatStatusLabel(status)}
+              {serviceStatusButtonLabel(status)}
             </button>
           ))}
+        </div>
+        <div className="booking-inline-actions">
+          <button type="button" className="booking-inline-action">
+            Note
+          </button>
+          <button
+            type="button"
+            className="booking-inline-action"
+            disabled={props.saving === "booking-status" || props.selectedBooking.status === "completed"}
+            onClick={() => props.onStatusChange("completed")}
+          >
+            Completa
+          </button>
         </div>
       </div>
 

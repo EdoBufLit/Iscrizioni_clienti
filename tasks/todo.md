@@ -1,3 +1,20 @@
+## Plan (Org admin booking agenda compact redesign - Apr 27, 2026)
+- [x] Mappare struttura e stati dell'agenda prenotazioni esistente, preservando API/handler di selezione, assegnazione, review richiesta e cambio stato.
+- [x] Tradurre le label stato prenotazione in italiano mantenendo `No show` invariato.
+- [x] Rifare il popup/dettaglio giornata come pannello compatto centrato sopra la pagina dopo click sul giorno, aderente al reference: header verde, KPI, filtri, righe compatte e dettaglio espandibile in-place.
+- [x] Rendere la lista scalabile con scroll interno per molte prenotazioni, evitando card enormi e overflow testo.
+- [x] Adattare light/dark mode senza rompere il tema esistente.
+- [x] Eseguire typecheck/build e, se possibile, smoke visuale mirato su agenda.
+
+## Review (Org admin booking agenda compact redesign - Apr 27, 2026)
+- Stati prenotazione tradotti in italiano in `OrgAdminBookings.tsx`: `confirmed` -> `Confermata`, `pending/new` -> `In attesa`, `seated` -> `Seduta`, `completed` -> `Completata`, `cancelled` -> `Cancellata`; `no_show` resta `No show`.
+- Il click su un giorno dell'agenda ora apre un pannello giornata centrato sopra il calendario con header verde, KPI del giorno, filtri `Tutte / Confermata / In attesa / Seduta / Completata`, righe compatte e dettaglio espandibile in-place.
+- La lista giornata ha scroll interno e mantiene visibili nome, orario, tavolo, stato e coperti anche con molte prenotazioni; nello smoke con 24 prenotazioni il pannello resta scrollabile.
+- Il dettaglio mantiene le funzioni esistenti: cambio stato servizio, completamento rapido, richiesta collegata, link ai moduli e assegnazione sala/tavolo.
+- Stili light/dark aggiunti in `index.css` con classi scoped `booking-*`, evitando overflow dei badge e dei pulsanti stato.
+- Verifiche: `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK con solo warning Vite preesistente sui chunk grandi; smoke Playwright mockato su `http://127.0.0.1:5173/org-admin/prenotazioni?section=agenda` OK con 24 righe, scroll interno, 0 errori console/API, nessuna label stato inglese residua e nessun overflow sui pulsanti stato.
+- Evidenze: `tasks/screenshots/booking-agenda-redesign-20260427/agenda-panel-light.png` e `tasks/screenshots/booking-agenda-redesign-20260427/agenda-panel-dark.png`.
+
 ## Plan (Super admin mockup fidelity correction - Apr 27, 2026)
 - [x] Verificare che la configurazione SumUp nel dettaglio associazione sia ancora collegata a `saveSuperAdminSumUpApiKey` / `deleteSuperAdminSumUpApiKey` e non venga rimossa o scollegata.
 - [x] Allineare `/super-admin/associazioni` al mockup: header piu compatto, nessun pulsante extra non presente, KPI a 6 colonne, toolbar, tabella con colonne/azioni/stati come reference.
