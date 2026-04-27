@@ -12,12 +12,23 @@ from app.db import SessionLocal
 from app.models import (
     AdminRole,
     AdminUser,
+    Booking,
+    BookingEvent,
     EmailCampaign,
+    Form,
     Member,
     OrgAdminToken,
     Organization,
+    WhatsAppConnection,
+)
+from app.services.booking_whatsapp_reminders import (
+    BOOKING_REMINDER_EVENT,
+    SURVEY_DISPATCH_EVENT,
+    process_booking_whatsapp_reminders,
+    process_post_event_survey_whatsapp,
 )
 from app.services.email_campaigns import process_scheduled_campaigns
+from app.services.whatsapp_evolution import EvolutionSendTextResult
 from app.utils import clear_captured_emails, get_captured_emails, hash_token
 
 
@@ -620,6 +631,129 @@ def test_org_admin_campaign_can_be_scheduled_with_design_and_linked_form(client,
     finally:
         settings.EMAIL_MODE = original_mode
         settings.MAIL_FROM_DOMAIN = original_domain
+
+
+def test_booking_whatsapp_reminder_is_automatic_and_deduped(client, db, monkeypatch):
+    original_whatsapp = settings.ENABLE_WHATSAPP_EVOLUTION
+    settings.ENABLE_WHATSAPP_EVOLUTION = True
+    sent_messages: list[dict[str, str]] = []
+
+    def fake_send_text(self, instance_name: str, *, number: str, text: str):
+        sent_messages.append({"instance": instance_name, "number": number, "text": text})
+        return EvolutionSendTextResult(
+            external_message_id=f"reminder-{uuid.uuid4().hex}",
+            status="sent",
+            raw={},
+        )
+
+    monkeypatch.setattr("app.services.whatsapp_automation.EvolutionLiteClient.send_text", fake_send_text)
+    try:
+        db.query(Organization).update({Organization.booking_whatsapp_reminder_enabled: False})
+        db.commit()
+        org, _admin = _create_org_admin(db, communications_enabled=True)
+        org.booking_whatsapp_reminder_enabled = True
+        org.booking_whatsapp_reminder_hours_before = 3
+        org.booking_whatsapp_reminder_template = "Reminder {{nome_contatto}} {{data_prenotazione}} {{orario_prenotazione}}"
+        connection = WhatsAppConnection(
+            org_id=org.id,
+            instance_name=f"reminder-{org.id}",
+            status="connected",
+            phone_number="+390200000000",
+        )
+        booking = Booking(
+            association_id=org.id,
+            status="confirmed",
+            customer_name="Giulia Bianchi",
+            customer_phone="+393331234567",
+            booking_date=(datetime.utcnow() + timedelta(hours=2)).date(),
+            booking_time=(datetime.utcnow() + timedelta(hours=2)).strftime("%H:%M"),
+            party_size=2,
+            confirmed_at=datetime.utcnow(),
+        )
+        db.add_all([connection, booking])
+        db.commit()
+
+        stats = process_booking_whatsapp_reminders(db, now=datetime.utcnow())
+        assert stats["sent"] == 1
+        assert sent_messages[0]["number"] == "+393331234567"
+        assert "Giulia Bianchi" in sent_messages[0]["text"]
+        assert db.query(BookingEvent).filter(BookingEvent.booking_id == booking.id, BookingEvent.event_type == BOOKING_REMINDER_EVENT).count() == 1
+
+        repeat_stats = process_booking_whatsapp_reminders(db, now=datetime.utcnow())
+        assert repeat_stats["sent"] == 0
+        assert len(sent_messages) == 1
+    finally:
+        settings.ENABLE_WHATSAPP_EVOLUTION = original_whatsapp
+
+
+def test_post_event_survey_targets_only_present_bookings(db, monkeypatch):
+    original_whatsapp = settings.ENABLE_WHATSAPP_EVOLUTION
+    original_frontend = settings.FRONTEND_URL
+    settings.ENABLE_WHATSAPP_EVOLUTION = True
+    settings.FRONTEND_URL = "https://example.test"
+    sent_numbers: list[str] = []
+
+    def fake_send_text(self, instance_name: str, *, number: str, text: str):
+        sent_numbers.append(number)
+        assert "https://example.test/forms/" in text
+        return EvolutionSendTextResult(
+            external_message_id=f"survey-{uuid.uuid4().hex}",
+            status="sent",
+            raw={},
+        )
+
+    monkeypatch.setattr("app.services.whatsapp_automation.EvolutionLiteClient.send_text", fake_send_text)
+    try:
+        db.query(Form).update({Form.survey_post_event_enabled: False})
+        db.commit()
+        org, _admin = _create_org_admin(db, communications_enabled=True)
+        connection = WhatsAppConnection(
+            org_id=org.id,
+            instance_name=f"survey-{org.id}",
+            status="connected",
+            phone_number="+390200000000",
+        )
+        survey = Form(
+            association_id=org.id,
+            title="Sondaggio evento",
+            public_slug=f"sondaggio-{uuid.uuid4().hex[:6]}",
+            is_active=True,
+            form_type="survey",
+            visibility="public",
+            survey_post_event_enabled=True,
+            survey_post_event_delay_hours=1,
+        )
+        present_booking = Booking(
+            association_id=org.id,
+            status="seated",
+            customer_name="Presente",
+            customer_phone="+393331111111",
+            booking_date=(datetime.utcnow() - timedelta(hours=3)).date(),
+            booking_time=(datetime.utcnow() - timedelta(hours=3)).strftime("%H:%M"),
+        )
+        confirmed_booking = Booking(
+            association_id=org.id,
+            status="confirmed",
+            customer_name="Solo confermato",
+            customer_phone="+393332222222",
+            booking_date=(datetime.utcnow() - timedelta(hours=3)).date(),
+            booking_time=(datetime.utcnow() - timedelta(hours=3)).strftime("%H:%M"),
+        )
+        db.add_all([connection, survey, present_booking, confirmed_booking])
+        db.commit()
+
+        stats = process_post_event_survey_whatsapp(db, now=datetime.utcnow())
+        assert stats["sent"] == 1
+        assert sent_numbers == ["+393331111111"]
+        assert (
+            db.query(BookingEvent)
+            .filter(BookingEvent.booking_id == present_booking.id, BookingEvent.event_type == SURVEY_DISPATCH_EVENT)
+            .count()
+            == 1
+        )
+    finally:
+        settings.ENABLE_WHATSAPP_EVOLUTION = original_whatsapp
+        settings.FRONTEND_URL = original_frontend
         clear_captured_emails()
 
 

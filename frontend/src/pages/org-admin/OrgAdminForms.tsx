@@ -237,6 +237,9 @@ function emptyFormDraft() {
     booking_notification_enabled: true,
     booking_auto_assign_enabled: false,
     booking_field_mapping: {} as Record<string, string>,
+    survey_post_event_enabled: false,
+    survey_post_event_delay_hours: 2,
+    survey_post_event_message_template: "",
     notify_admin_on_submit: true,
     send_user_confirmation: true,
     whatsapp_auto_reply_enabled: false,
@@ -250,11 +253,14 @@ function emptyFormDraft() {
   };
 }
 
-function createSeededFormDraft() {
-  const defaultTitle = "Nuovo form";
+function createSeededFormDraft(mode: "forms" | "surveys" = "forms") {
+  const defaultTitle = mode === "surveys" ? "Nuovo sondaggio" : "Nuovo form";
   return {
     ...emptyFormDraft(),
     title: defaultTitle,
+    submit_button_text: mode === "surveys" ? "Invia sondaggio" : "Invia richiesta",
+    success_message: mode === "surveys" ? "Grazie, risposta registrata." : "Richiesta inviata correttamente.",
+    form_type: mode === "surveys" ? ("survey" as AssociationFormType) : ("generic" as AssociationFormType),
     public_slug: derivePublicSlug(defaultTitle),
   };
 }
@@ -356,6 +362,7 @@ type OrgAdminFormsWorkspaceProps = {
   locked?: boolean;
   lockedMessage?: string;
   availableTemplates?: OrgAdminEmailTemplate[];
+  mode?: "forms" | "surveys";
 };
 
 export function OrgAdminFormsWorkspace({
@@ -363,6 +370,7 @@ export function OrgAdminFormsWorkspace({
   locked = false,
   lockedMessage = "I Form richiedono il modulo Comunicazioni attivo.",
   availableTemplates = [],
+  mode = "forms",
 }: OrgAdminFormsWorkspaceProps) {
   const { admin, loading: adminLoading } = useOrgAdmin();
   const { showToast } = useToast();
@@ -486,6 +494,9 @@ export function OrgAdminFormsWorkspace({
       booking_notification_enabled: Boolean(selectedForm.booking_notification_enabled),
       booking_auto_assign_enabled: Boolean(selectedForm.booking_auto_assign_enabled),
       booking_field_mapping: selectedForm.booking_field_mapping || {},
+      survey_post_event_enabled: Boolean(selectedForm.survey_post_event_enabled),
+      survey_post_event_delay_hours: selectedForm.survey_post_event_delay_hours || 2,
+      survey_post_event_message_template: selectedForm.survey_post_event_message_template || "",
       notify_admin_on_submit: Boolean(selectedForm.notify_admin_on_submit),
       send_user_confirmation: Boolean(selectedForm.send_user_confirmation),
       whatsapp_auto_reply_enabled: Boolean(selectedForm.whatsapp_auto_reply_enabled),
@@ -535,6 +546,10 @@ export function OrgAdminFormsWorkspace({
     return `${window.location.origin}${path}`;
   }, [publicPath, selectedForm?.public_path]);
   const isEditorOpen = isCreatingForm || selectedFormId !== null;
+  const visibleForms = useMemo(
+    () => forms.filter((form) => (mode === "surveys" ? form.form_type === "survey" : form.form_type !== "survey")),
+    [forms, mode],
+  );
   const previewFields = useMemo(
     () => buildPreviewFields(builderDraftFields, selectedForm?.id ?? selectedFormId ?? 0),
     [builderDraftFields, selectedForm?.id, selectedFormId],
@@ -767,6 +782,10 @@ export function OrgAdminFormsWorkspace({
         booking_success_message_override: formDraft.booking_success_message_override || null,
         booking_auto_assign_enabled: formDraft.booking_auto_assign_enabled,
         booking_field_mapping: formDraft.booking_field_mapping || {},
+        form_type: mode === "surveys" ? "survey" : formDraft.form_type,
+        survey_post_event_enabled: formDraft.survey_post_event_enabled,
+        survey_post_event_delay_hours: formDraft.survey_post_event_delay_hours,
+        survey_post_event_message_template: formDraft.survey_post_event_message_template || null,
         admin_notification_template_id: formDraft.admin_notification_template_id || null,
         user_confirmation_template_id: formDraft.user_confirmation_template_id || null,
         whatsapp_auto_reply_enabled: formDraft.whatsapp_auto_reply_enabled,
@@ -1243,7 +1262,7 @@ export function OrgAdminFormsWorkspace({
     setSelectedSubmission(null);
     setDeleteArmed(false);
     setActiveTab("design");
-    setFormDraft(createSeededFormDraft());
+    setFormDraft(createSeededFormDraft(mode));
     setBuilderDraftFields([]);
     setFieldDraft(emptyFieldDraft(null));
     setEditingFieldId(null);
@@ -1587,6 +1606,54 @@ export function OrgAdminFormsWorkspace({
           ) : null}
         </section>
 
+        {mode === "surveys" ? (
+          <section className="rounded-[1.35rem] border border-emerald-200 bg-emerald-50/60 p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.12)]">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-semibold text-neutral-900">Invio post evento</h3>
+                <p className="mt-1 text-xs leading-5 text-neutral-600">
+                  Invia automaticamente questo sondaggio via WhatsApp alle prenotazioni segnate come presenti in agenda.
+                </p>
+              </div>
+              <label className="relative inline-flex cursor-pointer items-center">
+                <input
+                  type="checkbox"
+                  disabled={locked}
+                  checked={formDraft.survey_post_event_enabled}
+                  onChange={(event) => syncFormDraft("survey_post_event_enabled", event.target.checked)}
+                  className="peer sr-only"
+                />
+                <span className="h-6 w-11 rounded-full bg-neutral-200 transition peer-checked:bg-brand" />
+                <span className="absolute left-1 h-4 w-4 rounded-full bg-white transition peer-checked:translate-x-5" />
+              </label>
+            </div>
+            <div className="mt-4 grid gap-4">
+              <label className={labelClass}>
+                Ore dopo l'evento
+                <input
+                  className={inputClass}
+                  type="number"
+                  min={0}
+                  max={336}
+                  disabled={locked}
+                  value={formDraft.survey_post_event_delay_hours}
+                  onChange={(event) => syncFormDraft("survey_post_event_delay_hours", Number(event.target.value || 2))}
+                />
+              </label>
+              <label className={labelClass}>
+                Messaggio WhatsApp
+                <textarea
+                  className={`${inputClass} min-h-[96px] resize-none`}
+                  disabled={locked}
+                  value={formDraft.survey_post_event_message_template}
+                  onChange={(event) => syncFormDraft("survey_post_event_message_template", event.target.value)}
+                  placeholder="Ciao {{nome_contatto}}, grazie per aver partecipato. Ci aiuti con un breve sondaggio? {{link_sondaggio}}"
+                />
+              </label>
+            </div>
+          </section>
+        ) : null}
+
         <section className="rounded-[1.35rem] border border-neutral-200 bg-white p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.16)]">
           <h3 className="text-sm font-semibold text-neutral-900">Notifiche email</h3>
           <div className="mt-4 space-y-4">
@@ -1903,23 +1970,25 @@ export function OrgAdminFormsWorkspace({
           </div>
         ) : null}
 
-        {!isEditorOpen && !loading && !adminLoading && forms.length > 0 && (
+        {!isEditorOpen && !loading && !adminLoading && visibleForms.length > 0 && (
           <section className="rounded-[1.25rem] bg-white p-8 ring-1 ring-inset ring-slate-200/60 shadow-sm">
             <div className="border-b border-slate-100 pb-6 mb-8">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Gestione Moduli</p>
                   <h2 className="mt-2 text-2xl font-light tracking-tight text-slate-900">Le tue pagine modulo</h2>
-                  <p className="mt-1 text-sm text-slate-500">Seleziona una pagina esistente o creane una nuova.</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {mode === "surveys" ? "Seleziona un sondaggio esistente o creane uno nuovo." : "Seleziona una pagina esistente o creane una nuova."}
+                  </p>
                 </div>
                 <button className="btn-primary !rounded-full !px-6" type="button" onClick={handleCreateNewForm} disabled={locked}>
-                  {locked ? "Modulo richiesto" : "Nuovo form"}
+                  {locked ? "Modulo richiesto" : mode === "surveys" ? "Nuovo sondaggio" : "Nuovo form"}
                 </button>
               </div>
             </div>
             <div>
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {forms.map((form) => (
+                {visibleForms.map((form) => (
                   <div
                     key={form.id}
                     onClick={() => {
@@ -1982,16 +2051,22 @@ export function OrgAdminFormsWorkspace({
           </section>
         )}
 
-        {!isEditorOpen && !loading && !adminLoading && forms.length === 0 && (
+        {!isEditorOpen && !loading && !adminLoading && visibleForms.length === 0 && (
           <section className="rounded-[1.25rem] bg-white p-12 ring-1 ring-inset ring-slate-200/60 shadow-sm text-center">
             <div className="mx-auto max-w-xl">
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Pagine e moduli</p>
-              <h2 className="mt-4 text-3xl font-light tracking-tight text-slate-900">Nessun form creato</h2>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+                {mode === "surveys" ? "Sondaggi" : "Pagine e moduli"}
+              </p>
+              <h2 className="mt-4 text-3xl font-light tracking-tight text-slate-900">
+                {mode === "surveys" ? "Nessun sondaggio creato" : "Nessun form creato"}
+              </h2>
               <p className="mt-3 text-base text-slate-500">
-                Crea il primo modulo pubblico per raccogliere iscrizioni, richieste o prenotazioni.
+                {mode === "surveys"
+                  ? "Crea un sondaggio pubblico e, se vuoi, invialo automaticamente ai partecipanti segnati come presenti in agenda."
+                  : "Crea il primo modulo pubblico per raccogliere iscrizioni, richieste o prenotazioni."}
               </p>
               <button className="btn-primary !rounded-full !px-8 !py-3.5 text-sm font-medium mt-8" type="button" onClick={handleCreateNewForm} disabled={locked}>
-                Crea un nuovo form
+                {mode === "surveys" ? "Crea un sondaggio" : "Crea un nuovo form"}
               </button>
             </div>
           </section>

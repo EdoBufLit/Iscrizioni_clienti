@@ -43,6 +43,12 @@ type SelectedButtonState = {
   href: string;
 };
 
+type BuilderSectionSummary = {
+  id: string;
+  label: string;
+  selected: boolean;
+};
+
 const railTabs: Array<{ key: RailTab; label: string }> = [
   { key: "blocks", label: "Blocchi" },
   { key: "media", label: "Media" },
@@ -86,6 +92,8 @@ export function GrapesEmailBuilder({
   const [assetBusyId, setAssetBusyId] = useState<number | null>(null);
   const [uploadingAsset, setUploadingAsset] = useState(false);
   const [selectedButton, setSelectedButton] = useState<SelectedButtonState | null>(null);
+  const [selectedSectionLabel, setSelectedSectionLabel] = useState<string | null>(null);
+  const [sections, setSections] = useState<BuilderSectionSummary[]>([]);
   const { showToast } = useToast();
   const sortedAssets = useMemo(() => sortAssetsByDate(assets), [assets]);
   const linkVariables = useMemo(
@@ -116,17 +124,17 @@ export function GrapesEmailBuilder({
         appendTo: stylePanelRef.current || undefined,
         sectors: [
           {
-            name: "Typography",
+            name: "Tipografia",
             open: true,
             buildProps: ["font-size", "font-weight", "line-height", "letter-spacing", "text-align", "color"],
           },
           {
-            name: "Spacing",
+            name: "Spaziatura",
             open: false,
             buildProps: ["padding", "margin"],
           },
           {
-            name: "Decoration",
+            name: "Decorazione",
             open: false,
             buildProps: ["background-color", "border-radius", "border-color"],
           },
@@ -209,22 +217,47 @@ export function GrapesEmailBuilder({
       };
     };
 
+    const refreshSections = () => {
+      const currentEditor = editorRef.current;
+      if (!currentEditor) return;
+      const body = getBodyComponent(currentEditor);
+      const selectedSection = getSelectedTopLevelSection(currentEditor);
+      const nextSections = body
+        ? body.components().map((section: any, index: number) => ({
+            id: String(section.cid || section.getId?.() || index),
+            label: sectionLabel(section, index),
+            selected: Boolean(selectedSection && section === selectedSection),
+          }))
+        : [];
+      setSections(nextSections);
+      setSelectedSectionLabel(
+        selectedSection ? sectionLabel(selectedSection, nextSections.findIndex((item: BuilderSectionSummary) => item.selected)) : null,
+      );
+    };
+
     const syncSelectedButton = (component: any) => {
       const next = readButtonState(component);
       selectedButtonComponentRef.current = next ? component : null;
       setSelectedButton(next);
+      window.requestAnimationFrame(refreshSections);
     };
 
     editor.on("load", () => {
       setReady(true);
       currentSetDevice("desktop");
       emitSnapshot();
+      refreshSections();
     });
-    editor.on("update", scheduleSync);
+    editor.on("update", () => {
+      scheduleSync();
+      refreshSections();
+    });
     editor.on("component:selected", syncSelectedButton);
     editor.on("component:deselected", () => {
       selectedButtonComponentRef.current = null;
       setSelectedButton(null);
+      setSelectedSectionLabel(null);
+      refreshSections();
     });
     editor.on("component:update", () => {
       if (selectedButtonComponentRef.current) {
@@ -265,27 +298,58 @@ export function GrapesEmailBuilder({
   function appendBlock(block: BuilderBlockDefinition) {
     const editor = editorRef.current;
     if (!editor) return;
-    const wrapper = editor.getWrapper();
-    if (!wrapper) return;
-    const body = wrapper.find("mj-body")[0] || wrapper;
+    const body = getBodyComponent(editor);
+    if (!body) return;
     const collection = body.components();
     const previousLength = collection.length;
-    body.append(block.mjml.trim() as never);
-    const last = collection.at(collection.length - 1);
-    if (collection.length === previousLength || !last) {
+    const selectedSection = getSelectedTopLevelSection(editor);
+    const insertAt = selectedSection ? collection.indexOf(selectedSection) + 1 : collection.length;
+    const insertedCollection = collection.add(block.mjml.trim() as never, { at: insertAt });
+    const inserted = Array.isArray(insertedCollection) ? insertedCollection[0] : insertedCollection;
+    if (collection.length === previousLength || !inserted) {
       showToast({ tone: "error", message: `Impossibile inserire ${block.label.toLowerCase()} nel builder.` });
       return;
     }
-    const children = body.components();
-    const inserted = children.at(children.length - 1);
-    editor.select(inserted || last);
+    editor.select(inserted);
     window.requestAnimationFrame(() => {
-      const element = (inserted || last)?.getEl?.();
+      const element = inserted?.getEl?.();
       if (element instanceof HTMLElement) {
         element.scrollIntoView({ block: "center", behavior: "smooth" });
       }
     });
-    showToast({ tone: "success", message: `${block.label} aggiunto al messaggio.` });
+    showToast({ tone: "success", message: `${block.label} aggiunto ${selectedSection ? "dopo il blocco selezionato" : "al messaggio"}.` });
+  }
+
+  function selectSection(sectionId: string) {
+    const editor = editorRef.current;
+    const body = editor ? getBodyComponent(editor) : null;
+    if (!editor || !body) return;
+    const target = body.components().find((section: any, index: number) => String(section.cid || section.getId?.() || index) === sectionId);
+    if (target) editor.select(target);
+  }
+
+  function moveSelectedSection(direction: "up" | "down") {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const body = getBodyComponent(editor);
+    const section = getSelectedTopLevelSection(editor);
+    if (!body || !section) return;
+    const collection = body.components();
+    const currentIndex = collection.indexOf(section);
+    const nextIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (nextIndex < 0 || nextIndex >= collection.length) return;
+    section.move(body, { at: nextIndex });
+    editor.select(section);
+  }
+
+  function deleteSelectedSection() {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const section = getSelectedTopLevelSection(editor);
+    if (!section) return;
+    section.remove();
+    setSelectedButton(null);
+    setSelectedSectionLabel(null);
   }
 
   function updateSelectedButtonLabel(value: string) {
@@ -530,7 +594,7 @@ export function GrapesEmailBuilder({
           <div className="builder-properties-heading">
             <p className="builder-selection-card__eyebrow">Proprieta blocco</p>
             <p className="builder-selection-card__title">
-              {selectedButton ? "CTA selezionata" : "Seleziona un elemento"}
+              {selectedButton ? "CTA selezionata" : selectedSectionLabel || "Seleziona un elemento"}
             </p>
             <p className="builder-rail__copy">
               Modifica contenuto, stile e spaziatura del blocco selezionato nel canvas.
@@ -578,12 +642,59 @@ export function GrapesEmailBuilder({
             </div>
           )}
 
+          <div className="builder-selection-card">
+            <p className="builder-selection-card__label">Struttura messaggio</p>
+            <div className="builder-section-list">
+              {sections.map((section) => (
+                <button
+                  key={section.id}
+                  type="button"
+                  className={section.selected ? "builder-section-row builder-section-row--active" : "builder-section-row"}
+                  onClick={() => selectSection(section.id)}
+                >
+                  {section.label}
+                </button>
+              ))}
+            </div>
+            <div className="builder-section-actions">
+              <button type="button" className="builder-section-action" onClick={() => moveSelectedSection("up")} disabled={!selectedSectionLabel}>
+                Su
+              </button>
+              <button type="button" className="builder-section-action" onClick={() => moveSelectedSection("down")} disabled={!selectedSectionLabel}>
+                Giu
+              </button>
+              <button type="button" className="builder-section-action builder-section-action--danger" onClick={deleteSelectedSection} disabled={!selectedSectionLabel}>
+                Elimina
+              </button>
+            </div>
+          </div>
+
           <div className="builder-style-panel" ref={stylePanelRef} />
-          <button type="button" className="builder-delete-block" disabled>
-            Elimina blocco
-          </button>
         </aside>
       </div>
     </div>
   );
+}
+
+function getBodyComponent(editor: Editor): any | null {
+  const wrapper = editor.getWrapper();
+  if (!wrapper) return null;
+  return wrapper.find("mj-body")[0] || wrapper;
+}
+
+function getSelectedTopLevelSection(editor: Editor): any | null {
+  const body = getBodyComponent(editor);
+  const selected = editor.getSelected();
+  if (!body || !selected) return null;
+  let current: any = selected;
+  while (current && current.parent && current.parent() && current.parent() !== body) {
+    current = current.parent();
+  }
+  return current && current.parent && current.parent() === body ? current : null;
+}
+
+function sectionLabel(section: any, index: number): string {
+  const text = String(section.getName?.() || section.get?.("tagName") || "Blocco").replace(/^mj-/i, "");
+  const normalized = text ? text.charAt(0).toUpperCase() + text.slice(1) : "Blocco";
+  return `${index + 1}. ${normalized}`;
 }

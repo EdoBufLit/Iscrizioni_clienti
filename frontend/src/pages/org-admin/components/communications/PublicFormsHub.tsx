@@ -6,9 +6,10 @@ import { OrgAdminFormsWorkspace } from "../../OrgAdminForms";
 
 type PublicFormsHubProps = {
   locked?: boolean;
+  mode?: "forms" | "surveys";
 };
 
-export function PublicFormsHub({ locked = false }: PublicFormsHubProps) {
+export function PublicFormsHub({ locked = false, mode = "forms" }: PublicFormsHubProps) {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [templates, setTemplates] = useState<OrgAdminEmailTemplate[]>([]);
@@ -45,5 +46,5 @@ export function PublicFormsHub({ locked = false }: PublicFormsHubProps) {
     return <Skeleton className="h-[32rem] w-full rounded-[1.25rem]" />;
   }
 
-  return <OrgAdminFormsWorkspace embedded locked={locked} availableTemplates={templates} />;
+  return <OrgAdminFormsWorkspace embedded locked={locked} availableTemplates={templates} mode={mode} />;
 }

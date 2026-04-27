@@ -307,6 +307,13 @@ class Organization(Base):
     sender_email_local_part = Column(String, nullable=True)
     email_from_name_override = Column(String, nullable=True)
     reply_to_email = Column(String, nullable=True)
+    booking_whatsapp_reminder_enabled = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    booking_whatsapp_reminder_hours_before = Column(
+        Integer, nullable=False, default=24, server_default="24"
+    )
+    booking_whatsapp_reminder_template = Column(Text, nullable=True)
     stripe_connected_account_id = Column(String, nullable=True, unique=True)
     stripe_platform_subscription_status = Column(String, nullable=True)
     stripe_platform_subscription_id = Column(String, nullable=True)
@@ -1365,6 +1372,13 @@ class Form(Base):
         Boolean, nullable=False, default=False, server_default="false"
     )
     booking_field_mapping = Column(GENERIC_JSON_TYPE, nullable=True)
+    survey_post_event_enabled = Column(
+        Boolean, nullable=False, default=False, server_default="false", index=True
+    )
+    survey_post_event_delay_hours = Column(
+        Integer, nullable=False, default=2, server_default="2"
+    )
+    survey_post_event_message_template = Column(Text, nullable=True)
     created_by_user_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True, index=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
     updated_at = Column(

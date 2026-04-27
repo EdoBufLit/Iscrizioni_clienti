@@ -19,7 +19,7 @@ from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 
 
-BOOKING_FORM_TYPES = {"generic", "booking", "request"}
+BOOKING_FORM_TYPES = {"generic", "booking", "request", "survey"}
 BOOKING_FIELD_TARGETS = {
     "customer_name",
     "customer_email",

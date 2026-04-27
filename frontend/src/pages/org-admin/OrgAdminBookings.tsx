@@ -541,8 +541,8 @@ export default function OrgAdminBookings() {
       setSelectedBookingId(null);
       return;
     }
-    if (!selectedBookingId || !items.some((item) => item.id === selectedBookingId)) {
-      setSelectedBookingId(items[0].id);
+    if (selectedBookingId && !items.some((item) => item.id === selectedBookingId)) {
+      setSelectedBookingId(null);
     }
   }, [bookingsByDay, selectedBookingId, selectedCalendarDate]);
 
@@ -1584,7 +1584,7 @@ function AgendaSection(props: {
                       booking={booking}
                       expanded={isExpanded}
                       selectedBooking={isDetailLoaded ? props.selectedBooking : null}
-                      onSelect={() => props.setSelectedBookingId(booking.id)}
+                      onSelect={() => props.setSelectedBookingId(isExpanded ? null : booking.id)}
                       detail={
                         isDetailLoaded ? (
                           <BookingDetailPanel

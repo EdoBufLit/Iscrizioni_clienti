@@ -475,6 +475,9 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
         "booking_field_mapping": normalize_booking_field_mapping(
             getattr(form, "booking_field_mapping", None) or {}
         ),
+        "survey_post_event_enabled": bool(getattr(form, "survey_post_event_enabled", False)),
+        "survey_post_event_delay_hours": int(getattr(form, "survey_post_event_delay_hours", 2) or 2),
+        "survey_post_event_message_template": getattr(form, "survey_post_event_message_template", None),
         "notify_admin_on_submit": bool(getattr(form, "notify_admin_on_submit", True)),
         "send_user_confirmation": bool(getattr(form, "send_user_confirmation", True)),
         "whatsapp_auto_reply_enabled": bool(getattr(form, "whatsapp_auto_reply_enabled", False)),
@@ -535,6 +538,9 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
             "booking_field_mapping": normalize_booking_field_mapping(
                 getattr(form, "booking_field_mapping", None) or {}
             ),
+            "survey_post_event_enabled": bool(getattr(form, "survey_post_event_enabled", False)),
+            "survey_post_event_delay_hours": int(getattr(form, "survey_post_event_delay_hours", 2) or 2),
+            "survey_post_event_message_template": getattr(form, "survey_post_event_message_template", None),
             "connected_whatsapp_automations": [
                 serialize_whatsapp_automation(automation) for automation in whatsapp_automations
             ],
@@ -638,6 +644,9 @@ def apply_form_updates(
     booking_notification_enabled: bool,
     booking_auto_assign_enabled: bool,
     booking_field_mapping: Any,
+    survey_post_event_enabled: bool,
+    survey_post_event_delay_hours: int | None,
+    survey_post_event_message_template: Any,
     notify_admin_on_submit: bool,
     send_user_confirmation: bool,
     whatsapp_auto_reply_enabled: bool,
@@ -678,6 +687,15 @@ def apply_form_updates(
     form.booking_notification_enabled = bool(booking_notification_enabled)
     form.booking_auto_assign_enabled = bool(booking_auto_assign_enabled)
     form.booking_field_mapping = normalize_booking_field_mapping(booking_field_mapping)
+    form.survey_post_event_enabled = bool(survey_post_event_enabled)
+    try:
+        normalized_delay = int(survey_post_event_delay_hours or 2)
+    except Exception:
+        normalized_delay = 2
+    form.survey_post_event_delay_hours = min(max(normalized_delay, 0), 336)
+    form.survey_post_event_message_template = _normalize_multiline_text(
+        survey_post_event_message_template
+    )
     form.notify_admin_on_submit = bool(notify_admin_on_submit)
     form.send_user_confirmation = bool(send_user_confirmation)
     form.whatsapp_auto_reply_enabled = bool(whatsapp_auto_reply_enabled)

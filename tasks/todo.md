@@ -1,3 +1,31 @@
+## Plan (Org admin browser feedback WhatsApp e agenda - Apr 27, 2026)
+- [x] Correggere il link sidebar WhatsApp che tornava a Panoramica quando WhatsApp non era attivo.
+- [x] Rendere richiudibili le righe prenotazione espanse nell'agenda senza riapertura automatica.
+- [x] Verificare typecheck/build e smoke rapido nel browser locale.
+
+## Review (Org admin browser feedback WhatsApp e agenda - Apr 27, 2026)
+- WhatsApp: la tab non viene piu rimossa quando il canale non e attivo e non esiste piu il redirect automatico verso Panoramica. Il link `/org-admin/comunicazioni?tab=whatsapp` resta sulla tab WhatsApp e mostra lo stato non attivo.
+- Agenda: cliccare una prenotazione gia espansa ora imposta `selectedBookingId` a `null`; l'effetto di sincronizzazione non riapre piu automaticamente la prima prenotazione del giorno.
+- Verifiche: `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK con solo warning Vite preesistente sui chunk grandi; smoke browser su `http://127.0.0.1:5173/org-admin/comunicazioni?tab=whatsapp` OK.
+
+## Plan (Org admin comunicazioni, reminder WhatsApp e sondaggi - Apr 27, 2026)
+- [x] Mappare schema, API, worker e UI esistenti per prenotazioni, WhatsApp, form e builder campagne.
+- [x] Implementare reminder WhatsApp automatico per prenotazioni confermate: messaggio e ore prima evento configurabili dall'org admin, invio da worker reale, deduplica e test.
+- [x] Aggiungere `Sondaggi` dentro `Comunicazioni`, riusando il motore form con builder semplificato e automazione post-evento per prenotazioni segnate come presentate in agenda.
+- [x] Migliorare builder campagne: aggiunta blocchi vicino alla selezione, reorder/scambio piu semplice, controlli rapidi su blocco e pannello proprieta tradotto/semplificato.
+- [x] Aggiornare navigation, API client, migration/bootstrap e test mirati senza rompere i flussi esistenti.
+- [x] Eseguire typecheck/build, test backend mirati, controllo locale frontend e documentare come funziona il reminder automatico.
+
+## Review (Org admin comunicazioni, reminder WhatsApp e sondaggi - Apr 27, 2026)
+- Reminder WhatsApp prenotazioni: aggiunti campi organizzazione per attivo/ore/template, pannello dedicato in `Comunicazioni > WhatsApp`, invio automatico nel worker esistente e deduplica con `BookingEvent`.
+- Funzionamento reminder: il worker controlla prenotazioni `confirmed` con data futura, invia nel range `evento - ore_prima` fino all'ora evento, usa la connessione WhatsApp Evolution dell'organizzazione e non richiede invio manuale dall'org admin.
+- Sondaggi: aggiunta tab `Sondaggi` dentro `Comunicazioni`, voce menu dedicata e supporto API `form_type=survey`; il builder riusa i form ma mostra testi/default da sondaggio.
+- Invio post evento sondaggi: ogni sondaggio puo abilitare WhatsApp automatico con delay e messaggio; il worker invia solo a prenotazioni segnate in agenda come `seated` o `completed`, non ai soli confermati.
+- Builder campagne: i blocchi nuovi vengono inseriti dopo la sezione selezionata, il pannello destro mostra una lista `Struttura messaggio` con azioni `Su/Giu/Elimina`, settori proprieta tradotti e controlli piu vicini al reference.
+- DB/API: aggiunta migration Alembic `o4p5q6r7s8t9_add_booking_reminders_and_surveys.py`, bootstrap dev in `init_db.py`, tipi frontend e serializzazione settings aggiornati; i PUT impostazioni comunicazioni ora aggiornano solo i campi inviati.
+- Verifiche: `python -m py_compile ...` OK; `python -m pytest -q tests\test_org_admin_communications.py::test_booking_whatsapp_reminder_is_automatic_and_deduped tests\test_org_admin_communications.py::test_post_event_survey_targets_only_present_bookings` OK; `python -m pytest -q tests\test_org_admin_communications.py tests\test_forms_module.py` OK (`34 passed`); `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK con solo warning Vite preesistente sui chunk grandi; `git diff --check` OK con soli warning CRLF.
+- Smoke locale: frontend disponibile su `http://127.0.0.1:5173`; non ho forzato uno smoke Playwright autenticato perche il backend locale collegato al proxy Vite su `:8000` rispondeva in modo non valido al controllo `/api/health`.
+
 ## Plan (Org admin booking agenda compact redesign - Apr 27, 2026)
 - [x] Mappare struttura e stati dell'agenda prenotazioni esistente, preservando API/handler di selezione, assegnazione, review richiesta e cambio stato.
 - [x] Tradurre le label stato prenotazione in italiano mantenendo `No show` invariato.

@@ -265,6 +265,7 @@ const OrgAdminLayout = () => {
           { to: "/org-admin/comunicazioni?tab=campagne", label: "Campagne", icon: "send" },
           { to: "/org-admin/comunicazioni?tab=modelli", label: "Modelli", icon: "template" },
           { to: "/org-admin/comunicazioni?tab=moduli", label: "Form pubblici", icon: "form" },
+          { to: "/org-admin/comunicazioni?tab=sondaggi", label: "Sondaggi", icon: "form" },
           { to: "/org-admin/comunicazioni?tab=whatsapp", label: "WhatsApp", icon: "whatsapp" },
           { to: "/org-admin/comunicazioni?tab=email", label: "Email", icon: "mail" },
         ],

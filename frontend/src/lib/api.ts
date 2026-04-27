@@ -638,6 +638,9 @@ export type OrgAdminOrganizationDetail = {
   sender_email_local_part: string | null;
   email_from_name_override: string | null;
   reply_to_email: string | null;
+  booking_whatsapp_reminder_enabled: boolean;
+  booking_whatsapp_reminder_hours_before: number;
+  booking_whatsapp_reminder_template: string | null;
   mail_from_domain: string | null;
   wallet_effective_bg_color?: string | null;
   wallet_effective_logo_url?: string | null;
@@ -686,6 +689,9 @@ export type OrgAdminCommunicationSettings = {
   sender_email_local_part: string | null;
   email_from_name_override: string | null;
   reply_to_email: string | null;
+  booking_whatsapp_reminder_enabled: boolean;
+  booking_whatsapp_reminder_hours_before: number;
+  booking_whatsapp_reminder_template: string | null;
   mail_from_domain: string | null;
   system_email_sender: NonNullable<OrgAdminOrganizationDetail["system_email_sender"]>;
   association_email_sender: NonNullable<OrgAdminOrganizationDetail["association_email_sender"]>;
@@ -1019,7 +1025,7 @@ export type AssociationFormActionTemplate = {
   is_active: boolean;
 };
 
-export type AssociationFormType = "generic" | "booking" | "request";
+export type AssociationFormType = "generic" | "booking" | "request" | "survey";
 
 export type AssociationForm = {
   id: number;
@@ -1044,6 +1050,9 @@ export type AssociationForm = {
   booking_notification_enabled: boolean;
   booking_auto_assign_enabled: boolean;
   booking_field_mapping: Record<string, string>;
+  survey_post_event_enabled: boolean;
+  survey_post_event_delay_hours: number;
+  survey_post_event_message_template: string | null;
   notify_admin_on_submit: boolean;
   send_user_confirmation: boolean;
   whatsapp_auto_reply_enabled: boolean;
@@ -1094,6 +1103,9 @@ export type AssociationForm = {
     booking_requires_manual_confirmation: boolean;
     booking_notification_enabled: boolean;
     booking_field_mapping: Record<string, string>;
+    survey_post_event_enabled: boolean;
+    survey_post_event_delay_hours: number;
+    survey_post_event_message_template: string | null;
     connected_whatsapp_automations?: OrgAdminWhatsAppAutomation[];
   };
 };
@@ -1468,6 +1480,9 @@ export async function putOrgAdminCommunicationSettings(data: {
   sender_email_local_part?: string | null;
   email_from_name_override?: string | null;
   reply_to_email?: string | null;
+  booking_whatsapp_reminder_enabled?: boolean;
+  booking_whatsapp_reminder_hours_before?: number;
+  booking_whatsapp_reminder_template?: string | null;
 }): Promise<{ ok: boolean; settings: OrgAdminCommunicationSettings }> {
   const res = await fetch("/api/org-admin/communications/settings", {
     method: "PUT",
@@ -1981,6 +1996,9 @@ export async function createOrgAdminForm(data: {
   booking_notification_enabled?: boolean;
   booking_auto_assign_enabled?: boolean;
   booking_field_mapping?: Record<string, string>;
+  survey_post_event_enabled?: boolean;
+  survey_post_event_delay_hours?: number;
+  survey_post_event_message_template?: string | null;
   notify_admin_on_submit?: boolean;
   send_user_confirmation?: boolean;
   whatsapp_auto_reply_enabled?: boolean;
@@ -2032,6 +2050,9 @@ export async function updateOrgAdminForm(
   booking_notification_enabled?: boolean;
   booking_auto_assign_enabled?: boolean;
   booking_field_mapping?: Record<string, string>;
+  survey_post_event_enabled?: boolean;
+  survey_post_event_delay_hours?: number;
+  survey_post_event_message_template?: string | null;
   notify_admin_on_submit?: boolean;
   send_user_confirmation?: boolean;
   whatsapp_auto_reply_enabled?: boolean;

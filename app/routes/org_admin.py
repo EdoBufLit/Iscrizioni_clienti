@@ -544,6 +544,18 @@ def _normalize_org_communications_update(
             field_name="reply_to_email",
         )
 
+    if "booking_whatsapp_reminder_hours_before" in normalized:
+        try:
+            hours_before = int(normalized.get("booking_whatsapp_reminder_hours_before") or 24)
+        except Exception:
+            hours_before = 24
+        normalized["booking_whatsapp_reminder_hours_before"] = min(max(hours_before, 1), 336)
+
+    if "booking_whatsapp_reminder_template" in normalized:
+        normalized["booking_whatsapp_reminder_template"] = _normalize_optional_text(
+            normalized.get("booking_whatsapp_reminder_template")  # type: ignore[arg-type]
+        )
+
     return normalized
 
 
@@ -582,6 +594,11 @@ def _serialize_org_admin_communications_settings(
         "sender_email_local_part": org.sender_email_local_part,
         "email_from_name_override": org.email_from_name_override,
         "reply_to_email": org.reply_to_email,
+        "booking_whatsapp_reminder_enabled": bool(getattr(org, "booking_whatsapp_reminder_enabled", False)),
+        "booking_whatsapp_reminder_hours_before": int(
+            getattr(org, "booking_whatsapp_reminder_hours_before", 24) or 24
+        ),
+        "booking_whatsapp_reminder_template": getattr(org, "booking_whatsapp_reminder_template", None),
         "mail_from_domain": (settings.MAIL_FROM_DOMAIN or "").strip().lower() or None,
         "system_email_sender": _serialize_communications_sender(system_sender),
         "association_email_sender": _serialize_communications_sender(association_sender),
@@ -627,6 +644,15 @@ def _serialize_org_admin_organization(
         "sender_email_local_part": communications_settings["sender_email_local_part"],
         "email_from_name_override": communications_settings["email_from_name_override"],
         "reply_to_email": communications_settings["reply_to_email"],
+        "booking_whatsapp_reminder_enabled": communications_settings[
+            "booking_whatsapp_reminder_enabled"
+        ],
+        "booking_whatsapp_reminder_hours_before": communications_settings[
+            "booking_whatsapp_reminder_hours_before"
+        ],
+        "booking_whatsapp_reminder_template": communications_settings[
+            "booking_whatsapp_reminder_template"
+        ],
         "mail_from_domain": communications_settings["mail_from_domain"],
         "wallet_effective_bg_color": wallet_defaults["wallet_bg_color"],
         "wallet_effective_logo_url": wallet_defaults["wallet_logo_url"],
@@ -1999,6 +2025,9 @@ class PutOrgCommunicationSettings(BaseModel):
     sender_email_local_part: Optional[str] = None
     email_from_name_override: Optional[str] = None
     reply_to_email: Optional[str] = None
+    booking_whatsapp_reminder_enabled: Optional[bool] = None
+    booking_whatsapp_reminder_hours_before: Optional[int] = Field(default=None, ge=1, le=336)
+    booking_whatsapp_reminder_template: Optional[str] = Field(default=None, max_length=4000)
 
 
 class SendOrgCommunicationTestEmailBody(BaseModel):
@@ -2130,6 +2159,9 @@ class CreateAssociationFormBody(BaseModel):
     booking_notification_enabled: bool = True
     booking_auto_assign_enabled: bool = False
     booking_field_mapping: dict[str, str] = Field(default_factory=dict)
+    survey_post_event_enabled: bool = False
+    survey_post_event_delay_hours: int = Field(default=2, ge=0, le=336)
+    survey_post_event_message_template: Optional[str] = None
     notify_admin_on_submit: bool = True
     send_user_confirmation: bool = True
     whatsapp_auto_reply_enabled: bool = False
@@ -2163,6 +2195,9 @@ class UpdateAssociationFormBody(BaseModel):
     booking_notification_enabled: bool = True
     booking_auto_assign_enabled: bool = False
     booking_field_mapping: dict[str, str] = Field(default_factory=dict)
+    survey_post_event_enabled: bool = False
+    survey_post_event_delay_hours: int = Field(default=2, ge=0, le=336)
+    survey_post_event_message_template: Optional[str] = None
     notify_admin_on_submit: bool = True
     send_user_confirmation: bool = True
     whatsapp_auto_reply_enabled: bool = False
@@ -2798,7 +2833,7 @@ def put_communications_settings(
 
     org = admin.organization
     _require_active_communications_module(org)
-    update_data = _normalize_org_communications_update(body.model_dump())
+    update_data = _normalize_org_communications_update(body.model_dump(exclude_unset=True))
 
     for key, value in update_data.items():
         setattr(org, key, value)
@@ -6073,6 +6108,9 @@ def create_association_form(
         booking_notification_enabled=body.booking_notification_enabled,
         booking_auto_assign_enabled=body.booking_auto_assign_enabled,
         booking_field_mapping=body.booking_field_mapping,
+        survey_post_event_enabled=body.survey_post_event_enabled,
+        survey_post_event_delay_hours=body.survey_post_event_delay_hours,
+        survey_post_event_message_template=body.survey_post_event_message_template,
         notify_admin_on_submit=body.notify_admin_on_submit,
         send_user_confirmation=body.send_user_confirmation,
         whatsapp_auto_reply_enabled=body.whatsapp_auto_reply_enabled,
@@ -6139,6 +6177,9 @@ def update_association_form(
         booking_notification_enabled=body.booking_notification_enabled,
         booking_auto_assign_enabled=body.booking_auto_assign_enabled,
         booking_field_mapping=body.booking_field_mapping,
+        survey_post_event_enabled=body.survey_post_event_enabled,
+        survey_post_event_delay_hours=body.survey_post_event_delay_hours,
+        survey_post_event_message_template=body.survey_post_event_message_template,
         notify_admin_on_submit=body.notify_admin_on_submit,
         send_user_confirmation=body.send_user_confirmation,
         whatsapp_auto_reply_enabled=body.whatsapp_auto_reply_enabled,

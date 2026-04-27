@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { applySeo } from "../../lib/seo";
 import { fetchOrgAdminCommunicationSettings } from "../../lib/api";
@@ -16,7 +16,7 @@ type WhatsAppView = "inbox" | "automazioni";
 
 const COMMUNICATIONS_LOCKED_MESSAGE = "Modulo Comunicazioni non attivo. Contatta ASSONAM per abilitarlo.";
 
-type TabKey = "panoramica" | "campagne" | "modelli" | "moduli" | "whatsapp" | "email";
+type TabKey = "panoramica" | "campagne" | "modelli" | "moduli" | "sondaggi" | "whatsapp" | "email";
 
 const communicationsTabs: Array<{
   key: TabKey;
@@ -26,6 +26,7 @@ const communicationsTabs: Array<{
   { key: "campagne", label: "Campagne" },
   { key: "modelli", label: "Modelli" },
   { key: "moduli", label: "Form pubblici" },
+  { key: "sondaggi", label: "Sondaggi" },
   { key: "whatsapp", label: "WhatsApp" },
   { key: "email", label: "Email" },
 ];
@@ -35,6 +36,7 @@ function normalizeTab(value: string | null | undefined): TabKey {
   if (normalized === "campagne") return "campagne";
   if (normalized === "modelli" || normalized === "messaggi") return "modelli";
   if (normalized === "moduli" || normalized === "form-pubblici" || normalized === "pagine-e-moduli") return "moduli";
+  if (normalized === "sondaggi" || normalized === "survey" || normalized === "surveys") return "sondaggi";
   if (normalized === "invii" || normalized === "invii-statistiche" || normalized === "panoramica") return "panoramica";
   if (normalized === "impostazioni" || normalized === "invio-email" || normalized === "email") return "email";
   if (normalized === "whatsapp") return "whatsapp";
@@ -106,11 +108,6 @@ export default function OrgAdminCommunications() {
     setSearchParams(nextParams, { replace: true });
   };
 
-  const visibleTabs = useMemo(
-    () => communicationsTabs.filter((tab) => whatsappEnabled || tab.key !== "whatsapp"),
-    [whatsappEnabled],
-  );
-
   const selectWhatsAppView = (view: WhatsAppView) => {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("tab", "whatsapp");
@@ -128,12 +125,6 @@ export default function OrgAdminCommunications() {
       setActiveTab(next);
     }
   }, [activeTab, searchParams]);
-
-  useEffect(() => {
-    if (!loading && !whatsappEnabled && activeTab === "whatsapp") {
-      selectTab("panoramica");
-    }
-  }, [activeTab, loading, whatsappEnabled]);
 
   if (loading) {
     return (
@@ -205,7 +196,7 @@ export default function OrgAdminCommunications() {
             </div>
             <div className="overflow-x-auto pb-1">
               <div className="inline-flex min-w-max rounded-lg border border-neutral-200 bg-neutral-50 p-1">
-                {visibleTabs.map((tab) => (
+                {communicationsTabs.map((tab) => (
                   <button
                     key={tab.key}
                     type="button"
@@ -296,6 +287,9 @@ export default function OrgAdminCommunications() {
           )}
           {activeTab === "moduli" && (
             <PublicFormsHub locked={communicationsLocked} />
+          )}
+          {activeTab === "sondaggi" && (
+            <PublicFormsHub locked={communicationsLocked} mode="surveys" />
           )}
           {activeTab === "email" && (
             <EmailSendingSettings communicationsLocked={communicationsLocked} />

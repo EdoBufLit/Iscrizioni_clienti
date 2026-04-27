@@ -5,6 +5,7 @@ import logging
 import time
 
 from app.config import settings
+from app.services.booking_whatsapp_reminders import process_booking_communications_once
 from app.services.email_campaigns import process_scheduled_campaigns_once
 from app.services.email_outbox import process_outbox_once
 
@@ -38,6 +39,7 @@ def main() -> int:
 
     if args.once:
         stats = {
+            "booking_communications": process_booking_communications_once(),
             "scheduled_campaigns": process_scheduled_campaigns_once(),
             "email": process_outbox_once(limit=args.limit),
         }
@@ -46,6 +48,7 @@ def main() -> int:
 
     while True:
         stats = {
+            "booking_communications": process_booking_communications_once(),
             "scheduled_campaigns": process_scheduled_campaigns_once(),
             "email": process_outbox_once(limit=args.limit),
         }

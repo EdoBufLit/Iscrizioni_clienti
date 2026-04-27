@@ -2,10 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   createOrgAdminWhatsAppAutomation,
+  fetchOrgAdminCommunicationSettings,
   fetchOrgAdminForms,
   fetchOrgAdminWhatsAppAutomations,
+  putOrgAdminCommunicationSettings,
   updateOrgAdminWhatsAppAutomation,
   type AssociationForm,
+  type OrgAdminCommunicationSettings,
   type OrgAdminWhatsAppAutomation,
 } from "../../../../lib/api";
 import Skeleton from "../../../../components/ui/Skeleton";
@@ -195,6 +198,8 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
   const [loading, setLoading] = useState(true);
   const [forms, setForms] = useState<AssociationForm[]>([]);
   const [automations, setAutomations] = useState<OrgAdminWhatsAppAutomation[]>([]);
+  const [settings, setSettings] = useState<OrgAdminCommunicationSettings | null>(null);
+  const [settingsSaving, setSettingsSaving] = useState(false);
   const [draft, setDraft] = useState(emptyAutomationDraft());
   const [activeStep, setActiveStep] = useState<AutomationWizardStep>("origin");
 
@@ -236,6 +241,20 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
     const formId = Number(searchParams.get("formId") || 0) || null;
     void loadData(formId);
   }, [searchParams]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchOrgAdminCommunicationSettings()
+      .then((data) => {
+        if (!cancelled) setSettings(data);
+      })
+      .catch(() => {
+        if (!cancelled) setSettings(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (draft.phone_source !== "form_field") return;
@@ -344,6 +363,32 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
     setActiveStep(next.key);
   }
 
+  async function saveReminderSettings() {
+    if (!settings || communicationsLocked) return;
+    setSettingsSaving(true);
+    try {
+      const response = await putOrgAdminCommunicationSettings({
+        booking_whatsapp_reminder_enabled: settings.booking_whatsapp_reminder_enabled,
+        booking_whatsapp_reminder_hours_before: settings.booking_whatsapp_reminder_hours_before,
+        booking_whatsapp_reminder_template: settings.booking_whatsapp_reminder_template || null,
+      });
+      setSettings(response.settings);
+      showToast({
+        title: "Reminder aggiornato",
+        message: "Il promemoria WhatsApp verra inviato automaticamente prima dell'evento.",
+        tone: "success",
+      });
+    } catch (err) {
+      showToast({
+        title: "Errore",
+        message: err instanceof Error ? err.message : "Errore salvataggio reminder WhatsApp.",
+        tone: "error",
+      });
+    } finally {
+      setSettingsSaving(false);
+    }
+  }
+
   function previousStep() {
     const next = wizardSteps[Math.max(activeIndex - 1, 0)];
     setActiveStep(next.key);
@@ -410,6 +455,77 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
           </div>
         ) : null}
       </section>
+
+      {settings ? (
+        <section className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-5 shadow-sm md:p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700">Reminder prenotazioni</p>
+              <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950">Promemoria automatico prima dell'evento</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Quando una prenotazione e confermata, il worker invia da solo questo messaggio WhatsApp al contatto della prenotazione
+                all'orario configurato. L'org admin non deve inviarlo manualmente.
+              </p>
+            </div>
+            <label className="inline-flex items-center gap-3 rounded-full border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-neutral-300 text-brand"
+                checked={settings.booking_whatsapp_reminder_enabled}
+                disabled={communicationsLocked}
+                onChange={(event) =>
+                  setSettings((current) =>
+                    current ? { ...current, booking_whatsapp_reminder_enabled: event.target.checked } : current,
+                  )
+                }
+              />
+              Attivo
+            </label>
+          </div>
+          <div className="mt-5 grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)_auto] lg:items-end">
+            <label className={labelClass}>
+              Ore prima
+              <input
+                className={fieldClass}
+                type="number"
+                min={1}
+                max={336}
+                disabled={communicationsLocked}
+                value={settings.booking_whatsapp_reminder_hours_before}
+                onChange={(event) =>
+                  setSettings((current) =>
+                    current
+                      ? { ...current, booking_whatsapp_reminder_hours_before: Number(event.target.value || 24) }
+                      : current,
+                  )
+                }
+              />
+            </label>
+            <label className={labelClass}>
+              Messaggio
+              <textarea
+                className={`${textareaClass} min-h-[104px]`}
+                disabled={communicationsLocked}
+                value={settings.booking_whatsapp_reminder_template || ""}
+                onChange={(event) =>
+                  setSettings((current) =>
+                    current ? { ...current, booking_whatsapp_reminder_template: event.target.value } : current,
+                  )
+                }
+                placeholder="Ciao {{nome_contatto}}, ti ricordiamo la prenotazione per {{nome_associazione}} {{data_prenotazione}} alle {{orario_prenotazione}}."
+              />
+            </label>
+            <button
+              type="button"
+              className="inline-flex min-h-[3.3rem] items-center justify-center rounded-lg bg-brand px-6 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={communicationsLocked || settingsSaving}
+              onClick={() => void saveReminderSettings()}
+            >
+              {settingsSaving ? "Salvataggio..." : "Salva reminder"}
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <section className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm md:p-7">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 pb-5">
