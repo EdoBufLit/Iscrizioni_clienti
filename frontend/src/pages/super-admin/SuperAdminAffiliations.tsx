@@ -20,6 +20,13 @@ import ConfirmModal from "../../components/ui/ConfirmModal";
 import PromptModal from "../../components/ui/PromptModal";
 import Skeleton from "../../components/ui/Skeleton";
 import { useToast } from "../../components/ui/ToastProvider";
+import {
+  SuperAdminActionButton,
+  SuperAdminIcon,
+  SuperAdminKpiCard,
+  SuperAdminPageHeader,
+  SuperAdminToolbar,
+} from "./components/SuperAdminPrimitives";
 
 const STATUS_OPTIONS = [
   { value: "", label: "Tutti" },
@@ -367,9 +374,81 @@ const SuperAdminAffiliations = () => {
     });
   };
 
+  const stats = useMemo(
+    () => ({
+      total: items.length,
+      review: items.filter((item) => item.status === "under_review" || item.status === "changes_requested").length,
+      approved: items.filter((item) => item.status === "approved").length,
+      rejected: items.filter((item) => item.status === "rejected").length,
+      payments: items.filter((item) => item.payment_status === "payment_under_review" || item.payment_status === "checkout_pending").length,
+    }),
+    [items],
+  );
+
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="sa-page animate-in fade-in duration-500">
+      <SuperAdminPageHeader
+        icon="user"
+        eyebrow="Governance"
+        title="Affiliazioni"
+        subtitle="Workflow centralizzato per valutare richieste, documenti e pagamenti delle nuove associazioni."
+        actions={
+          <>
+            <SuperAdminActionButton icon="refresh" onClick={() => void refreshAll()} disabled={loading || actionLoading}>
+              Aggiorna
+            </SuperAdminActionButton>
+          </>
+        }
+      />
+
+      <section className="sa-kpi-grid">
+        <SuperAdminKpiCard label="Richieste totali" value={stats.total} hint="Tutte le richieste caricate" icon="users" tone="success" />
+        <SuperAdminKpiCard label="In revisione" value={stats.review} hint="In valutazione" icon="clock" tone="warning" />
+        <SuperAdminKpiCard label="Approvate" value={stats.approved} hint="Affiliazioni approvate" icon="check" tone="success" />
+        <SuperAdminKpiCard label="Respinte" value={stats.rejected} hint="Richieste rifiutate" icon="x" tone="danger" />
+        <SuperAdminKpiCard label="Pagamenti in verifica" value={stats.payments} hint="Da confermare" icon="wallet" tone="info" />
+      </section>
+
+      <SuperAdminToolbar>
+        <div className="sa-toolbar__row">
+          <div className="flex-1 min-w-0 relative">
+            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[var(--sa-soft)]">
+              <SuperAdminIcon name="search" className="h-4 w-4" />
+            </span>
+            <input
+              className="premium-select w-full pl-10"
+              value={query}
+              onChange={(event) => {
+                setPage(1);
+                setQuery(event.target.value);
+              }}
+              placeholder="Cerca per associazione, email o referente..."
+            />
+          </div>
+          <div className="sa-toolbar__field">
+            <label>Stato pratica</label>
+            <select
+              className="premium-select"
+              value={statusFilter}
+              onChange={(event) => {
+                setPage(1);
+                setStatusFilter(event.target.value);
+              }}
+            >
+              {STATUS_OPTIONS.map((option) => (
+                <option key={option.value || "all"} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <SuperAdminActionButton icon="refresh" onClick={() => void loadList()}>
+            Reset / aggiorna
+          </SuperAdminActionButton>
+        </div>
+      </SuperAdminToolbar>
+
+      <div className="hidden">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-neutral-900">Gestione Affiliazioni</h2>
           <p className="mt-1 text-sm font-medium text-neutral-500">
@@ -423,7 +502,7 @@ const SuperAdminAffiliations = () => {
         </div>
       )}
 
-      <div className="grid gap-8 lg:grid-cols-[1.1fr_1fr] items-start">
+      <div className="sa-master-detail lg:grid-cols-[1.1fr_1fr]">
         <div className="surface overflow-hidden border-neutral-200/60 shadow-premium-lg">
           <div className="overflow-x-auto">
             <table className="w-full text-left">

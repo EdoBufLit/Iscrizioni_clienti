@@ -21,6 +21,7 @@ import {
   type SuperAdminMembershipPaymentSettings,
 } from "../../../lib/api";
 import ConfirmModal from "../../../components/ui/ConfirmModal";
+import { SuperAdminIcon, type SuperAdminIconName } from "./SuperAdminPrimitives";
 
 export type OrganizationModalType = "create" | "range" | "add-batch" | "view-batches" | "branding";
 
@@ -196,6 +197,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
   );
   const [loadingMembershipPayment, setLoadingMembershipPayment] = useState(false);
   const [membershipPaymentMessage, setMembershipPaymentMessage] = useState("");
+  const [setupTab, setSetupTab] = useState<"general" | "numbering" | "signup" | "branding" | "communications">("general");
   const currentBrandingNumberingMode =
     numberingConfig?.numbering_mode === "dedicated" ? "dedicated" : "shared_assonam";
   const numberingModeChanged =
@@ -282,6 +284,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
     setMembershipPaymentFormData(createInitialMembershipPaymentFormData());
     setLoadingMembershipPayment(false);
     setMembershipPaymentMessage("");
+    setSetupTab("general");
   }, [open, modalType, selectedOrg?.id]);
 
   useEffect(() => {
@@ -723,7 +726,9 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
 
   const panelClassName =
     modalType === "view-batches"
-      ? "modal-panel w-full max-w-6xl max-h-[90vh] overflow-y-auto p-6"
+      ? "modal-panel sa-lots-modal"
+      : modalType === "branding"
+        ? "modal-panel sa-setup-drawer"
       : "modal-panel max-w-lg max-h-[90vh] overflow-y-auto p-6";
 
   if (!open) {
@@ -733,7 +738,11 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
   return (
     <>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        className={
+          modalType === "branding"
+            ? "fixed inset-0 z-50 flex justify-end bg-black/55 p-0 backdrop-blur-[2px]"
+            : "fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-[2px]"
+        }
         onClick={(event) => {
           if (event.target === event.currentTarget) {
             onClose();
@@ -741,14 +750,38 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
         }}
       >
         <div className={`${panelClassName} relative`} data-component="superadmin-org-manage-modal">
-          <div className="flex items-start justify-between gap-4">
-            <h3 className="text-lg font-semibold text-neutral-900">
-              {modalType === "create" && "Nuova associazione"}
-              {modalType === "range" && `Imposta range tessere: ${selectedOrg?.name}`}
-              {modalType === "add-batch" && `Aggiungi lotto tessere: ${selectedOrg?.name}`}
-              {modalType === "view-batches" && `Lotti tessere: ${selectedOrg?.name}`}
-              {modalType === "branding" && `Branding e alert: ${selectedOrg?.name}`}
-            </h3>
+          <div className={modalType === "branding" ? "sa-setup-header" : modalType === "view-batches" ? "sa-lots-header" : "flex items-start justify-between gap-4"}>
+            <div className={modalType === "view-batches" ? "sa-lots-heading" : ""}>
+              {modalType === "view-batches" ? (
+                <span className="sa-lots-heading__icon"><SuperAdminIcon name="card" className="h-5 w-5" /></span>
+              ) : null}
+              <div>
+                <h3 className="text-lg font-semibold text-neutral-900">
+                  {modalType === "create" && "Nuova associazione"}
+                  {modalType === "range" && `Imposta range tessere: ${selectedOrg?.name}`}
+                  {modalType === "add-batch" && `Aggiungi lotto tessere: ${selectedOrg?.name}`}
+                  {modalType === "view-batches" && "Lotti tessere"}
+                  {modalType === "branding" && "Setup associazione"}
+                </h3>
+                {modalType === "branding" && selectedOrg ? (
+                  <>
+                    <p className="mt-1 text-base font-semibold text-neutral-900">{selectedOrg.name}</p>
+                    <p className="mt-0.5 text-sm text-neutral-500">ID: {selectedOrg.id}</p>
+                  </>
+                ) : null}
+                {modalType === "view-batches" && selectedOrg ? (
+                  <p className="mt-1 text-sm text-neutral-600">
+                    {selectedOrg.name} <span className="mx-1">•</span> <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs">ID: {selectedOrg.id}</span>
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            {modalType === "branding" && selectedOrg ? (
+              <span className={`sa-chip sa-chip--${selectedOrg.is_active ? "success" : "warning"}`}>
+                <span className="sa-chip__dot" />
+                {selectedOrg.is_active ? "Attiva" : "Sospesa"}
+              </span>
+            ) : null}
             <button
               type="button"
               className="rounded-full p-2 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-900"
@@ -761,7 +794,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
             </button>
           </div>
 
-          <div className="mt-4 min-h-[48px]">
+          <div className={modalType === "branding" ? "sa-setup-error" : modalType === "view-batches" ? "sa-lots-error" : "mt-4 min-h-[48px]"}>
             {submitError && (
               <div className="rounded-md border border-red-200/60 bg-red-50 px-4 py-3">
                 <p className="text-sm text-red-700">{submitError}</p>
@@ -769,7 +802,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
             )}
           </div>
 
-          <form className="mt-2 grid gap-4" onSubmit={handleSubmit}>
+          <form className={modalType === "branding" ? "sa-setup-form" : modalType === "view-batches" ? "sa-lots-form" : "mt-2 grid gap-4"} onSubmit={handleSubmit}>
           {modalType === "create" && (
             <>
               <div>
@@ -1062,16 +1095,18 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
           )}
 
           {modalType === "view-batches" && (
-            <div>
-              <div className="mb-4 rounded-md border border-neutral-200 bg-neutral-50 px-4 py-3">
+            <div className="sa-lots-body">
+              <div className="sa-lots-summary">
                 <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-                  <div>
+                  <div className="sa-lots-summary__item">
+                    <SuperAdminIcon name="clock" className="h-5 w-5" />
                     <p className="text-neutral-500">Anno corrente (server)</p>
                     <p className="font-semibold text-neutral-900 tabular-nums">
                       {batchesCurrentYear ?? "-"}
                     </p>
                   </div>
-                  <div>
+                  <div className="sa-lots-summary__item">
+                    <SuperAdminIcon name="refresh" className="h-5 w-5" />
                     <p className="text-neutral-500">Reset annuale</p>
                     <p className="font-medium text-neutral-800">
                       {nextResetAt
@@ -1079,9 +1114,30 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                         : "A inizio anno (01/01)"}
                     </p>
                   </div>
+                  <div className="sa-lots-summary__item">
+                    <SuperAdminIcon name="card" className="h-5 w-5" />
+                    <p className="text-neutral-500">Totale tessere</p>
+                    <p className="font-semibold text-neutral-900 tabular-nums">
+                      {batchesSummary?.total ?? 0}
+                    </p>
+                  </div>
+                  <div className="sa-lots-summary__item">
+                    <SuperAdminIcon name="users" className="h-5 w-5" />
+                    <p className="text-neutral-500">Assegnate</p>
+                    <p className="font-semibold text-neutral-900 tabular-nums">
+                      {batchesSummary?.assigned ?? 0}
+                    </p>
+                  </div>
+                  <div className="sa-lots-summary__item">
+                    <SuperAdminIcon name="cards" className="h-5 w-5" />
+                    <p className="text-neutral-500">Rimanenti</p>
+                    <p className="font-semibold text-orange-600 tabular-nums">
+                      {batchesSummary?.remaining ?? 0}
+                    </p>
+                  </div>
                   <button
                     type="button"
-                    className="rounded-md border border-brand/30 bg-brand/5 px-3 py-2 text-xs font-semibold text-brand transition hover:bg-brand/10 disabled:opacity-60"
+                    className="sa-btn sa-btn--success"
                     onClick={handleRunMaintenance}
                     disabled={maintenanceRunning}
                   >
@@ -1099,6 +1155,8 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                 <p className="text-sm text-neutral-500">Nessun lotto configurato.</p>
               ) : (
                 <>
+                  <section className="sa-lots-table">
+                    <h4>Lotti disponibili</h4>
                   <div className="overflow-x-auto rounded-xl border border-neutral-200/80">
                     <table className="min-w-full text-sm">
                       <thead className="bg-neutral-50/80">
@@ -1181,97 +1239,118 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                       </tbody>
                     </table>
                   </div>
-                  {batchesSummary && (
-                    <div className="mt-4 rounded-md bg-neutral-50 px-4 py-3">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-neutral-600">Totale tessere:</span>
-                        <span className="font-medium tabular-nums">{batchesSummary.total}</span>
-                      </div>
-                      <div className="flex justify-between text-sm mt-1">
-                        <span className="text-neutral-600">Assegnate:</span>
-                        <span className="font-medium tabular-nums">{batchesSummary.assigned}</span>
-                      </div>
-                      <div className="flex justify-between text-sm mt-1">
-                        <span className="text-neutral-600">Rimanenti:</span>
-                        <span className="font-semibold text-brand tabular-nums">{batchesSummary.remaining}</span>
-                      </div>
+                  </section>
+                  <div className="sa-lots-info">
+                    <SuperAdminIcon name="clock" className="h-5 w-5" />
+                    <div>
+                      <p>Informazioni sul reset annuale</p>
+                      <span>
+                        Il conteggio delle tessere viene azzerato automaticamente il {nextResetAt ? new Date(nextResetAt).toLocaleDateString("it-IT") : "01/01"}.
+                        Al reset, lotti futuri verranno attivati in sequenza in base alla data.
+                      </span>
                     </div>
-                  )}
+                  </div>
                 </>
               )}
             </div>
           )}
 
           {modalType === "branding" && (
+            <div className="sa-setup-layout">
+              <aside className="sa-setup-tabs" aria-label="Sezioni setup associazione">
+                {([
+                  { key: "general", label: "Generale", icon: "document" },
+                  { key: "numbering", label: "Numerazione tessere", icon: "cards" },
+                  { key: "signup", label: "Iscrizioni", icon: "user" },
+                  { key: "branding", label: "Branding", icon: "send" },
+                  { key: "communications", label: "Comunicazioni", icon: "mail" },
+                ] satisfies Array<{ key: typeof setupTab; label: string; icon: SuperAdminIconName }>).map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    className={setupTab === item.key ? "is-active" : ""}
+                    onClick={() => setSetupTab(item.key)}
+                  >
+                    <SuperAdminIcon name={item.icon} className="h-4 w-4" />
+                    {item.label}
+                  </button>
+                ))}
+              </aside>
+              <div className="sa-setup-content">
             <div className="grid gap-4">
-              <p className="text-sm text-neutral-600">
-                Configura branding tessera e numero WhatsApp usato per gli alert automatici.
-              </p>
-              <div>
-                <label className="block text-xs font-medium text-neutral-600">
-                  Nome club visualizzato
-                </label>
-                <input
-                  type="text"
-                  className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
-                  value={formData.club_display_name}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, club_display_name: e.target.value }))
-                  }
-                  placeholder={selectedOrg?.name ?? "Nome club"}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-neutral-600">
-                  WhatsApp alert (E.164)
-                </label>
-                <input
-                  type="text"
-                  className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
-                  value={formData.whatsapp_e164}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, whatsapp_e164: e.target.value }))
-                  }
-                  placeholder="+393331112233"
-                />
-                <p className="mt-1 text-xs text-neutral-500">
-                  Numero destinatario degli alert WhatsApp per tessere residue sotto soglia.
-                </p>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-neutral-600">
-                  Oggetto email tessera
-                </label>
-                <input
-                  type="text"
-                  className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
-                  value={formData.card_email_subject}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, card_email_subject: e.target.value }))
-                  }
-                  placeholder="La tua tessera {club_display_name}"
-                />
-                <p className="mt-1 text-xs text-neutral-500">
-                  Placeholder supportati: {"{club_display_name}"}, {"{org_name}"}.
-                </p>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-neutral-600">
-                  URL logo tessera
-                </label>
-                <input
-                  type="url"
-                  className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
-                  value={formData.card_logo_url}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, card_logo_url: e.target.value }))
-                  }
-                  placeholder="https://..."
-                />
-                <p className="mt-1 text-xs text-neutral-500">
-                  Se vuoto, viene usato il logo ufficiale associazione (se presente).
-                </p>
-              </div>
+              <section className="sa-setup-section">
+                <div className="sa-setup-section__heading">
+                  <h4>Informazioni generali</h4>
+                  <p>Dati principali e identificativi dell'associazione.</p>
+                </div>
+                <div className="sa-setup-fields">
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600">
+                      Nome club visualizzato
+                    </label>
+                    <input
+                      type="text"
+                      className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
+                      value={formData.club_display_name}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, club_display_name: e.target.value }))
+                      }
+                      placeholder={selectedOrg?.name ?? "Nome club"}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600">
+                      Oggetto email tessera
+                    </label>
+                    <input
+                      type="text"
+                      className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
+                      value={formData.card_email_subject}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, card_email_subject: e.target.value }))
+                      }
+                      placeholder="La tua tessera {club_display_name}"
+                    />
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Placeholder supportati: {"{club_display_name}"}, {"{org_name}"}.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600">
+                      WhatsApp alert (E.164)
+                    </label>
+                    <input
+                      type="text"
+                      className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
+                      value={formData.whatsapp_e164}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, whatsapp_e164: e.target.value }))
+                      }
+                      placeholder="+393331112233"
+                    />
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Numero utilizzato per gli alert WhatsApp delle tessere.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600">
+                      URL logo tessera (facoltativo)
+                    </label>
+                    <input
+                      type="url"
+                      className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
+                      value={formData.card_logo_url}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, card_logo_url: e.target.value }))
+                      }
+                      placeholder="https://..."
+                    />
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Se vuoto, viene usato il logo ufficiale associazione (se presente).
+                    </p>
+                  </div>
+                </div>
+              </section>
               <div className="rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -1738,10 +1817,12 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                 ) : null}
               </div>
             </div>
+              </div>
+            </div>
           )}
 
           {modalType !== "view-batches" && (
-            <div className="mt-4 flex justify-end gap-3">
+            <div className={modalType === "branding" ? "sa-setup-footer" : "mt-4 flex justify-end gap-3"}>
               <button
                 type="button"
                 className="rounded-md border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900"
@@ -1754,23 +1835,24 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                 className="inline-flex items-center justify-center rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white shadow-subtle transition hover:-translate-y-px hover:bg-brand-dark hover:shadow-card active:translate-y-0 disabled:opacity-50"
                 disabled={submitting}
               >
-                {submitting ? "Salvataggio..." : "Conferma"}
+                {submitting ? "Salvataggio..." : modalType === "branding" ? "Salva modifiche" : "Conferma"}
               </button>
             </div>
           )}
 
           {modalType === "view-batches" && (
-            <div className="mt-6 flex justify-between">
+            <div className="sa-lots-footer">
               <button
                 type="button"
-                className="text-sm font-medium text-brand hover:text-brand-dark"
+                className="sa-btn"
                 onClick={onSwitchToAddBatch}
               >
-                + Aggiungi lotto
+                <SuperAdminIcon name="plus" className="h-4 w-4" />
+                Aggiungi lotto
               </button>
               <button
                 type="button"
-                className="rounded-md border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900"
+                className="sa-btn"
                 onClick={onClose}
               >
                 Chiudi

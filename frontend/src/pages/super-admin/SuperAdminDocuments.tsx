@@ -13,6 +13,12 @@ import {
   type SuperAdminProfile,
   type SuperAdminSharedDocument,
 } from "../../lib/api";
+import {
+  SuperAdminActionButton,
+  SuperAdminKpiCard,
+  SuperAdminPageHeader,
+  SuperAdminTabs,
+} from "./components/SuperAdminPrimitives";
 
 const formatDateTime = (value: string | null | undefined) => {
   if (!value) return "-";
@@ -144,6 +150,19 @@ const SuperAdminDocuments = () => {
     [targets],
   );
 
+  const docStats = useMemo(
+    () => ({
+      total: documents.length,
+      accounting: documents.filter((document) => document.kind === "accounting").length,
+      general: documents.filter((document) => document.kind !== "accounting").length,
+      recipients: documents.reduce((sum, document) => sum + (document.recipient_count || 0), 0),
+      covered: new Set(
+        documents.flatMap((document) => (document.recipients ?? document.recipient_preview ?? []).map((recipient) => recipient.id)),
+      ).size,
+    }),
+    [documents],
+  );
+
   const selectedAssociationId = selectedAssociationIds[0] ?? filteredTargets[0]?.id ?? null;
 
   useEffect(() => {
@@ -246,9 +265,40 @@ const SuperAdminDocuments = () => {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="sa-page">
+      <SuperAdminPageHeader
+        icon="documents"
+        eyebrow="Governance"
+        title="Documenti"
+        subtitle="Centro documentale per inviare, archiviare e consultare file contabili e amministrativi per le associazioni."
+        actions={
+          workspace === "general" ? (
+            <SuperAdminActionButton tone="primary" icon="upload" onClick={() => document.getElementById("super-admin-document-title")?.focus()}>
+              Nuovo invio
+            </SuperAdminActionButton>
+          ) : null
+        }
+      />
+
+      <SuperAdminTabs
+        active={workspace}
+        onSelect={(key) => setWorkspace(key as "general" | "accounting")}
+        items={[
+          { key: "general", label: "Documenti", icon: "documents" },
+          { key: "accounting", label: "Contabilita", icon: "wallet" },
+        ]}
+      />
+
+      <section className="sa-kpi-grid">
+        <SuperAdminKpiCard label="Documenti totali" value={docStats.total} hint="Archivio invii" icon="document" tone="success" />
+        <SuperAdminKpiCard label="Documenti generali" value={docStats.general} hint="Comunicazioni non contabili" icon="documents" tone="info" />
+        <SuperAdminKpiCard label="Categorie contabili" value={docStats.accounting} hint="Invii accounting" icon="wallet" tone="warning" />
+        <SuperAdminKpiCard label="Invii cumulati" value={docStats.recipients} hint="Destinatari documenti" icon="send" tone="success" />
+        <SuperAdminKpiCard label="Associazioni coperte" value={docStats.covered || totals.total} hint={`${totals.accounting} con contabilita attiva`} icon="users" tone="purple" />
+      </section>
+
       {/* Header & Workspace Switcher */}
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+      <div className="hidden">
         <div className="max-w-xl">
           <h2 className="text-3xl font-bold tracking-tight text-neutral-900">Documenti e Contabilità</h2>
           <p className="mt-2 text-sm font-medium text-neutral-500">
@@ -363,6 +413,7 @@ const SuperAdminDocuments = () => {
                   <div className="sm:col-span-2">
                     <label className="block text-xs font-bold uppercase tracking-widest text-neutral-500 mb-2">Titolo</label>
                     <input
+                      id="super-admin-document-title"
                       type="text"
                       className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-medium text-neutral-900 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
                       value={title}

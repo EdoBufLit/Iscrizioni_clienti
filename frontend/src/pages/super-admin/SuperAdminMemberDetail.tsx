@@ -10,6 +10,11 @@ import {
   type SuperAdminProfile,
   type SuperAdminOrganization,
 } from "../../lib/api";
+import {
+  SuperAdminKpiCard,
+  SuperAdminPageHeader,
+  SuperAdminToolbar,
+} from "./components/SuperAdminPrimitives";
 
 const PAGE_SIZE = 25;
 
@@ -194,8 +199,23 @@ const SuperAdminMemberDetailPage = () => {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="sa-page">
+      <SuperAdminPageHeader
+        icon="book"
+        eyebrow="Governance"
+        title="Libro Soci"
+        subtitle="Registro digitale dei soci, navigabile per associazione con filtri gestionali e dettaglio dedicato."
+      />
+
+      <section className="sa-kpi-grid">
+        <SuperAdminKpiCard label="Totale soci" value={registry?.kpis.total ?? 0} hint="Tutti gli stati" icon="users" tone="success" />
+        <SuperAdminKpiCard label="Attivi" value={registry?.kpis.active ?? 0} hint="Iscrizioni valide" icon="check" tone="success" />
+        <SuperAdminKpiCard label="In lavorazione" value={registry?.kpis.pending ?? 0} hint="Richiedono verifica" icon="clock" tone="info" />
+        <SuperAdminKpiCard label="Scaduti" value={registry?.kpis.expired ?? 0} hint="Iscrizioni non rinnovate" icon="clock" tone="warning" />
+        <SuperAdminKpiCard label="Rigettati" value={registry?.kpis.rejected ?? 0} hint="Domande rifiutate" icon="shield" tone="purple" />
+      </section>
+
+      <div className="hidden">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-neutral-900">Libro Soci</h2>
           <p className="mt-1 text-sm font-medium text-neutral-500">
@@ -214,7 +234,7 @@ const SuperAdminMemberDetailPage = () => {
         </div>
       ) : null}
 
-      <section className="surface-strong p-4 sm:p-5">
+      <SuperAdminToolbar>
         <div className="grid gap-4 xl:grid-cols-[1.1fr_1.2fr_0.8fr_0.9fr]">
           <div>
             <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500">
@@ -302,9 +322,9 @@ const SuperAdminMemberDetailPage = () => {
             </button>
           ) : null}
         </div>
-      </section>
+      </SuperAdminToolbar>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <section className="hidden">
         {[
           { label: "Totali", value: registry?.kpis.total ?? 0 },
           { label: "Attivi", value: registry?.kpis.active ?? 0 },

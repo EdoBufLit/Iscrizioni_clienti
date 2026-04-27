@@ -12,6 +12,17 @@ import Skeleton from "../../components/ui/Skeleton";
 import { useToast } from "../../components/ui/ToastProvider";
 import OrganizationManageModal from "./components/OrganizationManageModal";
 import SuperAdminPienissimoIntegrationCard from "./components/SuperAdminPienissimoIntegrationCard";
+import {
+  SuperAdminActionButton,
+  SuperAdminEmptyState,
+  SuperAdminIcon,
+  SuperAdminKpiCard,
+  SuperAdminPageHeader,
+  SuperAdminStatusChip,
+  SuperAdminTableShell,
+  SuperAdminToolbar,
+  type SuperAdminTone,
+} from "./components/SuperAdminPrimitives";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
@@ -22,6 +33,7 @@ const SuperAdminOrganizations = () => {
   const isSuperAdmin = profile?.role === "super_admin";
 
   const [orgs, setOrgs] = useState<SuperAdminOrganization[]>([]);
+  const [metricOrgs, setMetricOrgs] = useState<SuperAdminOrganization[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState("");
@@ -33,6 +45,9 @@ const SuperAdminOrganizations = () => {
 
   const [searchInput, setSearchInput] = useState("");
   const [q, setQ] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "pending" | "archived">("all");
+  const [scopeFilter, setScopeFilter] = useState<"all" | "shared" | "dedicated">("all");
+  const [numberingFilter, setNumberingFilter] = useState<"all" | "configured" | "missing">("all");
 
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState<"create" | "range" | "branding" | "view-batches" | "add-batch">("create");
@@ -62,6 +77,9 @@ const SuperAdminOrganizations = () => {
       setOrgs(data.items);
       setTotal(data.total);
       setTotalPages(data.total_pages);
+      fetchSuperAdminOrganizations({ page: 1, pageSize: 100, q: q || undefined })
+        .then((payload) => setMetricOrgs(payload.items))
+        .catch(() => setMetricOrgs(data.items));
       setError("");
     } catch (err) {
       if (err instanceof AuthError) {
@@ -101,6 +119,14 @@ const SuperAdminOrganizations = () => {
     setQ("");
     setPage(1);
   };
+
+  const orgInitials = (name: string) =>
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "A";
 
   const openModal = (type: typeof modalType, org: SuperAdminOrganization | null = null) => {
     setModalType(type);
@@ -205,6 +231,60 @@ const SuperAdminOrganizations = () => {
     return pages;
   }, [page, totalPages]);
 
+  const statsSource = metricOrgs.length > 0 ? metricOrgs : orgs;
+  const organizationStats = useMemo(() => {
+    const archived = statsSource.filter((org) => org.is_archived || org.deleted_at).length;
+    const active = statsSource.filter((org) => org.is_active && !org.is_archived && !org.deleted_at).length;
+    const auto = statsSource.filter((org) => org.auto_approve_signup).length;
+    const shared = statsSource.filter((org) => (org.numbering_mode ?? "shared_assonam") === "shared_assonam").length;
+    const dedicated = statsSource.filter((org) => org.numbering_mode === "dedicated").length;
+    return {
+      total: q ? statsSource.length : total || statsSource.length,
+      active,
+      archived,
+      auto,
+      shared,
+      dedicated,
+    };
+  }, [q, statsSource, total]);
+
+  const filteredOrgs = useMemo(() => {
+    return orgs.filter((org) => {
+      const isArchived = Boolean(org.is_archived || org.deleted_at);
+      const isActive = org.is_active && !isArchived;
+      if (statusFilter === "active" && !isActive) return false;
+      if (statusFilter === "archived" && !isArchived) return false;
+      if (statusFilter === "pending" && org.affiliation_status !== "under_review") return false;
+      if (scopeFilter === "shared" && (org.numbering_mode ?? "shared_assonam") !== "shared_assonam") return false;
+      if (scopeFilter === "dedicated" && org.numbering_mode !== "dedicated") return false;
+      if (numberingFilter === "configured" && !org.card_min) return false;
+      if (numberingFilter === "missing" && org.card_min) return false;
+      return true;
+    });
+  }, [numberingFilter, orgs, scopeFilter, statusFilter]);
+
+  const resetFilters = () => {
+    setSearchInput("");
+    setQ("");
+    setStatusFilter("all");
+    setScopeFilter("all");
+    setNumberingFilter("all");
+    setPage(1);
+  };
+
+  const platformTone = (org: SuperAdminOrganization): SuperAdminTone => {
+    if (org.is_archived || org.deleted_at) return "muted";
+    return org.is_active ? "success" : "warning";
+  };
+
+  const affiliationTone = (status: string | null | undefined): SuperAdminTone => {
+    if (status === "approved") return "success";
+    if (status === "under_review") return "warning";
+    if (status === "changes_requested") return "accent";
+    if (status === "rejected") return "danger";
+    return "muted";
+  };
+
   if (loading || !profile) {
     return (
       <div className="space-y-6">
@@ -221,27 +301,55 @@ const SuperAdminOrganizations = () => {
   const endIndex = Math.min(page * pageSize, total);
 
   return (
-    <div className="space-y-8">
-      <div className="min-h-[76px]">
-        {error && (
+    <div className="sa-page">
+      {(error || deleteSuccess) && (
+        <div>
+          {error && (
           <div className="rounded-xl border border-red-200/50 bg-red-50/50 p-5 flex items-center gap-3 animate-in slide-in-from-top-2 duration-300">
             <svg className="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
             </svg>
             <p className="text-sm font-bold text-red-900">{error}</p>
           </div>
-        )}
-        {!error && deleteSuccess && (
+          )}
+          {!error && deleteSuccess && (
           <div className="rounded-xl border border-emerald-200/50 bg-emerald-50/50 p-5 flex items-center gap-3 animate-in slide-in-from-top-2 duration-300">
             <svg className="h-5 w-5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
             </svg>
             <p className="text-sm font-bold text-emerald-900">{deleteSuccess}</p>
           </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+      <SuperAdminPageHeader
+        icon="users"
+        eyebrow="Governance"
+        title="Associazioni"
+        subtitle="Governance completa delle entita affiliate e configurazione lotti card."
+        actions={
+          <SuperAdminActionButton
+            tone="primary"
+            icon="plus"
+            onClick={() => openModal("create")}
+            data-component="superadmin-orgs-open-modal"
+          >
+            Nuova associazione
+          </SuperAdminActionButton>
+        }
+      />
+
+      <section className="sa-kpi-grid sa-kpi-grid--six" aria-label="Metriche associazioni">
+        <SuperAdminKpiCard label="Totale associazioni" value={organizationStats.total.toLocaleString("it-IT")} hint="Entita registrate" icon="users" tone="success" />
+        <SuperAdminKpiCard label="Attive" value={organizationStats.active.toLocaleString("it-IT")} hint="Associazioni operative" icon="check" tone="success" />
+        <SuperAdminKpiCard label="Archiviate" value={organizationStats.archived.toLocaleString("it-IT")} hint="Non operative" icon="documents" tone="muted" />
+        <SuperAdminKpiCard label="Iscrizione automatica" value={organizationStats.auto.toLocaleString("it-IT")} hint="Abilitata" icon="send" tone="info" />
+        <SuperAdminKpiCard label="Numerazione condivisa" value={organizationStats.shared.toLocaleString("it-IT")} hint="ASSONAM central" icon="cards" tone="warning" />
+        <SuperAdminKpiCard label="Numerazione dedicata" value={organizationStats.dedicated.toLocaleString("it-IT")} hint="Range proprio" icon="shield" tone="purple" />
+      </section>
+
+      <div className="hidden">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-neutral-900">Registro Associazioni</h2>
           <p className="mt-1 text-sm font-medium text-neutral-500">
@@ -260,7 +368,111 @@ const SuperAdminOrganizations = () => {
         </button>
       </div>
 
-      <div className="surface-strong p-2 sm:p-3">
+      <SuperAdminToolbar>
+        <div className="sa-toolbar__row">
+          <div className="flex-1 min-w-0 relative">
+            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[var(--sa-soft)]">
+              <SuperAdminIcon name="search" className="h-4 w-4" />
+            </span>
+            <input
+              id="super-admin-org-search-v2"
+              type="search"
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  applySearchImmediately();
+                }
+              }}
+              placeholder="Cerca per nome, slug o localita..."
+              className="theme-input w-full pl-11 pr-11"
+            />
+            {searchInput && (
+              <button
+                type="button"
+                onClick={clearSearch}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--sa-soft)] transition-colors hover:text-[var(--sa-text)]"
+              >
+                <SuperAdminIcon name="x" className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          <div className="sa-toolbar__field">
+            <label htmlFor="super-admin-org-status">Stato</label>
+            <select
+              id="super-admin-org-status"
+              className="premium-select"
+              value={statusFilter}
+              onChange={(event) => {
+                setStatusFilter(event.target.value as typeof statusFilter);
+                setPage(1);
+              }}
+            >
+              <option value="all">Tutti</option>
+              <option value="active">Attive</option>
+              <option value="pending">In attesa</option>
+              <option value="archived">Archiviate</option>
+            </select>
+          </div>
+
+          <div className="sa-toolbar__field">
+            <label htmlFor="super-admin-org-scope">Scope</label>
+            <select
+              id="super-admin-org-scope"
+              className="premium-select"
+              value={scopeFilter}
+              onChange={(event) => {
+                setScopeFilter(event.target.value as typeof scopeFilter);
+                setPage(1);
+              }}
+            >
+              <option value="all">Tutti</option>
+              <option value="shared">Condivisa</option>
+              <option value="dedicated">Dedicata</option>
+            </select>
+          </div>
+
+          <div className="sa-toolbar__field">
+            <label htmlFor="super-admin-org-numbering">Numerazione</label>
+            <select
+              id="super-admin-org-numbering"
+              className="premium-select"
+              value={numberingFilter}
+              onChange={(event) => {
+                setNumberingFilter(event.target.value as typeof numberingFilter);
+                setPage(1);
+              }}
+            >
+              <option value="all">Tutti</option>
+              <option value="configured">Configurata</option>
+              <option value="missing">Da configurare</option>
+            </select>
+          </div>
+
+          <SuperAdminActionButton icon="refresh" onClick={resetFilters} className="self-end">
+            Reset
+          </SuperAdminActionButton>
+        </div>
+
+        <div className="sa-toolbar__chips">
+          <button type="button" className={`sa-filter-chip ${statusFilter === "all" ? "is-active" : ""}`} onClick={() => setStatusFilter("all")}>
+            Tutti <span>{organizationStats.total}</span>
+          </button>
+          <button type="button" className={`sa-filter-chip ${statusFilter === "active" ? "is-active" : ""}`} onClick={() => setStatusFilter("active")}>
+            Attive <span>{organizationStats.active}</span>
+          </button>
+          <button type="button" className={`sa-filter-chip ${statusFilter === "pending" ? "is-active" : ""}`} onClick={() => setStatusFilter("pending")}>
+            In attesa <span>{statsSource.filter((org) => org.affiliation_status === "under_review").length}</span>
+          </button>
+          <button type="button" className={`sa-filter-chip ${statusFilter === "archived" ? "is-active" : ""}`} onClick={() => setStatusFilter("archived")}>
+            Archiviate <span>{organizationStats.archived}</span>
+          </button>
+        </div>
+      </SuperAdminToolbar>
+
+      <div className="hidden">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center">
           <div className="flex-1 min-w-0 relative">
             <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 group-focus-within:text-brand transition-colors">
@@ -337,7 +549,173 @@ const SuperAdminOrganizations = () => {
         </div>
       </div>
 
-      <div className="surface-strong overflow-hidden border-neutral-200/60" data-component="superadmin-orgs-table">
+      <SuperAdminTableShell className="sa-orgs-table-shell overflow-hidden">
+        <div data-component="superadmin-orgs-table-v2">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr>
+                  <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Associazione</th>
+                  <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Slug</th>
+                  <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Localita</th>
+                  <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Stato</th>
+                  <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Comunicazioni</th>
+                  <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Numerazione tessere</th>
+                  <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 text-right">Azioni</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-50">
+                {filteredOrgs.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-5 py-10">
+                      <SuperAdminEmptyState
+                        title={q ? "Nessuna corrispondenza" : "Database vuoto"}
+                        description="Modifica i filtri o crea una nuova associazione."
+                        action={
+                          <SuperAdminActionButton tone="primary" icon="plus" onClick={() => openModal("create")}>
+                            Nuova associazione
+                          </SuperAdminActionButton>
+                        }
+                      />
+                    </td>
+                  </tr>
+                ) : (
+                  filteredOrgs.map((org) => (
+                    <tr
+                      key={org.id}
+                      data-tone={platformTone(org)}
+                      data-affiliation-tone={affiliationTone(org.affiliation_status)}
+                      className="group transition-colors hover:bg-neutral-50/50"
+                    >
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <span className="sa-avatar sa-avatar--lg">
+                            {orgInitials(org.club_display_name || org.name)}
+                          </span>
+                          <div>
+                            <p className="text-sm font-bold text-neutral-900 group-hover:text-brand transition-colors">
+                              {org.name}
+                            </p>
+                            <p className="text-[10px] text-neutral-400 mt-0.5">ID: {org.id}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <code className="text-[11px] font-mono font-bold text-neutral-500 bg-neutral-100 px-1.5 py-0.5 rounded uppercase">
+                          {org.slug}
+                        </code>
+                      </td>
+                      <td className="px-5 py-4">
+                        <p className="text-sm font-medium uppercase text-neutral-600">
+                          {org.city || "-"} {org.province ? `(${org.province})` : ""}
+                        </p>
+                      </td>
+                      <td className="px-5 py-4">
+                        {org.is_archived || org.deleted_at ? (
+                          <SuperAdminStatusChip tone="muted" dot>Archiviata</SuperAdminStatusChip>
+                        ) : org.is_active ? (
+                          <SuperAdminStatusChip tone="success" dot>Attiva</SuperAdminStatusChip>
+                        ) : (
+                          <SuperAdminStatusChip tone="warning" dot>Sospesa</SuperAdminStatusChip>
+                        )}
+                      </td>
+                      <td className="px-5 py-4">
+                        {isSuperAdmin ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void handleToggleCommunications(org, !Boolean(org.communications_enabled))
+                            }
+                            className={`sa-switch ${org.communications_enabled ? "is-on" : ""}`}
+                            disabled={communicationsSavingOrgId === org.id}
+                            aria-pressed={Boolean(org.communications_enabled)}
+                            title="Attiva o disattiva il modulo Comunicazioni"
+                          >
+                            <span>{org.communications_enabled ? "ON" : "OFF"}</span>
+                          </button>
+                        ) : (
+                          <span className="text-sm font-semibold text-neutral-500">
+                            {org.communications_enabled ? "ON" : "OFF"}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <SuperAdminIcon
+                            name={org.numbering_mode === "dedicated" ? "shield" : "users"}
+                            className={`h-5 w-5 ${org.numbering_mode === "dedicated" ? "text-purple-600" : "text-blue-600"}`}
+                          />
+                          <div>
+                            <p className="text-sm font-semibold text-neutral-800">
+                              {org.numbering_mode === "dedicated" ? "Dedicata" : "Condivisa"}
+                              {org.numbering_mode !== "dedicated" ? " (ASSONAM Central)" : ""}
+                            </p>
+                            <p className="text-xs text-neutral-500 tabular-nums">
+                              {org.card_min ? `${org.card_min}-${org.card_max}` : "Range non impostato"}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openModal(org.card_min ? "view-batches" : "range", org)}
+                            className="sa-row-action"
+                            title={org.card_min ? "Gestione lotti" : "Imposta range iniziale"}
+                          >
+                            <SuperAdminIcon name="cards" className="h-4 w-4" />
+                            Lotti
+                          </button>
+                          {isSuperAdmin && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => openModal("branding", org)}
+                                className="sa-row-action"
+                                title="Configurazione associazione"
+                              >
+                                <SuperAdminIcon name="settings" className="h-4 w-4" />
+                                Setup
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openIntegrationModal(org)}
+                                className="sa-row-action"
+                                title="Integrazione API esterne"
+                              >
+                                <SuperAdminIcon name="api" className="h-4 w-4" />
+                                API
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(org)}
+                                className="sa-row-action sa-row-action--danger"
+                                title="Elimina o archivia associazione"
+                              >
+                                <SuperAdminIcon name="trash" className="h-4 w-4" />
+                                <span className="sr-only">Elimina</span>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </SuperAdminTableShell>
+
+      <SuperAdminTableShell
+        title="Registro associazioni"
+        subtitle={`${filteredOrgs.length.toLocaleString("it-IT")} righe visibili su ${total.toLocaleString("it-IT")} entita`}
+        action={isFetching ? <SuperAdminStatusChip tone="info" dot>Aggiornamento</SuperAdminStatusChip> : null}
+        className="hidden"
+      >
+        <div data-component="superadmin-orgs-table">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -352,18 +730,26 @@ const SuperAdminOrganizations = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-50">
-              {orgs.length === 0 ? (
+              {filteredOrgs.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-16 text-center">
-                    <p className="text-sm font-bold text-neutral-400 uppercase tracking-widest">
-                      {q ? "Nessuna corrispondenza" : "Database vuoto"}
-                    </p>
+                  <td colSpan={7} className="px-5 py-10">
+                    <SuperAdminEmptyState
+                      title={q ? "Nessuna corrispondenza" : "Database vuoto"}
+                      description="Modifica i filtri o crea una nuova associazione."
+                      action={
+                        <SuperAdminActionButton tone="primary" icon="plus" onClick={() => openModal("create")}>
+                          Nuova associazione
+                        </SuperAdminActionButton>
+                      }
+                    />
                   </td>
                 </tr>
               ) : (
-                orgs.map((org) => (
+                filteredOrgs.map((org) => (
                   <tr
                     key={org.id}
+                    data-tone={platformTone(org)}
+                    data-affiliation-tone={affiliationTone(org.affiliation_status)}
                     className="group transition-colors hover:bg-neutral-50/50"
                   >
                     <td className="px-5 py-4">
@@ -576,7 +962,8 @@ const SuperAdminOrganizations = () => {
             </div>
           </div>
         )}
-      </div>
+        </div>
+      </SuperAdminTableShell>
 
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/80 p-4 backdrop-blur-sm animate-in fade-in duration-300">

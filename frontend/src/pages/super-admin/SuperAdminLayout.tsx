@@ -11,6 +11,7 @@ import {
 import { applySeo } from "../../lib/seo";
 import MobileDashboardNav, { type MobileDashboardNavItem } from "../../components/ui/MobileDashboardNav";
 import ThemeToggle from "../../components/theme/ThemeToggle";
+import { SuperAdminIcon, type SuperAdminIconName } from "./components/SuperAdminPrimitives";
 
 const SuperAdminLayout = () => {
   const navigate = useNavigate();
@@ -42,13 +43,13 @@ const SuperAdminLayout = () => {
     navigate("/super-admin/login", { replace: true });
   };
 
-  const navLinks = [
-    { label: "Associazioni", path: "/super-admin/associazioni" },
-    { label: "Affiliazioni", path: "/super-admin/affiliazioni" },
-    { label: "Documenti", path: "/super-admin/documenti" },
-    { label: "Amministratori", path: "/super-admin/org-admins" },
-    { label: "Registro lotti", path: "/super-admin/registro-lotti" },
-    { label: "Libro Soci", path: "/super-admin/soci" },
+  const navLinks: Array<{ label: string; path: string; icon: SuperAdminIconName }> = [
+    { label: "Associazioni", path: "/super-admin/associazioni", icon: "users" },
+    { label: "Affiliazioni", path: "/super-admin/affiliazioni", icon: "user" },
+    { label: "Documenti", path: "/super-admin/documenti", icon: "documents" },
+    { label: "Amministratori", path: "/super-admin/org-admins", icon: "shield" },
+    { label: "Registro lotti", path: "/super-admin/registro-lotti", icon: "cards" },
+    { label: "Libro Soci", path: "/super-admin/soci", icon: "book" },
   ];
 
   const mobilePrimaryNav = useMemo(
@@ -64,7 +65,7 @@ const SuperAdminLayout = () => {
   const mobileMoreNav = useMemo(
     (): MobileDashboardNavItem[] => [
       { key: "admins", label: "Amministratori", to: "/super-admin/org-admins", activeMatch: ["/super-admin/org-admins"], icon: "shield" as const },
-      { key: "members", label: "Libro Soci", to: "/super-admin/soci", activeMatch: ["/super-admin/soci"], icon: "users" as const },
+      { key: "members", label: "Libro Soci", to: "/super-admin/soci", activeMatch: ["/super-admin/soci"], icon: "book" as const },
       { key: "site", label: "Torna al sito", to: "/", icon: "globe" as const },
       {
         key: "logout",
@@ -86,93 +87,54 @@ const SuperAdminLayout = () => {
   }
 
   return (
-    <div className="app-shell min-h-screen">
-      {/* Header band */}
-      <header className="app-header sticky top-0 z-50 transition-all">
-        <div className="container-shell flex items-center justify-between h-16 md:h-20">
-          <div className="flex items-center gap-6">
-            <div className="hidden shrink-0 sm:block">
-              <Link to="/" className="flex items-center gap-3 transition-transform hover:scale-95 group">
-                <img
-                  src={`${import.meta.env.BASE_URL}assonam-logo.svg`}
-                  alt="ASSONAM"
-                  className="h-8 md:h-10 w-auto"
-                />
-                <span className="font-display font-bold text-xl tracking-tight text-neutral-900 hidden lg:block group-hover:text-brand transition-colors">
-                  ASSONAM
-                </span>
-              </Link>
-            </div>
-            <div className="min-w-0 flex-1 border-l border-neutral-200/60 pl-6 ml-2 hidden sm:block">
-              <div className="flex flex-col justify-center h-full">
-                <div className="flex items-center gap-2.5">
-                  <h1 className="truncate text-base font-bold tracking-tight text-neutral-900 uppercase tracking-widest leading-none">
-                    Governance
-                  </h1>
-                  <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-red-700 shadow-sm leading-none">
-                    Super Admin
-                  </span>
-                </div>
-                {profile && (
-                  <p className="truncate text-[11px] font-medium text-neutral-500 uppercase tracking-wide opacity-80 mt-1 leading-none">
-                    {profile.email}
-                  </p>
-                )}
+    <div className="app-shell super-admin-v2 min-h-screen">
+      <header className="sa-header sticky top-0 z-50 transition-all">
+        <div className="container-shell sa-header__top">
+          <div className="sa-header__brand">
+            <Link to="/" className="sa-header__logo">
+              <img
+                src={`${import.meta.env.BASE_URL}assonam-logo.svg`}
+                alt="ASSONAM"
+              />
+              <span className="hidden text-xl font-black tracking-tight md:inline">ASSONAM</span>
+            </Link>
+            <div className="sa-header__identity">
+              <div className="sa-header__workspace">
+                Governance
+                <span className="sa-header__role">Super Admin</span>
               </div>
-            </div>
-            
-            {/* Mobile Header Title */}
-            <div className="sm:hidden min-w-0 flex-1">
-              <div className="flex items-center gap-3">
-                <Link to="/" className="shrink-0 transition-transform hover:scale-95">
-                  <img
-                    src={`${import.meta.env.BASE_URL}assonam-logo.svg`}
-                    alt="ASSONAM"
-                    className="h-8 w-auto"
-                  />
-                </Link>
-                <div className="w-px h-6 bg-neutral-200/60"></div>
-                <h1 className="truncate text-sm font-bold tracking-tight text-neutral-900 uppercase">
-                  Governance
-                </h1>
-              </div>
+              {profile ? <p className="sa-header__email">{profile.email}</p> : null}
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-4">
+          <div className="sa-header__actions">
             <ThemeToggle />
-            <Link className="link-muted hidden text-sm font-bold tracking-tight sm:block" to="/">
+            <Link className="sa-header__public hidden sm:inline-flex" to="/">
               Sito pubblico
+              <SuperAdminIcon name="link" className="h-4 w-4" />
             </Link>
-            <div className="app-divider hidden h-4 w-px sm:block" />
             <button
-              className="btn-ghost !px-4 !py-2 !text-xs font-bold uppercase tracking-wider"
+              className="sa-btn"
               type="button"
               onClick={handleLogout}
             >
               Esci
+              <SuperAdminIcon name="chevron" className="h-4 w-4" />
             </button>
           </div>
         </div>
 
-        {/* Navigation Tabs */}
         <div className="container-shell">
-          <nav className="hidden flex-wrap gap-6 pb-0 overflow-x-auto no-scrollbar md:flex">
+          <nav className="sa-nav" aria-label="Navigazione super admin">
             {navLinks.map((link) => {
               const isActive = location.pathname.startsWith(link.path);
               return (
                 <Link
                   key={link.path}
                   to={link.path}
-                  className={`relative whitespace-nowrap py-3 text-sm font-bold tracking-tight transition-colors ${
-                    isActive 
-                      ? "text-neutral-900" 
-                      : "text-neutral-500 hover:text-neutral-900"
-                  }`}
+                  className={`sa-nav__item ${isActive ? "is-active" : ""}`}
                 >
+                  <SuperAdminIcon name={link.icon} />
                   {link.label}
-                  {isActive && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-neutral-900 rounded-t-full" />
-                  )}
                 </Link>
               );
             })}
@@ -180,7 +142,7 @@ const SuperAdminLayout = () => {
         </div>
       </header>
 
-      <main className="dashboard-mobile-safe container-shell py-10 animate-in fade-in duration-500 md:pb-10">
+      <main className="dashboard-mobile-safe container-shell py-7 animate-in fade-in duration-500 md:pb-10">
         <Outlet context={{ profile }} />
       </main>
 

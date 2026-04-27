@@ -1549,3 +1549,50 @@ select:focus {
   color: var(--oa-brand-strong) !important;
   border-color: var(--oa-line-strong) !important;
 }
+
+/* Super-admin pages define their own `--sa-*` tokens in index.css, which is
+   imported before this global bridge. Re-assert dark utility colors here so
+   table rows and modal copy do not fall back to near-black Tailwind colors. */
+:root[data-theme="dark"] .super-admin-v2 .text-neutral-950,
+:root[data-theme="dark"] .super-admin-v2 .text-neutral-900,
+:root[data-theme="dark"] .super-admin-v2 .text-neutral-800,
+:root[data-theme="dark"] .super-admin-v2 .text-neutral-700,
+:root[data-theme="dark"] .super-admin-v2 .text-slate-950,
+:root[data-theme="dark"] .super-admin-v2 .text-slate-900,
+:root[data-theme="dark"] .super-admin-v2 .text-slate-800 {
+  color: var(--sa-text) !important;
+  -webkit-text-fill-color: var(--sa-text) !important;
+}
+
+:root[data-theme="dark"] .super-admin-v2 .text-neutral-600,
+:root[data-theme="dark"] .super-admin-v2 .text-neutral-500,
+:root[data-theme="dark"] .super-admin-v2 .text-slate-700,
+:root[data-theme="dark"] .super-admin-v2 .text-slate-600,
+:root[data-theme="dark"] .super-admin-v2 .text-slate-500 {
+  color: var(--sa-muted) !important;
+  -webkit-text-fill-color: var(--sa-muted) !important;
+}
+
+:root[data-theme="dark"] .super-admin-v2 .text-neutral-400,
+:root[data-theme="dark"] .super-admin-v2 .text-neutral-300,
+:root[data-theme="dark"] .super-admin-v2 .text-slate-400,
+:root[data-theme="dark"] .super-admin-v2 .text-slate-300 {
+  color: var(--sa-soft) !important;
+  -webkit-text-fill-color: var(--sa-soft) !important;
+}
+
+:root[data-theme="dark"] .super-admin-v2 .theme-input,
+:root[data-theme="dark"] .super-admin-v2 .theme-select,
+:root[data-theme="dark"] .super-admin-v2 .premium-select,
+:root[data-theme="dark"] .super-admin-v2 .sa-input,
+:root[data-theme="dark"] .super-admin-v2 .sa-select,
+:root[data-theme="dark"] .super-admin-v2 .sa-textarea {
+  border-color: var(--sa-line-strong) !important;
+  background: var(--sa-panel-strong) !important;
+  color: #151b1f !important;
+  -webkit-text-fill-color: #151b1f !important;
+}
+
+:root[data-theme="dark"] .super-admin-v2 .sa-orgs-table-shell table thead tr {
+  background: color-mix(in srgb, var(--sa-panel-muted) 86%, #020617) !important;
+}

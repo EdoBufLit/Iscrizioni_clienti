@@ -1,3 +1,61 @@
+## Plan (Super admin mockup fidelity correction - Apr 27, 2026)
+- [x] Verificare che la configurazione SumUp nel dettaglio associazione sia ancora collegata a `saveSuperAdminSumUpApiKey` / `deleteSuperAdminSumUpApiKey` e non venga rimossa o scollegata.
+- [x] Allineare `/super-admin/associazioni` al mockup: header piu compatto, nessun pulsante extra non presente, KPI a 6 colonne, toolbar, tabella con colonne/azioni/stati come reference.
+- [x] Rifare `Setup associazione` come drawer destro full-height con overlay, header, stato attiva, tab verticali `Generale`, `Numerazione tessere`, `Iscrizioni`, `Branding`, `Comunicazioni`, contenuto come reference e salvataggio esistente.
+- [x] Preservare/integrare la sezione SumUp nella tab corretta del drawer senza cambiare API, payload, validazioni o handler.
+- [x] Rifare `Lotti tessere` come modal centrale aderente alla reference: header, summary rail, tabella lotti, info reset annuale, CTA aggiungi/chiudi e overlay.
+- [x] Eseguire typecheck/build e smoke visuale mirato light/dark su Associazioni, Setup associazione, Lotti tessere.
+
+## Review (Super admin mockup fidelity correction - Apr 27, 2026)
+- Associazioni: `SuperAdminOrganizations.tsx` ora usa la tabella operativa in stile reference con KPI a 6 card, toolbar, chip filtro, colonne `Associazione`, `Slug`, `Localita`, `Stato`, `Comunicazioni`, `Numerazione tessere`, `Azioni`, e CTA primaria `Nuova associazione`.
+- Setup associazione: `OrganizationManageModal.tsx` ora rende il setup come drawer destro full-height con overlay, header/stato, nav verticale e sezioni `Informazioni generali`, `Numerazione tessere`, `Iscrizioni e documenti`, `Pagamento quota associativa`.
+- SumUp: la sezione `Pagamento quota associativa` resta visibile scorrendo nel drawer; handler `saveSuperAdminSumUpApiKey` / `deleteSuperAdminSumUpApiKey`, provider, chiave, rimozione e validazioni non sono stati scollegati.
+- Lotti tessere: la vista `view-batches` ora usa modale centrale come reference con header, summary rail, tabella lotti disponibili, informazione reset annuale, `Aggiungi lotto`, `Chiudi`, modifica/elimina lotto e manutenzione annuale preservati.
+- Dark mode: corretto il bridge tema super-admin in `theme.css` per mantenere leggibili testi/tabella/controlli anche quando il global theme viene caricato dopo i token super-admin.
+- Verifiche: `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK con solo warning Vite preesistente sui chunk grandi; smoke Playwright su `http://127.0.0.1:8019` OK con 0 errori console e 0 risposte API 4xx/5xx inattese.
+- Evidenze: screenshot viewport in `tasks/screenshots/super-admin-mockup-fix-20260427/`: `06-associazioni-viewport-light.png`, `07-setup-viewport-top-light.png`, `08-setup-viewport-sumup-light.png`, `09-lotti-viewport-light.png`, `10-associazioni-viewport-dark.png`.
+
+## Plan (Super admin structural UI/UX rehaul - Apr 26, 2026)
+- [x] Proteggere invarianti: logo ASSONAM esistente, sigla/payoff, route/API/permessi/handler e light/dark mode.
+- [x] Introdurre primitive condivise super-admin (`PageHeader`, `KpiCard`, `Toolbar`, `Tabs`, `StatusChip`, `TableShell`, `DetailPanel`, `ModalShell`, `DrawerShell`, `ActionRail`, `EmptyState`, `ProgressMeter`).
+- [x] Aggiornare shell `/super-admin` con topbar governance, tab orizzontali, profilo, theme toggle, sito pubblico, logout e navigazione mobile.
+- [x] Ridisegnare Associazioni con KPI, filtri, tabella operativa, numerazione, comunicazioni, azioni `Lotti`, `Setup`, `API`, elimina/archivia.
+- [x] Ridisegnare `Setup associazione` e `Lotti tessere` in modal strutturati, mantenendo tutti i salvataggi e flussi batch esistenti.
+- [x] Ridisegnare Affiliazioni come master-detail con KPI, inbox pratiche, documenti, dati amministrativi, pagamento e azioni governance.
+- [x] Ridisegnare Documenti/Contabilita con KPI, filtri, tabella, pannello dettaglio/preview e azioni reali.
+- [x] Ridisegnare Amministratori con KPI, invito orizzontale, filtri, tabella accessi e azioni sospendi/riattiva/rimuovi.
+- [x] Ridisegnare Registro lotti con KPI, filtri, disponibilita/progress, export e azione nuovo lotto collegata a flusso reale.
+- [x] Rifinire Libro Soci con KPI, filtri, tabella registro e pannello scheda socio coerente.
+- [x] Eseguire typecheck/build, test backend super-admin mirati e smoke visuale light/dark su pagine e modali critiche.
+- [x] Documentare review finale con checklist pagina per pagina e residui.
+
+## Review (Super admin structural UI/UX rehaul - Apr 26, 2026)
+- Primitive: aggiunto `SuperAdminPrimitives.tsx` con PageHeader, KpiCard, Toolbar, Tabs, StatusChip, TableShell, DetailPanel, ModalShell/DrawerShell, ActionRail, EmptyState e ProgressMeter; `index.css` contiene token scoped `.super-admin-v2` con light/dark mode.
+- Shell: `SuperAdminLayout.tsx` ora usa topbar governance, nav orizzontale, theme toggle, sito pubblico e logout, mantenendo il logo `/assonam-logo.svg` e la scritta ASSONAM esistenti.
+- Associazioni: trasformata in workspace con KPI, filtri/search, chip stato, tabella operativa, numerazione, comunicazioni e azioni reali `Lotti`, `Setup`, `API`, elimina/archivia.
+- Setup associazione e Lotti tessere: modali rifiniti con gerarchia piu vicina ai mockup e flussi esistenti di salvataggio, batch, reset, modifica/elimina lotto preservati.
+- Affiliazioni: trasformata in master-detail con KPI, inbox pratiche, documenti caricati, dati amministrativi, stato pagamento e action rail governance.
+- Documenti/Contabilita: aggiunti header, tab, KPI, filtri e pannello dettaglio/preview mantenendo upload, sostituzione, notifica, download e azioni contabili esistenti.
+- Amministratori: pagina ridisegnata con KPI, invito orizzontale, toolbar, tabella accessi, stati e azioni sospendi/riattiva/rimuovi.
+- Registro lotti: nuova vista con KPI, filtri, progress disponibilita, scope, export Excel e tabella densa come da mockup.
+- Libro Soci: rifinito con PageHeader, KPI, toolbar filtri e scheda socio laterale coerente con la governance super-admin.
+- Fix funzionale emerso dai test: in `app/routes/org_admin.py` la decisione socio registra `decision_at` prima del fulfillment, cosi l'approvazione puo emettere tessera e attivare il socio invece di restare `pending_verification`.
+- Verifiche: `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK con solo warning Vite preesistente sui chunk grandi; `python -m pytest -q tests/test_documents.py::test_document_flow tests/test_super_admin_organizations_pagination.py tests/test_super_admin_numbering_scopes.py tests/test_super_admin_card_lot_management.py tests/test_card_lot_registry.py tests/test_super_admin_member_registry.py tests/test_super_admin_member_payment_method_detail.py tests/test_accounting_archive.py tests/test_affiliation_flow.py` OK (`37 passed`); `git diff --check` OK con soli warning CRLF.
+- Smoke visuale: locale su `http://127.0.0.1:8018` con affiliazioni abilitate, screenshot light/dark in `tasks/screenshots/super-admin-rehaul-smoke-20260426/`; 11 viste, 0 errori console, 0 risposte API 4xx/5xx non attese.
+
+## Plan (Low cards WhatsApp alert REST API bug - Apr 26, 2026)
+- [x] Mappare il flusso scheduler -> job low cards -> Twilio Studio execution, inclusi env e destinatario.
+- [x] Riprodurre localmente il caso "tessere sotto 50" con i test esistenti e individuare il punto fragile non coperto.
+- [x] Correggere la REST API/service mantenendo `organizations.whatsapp_e164` come destinatario canonico e Twilio Studio con `to/from_` top-level.
+- [x] Aggiungere test di regressione per mittente bot configurato come numero E.164 semplice.
+- [x] Eseguire test mirati backend e documentare esito/root cause nella review.
+
+## Review (Low cards WhatsApp alert REST API bug - Apr 26, 2026)
+- Root cause probabile: `execute_low_cards_alert_flow()` normalizzava il destinatario in `whatsapp:+...`, ma passava `TWILIO_WHATSAPP_FROM` raw a Twilio Studio. Se il numero del bot era salvato come `+39...` invece che `whatsapp:+39...`, la create execution riceveva un `from_` non valido.
+- Fix: aggiunto `_resolve_low_cards_from()` in `app/services/twilio_notifications.py`, che normalizza anche il mittente con la stessa pipeline del destinatario e salta l'invio con log chiaro se il valore non e valido.
+- Regressione: aggiunto test che verifica `TWILIO_WHATSAPP_FROM=+390299914307` venga inviato a Studio come `from_="whatsapp:+390299914307"`.
+- Verifiche: `python -m pytest -q tests/test_low_cards_alert_job.py tests/test_low_cards_scheduler.py` OK (`10 passed`); `python -m py_compile app/services/twilio_notifications.py tests/test_low_cards_alert_job.py` OK.
+
 ## Plan (Communications overview KPI refinement - Apr 26, 2026)
 - [x] Isolare le KPI della tab Panoramica Comunicazioni senza modificare le card KPI condivise degli altri moduli.
 - [x] Sostituire icone testuali e gradienti generici con card operative a 5 colonne, icone SVG, separatore, meta di aggiornamento e badge/stato quando utile.
