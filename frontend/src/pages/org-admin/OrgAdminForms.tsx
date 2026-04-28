@@ -605,6 +605,73 @@ export function OrgAdminFormsWorkspace({
       ),
     [submissions],
   );
+  const surveyStats = useMemo(() => {
+    const fields = selectedForm?.fields || [];
+    const decodedFields = fields.map((field) => ({ raw: field, decoded: decodeField(field) }));
+    const scaleFields = decodedFields.filter(
+      (item) => item.decoded.type === "rating_1_5" || item.decoded.type === "nps_0_10",
+    );
+    const choiceFields = decodedFields.filter((item) => ["radio", "checkbox", "select"].includes(item.decoded.type));
+    const textFields = decodedFields.filter((item) => item.decoded.type === "long_text" || item.decoded.type === "short_text");
+    const numericValues = (kind: "rating_1_5" | "nps_0_10") =>
+      scaleFields
+        .filter((item) => item.decoded.type === kind)
+        .flatMap((item) =>
+          submissions
+            .map((submission) => Number(submission.payload_json?.[item.raw.field_key]))
+            .filter((value) => Number.isFinite(value)),
+        );
+    const average = (values: number[]) =>
+      values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+    const scaleStats = scaleFields.map((item) => {
+      const options = item.decoded.optionsText.split(",").map((option) => option.trim()).filter(Boolean);
+      const counts = new Map(options.map((option) => [option, 0]));
+      let total = 0;
+      for (const submission of submissions) {
+        const value = submission.payload_json?.[item.raw.field_key];
+        if (value == null || value === "") continue;
+        const key = String(value);
+        counts.set(key, (counts.get(key) || 0) + 1);
+        total += 1;
+      }
+      const values = Array.from(counts.values());
+      const max = values.length ? Math.max(...values) : 0;
+      return { key: item.raw.field_key, label: item.raw.label, options, counts, total, max };
+    });
+    const choiceStats = choiceFields.map((item) => {
+      const options = item.decoded.optionsText.split(",").map((option) => option.trim()).filter(Boolean);
+      const counts = new Map(options.map((option) => [option, 0]));
+      for (const submission of submissions) {
+        const value = submission.payload_json?.[item.raw.field_key];
+        const values = Array.isArray(value) ? value.map(String) : value ? [String(value)] : [];
+        for (const option of values) counts.set(option, (counts.get(option) || 0) + 1);
+      }
+      const total = Array.from(counts.values()).reduce((sum, value) => sum + value, 0);
+      const max = Math.max(0, ...Array.from(counts.values()));
+      return { key: item.raw.field_key, label: item.raw.label, options, counts, total, max };
+    });
+    const comments = submissions.flatMap((submission) =>
+      textFields
+        .map((item) => ({
+          key: `${submission.id}-${item.raw.field_key}`,
+          label: item.raw.label,
+          value: String(submission.payload_json?.[item.raw.field_key] || "").trim(),
+          submittedAt: submission.submitted_at,
+        }))
+        .filter((item) => item.value.length > 0),
+    );
+    const ratingValues = numericValues("rating_1_5");
+    const npsValues = numericValues("nps_0_10");
+    return {
+      total: submissions.length,
+      ratingAverage: average(ratingValues),
+      npsAverage: average(npsValues),
+      scaleStats,
+      choiceStats,
+      comments,
+      responseRateLabel: submissions.length === 1 ? "1 risposta ricevuta" : `${submissions.length} risposte ricevute`,
+    };
+  }, [selectedForm?.fields, submissions]);
   const selectedSubmissionStatus = submissionStatusLabel(selectedSubmission?.status);
 
   function resetEditorState() {
@@ -1297,6 +1364,7 @@ export function OrgAdminFormsWorkspace({
         onDeleteField={handleBuilderDeleteField}
         onReorder={handleBuilderReorder}
         locked={locked || !selectedFormId}
+        mode={mode}
       />
     </div>
   );
@@ -1676,7 +1744,208 @@ export function OrgAdminFormsWorkspace({
       </div>
     </div>
   );
-  const responsesTab = (
+  const surveyResponsesTab = (
+    <div className="space-y-6">
+      <SectionPanel className="p-5">
+        <div>
+          <p className="admin-eyebrow">Statistiche sondaggio</p>
+          <h3 className="mt-2 text-2xl font-semibold tracking-tight text-neutral-950">Gradimento e risposte</h3>
+          <p className="mt-1 text-sm text-neutral-500">
+            Lettura aggregata delle valutazioni, delle preferenze e dei commenti inviati.
+          </p>
+        </div>
+        {selectedFormId && submissions.length > 0 ? (
+          <a className="btn-secondary" href={buildOrgAdminFormSubmissionsExportUrl(selectedFormId)}>
+            Scarica CSV
+          </a>
+        ) : null}
+      </SectionPanel>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <KpiCard label="Risposte" value={surveyStats.total} hint={surveyStats.responseRateLabel} tone="info" />
+        <KpiCard
+          label="Media 1-5"
+          value={surveyStats.ratingAverage === null ? "-" : surveyStats.ratingAverage.toFixed(1)}
+          hint="Domande valutazione"
+          tone="success"
+        />
+        <KpiCard
+          label="NPS medio"
+          value={surveyStats.npsAverage === null ? "-" : surveyStats.npsAverage.toFixed(1)}
+          hint="Scala 0-10"
+          tone="warning"
+        />
+        <KpiCard label="Scale attive" value={surveyStats.scaleStats.length} hint="Rating e NPS nel builder" tone="muted" />
+        <KpiCard label="Commenti" value={surveyStats.comments.length} hint="Risposte testuali compilate" tone="info" />
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)] xl:items-start">
+        <div className="space-y-5">
+          <SectionPanel className="p-5" title="Apprezzamento" eyebrow="Scale e valutazioni">
+            {surveyStats.scaleStats.length === 0 ? (
+              <EmptyState
+                title="Nessuna domanda di gradimento"
+                description="Aggiungi una valutazione 1-5 o un NPS 0-10 nel builder per vedere le statistiche aggregate."
+              />
+            ) : (
+              <div className="space-y-5">
+                {surveyStats.scaleStats.map((stat) => (
+                  <div key={stat.key} className="rounded-[1rem] border border-neutral-200 bg-white p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h4 className="text-sm font-semibold text-neutral-950">{stat.label}</h4>
+                        <p className="mt-1 text-xs text-neutral-500">{stat.total} risposte valide</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 grid gap-2">
+                      {stat.options.map((option) => {
+                        const count = stat.counts.get(option) || 0;
+                        const width = stat.max > 0 ? Math.max(7, Math.round((count / stat.max) * 100)) : 0;
+                        return (
+                          <div key={option} className="grid grid-cols-[2.5rem_minmax(0,1fr)_2.5rem] items-center gap-3 text-sm">
+                            <span className="font-semibold text-neutral-700">{option}</span>
+                            <span className="h-2.5 overflow-hidden rounded-full bg-neutral-100">
+                              <span className="block h-full rounded-full bg-[#0f6b5f]" style={{ width: `${width}%` }} />
+                            </span>
+                            <span className="text-right font-semibold text-neutral-700">{count}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionPanel>
+
+          <SectionPanel className="p-5" title="Preferenze" eyebrow="Scelte aggregate">
+            {surveyStats.choiceStats.length === 0 ? (
+              <EmptyState
+                title="Nessuna domanda a scelta"
+                description="Le risposte a scelta multipla, checkbox e menu appariranno qui in forma aggregata."
+              />
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-2">
+                {surveyStats.choiceStats.map((stat) => (
+                  <div key={stat.key} className="rounded-[1rem] border border-neutral-200 bg-white p-4">
+                    <h4 className="text-sm font-semibold text-neutral-950">{stat.label}</h4>
+                    <div className="mt-4 space-y-3">
+                      {stat.options.map((option) => {
+                        const count = stat.counts.get(option) || 0;
+                        const percent = stat.total > 0 ? Math.round((count / stat.total) * 100) : 0;
+                        return (
+                          <div key={option}>
+                            <div className="flex items-center justify-between gap-3 text-xs">
+                              <span className="font-medium text-neutral-700">{option}</span>
+                              <span className="font-semibold text-neutral-900">{count} ({percent}%)</span>
+                            </div>
+                            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-neutral-100">
+                              <div className="h-full rounded-full bg-neutral-900" style={{ width: `${percent}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionPanel>
+
+          <SectionPanel className="p-5" title="Commenti aperti" eyebrow="Risposte testuali">
+            {surveyStats.comments.length === 0 ? (
+              <EmptyState title="Nessun commento ricevuto" description="I suggerimenti e le risposte aperte compilate verranno raccolti qui." />
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2">
+                {surveyStats.comments.slice(0, 12).map((comment) => (
+                  <article key={comment.key} className="rounded-[1rem] border border-neutral-200 bg-white p-4">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-neutral-500">{comment.label}</p>
+                    <p className="mt-2 text-sm leading-6 text-neutral-800">{comment.value}</p>
+                    <p className="mt-3 text-xs text-neutral-400">{formatDateTime(comment.submittedAt)}</p>
+                  </article>
+                ))}
+              </div>
+            )}
+          </SectionPanel>
+        </div>
+
+        <SectionPanel className="sticky top-6 min-h-[34rem] overflow-hidden p-0">
+          <div className="admin-panel__header">
+            <div>
+              <p className="admin-eyebrow">Invii ricevuti</p>
+              <h4 className="mt-2 text-lg font-semibold text-neutral-950">Dettaglio risposta</h4>
+            </div>
+          </div>
+          <div className="grid max-h-[70vh] overflow-hidden lg:grid-cols-[280px_minmax(0,1fr)]">
+            <div className="border-b border-neutral-200 lg:border-b-0 lg:border-r">
+              <div className="max-h-[70vh] overflow-y-auto">
+                {submissionsLoading ? (
+                  <div className="space-y-3 p-4">
+                    <Skeleton className="h-20 w-full rounded-xl" />
+                    <Skeleton className="h-20 w-full rounded-xl" />
+                    <Skeleton className="h-20 w-full rounded-xl" />
+                  </div>
+                ) : submissions.length === 0 ? (
+                  <EmptyState title="Nessuna risposta ricevuta" description="Le risposte al sondaggio appariranno qui appena inviate." />
+                ) : (
+                  <div className="divide-y divide-neutral-200">
+                    {submissions.map((submission) => {
+                      const isSelected = selectedSubmission?.id === submission.id;
+                      return (
+                        <button
+                          key={submission.id}
+                          type="button"
+                          onClick={() => void openSubmissionDetail(submission)}
+                          className={`w-full px-4 py-4 text-left transition ${
+                            isSelected ? "bg-neutral-950 text-white" : "bg-white hover:bg-neutral-50"
+                          }`}
+                        >
+                          <p className={`truncate text-sm font-semibold ${isSelected ? "text-white" : "text-neutral-900"}`}>
+                            {submission.submitted_by?.name || submission.submitted_by?.email || `Risposta #${submission.id}`}
+                          </p>
+                          <p className={`mt-1 text-xs ${isSelected ? "text-white/70" : "text-neutral-500"}`}>
+                            {formatDateTime(submission.submitted_at)}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="min-h-[28rem] overflow-y-auto p-5">
+              {selectedSubmission ? (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500">Risposta selezionata</p>
+                    <h4 className="mt-2 text-base font-semibold text-neutral-950">
+                      {selectedSubmission.submitted_by?.name || selectedSubmission.submitted_by?.email || `Risposta #${selectedSubmission.id}`}
+                    </h4>
+                    <p className="mt-1 text-sm text-neutral-500">{formatDateTime(selectedSubmission.submitted_at)}</p>
+                  </div>
+                  <div className="grid gap-3">
+                    {selectedSubmissionEntries.map((entry) => (
+                      <div key={entry.key} className="rounded-xl border border-neutral-200 bg-white p-4">
+                        <div className="text-xs font-medium uppercase tracking-[0.12em] text-neutral-500">{entry.label}</div>
+                        <div className="mt-2 break-words text-sm font-medium text-neutral-900">
+                          {stringifySubmissionValue(entry.value)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <EmptyState title="Seleziona una risposta" description="Apri un invio per leggere tutti i dati compilati nel sondaggio." />
+              )}
+            </div>
+          </div>
+        </SectionPanel>
+      </div>
+    </div>
+  );
+
+  const formResponsesTab = (
     <div className="space-y-6">
       <SectionPanel className="p-5">
         <div>
@@ -1956,6 +2225,8 @@ export function OrgAdminFormsWorkspace({
       </div>
     </div>
   );
+
+  const responsesTab = mode === "surveys" ? surveyResponsesTab : formResponsesTab;
 
   return (
     <div className={embedded ? "" : (isEditorOpen ? "w-full" : "container-shell py-8 md:py-10")}>

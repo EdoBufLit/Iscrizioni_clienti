@@ -180,6 +180,53 @@ function renderField(props: {
     ? "border border-white/10 bg-white/5 text-white/90 hover:bg-white/10"
     : "border border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300";
 
+  if (decoded.type === "rating_1_5" || decoded.type === "nps_0_10") {
+    const options = decoded.optionsText.split(",").map((s) => s.trim()).filter(Boolean);
+    const minimumLabel = decoded.type === "rating_1_5" ? "Per niente soddisfatto" : "Per niente probabile";
+    const maximumLabel = decoded.type === "rating_1_5" ? "Molto soddisfatto" : "Estremamente probabile";
+    return (
+      <fieldset key={decoded.key} style={containerStyle} className="block">
+        {!decoded.hideLabel && (
+          <legend className={`text-sm font-semibold mb-3 ${labelColor}`}>
+            {decoded.label} {decoded.required && <span className="text-red-500 ml-0.5">*</span>}
+          </legend>
+        )}
+        <div className={`grid gap-2 ${decoded.type === "nps_0_10" ? "grid-cols-6 sm:grid-cols-11" : "grid-cols-5"}`}>
+          {options.map((option) => {
+            const selected = String(value || "") === option;
+            return (
+              <label
+                key={option}
+                className={`flex h-11 cursor-pointer items-center justify-center rounded-xl border text-sm font-semibold transition-colors ${
+                  selected
+                    ? "border-transparent text-white"
+                    : optionCardClass
+                }`}
+                style={selected && !isSpotlight ? { backgroundColor: accentColor } : undefined}
+              >
+                <input
+                  type="radio"
+                  name={decoded.key}
+                  disabled={disabled}
+                  checked={selected}
+                  onChange={() => onValueChange?.(decoded.key, option)}
+                  required={decoded.required}
+                  className="sr-only"
+                />
+                {option}
+              </label>
+            );
+          })}
+        </div>
+        <div className={`mt-2 flex justify-between text-xs ${helpColor}`}>
+          <span>{minimumLabel}</span>
+          <span>{maximumLabel}</span>
+        </div>
+        {renderHelpText()}
+      </fieldset>
+    );
+  }
+
   if (decoded.type === "radio") {
     const options = decoded.optionsText.split(",").map((s) => s.trim()).filter(Boolean);
     return (

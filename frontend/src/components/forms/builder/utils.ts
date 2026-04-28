@@ -8,7 +8,9 @@ export type VirtualFieldType =
   | "free_text"
   | "divider"
   | "spacer"
-  | "file_upload";
+  | "file_upload"
+  | "rating_1_5"
+  | "nps_0_10";
 
 export interface BuilderField {
   id: number;
@@ -21,6 +23,7 @@ export interface BuilderField {
   optionsText: string;
   width: FieldWidth;
   hideLabel: boolean;
+  surveyKind?: "rating_1_5" | "nps_0_10";
 }
 
 export type BuilderFieldPayload = {
@@ -40,6 +43,8 @@ export const VIRTUAL_TYPE_PREFIXES: Record<string, string> = {
   divider: "__ui_divider__",
   spacer: "__ui_spacer__",
   file_upload: "__ui_file__",
+  rating_1_5: "__survey_rating__",
+  nps_0_10: "__survey_nps__",
 };
 
 export const META_DELIMITER = "|||META:";
@@ -51,6 +56,8 @@ export function createFieldFromPaletteItem(
 ): BuilderField {
   const paletteItem = PALETTE_ITEMS.find((item) => item.type === type);
   const resolvedLabel = label || paletteItem?.label || "Nuovo blocco";
+  const isRating = type === "rating_1_5";
+  const isNps = type === "nps_0_10";
 
   return {
     id: -Date.now(),
@@ -58,13 +65,22 @@ export function createFieldFromPaletteItem(
     key: generateFieldKey(type, resolvedLabel),
     label: resolvedLabel,
     placeholder: "",
-    helpText: "",
+    helpText: isRating
+      ? "Lascia una valutazione da 1 a 5."
+      : isNps
+        ? "Indica quanto consiglieresti questa esperienza."
+        : "",
     required: false,
-    optionsText: ["select", "radio", "checkbox"].includes(type)
-      ? "Opzione 1, Opzione 2"
-      : "",
+    optionsText: isRating
+      ? "1, 2, 3, 4, 5"
+      : isNps
+        ? "0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10"
+        : ["select", "radio", "checkbox"].includes(type)
+          ? "Opzione 1, Opzione 2"
+          : "",
     width: "100%",
     hideLabel: false,
+    surveyKind: isRating || isNps ? type : undefined,
   };
 }
 
@@ -88,9 +104,12 @@ export function decodeField(apiField: AssociationFormField): BuilderField {
     const parts = helpText.split(META_DELIMITER);
     helpText = parts[0];
     try {
-      const meta = JSON.parse(parts[1]) as { w?: FieldWidth; hl?: boolean };
+      const meta = JSON.parse(parts[1]) as { w?: FieldWidth; hl?: boolean; survey?: "rating_1_5" | "nps_0_10" };
       if (meta.w === "50%") width = "50%";
       if (meta.hl === true) hideLabel = true;
+      if (meta.survey === "rating_1_5" || meta.survey === "nps_0_10") {
+        virtualType = meta.survey;
+      }
     } catch {
       // ignore parse errors
     }
@@ -107,6 +126,7 @@ export function decodeField(apiField: AssociationFormField): BuilderField {
     optionsText: (apiField.options || []).join(", "),
     width,
     hideLabel,
+    surveyKind: virtualType === "rating_1_5" || virtualType === "nps_0_10" ? virtualType : undefined,
   };
 }
 
@@ -133,12 +153,17 @@ export function encodeField(
     apiType = builderField.type as AssociationFormFieldType;
   } else if (builderField.type === "free_text") {
     apiType = "long_text";
+  } else if (builderField.type === "rating_1_5" || builderField.type === "nps_0_10") {
+    apiType = "radio";
   }
 
   // Build metadata
-  const meta: { w?: FieldWidth; hl?: boolean } = {};
+  const meta: { w?: FieldWidth; hl?: boolean; survey?: "rating_1_5" | "nps_0_10" } = {};
   if (builderField.width === "50%") meta.w = "50%";
   if (builderField.hideLabel) meta.hl = true;
+  if (builderField.surveyKind || builderField.type === "rating_1_5" || builderField.type === "nps_0_10") {
+    meta.survey = (builderField.surveyKind || builderField.type) as "rating_1_5" | "nps_0_10";
+  }
   
   let finalHelpText = builderField.helpText;
   if (Object.keys(meta).length > 0) {
@@ -177,7 +202,7 @@ export function generateFieldKey(type: VirtualFieldType, label: string): string 
   return `${baseKey}_${suffix}`;
 }
 
-export const PALETTE_ITEMS = [
+export const FORM_PALETTE_ITEMS = [
   { type: "section_title", label: "Titolo sezione", icon: "H" },
   { type: "free_text", label: "Testo libero", icon: "T" },
   { type: "divider", label: "Separatore", icon: "—" },
@@ -194,3 +219,22 @@ export const PALETTE_ITEMS = [
   { type: "file_upload", label: "Upload file", icon: "↑" },
   { type: "consent", label: "Consenso Privacy", icon: "✓" },
 ] as const;
+
+export const SURVEY_PALETTE_ITEMS = [
+  { type: "section_title", label: "Titolo/Intro", icon: "T" },
+  { type: "short_text", label: "Risposta breve", icon: "Aa" },
+  { type: "long_text", label: "Paragrafo", icon: "P" },
+  { type: "radio", label: "Scelta multipla", icon: "O" },
+  { type: "checkbox", label: "Caselle di controllo", icon: "C" },
+  { type: "select", label: "Menu a tendina", icon: "V" },
+  { type: "rating_1_5", label: "Valutazione 1-5", icon: "5" },
+  { type: "nps_0_10", label: "NPS 0-10", icon: "10" },
+  { type: "date", label: "Data", icon: "D" },
+  { type: "consent", label: "Consenso privacy", icon: "OK" },
+] as const;
+
+export const PALETTE_ITEMS = [...FORM_PALETTE_ITEMS, ...SURVEY_PALETTE_ITEMS] as const;
+
+export function getPaletteItems(mode: "forms" | "surveys" = "forms") {
+  return mode === "surveys" ? SURVEY_PALETTE_ITEMS : FORM_PALETTE_ITEMS;
+}

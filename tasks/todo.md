@@ -1,3 +1,49 @@
+## Plan (Pre-push quote tessere, builder campagne e sondaggi - Apr 28, 2026)
+- [x] Rieseguire test backend mirati per totale quote, campagne/comunicazioni e sondaggi/form.
+- [x] Rieseguire typecheck e build frontend.
+- [x] Controllare diff/staging per includere solo modifiche pertinenti.
+- [x] Creare commit e fare push del ramo corrente.
+
+## Review (Pre-push quote tessere, builder campagne e sondaggi - Apr 28, 2026)
+- Verifica backend: `python -m pytest -q tests/test_org_admin_member_filters.py tests/test_forms_module.py tests/test_org_admin_communications.py tests/test_low_cards_alert_job.py` OK (`44 passed`).
+- Verifica frontend: `npm --prefix frontend run typecheck` OK e `npm --prefix frontend run build` OK; resta solo il warning Vite gia noto sui chunk grandi.
+- Diff check: `git diff --check` OK, con soli warning CRLF locali.
+- Staging previsto: codice e test per totale quote, builder campagne e sondaggi; artefatti locali non tracciati esclusi.
+
+## Plan (Quote tessere, builder campagne e sondaggi - Apr 28, 2026)
+- [x] Aggiornare il totale quote in Tessere per ricalcolare dai prezzi correnti annuale/temporanea senza modificare gli snapshot storici dei soci.
+- [x] Correggere il builder campagne attivo: sezioni iniziali separate, lista struttura affidabile, `Giu` funzionante e drag blocchi nel canvas.
+- [x] Separare l'esperienza sondaggi dai form: palette builder dedicata, rating/NPS renderizzati e tab risposte con statistiche di apprezzamento.
+- [x] Aggiornare test backend mirati e verifiche frontend.
+- [x] Eseguire smoke browser sulle superfici toccate e documentare risultati.
+
+## Review (Quote tessere, builder campagne e sondaggi - Apr 28, 2026)
+- Tessere: il totale quote in `/api/org-admin/members` ora somma le tessere emesse usando i prezzi quota correnti annuale/temporanea dell'organizzazione; il salvataggio regole in UI ricarica il riepilogo subito dopo la PATCH.
+- Builder campagne: la struttura legge le sezioni top-level anche quando il documento iniziale e incapsulato in `mjml/mj-body`; `Su/Giu` e drag nella lista struttura riordinano la collection corretta, e il click su un blocco aggiunge una nuova sezione senza collassare il documento.
+- Sondaggi: palette builder ridotta ai blocchi utili, con `Valutazione 1-5` e `NPS 0-10`; preview pubblica e canvas renderizzano scale numeriche; la tab risposte mostra KPI, distribuzioni, preferenze e commenti senza conferma/rigetto.
+- Verifiche: `python -m pytest -q tests/test_org_admin_member_filters.py tests/test_forms_module.py tests/test_org_admin_communications.py` OK (`36 passed`); `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK con solo warning Vite preesistente sui chunk grandi.
+- Smoke: Playwright mockato su `http://127.0.0.1:5173` OK per campagne e sondaggi: 3 sezioni iniziali separate, click blocco -> 4 sezioni, drag struttura senza errori, tab sondaggi con statistiche e senza azioni conferma/rigetto.
+
+## Plan (ASSONAM UI/UX implementation plan da PDF - Apr 27, 2026)
+- [ ] Fase 0 - Audit mirato prima di toccare UI: verificare nel codice quali punti del PDF sono ancora veri dopo i rehaul recenti, con particolare attenzione a super-admin, org-admin, dark mode, componenti gia introdotti, paginazione Organizations, modali, toast, copy e mobile.
+- [ ] Fase 1 - Correzioni funzionali e fiducia prodotto: spostare o confermare i filtri Organizations server-side, sistemare paginazione e KPI calcolati da server, rimuovere dati hardcoded o finti, eliminare prezzo affiliazione hardcoded, standardizzare password minima e correggere label/status in italiano.
+- [ ] Fase 2 - Fondazioni UI condivise: consolidare Button, StatusBadge, Confirm/ModalShell, ToastProvider, FormField, FileUpload, EmptyState e DataTable solo dove non esistono gia primitive equivalenti; evitare di creare doppioni se le primitive super-admin/org-admin introdotte nei rehaul coprono gia il caso.
+- [ ] Fase 3 - Accessibilita e sicurezza UX: focus trap su tutte le modali, aria-live toast, aria-current navigazione, ARIA tabs/combobox, aria-invalid/describedby sui form, skip-link, focus-visible globale, prefers-reduced-motion e conferme standard per azioni distruttive.
+- [ ] Fase 4 - Copy e microcopy: correggere accenti e italiano visibile, tradurre label inglesi residue, centralizzare status labels e messaggi ricorrenti, rinominare "Password dimenticata" in "Accedi senza password", usare azioni specifiche come "Scarica elenco CSV" e "Salva modifiche".
+- [ ] Fase 5 - Responsive operativo: filtri in drawer mobile, tabelle in card sotto 768px, bottom sheet per azioni complesse, submit sticky nei wizard pubblici, touch events su RoomFloorMap e controllo viewport reale a 375, 768, 1024 e 1440px.
+- [ ] Fase 6 - IA e layout prodotto: applicare solo dopo l'audit le modifiche di architettura informativa che riducono complessita reale, in particolare accorpamenti "Soci e Tessere", "Documenti e Contabilita", "Prenotazioni: Agenda / Sale e Tavoli" e pulizia Comunicazioni, evitando altri re-skin generici.
+- [ ] Fase 7 - Dark mode sostenibile: non fare un big bang se le aree sono gia state corrette di recente; convergere progressivamente su token semantici e rimuovere override fragili solo dopo screenshot light/dark per dashboard, tabelle, modali, builder e pagine pubbliche principali.
+- [ ] Fase 8 - Refactor componenti monolitici: scomporre Bookings, OrganizationManageModal, MemberDetail, Forms, Iscrizione e Affiliazione per flusso e responsabilita, ma solo mentre si tocca la pagina per un miglioramento concreto; evitare refactor isolati senza test e smoke.
+- [ ] Fase 9 - Evoluzioni da posticipare: onboarding wizard backend, notifiche in-app complete, analytics dashboard, PWA/offline/push e drag-and-drop avanzato del builder vanno trattati come roadmap prodotto separata, non come prerequisito del redesign UI/UX.
+- [ ] Verifica per ogni fase: typecheck/build frontend, test backend mirati quando cambia il contratto dati, smoke browser autenticato, screenshot viewport normali light/dark e mobile, controllo console/network e mini-audit accessibilita sulle superfici toccate.
+
+## Review (ASSONAM UI/UX implementation plan da PDF - Apr 27, 2026)
+- Piano creato dal PDF `C:\Users\edoar\Downloads\ASSONAM_Analisi_UI_UX.pdf` e incrociato con le lezioni di progetto: priorita a bug funzionali, fiducia, accessibilita, responsive e coerenza, non a un altro re-skin.
+- Parere: il PDF e valido come backlog, ma va normalizzato. Alcune voci sono gia state toccate dai rehaul recenti e vanno prima riverificate; altre sono troppo ampie per stare nello stesso rilascio e rischiano regressioni se fatte insieme.
+- Da tenere subito: server-side filtering/pagination, rimozione hardcoded, status/copy italiano, conferme distruttive, focus trap, ToastProvider, validazione file, DataTable/StatusBadge/FormField condivisi, responsive table cards e test light/dark.
+- Da ridurre o spostare: dashboard analytics, PWA/push/offline, onboarding backend, sistema notifiche completo e refactor massivi senza obiettivo funzionale immediato.
+- Modifiche extra consigliate: baseline visual regression per pagine critiche, matrice ruoli/flussi prima di cambiare IA, audit di feature gate e permessi quando si spostano voci menu, controllo performance INP sulle dashboard e inventario dei componenti gia esistenti prima di crearne altri.
+
 ## Plan (Org admin browser feedback WhatsApp e agenda - Apr 27, 2026)
 - [x] Correggere il link sidebar WhatsApp che tornava a Panoramica quando WhatsApp non era attivo.
 - [x] Rendere richiudibili le righe prenotazione espanse nell'agenda senza riapertura automatica.

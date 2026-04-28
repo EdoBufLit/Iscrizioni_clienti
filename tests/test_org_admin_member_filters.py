@@ -285,8 +285,23 @@ def test_org_admin_members_summary_uses_snapshot_and_expired_temporary_cards(cli
     members_res = client.get("/api/org-admin/members")
     assert members_res.status_code == 200, members_res.text
     payload = members_res.json()
-    assert payload["summary"]["total_theoretical_membership_fees"] == 40.0
+    assert payload["summary"]["total_theoretical_membership_fees"] == 213.0
     assert payload["summary"]["issued_members_count"] == 3
+
+    patch_res = client.patch(
+        "/api/org-admin/organization/membership-settings",
+        json={
+            "membership_fee_amount": 3,
+            "temporary_membership_fee_amount": 2,
+            "temporary_membership_duration_value": 1,
+            "temporary_membership_duration_unit": "days",
+        },
+    )
+    assert patch_res.status_code == 200, patch_res.text
+
+    updated_res = client.get("/api/org-admin/members")
+    assert updated_res.status_code == 200, updated_res.text
+    assert updated_res.json()["summary"]["total_theoretical_membership_fees"] == 8.0
 
     expired_res = client.get("/api/org-admin/members?status=expired")
     assert expired_res.status_code == 200, expired_res.text

@@ -30,6 +30,7 @@ import {
   createFieldFromPaletteItem,
   FORM_BUILDER_CANVAS_ID,
   generateFieldKey,
+  getPaletteItems,
   PALETTE_ITEMS,
 } from "./utils";
 import { PaletteItem, StaticPaletteItem } from "./PaletteItem";
@@ -43,6 +44,7 @@ type Props = {
   onDeleteField: (id: number) => Promise<void>;
   onReorder: (fields: BuilderField[]) => Promise<void>;
   locked?: boolean;
+  mode?: "forms" | "surveys";
 };
 
 type BuilderCanvasProps = {
@@ -122,7 +124,7 @@ function BuilderCanvas({
   );
 }
 
-export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onReorder, locked }: Props) {
+export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onReorder, locked, mode = "forms" }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [lastKnownOverId, setLastKnownOverId] = useState<string | null>(null);
@@ -133,6 +135,7 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
   const creatingFieldKeysRef = useRef<Set<string>>(new Set());
   const queuedCreateUpdatesRef = useRef<Map<string, BuilderField>>(new Map());
   const items = fields;
+  const paletteItems = useMemo(() => getPaletteItems(mode), [mode]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -395,7 +398,7 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
             <p className="mt-1 text-xs leading-5 text-slate-500">Trascina campi, sezioni e blocchi di consenso nel canvas centrale.</p>
           </div>
           <div className="flex flex-col gap-2 max-h-[70vh] overflow-y-auto custom-scrollbar pr-2">
-            {PALETTE_ITEMS.map((item) => (
+            {paletteItems.map((item) => (
               <PaletteItem key={item.type} item={item} />
             ))}
           </div>

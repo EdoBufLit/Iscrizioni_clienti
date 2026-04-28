@@ -3,6 +3,8 @@
 - Quando il cliente chiede fedelta esatta a mockup admin, non basta un re-skin: prima della consegna servono screenshot viewport-to-viewport delle superfici critiche, inclusi drawer/modali fixed. Inoltre le integrazioni esistenti nel dettaglio (es. SumUp) vanno preservate esplicitamente nella nuova IA e verificate nello screenshot.
 # Lessons
 
+- Se l'utente contesta un builder visuale perche tratta il documento iniziale come un blocco unico, verificare il modello componenti reale del canvas: distinguere wrapper `mjml/mj-body` dalle sezioni top-level, testare `Su/Giu`, click blocco e drag in browser prima di dichiarare risolto.
+
 - Quando un messaggio automatico di conferma/rigetto dipende da dati inseriti nel form, il testo non deve mai leggere solo la `booking` persistita: servono fallback dal payload reale, placeholder compositi sicuri (`slot`/`riepilogo`) e un override per-decision opzionale nella UI di review.
 
 - Se in un workspace admin esiste gia una vista operativa primaria (es. inbox WhatsApp con QR/chat), una nuova capability secondaria (es. automazioni) non deve mai sostituirla: va introdotta come sottovista discreta, senza hero promozionali o blocchi marketing.

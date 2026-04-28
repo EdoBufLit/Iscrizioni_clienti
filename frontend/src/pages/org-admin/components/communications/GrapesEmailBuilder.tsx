@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import grapesjs, { type Editor } from "grapesjs";
 import grapesjsMjml from "grapesjs-mjml";
 import mjml2html from "mjml-browser";
@@ -80,6 +80,7 @@ export function GrapesEmailBuilder({
   onDeleteAsset,
 }: GrapesEmailBuilderProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const blocksPanelRef = useRef<HTMLDivElement | null>(null);
   const stylePanelRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<Editor | null>(null);
@@ -94,16 +95,35 @@ export function GrapesEmailBuilder({
   const [selectedButton, setSelectedButton] = useState<SelectedButtonState | null>(null);
   const [selectedSectionLabel, setSelectedSectionLabel] = useState<string | null>(null);
   const [sections, setSections] = useState<BuilderSectionSummary[]>([]);
+  const [draggingSectionId, setDraggingSectionId] = useState<string | null>(null);
   const { showToast } = useToast();
   const sortedAssets = useMemo(() => sortAssetsByDate(assets), [assets]);
   const linkVariables = useMemo(
-    () => variables.filter((item) => item.placeholder.includes("link_") || item.placeholder.includes("url")),
+    () =>
+      variables.filter((item) => {
+        const placeholder = String(item.placeholder || item.key || "");
+        return placeholder.includes("link_") || placeholder.includes("url");
+      }),
     [variables],
   );
 
   useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
+
+  const refreshSections = useCallback((currentEditor: Editor | null = editorRef.current) => {
+    if (!currentEditor) return;
+    const selectedSection = getSelectedTopLevelSection(currentEditor);
+    const nextSections = getTopLevelEmailSections(currentEditor).map((section: any, index: number) => ({
+      id: sectionIdentity(section, index),
+      label: sectionLabel(section, index),
+      selected: Boolean(selectedSection && section === selectedSection),
+    }));
+    setSections(nextSections);
+    setSelectedSectionLabel(
+      selectedSection ? sectionLabel(selectedSection, nextSections.findIndex((item: BuilderSectionSummary) => item.selected)) : null,
+    );
+  }, []);
 
   useEffect(() => {
     if (!hostRef.current) return;
@@ -173,10 +193,18 @@ export function GrapesEmailBuilder({
     editor.BlockManager.getAll().reset();
     BUILDER_BLOCKS.forEach((block) => {
       editor.BlockManager.add(block.id, {
-        label: block.label,
+        label: `
+          <span class="builder-block-card__label">${block.label}</span>
+          <span class="builder-block-card__description">${block.description}</span>
+        `,
         content: block.mjml.trim(),
+        attributes: {
+          class: "builder-block-card",
+          title: block.description,
+        },
       });
     });
+    renderNativeBlocks(editor, blocksPanelRef.current, appendBlock);
 
     const initialDocument = ensureMjmlDocument(initialMjmlSource);
     if (initialProjectData && Object.keys(initialProjectData).length > 0) {
@@ -217,29 +245,11 @@ export function GrapesEmailBuilder({
       };
     };
 
-    const refreshSections = () => {
-      const currentEditor = editorRef.current;
-      if (!currentEditor) return;
-      const body = getBodyComponent(currentEditor);
-      const selectedSection = getSelectedTopLevelSection(currentEditor);
-      const nextSections = body
-        ? body.components().map((section: any, index: number) => ({
-            id: String(section.cid || section.getId?.() || index),
-            label: sectionLabel(section, index),
-            selected: Boolean(selectedSection && section === selectedSection),
-          }))
-        : [];
-      setSections(nextSections);
-      setSelectedSectionLabel(
-        selectedSection ? sectionLabel(selectedSection, nextSections.findIndex((item: BuilderSectionSummary) => item.selected)) : null,
-      );
-    };
-
     const syncSelectedButton = (component: any) => {
       const next = readButtonState(component);
       selectedButtonComponentRef.current = next ? component : null;
       setSelectedButton(next);
-      window.requestAnimationFrame(refreshSections);
+      window.requestAnimationFrame(() => refreshSections());
     };
 
     editor.on("load", () => {
@@ -283,6 +293,11 @@ export function GrapesEmailBuilder({
   }, [editorKey]);
 
   useEffect(() => {
+    if (railTab !== "blocks" || !ready) return;
+    renderNativeBlocks(editorRef.current, blocksPanelRef.current, appendBlock);
+  }, [railTab, ready]);
+
+  useEffect(() => {
     const editor = editorRef.current;
     if (!editor) return;
     editor.AssetManager.getAll().reset(createAssetRecords(sortedAssets));
@@ -298,9 +313,9 @@ export function GrapesEmailBuilder({
   function appendBlock(block: BuilderBlockDefinition) {
     const editor = editorRef.current;
     if (!editor) return;
-    const body = getBodyComponent(editor);
-    if (!body) return;
-    const collection = body.components();
+    const sectionContainer = getSectionContainer(editor);
+    if (!sectionContainer) return;
+    const { collection } = sectionContainer;
     const previousLength = collection.length;
     const selectedSection = getSelectedTopLevelSection(editor);
     const insertAt = selectedSection ? collection.indexOf(selectedSection) + 1 : collection.length;
@@ -322,24 +337,41 @@ export function GrapesEmailBuilder({
 
   function selectSection(sectionId: string) {
     const editor = editorRef.current;
-    const body = editor ? getBodyComponent(editor) : null;
-    if (!editor || !body) return;
-    const target = body.components().find((section: any, index: number) => String(section.cid || section.getId?.() || index) === sectionId);
+    if (!editor) return;
+    const target = getTopLevelEmailSections(editor).find((section: any, index: number) => sectionIdentity(section, index) === sectionId);
     if (target) editor.select(target);
   }
 
   function moveSelectedSection(direction: "up" | "down") {
     const editor = editorRef.current;
     if (!editor) return;
-    const body = getBodyComponent(editor);
+    const sectionContainer = getSectionContainer(editor);
     const section = getSelectedTopLevelSection(editor);
-    if (!body || !section) return;
-    const collection = body.components();
+    if (!sectionContainer || !section) return;
+    const { collection } = sectionContainer;
     const currentIndex = collection.indexOf(section);
     const nextIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
     if (nextIndex < 0 || nextIndex >= collection.length) return;
-    section.move(body, { at: nextIndex });
+    collection.remove(section);
+    collection.add(section, { at: nextIndex });
     editor.select(section);
+    window.requestAnimationFrame(() => refreshSections(editor));
+  }
+
+  function moveSectionToIndex(sectionId: string, targetIndex: number) {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const sectionContainer = getSectionContainer(editor);
+    const sectionsList = getTopLevelEmailSections(editor);
+    const section = sectionsList.find((item: any, index: number) => sectionIdentity(item, index) === sectionId);
+    if (!sectionContainer || !section) return;
+    const currentIndex = sectionsList.indexOf(section);
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= sectionsList.length || currentIndex === targetIndex) return;
+    const { collection } = sectionContainer;
+    collection.remove(section);
+    collection.add(section, { at: targetIndex });
+    editor.select(section);
+    window.requestAnimationFrame(() => refreshSections(editor));
   }
 
   function deleteSelectedSection() {
@@ -489,15 +521,8 @@ export function GrapesEmailBuilder({
           {railTab === "blocks" ? (
             <div className="builder-rail__panel">
               <p className="builder-rail__title">Blocchi guidati</p>
-              <p className="builder-rail__copy">Aggiungi solo i moduli utili per le comunicazioni associative.</p>
-              <div className="builder-block-grid">
-                {BUILDER_BLOCKS.map((block) => (
-                  <button key={block.id} type="button" className="builder-block-card" onClick={() => appendBlock(block)}>
-                    <span className="builder-block-card__label">{block.label}</span>
-                    <span className="builder-block-card__description">{block.description}</span>
-                  </button>
-                ))}
-              </div>
+              <p className="builder-rail__copy">Trascina un blocco nel canvas oppure cliccalo per aggiungerlo al messaggio.</p>
+              <div ref={blocksPanelRef} className="builder-block-grid builder-block-grid--native" />
             </div>
           ) : null}
 
@@ -645,13 +670,34 @@ export function GrapesEmailBuilder({
           <div className="builder-selection-card">
             <p className="builder-selection-card__label">Struttura messaggio</p>
             <div className="builder-section-list">
-              {sections.map((section) => (
+              {sections.map((section, index) => (
                 <button
                   key={section.id}
                   type="button"
-                  className={section.selected ? "builder-section-row builder-section-row--active" : "builder-section-row"}
+                  draggable
+                  className={[
+                    section.selected ? "builder-section-row builder-section-row--active" : "builder-section-row",
+                    draggingSectionId === section.id ? "builder-section-row--dragging" : "",
+                  ].filter(Boolean).join(" ")}
                   onClick={() => selectSection(section.id)}
+                  onDragStart={(event) => {
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("text/plain", section.id);
+                    setDraggingSectionId(section.id);
+                  }}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const draggedId = event.dataTransfer.getData("text/plain") || draggingSectionId;
+                    if (draggedId) moveSectionToIndex(draggedId, index);
+                    setDraggingSectionId(null);
+                  }}
+                  onDragEnd={() => setDraggingSectionId(null)}
                 >
+                  <span className="builder-section-row__handle" aria-hidden="true">::</span>
                   {section.label}
                 </button>
               ))}
@@ -676,25 +722,113 @@ export function GrapesEmailBuilder({
   );
 }
 
+function componentName(component: any): string {
+  return String(
+    component?.getName?.()
+      || component?.get?.("tagName")
+      || component?.get?.("type")
+      || component?.attributes?.tagName
+      || "",
+  ).toLowerCase();
+}
+
+function findComponentByName(root: any, matcher: (name: string) => boolean): any | null {
+  if (!root) return null;
+  if (matcher(componentName(root))) return root;
+  const children = root.components?.();
+  if (!children) return null;
+  for (const child of children.models || children) {
+    const found = findComponentByName(child, matcher);
+    if (found) return found;
+  }
+  return null;
+}
+
 function getBodyComponent(editor: Editor): any | null {
   const wrapper = editor.getWrapper();
   if (!wrapper) return null;
-  return wrapper.find("mj-body")[0] || wrapper;
+  return (
+    findComponentByName(wrapper, (name) => name === "mj-body" || name === "body" || name.includes("mj-body"))
+    || wrapper
+  );
+}
+
+function getSectionContainer(editor: Editor): { body: any; collection: any } | null {
+  const body = getBodyComponent(editor);
+  const collection = body?.components?.();
+  if (!body || !collection) return null;
+  const children = Array.from(collection.models || collection) as any[];
+  const mjmlRoot = children.length === 1 && componentName(children[0]).includes("mjml") ? children[0] : null;
+  if (mjmlRoot) {
+    const nestedBody = findComponentByName(mjmlRoot, (name) => name === "mj-body" || name === "body" || name.includes("mj-body"));
+    const nestedCollection = nestedBody?.components?.();
+    if (nestedBody && nestedCollection) {
+      return { body: nestedBody, collection: nestedCollection };
+    }
+  }
+  return { body, collection };
+}
+
+function renderNativeBlocks(
+  editor: Editor | null,
+  container: HTMLDivElement | null,
+  onBlockClick?: (block: BuilderBlockDefinition) => void,
+) {
+  if (!editor || !container) return;
+  container.innerHTML = "";
+  const rendered = editor.BlockManager.render(undefined, { external: true });
+  if (rendered) {
+    container.appendChild(rendered);
+    if (onBlockClick) {
+      Array.from(container.querySelectorAll<HTMLElement>(".gjs-block")).forEach((element, index) => {
+        element.addEventListener(
+          "click",
+          (event) => {
+            const block = BUILDER_BLOCKS[index];
+            if (!block) return;
+            event.preventDefault();
+            event.stopPropagation();
+            onBlockClick(block);
+          },
+          true,
+        );
+      });
+    }
+  }
+}
+
+function getTopLevelEmailSections(editor: Editor): any[] {
+  const sectionContainer = getSectionContainer(editor);
+  if (!sectionContainer) return [];
+  const children = Array.from(sectionContainer.collection.models || sectionContainer.collection) as any[];
+  return children.filter((child: any) => {
+    const name = componentName(child);
+    return !name.includes("mjml") && !name.includes("body");
+  });
 }
 
 function getSelectedTopLevelSection(editor: Editor): any | null {
-  const body = getBodyComponent(editor);
+  const sectionContainer = getSectionContainer(editor);
   const selected = editor.getSelected();
-  if (!body || !selected) return null;
+  if (!sectionContainer || !selected) return null;
+  const { body } = sectionContainer;
+  const sections = getTopLevelEmailSections(editor);
   let current: any = selected;
   while (current && current.parent && current.parent() && current.parent() !== body) {
     current = current.parent();
   }
-  return current && current.parent && current.parent() === body ? current : null;
+  if (current && current.parent && current.parent() === body && sections.includes(current)) {
+    return current;
+  }
+  return sections.find((section) => section === selected) || null;
+}
+
+function sectionIdentity(section: any, index: number): string {
+  return String(section.cid || section.getId?.() || section.get?.("id") || index);
 }
 
 function sectionLabel(section: any, index: number): string {
   const text = String(section.getName?.() || section.get?.("tagName") || "Blocco").replace(/^mj-/i, "");
-  const normalized = text ? text.charAt(0).toUpperCase() + text.slice(1) : "Blocco";
+  const normalized = text && text.toLowerCase() !== "section" ? text.charAt(0).toUpperCase() + text.slice(1) : "Blocco";
   return `${index + 1}. ${normalized}`;
 }

@@ -187,6 +187,7 @@ from app.services.member_activity import (
 )
 from app.services.member_membership import (
     MEMBERSHIP_TYPE_ANNUAL,
+    MEMBERSHIP_TYPE_TEMPORARY,
     apply_membership_defaults,
     membership_amount_to_float,
     membership_type_label,
@@ -4818,7 +4819,24 @@ def list_org_members(
 
     summary_row = (
         db.query(
-            func.coalesce(func.sum(Member.membership_fee_snapshot), 0),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            Member.membership_type == MEMBERSHIP_TYPE_TEMPORARY,
+                            organization_membership_fee_amount(
+                                admin.organization, MEMBERSHIP_TYPE_TEMPORARY
+                            )
+                            or Decimal("0.00"),
+                        ),
+                        else_=organization_membership_fee_amount(
+                            admin.organization, MEMBERSHIP_TYPE_ANNUAL
+                        )
+                        or Decimal("0.00"),
+                    )
+                ),
+                0,
+            ),
             func.count(Member.id),
         )
         .filter(
@@ -5494,6 +5512,10 @@ def member_decision(
     org = member.organization or db.query(Organization).filter(Organization.id == member.org_id).first()
     requires_payment = organization_requires_membership_payment(org)
 
+    member.decision_at = datetime.utcnow()
+    member.decision_by_admin_id = admin.id
+    member.decision_notes = body.notes
+
     # Apply decision
     if body.decision == "approve":
         if requires_payment and not payment_status_is_paid(member.payment_status):
@@ -5509,10 +5531,6 @@ def member_decision(
                 member.status = MemberStatus.PENDING_CARDS
     else:
         member.status = MemberStatus.REJECTED
-
-    member.decision_at = datetime.utcnow()
-    member.decision_by_admin_id = admin.id
-    member.decision_notes = body.notes
 
     db.commit()
 

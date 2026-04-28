@@ -112,7 +112,10 @@ const OrgAdminCards = () => {
           : undefined,
       };
       const response = await patchOrgAdminMembershipSettings(payload);
+      const membersData = await fetchOrgAdminMembers({ limit: 1, offset: 0 });
       setMembershipSettings(response.settings);
+      setSummaryTotal(membersData.summary?.total_theoretical_membership_fees ?? 0);
+      setIssuedMembersCount(membersData.summary?.issued_members_count ?? 0);
       setMembershipSettingsError("");
     } catch (err) {
       setMembershipSettingsError(err instanceof Error ? err.message : "Errore aggiornamento impostazioni tessera.");
@@ -313,7 +316,7 @@ const OrgAdminCards = () => {
 
               <SectionPanel title="Totale quote" eyebrow="Contabilita">
                 <p className="text-3xl font-semibold tracking-tight text-slate-950">€ {summaryTotal.toFixed(2)}</p>
-                <p className="mt-2 text-sm text-slate-500">Valore teorico calcolato sui soci e sulle regole quota correnti.</p>
+                <p className="mt-2 text-sm text-slate-500">Valore teorico calcolato sulle tessere emesse e sui prezzi quota correnti.</p>
               </SectionPanel>
             </aside>
           </div>

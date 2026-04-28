@@ -286,6 +286,7 @@
   font-size: 0.82rem;
   font-weight: 700;
   color: #52606f;
+  cursor: grab;
   transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease;
 }
 
@@ -294,6 +295,18 @@
   border-color: #17494a;
   background: #eef7f7;
   color: #17494a;
+}
+
+.builder-section-row--dragging {
+  opacity: 0.55;
+  cursor: grabbing;
+}
+
+.builder-section-row__handle {
+  display: inline-flex;
+  margin-right: 0.45rem;
+  color: #8a7a68;
+  letter-spacing: -0.12em;
 }
 
 .builder-section-actions {
@@ -382,6 +395,29 @@
 .builder-media-list {
   display: grid;
   gap: 0.8rem;
+}
+
+.builder-block-grid--native .gjs-blocks-c {
+  display: grid;
+  gap: 0.8rem;
+  min-height: 0;
+}
+
+.builder-block-grid--native .gjs-block-category {
+  display: contents;
+}
+
+.builder-block-grid--native .gjs-block-category .gjs-title,
+.builder-block-grid--native .gjs-block__media {
+  display: none;
+}
+
+.builder-block-grid--native .gjs-block {
+  width: 100%;
+  min-height: 0;
+  margin: 0;
+  box-shadow: none;
+  color: inherit;
 }
 
 .builder-block-card,

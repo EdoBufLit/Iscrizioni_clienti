@@ -26,7 +26,8 @@ export function PropertiesPanel({ selectedField, onChange, locked }: Props) {
   const isStructural = ["divider", "spacer"].includes(selectedField.type);
   const isTitle = selectedField.type === "section_title";
   const isFreeText = selectedField.type === "free_text";
-  const hasOptions = ["select", "radio", "checkbox"].includes(selectedField.type);
+  const isScaleInput = selectedField.type === "rating_1_5" || selectedField.type === "nps_0_10";
+  const hasOptions = ["select", "radio", "checkbox", "rating_1_5", "nps_0_10"].includes(selectedField.type);
   const isStandardInput = !isStructural && !isTitle && !isFreeText;
 
   const handleChange = (key: keyof BuilderField, value: unknown) => {
@@ -57,7 +58,7 @@ export function PropertiesPanel({ selectedField, onChange, locked }: Props) {
               />
             </div>
 
-            {isStandardInput && (
+            {isStandardInput && !isScaleInput && (
               <div>
                 <label className={labelClass}>Placeholder</label>
                 <input
@@ -85,13 +86,13 @@ export function PropertiesPanel({ selectedField, onChange, locked }: Props) {
 
             {hasOptions && (
               <div>
-                <label className={labelClass}>Opzioni</label>
+                <label className={labelClass}>{isScaleInput ? "Valori scala" : "Opzioni"}</label>
                 <textarea
                   className={`${inputClass} min-h-[88px] resize-none`}
                   disabled={locked}
                   value={selectedField.optionsText}
                   onChange={(e) => handleChange("optionsText", e.target.value)}
-                  placeholder="Opzione 1, Opzione 2, Opzione 3"
+                  placeholder={isScaleInput ? "1, 2, 3, 4, 5" : "Opzione 1, Opzione 2, Opzione 3"}
                 />
               </div>
             )}

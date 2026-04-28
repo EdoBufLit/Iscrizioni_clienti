@@ -56,6 +56,25 @@ function CanvasItemFrame({
         return <hr className="border-t border-neutral-200 my-4" />;
       case "spacer":
         return <div className="flex h-10 items-center justify-center rounded-[0.65rem] border border-dashed border-slate-200/70 bg-slate-50 text-[10px] uppercase tracking-widest text-slate-400">Spazio vuoto</div>;
+      case "rating_1_5":
+      case "nps_0_10": {
+        const options = field.optionsText.split(",").map((item) => item.trim()).filter(Boolean);
+        return (
+          <div className="flex flex-col gap-2 w-full">
+            <span className="text-sm font-semibold text-neutral-800">
+              {field.label} {field.required && <span className="text-red-500">*</span>}
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {options.map((option) => (
+                <span key={option} className="flex h-9 min-w-9 items-center justify-center rounded-[0.65rem] border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600">
+                  {option}
+                </span>
+              ))}
+            </div>
+            {field.helpText && <span className="text-xs text-neutral-500 mt-1">{field.helpText}</span>}
+          </div>
+        );
+      }
       default:
         return (
           <div className="flex flex-col gap-1 w-full">
