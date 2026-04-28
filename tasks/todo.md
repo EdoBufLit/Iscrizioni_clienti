@@ -1,3 +1,13 @@
+## Plan (Fix deploy Alembic tokentype - Apr 28, 2026)
+- [x] Rendere la migration password reset compatibile con Postgres enum e varchar legacy.
+- [x] Eseguire test backend mirati e typecheck frontend.
+- [x] Creare commit correttivo e pushare sul branch corrente.
+
+## Review (Fix deploy Alembic tokentype - Apr 28, 2026)
+- Migration resa idempotente: su PostgreSQL legge da `pg_catalog` il tipo reale di `tokens.purpose`, altera solo enum esistenti e fa no-op per `varchar`/schemi legacy o dialect non PostgreSQL.
+- Verifiche: `python -m py_compile alembic\versions\p7q8r9s0t1u2_add_member_password_reset_token_type.py`, `alembic heads`, reset password email flow (`2 passed`), affiliazione + paginazione super-admin (`15 passed`) e `npm --prefix frontend run typecheck` OK.
+- Staging previsto limitato a migration, `tasks/todo.md` e `tasks/lessons.md`; modifiche locali non correlate escluse.
+
 ## Plan (Piano immediato ASSONAM aggiornato - Apr 28, 2026)
 - [x] Estendere API super-admin associazioni con filtri server-side `status`, `scope`, `numbering` e summary globale filtrata.
 - [x] Aggiornare UI super-admin associazioni per usare filtri/summary backend e rimuovere contatori derivati da pagina corrente.

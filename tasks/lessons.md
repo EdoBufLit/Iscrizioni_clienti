@@ -3,6 +3,7 @@
 - Quando il cliente chiede fedelta esatta a mockup admin, non basta un re-skin: prima della consegna servono screenshot viewport-to-viewport delle superfici critiche, inclusi drawer/modali fixed. Inoltre le integrazioni esistenti nel dettaglio (es. SumUp) vanno preservate esplicitamente nella nuova IA e verificate nello screenshot.
 # Lessons
 
+- Se una migration deve alterare un enum Postgres, non assumere il nome del tipo generato da SQLAlchemy: interrogare `pg_catalog` sul tipo reale della colonna e rendere la migration no-op se il DB live usa `varchar` o schema legacy.
 - Se l'utente indica una sezione pubblica specifica da preservare anche con dati hardcoded, non applicare automaticamente principi generali di trust-copy a quella sezione: prima distinguere tra claim marketing approvato e dato operativo ingannevole.
 - Quando l'utente distingue due flussi simili (es. magic link passwordless vs password dimenticata), non riusare il flusso esistente con una label diversa: implementare il dominio separato richiesto e lasciare invariati i comportamenti gia approvati.
 - Se l'utente approva un comportamento esistente (es. verifica QR tessera interna), non includerlo nelle modifiche immediate solo per hardening futuro: separare chiaramente rischio tecnico da cambio funzionale.
