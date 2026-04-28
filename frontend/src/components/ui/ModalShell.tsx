@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useId, useRef } from "react";
 
 type ModalShellProps = {
   open: boolean;
@@ -27,19 +27,60 @@ const ModalShell = ({
   closeOnEscape = true,
   contentClassName = "p-6",
 }: ModalShellProps) => {
+  const titleId = useId();
+  const descriptionId = useId();
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
-    if (!open || !closeOnEscape) {
+    if (!open) {
       return;
     }
 
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const panel = panelRef.current;
+    const focusableSelector =
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const focusable = Array.from(panel?.querySelectorAll<HTMLElement>(focusableSelector) ?? []);
+    (focusable[0] ?? panel)?.focus();
+
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && closeOnEscape) {
         onClose();
+        return;
+      }
+
+      if (event.key !== "Tab" || !panel) {
+        return;
+      }
+
+      const nodes = Array.from(panel.querySelectorAll<HTMLElement>(focusableSelector)).filter(
+        (node) => !node.hasAttribute("disabled") && node.tabIndex !== -1,
+      );
+      if (nodes.length === 0) {
+        event.preventDefault();
+        panel.focus();
+        return;
+      }
+
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      previousFocusRef.current?.focus();
+      previousFocusRef.current = null;
+    };
   }, [closeOnEscape, onClose, open]);
 
   if (!open) {
@@ -51,18 +92,24 @@ const ModalShell = ({
       className={`modal-overlay fixed inset-0 ${zIndexClassName} flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200`}
       role="dialog"
       aria-modal="true"
+      aria-labelledby={titleId}
+      aria-describedby={description ? descriptionId : undefined}
       onClick={(event) => {
         if (closeOnOverlay && event.target === event.currentTarget) {
           onClose();
         }
       }}
     >
-      <div className={`modal-panel relative w-full ${sizeClassName} ${contentClassName}`}>
+      <div
+        ref={panelRef}
+        className={`modal-panel relative w-full ${sizeClassName} ${contentClassName}`}
+        tabIndex={-1}
+      >
         <div className="flex items-start justify-between gap-4">
           <div className="pr-10">
-            <h3 className="text-lg font-semibold text-neutral-900">{title}</h3>
+            <h3 id={titleId} className="text-lg font-semibold text-neutral-900">{title}</h3>
             {description ? (
-              <p className="mt-1 text-sm leading-6 text-neutral-500">{description}</p>
+              <p id={descriptionId} className="mt-1 text-sm leading-6 text-neutral-500">{description}</p>
             ) : null}
           </div>
           <button

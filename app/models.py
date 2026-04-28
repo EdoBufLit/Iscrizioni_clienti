@@ -237,6 +237,7 @@ class AffiliationVideoMode(str, enum.Enum):
 class TokenType(str, enum.Enum):
     SIGNUP_CONTINUE = "signup_continue"
     LOGIN_MAGIC_LINK = "login_magic_link"
+    PASSWORD_RESET = "password_reset"
 
 
 class EmailOutboxStatus(str, enum.Enum):

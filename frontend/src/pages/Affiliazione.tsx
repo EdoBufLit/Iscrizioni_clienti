@@ -507,7 +507,18 @@ const Affiliazione = () => {
     updateResumeLocation(token, currentStep);
   }, [currentStep, showIntroScreen, token, updateResumeLocation]);
 
+  const paymentEnabled = draft?.payment_config?.payment_enabled !== false;
+  const feeAmountCents = draft?.payment_config?.fee_amount_cents ?? null;
+  const feeCurrency = draft?.payment_config?.fee_currency || "EUR";
+  const feeLabel =
+    typeof feeAmountCents === "number" && feeAmountCents > 0
+      ? new Intl.NumberFormat("it-IT", {
+          style: "currency",
+          currency: feeCurrency,
+        }).format(feeAmountCents / 100)
+      : "Quota da confermare";
   const stripeEnabled =
+    paymentEnabled &&
     capabilities?.stripeEnabled === true &&
     (draft?.payment_config?.stripe_enabled ?? true);
   const videoEnabled = capabilities?.affiliationVideoEnabled === true;
@@ -884,7 +895,7 @@ const Affiliazione = () => {
         {/* Stepper top */}
         {!showIntroScreen && !hasRealSubmission && (
           <div className="mb-10 mt-4">
-            <div className="flex items-center justify-between relative z-0">
+            <div className="flex items-center justify-between relative z-0" role="tablist" aria-label="Passaggi affiliazione">
               {/* Line behind */}
               <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-slate-200 rounded-full -z-10"></div>
               <div 
@@ -899,6 +910,10 @@ const Affiliazione = () => {
                   <button
                     key={item.step}
                     type="button"
+                    id={`affiliation-step-tab-${item.step}`}
+                    role="tab"
+                    aria-selected={isActive}
+                    aria-controls={`affiliation-step-panel-${item.step}`}
                     onClick={() => {
                       setShowIntroScreen(false);
                       setCurrentStep(item.step);
@@ -979,7 +994,7 @@ const Affiliazione = () => {
           )}
 
           {!showIntroScreen && !hasRealSubmission && currentStep === 1 && (
-            <div className="p-6 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div id="affiliation-step-panel-1" role="tabpanel" aria-labelledby="affiliation-step-tab-1" className="p-6 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="border-b border-slate-100 pb-5">
                 <h2 className="text-2xl font-extrabold text-slate-900">Dati dell'Associazione</h2>
                 <p className="mt-1 text-sm text-slate-500">Inserisci i riferimenti principali e i dati del referente della richiesta.</p>
@@ -1048,7 +1063,7 @@ const Affiliazione = () => {
           )}
 
           {!showIntroScreen && !hasRealSubmission && currentStep === 2 && (
-            <div className="p-6 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div id="affiliation-step-panel-2" role="tabpanel" aria-labelledby="affiliation-step-tab-2" className="p-6 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="border-b border-slate-100 pb-5">
                 <h2 className="text-2xl font-extrabold text-slate-900">Cariche e Referenti</h2>
                 <p className="mt-1 text-sm text-slate-500">Inserisci i responsabili del direttivo dell'associazione.</p>
@@ -1088,7 +1103,7 @@ const Affiliazione = () => {
           )}
 
           {!showIntroScreen && !hasRealSubmission && currentStep === 3 && (
-            <div className="p-6 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div id="affiliation-step-panel-3" role="tabpanel" aria-labelledby="affiliation-step-tab-3" className="p-6 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="border-b border-slate-100 pb-5">
                 <h2 className="text-2xl font-extrabold text-slate-900">Upload Documenti</h2>
                 <p className="mt-1 text-sm text-slate-500">Carica i file in formato PDF. La segreteria convaliderà i documenti manualmente.</p>
@@ -1176,7 +1191,7 @@ const Affiliazione = () => {
           )}
 
           {!showIntroScreen && !hasRealSubmission && currentStep === 4 && (
-            <div className="p-6 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div id="affiliation-step-panel-4" role="tabpanel" aria-labelledby="affiliation-step-tab-4" className="p-6 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="border-b border-slate-100 pb-5">
                 <h2 className="text-2xl font-extrabold text-slate-900">Pagamento</h2>
                 <p className="mt-1 text-sm text-slate-500">Scegli come saldare la quota associativa.</p>
@@ -1187,8 +1202,13 @@ const Affiliazione = () => {
                 <div className="relative z-10">
                   <p className="text-brand-light text-xs font-bold uppercase tracking-widest mb-1">Quota Affiliazione Annuale</p>
                   <p className="text-4xl sm:text-5xl font-extrabold tracking-tight">
-                    399,00 <span className="text-xl text-slate-400 font-medium">EUR</span>
+                    {feeLabel}
                   </p>
+                  {!paymentEnabled ? (
+                    <p className="mt-3 max-w-md text-sm font-medium text-slate-300">
+                      La segreteria confermera importo e modalita prima del saldo.
+                    </p>
+                  ) : null}
                 </div>
                 <div className="hidden sm:flex w-16 h-16 rounded-full bg-white/10 items-center justify-center relative z-10">
                   <svg className="w-8 h-8 text-brand-light" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
@@ -1262,7 +1282,7 @@ const Affiliazione = () => {
           )}
 
           {!showIntroScreen && !hasRealSubmission && currentStep === 5 && (
-            <div className="p-6 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div id="affiliation-step-panel-5" role="tabpanel" aria-labelledby="affiliation-step-tab-5" className="p-6 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="border-b border-slate-100 pb-5">
                 <h2 className="text-2xl font-extrabold text-slate-900">Riepilogo Finale</h2>
                 <p className="mt-1 text-sm text-slate-500">Un ultimo controllo prima di inviare definitivamente la richiesta.</p>

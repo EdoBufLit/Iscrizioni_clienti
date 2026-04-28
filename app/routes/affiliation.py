@@ -724,6 +724,18 @@ def _serialize_affiliation(
         ),
         "payment_config": {
             "stripe_enabled": bool(settings.STRIPE_ENABLED),
+            "fee_amount": (
+                (application.payment_amount_cents or 0) / 100
+                if (application.payment_amount_cents or 0) > 0
+                else None
+            ),
+            "fee_amount_cents": (
+                int(application.payment_amount_cents)
+                if (application.payment_amount_cents or 0) > 0
+                else None
+            ),
+            "fee_currency": settings.AFFILIATION_FEE_CURRENCY or "EUR",
+            "payment_enabled": (application.payment_amount_cents or 0) > 0,
             "bank_iban": settings.AFFILIATION_BANK_IBAN,
             "bank_causale_prefix": settings.AFFILIATION_BANK_CAUSALE_PREFIX,
             "cash_location": settings.AFFILIATION_CASH_LOCATION,

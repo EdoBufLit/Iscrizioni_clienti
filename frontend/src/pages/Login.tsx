@@ -170,7 +170,12 @@ const Login = () => {
                 <button
                   className="auth-link auth-link--accent"
                   type="button"
-                  onClick={() => setMode("magic")}
+                  onClick={() => {
+                    const query = email.trim()
+                      ? `?email=${encodeURIComponent(email.trim())}`
+                      : "";
+                    navigate(`/recupera-password${query}`);
+                  }}
                 >
                   Password dimenticata?
                 </button>

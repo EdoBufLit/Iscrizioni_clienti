@@ -33,6 +33,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+_PASSWORD_RESET_GENERIC_MESSAGE = (
+    "Se l'email e associata a un account, riceverai un link per reimpostare la password."
+)
+
 _ALLOWED_PAYMENT_METHODS = {PaymentMethod.CASH.value, PaymentMethod.BONIFICO.value}
 _ACCOUNT_NOT_ACTIVE_DETAIL = "account non attivo"
 
@@ -461,6 +465,121 @@ def api_auth_login(request: Request, email: str = Form(...), password: str = For
 
     audit.member_magic_link_requested(email=email, ip=get_client_ip(request))
     return {"status": "ok", "message": "If an account exists, a magic link has been sent."}
+
+
+@router.post("/api/auth/password-reset/request")
+def api_auth_password_reset_request(
+    request: Request,
+    email: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Request a one-time password reset link for active member accounts only."""
+    auth_limiter.check(get_client_ip(request))
+
+    email_norm = email.strip().lower()
+    now = datetime.utcnow()
+    matching_members = (
+        db.query(Member)
+        .filter(func.lower(Member.email) == email_norm)
+        .order_by(Member.id.desc())
+        .all()
+    )
+    member = next(
+        (candidate for candidate in matching_members if is_member_active(candidate, now=now)),
+        None,
+    )
+
+    if member:
+        token_str = generate_token()
+        token = Token(
+            member_id=member.id,
+            purpose=TokenType.PASSWORD_RESET,
+            token_hash=hash_token(token_str),
+            expires_at=now + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES),
+        )
+        db.add(token)
+        db.flush()
+
+        frontend_base = settings.FRONTEND_URL.rstrip("/")
+        if not frontend_base:
+            frontend_base = str(request.base_url).rstrip("/")
+
+        link = f"{frontend_base}/recupera-password?token={token_str}"
+        logger.info("Generated member password reset link: %s", link.replace(token_str, "***"))
+
+        enqueue_email(
+            db,
+            email_type="member_password_reset",
+            to_email=member.email,
+            subject="Recupero password Area Riservata - ASSO.N.A.M.",
+            payload=build_email_payload(
+                text_body=(
+                    f"Clicca qui per reimpostare la password della tua area riservata: {link}\n\n"
+                    f"Il link scade tra {settings.LOGIN_TOKEN_EXPIRE_MINUTES} minuti. "
+                    "Se non hai richiesto tu il recupero, puoi ignorare questa email."
+                ),
+                sender=build_sender_payload(
+                    mode="association",
+                    association=member.organization,
+                ),
+                meta={
+                    "member_id": member.id,
+                    "token_purpose": TokenType.PASSWORD_RESET.value,
+                },
+            ),
+            priority=1,
+        )
+        db.commit()
+
+    return {"status": "ok", "message": _PASSWORD_RESET_GENERIC_MESSAGE}
+
+
+@router.post("/api/auth/password-reset/confirm")
+def api_auth_password_reset_confirm(
+    request: Request,
+    token: str = Form(...),
+    new_password: str = Form(...),
+    confirm_password: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Consume a one-time password reset token and update the member password."""
+    auth_limiter.check(get_client_ip(request))
+
+    if len(new_password) < 8:
+        raise HTTPException(status_code=400, detail="La password deve avere almeno 8 caratteri.")
+    if new_password != confirm_password:
+        raise HTTPException(status_code=400, detail="Le password non coincidono.")
+
+    token_hash = hash_token(token)
+    now = datetime.utcnow()
+
+    from sqlalchemy import update
+
+    result = db.execute(
+        update(Token)
+        .where(
+            Token.token_hash == token_hash,
+            Token.purpose == TokenType.PASSWORD_RESET,
+            Token.expires_at > now,
+            Token.used_at.is_(None),
+        )
+        .values(used_at=now)
+    )
+    db.flush()
+
+    if result.rowcount == 0:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Link non valido o scaduto.")
+
+    token_entry = db.query(Token).filter(Token.token_hash == token_hash).first()
+    member = db.query(Member).filter(Member.id == token_entry.member_id).first() if token_entry else None
+    if not member or not is_member_active(member, now=now):
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Link non valido o scaduto.")
+
+    member.password_hash = get_password_hash(new_password)
+    db.commit()
+    return {"status": "ok", "message": "Password aggiornata. Ora puoi accedere con la nuova password."}
 
 
 @router.post("/api/auth/register")

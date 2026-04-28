@@ -7,6 +7,7 @@ import {
   patchSuperAdminOrganization,
   type SuperAdminProfile,
   type SuperAdminOrganization,
+  type SuperAdminOrganizationsResponse,
 } from "../../lib/api";
 import Skeleton from "../../components/ui/Skeleton";
 import { useToast } from "../../components/ui/ToastProvider";
@@ -33,7 +34,7 @@ const SuperAdminOrganizations = () => {
   const isSuperAdmin = profile?.role === "super_admin";
 
   const [orgs, setOrgs] = useState<SuperAdminOrganization[]>([]);
-  const [metricOrgs, setMetricOrgs] = useState<SuperAdminOrganization[]>([]);
+  const [summary, setSummary] = useState<NonNullable<SuperAdminOrganizationsResponse["summary"]> | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState("");
@@ -73,13 +74,14 @@ const SuperAdminOrganizations = () => {
         page,
         pageSize,
         q: q || undefined,
+        status: statusFilter,
+        scope: scopeFilter,
+        numbering: numberingFilter,
       });
       setOrgs(data.items);
       setTotal(data.total);
       setTotalPages(data.total_pages);
-      fetchSuperAdminOrganizations({ page: 1, pageSize: 100, q: q || undefined })
-        .then((payload) => setMetricOrgs(payload.items))
-        .catch(() => setMetricOrgs(data.items));
+      setSummary(data.summary ?? null);
       setError("");
     } catch (err) {
       if (err instanceof AuthError) {
@@ -91,7 +93,7 @@ const SuperAdminOrganizations = () => {
       setLoading(false);
       setIsFetching(false);
     }
-  }, [profile, page, pageSize, q, navigate]);
+  }, [profile, page, pageSize, q, statusFilter, scopeFilter, numberingFilter, navigate]);
 
   useEffect(() => {
     loadOrgs();
@@ -231,37 +233,18 @@ const SuperAdminOrganizations = () => {
     return pages;
   }, [page, totalPages]);
 
-  const statsSource = metricOrgs.length > 0 ? metricOrgs : orgs;
-  const organizationStats = useMemo(() => {
-    const archived = statsSource.filter((org) => org.is_archived || org.deleted_at).length;
-    const active = statsSource.filter((org) => org.is_active && !org.is_archived && !org.deleted_at).length;
-    const auto = statsSource.filter((org) => org.auto_approve_signup).length;
-    const shared = statsSource.filter((org) => (org.numbering_mode ?? "shared_assonam") === "shared_assonam").length;
-    const dedicated = statsSource.filter((org) => org.numbering_mode === "dedicated").length;
-    return {
-      total: q ? statsSource.length : total || statsSource.length,
-      active,
-      archived,
-      auto,
-      shared,
-      dedicated,
-    };
-  }, [q, statsSource, total]);
-
-  const filteredOrgs = useMemo(() => {
-    return orgs.filter((org) => {
-      const isArchived = Boolean(org.is_archived || org.deleted_at);
-      const isActive = org.is_active && !isArchived;
-      if (statusFilter === "active" && !isActive) return false;
-      if (statusFilter === "archived" && !isArchived) return false;
-      if (statusFilter === "pending" && org.affiliation_status !== "under_review") return false;
-      if (scopeFilter === "shared" && (org.numbering_mode ?? "shared_assonam") !== "shared_assonam") return false;
-      if (scopeFilter === "dedicated" && org.numbering_mode !== "dedicated") return false;
-      if (numberingFilter === "configured" && !org.card_min) return false;
-      if (numberingFilter === "missing" && org.card_min) return false;
-      return true;
-    });
-  }, [numberingFilter, orgs, scopeFilter, statusFilter]);
+  const organizationStats = summary ?? {
+    total,
+    active: 0,
+    archived: 0,
+    pending: 0,
+    shared: 0,
+    dedicated: 0,
+    numbering_configured: 0,
+    numbering_missing: 0,
+    auto: 0,
+  };
+  const filteredOrgs = orgs;
 
   const resetFilters = () => {
     setSearchInput("");
@@ -457,16 +440,16 @@ const SuperAdminOrganizations = () => {
         </div>
 
         <div className="sa-toolbar__chips">
-          <button type="button" className={`sa-filter-chip ${statusFilter === "all" ? "is-active" : ""}`} onClick={() => setStatusFilter("all")}>
+          <button type="button" className={`sa-filter-chip ${statusFilter === "all" ? "is-active" : ""}`} onClick={() => { setStatusFilter("all"); setPage(1); }}>
             Tutti <span>{organizationStats.total}</span>
           </button>
-          <button type="button" className={`sa-filter-chip ${statusFilter === "active" ? "is-active" : ""}`} onClick={() => setStatusFilter("active")}>
+          <button type="button" className={`sa-filter-chip ${statusFilter === "active" ? "is-active" : ""}`} onClick={() => { setStatusFilter("active"); setPage(1); }}>
             Attive <span>{organizationStats.active}</span>
           </button>
-          <button type="button" className={`sa-filter-chip ${statusFilter === "pending" ? "is-active" : ""}`} onClick={() => setStatusFilter("pending")}>
-            In attesa <span>{statsSource.filter((org) => org.affiliation_status === "under_review").length}</span>
+          <button type="button" className={`sa-filter-chip ${statusFilter === "pending" ? "is-active" : ""}`} onClick={() => { setStatusFilter("pending"); setPage(1); }}>
+            In attesa <span>{organizationStats.pending}</span>
           </button>
-          <button type="button" className={`sa-filter-chip ${statusFilter === "archived" ? "is-active" : ""}`} onClick={() => setStatusFilter("archived")}>
+          <button type="button" className={`sa-filter-chip ${statusFilter === "archived" ? "is-active" : ""}`} onClick={() => { setStatusFilter("archived"); setPage(1); }}>
             Archiviate <span>{organizationStats.archived}</span>
           </button>
         </div>
@@ -520,7 +503,10 @@ const SuperAdminOrganizations = () => {
             <select
               className="premium-select min-w-[160px]"
               value={pageSize}
-              onChange={(event) => setPageSize(Number(event.target.value))}
+              onChange={(event) => {
+                setPageSize(Number(event.target.value));
+                setPage(1);
+              }}
             >
               {PAGE_SIZE_OPTIONS.map((option) => (
                 <option key={option} value={option}>

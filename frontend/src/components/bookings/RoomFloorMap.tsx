@@ -14,6 +14,7 @@ type DragState = {
   id: number;
   offsetX: number;
   offsetY: number;
+  pointerId: number;
 } | null;
 
 function occupancyTone(state: AssociationRoomTable["occupancy_state"]) {
@@ -60,7 +61,8 @@ export function RoomFloorMap({
   useEffect(() => {
     if (!dragState || !editable) return;
     const currentDrag = dragState;
-    function handleMouseMove(event: MouseEvent) {
+    function handlePointerMove(event: PointerEvent) {
+      if (event.pointerId !== currentDrag.pointerId) return;
       const container = containerRef.current;
       if (!container || !onMoveTable) return;
       const rect = container.getBoundingClientRect();
@@ -68,14 +70,17 @@ export function RoomFloorMap({
       const nextY = clamp(Math.round(event.clientY - rect.top - currentDrag.offsetY), 0, Math.max(0, rect.height - 32));
       onMoveTable(currentDrag.id, { pos_x: nextX, pos_y: nextY });
     }
-    function handleMouseUp() {
+    function handlePointerUp(event: PointerEvent) {
+      if (event.pointerId !== currentDrag.pointerId) return;
       setDragState(null);
     }
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
     };
   }, [dragState, editable, onMoveTable]);
 
@@ -148,19 +153,21 @@ export function RoomFloorMap({
               key={table.id}
               type="button"
               onClick={() => onSelectTable?.(table)}
-              onMouseDown={(event) => {
+              onPointerDown={(event) => {
                 if (!editable) return;
+                event.currentTarget.setPointerCapture(event.pointerId);
                 const target = event.currentTarget.getBoundingClientRect();
                 setDragState({
                   id: table.id,
                   offsetX: event.clientX - target.left,
                   offsetY: event.clientY - target.top,
+                  pointerId: event.pointerId,
                 });
               }}
               className={`absolute z-10 flex flex-col items-center justify-center border px-3 text-center shadow-[0_14px_22px_-18px_rgba(15,23,42,0.7)] ring-2 transition ${
                 shapeClass
               } ${occupancyTone(table.occupancy_state)} ${isSelected ? "scale-[1.03] border-slate-950 ring-slate-950" : "border-white/80 ring-transparent"} ${
-                editable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
+                editable ? "cursor-grab touch-none active:cursor-grabbing" : "cursor-pointer"
               }`}
               style={{
                 left: `${table.pos_x}px`,
@@ -182,6 +189,30 @@ export function RoomFloorMap({
           );
         })}
       </div>
+
+      {tables.length > 0 ? (
+        <div className="grid gap-2 md:hidden" aria-label="Selezione tavoli mobile">
+          {tables.map((table) => (
+            <button
+              key={table.id}
+              type="button"
+              className={`flex items-center justify-between rounded-[1rem] border px-3 py-3 text-left text-sm font-semibold ${occupancyTone(table.occupancy_state)} ${
+                selectedTableId === table.id ? "ring-2 ring-slate-950" : ""
+              }`}
+              onClick={() => onSelectTable?.(table)}
+              aria-pressed={selectedTableId === table.id}
+            >
+              <span>
+                {table.name}
+                <span className="block text-[11px] uppercase tracking-[0.16em] opacity-70">
+                  {table.capacity} posti
+                </span>
+              </span>
+              <span>{occupancyLabel(table.occupancy_state)}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         {(["free", "reserved", "occupied", "out_of_service"] as AssociationRoomTable["occupancy_state"][]).map((state) => (

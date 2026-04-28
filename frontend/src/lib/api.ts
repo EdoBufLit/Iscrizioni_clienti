@@ -264,6 +264,34 @@ export async function requestMagicLink(
   return res.json();
 }
 
+export async function requestPasswordReset(
+  email: string,
+): Promise<{ status: string; message: string }> {
+  const body = new FormData();
+  body.append("email", email);
+  const res = await fetch("/api/auth/password-reset/request", { method: "POST", body });
+  if (!res.ok) throw new Error("Request failed");
+  return res.json();
+}
+
+export async function confirmPasswordReset(data: {
+  token: string;
+  newPassword: string;
+  confirmPassword: string;
+}): Promise<{ status: string; message: string }> {
+  const body = new FormData();
+  body.append("token", data.token);
+  body.append("new_password", data.newPassword);
+  body.append("confirm_password", data.confirmPassword);
+  const res = await fetch("/api/auth/password-reset/confirm", { method: "POST", body });
+  if (res.status === 400) {
+    const payload = await res.json().catch(() => null);
+    throw new Error(payload?.detail ?? "Dati non validi");
+  }
+  if (!res.ok) throw new Error("Reset failed");
+  return res.json();
+}
+
 export async function loginWithPassword(
   email: string,
   password: string,
@@ -3390,6 +3418,17 @@ export type SuperAdminOrganizationsResponse = {
   page_size: number;
   total: number;
   total_pages: number;
+  summary?: {
+    total: number;
+    active: number;
+    archived: number;
+    pending: number;
+    shared: number;
+    dedicated: number;
+    numbering_configured: number;
+    numbering_missing: number;
+    auto: number;
+  };
   data?: SuperAdminOrganization[];
   meta?: {
     page: number;
@@ -3406,6 +3445,9 @@ export async function fetchSuperAdminOrganizations(
     pageSize?: number;
     q?: string;
     sort?: string;
+    status?: "all" | "active" | "pending" | "archived";
+    scope?: "all" | "shared" | "dedicated";
+    numbering?: "all" | "configured" | "missing";
     signal?: AbortSignal;
   }
 ): Promise<SuperAdminOrganizationsResponse> {
@@ -3414,6 +3456,9 @@ export async function fetchSuperAdminOrganizations(
   sp.set("page_size", String(params?.pageSize ?? 50));
   if (params?.q) sp.set("q", params.q);
   if (params?.sort) sp.set("sort", params.sort);
+  if (params?.status && params.status !== "all") sp.set("status", params.status);
+  if (params?.scope && params.scope !== "all") sp.set("scope", params.scope);
+  if (params?.numbering && params.numbering !== "all") sp.set("numbering", params.numbering);
 
   const query = sp.toString();
   const res = await fetch(`/api/admin/organizations${query ? `?${query}` : ""}`, {
@@ -3938,6 +3983,10 @@ export type AffiliationDraft = {
   resume_url: string;
   payment_config: {
     stripe_enabled: boolean;
+    fee_amount: number | null;
+    fee_amount_cents: number | null;
+    fee_currency: string;
+    payment_enabled: boolean;
     bank_iban: string;
     bank_causale_prefix: string;
     cash_location: string;

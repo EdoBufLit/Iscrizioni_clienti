@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 
 type IconName =
@@ -135,6 +135,9 @@ const MobileDashboardNav = ({
 }: MobileDashboardNavProps) => {
   const location = useLocation();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const sheetTitleId = useId();
+  const sheetPanelRef = useRef<HTMLDivElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   const hasMore = moreItems.length > 0;
   const moreActive = useMemo(
@@ -148,15 +151,47 @@ const MobileDashboardNav = ({
 
   useEffect(() => {
     if (!sheetOpen) return;
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    window.requestAnimationFrame(() => {
+      const panel = sheetPanelRef.current;
+      const firstFocusable = panel?.querySelector<HTMLElement>(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      (firstFocusable ?? panel)?.focus();
+    });
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setSheetOpen(false);
+      if (event.key === "Escape") {
+        setSheetOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const panel = sheetPanelRef.current;
+      if (!panel) return;
+      const nodes = Array.from(
+        panel.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      if (nodes.length === 0) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => {
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", onKeyDown);
+      previousFocusRef.current?.focus();
+      previousFocusRef.current = null;
     };
   }, [sheetOpen]);
 
@@ -180,7 +215,7 @@ const MobileDashboardNav = ({
 
     if (item.to) {
       return (
-        <Link key={item.key} to={item.to} className={baseClass}>
+        <Link key={item.key} to={item.to} className={baseClass} aria-current={isActive ? "page" : undefined}>
           {content}
         </Link>
       );
@@ -211,6 +246,8 @@ const MobileDashboardNav = ({
               type="button"
               onClick={() => setSheetOpen(true)}
               className={`mobile-dashboard-nav__item ${sheetOpen || moreActive ? "mobile-dashboard-nav__item--active" : ""}`}
+              aria-expanded={sheetOpen}
+              aria-controls="mobile-dashboard-more-sheet"
             >
               <span className="mobile-dashboard-nav__icon">
                 <NavIcon icon="more" />
@@ -222,19 +259,25 @@ const MobileDashboardNav = ({
       </div>
 
       {hasMore && sheetOpen && (
-        <div className="mobile-dashboard-sheet md:hidden" role="dialog" aria-modal="true" aria-label={moreTitle}>
+        <div
+          className="mobile-dashboard-sheet md:hidden"
+          id="mobile-dashboard-more-sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={sheetTitleId}
+        >
           <button
             type="button"
             className="mobile-dashboard-sheet__backdrop"
             aria-label="Chiudi menu"
             onClick={() => setSheetOpen(false)}
           />
-          <div className="mobile-dashboard-sheet__panel">
+          <div ref={sheetPanelRef} className="mobile-dashboard-sheet__panel" tabIndex={-1}>
             <div className="mobile-dashboard-sheet__handle" />
             <div className="mobile-dashboard-sheet__header">
               <div>
                 <p className="mobile-dashboard-sheet__eyebrow">Dashboard mobile</p>
-                <h3 className="mobile-dashboard-sheet__title">{moreTitle}</h3>
+                <h3 id={sheetTitleId} className="mobile-dashboard-sheet__title">{moreTitle}</h3>
               </div>
               <button
                 type="button"

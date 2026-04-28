@@ -3,6 +3,10 @@
 - Quando il cliente chiede fedelta esatta a mockup admin, non basta un re-skin: prima della consegna servono screenshot viewport-to-viewport delle superfici critiche, inclusi drawer/modali fixed. Inoltre le integrazioni esistenti nel dettaglio (es. SumUp) vanno preservate esplicitamente nella nuova IA e verificate nello screenshot.
 # Lessons
 
+- Se l'utente indica una sezione pubblica specifica da preservare anche con dati hardcoded, non applicare automaticamente principi generali di trust-copy a quella sezione: prima distinguere tra claim marketing approvato e dato operativo ingannevole.
+- Quando l'utente distingue due flussi simili (es. magic link passwordless vs password dimenticata), non riusare il flusso esistente con una label diversa: implementare il dominio separato richiesto e lasciare invariati i comportamenti gia approvati.
+- Se l'utente approva un comportamento esistente (es. verifica QR tessera interna), non includerlo nelle modifiche immediate solo per hardening futuro: separare chiaramente rischio tecnico da cambio funzionale.
+
 - Se l'utente contesta un builder visuale perche tratta il documento iniziale come un blocco unico, verificare il modello componenti reale del canvas: distinguere wrapper `mjml/mj-body` dalle sezioni top-level, testare `Su/Giu`, click blocco e drag in browser prima di dichiarare risolto.
 
 - Quando un messaggio automatico di conferma/rigetto dipende da dati inseriti nel form, il testo non deve mai leggere solo la `booking` persistita: servono fallback dal payload reale, placeholder compositi sicuri (`slot`/`riepilogo`) e un override per-decision opzionale nella UI di review.

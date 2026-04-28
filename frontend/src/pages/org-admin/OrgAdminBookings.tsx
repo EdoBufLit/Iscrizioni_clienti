@@ -1563,6 +1563,8 @@ function AgendaSection(props: {
                   type="button"
                   role="tab"
                   aria-selected={dayFilter === filter.key}
+                  aria-controls="booking-day-list-panel"
+                  id={`booking-day-filter-${filter.key}`}
                   className={dayFilter === filter.key ? "is-active" : ""}
                   onClick={() => setDayFilter(filter.key)}
                 >
@@ -1571,7 +1573,12 @@ function AgendaSection(props: {
               ))}
             </div>
 
-            <div className="booking-day-list">
+            <div
+              className="booking-day-list"
+              id="booking-day-list-panel"
+              role="tabpanel"
+              aria-labelledby={`booking-day-filter-${dayFilter}`}
+            >
               {filteredDayItems.length === 0 ? (
                 <EmptyState message="Nessuna prenotazione in questo filtro." />
               ) : (

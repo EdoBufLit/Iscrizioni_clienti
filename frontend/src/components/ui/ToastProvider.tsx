@@ -46,7 +46,7 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
   const showToast = useCallback(
     ({ title, message, tone = "info" }: ShowToastInput) => {
       const id = toastId++;
-      setItems((prev) => [...prev, { id, title, message, tone }]);
+      setItems((prev) => [...prev, { id, title, message, tone }].slice(-3));
       window.setTimeout(() => removeToast(id), 3200);
     },
     [removeToast],
@@ -57,11 +57,16 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed right-4 top-4 z-[140] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-3">
+      <div
+        className="pointer-events-none fixed right-4 top-4 z-[140] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-3"
+        aria-live="polite"
+        aria-atomic="true"
+      >
         {items.map((item) => (
           <div
             key={item.id}
             className={`pointer-events-auto border px-4 py-3 animate-in slide-in-from-right-4 duration-200 ${toneClassName[item.tone]}`}
+            role={item.tone === "error" ? "alert" : "status"}
           >
             <div className="flex items-start justify-between gap-3">
               <div>

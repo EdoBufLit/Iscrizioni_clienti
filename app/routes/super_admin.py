@@ -21,6 +21,8 @@ from app.models import (
     AdminUser,
     AdminRole,
     Organization,
+    NumberingScope,
+    NumberingScopeType,
     OrgAdminToken,
     CardBatch,
     CardMovement,
@@ -72,6 +74,7 @@ from app.services.accounting import (
     slugify_accounting_label,
 )
 from app.services.numbering_scopes import (
+    ASSONAM_CENTRAL_SCOPE_NAME,
     NUMBERING_MODE_SHARED_ASSONAM,
     get_numbering_mode,
     get_numbering_usage_state,
@@ -275,11 +278,24 @@ def _list_organizations_payload(
     page_size: int,
     sort: Optional[str],
     db: Session,
+    status: str = "all",
+    scope: str = "all",
+    numbering: str = "all",
 ):
     filters = []
     search_filter = _organization_search_filter(q)
     if search_filter is not None:
         filters.append(search_filter)
+
+    normalized_status = (status or "all").strip().lower()
+    normalized_scope = (scope or "all").strip().lower()
+    normalized_numbering = (numbering or "all").strip().lower()
+
+    if normalized_status == "active":
+        filters.append(Organization.is_active.is_(True))
+        filters.append(Organization.deleted_at.is_(None))
+    elif normalized_status == "archived":
+        filters.append(Organization.deleted_at.isnot(None))
 
     card_ranges_subquery = (
         db.query(
@@ -292,9 +308,6 @@ def _list_organizations_payload(
         .subquery()
     )
 
-    total = db.query(func.count(Organization.id)).filter(*filters).scalar() or 0
-    total_pages = max(1, math.ceil(total / page_size)) if page_size else 1
-
     latest_affiliation_subquery = (
         db.query(
             AffiliationApplication.approved_org_id.label("org_id"),
@@ -305,8 +318,75 @@ def _list_organizations_payload(
         .subquery()
     )
     latest_affiliation_alias = aliased(AffiliationApplication)
+    shared_scope_filter = Organization.numbering_scope.has(
+        or_(
+            NumberingScope.name == ASSONAM_CENTRAL_SCOPE_NAME,
+            NumberingScope.scope_type == NumberingScopeType.SHARED.value,
+        )
+    )
+
+    if normalized_status == "pending":
+        filters.append(latest_affiliation_alias.status == "under_review")
+    if normalized_scope == "shared":
+        filters.append(shared_scope_filter)
+    elif normalized_scope == "dedicated":
+        filters.append(Organization.numbering_scope_id.isnot(None))
+        filters.append(~shared_scope_filter)
+    if normalized_numbering == "configured":
+        filters.append(card_ranges_subquery.c.card_min.isnot(None))
+    elif normalized_numbering == "missing":
+        filters.append(card_ranges_subquery.c.card_min.is_(None))
+
+    active_condition = and_(Organization.is_active.is_(True), Organization.deleted_at.is_(None))
+    archived_condition = Organization.deleted_at.isnot(None)
+    pending_condition = latest_affiliation_alias.status == "under_review"
+    dedicated_condition = and_(Organization.numbering_scope_id.isnot(None), ~shared_scope_filter)
+    configured_condition = card_ranges_subquery.c.card_min.isnot(None)
+
+    def _summary_count(condition):
+        return func.coalesce(func.sum(case((condition, 1), else_=0)), 0)
 
     try:
+        summary_row = (
+            db.query(
+                func.count(Organization.id).label("total"),
+                _summary_count(active_condition).label("active"),
+                _summary_count(archived_condition).label("archived"),
+                _summary_count(pending_condition).label("pending"),
+                _summary_count(shared_scope_filter).label("shared"),
+                _summary_count(dedicated_condition).label("dedicated"),
+                _summary_count(configured_condition).label("numbering_configured"),
+                _summary_count(card_ranges_subquery.c.card_min.is_(None)).label("numbering_missing"),
+                _summary_count(Organization.auto_approve_signup.is_(True)).label("auto"),
+            )
+            .outerjoin(
+                card_ranges_subquery, card_ranges_subquery.c.org_id == Organization.id
+            )
+            .outerjoin(
+                latest_affiliation_subquery,
+                latest_affiliation_subquery.c.org_id == Organization.id,
+            )
+            .outerjoin(
+                latest_affiliation_alias,
+                latest_affiliation_alias.id
+                == latest_affiliation_subquery.c.latest_affiliation_id,
+            )
+            .filter(*filters)
+            .one()
+        )
+        total = int(summary_row.total or 0)
+        summary = {
+            "total": total,
+            "active": int(summary_row.active or 0),
+            "archived": int(summary_row.archived or 0),
+            "pending": int(summary_row.pending or 0),
+            "shared": int(summary_row.shared or 0),
+            "dedicated": int(summary_row.dedicated or 0),
+            "numbering_configured": int(summary_row.numbering_configured or 0),
+            "numbering_missing": int(summary_row.numbering_missing or 0),
+            "auto": int(summary_row.auto or 0),
+        }
+        total_pages = max(1, math.ceil(total / page_size)) if page_size else 1
         results = (
             db.query(
                 Organization,
@@ -351,30 +431,88 @@ def _list_organizations_payload(
             ) in results
         ]
     except (OperationalError, ProgrammingError):
-        results = (
-            db.query(
-                Organization,
-                card_ranges_subquery.c.card_min,
-                card_ranges_subquery.c.card_max,
+        fallback_filters = list(filters)
+        if normalized_status == "pending":
+            total = 0
+            total_pages = 1
+            summary = {
+                "total": 0,
+                "active": 0,
+                "archived": 0,
+                "pending": 0,
+                "shared": 0,
+                "dedicated": 0,
+                "numbering_configured": 0,
+                "numbering_missing": 0,
+                "auto": 0,
+            }
+            results = []
+        else:
+            total = (
+                db.query(func.count(Organization.id))
+                .outerjoin(
+                    card_ranges_subquery, card_ranges_subquery.c.org_id == Organization.id
+                )
+                .filter(*fallback_filters)
+                .scalar()
+                or 0
             )
-            .options(joinedload(Organization.numbering_scope))
-            .outerjoin(
-                card_ranges_subquery, card_ranges_subquery.c.org_id == Organization.id
+            total_pages = max(1, math.ceil(total / page_size)) if page_size else 1
+            summary_row = (
+                db.query(
+                    func.count(Organization.id).label("total"),
+                    _summary_count(active_condition).label("active"),
+                    _summary_count(archived_condition).label("archived"),
+                    _summary_count(shared_scope_filter).label("shared"),
+                    _summary_count(dedicated_condition).label("dedicated"),
+                    _summary_count(configured_condition).label("numbering_configured"),
+                    _summary_count(card_ranges_subquery.c.card_min.is_(None)).label("numbering_missing"),
+                    _summary_count(Organization.auto_approve_signup.is_(True)).label("auto"),
+                )
+                .outerjoin(
+                    card_ranges_subquery, card_ranges_subquery.c.org_id == Organization.id
+                )
+                .filter(*fallback_filters)
+                .one()
             )
-            .filter(*filters)
-            .order_by(*_organization_sort_order(sort))
-            .offset((page - 1) * page_size)
-            .limit(page_size)
-            .all()
-        )
-        items = [
-            _serialize_organization_row(
-                org,
-                card_min=card_min,
-                card_max=card_max,
+            summary = {
+                "total": int(summary_row.total or 0),
+                "active": int(summary_row.active or 0),
+                "archived": int(summary_row.archived or 0),
+                "pending": 0,
+                "shared": int(summary_row.shared or 0),
+                "dedicated": int(summary_row.dedicated or 0),
+                "numbering_configured": int(summary_row.numbering_configured or 0),
+                "numbering_missing": int(summary_row.numbering_missing or 0),
+                "auto": int(summary_row.auto or 0),
+            }
+            results = (
+                db.query(
+                    Organization,
+                    card_ranges_subquery.c.card_min,
+                    card_ranges_subquery.c.card_max,
+                )
+                .options(joinedload(Organization.numbering_scope))
+                .outerjoin(
+                    card_ranges_subquery, card_ranges_subquery.c.org_id == Organization.id
+                )
+                .filter(*fallback_filters)
+                .order_by(*_organization_sort_order(sort))
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+                .all()
             )
-            for org, card_min, card_max in results
-        ]
+        if normalized_status == "pending":
+            items = []
+        else:
+            items = [
+                _serialize_organization_row(
+                    org,
+                    card_min=card_min,
+                    card_max=card_max,
+                )
+                for org, card_min, card_max in results
+            ]
 
     return {
         "items": items,
@@ -382,6 +520,7 @@ def _list_organizations_payload(
         "page_size": page_size,
         "total": total,
         "total_pages": total_pages,
+        "summary": summary,
         # Legacy payload preserved for existing consumers.
         "data": items,
         "meta": {
@@ -1997,6 +2136,9 @@ def list_organizations(
     limit: Optional[int] = Query(None, ge=10, le=200),
     q: Optional[str] = None,
     sort: Optional[str] = None,
+    status: Literal["all", "active", "pending", "archived"] = "all",
+    scope: Literal["all", "shared", "dedicated"] = "all",
+    numbering: Literal["all", "configured", "missing"] = "all",
     db: Session = Depends(get_db),
 ):
     _require_super_admin(request, db)
@@ -2006,6 +2148,9 @@ def list_organizations(
         page=page,
         page_size=resolved_page_size,
         sort=sort,
+        status=status,
+        scope=scope,
+        numbering=numbering,
         db=db,
     )
 

@@ -1,3 +1,18 @@
+## Plan (Piano immediato ASSONAM aggiornato - Apr 28, 2026)
+- [x] Estendere API super-admin associazioni con filtri server-side `status`, `scope`, `numbering` e summary globale filtrata.
+- [x] Aggiornare UI super-admin associazioni per usare filtri/summary backend e rimuovere contatori derivati da pagina corrente.
+- [x] Implementare recupero password reale per soci: endpoint request/confirm, token one-time, email, pagina reset e login aggiornato.
+- [x] Rimuovere prezzo affiliazione hardcoded e usare quota/config reale con fallback "Quota da confermare".
+- [x] Preservare la sezione Home "La nostra rete" con numeri hardcoded approvati.
+- [x] Migliorare accessibilita immediata: ModalShell focus trap, ToastProvider aria-live/limite, tab ARIA, navigazione attiva/bottom sheet.
+- [x] Migliorare mobile operativo: RoomFloorMap pointer events/fallback mobile e InstallAppPrompt non invasivo.
+- [x] Eseguire test backend mirati, typecheck/build frontend e smoke preview sulle route principali.
+
+## Review (Piano immediato ASSONAM aggiornato - Apr 28, 2026)
+- Implementati filtri/summary server-side super-admin, recupero password soci v1, quota affiliazione da config, accessibilita base e mobile map/PWA. La sezione Home "La nostra rete" resta hardcoded come richiesto.
+- Verifiche: `python -m pytest -q tests/test_super_admin_organizations_pagination.py tests/test_email_flows.py::test_member_password_reset_flow_is_one_time_and_non_enumerating tests/test_email_flows.py::test_member_password_reset_expired_token_fails tests/test_affiliation_flow.py::test_affiliation_draft_exposes_configured_fee tests/test_affiliation_flow.py::test_affiliation_draft_handles_missing_fee_without_ready_payment`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, smoke Vite preview su `/`, `/login`, `/recupera-password`, `/affiliazione`, `/org-admin/prenotazioni`, `/super-admin/associazioni`.
+- Nota: QR tessera non modificato; uso `api.qrserver.com` resta come comportamento esistente approvato.
+
 ## Plan (Pre-push quote tessere, builder campagne e sondaggi - Apr 28, 2026)
 - [x] Rieseguire test backend mirati per totale quote, campagne/comunicazioni e sondaggi/form.
 - [x] Rieseguire typecheck e build frontend.

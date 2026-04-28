@@ -42,6 +42,7 @@ const InstallAppPrompt = ({ hidden = false }: Props) => {
   const [dismissed, setDismissed] = useState(true);
   const [installed, setInstalled] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const [interactionReady, setInteractionReady] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -81,6 +82,21 @@ const InstallAppPrompt = ({ hidden = false }: Props) => {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const activate = () => setInteractionReady(true);
+    const timeout = window.setTimeout(activate, 3500);
+    window.addEventListener("pointerdown", activate, { once: true, passive: true });
+    window.addEventListener("keydown", activate, { once: true });
+    window.addEventListener("scroll", activate, { once: true, passive: true });
+    return () => {
+      window.clearTimeout(timeout);
+      window.removeEventListener("pointerdown", activate);
+      window.removeEventListener("keydown", activate);
+      window.removeEventListener("scroll", activate);
+    };
+  }, []);
+
   const variant = useMemo(() => {
     if (installed || dismissed) return null;
     if (deferredPrompt) return "install";
@@ -88,7 +104,7 @@ const InstallAppPrompt = ({ hidden = false }: Props) => {
     return null;
   }, [deferredPrompt, dismissed, installed]);
 
-  if (!variant) return null;
+  if (!variant || !interactionReady) return null;
 
   const dismiss = () => {
     persistDismiss();
@@ -124,18 +140,18 @@ const InstallAppPrompt = ({ hidden = false }: Props) => {
 
   return (
     <div
-      className={`pointer-events-none fixed inset-x-0 top-[5.35rem] z-40 flex justify-center px-4 transition-all duration-200 sm:top-[5.75rem]${
-        hidden ? " -translate-y-2 opacity-0" : " opacity-100"
+      className={`pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-center px-4 transition-all duration-200 sm:justify-end${
+        hidden ? " translate-y-2 opacity-0" : " opacity-100"
       }`}
       aria-hidden={hidden}
     >
-      <div className="pointer-events-auto flex w-full max-w-[38rem] items-start gap-3 rounded-[1.6rem] border border-white/70 bg-[rgba(246,250,250,0.88)] px-4 py-3 text-left shadow-[0_18px_44px_rgba(15,35,38,0.14)] backdrop-blur-xl">
+      <div className="pointer-events-auto flex w-full max-w-[28rem] items-start gap-3 rounded-[1.15rem] border border-white/70 bg-[rgba(246,250,250,0.92)] px-3 py-3 text-left shadow-[0_18px_44px_rgba(15,35,38,0.14)] backdrop-blur-xl">
         <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[rgba(15,61,58,0.12)] text-[0.7rem] font-semibold uppercase tracking-[0.24em] text-brand">
           App
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-slate-900">{title}</p>
-          <p className="mt-1 text-sm leading-6 text-slate-600">{copy}</p>
+          <p className="mt-1 text-xs leading-5 text-slate-600 sm:text-sm">{copy}</p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {variant === "install" ? (
               <button

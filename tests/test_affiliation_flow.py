@@ -36,6 +36,30 @@ def _create_draft(client, email: str) -> dict:
     return response.json()
 
 
+def test_affiliation_draft_exposes_configured_fee(client, monkeypatch):
+    monkeypatch.setattr(settings, "STRIPE_AFFILIATION_PRICE_CENTS", 12345, raising=False)
+    monkeypatch.setattr(settings, "AFFILIATION_FEE_CURRENCY", "EUR", raising=False)
+
+    draft = _create_draft(client, email=f"fee-{uuid.uuid4().hex[:10]}@example.com")
+
+    assert draft["payment_amount_cents"] == 12345
+    assert draft["payment_config"]["fee_amount_cents"] == 12345
+    assert draft["payment_config"]["fee_amount"] == 123.45
+    assert draft["payment_config"]["fee_currency"] == "EUR"
+    assert draft["payment_config"]["payment_enabled"] is True
+
+
+def test_affiliation_draft_handles_missing_fee_without_ready_payment(client, monkeypatch):
+    monkeypatch.setattr(settings, "STRIPE_AFFILIATION_PRICE_CENTS", 0, raising=False)
+
+    draft = _create_draft(client, email=f"missing-fee-{uuid.uuid4().hex[:10]}@example.com")
+
+    assert draft["payment_amount_cents"] == 0
+    assert draft["payment_config"]["fee_amount_cents"] is None
+    assert draft["payment_config"]["fee_amount"] is None
+    assert draft["payment_config"]["payment_enabled"] is False
+
+
 def _patch_required_fields(client, token: str, *, email: str, payment_method: str):
     response = client.patch(
         f"/api/affiliazione/draft/{token}",
