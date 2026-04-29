@@ -89,6 +89,20 @@ AVAILABLE_TEMPLATE_VARIABLES = [
         "example": "mario.rossi@example.com",
     },
     {
+        "key": "telefono_socio",
+        "placeholder": "{{telefono_socio}}",
+        "label": "Telefono socio",
+        "description": "Telefono del socio o del destinatario principale.",
+        "example": "+39 333 1234567",
+    },
+    {
+        "key": "telefono_associazione",
+        "placeholder": "{{telefono_associazione}}",
+        "label": "Telefono associazione",
+        "description": "Telefono pubblico dell'associazione mittente.",
+        "example": "+39 02 123456",
+    },
+    {
         "key": "link_iscrizione",
         "placeholder": "{{link_iscrizione}}",
         "label": "Link iscrizione",
@@ -115,6 +129,13 @@ AVAILABLE_TEMPLATE_VARIABLES = [
         "label": "Data evento",
         "description": "Data o slot evento/prenotazione.",
         "example": "12 aprile 2026 - 20:30",
+    },
+    {
+        "key": "data_oggi",
+        "placeholder": "{{data_oggi}}",
+        "label": "Data oggi",
+        "description": "Data corrente al momento della generazione del messaggio.",
+        "example": "29/04/2026",
     },
     {
         "key": "stato_prenotazione",
@@ -590,12 +611,14 @@ def build_template_context(
 ) -> dict[str, str]:
     association_name = _normalize_text(getattr(association, "name", None) if association is not None else None) or "ASSONAM"
     association_slug = _normalize_text(getattr(association, "slug", None) if association is not None else None)
+    association_phone = _normalize_text(getattr(association, "phone", None) if association is not None else None)
     base_url = (settings.FRONTEND_URL or settings.BASE_URL or "").strip().rstrip("/")
 
     first_name = _normalize_text(getattr(member, "first_name", None) if member is not None else None)
     last_name = _normalize_text(getattr(member, "last_name", None) if member is not None else None)
     full_name = " ".join(part for part in [first_name, last_name] if part).strip() or ""
     recipient_email = _normalize_text(getattr(member, "email", None) if member is not None else None) or ""
+    recipient_phone = _normalize_text(getattr(member, "phone", None) if member is not None else None) or ""
     card_no = getattr(member, "card_no", None) if member is not None else None
     card_year = getattr(member, "card_year", None) if member is not None else None
 
@@ -604,10 +627,13 @@ def build_template_context(
         last_name = last_name or "Rossi"
         full_name = full_name or "Mario Rossi"
         recipient_email = recipient_email or "mario.rossi@example.com"
+        recipient_phone = recipient_phone or "+39 333 1234567"
+        association_phone = association_phone or "+39 02 123456"
         card_no = card_no or 12345
         card_year = card_year or datetime.utcnow().year
 
     expiry = f"31/12/{int(card_year)}" if card_year else ""
+    today = datetime.utcnow().strftime("%d/%m/%Y")
     if base_url and association_slug:
         signup_link = f"{base_url}/associazioni/{association_slug}/iscrizione"
         document_link = f"{base_url}/associazioni/{association_slug}"
@@ -620,6 +646,8 @@ def build_template_context(
         "cognome_socio": last_name or "",
         "nome_associazione": association_name,
         "email_socio": recipient_email,
+        "telefono_socio": recipient_phone,
+        "telefono_associazione": association_phone or "",
         "numero_tessera": str(card_no or ""),
         "data_scadenza": expiry,
         "link_iscrizione": signup_link,
@@ -628,6 +656,7 @@ def build_template_context(
         "link_documento": document_link,
         "nome_evento": "",
         "data_evento": "",
+        "data_oggi": today,
         "stato_prenotazione": "",
         "messaggio_org": "",
         "titolo_form": "",

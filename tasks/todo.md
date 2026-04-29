@@ -4598,3 +4598,16 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Il builder form/sondaggi distingue draft locale e persistenza: sui nuovi form si possono aggiungere e modificare blocchi prima del primo save; dopo la creazione del form i blocchi draft vengono creati in sequenza via API e poi ricaricati come campi reali.
 - Ho corretto anche la normalizzazione backend delle chiavi builder `__ui_*` / `__survey_*`, perche venivano trasformate in chiavi legacy senza prefisso e potevano perdere identita dopo reload. Il frontend decodifica comunque anche le chiavi legacy gia presenti.
 - Verifiche eseguite: `python -m py_compile app/services/forms.py`; `python -m pytest -q tests/test_forms_module.py tests/test_org_admin_communications.py::test_org_admin_builder_template_assets_and_campaign_from_template` OK (`17 passed`); `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK con solo warning Vite chunk grandi gia noto.
+
+## Plan (Builder campagne follow-up bordi e dati rapidi - Apr 29, 2026)
+- [x] Rimuovere i residui visuali nativi GrapesJS che creano bordi/scuri sui blocchi laterali in light e dark mode
+- [x] Rendere coerenti anche i wrapper del pannello avanzato quando resta disponibile sotto inspector custom
+- [x] Ripristinare nel tab `Dati` scorciatoie rapide per telefono, data e merge tag ricorrenti senza dipendere solo dalla lista API
+- [x] Eseguire typecheck/build frontend e documentare l'esito
+
+## Review (Builder campagne follow-up bordi e dati rapidi - Apr 29, 2026)
+- In `grapes-email-builder.css` ho neutralizzato wrapper, label, pseudo-elementi, background e shadow nativi GrapesJS per i blocchi laterali: i blocchi ora usano solo i token scoped `--builder-*` in light e dark mode.
+- Ho applicato la stessa normalizzazione al pannello `Avanzate`, cosi anche quando viene aperto non mostra piu cornici o superfici scure incoerenti con il tema corrente.
+- In `emailBuilder.ts` ho aggiunto blocchi guidati `Data e dettagli` e `Contatti`, per ripristinare opzioni pratiche come data, telefono ed email direttamente dalla palette.
+- In `app/services/email_templates.py` ho aggiunto i merge tag reali `{{telefono_socio}}`, `{{telefono_associazione}}` e `{{data_oggi}}`, includendoli nel contesto di rendering per evitare placeholder vuoti non supportati.
+- Verifiche eseguite: `python -m py_compile app/services/email_templates.py` OK; `python -m pytest -q tests/test_org_admin_communications.py::test_org_admin_template_library_seed_duplicate_preview_and_archive` OK; `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK con solo warning Vite chunk grandi gia noto.

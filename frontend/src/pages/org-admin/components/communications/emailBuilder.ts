@@ -162,6 +162,33 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     `,
   },
   {
+    id: "assoc-date-details",
+    label: "Data e dettagli",
+    description: "Riepilogo rapido con data, luogo e informazioni operative.",
+    mjml: `
+      <mj-section background-color="#f8fafc" padding="18px" border-radius="8px">
+        <mj-column>
+          <mj-text color="#8d6b3f" font-size="12px" font-weight="700" letter-spacing="1px" text-transform="uppercase">Dettagli utili</mj-text>
+          <mj-text color="#0f172a" font-size="18px" font-weight="700" line-height="24px">{{nome_evento}}</mj-text>
+          <mj-text color="#334155" font-size="15px" line-height="24px">Quando: {{data_evento}}<br />Aggiornato il: {{data_oggi}}</mj-text>
+        </mj-column>
+      </mj-section>
+    `,
+  },
+  {
+    id: "assoc-contact-details",
+    label: "Contatti",
+    description: "Telefono, email e riferimenti dell'associazione.",
+    mjml: `
+      <mj-section background-color="#ffffff" padding="16px 0">
+        <mj-column>
+          <mj-text color="#8d6b3f" font-size="12px" font-weight="700" letter-spacing="1px" text-transform="uppercase">Contatti</mj-text>
+          <mj-text color="#334155" font-size="15px" line-height="24px">Telefono socio: {{telefono_socio}}<br />Telefono associazione: {{telefono_associazione}}<br />Email socio: {{email_socio}}</mj-text>
+        </mj-column>
+      </mj-section>
+    `,
+  },
+  {
     id: "assoc-renewal",
     label: "Reminder rinnovo",
     description: "Blocco pronto per sollecitare il rinnovo.",

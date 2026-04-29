@@ -180,6 +180,9 @@ def test_org_admin_template_library_seed_duplicate_preview_and_archive(client, d
     assert "{{nome_socio}}" in placeholders
     assert "{{link_rinnovo}}" in placeholders
     assert "{{link_form_collegato}}" in placeholders
+    assert "{{telefono_socio}}" in placeholders
+    assert "{{telefono_associazione}}" in placeholders
+    assert "{{data_oggi}}" in placeholders
 
     preview_res = client.post(
         "/api/org-admin/communications/templates/preview",
