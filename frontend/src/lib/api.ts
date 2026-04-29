@@ -4403,6 +4403,13 @@ export type SuperAdminAffiliationsResponse = {
   page_size: number;
   total: number;
   total_pages: number;
+  summary: {
+    total: number;
+    in_review: number;
+    approved: number;
+    rejected: number;
+    payment_pending: number;
+  };
 };
 
 export type SuperAdminAffiliationDetail = Omit<

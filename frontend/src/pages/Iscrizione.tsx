@@ -24,7 +24,10 @@ import {
   validateCodiceFiscale,
 } from "../lib/codiceFiscale";
 import { applySeo } from "../lib/seo";
+import { publicUploadHint, validatePublicDocumentUpload } from "../lib/uploadValidation";
 import Skeleton from "../components/ui/Skeleton";
+
+const MEMBER_PASSWORD_MIN_LENGTH = 8;
 
 const STEPS = [
   { label: "Dati", title: "I tuoi dati" },
@@ -121,8 +124,8 @@ function validateStep1(
   if (!requireOnlinePayment && !f.modalitaPagamento) {
     e.modalitaPagamento = "Seleziona la modalita di pagamento.";
   }
-  if (!f.password || f.password.length < 6) {
-    e.password = "La password deve avere almeno 6 caratteri.";
+  if (!f.password || f.password.length < MEMBER_PASSWORD_MIN_LENGTH) {
+    e.password = `La password deve avere almeno ${MEMBER_PASSWORD_MIN_LENGTH} caratteri.`;
   }
   return e;
 }
@@ -638,8 +641,23 @@ const Iscrizione = () => {
     (event: ChangeEvent<HTMLInputElement>) =>
       updateField(field, event.target.value);
 
-  const handleFile = (event: ChangeEvent<HTMLInputElement>) =>
-    updateField("documentoIdentita", event.target.files?.[0] ?? null);
+  const handleFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    if (!file) {
+      updateField("documentoIdentita", null);
+      return;
+    }
+
+    const validationError = validatePublicDocumentUpload(file);
+    if (validationError) {
+      event.target.value = "";
+      updateField("documentoIdentita", null);
+      setErrors((prev) => ({ ...prev, documentoIdentita: validationError }));
+      return;
+    }
+
+    updateField("documentoIdentita", file);
+  };
 
   const handleCheck =
     (field: "privacy" | "statuto") =>
@@ -1282,7 +1300,7 @@ const Iscrizione = () => {
                             id="password"
                             label="Password"
                             error={errors.password}
-                            hint={!errors.password ? "Minimo 6 caratteri." : undefined}
+                            hint={!errors.password ? `Minimo ${MEMBER_PASSWORD_MIN_LENGTH} caratteri.` : undefined}
                             placeholder="Inserisci una password"
                             value={form.password}
                             onChange={handleText("password")}
@@ -1372,7 +1390,7 @@ const Iscrizione = () => {
                                   Trascina qui o clicca per esplorare
                                 </h3>
                                 <p className="mt-3 text-base text-slate-500">
-                                  Formati supportati: PDF, JPG, PNG (max 5 MB)
+                                  {publicUploadHint}
                                 </p>
                                 <input
                                   id="documentoIdentita"

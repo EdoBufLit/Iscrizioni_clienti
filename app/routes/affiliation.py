@@ -1806,6 +1806,39 @@ def list_affiliations(
         query = query.filter(AffiliationApplication.status == normalized_status)
 
     total = int(query.count())
+    summary = {
+        "total": total,
+        "in_review": int(
+            query.filter(
+                AffiliationApplication.status.in_(
+                    [
+                        AffiliationApplicationStatus.UNDER_REVIEW.value,
+                        AffiliationApplicationStatus.CHANGES_REQUESTED.value,
+                    ]
+                )
+            ).count()
+        ),
+        "approved": int(
+            query.filter(
+                AffiliationApplication.status == AffiliationApplicationStatus.APPROVED.value
+            ).count()
+        ),
+        "rejected": int(
+            query.filter(
+                AffiliationApplication.status == AffiliationApplicationStatus.REJECTED.value
+            ).count()
+        ),
+        "payment_pending": int(
+            query.filter(
+                AffiliationApplication.payment_status.in_(
+                    [
+                        AffiliationPaymentStatus.PAYMENT_UNDER_REVIEW.value,
+                        AffiliationPaymentStatus.CHECKOUT_PENDING.value,
+                    ]
+                )
+            ).count()
+        ),
+    }
     total_pages = max(1, math.ceil(total / page_size)) if total > 0 else 1
     items = (
         query.order_by(
@@ -1839,6 +1872,7 @@ def list_affiliations(
         "page_size": page_size,
         "total": total,
         "total_pages": total_pages,
+        "summary": summary,
     }
 
 

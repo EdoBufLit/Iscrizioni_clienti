@@ -21,6 +21,14 @@ import PromptModal from "../../components/ui/PromptModal";
 import Skeleton from "../../components/ui/Skeleton";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
+  affiliationDocsStatusMeta,
+  affiliationDocumentStatusMeta,
+  affiliationPaymentStatusMeta,
+  affiliationStatusMeta,
+  referralStatusMeta,
+  resolveStatusMeta,
+} from "../../lib/statusLabels";
+import {
   SuperAdminActionButton,
   SuperAdminIcon,
   SuperAdminKpiCard,
@@ -52,40 +60,6 @@ const formatDate = (value: string | null | undefined) => {
   });
 };
 
-const statusBadgeClass = (status: string) => {
-  switch (status) {
-    case "under_review":
-      return "border-amber-200 bg-amber-50 text-amber-700";
-    case "changes_requested":
-      return "border-orange-200 bg-orange-50 text-orange-700";
-    case "approved":
-      return "border-emerald-200 bg-emerald-50 text-emerald-700";
-    case "rejected":
-      return "border-red-200 bg-red-50 text-red-700";
-    default:
-      return "border-neutral-200 bg-neutral-50 text-neutral-600";
-  }
-};
-
-const paymentBadgeClass = (status: string) => {
-  switch (status) {
-    case "paid":
-    case "verified":
-      return "border-emerald-200 bg-emerald-50 text-emerald-700";
-    case "payment_under_review":
-    case "checkout_pending":
-      return "border-amber-200 bg-amber-50 text-amber-700";
-    default:
-      return "border-neutral-200 bg-neutral-50 text-neutral-600";
-  }
-};
-
-const docStatusLabel = (status: string) => {
-  if (status === "approved") return "Approvato";
-  if (status === "rejected") return "Rifiutato";
-  return "In attesa";
-};
-
 const SuperAdminAffiliations = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -101,6 +75,13 @@ const SuperAdminAffiliations = () => {
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [summary, setSummary] = useState({
+    total: 0,
+    in_review: 0,
+    approved: 0,
+    rejected: 0,
+    payment_pending: 0,
+  });
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [actionStates, setActionStates] = useState<Record<string, AsyncActionState>>({});
@@ -140,6 +121,15 @@ const SuperAdminAffiliations = () => {
       });
       setItems(response.items);
       setTotalPages(response.total_pages || 1);
+      setSummary(
+        response.summary ?? {
+          total: response.total ?? response.items.length,
+          in_review: 0,
+          approved: 0,
+          rejected: 0,
+          payment_pending: 0,
+        },
+      );
       setError("");
 
       if (
@@ -374,16 +364,10 @@ const SuperAdminAffiliations = () => {
     });
   };
 
-  const stats = useMemo(
-    () => ({
-      total: items.length,
-      review: items.filter((item) => item.status === "under_review" || item.status === "changes_requested").length,
-      approved: items.filter((item) => item.status === "approved").length,
-      rejected: items.filter((item) => item.status === "rejected").length,
-      payments: items.filter((item) => item.payment_status === "payment_under_review" || item.payment_status === "checkout_pending").length,
-    }),
-    [items],
-  );
+  const detailStatus = resolveStatusMeta(affiliationStatusMeta, detail?.status);
+  const detailDocsStatus = resolveStatusMeta(affiliationDocsStatusMeta, detail?.docs_status);
+  const detailPaymentStatus = resolveStatusMeta(affiliationPaymentStatusMeta, detail?.payment_status);
+  const detailReferralStatus = resolveStatusMeta(referralStatusMeta, detail?.referral?.status);
 
   return (
     <div className="sa-page animate-in fade-in duration-500">
@@ -402,11 +386,11 @@ const SuperAdminAffiliations = () => {
       />
 
       <section className="sa-kpi-grid">
-        <SuperAdminKpiCard label="Richieste totali" value={stats.total} hint="Tutte le richieste caricate" icon="users" tone="success" />
-        <SuperAdminKpiCard label="In revisione" value={stats.review} hint="In valutazione" icon="clock" tone="warning" />
-        <SuperAdminKpiCard label="Approvate" value={stats.approved} hint="Affiliazioni approvate" icon="check" tone="success" />
-        <SuperAdminKpiCard label="Respinte" value={stats.rejected} hint="Richieste rifiutate" icon="x" tone="danger" />
-        <SuperAdminKpiCard label="Pagamenti in verifica" value={stats.payments} hint="Da confermare" icon="wallet" tone="info" />
+        <SuperAdminKpiCard label="Richieste totali" value={summary.total} hint="Risultati filtrati totali" icon="users" tone="success" />
+        <SuperAdminKpiCard label="In revisione" value={summary.in_review} hint="In valutazione" icon="clock" tone="warning" />
+        <SuperAdminKpiCard label="Approvate" value={summary.approved} hint="Affiliazioni approvate" icon="check" tone="success" />
+        <SuperAdminKpiCard label="Respinte" value={summary.rejected} hint="Richieste rifiutate" icon="x" tone="danger" />
+        <SuperAdminKpiCard label="Pagamenti in verifica" value={summary.payment_pending} hint="Da confermare" icon="wallet" tone="info" />
       </section>
 
       <SuperAdminToolbar>
@@ -531,14 +515,17 @@ const SuperAdminAffiliations = () => {
                     </td>
                   </tr>
                 ) : (
-                  items.map((item) => (
-                    <tr
-                      key={item.id}
-                      className={`group cursor-pointer transition-all duration-200 hover:bg-brand/[0.02] ${
-                        selectedId === item.id ? "bg-brand/[0.05]" : ""
-                      }`}
-                      onClick={() => setSelectedId(item.id)}
-                    >
+                  items.map((item) => {
+                    const status = resolveStatusMeta(affiliationStatusMeta, item.status);
+                    const payment = resolveStatusMeta(affiliationPaymentStatusMeta, item.payment_status);
+                    return (
+                      <tr
+                        key={item.id}
+                        className={`group cursor-pointer transition-all duration-200 hover:bg-brand/[0.02] ${
+                          selectedId === item.id ? "bg-brand/[0.05]" : ""
+                        }`}
+                        onClick={() => setSelectedId(item.id)}
+                      >
                       <td className="px-4 py-4">
                         <p className={`text-sm font-bold transition-colors ${selectedId === item.id ? 'text-brand' : 'text-neutral-900 group-hover:text-brand'}`}>
                           {item.organization_name || "N/D"}
@@ -548,13 +535,13 @@ const SuperAdminAffiliations = () => {
                         </p>
                       </td>
                       <td className="px-4 py-4">
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter ring-1 ring-inset ${statusBadgeClass(item.status)}`}>
-                          {item.status.replace('_', ' ')}
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold uppercase tracking-tighter ring-1 ring-inset ${status.tone}`}>
+                          {status.label}
                         </span>
                       </td>
                       <td className="px-4 py-4">
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter ring-1 ring-inset ${paymentBadgeClass(item.payment_status)}`}>
-                          {item.payment_status.replace('_', ' ')}
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold uppercase tracking-tighter ring-1 ring-inset ${payment.tone}`}>
+                          {payment.label}
                         </span>
                       </td>
                       <td className="px-4 py-4 text-right">
@@ -566,7 +553,8 @@ const SuperAdminAffiliations = () => {
                         </p>
                       </td>
                     </tr>
-                  ))
+                  );
+                  })
                 )}
               </tbody>
             </table>
@@ -630,8 +618,8 @@ const SuperAdminAffiliations = () => {
                 </div>
                 <div className="text-right">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-1">Stato</p>
-                  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-tighter ring-1 ring-inset ${statusBadgeClass(detail.status)}`}>
-                    {detail.status.replace('_', ' ')}
+                  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-tighter ring-1 ring-inset ${detailStatus.tone}`}>
+                    {detailStatus.label}
                   </span>
                 </div>
               </div>
@@ -661,11 +649,11 @@ const SuperAdminAffiliations = () => {
                     <div className="space-y-2.5">
                       <div className="flex items-center gap-2 text-sm">
                         <span className="text-neutral-400 w-5">📄</span>
-                        <span className="font-bold text-neutral-700 uppercase tracking-tighter">Docs: {detail.docs_status}</span>
+                        <span className={`rounded-full border px-2 py-0.5 text-xs font-bold uppercase tracking-tighter ${detailDocsStatus.tone}`}>{detailDocsStatus.label}</span>
                       </div>
                       <div className="flex items-center gap-2 text-sm">
                         <span className="text-neutral-400 w-5">💳</span>
-                        <span className={`font-bold uppercase tracking-tighter ${detail.payment_status === 'paid' ? 'text-emerald-600' : 'text-amber-600'}`}>{detail.payment_status}</span>
+                        <span className={`rounded-full border px-2 py-0.5 text-xs font-bold uppercase tracking-tighter ${detailPaymentStatus.tone}`}>{detailPaymentStatus.label}</span>
                       </div>
                       <div className="flex items-center gap-2 text-sm">
                         <span className="text-neutral-400 w-5">🏛️</span>
@@ -690,7 +678,7 @@ const SuperAdminAffiliations = () => {
                         </p>
                         <div className="flex flex-wrap gap-2">
                           <span className="inline-flex items-center rounded-lg bg-cyan-100 px-2 py-1 text-[10px] font-bold uppercase text-cyan-700">
-                            Stato: {detail.referral.status}
+                            Stato: {detailReferralStatus.label}
                           </span>
                           {detail.referral.reward_title && (
                             <span className="inline-flex items-center rounded-lg bg-emerald-100 px-2 py-1 text-[10px] font-bold uppercase text-emerald-700">
@@ -724,7 +712,7 @@ const SuperAdminAffiliations = () => {
                               <p className="text-sm font-bold text-neutral-900 group-hover:text-brand transition-colors">{doc.doc_type}</p>
                               <div className="flex items-center gap-2 mt-0.5">
                                 <span className={`text-[10px] font-bold uppercase tracking-widest ${doc.status === 'approved' ? 'text-emerald-600' : doc.status === 'rejected' ? 'text-red-600' : 'text-neutral-400'}`}>
-                                  {docStatusLabel(doc.status)}
+                                  {resolveStatusMeta(affiliationDocumentStatusMeta, doc.status).label}
                                 </span>
                                 {(doc.review_notes || doc.rejection_note) && <span className="text-[10px] text-neutral-300">•</span>}
                                 {(doc.review_notes || doc.rejection_note) && <span className="text-[10px] text-neutral-400 italic truncate max-w-[120px]">{doc.review_notes || doc.rejection_note}</span>}
@@ -737,7 +725,7 @@ const SuperAdminAffiliations = () => {
                             target="_blank" 
                             rel="noreferrer"
                           >
-                            View
+                            Vedi
                           </a>
                         </div>
                         

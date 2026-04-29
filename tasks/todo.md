@@ -1,3 +1,16 @@
+## Plan (Prossime modifiche immediate ASSONAM - Apr 28, 2026)
+- [x] Aggiungere summary server-side a Super Admin Affiliazioni e usare KPI non derivati dalla pagina corrente.
+- [x] Migliorare Org Admin Inviti con ricerca debounced, reset pagina su filtri e ToastProvider.
+- [x] Standardizzare password socio a minimo 8 caratteri su iscrizione frontend e backend.
+- [x] Aggiungere validazione upload client-side su Iscrizione e Affiliazione pubblica.
+- [x] Centralizzare status labels sulle superfici toccate e correggere microcopy visibile.
+- [x] Eseguire test backend/frontend mirati e documentare esito.
+
+## Review (Prossime modifiche immediate ASSONAM - Apr 28, 2026)
+- Implementati summary globali filtrati per Super Admin Affiliazioni, debounce/toast condiviso negli Inviti, password socio minima a 8 caratteri, validazione upload pubblica 10 MB PDF/JPG/PNG e status labels condivise per le superfici toccate.
+- Verifiche OK: `python -m py_compile app\routes\affiliation.py app\routes\member.py app\routes\membership_payments.py app\security.py`, test mirati affiliazioni/signup/checkout SumUp, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
+- Nota verifica: il comando largo `python -m pytest -q tests/test_affiliation_flow.py tests/test_signup_fixes.py` fallisce su `test_all_active_orgs_accept_signup` per dati locali con molte organizzazioni generate da altri test che rispondono 400 a `/api/join/.../submit`; non e una regressione della password perche quel flusso non usa `/api/auth/register`.
+
 ## Plan (Fix deploy Alembic tokentype - Apr 28, 2026)
 - [x] Rendere la migration password reset compatibile con Postgres enum e varchar legacy.
 - [x] Eseguire test backend mirati e typecheck frontend.

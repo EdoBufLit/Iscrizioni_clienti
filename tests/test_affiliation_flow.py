@@ -6,7 +6,7 @@ import pytest
 from app.config import settings
 from app.db import SessionLocal
 from app.models import AdminRole, AdminUser, Organization
-from app.models_affiliation import AffiliationVideoMode, VideoJob, VideoJobStatus
+from app.models_affiliation import AffiliationApplication, AffiliationVideoMode, VideoJob, VideoJobStatus
 
 
 @pytest.fixture
@@ -219,6 +219,48 @@ def test_super_admin_affiliation_views_redact_public_token(client):
         detail_payload["payment_config"]["reference_code"]
         == f"AFF-{application_id:06d}"
     )
+
+
+def test_super_admin_affiliations_summary_uses_filtered_dataset_not_page(client, db):
+    marker = f"summary-{uuid.uuid4().hex[:8]}"
+    statuses = [
+        ("under_review", "payment_under_review"),
+        ("approved", "verified"),
+        ("rejected", "checkout_pending"),
+    ]
+
+    application_ids = []
+    for index, (status, payment_status) in enumerate(statuses):
+        draft = _create_draft(client, email=f"{marker}-{index}@example.com")
+        application_ids.append(int(draft["id"]))
+        application = (
+            db.query(AffiliationApplication)
+            .filter(AffiliationApplication.id == int(draft["id"]))
+            .first()
+        )
+        assert application is not None
+        application.organization_name = f"{marker} associazione {index}"
+        application.status = status
+        application.payment_status = payment_status
+    db.commit()
+
+    _login_super_admin(client)
+    response = client.get(
+        "/api/super-admin/affiliations",
+        params={"q": marker, "page_size": 1, "page": 1},
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert len(payload["items"]) == 1
+    assert payload["total"] == len(application_ids)
+    assert payload["summary"] == {
+        "total": 3,
+        "in_review": 1,
+        "approved": 1,
+        "rejected": 1,
+        "payment_pending": 2,
+    }
 
 
 def test_affiliation_approve_requires_docs_and_payment_verification(client, db):

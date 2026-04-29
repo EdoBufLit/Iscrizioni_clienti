@@ -4,6 +4,11 @@ import {
   fetchMembershipPaymentStatus,
   type MembershipPaymentStatusResponse,
 } from "../lib/api";
+import {
+  affiliationPaymentStatusMeta,
+  membershipCardStatusMeta,
+  resolveStatusMeta,
+} from "../lib/statusLabels";
 
 type LoadState = "loading" | "success" | "error";
 
@@ -16,6 +21,12 @@ export default function IscrizionePagamentoEsito() {
   const [error, setError] = useState<string | null>(null);
   const readyCardUrl =
     status?.is_paid && status.card_status === "issued" ? status.active_card_page_url : null;
+  const paymentStatus = resolveStatusMeta(
+    affiliationPaymentStatusMeta,
+    status?.payment_status || (loadState === "loading" ? "pending" : null),
+    "-",
+  );
+  const cardStatus = resolveStatusMeta(membershipCardStatusMeta, status?.card_status, "-");
 
   useEffect(() => {
     if (!Number.isFinite(paymentId) || paymentId <= 0) {
@@ -97,11 +108,11 @@ export default function IscrizionePagamentoEsito() {
           <div className="mt-8 rounded-[1.6rem] border border-slate-200 bg-slate-50/70 px-6 py-5 text-left">
             <p className="text-sm text-slate-500">Stato pagamento</p>
             <p className="mt-2 text-2xl font-semibold text-slate-950">
-              {status?.payment_status || (loadState === "loading" ? "pending" : "-")}
+              {paymentStatus.label}
             </p>
             <p className="mt-4 text-sm text-slate-500">Stato tessera</p>
             <p className="mt-2 text-lg font-medium text-slate-900">
-              {status?.card_status || "-"}
+              {cardStatus.label}
             </p>
           </div>
 

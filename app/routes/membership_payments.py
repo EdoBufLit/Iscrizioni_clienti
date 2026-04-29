@@ -31,7 +31,7 @@ from app.routes.join import (
     _validate_signup_fiscal_code,
     check_signup_allowed,
 )
-from app.security import get_password_hash
+from app.security import MIN_MEMBER_PASSWORD_LENGTH, get_password_hash
 from app.services.membership_payments import (
     MembershipPaymentSource,
     build_membership_payment_status_payload,
@@ -116,6 +116,8 @@ async def _upsert_member_for_checkout(
         raise HTTPException(status_code=400, detail="E necessario accettare lo statuto per procedere.")
     if not accept_privacy:
         raise HTTPException(status_code=400, detail="E necessario accettare l'informativa privacy.")
+    if password and len(password) < MIN_MEMBER_PASSWORD_LENGTH:
+        raise HTTPException(status_code=400, detail=f"La password deve avere almeno {MIN_MEMBER_PASSWORD_LENGTH} caratteri.")
 
     requested_membership_type = normalize_membership_type(membership_type)
     if (

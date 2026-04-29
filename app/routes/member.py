@@ -7,7 +7,7 @@ from app.models import Member, Token, TokenType, MemberDocument, MemberStatus, P
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 from app.utils import generate_token, hash_token, save_upload_file
-from app.security import get_password_hash, verify_password
+from app.security import MIN_MEMBER_PASSWORD_LENGTH, get_password_hash, verify_password
 from app.config import settings
 from app.middleware import auth_limiter, get_client_ip
 from app.services.card_verification import build_card_verification_token
@@ -545,8 +545,8 @@ def api_auth_password_reset_confirm(
     """Consume a one-time password reset token and update the member password."""
     auth_limiter.check(get_client_ip(request))
 
-    if len(new_password) < 8:
-        raise HTTPException(status_code=400, detail="La password deve avere almeno 8 caratteri.")
+    if len(new_password) < MIN_MEMBER_PASSWORD_LENGTH:
+        raise HTTPException(status_code=400, detail=f"La password deve avere almeno {MIN_MEMBER_PASSWORD_LENGTH} caratteri.")
     if new_password != confirm_password:
         raise HTTPException(status_code=400, detail="Le password non coincidono.")
 
@@ -610,6 +610,9 @@ def api_auth_register(
     org = db.query(Organization).filter(Organization.slug == org_slug).first()
     if not org:
         raise HTTPException(status_code=404, detail="Not found")
+
+    if len(password) < MIN_MEMBER_PASSWORD_LENGTH:
+        raise HTTPException(status_code=400, detail=f"La password deve avere almeno {MIN_MEMBER_PASSWORD_LENGTH} caratteri.")
 
     normalized_payment_method = _normalize_payment_method(payment_method)
     email_norm = email.strip().lower()
@@ -702,8 +705,8 @@ def api_auth_change_password(
     member = get_current_member(request, db)
     if not member:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    if len(new_password) < 8:
-        raise HTTPException(status_code=400, detail="La password deve avere almeno 8 caratteri.")
+    if len(new_password) < MIN_MEMBER_PASSWORD_LENGTH:
+        raise HTTPException(status_code=400, detail=f"La password deve avere almeno {MIN_MEMBER_PASSWORD_LENGTH} caratteri.")
     member.password_hash = get_password_hash(new_password)
     db.commit()
     return {"status": "ok", "message": "Password aggiornata."}

@@ -13,6 +13,7 @@ from app.models import IntegrationApiKey
 # bcrypt has 72-byte input limit; bcrypt_sha256 avoids this and is more robust in containers.
 pwd_context = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
 
+MIN_MEMBER_PASSWORD_LENGTH = 8
 INTEGRATION_API_KEY_HEADER = "X-ASSONAM-API-KEY"
 
 

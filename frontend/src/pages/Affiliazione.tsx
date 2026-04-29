@@ -13,6 +13,8 @@ import {
   type AffiliationSubmitResponse,
 } from "../lib/api";
 import { applySeo } from "../lib/seo";
+import { affiliationDocumentStatusMeta, resolveStatusMeta } from "../lib/statusLabels";
+import { publicUploadHint, validatePublicDocumentUpload } from "../lib/uploadValidation";
 import { useStatePlatformCapabilities } from "../hooks/useStatePlatformCapabilities";
 import FullscreenVideoOverlay from "../components/affiliation/FullscreenVideoOverlay";
 
@@ -164,19 +166,6 @@ type WizardValidation = {
 };
 
 const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-
-const docStatusMeta = (status: string | undefined) => {
-  if (status === "approved") {
-    return { tone: "text-emerald-700", label: "approvato" };
-  }
-  if (status === "rejected") {
-    return { tone: "text-red-700", label: "rifiutato" };
-  }
-  if (status === "pending" || status === "uploaded") {
-    return { tone: "text-amber-700", label: "in revisione" };
-  }
-  return { tone: "text-neutral-500", label: "non caricato" };
-};
 
 const buildDraftPatchPayload = (form: FormState) => ({
   organization_name: form.organization_name || null,
@@ -638,6 +627,12 @@ const Affiliazione = () => {
 
   const onUploadDocument = useCallback(
     async (docType: string, file: File) => {
+      const validationError = validatePublicDocumentUpload(file);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+
       try {
         setUploadingType(docType);
         setError("");
@@ -1106,14 +1101,14 @@ const Affiliazione = () => {
             <div id="affiliation-step-panel-3" role="tabpanel" aria-labelledby="affiliation-step-tab-3" className="p-6 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="border-b border-slate-100 pb-5">
                 <h2 className="text-2xl font-extrabold text-slate-900">Upload Documenti</h2>
-                <p className="mt-1 text-sm text-slate-500">Carica i file in formato PDF. La segreteria convaliderà i documenti manualmente.</p>
+                <p className="mt-1 text-sm text-slate-500">Carica i file richiesti. {publicUploadHint}. La segreteria convaliderà i documenti manualmente.</p>
               </div>
 
               <div className="grid gap-5 sm:grid-cols-2">
                 {DOC_ITEMS.map((doc) => {
                   const docData = docsByType.get(doc.type);
                   const isUploaded = !!docData;
-                  const status = docStatusMeta(docData?.status);
+                  const status = resolveStatusMeta(affiliationDocumentStatusMeta, docData?.status, "Non caricato");
                   
                   return (
                     <div key={doc.type} className={`relative flex flex-col justify-between rounded-2xl border-2 p-5 transition-all ${isUploaded ? 'border-brand/40 bg-brand/[0.02] shadow-sm' : 'border-dashed border-slate-300 bg-slate-50/80 hover:bg-slate-50 hover:border-slate-400'}`}>
@@ -1128,11 +1123,7 @@ const Affiliazione = () => {
                         </div>
                         {isUploaded && (
                           <div className="mt-2 flex items-center gap-3">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                              status.label === 'approvato' ? 'bg-emerald-100 text-emerald-800' : 
-                              status.label === 'rifiutato' ? 'bg-red-100 text-red-800' : 
-                              'bg-amber-100 text-amber-800'
-                            }`}>
+                            <span className={`rounded border px-2 py-0.5 text-xs font-bold uppercase tracking-wider ${status.tone}`}>
                               {status.label}
                             </span>
                             {docData.download_url && (
@@ -1168,16 +1159,17 @@ const Affiliazione = () => {
                           ) : (
                             <span className="flex items-center gap-2">
                               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                              Carica PDF
+                              Carica file
                             </span>
                           )}
                           <input
                             type="file"
-                            accept=".pdf"
+                            accept=".pdf,.jpg,.jpeg,.png"
                             className="hidden"
                             disabled={uploadingType === doc.type}
                             onChange={(event) => {
                               const file = event.target.files?.[0];
+                              event.target.value = "";
                               if (file) void onUploadDocument(doc.type, file);
                             }}
                           />

@@ -9,12 +9,9 @@ import {
   type OrgAdminReferralListItem,
   type OrgAdminReferralSummary,
 } from "../../lib/api";
+import { referralInviteStatusMeta } from "../../lib/statusLabels";
+import { useToast } from "../../components/ui/ToastProvider";
 import { useOrgAdmin } from "./OrgAdminLayout";
-
-type ToastState = {
-  type: "success" | "error";
-  message: string;
-} | null;
 
 const PAGE_SIZE = 20;
 
@@ -29,37 +26,6 @@ const STATUS_FILTERS: Array<{
   { value: "approved", label: "Approvati" },
   { value: "rejected", label: "Rifiutati" },
 ];
-
-const INVITE_STATUS_META: Record<
-  string,
-  { label: string; tone: string; hint: string }
-> = {
-  invited: {
-    label: "Invitata",
-    tone: "border-neutral-200 bg-neutral-50 text-neutral-700",
-    hint: "L'associazione non ha ancora completato la richiesta.",
-  },
-  completed_by_association: {
-    label: "Completata da associazione",
-    tone: "border-sky-200 bg-sky-50 text-sky-700",
-    hint: "Compilazione completata, in attesa di presa in carico.",
-  },
-  under_review: {
-    label: "In revisione",
-    tone: "border-amber-200 bg-amber-50 text-amber-700",
-    hint: "Pratica in revisione da parte del super admin.",
-  },
-  approved: {
-    label: "Approvata",
-    tone: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    hint: "La ruota premi e disponibile.",
-  },
-  rejected: {
-    label: "Rifiutata",
-    tone: "border-red-200 bg-red-50 text-red-700",
-    hint: "Pratica rifiutata dal super admin.",
-  },
-};
 
 const formatDateTime = (value: string | null | undefined) => {
   if (!value) return "-";
@@ -96,6 +62,7 @@ const resolveWheelResult = (
 const OrgAdminInvites = () => {
   const { admin, loading: adminLoading } = useOrgAdmin();
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
   const [summary, setSummary] = useState<OrgAdminReferralSummary | null>(null);
   const [items, setItems] = useState<OrgAdminReferralListItem[]>([]);
@@ -104,6 +71,7 @@ const OrgAdminInvites = () => {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [reloadTick, setReloadTick] = useState(0);
 
@@ -119,13 +87,12 @@ const OrgAdminInvites = () => {
   const [inviteError, setInviteError] = useState("");
   const [inviteSuccess, setInviteSuccess] = useState("");
 
-  const [toast, setToast] = useState<ToastState>(null);
-
   useEffect(() => {
-    if (!toast) return;
-    const timeout = window.setTimeout(() => setToast(null), 2800);
+    const timeout = window.setTimeout(() => {
+      setDebouncedQuery(query.trim());
+    }, 350);
     return () => window.clearTimeout(timeout);
-  }, [toast]);
+  }, [query]);
 
   useEffect(() => {
     if (adminLoading) return;
@@ -138,7 +105,7 @@ const OrgAdminInvites = () => {
       fetchOrgAdminReferralInvites({
         page,
         pageSize: PAGE_SIZE,
-        q: query.trim() || undefined,
+        q: debouncedQuery || undefined,
         status: statusFilter || undefined,
       }),
     ])
@@ -165,14 +132,14 @@ const OrgAdminInvites = () => {
         setError(err instanceof Error ? err.message : "Errore caricamento inviti.");
       })
       .finally(() => setLoading(false));
-  }, [admin, adminLoading, navigate, page, query, reloadTick, selectedInviteId, statusFilter]);
+  }, [admin, adminLoading, debouncedQuery, navigate, page, reloadTick, selectedInviteId, statusFilter]);
 
   const selectedInvite = useMemo(
     () => items.find((item) => item.id === selectedInviteId) ?? null,
     [items, selectedInviteId],
   );
   const selectedInviteStatusMeta =
-    INVITE_STATUS_META[selectedInvite?.invite_status || "invited"] ?? INVITE_STATUS_META.invited;
+    referralInviteStatusMeta[selectedInvite?.invite_status || "invited"] ?? referralInviteStatusMeta.invited;
   const selectedWheelResult = resolveWheelResult(selectedInvite);
 
   const onCreateInvite = async () => {
@@ -193,7 +160,7 @@ const OrgAdminInvites = () => {
         notes: inviteNotes.trim() || undefined,
       });
       setInviteSuccess(`Invito inviato a ${normalizedEmail}.`);
-      setToast({ type: "success", message: "Invito creato con successo." });
+      showToast({ tone: "success", title: "Inviti", message: "Invito creato con successo." });
       setInviteOrgName("");
       setInviteEmail("");
       setInviteNotes("");
@@ -229,12 +196,12 @@ const OrgAdminInvites = () => {
 
       const rewardTitle =
         response.wheel_result?.title || response.reward?.title || "Premio assegnato";
-      setToast({ type: "success", message: `Ruota completata: ${rewardTitle}` });
+      showToast({ tone: "success", title: "Ruota premi", message: `Ruota completata: ${rewardTitle}` });
       setReloadTick((value) => value + 1);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Errore durante la ruota premi.";
       setSpinError(message);
-      setToast({ type: "error", message });
+      showToast({ tone: "error", title: "Ruota premi", message });
     } finally {
       setSpinLoading(false);
     }
@@ -388,7 +355,7 @@ const OrgAdminInvites = () => {
                 ) : (
                   items.map((item) => {
                     const statusMeta =
-                      INVITE_STATUS_META[item.invite_status] ?? INVITE_STATUS_META.invited;
+                      referralInviteStatusMeta[item.invite_status] ?? referralInviteStatusMeta.invited;
                     return (
                       <tr
                         key={item.id}
@@ -401,7 +368,7 @@ const OrgAdminInvites = () => {
                           <p className="mt-0.5 text-xs text-neutral-500">{item.applicant_email || "-"}</p>
                         </td>
                         <td className="px-4 py-3">
-                          <span
+                      <span
                             className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${statusMeta.tone}`}
                           >
                             {statusMeta.label}
@@ -560,19 +527,6 @@ const OrgAdminInvites = () => {
         )}
       </div>
 
-      {toast && (
-        <div className="pointer-events-none fixed right-4 top-4 z-[90]">
-          <div
-            className={`rounded-md border px-4 py-2 text-sm shadow-lg ${
-              toast.type === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                : "border-red-200 bg-red-50 text-red-800"
-            }`}
-          >
-            {toast.message}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

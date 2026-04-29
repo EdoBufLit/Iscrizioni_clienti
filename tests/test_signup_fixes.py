@@ -152,3 +152,21 @@ def test_web_register_sets_signup_source_assonam_form(client, db):
     member = db.query(Member).filter(Member.org_id == org.id, Member.email == email).first()
     assert member is not None
     assert member.signup_source == SignupSource.ASSONAM_FORM.value
+
+
+def test_web_register_rejects_short_member_password(client, db):
+    org = _ensure_org(db, "register-password-min-test-org", statute=False)
+
+    resp = client.post(
+        "/api/auth/register",
+        data={
+            "email": f"short-password-{int(datetime.utcnow().timestamp() * 1000)}@example.com",
+            "password": "short",
+            "first_name": "Mario",
+            "last_name": "Rossi",
+            "org_slug": org.slug,
+        },
+    )
+
+    assert resp.status_code == 400, resp.text
+    assert "almeno 8 caratteri" in resp.text
