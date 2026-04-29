@@ -4637,3 +4637,16 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - `Z000` non viene piu proposto ne accettato come codice estero nel frontend.
 - In `app/routes/join.py` il backend valida il caso estero con pattern `Z###` escluso `Z000`, persiste nome e codice ricevuti e continua ad accettare CF formalmente validi anche se modificati manualmente rispetto allo Stato selezionato, con warning non bloccante.
 - Verifiche eseguite: `python -m py_compile app/routes/join.py app/routes/membership_payments.py tests/signup_payloads.py tests/test_signup_fiscal_code.py` OK; `python -m pytest -q tests/test_signup_fiscal_code.py` OK (`6 passed`); `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK con solo warning Vite chunk grandi gia noto.
+
+## Plan (Deploy no space server cleanup - Apr 29, 2026)
+- [x] Verificare spazio disco e uso Docker sul server `157.90.31.105`
+- [x] Liberare cache Docker sicure senza rimuovere volumi/database
+- [x] Verificare spazio e servizi dopo cleanup
+- [x] Eseguire ripush del branch per ritentare il deploy
+
+## Review (Deploy no space server cleanup - Apr 29, 2026)
+- Il deploy falliva per root filesystem pieno: `/dev/sda1` era al 100% con `0` spazio disponibile.
+- La causa principale era storage Docker/containerd sotto `/var/lib/containerd`; ho liberato solo risorse ricreabili con prune immagini/build cache/container/network non usati, `journalctl --vacuum-size=100M` e pulizia apt.
+- Non ho toccato volumi Docker ne dati Postgres.
+- Dopo cleanup `/dev/sda1` e al 25% con circa `27G` liberi; `docker compose ps` mostra web, worker e db in esecuzione/healthy e `pg_isready` risponde `accepting connections`.
+- Branch ripushato per ritentare il deploy dopo il cleanup.
