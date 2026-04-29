@@ -861,9 +861,16 @@ export function OrgAdminFormsWorkspace({
         whatsapp_rejection_template: formDraft.whatsapp_rejection_template || null,
         create_booking: bookingEnabled,
       };
+      const wasCreatingNewForm = !selectedFormId;
+      const draftFieldsToPersist = wasCreatingNewForm ? [...builderDraftFields] : [];
       const response = selectedFormId
         ? await updateOrgAdminForm(selectedFormId, payload)
         : await createOrgAdminForm(payload);
+      if (wasCreatingNewForm && draftFieldsToPersist.length > 0) {
+        for (const [index, builderField] of draftFieldsToPersist.entries()) {
+          await createOrgAdminFormField(response.form.id, encodeField(builderField, (index + 1) * 10));
+        }
+      }
       setIsCreatingForm(false);
       setSelectedFormId(response.form.id);
       setSelectedForm(response.form);
@@ -1363,7 +1370,8 @@ export function OrgAdminFormsWorkspace({
         onSaveField={handleBuilderSaveField}
         onDeleteField={handleBuilderDeleteField}
         onReorder={handleBuilderReorder}
-        locked={locked || !selectedFormId}
+        locked={locked}
+        persistEnabled={Boolean(selectedFormId)}
         mode={mode}
       />
     </div>

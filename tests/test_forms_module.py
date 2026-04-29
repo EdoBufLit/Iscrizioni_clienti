@@ -308,6 +308,66 @@ def test_org_admin_form_payload_includes_connected_whatsapp_automations(client, 
     assert detail_form["actions"]["connected_whatsapp_automations"][0]["id"] == automation_id
 
 
+def test_org_admin_form_fields_persist_multiple_builder_blocks_in_order(client, db):
+    org, admin = _create_org_admin(db)
+    _login_org_admin(client, db, admin.id)
+    public_slug = f"sondaggio-builder-{uuid.uuid4().hex[:6]}"
+
+    create_res = client.post(
+        "/api/org-admin/forms",
+        json={
+            "title": "Sondaggio builder",
+            "public_slug": public_slug,
+            "form_type": "survey",
+            "is_active": False,
+            "visibility": "public",
+        },
+    )
+    assert create_res.status_code == 201, create_res.text
+    form_id = create_res.json()["form"]["id"]
+
+    field_payloads = [
+        {
+            "field_type": "long_text",
+            "field_key": "__ui_text__intro",
+            "label": "Intro",
+            "help_text": "Paragrafo modificato prima del save",
+            "sort_order": 10,
+        },
+        {
+            "field_type": "radio",
+            "field_key": "__survey_rating__voto",
+            "label": "Valutazione servizio",
+            "help_text": "Lascia una valutazione|||META:{\"survey\":\"rating_1_5\"}",
+            "options": "1, 2, 3, 4, 5",
+            "sort_order": 20,
+        },
+        {
+            "field_type": "short_text",
+            "field_key": "commento_finale",
+            "label": "Commento finale",
+            "placeholder": "Scrivi qui",
+            "is_required": True,
+            "sort_order": 30,
+        },
+    ]
+    for payload in field_payloads:
+        field_res = client.post(f"/api/org-admin/forms/{form_id}/fields", json=payload)
+        assert field_res.status_code == 201, field_res.text
+
+    detail_res = client.get(f"/api/org-admin/forms/{form_id}")
+    assert detail_res.status_code == 200, detail_res.text
+    fields = detail_res.json()["form"]["fields"]
+    assert [field["field_key"] for field in fields] == [
+        "__ui_text__intro",
+        "__survey_rating__voto",
+        "commento_finale",
+    ]
+    assert fields[0]["help_text"] == "Paragrafo modificato prima del save"
+    assert fields[1]["options"] == ["1", "2", "3", "4", "5"]
+    assert fields[2]["is_required"] is True
+
+
 def test_members_only_public_form_requires_member_session(client, db):
     org, admin = _create_org_admin(db)
     _login_org_admin(client, db, admin.id)

@@ -38,9 +38,23 @@ type GrapesEmailBuilderProps = {
 
 type RailTab = "blocks" | "media" | "variables";
 
-type SelectedButtonState = {
-  label: string;
+type SelectedElementKind = "testo" | "bottone" | "immagine" | "blocco" | "elemento";
+
+type SelectedElementState = {
+  kind: SelectedElementKind;
+  title: string;
+  content: string;
   href: string;
+  src: string;
+  alt: string;
+  fontSize: string;
+  fontWeight: string;
+  textColor: string;
+  backgroundColor: string;
+  align: string;
+  paddingTop: string;
+  paddingBottom: string;
+  borderRadius: string;
 };
 
 type BuilderSectionSummary = {
@@ -55,6 +69,19 @@ const railTabs: Array<{ key: RailTab; label: string }> = [
   { key: "variables", label: "Dati" },
 ];
 
+const alignOptions = [
+  { value: "left", label: "Sinistra" },
+  { value: "center", label: "Centro" },
+  { value: "right", label: "Destra" },
+];
+
+const fontWeightOptions = [
+  { value: "400", label: "Normale" },
+  { value: "600", label: "Semi-bold" },
+  { value: "700", label: "Bold" },
+  { value: "800", label: "Extra bold" },
+];
+
 function compileMjml(input: string): string {
   const compiled = mjml2html(input, { validationLevel: "soft" });
   return compiled.html || "";
@@ -66,6 +93,19 @@ function createAssetRecords(items: OrgAdminEmailBuilderAsset[]) {
     src: item.public_url,
     name: item.name,
   }));
+}
+
+function mapSelectedElementAttr(current: SelectedElementState, key: string, value: string): SelectedElementState {
+  if (key === "href") return { ...current, href: value };
+  if (key === "src") return { ...current, src: value };
+  if (key === "alt") return { ...current, alt: value };
+  if (key === "font-size") return { ...current, fontSize: value };
+  if (key === "font-weight") return { ...current, fontWeight: value };
+  if (key === "color") return { ...current, textColor: value };
+  if (key === "background-color") return { ...current, backgroundColor: value };
+  if (key === "align") return { ...current, align: value };
+  if (key === "border-radius") return { ...current, borderRadius: value };
+  return current;
 }
 
 export function GrapesEmailBuilder({
@@ -84,7 +124,7 @@ export function GrapesEmailBuilder({
   const stylePanelRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<Editor | null>(null);
-  const selectedButtonComponentRef = useRef<any>(null);
+  const selectedComponentRef = useRef<any>(null);
   const onChangeRef = useRef(onChange);
   const syncTimerRef = useRef<number | null>(null);
   const [ready, setReady] = useState(false);
@@ -92,7 +132,7 @@ export function GrapesEmailBuilder({
   const [railTab, setRailTab] = useState<RailTab>("blocks");
   const [assetBusyId, setAssetBusyId] = useState<number | null>(null);
   const [uploadingAsset, setUploadingAsset] = useState(false);
-  const [selectedButton, setSelectedButton] = useState<SelectedButtonState | null>(null);
+  const [selectedElement, setSelectedElement] = useState<SelectedElementState | null>(null);
   const [selectedSectionLabel, setSelectedSectionLabel] = useState<string | null>(null);
   const [sections, setSections] = useState<BuilderSectionSummary[]>([]);
   const [draggingSectionId, setDraggingSectionId] = useState<string | null>(null);
@@ -233,22 +273,44 @@ export function GrapesEmailBuilder({
       syncTimerRef.current = window.setTimeout(emitSnapshot, 220);
     };
 
-    const readButtonState = (component: any): SelectedButtonState | null => {
+    const attrValue = (component: any, key: string, fallback = "") => {
+      if (!component) return null;
+      const attrs = component.getAttributes?.() || {};
+      const style = component.getStyle?.() || {};
+      return String(attrs[key] ?? style[key] ?? component.get?.(key) ?? fallback);
+    };
+
+    const readSelectedElement = (component: any): SelectedElementState | null => {
       if (!component) return null;
       const name = String(component.getName?.() || component.get?.("type") || component.get?.("tagName") || "").toLowerCase();
       const isButton = name.includes("button");
-      if (!isButton) return null;
-      const attrs = component.getAttributes?.() || {};
+      const isImage = name.includes("image");
+      const isText = name.includes("text");
+      const isSection = name.includes("section") || name.includes("column") || name.includes("body");
+      const kind: SelectedElementKind = isButton ? "bottone" : isImage ? "immagine" : isText ? "testo" : isSection ? "blocco" : "elemento";
+      const title = isButton ? "Bottone CTA" : isImage ? "Immagine" : isText ? "Testo" : isSection ? "Blocco selezionato" : "Elemento selezionato";
       return {
-        label: String(component.get?.("content") || ""),
-        href: String(attrs.href || ""),
+        kind,
+        title,
+        content: String(component.get?.("content") || ""),
+        href: attrValue(component, "href", "") || "",
+        src: attrValue(component, "src", "") || "",
+        alt: attrValue(component, "alt", "") || "",
+        fontSize: attrValue(component, "font-size", isButton ? "14px" : "15px") || "",
+        fontWeight: attrValue(component, "font-weight", isButton ? "700" : "400") || "",
+        textColor: attrValue(component, "color", isButton ? "#ffffff" : "#334155") || "",
+        backgroundColor: attrValue(component, "background-color", isButton ? "#17494a" : "") || "",
+        align: attrValue(component, "align", "left") || "left",
+        paddingTop: attrValue(component, "padding-top", "") || "",
+        paddingBottom: attrValue(component, "padding-bottom", "") || "",
+        borderRadius: attrValue(component, "border-radius", "") || "",
       };
     };
 
-    const syncSelectedButton = (component: any) => {
-      const next = readButtonState(component);
-      selectedButtonComponentRef.current = next ? component : null;
-      setSelectedButton(next);
+    const syncSelectedElement = (component: any) => {
+      const next = readSelectedElement(component);
+      selectedComponentRef.current = next ? component : null;
+      setSelectedElement(next);
       window.requestAnimationFrame(() => refreshSections());
     };
 
@@ -262,16 +324,16 @@ export function GrapesEmailBuilder({
       scheduleSync();
       refreshSections();
     });
-    editor.on("component:selected", syncSelectedButton);
+    editor.on("component:selected", syncSelectedElement);
     editor.on("component:deselected", () => {
-      selectedButtonComponentRef.current = null;
-      setSelectedButton(null);
+      selectedComponentRef.current = null;
+      setSelectedElement(null);
       setSelectedSectionLabel(null);
       refreshSections();
     });
     editor.on("component:update", () => {
-      if (selectedButtonComponentRef.current) {
-        syncSelectedButton(selectedButtonComponentRef.current);
+      if (selectedComponentRef.current) {
+        syncSelectedElement(selectedComponentRef.current);
       }
     });
 
@@ -380,22 +442,30 @@ export function GrapesEmailBuilder({
     const section = getSelectedTopLevelSection(editor);
     if (!section) return;
     section.remove();
-    setSelectedButton(null);
+    setSelectedElement(null);
     setSelectedSectionLabel(null);
   }
 
-  function updateSelectedButtonLabel(value: string) {
-    const component = selectedButtonComponentRef.current;
+  function updateSelectedContent(value: string) {
+    const component = selectedComponentRef.current;
     if (!component) return;
     component.set("content", value);
-    setSelectedButton((current) => (current ? { ...current, label: value } : current));
+    setSelectedElement((current) => (current ? { ...current, content: value } : current));
   }
 
-  function updateSelectedButtonHref(value: string) {
-    const component = selectedButtonComponentRef.current;
+  function updateSelectedAttr(key: string, value: string) {
+    const component = selectedComponentRef.current;
     if (!component) return;
-    component.addAttributes({ href: value });
-    setSelectedButton((current) => (current ? { ...current, href: value } : current));
+    component.addAttributes({ [key]: value });
+    setSelectedElement((current) => (current ? mapSelectedElementAttr(current, key, value) : current));
+  }
+
+  function updateSelectedSectionPadding(key: "paddingTop" | "paddingBottom", value: string) {
+    const component = selectedComponentRef.current;
+    if (!component) return;
+    const attrKey = key === "paddingTop" ? "padding-top" : "padding-bottom";
+    component.addAttributes({ [attrKey]: value });
+    setSelectedElement((current) => (current ? { ...current, [key]: value } : current));
   }
 
   function insertVariable(placeholder: string) {
@@ -619,51 +689,195 @@ export function GrapesEmailBuilder({
           <div className="builder-properties-heading">
             <p className="builder-selection-card__eyebrow">Proprieta blocco</p>
             <p className="builder-selection-card__title">
-              {selectedButton ? "CTA selezionata" : selectedSectionLabel || "Seleziona un elemento"}
+              {selectedElement?.title || selectedSectionLabel || "Seleziona un elemento"}
             </p>
             <p className="builder-rail__copy">
-              Modifica contenuto, stile e spaziatura del blocco selezionato nel canvas.
+              Clicca testo, bottone, immagine o blocco nel canvas per modificarlo senza pannelli tecnici.
             </p>
           </div>
 
-          {selectedButton ? (
-            <div className="builder-selection-card">
-              <label className="builder-selection-card__label">
-                Testo bottone
-                <input
-                  className="builder-selection-card__input"
-                  value={selectedButton.label}
-                  onChange={(event) => updateSelectedButtonLabel(event.target.value)}
-                  placeholder="Es. Scarica il documento"
-                />
-              </label>
-              <label className="builder-selection-card__label">
-                Link o documento
-                <input
-                  className="builder-selection-card__input"
-                  value={selectedButton.href}
-                  onChange={(event) => updateSelectedButtonHref(event.target.value)}
-                  placeholder="https://... oppure {{link_documento}}"
-                />
-              </label>
-              {linkVariables.length ? (
+          {selectedElement ? (
+            <div className="builder-inspector">
+              {(selectedElement.kind === "testo" || selectedElement.kind === "bottone") ? (
+                <label className="builder-selection-card__label">
+                  {selectedElement.kind === "bottone" ? "Testo del bottone" : "Testo"}
+                  <textarea
+                    className="builder-selection-card__input builder-selection-card__textarea"
+                    value={selectedElement.content}
+                    onChange={(event) => updateSelectedContent(event.target.value)}
+                    placeholder="Scrivi il contenuto"
+                  />
+                </label>
+              ) : null}
+
+              {selectedElement.kind === "bottone" ? (
+                <label className="builder-selection-card__label">
+                  Link del bottone
+                  <input
+                    className="builder-selection-card__input"
+                    value={selectedElement.href}
+                    onChange={(event) => updateSelectedAttr("href", event.target.value)}
+                    placeholder="https://... oppure {{link_form_collegato}}"
+                  />
+                </label>
+              ) : null}
+
+              {selectedElement.kind === "immagine" ? (
+                <>
+                  <label className="builder-selection-card__label">
+                    URL immagine
+                    <input
+                      className="builder-selection-card__input"
+                      value={selectedElement.src}
+                      onChange={(event) => updateSelectedAttr("src", event.target.value)}
+                      placeholder="https://..."
+                    />
+                  </label>
+                  <label className="builder-selection-card__label">
+                    Testo alternativo
+                    <input
+                      className="builder-selection-card__input"
+                      value={selectedElement.alt}
+                      onChange={(event) => updateSelectedAttr("alt", event.target.value)}
+                      placeholder="Descrizione immagine"
+                    />
+                  </label>
+                </>
+              ) : null}
+
+              {selectedElement.kind === "bottone" && linkVariables.length ? (
                 <div className="builder-selection-card__chips">
                   {linkVariables.map((item) => (
                     <button
                       key={item.placeholder}
                       type="button"
                       className="builder-selection-card__chip"
-                      onClick={() => updateSelectedButtonHref(item.placeholder)}
+                      onClick={() => updateSelectedAttr("href", item.placeholder)}
                     >
                       {item.label}
                     </button>
                   ))}
                 </div>
               ) : null}
+
+              {(selectedElement.kind === "testo" || selectedElement.kind === "bottone") ? (
+                <div className="builder-inspector-grid">
+                  <label className="builder-selection-card__label">
+                    Dimensione testo
+                    <input
+                      className="builder-selection-card__input"
+                      value={selectedElement.fontSize}
+                      onChange={(event) => updateSelectedAttr("font-size", event.target.value)}
+                      placeholder="15px"
+                    />
+                  </label>
+                  <label className="builder-selection-card__label">
+                    Peso
+                    <select
+                      className="builder-selection-card__input"
+                      value={selectedElement.fontWeight}
+                      onChange={(event) => updateSelectedAttr("font-weight", event.target.value)}
+                    >
+                      {fontWeightOptions.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              ) : null}
+
+              <div className="builder-inspector-grid">
+                {(selectedElement.kind === "testo" || selectedElement.kind === "bottone") ? (
+                  <label className="builder-selection-card__label">
+                    Colore testo
+                    <span className="builder-color-row">
+                      <input
+                        type="color"
+                        value={selectedElement.textColor.startsWith("#") ? selectedElement.textColor : "#334155"}
+                        onChange={(event) => updateSelectedAttr("color", event.target.value)}
+                      />
+                      <input
+                        className="builder-selection-card__input"
+                        value={selectedElement.textColor}
+                        onChange={(event) => updateSelectedAttr("color", event.target.value)}
+                      />
+                    </span>
+                  </label>
+                ) : null}
+                {(selectedElement.kind === "bottone" || selectedElement.kind === "blocco" || selectedElement.kind === "elemento") ? (
+                  <label className="builder-selection-card__label">
+                    Sfondo
+                    <span className="builder-color-row">
+                      <input
+                        type="color"
+                        value={selectedElement.backgroundColor.startsWith("#") ? selectedElement.backgroundColor : "#ffffff"}
+                        onChange={(event) => updateSelectedAttr("background-color", event.target.value)}
+                      />
+                      <input
+                        className="builder-selection-card__input"
+                        value={selectedElement.backgroundColor}
+                        onChange={(event) => updateSelectedAttr("background-color", event.target.value)}
+                        placeholder="#ffffff"
+                      />
+                    </span>
+                  </label>
+                ) : null}
+              </div>
+
+              {(selectedElement.kind === "testo" || selectedElement.kind === "bottone") ? (
+                <div className="builder-segmented" role="group" aria-label="Allineamento">
+                  {alignOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={selectedElement.align === option.value ? "is-active" : ""}
+                      onClick={() => updateSelectedAttr("align", option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="builder-inspector-grid">
+                {(selectedElement.kind === "blocco" || selectedElement.kind === "elemento") ? (
+                  <>
+                    <label className="builder-selection-card__label">
+                      Spazio sopra
+                      <input
+                        className="builder-selection-card__input"
+                        value={selectedElement.paddingTop}
+                        onChange={(event) => updateSelectedSectionPadding("paddingTop", event.target.value)}
+                        placeholder="18px"
+                      />
+                    </label>
+                    <label className="builder-selection-card__label">
+                      Spazio sotto
+                      <input
+                        className="builder-selection-card__input"
+                        value={selectedElement.paddingBottom}
+                        onChange={(event) => updateSelectedSectionPadding("paddingBottom", event.target.value)}
+                        placeholder="18px"
+                      />
+                    </label>
+                  </>
+                ) : null}
+                {(selectedElement.kind === "immagine" || selectedElement.kind === "bottone") ? (
+                  <label className="builder-selection-card__label">
+                    Raggio bordo
+                    <input
+                      className="builder-selection-card__input"
+                      value={selectedElement.borderRadius}
+                      onChange={(event) => updateSelectedAttr("border-radius", event.target.value)}
+                      placeholder="6px"
+                    />
+                  </label>
+                ) : null}
+              </div>
             </div>
           ) : (
             <div className="builder-empty-state">
-              Clicca un testo, un'immagine o un bottone nel canvas per modificare le proprieta.
+              Seleziona un elemento nel canvas. Qui compariranno solo i controlli utili per modificarlo.
             </div>
           )}
 
@@ -715,7 +929,11 @@ export function GrapesEmailBuilder({
             </div>
           </div>
 
-          <div className="builder-style-panel" ref={stylePanelRef} />
+          <details className="builder-advanced-panel">
+            <summary>Avanzate</summary>
+            <p>Proprieta tecniche dell'editor. Usale solo per rifiniture non coperte dai controlli rapidi.</p>
+            <div className="builder-style-panel" ref={stylePanelRef} />
+          </details>
         </aside>
       </div>
     </div>

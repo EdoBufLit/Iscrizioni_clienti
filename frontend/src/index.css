@@ -5706,3 +5706,94 @@ body.dashboard-perf-mode .btn-ghost:hover {
 :root[data-theme="dark"] .org-admin-v2 .booking-status-chip--completed { background: #dcfff0; color: #07563f; }
 :root[data-theme="dark"] .org-admin-v2 .booking-status-chip--seated { background: #dfeeff; color: #164478; }
 :root[data-theme="dark"] .org-admin-v2 .booking-status-chip--cancelled { background: #ffe3e1; color: #7b1715; }
+
+.org-admin-v2 .form-builder-shell {
+  --fb-surface: var(--oa-panel, #ffffff);
+  --fb-muted-surface: var(--oa-panel-muted, #f8fafc);
+  --fb-border: var(--oa-border, #e2e8f0);
+  --fb-text: var(--oa-text, #0f172a);
+  --fb-muted: var(--oa-muted, #64748b);
+  --fb-input: #ffffff;
+}
+
+:root[data-theme="dark"] .org-admin-v2 .form-builder-shell {
+  --fb-surface: #162433;
+  --fb-muted-surface: #101b24;
+  --fb-border: #314253;
+  --fb-text: #f8fafc;
+  --fb-muted: #c3cfdb;
+  --fb-input: #0f1b27;
+}
+
+.org-admin-v2 .form-builder-rail,
+.org-admin-v2 .form-builder-properties,
+.org-admin-v2 .form-builder-canvas-heading,
+.org-admin-v2 .form-builder-item,
+.org-admin-v2 .form-builder-palette-card,
+.org-admin-v2 .form-builder-empty,
+.org-admin-v2 .form-builder-properties-note {
+  border-color: var(--fb-border);
+  background: var(--fb-surface);
+  color: var(--fb-text);
+}
+
+.org-admin-v2 .form-builder-canvas {
+  border-color: var(--fb-border);
+  background: var(--fb-muted-surface);
+}
+
+.org-admin-v2 .form-builder-canvas--over {
+  background: color-mix(in srgb, var(--oa-success, #14b8a6) 12%, var(--fb-muted-surface));
+}
+
+.org-admin-v2 .form-builder-rail__header,
+.org-admin-v2 .form-builder-properties__header,
+.org-admin-v2 .form-builder-properties__section {
+  border-color: var(--fb-border);
+}
+
+.org-admin-v2 .form-builder-shell h3,
+.org-admin-v2 .form-builder-item__title,
+.org-admin-v2 .form-builder-item__label,
+.org-admin-v2 .form-builder-palette-card__label,
+.org-admin-v2 .form-builder-properties h3,
+.org-admin-v2 .form-builder-properties h4 {
+  color: var(--fb-text) !important;
+}
+
+.org-admin-v2 .form-builder-shell p,
+.org-admin-v2 .form-builder-item__muted,
+.org-admin-v2 .form-builder-item__hint,
+.org-admin-v2 .form-builder-properties-empty,
+.org-admin-v2 .form-builder-shell .text-slate-500,
+.org-admin-v2 .form-builder-shell .text-slate-400,
+.org-admin-v2 .form-builder-shell .text-neutral-500 {
+  color: var(--fb-muted) !important;
+}
+
+.org-admin-v2 .form-builder-palette-card__icon {
+  background: color-mix(in srgb, var(--oa-success, #14b8a6) 14%, var(--fb-surface));
+}
+
+.org-admin-v2 .form-builder-item__input-preview,
+.org-admin-v2 .form-builder-item__option,
+.org-admin-v2 .form-builder-field-input,
+.org-admin-v2 .form-builder-segment {
+  border-color: var(--fb-border) !important;
+  background: var(--fb-input) !important;
+  color: var(--fb-text) !important;
+}
+
+.org-admin-v2 .form-builder-item__divider {
+  border-color: var(--fb-border);
+}
+
+.org-admin-v2 .form-builder-item__spacer {
+  border-color: var(--fb-border);
+  background: var(--fb-muted-surface);
+  color: var(--fb-muted);
+}
+
+.org-admin-v2 .form-builder-toggle-track {
+  background: color-mix(in srgb, var(--fb-muted) 28%, var(--fb-surface));
+}

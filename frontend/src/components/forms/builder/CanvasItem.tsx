@@ -41,7 +41,7 @@ function CanvasItemFrame({
       <div
         ref={nodeRef}
         style={style}
-        className="h-20 w-full rounded-[0.75rem] border-2 border-dashed border-brand bg-brand/5"
+        className="form-builder-canvas-placeholder h-20 w-full rounded-[0.75rem] border-2 border-dashed border-brand bg-brand/5"
       />
     );
   }
@@ -49,29 +49,29 @@ function CanvasItemFrame({
   const renderContent = () => {
     switch (field.type) {
       case "section_title":
-        return <h3 className="text-xl font-semibold text-slate-950">{field.label || "Titolo sezione"}</h3>;
+        return <h3 className="form-builder-item__title text-xl font-semibold text-slate-950">{field.label || "Titolo sezione"}</h3>;
       case "free_text":
-        return <p className="text-sm leading-6 text-slate-600">{field.helpText || "Aggiungi il tuo testo libero qui..."}</p>;
+        return <p className="form-builder-item__muted text-sm leading-6 text-slate-600">{field.helpText || "Aggiungi il tuo testo libero qui..."}</p>;
       case "divider":
-        return <hr className="border-t border-neutral-200 my-4" />;
+        return <hr className="form-builder-item__divider border-t my-4" />;
       case "spacer":
-        return <div className="flex h-10 items-center justify-center rounded-[0.65rem] border border-dashed border-slate-200/70 bg-slate-50 text-[10px] uppercase tracking-widest text-slate-400">Spazio vuoto</div>;
+        return <div className="form-builder-item__spacer flex h-10 items-center justify-center rounded-[0.65rem] border border-dashed text-[10px] uppercase tracking-widest">Spazio vuoto</div>;
       case "rating_1_5":
       case "nps_0_10": {
         const options = field.optionsText.split(",").map((item) => item.trim()).filter(Boolean);
         return (
           <div className="flex flex-col gap-2 w-full">
-            <span className="text-sm font-semibold text-neutral-800">
+            <span className="form-builder-item__label text-sm font-semibold text-neutral-800">
               {field.label} {field.required && <span className="text-red-500">*</span>}
             </span>
             <div className="flex flex-wrap gap-2">
               {options.map((option) => (
-                <span key={option} className="flex h-9 min-w-9 items-center justify-center rounded-[0.65rem] border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600">
+                <span key={option} className="form-builder-item__option flex h-9 min-w-9 items-center justify-center rounded-[0.65rem] border px-3 text-sm font-semibold text-slate-600">
                   {option}
                 </span>
               ))}
             </div>
-            {field.helpText && <span className="text-xs text-neutral-500 mt-1">{field.helpText}</span>}
+            {field.helpText && <span className="form-builder-item__hint text-xs text-neutral-500 mt-1">{field.helpText}</span>}
           </div>
         );
       }
@@ -79,14 +79,14 @@ function CanvasItemFrame({
         return (
           <div className="flex flex-col gap-1 w-full">
             {!field.hideLabel && (
-              <span className="text-sm font-semibold text-neutral-800">
+              <span className="form-builder-item__label text-sm font-semibold text-neutral-800">
                 {field.label} {field.required && <span className="text-red-500">*</span>}
               </span>
             )}
-            <div className="pointer-events-none w-full rounded-[0.72rem] border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-400">
+            <div className="form-builder-item__input-preview pointer-events-none w-full rounded-[0.72rem] border px-3.5 py-2.5 text-sm">
               {field.placeholder || "..."}
             </div>
-            {field.helpText && <span className="text-xs text-neutral-500 mt-1">{field.helpText}</span>}
+            {field.helpText && <span className="form-builder-item__hint text-xs text-neutral-500 mt-1">{field.helpText}</span>}
           </div>
         );
     }
@@ -96,7 +96,7 @@ function CanvasItemFrame({
     <div
       ref={nodeRef}
       style={style}
-      className={`group relative flex flex-col rounded-[0.85rem] bg-white transition-all cursor-pointer ${
+      className={`form-builder-item group relative flex flex-col rounded-[0.85rem] transition-all cursor-pointer ${
         isSelected
           ? "ring-2 ring-brand shadow-[0_4px_20px_rgba(15,118,110,0.15)] z-10"
           : "ring-1 ring-black/5 hover:ring-black/15 shadow-sm hover:shadow-md"

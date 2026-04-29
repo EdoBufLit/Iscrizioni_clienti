@@ -44,6 +44,7 @@ type Props = {
   onDeleteField: (id: number) => Promise<void>;
   onReorder: (fields: BuilderField[]) => Promise<void>;
   locked?: boolean;
+  persistEnabled?: boolean;
   mode?: "forms" | "surveys";
 };
 
@@ -79,16 +80,16 @@ function BuilderCanvas({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-[0.85rem] border border-slate-200 bg-white px-5 py-4 shadow-sm">
+      <div className="form-builder-canvas-heading rounded-[0.85rem] border px-5 py-4 shadow-sm">
         <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Canvas modulo</p>
         <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950">Informazioni pubbliche</h3>
         <p className="mt-1 text-sm text-slate-500">Organizza sezioni, campi e consenso mantenendo l'ordine reale del form.</p>
       </div>
       <div
         ref={setCanvasNodeRef}
-        className={`min-h-[60vh] rounded-[0.85rem] border p-6 shadow-sm transition-colors ${
+        className={`form-builder-canvas min-h-[60vh] rounded-[0.85rem] border p-6 shadow-sm transition-colors ${
           isCanvasDropTarget
-            ? "border-brand bg-brand/5 ring-2 ring-brand/15"
+            ? "form-builder-canvas--over border-brand bg-brand/5 ring-2 ring-brand/15"
             : "border-slate-200 bg-[#fbfaf6]"
         }`}
       >
@@ -98,7 +99,7 @@ function BuilderCanvas({
             onClick={() => setSelectedId(null)}
           >
             {items.length === 0 ? (
-              <div className="pointer-events-none flex h-44 w-full flex-col items-center justify-center rounded-[0.85rem] border border-dashed border-slate-300 bg-white text-slate-400">
+              <div className="form-builder-empty pointer-events-none flex h-44 w-full flex-col items-center justify-center rounded-[0.85rem] border border-dashed text-slate-400">
                 <svg className="w-10 h-10 mb-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
                 </svg>
@@ -124,7 +125,7 @@ function BuilderCanvas({
   );
 }
 
-export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onReorder, locked, mode = "forms" }: Props) {
+export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onReorder, locked, persistEnabled = true, mode = "forms" }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [lastKnownOverId, setLastKnownOverId] = useState<string | null>(null);
@@ -181,7 +182,7 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
   }, []);
 
   useEffect(() => {
-    if (creatingFieldKeysRef.current.size === 0) {
+    if (!persistEnabled || creatingFieldKeysRef.current.size === 0) {
       return;
     }
 
@@ -217,7 +218,7 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
     if (resolvedKey) {
       setCreatingFieldKeys(Array.from(creatingFieldKeysRef.current));
     }
-  }, [items, onChange]);
+  }, [items, onChange, persistEnabled]);
 
   const scheduleFieldSave = (field: BuilderField, nextItems: BuilderField[]) => {
     pendingFieldSaveRef.current = { field, items: nextItems };
@@ -295,11 +296,15 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
         ...items.slice(insertIndex),
       ];
 
-      creatingFieldKeysRef.current.add(newField.key);
-      setCreatingFieldKeys(Array.from(creatingFieldKeysRef.current));
+      if (persistEnabled) {
+        creatingFieldKeysRef.current.add(newField.key);
+        setCreatingFieldKeys(Array.from(creatingFieldKeysRef.current));
+      }
       onChange(newItems);
       setSelectedId(newField.key);
-      await onSaveField(newField, newItems);
+      if (persistEnabled) {
+        await onSaveField(newField, newItems);
+      }
       return;
     }
 
@@ -313,7 +318,9 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
       if (oldIndex !== -1 && newIndex !== -1) {
         const newItems = arrayMove(items, oldIndex, newIndex);
         onChange(newItems);
-        await onReorder(newItems);
+        if (persistEnabled) {
+          await onReorder(newItems);
+        }
       }
     }
   };
@@ -321,6 +328,9 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
   const handleUpdateSelected = async (updatedField: BuilderField) => {
     const newItems = items.map((f) => (f.key === updatedField.key ? updatedField : f));
     onChange(newItems);
+    if (!persistEnabled) {
+      return;
+    }
     if (creatingFieldKeysRef.current.has(updatedField.key)) {
       queuedCreateUpdatesRef.current.set(updatedField.key, updatedField);
       return;
@@ -345,7 +355,9 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
     
     onChange(newItems);
     setSelectedId(newField.key);
-    await onSaveField(newField, newItems);
+    if (persistEnabled) {
+      await onSaveField(newField, newItems);
+    }
   };
 
   const handleDelete = async (fieldToDelete: BuilderField) => {
@@ -366,7 +378,7 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
     }
     const newItems = items.filter(f => f.key !== fieldToDelete.key);
     onChange(newItems);
-    if (fieldToDelete.id > 0) {
+    if (persistEnabled && fieldToDelete.id > 0) {
       await onDeleteField(fieldToDelete.id);
     }
   };
@@ -390,9 +402,9 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[260px_minmax(0,1fr)_320px]">
-        <div className="sticky top-6 flex max-h-[85vh] flex-col gap-4 overflow-hidden rounded-[0.85rem] border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="border-b border-slate-100 px-1 pb-3">
+      <div className="form-builder-shell grid grid-cols-1 items-start gap-6 lg:grid-cols-[260px_minmax(0,1fr)_320px]">
+        <div className="form-builder-rail sticky top-6 flex max-h-[85vh] flex-col gap-4 overflow-hidden rounded-[0.85rem] border p-4 shadow-sm">
+          <div className="form-builder-rail__header border-b px-1 pb-3">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Libreria campi</p>
             <h3 className="mt-2 text-base font-semibold text-slate-950">Aggiungi al modulo</h3>
             <p className="mt-1 text-xs leading-5 text-slate-500">Trascina campi, sezioni e blocchi di consenso nel canvas centrale.</p>
@@ -413,11 +425,11 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
           lastKnownOverId={lastKnownOverId}
         />
 
-        <div className="sticky top-6 max-h-[85vh] overflow-y-auto rounded-[0.85rem] border border-slate-200 bg-white p-5 shadow-sm custom-scrollbar">
+        <div className="form-builder-properties sticky top-6 max-h-[85vh] overflow-y-auto rounded-[0.85rem] border p-5 shadow-sm custom-scrollbar">
           <PropertiesPanel
             selectedField={selectedField}
             onChange={handleUpdateSelected}
-            locked={locked || creatingFieldKeys.includes(selectedId || "")}
+            locked={Boolean(locked) || (persistEnabled && creatingFieldKeys.includes(selectedId || ""))}
           />
         </div>
       </div>

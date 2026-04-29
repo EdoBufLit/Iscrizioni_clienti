@@ -4583,3 +4583,18 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Logo e payoff ASSONAM non sono stati modificati; viene riusato `frontend/public/assonam-logo.svg` esistente.
 - Verifiche: `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK con warning chunk grandi gia noto; `python -m pytest -q tests/test_org_admin_communications.py tests/test_org_admin_whatsapp.py tests/test_org_admin_member_filters.py tests/test_org_admin_manual_member.py tests/test_org_admin_member_profile_and_card_actions.py tests/test_org_admin_card_lot_movements.py` OK, 39 passed.
 - Smoke browser autenticato eseguito successivamente su istanza locale seedata `http://127.0.0.1:8017`; screenshot e summary in `tasks/screenshots/org-admin-visual-smoke-20260424-final-light-noext/` coprono 26 superfici desktop/mobile incluse wizard, builder, modali, detail panel e mappa sala. Residui non bloccanti: `whatsapp/contacts` 502 per Evolution abilitato senza API key locale e `stripe-demo` 404 per billing demo non abilitato nell'env/org seed.
+
+## Plan (Fix builder campagne, form e sondaggi - Apr 29, 2026)
+- [x] Sostituire il pannello proprieta campagne tecnico con inspector custom in italiano per testo, CTA, immagine e blocco/sezione
+- [x] Rendere theme-aware rail, blocchi, pannello proprieta e controlli GrapesJS del builder campagne, lasciando chiaro solo il canvas email
+- [x] Rendere theme-aware le superfici critiche del builder form/sondaggi: palette, canvas, card campo, pannello proprieta e input
+- [x] Separare draft locale e autosave nel builder form/sondaggi per consentire modifica blocchi prima del primo salvataggio
+- [x] Persistire al primo save i blocchi draft del nuovo form/sondaggio in sequenza, preservando ordine e metadata
+- [x] Aggiungere regressione backend sui campi form persistiti in ordine ed eseguire test/build previsti
+
+## Review (Fix builder campagne, form e sondaggi - Apr 29, 2026)
+- `GrapesEmailBuilder` ora usa un inspector custom in italiano per testo, bottone, immagine e blocco; lo style manager GrapesJS e spostato in `Avanzate`, chiuso di default.
+- Il CSS del builder campagne usa variabili light/dark scoped: rail, tab, blocchi, input, struttura messaggio e pannello avanzato non mischiano piu superfici chiare con input scuri. Il canvas email resta chiaro per rappresentare l'email reale.
+- Il builder form/sondaggi distingue draft locale e persistenza: sui nuovi form si possono aggiungere e modificare blocchi prima del primo save; dopo la creazione del form i blocchi draft vengono creati in sequenza via API e poi ricaricati come campi reali.
+- Ho corretto anche la normalizzazione backend delle chiavi builder `__ui_*` / `__survey_*`, perche venivano trasformate in chiavi legacy senza prefisso e potevano perdere identita dopo reload. Il frontend decodifica comunque anche le chiavi legacy gia presenti.
+- Verifiche eseguite: `python -m py_compile app/services/forms.py`; `python -m pytest -q tests/test_forms_module.py tests/test_org_admin_communications.py::test_org_admin_builder_template_assets_and_campaign_from_template` OK (`17 passed`); `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK con solo warning Vite chunk grandi gia noto.

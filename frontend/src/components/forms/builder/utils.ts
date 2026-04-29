@@ -47,6 +47,16 @@ export const VIRTUAL_TYPE_PREFIXES: Record<string, string> = {
   nps_0_10: "__survey_nps__",
 };
 
+const LEGACY_VIRTUAL_TYPE_PREFIXES: Record<string, string> = {
+  section_title: "ui_title_",
+  free_text: "ui_text_",
+  divider: "ui_divider_",
+  spacer: "ui_spacer_",
+  file_upload: "ui_file_",
+  rating_1_5: "survey_rating_",
+  nps_0_10: "survey_nps_",
+};
+
 export const META_DELIMITER = "|||META:";
 export const FORM_BUILDER_CANVAS_ID = "form-builder-canvas";
 
@@ -89,7 +99,8 @@ export function decodeField(apiField: AssociationFormField): BuilderField {
   
   // Detect virtual types from field_key
   for (const [vType, prefix] of Object.entries(VIRTUAL_TYPE_PREFIXES)) {
-    if (apiField.field_key.startsWith(prefix)) {
+    const legacyPrefix = LEGACY_VIRTUAL_TYPE_PREFIXES[vType];
+    if (apiField.field_key.startsWith(prefix) || (legacyPrefix && apiField.field_key.startsWith(legacyPrefix))) {
       virtualType = vType as VirtualFieldType;
       break;
     }

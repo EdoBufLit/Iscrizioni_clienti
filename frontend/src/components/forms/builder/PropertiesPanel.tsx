@@ -7,13 +7,13 @@ type Props = {
 };
 
 const inputClass =
-  "mt-1 w-full rounded-[0.72rem] border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20";
+  "form-builder-field-input mt-1 w-full rounded-[0.72rem] border px-3.5 py-2.5 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20";
 const labelClass = "mb-1 block text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500";
 
 export function PropertiesPanel({ selectedField, onChange, locked }: Props) {
   if (!selectedField) {
     return (
-      <div className="flex h-full min-h-[24rem] flex-col items-center justify-center p-6 text-center text-slate-400">
+      <div className="form-builder-properties-empty flex h-full min-h-[24rem] flex-col items-center justify-center p-6 text-center text-slate-400">
         <svg className="mb-4 h-12 w-12 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6V4m0 2a2 2 0 1 0 0 4m0-4a2 2 0 1 1 0 4m-6 8a2 2 0 1 0 0-4m0 4a2 2 0 1 1 0-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 1 0 0-4m0 4a2 2 0 1 1 0-4m0 4v2m0-6V4" />
         </svg>
@@ -36,14 +36,14 @@ export function PropertiesPanel({ selectedField, onChange, locked }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="border-b border-slate-100 pb-4">
+      <div className="form-builder-properties__header border-b pb-4">
         <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Proprieta campo</p>
         <h3 className="mt-2 text-base font-semibold text-slate-950">{selectedField.label || "Campo selezionato"}</h3>
       </div>
 
       <div className="space-y-5">
         {isStructural ? (
-          <div className="rounded-[0.75rem] border border-dashed border-slate-200 bg-slate-50 p-4 text-center">
+          <div className="form-builder-properties-note rounded-[0.75rem] border border-dashed p-4 text-center">
             <p className="text-xs text-slate-500">Questo elemento non ha proprieta configurabili.</p>
           </div>
         ) : (
@@ -108,7 +108,7 @@ export function PropertiesPanel({ selectedField, onChange, locked }: Props) {
                       onChange={(e) => handleChange("required", e.target.checked)}
                       className="peer sr-only"
                     />
-                    <div className="h-6 w-10 rounded-full bg-slate-200 transition-colors peer-checked:bg-brand"></div>
+                    <div className="form-builder-toggle-track h-6 w-10 rounded-full transition-colors peer-checked:bg-brand"></div>
                     <div className="absolute left-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-4"></div>
                   </div>
                   <span className="text-sm font-medium text-slate-800">Campo obbligatorio</span>
@@ -118,7 +118,7 @@ export function PropertiesPanel({ selectedField, onChange, locked }: Props) {
           </>
         )}
 
-        <div className="space-y-5 border-t border-slate-100 pt-5">
+        <div className="form-builder-properties__section space-y-5 border-t pt-5">
           <h4 className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-900">Aspetto layout</h4>
 
           <div>
@@ -133,7 +133,7 @@ export function PropertiesPanel({ selectedField, onChange, locked }: Props) {
                   className={`rounded-[0.72rem] border py-2.5 text-sm font-semibold transition-all ${
                     selectedField.width === width
                       ? "border-brand bg-brand/5 text-brand ring-1 ring-brand/20"
-                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                      : "form-builder-segment"
                   }`}
                 >
                   {width}
@@ -154,7 +154,7 @@ export function PropertiesPanel({ selectedField, onChange, locked }: Props) {
                     onChange={(e) => handleChange("hideLabel", e.target.checked)}
                     className="peer sr-only"
                   />
-                  <div className="h-6 w-10 rounded-full bg-slate-200 transition-colors peer-checked:bg-brand"></div>
+                  <div className="form-builder-toggle-track h-6 w-10 rounded-full transition-colors peer-checked:bg-brand"></div>
                   <div className="absolute left-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-4"></div>
                 </div>
               </label>

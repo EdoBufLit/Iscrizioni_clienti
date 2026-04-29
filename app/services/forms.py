@@ -283,10 +283,29 @@ def normalize_field_type(value: Any) -> str:
     return lowered
 
 
+VIRTUAL_FIELD_KEY_PREFIXES = (
+    "__ui_title__",
+    "__ui_text__",
+    "__ui_divider__",
+    "__ui_spacer__",
+    "__ui_file__",
+    "__survey_rating__",
+    "__survey_nps__",
+)
+
+
 def normalize_field_key(value: Any, *, fallback_label: Any | None = None) -> str:
     source = _normalize_text(value) or _normalize_text(fallback_label)
     if source is None:
         raise HTTPException(status_code=422, detail="Chiave campo obbligatoria.")
+    raw_source = source.strip().lower()
+    for prefix in VIRTUAL_FIELD_KEY_PREFIXES:
+        if raw_source.startswith(prefix):
+            suffix = raw_source[len(prefix):]
+            normalized_suffix = normalize_form_slug(suffix).replace("-", "_")
+            normalized_virtual_key = f"{prefix}{normalized_suffix}".rstrip("_")
+            if len(normalized_virtual_key) > len(prefix):
+                return normalized_virtual_key[:64]
     normalized = normalize_form_slug(source).replace("-", "_")
     if not normalized:
         raise HTTPException(status_code=422, detail="Chiave campo non valida.")
