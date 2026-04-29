@@ -23,13 +23,12 @@ import {
   normalizeCodiceFiscale,
   validateCodiceFiscale,
 } from "../lib/codiceFiscale";
+import { FOREIGN_BIRTH_PLACES, findForeignBirthPlaceByCode } from "../lib/foreignBirthPlaces";
 import { applySeo } from "../lib/seo";
 import { publicUploadHint, validatePublicDocumentUpload } from "../lib/uploadValidation";
 import Skeleton from "../components/ui/Skeleton";
 
 const MEMBER_PASSWORD_MIN_LENGTH = 8;
-const FOREIGN_BIRTH_PLACE_NAME = "Stato estero";
-const FOREIGN_BIRTH_PLACE_CODE = "Z000";
 
 const STEPS = [
   { label: "Dati", title: "I tuoi dati" },
@@ -101,8 +100,8 @@ function validateStep1(
   }
   if (!f.sesso) e.sesso = "Seleziona il sesso.";
   if (f.statoEsteroNascita) {
-    if (f.comuneNascitaCode !== FOREIGN_BIRTH_PLACE_CODE) {
-      e.comuneNascita = "Conferma lo stato estero di nascita.";
+    if (!/^Z(?!000)\d{3}$/.test(f.comuneNascitaCode)) {
+      e.comuneNascita = "Seleziona lo stato estero di nascita.";
     }
   } else if (!f.comuneNascita.trim()) {
     e.comuneNascita = "Il comune di nascita e obbligatorio.";
@@ -687,12 +686,29 @@ const Iscrizione = () => {
     setForm((prev) => ({
       ...prev,
       statoEsteroNascita: checked,
-      comuneNascita: checked ? FOREIGN_BIRTH_PLACE_NAME : "",
-      comuneNascitaCode: checked ? FOREIGN_BIRTH_PLACE_CODE : "",
+      comuneNascita: "",
+      comuneNascitaCode: "",
     }));
     setShowMunicipalitySuggestions(false);
     setMunicipalityLookupError("");
     setMunicipalitySuggestions([]);
+    if (errors.comuneNascita) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next.comuneNascita;
+        return next;
+      });
+    }
+  };
+
+  const handleForeignBirthCountryChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const code = event.target.value;
+    const country = findForeignBirthPlaceByCode(code);
+    setForm((prev) => ({
+      ...prev,
+      comuneNascita: country?.name || "",
+      comuneNascitaCode: country?.code || "",
+    }));
     if (errors.comuneNascita) {
       setErrors((prev) => {
         const next = { ...prev };
@@ -899,7 +915,9 @@ const Iscrizione = () => {
   const birthPlaceHint = fieldError("comuneNascita")
     ? fieldError("comuneNascita")
     : form.statoEsteroNascita
-      ? "Il comune italiano viene sostituito da Stato estero per il calcolo del codice fiscale."
+      ? form.comuneNascitaCode
+        ? `Codice Stato estero: ${form.comuneNascitaCode}`
+        : "Seleziona lo Stato estero: il codice fiscale verra calcolato con il relativo codice catastale."
     : municipalityLookupError
       ? municipalityLookupError
       : form.comuneNascitaCode
@@ -1206,20 +1224,32 @@ const Iscrizione = () => {
                               Nato/a all'estero
                             </label>
                           </div>
-                          <input
-                            id="comuneNascita"
-                            className={fieldError("comuneNascita") ? fieldErrClass : fieldOkClass}
-                            type="text"
-                            autoComplete="off"
-                            placeholder={form.statoEsteroNascita ? FOREIGN_BIRTH_PLACE_NAME : "es. Roma"}
-                            value={form.comuneNascita}
-                            onChange={handleBirthPlaceChange}
-                            onFocus={() => {
-                              if (!form.statoEsteroNascita) setShowMunicipalitySuggestions(true);
-                            }}
-                            readOnly={form.statoEsteroNascita}
-                            aria-readonly={form.statoEsteroNascita}
-                          />
+                          {form.statoEsteroNascita ? (
+                            <select
+                              id="comuneNascita"
+                              className={fieldError("comuneNascita") ? fieldErrClass : fieldOkClass}
+                              value={form.comuneNascitaCode}
+                              onChange={handleForeignBirthCountryChange}
+                            >
+                              <option value="">Seleziona lo Stato estero...</option>
+                              {FOREIGN_BIRTH_PLACES.map((country) => (
+                                <option key={country.code} value={country.code}>
+                                  {country.name} - {country.code}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              id="comuneNascita"
+                              className={fieldError("comuneNascita") ? fieldErrClass : fieldOkClass}
+                              type="text"
+                              autoComplete="off"
+                              placeholder="es. Roma"
+                              value={form.comuneNascita}
+                              onChange={handleBirthPlaceChange}
+                              onFocus={() => setShowMunicipalitySuggestions(true)}
+                            />
+                          )}
                           {!form.statoEsteroNascita &&
                           showMunicipalitySuggestions &&
                           !form.comuneNascitaCode &&

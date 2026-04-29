@@ -115,15 +115,15 @@ def test_join_submit_accepts_foreign_birth_place_flag(client, db):
         last_name="Rossi",
         birth_date=date(1990, 1, 1),
         gender="M",
-        birth_place_code="Z000",
+        birth_place_code="Z404",
     )
 
     response = client.post(
         f"/api/join/{org.slug}/submit",
         data=build_join_submit_data(
             email=email,
-            birth_place="",
-            birth_place_code="",
+            birth_place="Stati Uniti d'America",
+            birth_place_code="Z404",
             birth_place_foreign=True,
             fiscal_code=foreign_fiscal_code,
         ),
@@ -140,6 +140,58 @@ def test_join_submit_accepts_foreign_birth_place_flag(client, db):
         .first()
     )
     assert member is not None
-    assert member.birth_place == "Stato estero"
-    assert member.birth_place_code == "Z000"
+    assert member.birth_place == "Stati Uniti d'America"
+    assert member.birth_place_code == "Z404"
     assert member.fiscal_code == foreign_fiscal_code
+
+
+def test_join_submit_rejects_foreign_birth_place_without_state_code(client, db):
+    org = _ensure_org(db, "cf-foreign-missing-state-org")
+    email = f"cf-foreign-missing-{int(datetime.utcnow().timestamp() * 1000)}@example.com"
+    foreign_fiscal_code = calculate_fiscal_code(
+        first_name="Mario",
+        last_name="Rossi",
+        birth_date=date(1990, 1, 1),
+        gender="M",
+        birth_place_code="Z404",
+    )
+
+    response = client.post(
+        f"/api/join/{org.slug}/submit",
+        data=build_join_submit_data(
+            email=email,
+            birth_place="",
+            birth_place_code="",
+            birth_place_foreign=True,
+            fiscal_code=foreign_fiscal_code,
+        ),
+    )
+    assert response.status_code == 400, response.text
+    assert "Stato estero di nascita obbligatorio" in response.json()["detail"]
+
+
+def test_join_submit_accepts_manual_foreign_fiscal_code_with_different_state_code(client, db):
+    org = _ensure_org(db, "cf-foreign-manual-submit-org")
+    email = f"cf-foreign-manual-{int(datetime.utcnow().timestamp() * 1000)}@example.com"
+    manual_fiscal_code = calculate_fiscal_code(
+        first_name="Mario",
+        last_name="Rossi",
+        birth_date=date(1990, 1, 1),
+        gender="M",
+        birth_place_code="Z404",
+    )
+
+    response = client.post(
+        f"/api/join/{org.slug}/submit",
+        data=build_join_submit_data(
+            email=email,
+            birth_place="Albania",
+            birth_place_code="Z100",
+            birth_place_foreign=True,
+            fiscal_code=manual_fiscal_code,
+        ),
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["status"] == "received"
+    assert "fiscal_code_mismatch" in payload.get("warnings", [])

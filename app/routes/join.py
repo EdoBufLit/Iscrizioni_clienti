@@ -49,6 +49,7 @@ from app import audit
 import logging
 import os
 import hashlib
+import re
 from typing import Optional
 
 logging.basicConfig(level=logging.INFO)
@@ -56,8 +57,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-FOREIGN_BIRTH_PLACE_NAME = "Stato estero"
-FOREIGN_BIRTH_PLACE_CODE = "Z000"
+FOREIGN_BIRTH_PLACE_FALLBACK_NAME = "Stato estero"
+FOREIGN_BIRTH_PLACE_CODE_PATTERN = re.compile(r"^Z(?!000)\d{3}$")
 
 
 # Accepted values for member payment preference in signup.
@@ -170,9 +171,14 @@ def _resolve_birth_municipality(
     normalized_name = normalize_municipality_text(birth_place)
     normalized_code = (birth_place_code or "").strip().upper()
     if birth_place_foreign:
+        if not FOREIGN_BIRTH_PLACE_CODE_PATTERN.fullmatch(normalized_code):
+            raise HTTPException(
+                status_code=400,
+                detail="Stato estero di nascita obbligatorio. Seleziona uno Stato valido.",
+            )
         return {
-            "name": FOREIGN_BIRTH_PLACE_NAME,
-            "code": FOREIGN_BIRTH_PLACE_CODE,
+            "name": (birth_place or "").strip() or FOREIGN_BIRTH_PLACE_FALLBACK_NAME,
+            "code": normalized_code,
             "province": "",
             "region": "",
         }

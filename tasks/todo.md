@@ -4624,3 +4624,16 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - In `app/routes/join.py` e `app/routes/membership_payments.py` il backend accetta il flag e bypassa il lookup dei comuni italiani, persistendo `birth_place = Stato estero` e `birth_place_code = Z000` senza nuove colonne o migrazioni.
 - Ho aggiunto una regressione in `tests/test_signup_fiscal_code.py` per il submit con nascita estera.
 - Verifiche eseguite: `python -m py_compile app/routes/join.py app/routes/membership_payments.py tests/signup_payloads.py tests/test_signup_fiscal_code.py` OK; `python -m pytest -q tests/test_signup_fiscal_code.py` OK (`4 passed`); `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK con solo warning Vite chunk grandi gia noto.
+
+## Plan (Iscrizione stati esteri con codice catastale reale - Apr 29, 2026)
+- [x] Sostituire il fallback `Z000` con selezione dello stato estero e relativo codice catastale
+- [x] Validare lato backend i codici esteri `Z###` senza lookup comune italiano e persistere nome/codice selezionati
+- [x] Consentire comunque CF manuale formalmente valido quando l'utente modifica un codice diverso da quello atteso
+- [x] Aggiornare test e verifiche frontend/backend
+
+## Review (Iscrizione stati esteri con codice catastale reale - Apr 29, 2026)
+- In `frontend/src/lib/foreignBirthPlaces.ts` ho aggiunto una lista locale di Stati esteri con codice catastale `Z###`, inclusi i casi esplicitamente richiesti `Albania - Z100` e `Stati Uniti d'America - Z404`.
+- In `frontend/src/pages/Iscrizione.tsx`, quando `Nato/a all'estero` e attivo, il campo diventa una tendina Stato estero; la scelta aggiorna `birth_place`, `birth_place_code` e il calcolo automatico del codice fiscale.
+- `Z000` non viene piu proposto ne accettato come codice estero nel frontend.
+- In `app/routes/join.py` il backend valida il caso estero con pattern `Z###` escluso `Z000`, persiste nome e codice ricevuti e continua ad accettare CF formalmente validi anche se modificati manualmente rispetto allo Stato selezionato, con warning non bloccante.
+- Verifiche eseguite: `python -m py_compile app/routes/join.py app/routes/membership_payments.py tests/signup_payloads.py tests/test_signup_fiscal_code.py` OK; `python -m pytest -q tests/test_signup_fiscal_code.py` OK (`6 passed`); `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK con solo warning Vite chunk grandi gia noto.
