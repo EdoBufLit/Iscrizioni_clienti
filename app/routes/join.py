@@ -56,6 +56,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+FOREIGN_BIRTH_PLACE_NAME = "Stato estero"
+FOREIGN_BIRTH_PLACE_CODE = "Z000"
+
 
 # Accepted values for member payment preference in signup.
 _ALLOWED_PAYMENT_METHODS = {
@@ -159,10 +162,21 @@ def ensure_adults_only_age_requirement(
 
 
 def _resolve_birth_municipality(
-    *, birth_place: str | None, birth_place_code: str | None
+    *,
+    birth_place: str | None,
+    birth_place_code: str | None,
+    birth_place_foreign: bool = False,
 ) -> dict:
     normalized_name = normalize_municipality_text(birth_place)
     normalized_code = (birth_place_code or "").strip().upper()
+    if birth_place_foreign:
+        return {
+            "name": FOREIGN_BIRTH_PLACE_NAME,
+            "code": FOREIGN_BIRTH_PLACE_CODE,
+            "province": "",
+            "region": "",
+        }
+
     if not normalized_name or not normalized_code:
         raise HTTPException(
             status_code=400,
@@ -681,6 +695,7 @@ async def api_join_submit_multipart(
     birth_date: str = Form(...),
     birth_place: str = Form(...),
     birth_place_code: str = Form(...),
+    birth_place_foreign: bool = Form(False),
     gender: str = Form(...),
     email: str = Form(...),
     phone: str = Form(...),
@@ -750,6 +765,7 @@ async def api_join_submit_multipart(
     municipality = _resolve_birth_municipality(
         birth_place=birth_place,
         birth_place_code=birth_place_code,
+        birth_place_foreign=birth_place_foreign,
     )
     normalized_fiscal_code, fiscal_code_mismatch = _validate_signup_fiscal_code(
         first_name=first_name,

@@ -101,6 +101,7 @@ async def _upsert_member_for_checkout(
     birth_date: str,
     birth_place: str,
     birth_place_code: str,
+    birth_place_foreign: bool,
     gender: str,
     email: str,
     phone: str,
@@ -136,6 +137,7 @@ async def _upsert_member_for_checkout(
     municipality = _resolve_birth_municipality(
         birth_place=birth_place,
         birth_place_code=birth_place_code,
+        birth_place_foreign=birth_place_foreign,
     )
     normalized_fiscal_code, _fiscal_code_mismatch = _validate_signup_fiscal_code(
         first_name=first_name,
@@ -295,6 +297,7 @@ async def create_membership_payment_checkout(
     birth_date: str = Form(...),
     birth_place: str = Form(...),
     birth_place_code: str = Form(...),
+    birth_place_foreign: bool = Form(False),
     gender: str = Form(...),
     email: str = Form(...),
     phone: str = Form(...),
@@ -321,6 +324,7 @@ async def create_membership_payment_checkout(
         birth_date=birth_date,
         birth_place=birth_place,
         birth_place_code=birth_place_code,
+        birth_place_foreign=birth_place_foreign,
         gender=gender,
         email=email,
         phone=phone,

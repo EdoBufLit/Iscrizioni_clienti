@@ -105,3 +105,41 @@ def test_join_submit_accepts_formal_mismatch_and_persists_birth_fields(client, d
     assert member.birth_place_code == "H501"
     assert member.gender == "M"
     assert member.birth_date == date(1990, 1, 1)
+
+
+def test_join_submit_accepts_foreign_birth_place_flag(client, db):
+    org = _ensure_org(db, "cf-foreign-submit-org")
+    email = f"cf-foreign-{int(datetime.utcnow().timestamp() * 1000)}@example.com"
+    foreign_fiscal_code = calculate_fiscal_code(
+        first_name="Mario",
+        last_name="Rossi",
+        birth_date=date(1990, 1, 1),
+        gender="M",
+        birth_place_code="Z000",
+    )
+
+    response = client.post(
+        f"/api/join/{org.slug}/submit",
+        data=build_join_submit_data(
+            email=email,
+            birth_place="",
+            birth_place_code="",
+            birth_place_foreign=True,
+            fiscal_code=foreign_fiscal_code,
+        ),
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["status"] == "received"
+    assert "fiscal_code_mismatch" not in payload.get("warnings", [])
+
+    member = (
+        db.query(Member)
+        .filter(Member.org_id == org.id, Member.email == email)
+        .order_by(Member.id.desc())
+        .first()
+    )
+    assert member is not None
+    assert member.birth_place == "Stato estero"
+    assert member.birth_place_code == "Z000"
+    assert member.fiscal_code == foreign_fiscal_code

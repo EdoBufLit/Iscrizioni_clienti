@@ -28,6 +28,8 @@ import { publicUploadHint, validatePublicDocumentUpload } from "../lib/uploadVal
 import Skeleton from "../components/ui/Skeleton";
 
 const MEMBER_PASSWORD_MIN_LENGTH = 8;
+const FOREIGN_BIRTH_PLACE_NAME = "Stato estero";
+const FOREIGN_BIRTH_PLACE_CODE = "Z000";
 
 const STEPS = [
   { label: "Dati", title: "I tuoi dati" },
@@ -53,6 +55,7 @@ type FormData = {
   cognome: string;
   dataNascita: string;
   sesso: "" | "M" | "F";
+  statoEsteroNascita: boolean;
   comuneNascita: string;
   comuneNascitaCode: string;
   codiceFiscale: string;
@@ -71,6 +74,7 @@ const initial: FormData = {
   cognome: "",
   dataNascita: "",
   sesso: "",
+  statoEsteroNascita: false,
   comuneNascita: "",
   comuneNascitaCode: "",
   codiceFiscale: "",
@@ -96,7 +100,11 @@ function validateStep1(
     e.dataNascita = "Per questa associazione l'iscrizione e consentita solo ai maggiori di 18 anni.";
   }
   if (!f.sesso) e.sesso = "Seleziona il sesso.";
-  if (!f.comuneNascita.trim()) {
+  if (f.statoEsteroNascita) {
+    if (f.comuneNascitaCode !== FOREIGN_BIRTH_PLACE_CODE) {
+      e.comuneNascita = "Conferma lo stato estero di nascita.";
+    }
+  } else if (!f.comuneNascita.trim()) {
     e.comuneNascita = "Il comune di nascita e obbligatorio.";
   } else if (!f.comuneNascitaCode) {
     e.comuneNascita = "Seleziona un comune valido dall'elenco.";
@@ -484,6 +492,13 @@ const Iscrizione = () => {
   }, [shouldReduceMotion, step]);
 
   useEffect(() => {
+    if (form.statoEsteroNascita) {
+      setMunicipalitySuggestions([]);
+      setMunicipalityLoading(false);
+      setMunicipalityLookupError("");
+      return;
+    }
+
     const query = form.comuneNascita.trim();
     if (query.length < 2 || form.comuneNascitaCode) {
       setMunicipalitySuggestions([]);
@@ -516,7 +531,7 @@ const Iscrizione = () => {
       cancelled = true;
       window.clearTimeout(timeoutId);
     };
-  }, [form.comuneNascita, form.comuneNascitaCode]);
+  }, [form.comuneNascita, form.comuneNascitaCode, form.statoEsteroNascita]);
 
   useEffect(() => {
     if (
@@ -667,8 +682,29 @@ const Iscrizione = () => {
   const handleGenderChange = (event: ChangeEvent<HTMLSelectElement>) =>
     updateField("sesso", event.target.value as "" | "M" | "F");
 
+  const handleForeignBirthPlaceChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const checked = event.target.checked;
+    setForm((prev) => ({
+      ...prev,
+      statoEsteroNascita: checked,
+      comuneNascita: checked ? FOREIGN_BIRTH_PLACE_NAME : "",
+      comuneNascitaCode: checked ? FOREIGN_BIRTH_PLACE_CODE : "",
+    }));
+    setShowMunicipalitySuggestions(false);
+    setMunicipalityLookupError("");
+    setMunicipalitySuggestions([]);
+    if (errors.comuneNascita) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next.comuneNascita;
+        return next;
+      });
+    }
+  };
+
   const handleBirthPlaceChange = (event: ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
+    if (form.statoEsteroNascita) return;
     setShowMunicipalitySuggestions(true);
     setMunicipalityLookupError("");
     setForm((prev) => ({
@@ -766,6 +802,7 @@ const Iscrizione = () => {
           birth_date: form.dataNascita,
           birth_place: form.comuneNascita,
           birth_place_code: form.comuneNascitaCode,
+          birth_place_foreign: form.statoEsteroNascita,
           gender: form.sesso as "M" | "F",
           email: form.email,
           phone: form.telefono,
@@ -787,6 +824,7 @@ const Iscrizione = () => {
         birth_date: form.dataNascita,
         birth_place: form.comuneNascita,
         birth_place_code: form.comuneNascitaCode,
+        birth_place_foreign: form.statoEsteroNascita,
         gender: form.sesso as "M" | "F",
         email: form.email,
         phone: form.telefono,
@@ -860,6 +898,8 @@ const Iscrizione = () => {
   const fullName = [form.nome, form.cognome].filter(Boolean).join(" ").trim() || "futuro socio";
   const birthPlaceHint = fieldError("comuneNascita")
     ? fieldError("comuneNascita")
+    : form.statoEsteroNascita
+      ? "Il comune italiano viene sostituito da Stato estero per il calcolo del codice fiscale."
     : municipalityLookupError
       ? municipalityLookupError
       : form.comuneNascitaCode
@@ -1152,20 +1192,36 @@ const Iscrizione = () => {
                           className="relative md:col-span-2"
                           onBlur={() => window.setTimeout(() => setShowMunicipalitySuggestions(false), 120)}
                         >
-                          <label htmlFor="comuneNascita" className={labelClass}>
-                            Comune di nascita
-                          </label>
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <label htmlFor="comuneNascita" className={labelClass}>
+                              {form.statoEsteroNascita ? "Stato estero di nascita" : "Comune di nascita"}
+                            </label>
+                            <label className="inline-flex items-center gap-3 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50/30">
+                              <input
+                                className="h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-200"
+                                type="checkbox"
+                                checked={form.statoEsteroNascita}
+                                onChange={handleForeignBirthPlaceChange}
+                              />
+                              Nato/a all'estero
+                            </label>
+                          </div>
                           <input
                             id="comuneNascita"
                             className={fieldError("comuneNascita") ? fieldErrClass : fieldOkClass}
                             type="text"
                             autoComplete="off"
-                            placeholder="es. Roma"
+                            placeholder={form.statoEsteroNascita ? FOREIGN_BIRTH_PLACE_NAME : "es. Roma"}
                             value={form.comuneNascita}
                             onChange={handleBirthPlaceChange}
-                            onFocus={() => setShowMunicipalitySuggestions(true)}
+                            onFocus={() => {
+                              if (!form.statoEsteroNascita) setShowMunicipalitySuggestions(true);
+                            }}
+                            readOnly={form.statoEsteroNascita}
+                            aria-readonly={form.statoEsteroNascita}
                           />
-                          {showMunicipalitySuggestions &&
+                          {!form.statoEsteroNascita &&
+                          showMunicipalitySuggestions &&
                           !form.comuneNascitaCode &&
                           form.comuneNascita.trim().length >= 2 ? (
                             <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-[0_30px_70px_-36px_rgba(15,23,42,0.28)]">
@@ -1513,7 +1569,11 @@ const Iscrizione = () => {
                             <SummaryItem label="Nominativo completo" value={fullName} muted={fullName === "futuro socio"} />
                             <SummaryItem label="Data di nascita" value={formatDateDisplay(form.dataNascita)} muted={!form.dataNascita} />
                             <SummaryItem label="Sesso" value={genderLabel} muted={genderLabel === "-"} />
-                            <SummaryItem label="Comune di nascita" value={form.comuneNascita || "-"} muted={!form.comuneNascita} />
+                            <SummaryItem
+                              label={form.statoEsteroNascita ? "Stato di nascita" : "Comune di nascita"}
+                              value={form.comuneNascita || "-"}
+                              muted={!form.comuneNascita}
+                            />
                             <SummaryItem label="Codice fiscale" value={normalizeCodiceFiscale(form.codiceFiscale) || "-"} muted={!form.codiceFiscale} />
                           </dl>
                         </section>

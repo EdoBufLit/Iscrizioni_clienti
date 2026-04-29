@@ -337,6 +337,7 @@ export async function joinOrganization(
     birth_date: string;
     birth_place: string;
     birth_place_code: string;
+    birth_place_foreign?: boolean;
     gender: "M" | "F";
     email: string;
     phone: string;
@@ -367,6 +368,7 @@ export async function joinOrganization(
   body.append("birth_date", data.birth_date);
   body.append("birth_place", data.birth_place);
   body.append("birth_place_code", data.birth_place_code);
+  body.append("birth_place_foreign", String(Boolean(data.birth_place_foreign)));
   body.append("gender", data.gender);
   body.append("email", data.email);
   body.append("phone", data.phone);
@@ -1775,6 +1777,7 @@ export async function createMembershipPaymentCheckout(
     birth_date: string;
     birth_place: string;
     birth_place_code: string;
+    birth_place_foreign?: boolean;
     gender: "M" | "F";
     email: string;
     phone: string;
@@ -1793,6 +1796,7 @@ export async function createMembershipPaymentCheckout(
   body.append("birth_date", data.birth_date);
   body.append("birth_place", data.birth_place);
   body.append("birth_place_code", data.birth_place_code);
+  body.append("birth_place_foreign", String(Boolean(data.birth_place_foreign)));
   body.append("gender", data.gender);
   body.append("email", data.email);
   body.append("phone", data.phone);

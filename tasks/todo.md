@@ -4611,3 +4611,16 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - In `emailBuilder.ts` ho aggiunto blocchi guidati `Data e dettagli` e `Contatti`, per ripristinare opzioni pratiche come data, telefono ed email direttamente dalla palette.
 - In `app/services/email_templates.py` ho aggiunto i merge tag reali `{{telefono_socio}}`, `{{telefono_associazione}}` e `{{data_oggi}}`, includendoli nel contesto di rendering per evitare placeholder vuoti non supportati.
 - Verifiche eseguite: `python -m py_compile app/services/email_templates.py` OK; `python -m pytest -q tests/test_org_admin_communications.py::test_org_admin_template_library_seed_duplicate_preview_and_archive` OK; `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK con solo warning Vite chunk grandi gia noto.
+
+## Plan (Iscrizione stato estero codice fiscale - Apr 29, 2026)
+- [x] Mappare validazione codice fiscale/comune nascita nel frontend e negli endpoint iscrizione/pagamento
+- [x] Aggiungere flag `Stato estero` nel wizard pubblico: quando attivo sostituisce autocomplete comune e usa il codice catastale estero generico
+- [x] Aggiornare API submit/checkout e backend per accettare nascita estera senza lookup comune italiano
+- [x] Coprire il flusso con test backend e verifiche frontend
+
+## Review (Iscrizione stato estero codice fiscale - Apr 29, 2026)
+- In `frontend/src/pages/Iscrizione.tsx` ho aggiunto il flag `Nato/a all'estero`: quando attivo sostituisce l'autocomplete del comune con il valore read-only `Stato estero`, usa il codice `Z000` per il calcolo del codice fiscale e aggiorna il riepilogo finale.
+- In `frontend/src/lib/api.ts` il flag `birth_place_foreign` viene inviato sia al submit iscrizione standard sia al checkout pagamento online.
+- In `app/routes/join.py` e `app/routes/membership_payments.py` il backend accetta il flag e bypassa il lookup dei comuni italiani, persistendo `birth_place = Stato estero` e `birth_place_code = Z000` senza nuove colonne o migrazioni.
+- Ho aggiunto una regressione in `tests/test_signup_fiscal_code.py` per il submit con nascita estera.
+- Verifiche eseguite: `python -m py_compile app/routes/join.py app/routes/membership_payments.py tests/signup_payloads.py tests/test_signup_fiscal_code.py` OK; `python -m pytest -q tests/test_signup_fiscal_code.py` OK (`4 passed`); `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK con solo warning Vite chunk grandi gia noto.
