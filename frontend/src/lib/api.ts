@@ -2773,6 +2773,17 @@ export async function updateOrgAdminWhatsAppAutomation(
   return res.json();
 }
 
+export async function deleteOrgAdminWhatsAppAutomation(
+  automationId: number,
+): Promise<{ ok: boolean; deleted_automation_id: number }> {
+  const res = await fetch(`/api/org-admin/communications/whatsapp/automations/${automationId}`, {
+    method: "DELETE",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore eliminazione automazione WhatsApp"));
+  return res.json();
+}
+
 export async function uploadOrgAdminWalletAssets(
   input: { logo?: File | null; heroImage?: File | null },
 ): Promise<{

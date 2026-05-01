@@ -5847,3 +5847,39 @@ body.dashboard-perf-mode .btn-ghost:hover {
 :root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-400 {
   color: var(--fb-muted) !important;
 }
+
+:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel {
+  border-color: var(--oa-line-strong, #314253) !important;
+  background: var(--oa-panel, #162433) !important;
+  color: var(--oa-text, #f8fafc) !important;
+}
+
+:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel h3,
+:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel label,
+:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel .text-slate-950,
+:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel .text-slate-800,
+:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel .text-slate-700 {
+  color: var(--oa-text, #f8fafc) !important;
+}
+
+:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel p,
+:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel .text-slate-600,
+:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel .text-slate-500 {
+  color: var(--oa-muted, #c3cfdb) !important;
+}
+
+:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel .text-emerald-700 {
+  color: #5eead4 !important;
+}
+
+:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel input:not([type="checkbox"]),
+:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel textarea {
+  border-color: var(--oa-line-strong, #314253) !important;
+  background: var(--oa-panel-muted, #101b24) !important;
+  color: var(--oa-text, #f8fafc) !important;
+}
+
+:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel > div > label {
+  border-color: var(--oa-line-strong, #314253) !important;
+  background: var(--oa-panel-muted, #101b24) !important;
+}

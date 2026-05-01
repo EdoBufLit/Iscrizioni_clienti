@@ -372,6 +372,18 @@ def test_org_admin_whatsapp_automations_create_list_and_update(client, db):
     assert updated["custom_phone"] == "+393331234567"
     assert updated["is_active"] is False
 
+    delete_res = client.delete(
+        f"/api/org-admin/communications/whatsapp/automations/{automation['id']}"
+    )
+    assert delete_res.status_code == 200, delete_res.text
+    assert delete_res.json()["deleted_automation_id"] == automation["id"]
+
+    list_after_delete_res = client.get(
+        f"/api/org-admin/communications/whatsapp/automations?form_id={form_id}"
+    )
+    assert list_after_delete_res.status_code == 200, list_after_delete_res.text
+    assert list_after_delete_res.json()["total"] == 0
+
 
 def test_org_admin_campaign_send_snapshots_recipients_and_updates_history(client, db, drain_email_outbox):
     original_mode = settings.EMAIL_MODE

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   createOrgAdminWhatsAppAutomation,
+  deleteOrgAdminWhatsAppAutomation,
   fetchOrgAdminCommunicationSettings,
   fetchOrgAdminForms,
   fetchOrgAdminWhatsAppAutomations,
@@ -11,6 +12,7 @@ import {
   type OrgAdminCommunicationSettings,
   type OrgAdminWhatsAppAutomation,
 } from "../../../../lib/api";
+import ConfirmModal from "../../../../components/ui/ConfirmModal";
 import Skeleton from "../../../../components/ui/Skeleton";
 import { useToast } from "../../../../components/ui/ToastProvider";
 
@@ -134,11 +136,10 @@ function RuleCard(props: {
   automation: OrgAdminWhatsAppAutomation;
   selected: boolean;
   onSelect: () => void;
+  onDelete: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={props.onSelect}
+    <article
       className={`min-h-[156px] rounded-lg border p-5 text-left transition ${
         props.selected
           ? "border-brand/35 bg-brand/5 text-slate-950"
@@ -172,7 +173,23 @@ function RuleCard(props: {
           <p className="mt-1 font-medium">{props.automation.template_name}</p>
         </div>
       </div>
-    </button>
+      <div className="mt-5 flex flex-wrap gap-2">
+        <button
+          type="button"
+          className="inline-flex min-h-10 items-center justify-center rounded-lg border border-neutral-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-neutral-300 hover:bg-neutral-50"
+          onClick={props.onSelect}
+        >
+          Apri
+        </button>
+        <button
+          type="button"
+          className="inline-flex min-h-10 items-center justify-center rounded-lg border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-50"
+          onClick={props.onDelete}
+        >
+          Elimina
+        </button>
+      </div>
+    </article>
   );
 }
 
@@ -202,6 +219,7 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [draft, setDraft] = useState(emptyAutomationDraft());
   const [activeStep, setActiveStep] = useState<AutomationWizardStep>("origin");
+  const [deleteAutomationTarget, setDeleteAutomationTarget] = useState<OrgAdminWhatsAppAutomation | null>(null);
 
   const selectedForm = useMemo(
     () => forms.find((form) => form.id === draft.form_id) ?? null,
@@ -389,6 +407,30 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
     }
   }
 
+  async function confirmDeleteAutomation() {
+    if (!deleteAutomationTarget || communicationsLocked) return;
+    try {
+      await deleteOrgAdminWhatsAppAutomation(deleteAutomationTarget.id);
+      const deletedDraftWasOpen = draft.id === deleteAutomationTarget.id;
+      setDeleteAutomationTarget(null);
+      await loadData(draft.form_id);
+      if (deletedDraftWasOpen) {
+        beginNewRule();
+      }
+      showToast({
+        title: "Automazione eliminata",
+        message: "La regola WhatsApp e stata rimossa.",
+        tone: "success",
+      });
+    } catch (err) {
+      showToast({
+        title: "Errore",
+        message: err instanceof Error ? err.message : "Errore eliminazione automazione WhatsApp.",
+        tone: "error",
+      });
+    }
+  }
+
   function previousStep() {
     const next = wizardSteps[Math.max(activeIndex - 1, 0)];
     setActiveStep(next.key);
@@ -421,7 +463,7 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="whatsapp-automations-hub space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4 border-b border-neutral-200 pb-5">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Automazioni WhatsApp</p>
@@ -445,6 +487,7 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
               automation={automation}
               selected={draft.id === automation.id}
               onSelect={() => hydrateFromAutomation(automation)}
+              onDelete={() => setDeleteAutomationTarget(automation)}
             />
           ))}
           <NewRuleCard onClick={beginNewRule} />
@@ -457,7 +500,7 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
       </section>
 
       {settings ? (
-        <section className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-5 shadow-sm md:p-6">
+        <section className="whatsapp-reminder-panel rounded-lg border border-emerald-200 bg-emerald-50/60 p-5 shadow-sm md:p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-2xl">
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700">Reminder prenotazioni</p>
@@ -793,6 +836,15 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
           </div>
         </div>
       </section>
+      <ConfirmModal
+        open={Boolean(deleteAutomationTarget)}
+        title="Eliminare questa regola WhatsApp?"
+        description={`La regola "${deleteAutomationTarget?.name || "selezionata"}" non inviera piu messaggi automatici.`}
+        confirmLabel="Elimina regola"
+        tone="danger"
+        onClose={() => setDeleteAutomationTarget(null)}
+        onConfirm={() => void confirmDeleteAutomation()}
+      />
     </div>
   );
 }

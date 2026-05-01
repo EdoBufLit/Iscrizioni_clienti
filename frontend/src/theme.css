@@ -1628,3 +1628,30 @@ select:focus {
   color: rgba(255, 255, 255, 0.72) !important;
   -webkit-text-fill-color: rgba(255, 255, 255, 0.72) !important;
 }
+
+:root[data-theme="dark"] .associations-page .associations-hero-icon {
+  background: rgba(20, 184, 166, 0.16) !important;
+  color: #5eead4 !important;
+  box-shadow: 0 0 0 1px rgba(94, 234, 212, 0.24), 0 18px 42px rgba(20, 184, 166, 0.12);
+}
+
+:root[data-theme="dark"] .associations-page .association-card {
+  border-color: rgba(148, 163, 184, 0.24) !important;
+}
+
+:root[data-theme="dark"] .associations-page .association-card-body {
+  background: #142231 !important;
+}
+
+:root[data-theme="dark"] .associations-page .association-logo-plate {
+  border-color: rgba(226, 232, 240, 0.88) !important;
+  background: #f8fafc !important;
+  color: #0f766e !important;
+  box-shadow: 0 18px 38px rgba(2, 6, 23, 0.28), inset 0 0 0 1px rgba(15, 118, 110, 0.12) !important;
+  --tw-ring-color: rgba(20, 34, 49, 0.96) !important;
+}
+
+:root[data-theme="dark"] .associations-page .association-placeholder-icon {
+  color: #0f766e !important;
+  opacity: 1 !important;
+}

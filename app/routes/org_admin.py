@@ -3441,6 +3441,33 @@ def update_whatsapp_automation(
     return {"ok": True, "automation": serialize_whatsapp_automation(automation)}
 
 
+@router.delete("/communications/whatsapp/automations/{automation_id}")
+def delete_whatsapp_automation(
+    automation_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    _require_active_communications_module(admin.organization)
+    automation = (
+        db.query(WhatsAppAutomation)
+        .filter(
+            WhatsAppAutomation.id == automation_id,
+            WhatsAppAutomation.association_id == admin.org_id,
+        )
+        .first()
+    )
+    if automation is None:
+        raise HTTPException(status_code=404, detail="Automazione WhatsApp non trovata.")
+
+    db.delete(automation)
+    db.commit()
+    return {"ok": True, "deleted_automation_id": automation_id}
+
+
 @router.get("/communications/audience-estimate")
 def get_communications_audience_estimate(
     request: Request,

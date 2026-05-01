@@ -53,13 +53,13 @@ const Associazioni = () => {
 
 
   return (
-    <section className="py-20 md:py-32 bg-slate-50/50 min-h-screen font-sans" data-reveal="fade-up">
+    <section className="associations-page py-20 md:py-32 bg-slate-50/50 min-h-screen font-sans" data-reveal="fade-up">
       <div className="container-shell max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="surface-strong rounded-[2rem] overflow-hidden">
           
           <div className="p-8 md:p-12 lg:p-16 border-b border-slate-100 bg-slate-50/80">
             <div className="max-w-3xl">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-brand/10 text-brand mb-6">
+              <div className="associations-hero-icon inline-flex items-center justify-center w-16 h-16 rounded-full bg-brand/10 text-brand mb-6">
                 <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                 </svg>
@@ -142,7 +142,7 @@ const Associazioni = () => {
                 </p>
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3" data-reveal="stagger">
                   {orgs.map((org, index) => (
-                    <article key={org.slug} className="group bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-brand/30 transition-all duration-300" data-reveal-item>
+                    <article key={org.slug} className="association-card group bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-brand/30 transition-all duration-300" data-reveal-item>
                       <div
                         className="relative h-28 shrink-0 transition-transform duration-700 group-hover:scale-105 origin-bottom"
                         style={{ background: COVER_PATTERNS[index % COVER_PATTERNS.length] }}
@@ -159,8 +159,8 @@ const Associazioni = () => {
                         )}
                       </div>
                       
-                      <div className="flex flex-1 flex-col p-6 relative z-10 bg-white">
-                        <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-md border border-slate-100 -mt-14 mb-4 ring-4 ring-white">
+                      <div className="association-card-body flex flex-1 flex-col p-6 relative z-10 bg-white">
+                        <div className="association-logo-plate flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-md border border-slate-100 -mt-14 mb-4 ring-4 ring-white">
                           {org.logo_url ? (
                             <img
                               src={org.logo_url}
@@ -171,7 +171,7 @@ const Associazioni = () => {
                             />
                           ) : (
                             <svg
-                              className="h-8 w-8 text-brand/40"
+                              className="association-placeholder-icon h-8 w-8 text-brand/40"
                               viewBox="0 0 24 24"
                               fill="none"
                               stroke="currentColor"

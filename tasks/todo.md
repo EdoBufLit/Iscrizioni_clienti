@@ -4673,3 +4673,19 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - WhatsApp: il contenitore inbox ora ha altezza vincolata al viewport (`h-[min(44rem,calc(100dvh-11rem))]`) e mantiene scroll interno su lista chat/thread invece di allungare tutta la pagina.
 - Form/sondaggi pubblici: titolo e descrizione del canvas usano classi scoped con `data-page-style`, cosi editorial/minimal restano scuri anche quando l'admin e in dark mode; spotlight resta chiaro su fondo scuro.
 - Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`; dev server avviato su `http://127.0.0.1:5173`.
+
+## Plan (Eliminazione modelli/automazioni e dark mode comunicazioni - May 1, 2026)
+- [x] Aggiungere lesson sulla correzione richiesta: azioni distruttive visibili nella lista, dark mode dei pannelli WhatsApp e smoke reale del builder campagne.
+- [x] Verificare e rendere esplicita l'eliminazione dei modelli email dalla libreria modelli.
+- [x] Aggiungere eliminazione completa per regole automazioni WhatsApp: endpoint backend, client API, conferma UI e test.
+- [x] Correggere dark mode del reminder WhatsApp e delle icone nella pagina pubblica `/associazioni`.
+- [x] Eseguire test/backend frontend, build e smoke live del builder campagne per controllare il bordo scuro residuo.
+- [x] Commit e push del branch corrente includendo solo i file pertinenti.
+
+## Review (Eliminazione modelli/automazioni e dark mode comunicazioni - May 1, 2026)
+- Modelli email: la libreria attiva `MessagesComposerHub` espone gia `Elimina` per i modelli non di sistema e usa l'endpoint `DELETE /communications/templates/{id}` esistente; nessun duplicato necessario.
+- Automazioni WhatsApp: aggiunto `DELETE /api/org-admin/communications/whatsapp/automations/{id}`, client `deleteOrgAdminWhatsAppAutomation`, pulsante `Elimina` sulle card regola e modal di conferma.
+- Dark mode: il pannello `Reminder prenotazioni` WhatsApp ora usa token scuri scoped; `/associazioni` in dark mode usa plate chiaro e icona placeholder verde ad alto contrasto.
+- Verifiche OK: `python -m pytest -q tests/test_org_admin_communications.py::test_org_admin_whatsapp_automations_create_list_and_update`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
+- Smoke builder campagne live su `https://assonam.it/org-admin/comunicazioni?tab=campagne&mode=create`: autenticazione con magic-link temporaneo live, screenshot in `tasks/screenshots/live-builder-smoke-20260501/`, nessuna response 4xx/5xx, nessun errore console, rail sinistro con superfici bianche e nessun fondo opaco scuro.
+- Smoke `/associazioni` dark locale mockato: screenshot in `tasks/screenshots/associazioni-dark-smoke-20260501/`, plate `rgb(248, 250, 252)` e icona `rgb(15, 118, 110)`.
