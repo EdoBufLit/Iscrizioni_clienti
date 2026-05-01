@@ -1596,3 +1596,35 @@ select:focus {
 :root[data-theme="dark"] .super-admin-v2 .sa-orgs-table-shell table thead tr {
   background: color-mix(in srgb, var(--sa-panel-muted) 86%, #020617) !important;
 }
+
+.form-public-canvas-container[data-page-style="editorial"] .form-public-canvas__title,
+.form-public-canvas-container[data-page-style="minimal"] .form-public-canvas__title,
+.org-admin-v2 .org-admin-content .form-public-canvas-container[data-page-style="editorial"] .form-public-canvas__title,
+.org-admin-v2 .org-admin-content .form-public-canvas-container[data-page-style="minimal"] .form-public-canvas__title {
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827 !important;
+}
+
+.form-public-canvas-container[data-page-style="editorial"] .form-public-canvas__description,
+.org-admin-v2 .org-admin-content .form-public-canvas-container[data-page-style="editorial"] .form-public-canvas__description {
+  color: #4b5563 !important;
+  -webkit-text-fill-color: #4b5563 !important;
+}
+
+.form-public-canvas-container[data-page-style="minimal"] .form-public-canvas__description,
+.org-admin-v2 .org-admin-content .form-public-canvas-container[data-page-style="minimal"] .form-public-canvas__description {
+  color: #6b7280 !important;
+  -webkit-text-fill-color: #6b7280 !important;
+}
+
+.form-public-canvas-container[data-page-style="spotlight"] .form-public-canvas__title,
+.org-admin-v2 .org-admin-content .form-public-canvas-container[data-page-style="spotlight"] .form-public-canvas__title {
+  color: #f8fafc !important;
+  -webkit-text-fill-color: #f8fafc !important;
+}
+
+.form-public-canvas-container[data-page-style="spotlight"] .form-public-canvas__description,
+.org-admin-v2 .org-admin-content .form-public-canvas-container[data-page-style="spotlight"] .form-public-canvas__description {
+  color: rgba(255, 255, 255, 0.72) !important;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.72) !important;
+}

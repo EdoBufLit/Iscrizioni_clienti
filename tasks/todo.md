@@ -4650,3 +4650,14 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Non ho toccato volumi Docker ne dati Postgres.
 - Dopo cleanup `/dev/sda1` e al 25% con circa `27G` liberi; `docker compose ps` mostra web, worker e db in esecuzione/healthy e `pg_isready` risponde `accepting connections`.
 - Branch ripushato per ritentare il deploy dopo il cleanup.
+## Plan (Fix comunicazioni overflow e dark mode - May 1, 2026)
+- [x] Rimuovere i residui scuri nativi GrapesJS nei pannelli builder campagne, inclusi blocchi e avanzate in light/dark mode.
+- [x] Limitare l'altezza dell'inbox WhatsApp in `Comunicazioni > WhatsApp > Chat e connessione`, con scroll interno per lista chat e thread.
+- [x] Correggere il contrasto del titolo/descrizione nei form e sondaggi pubblici quando il tema app e dark ma la pagina pubblica resta chiara.
+- [x] Eseguire verifiche frontend mirate (`typecheck`/`build`) e documentare esito.
+
+## Review (Fix comunicazioni overflow e dark mode - May 1, 2026)
+- Builder campagne: neutralizzati altri wrapper nativi GrapesJS (`gjs-blocks`, `gjs-block-label`, style sectors/properties/layers) per evitare fondi o bordi scuri residui nei pannelli laterali e in `Avanzate`.
+- WhatsApp: il contenitore inbox ora ha altezza vincolata al viewport (`h-[min(44rem,calc(100dvh-11rem))]`) e mantiene scroll interno su lista chat/thread invece di allungare tutta la pagina.
+- Form/sondaggi pubblici: titolo e descrizione del canvas usano classi scoped con `data-page-style`, cosi editorial/minimal restano scuri anche quando l'admin e in dark mode; spotlight resta chiaro su fondo scuro.
+- Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`; dev server avviato su `http://127.0.0.1:5173`.

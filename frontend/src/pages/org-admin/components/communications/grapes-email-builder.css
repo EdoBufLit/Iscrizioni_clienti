@@ -944,3 +944,57 @@
   border-color: var(--builder-border-soft) !important;
   box-shadow: none !important;
 }
+
+.builder-shell .builder-block-grid--native .gjs-blocks,
+.builder-shell .builder-block-grid--native .gjs-blocks-c,
+.builder-shell .builder-block-grid--native .gjs-block-categories,
+.builder-shell .builder-block-grid--native .gjs-block-category,
+.builder-shell .builder-block-grid--native .gjs-block-category.gjs-open,
+.builder-shell .builder-block-grid--native .gjs-block-label {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: var(--builder-text) !important;
+}
+
+.builder-shell .builder-block-grid--native .gjs-block-label {
+  display: grid !important;
+  gap: 0.32rem !important;
+  padding: 0 !important;
+  min-height: 0 !important;
+  line-height: 1.35 !important;
+}
+
+.builder-shell .builder-block-grid--native .gjs-block,
+.builder-shell .builder-block-grid--native .gjs-block.builder-block-card {
+  background-image: none !important;
+}
+
+.builder-shell .builder-style-panel .gjs-sm-sectors,
+.builder-shell .builder-style-panel .gjs-sm-sector,
+.builder-shell .builder-style-panel .gjs-sm-sector .gjs-sm-sector-c,
+.builder-shell .builder-style-panel .gjs-sm-properties,
+.builder-shell .builder-style-panel .gjs-sm-property,
+.builder-shell .builder-style-panel .gjs-sm-field,
+.builder-shell .builder-style-panel .gjs-field,
+.builder-shell .builder-style-panel .gjs-field input,
+.builder-shell .builder-style-panel .gjs-field select,
+.builder-shell .builder-style-panel .gjs-field textarea,
+.builder-shell .builder-style-panel .gjs-input-holder,
+.builder-shell .builder-style-panel .gjs-input-holder input {
+  background-color: var(--builder-panel) !important;
+  background-image: none !important;
+  border-color: var(--builder-border) !important;
+  box-shadow: none !important;
+  color: var(--builder-text) !important;
+}
+
+.builder-shell .builder-style-panel .gjs-sm-clear,
+.builder-shell .builder-style-panel .gjs-sm-composite,
+.builder-shell .builder-style-panel .gjs-sm-stack,
+.builder-shell .builder-style-panel .gjs-sm-layer,
+.builder-shell .builder-style-panel .gjs-sm-layers {
+  background: transparent !important;
+  border-color: var(--builder-border-soft) !important;
+  box-shadow: none !important;
+}

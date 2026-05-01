@@ -485,7 +485,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
   const statusUi = statusCopy[connection.status];
 
   return (
-    <div className="flex min-h-[min(44rem,calc(100dvh-11rem))] flex-col gap-4 overflow-hidden pb-20 md:pb-0">
+    <div className="flex h-[min(44rem,calc(100dvh-11rem))] min-h-[32rem] flex-col gap-4 overflow-hidden pb-20 md:pb-0">
       <div className="shrink-0 rounded-lg border border-neutral-200 bg-white px-5 py-4 text-sm text-slate-700 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">

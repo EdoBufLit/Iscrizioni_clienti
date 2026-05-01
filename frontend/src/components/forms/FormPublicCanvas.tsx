@@ -369,6 +369,7 @@ export function FormPublicCanvas({
 }: FormPublicCanvasProps) {
   const accentColor = getAccentColor(form);
   const theme = getPageTheme(form.page_style);
+  const pageStyle = (form.page_style || "editorial").toLowerCase();
   const sortedFields = [...form.fields].sort((left, right) => left.sort_order - right.sort_order);
 
   // Dynamic styles
@@ -383,7 +384,10 @@ export function FormPublicCanvas({
   `;
 
   return (
-    <div className={`form-public-canvas-container w-full min-h-full ${theme.shell} transition-colors duration-300`}>
+    <div
+      className={`form-public-canvas-container w-full min-h-full ${theme.shell} transition-colors duration-300`}
+      data-page-style={pageStyle}
+    >
       <style>{customFocusStyle}</style>
       
       {/* Cover Image */}
@@ -402,9 +406,9 @@ export function FormPublicCanvas({
               <span className="truncate">{form.association.name}</span>
             </div>
           )}
-          <h1 className={theme.title}>{form.title}</h1>
+          <h1 className={`form-public-canvas__title ${theme.title}`}>{form.title}</h1>
           {form.description && (
-            <p className={`mt-5 text-sm md:text-base max-w-2xl mx-auto leading-relaxed ${theme.body}`}>
+            <p className={`form-public-canvas__description mt-5 text-sm md:text-base max-w-2xl mx-auto leading-relaxed ${theme.body}`}>
               {form.description}
             </p>
           )}
