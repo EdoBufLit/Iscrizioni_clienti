@@ -4650,6 +4650,18 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Non ho toccato volumi Docker ne dati Postgres.
 - Dopo cleanup `/dev/sda1` e al 25% con circa `27G` liberi; `docker compose ps` mostra web, worker e db in esecuzione/healthy e `pg_isready` risponde `accepting connections`.
 - Branch ripushato per ritentare il deploy dopo il cleanup.
+## Plan (Correzione regressioni dark settings e builder - May 1, 2026)
+- [x] Aggiungere lesson sulle regressioni segnalate: tab impostazioni hardcoded e wrapper GrapesJS trasparenti.
+- [x] Rendere dark-aware `Sondaggi > Impostazioni` con scope `form-settings-tab` e override tokenizzati per pannelli, input, label e testi.
+- [x] Correggere il pannello sinistro del builder campagne forzando i wrapper GrapesJS della block manager sul token del rail invece che trasparenti.
+- [x] Eseguire typecheck/build frontend e pushare commit incrementale.
+
+## Review (Correzione regressioni dark settings e builder - May 1, 2026)
+- `Sondaggi > Impostazioni`: aggiunto scope `form-settings-tab` e override dark mode per pannelli, input, textarea, select, label e testi ancora basati su classi hardcoded.
+- Builder campagne: il block manager del rail sinistro ora usa esplicitamente `--builder-panel` sui wrapper GrapesJS, evitando il fondo scuro tra le card in light mode.
+- Aggiornato `tasks/lessons.md` con la regola emersa dalla correzione.
+- Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
+
 ## Plan (Fix comunicazioni overflow e dark mode - May 1, 2026)
 - [x] Rimuovere i residui scuri nativi GrapesJS nei pannelli builder campagne, inclusi blocchi e avanzate in light/dark mode.
 - [x] Limitare l'altezza dell'inbox WhatsApp in `Comunicazioni > WhatsApp > Chat e connessione`, con scroll interno per lista chat e thread.

@@ -5797,3 +5797,53 @@ body.dashboard-perf-mode .btn-ghost:hover {
 .org-admin-v2 .form-builder-toggle-track {
   background: color-mix(in srgb, var(--fb-muted) 28%, var(--fb-surface));
 }
+
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab section,
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .bg-white,
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .bg-neutral-50,
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .bg-emerald-50\/60,
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab [class*="bg-[#fc"],
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab [class*="bg-[#f"] {
+  background-color: var(--fb-surface) !important;
+  background-image: none !important;
+  color: var(--fb-text) !important;
+}
+
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab [class*="border-[#"],
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .border-neutral-200,
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .border-emerald-200 {
+  border-color: var(--fb-border) !important;
+}
+
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab input:not([type="checkbox"]),
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab select,
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab textarea {
+  border-color: var(--fb-border) !important;
+  background: var(--fb-input) !important;
+  color: var(--fb-text) !important;
+}
+
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab input::placeholder,
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab textarea::placeholder {
+  color: color-mix(in srgb, var(--fb-muted) 72%, transparent) !important;
+}
+
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab label,
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab h3,
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab p,
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab span,
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab [class*="text-[#"],
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-900,
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-800,
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-700,
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-600 {
+  color: var(--fb-text) !important;
+}
+
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab label > span:first-child,
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab [class*="tracking-[0.14em]"],
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab [class*="tracking-[0.2em]"],
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-500,
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-400 {
+  color: var(--fb-muted) !important;
+}

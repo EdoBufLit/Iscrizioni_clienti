@@ -1526,7 +1526,7 @@ export function OrgAdminFormsWorkspace({
   );
 
   const automationsTab = (
-    <div className="space-y-5 overflow-y-auto custom-scrollbar pb-10">
+    <div className="form-settings-tab space-y-5 overflow-y-auto custom-scrollbar pb-10">
       <div>
         <section className="rounded-[1.45rem] border border-[#e6dccb] bg-white p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.18)]">
           <div className="border-b border-[#efe8db] pb-4">

@@ -998,3 +998,19 @@
   border-color: var(--builder-border-soft) !important;
   box-shadow: none !important;
 }
+
+.builder-shell .builder-rail--left .builder-block-grid--native,
+.builder-shell .builder-rail--left .builder-block-grid--native .gjs-blocks,
+.builder-shell .builder-rail--left .builder-block-grid--native .gjs-blocks-c,
+.builder-shell .builder-rail--left .builder-block-grid--native .gjs-block-categories,
+.builder-shell .builder-rail--left .builder-block-grid--native .gjs-block-category,
+.builder-shell .builder-rail--left .builder-block-grid--native .gjs-block-category.gjs-open {
+  background: var(--builder-panel) !important;
+  background-color: var(--builder-panel) !important;
+  background-image: none !important;
+}
+
+.builder-shell .builder-rail--left .builder-block-grid--native .gjs-block-label {
+  background: transparent !important;
+  background-color: transparent !important;
+}
