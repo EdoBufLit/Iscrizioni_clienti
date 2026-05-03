@@ -207,7 +207,7 @@ const Register = () => {
             </form>
 
             <div className="mt-6 border-t border-neutral-200/70 pt-4 text-sm text-neutral-600">
-              Hai gia un account?{" "}
+              Hai già un account?{" "}
               <Link className="font-semibold text-brand hover:text-brand-dark" to="/login">
                 Accedi
               </Link>

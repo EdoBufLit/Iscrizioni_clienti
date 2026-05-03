@@ -512,7 +512,7 @@ const SuperAdminMemberDetailPage = () => {
                   <dd className="text-right font-mono text-[13px] text-neutral-900">{selectedMember.fiscal_code || "—"}</dd>
                 </div>
                 <div className="flex items-start justify-between gap-4">
-                  <dt className="text-neutral-500">Modalita pagamento</dt>
+                  <dt className="text-neutral-500">Modalità pagamento</dt>
                   <dd className="text-right font-medium text-neutral-900">{selectedMember.payment_method || "—"}</dd>
                 </div>
                 <div className="flex items-start justify-between gap-4">

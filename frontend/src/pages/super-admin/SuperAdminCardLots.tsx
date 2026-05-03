@@ -178,7 +178,7 @@ const SuperAdminCardLots = () => {
         <SuperAdminKpiCard label="Lotti totali" value={totals.totalLots.toLocaleString("it-IT")} hint="Tutti i lotti registrati" icon="cards" tone="success" />
         <SuperAdminKpiCard label="Tessere totali" value={totals.totalCards.toLocaleString("it-IT")} hint="Totale tessere nei lotti" icon="card" tone="success" />
         <SuperAdminKpiCard label="Lotti attivi" value={totals.activeLots.toLocaleString("it-IT")} hint={`${Math.round((totals.activeLots / Math.max(1, totals.totalLots)) * 100)}% del totale`} icon="check" tone="success" />
-        <SuperAdminKpiCard label="Lotti esauriti" value={totals.exhaustedLots.toLocaleString("it-IT")} hint="Disponibilita zero" icon="clock" tone="warning" />
+        <SuperAdminKpiCard label="Lotti esauriti" value={totals.exhaustedLots.toLocaleString("it-IT")} hint="Disponibilità zero" icon="clock" tone="warning" />
         <SuperAdminKpiCard label="Lotti storici" value={totals.releasedLots.toLocaleString("it-IT")} hint="Rilasciati o chiusi" icon="documents" tone="muted" />
         <SuperAdminKpiCard label="Scope" value={`${totals.shared} / ${totals.dedicated}`} hint="Condivisi / dedicati" icon="shield" tone="purple" />
       </section>
@@ -240,7 +240,7 @@ const SuperAdminCardLots = () => {
                 <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em]">Range</th>
                 <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em]">Quantita</th>
                 <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em]">Stato</th>
-                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em]">Disponibilita</th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em]">Disponibilità</th>
                 <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em]">Scope</th>
                 <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em]">Richiesta</th>
                 <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em]">Creazione</th>

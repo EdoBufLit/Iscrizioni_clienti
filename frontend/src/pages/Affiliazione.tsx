@@ -571,7 +571,7 @@ const Affiliazione = () => {
     if (!applicantEmail) {
       addError(1, "Inserisci l'email del referente.");
     } else if (!isValidEmail(applicantEmail)) {
-      addError(1, "L'email del referente non e valida.");
+      addError(1, "L'email del referente non è valida.");
     }
     if (!applicantPhone) addError(1, "Inserisci il telefono del referente.");
 
@@ -585,7 +585,7 @@ const Affiliazione = () => {
       if (!email) {
         addError(2, `Compila l'email del ruolo ${role.label}.`);
       } else if (!isValidEmail(email)) {
-        addError(2, `L'email del ruolo ${role.label} non e valida.`);
+        addError(2, `L'email del ruolo ${role.label} non è valida.`);
       }
     });
 
@@ -1198,7 +1198,7 @@ const Affiliazione = () => {
                   </p>
                   {!paymentEnabled ? (
                     <p className="mt-3 max-w-md text-sm font-medium text-slate-300">
-                      La segreteria confermera importo e modalita prima del saldo.
+                      La segreteria confermerà importo e modalità prima del saldo.
                     </p>
                   ) : null}
                 </div>

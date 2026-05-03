@@ -153,7 +153,7 @@ const AccountingDocumentPreviewModal = <TDocument extends AccountingPreviewDocum
                     Preview inline non disponibile
                   </p>
                   <p className="max-w-lg text-sm font-medium leading-6 text-neutral-500">
-                    Questo formato non puo essere mostrato dentro il workspace. Aprilo in una
+                    Questo formato non può essere mostrato dentro il workspace. Aprilo in una
                     nuova scheda o scaricalo.
                   </p>
                 </div>

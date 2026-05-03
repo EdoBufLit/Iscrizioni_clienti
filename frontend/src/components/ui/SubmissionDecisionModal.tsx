@@ -49,7 +49,7 @@ const SubmissionDecisionModal = ({
             <textarea
               className="mt-2 min-h-[120px] w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-800 outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/10"
               value={reason}
-              placeholder="Es. posti esauriti, disponibilita terminata, dati non sufficienti."
+              placeholder="Es. posti esauriti, disponibilità terminata, dati non sufficienti."
               onChange={(event) => {
                 setReason(event.target.value);
                 if (localError) {
@@ -65,7 +65,7 @@ const SubmissionDecisionModal = ({
             Messaggio WhatsApp personalizzato (opzionale)
           </label>
           <p className="mt-2 text-sm leading-6 text-neutral-500">
-            Se lo lasci vuoto verra usato il template configurato del form. Puoi inserire testo libero oppure placeholder come
+            Se lo lasci vuoto verrà usato il template configurato del form. Puoi inserire testo libero oppure placeholder come
             {" "}
             <code>{"{{nome_contatto}}"}</code>, <code>{"{{nome_associazione}}"}</code>, <code>{"{{slot_prenotazione}}"}</code>,
             {" "}
@@ -101,7 +101,7 @@ const SubmissionDecisionModal = ({
             const trimmedReason = reason.trim();
             const trimmedMessage = whatsappMessage.trim();
             if (mode === "rejected" && !trimmedReason) {
-              setLocalError("Il motivo del rigetto e obbligatorio.");
+              setLocalError("Il motivo del rigetto ? obbligatorio.");
               return;
             }
             onConfirm({

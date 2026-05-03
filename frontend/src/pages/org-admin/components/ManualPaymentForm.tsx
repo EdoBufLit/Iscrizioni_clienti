@@ -75,7 +75,7 @@ const ManualPaymentForm = memo(function ManualPaymentForm({
 
       <div className="mt-4 rounded-lg border border-neutral-100 bg-neutral-50 px-4 py-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-          Modalita iscrizione selezionata
+          Modalità iscrizione selezionata
         </p>
         <p className="text-sm font-medium text-neutral-800">{paymentMethodLabel}</p>
       </div>

@@ -822,7 +822,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="city" className="block text-xs font-medium text-neutral-600">
-                    Citta
+                    Città
                   </label>
                   <input
                     id="city"
@@ -883,7 +883,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                       Numerazione tessere
                     </p>
                     <p className="mt-1 text-sm text-neutral-600">
-                      Default iniziale: Condivisa ASSONAM. Il Super Admin puo modificarla prima del primo uso reale.
+                      Default iniziale: Condivisa ASSONAM. Il Super Admin può modificarla prima del primo uso reale.
                     </p>
                   </div>
                   <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
@@ -927,7 +927,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                   </label>
                 </div>
                 <p className="mt-3 text-xs text-neutral-500">
-                  Le tessere gia emesse non verranno mai rinumerate. Questa impostazione controlla solo le future assegnazioni.
+                  Le tessere già emesse non verranno mai rinumerate. Questa impostazione controlla solo le future assegnazioni.
                 </p>
               </div>
 
@@ -1227,7 +1227,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                                   title={
                                     batch.deletable
                                       ? "Elimina lotto"
-                                      : "Impossibile eliminare: esistono tessere gia assegnate"
+                                      : "Impossibile eliminare: esistono tessere già assegnate"
                                   }
                                 >
                                   Elimina
@@ -1358,7 +1358,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                       Numerazione tessere
                     </p>
                     <p className="mt-1 text-sm text-neutral-600">
-                      Configurazione visibile solo al Super Admin. Le tessere gia emesse non verranno modificate.
+                      Configurazione visibile solo al Super Admin. Le tessere già emesse non verranno modificate.
                     </p>
                   </div>
                   {loadingNumbering ? (
@@ -1463,13 +1463,13 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                         <p className="text-sm font-semibold text-amber-800">Attenzione</p>
                         <p className="mt-1 text-sm leading-6 text-amber-700">
                           {numberingConfig?.warning_message ??
-                            "Questa modifica influira solo sulle future tessere. Le tessere gia esistenti non verranno modificate."}
+                            "Questa modifica influirà solo sulle future tessere. Le tessere già esistenti non verranno modificate."}
                         </p>
                       </div>
                     )}
 
                     <p className="mt-4 text-xs text-neutral-500">
-                      Le tessere gia emesse non verranno modificate. I cambiamenti post-storico valgono solo per le future assegnazioni.
+                      Le tessere già emesse non verranno modificate. I cambiamenti post-storico valgono solo per le future assegnazioni.
                     </p>
                   </>
                 )}
@@ -1569,7 +1569,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                     </label>
                     <p className="mt-1 text-xs text-neutral-500">
                       Se attivo, nella pagina pubblica di iscrizione compare un avviso evidente che indica che
-                      l&apos;iscrizione e consentita solo ai maggiori di 18 anni.
+                      l&apos;iscrizione è consentita solo ai maggiori di 18 anni.
                     </p>
                   </div>
                 </div>
@@ -1591,7 +1591,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                       Abilita tipi tessera personalizzati
                     </label>
                     <p className="mt-1 text-xs text-neutral-500">
-                      Se attivo, l&apos;associazione puÃ² usare tessera annuale e temporanea. Se disattivo, resta tutto annuale come oggi.
+                      Se attivo, l&apos;associazione può usare tessera annuale e temporanea. Se disattivo, resta tutto annuale come oggi.
                     </p>
                   </div>
                 </div>
@@ -1919,7 +1919,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                     title={
                       editingBatch.range_editable
                         ? undefined
-                        : "Non modificabile perche esistono assegnazioni"
+                        : "Non modificabile perché esistono assegnazioni"
                     }
                     disabled={!editingBatch.range_editable}
                     className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-100"
@@ -1955,13 +1955,13 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                     <p className="mt-1 text-xs text-neutral-500">
                       {editingBatch.range_editable
                         ? "Puoi modificare il range solo per lotti senza assegnazioni."
-                        : "Non modificabile perche esistono assegnazioni."}
+                        : "Non modificabile perché esistono assegnazioni."}
                     </p>
                   </div>
                   {!editingBatch.range_editable && (
                     <span
                       className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700"
-                      title="Non modificabile perche esistono assegnazioni"
+                      title="Non modificabile perché esistono assegnazioni"
                     >
                       Bloccato
                     </span>
@@ -1976,7 +1976,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                       title={
                         editingBatch.range_editable
                           ? undefined
-                          : "Non modificabile perche esistono assegnazioni"
+                          : "Non modificabile perché esistono assegnazioni"
                       }
                       disabled={!editingBatch.range_editable}
                       className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-100"
@@ -1996,7 +1996,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                       title={
                         editingBatch.range_editable
                           ? undefined
-                          : "Non modificabile perche esistono assegnazioni"
+                          : "Non modificabile perché esistono assegnazioni"
                       }
                       disabled={!editingBatch.range_editable}
                       className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-100"
@@ -2059,7 +2059,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
               <span className="font-semibold tabular-nums">
                 {deleteBatchTarget.start_no} - {deleteBatchTarget.end_no}
               </span>
-              . Procedi solo se il lotto non contiene tessere gia assegnate.
+              . Procedi solo se il lotto non contiene tessere già assegnate.
             </p>
 
             {batchActionError && (
@@ -2124,8 +2124,8 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
         title="Conferma modifica numerazione"
         description={
           numberingConfig?.is_sensitive
-            ? "Questa organizzazione ha gia storico o lotti usati. Il cambio influira solo sulle future tessere."
-            : "La configurazione e ancora libera. Conferma il cambio della modalita di numerazione."
+            ? "Questa organizzazione ha già storico o lotti usati. Il cambio influirà solo sulle future tessere."
+            : "La configurazione è ancora libera. Conferma il cambio della modalità di numerazione."
         }
         confirmLabel="Conferma modifica"
         tone={numberingConfig?.is_sensitive ? "danger" : "brand"}

@@ -10,6 +10,7 @@ import {
   type OrgAdminReferralSummary,
 } from "../../lib/api";
 import { referralInviteStatusMeta } from "../../lib/statusLabels";
+import { EMPTY_STATE_COPY } from "../../lib/statusLabels";
 import { useToast } from "../../components/ui/ToastProvider";
 import { useOrgAdmin } from "./OrgAdminLayout";
 
@@ -86,6 +87,14 @@ const OrgAdminInvites = () => {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState("");
   const [inviteSuccess, setInviteSuccess] = useState("");
+  const hasFilters = Boolean(query.trim() || statusFilter);
+
+  const resetFilters = () => {
+    setQuery("");
+    setDebouncedQuery("");
+    setStatusFilter("");
+    setPage(1);
+  };
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -283,8 +292,8 @@ const OrgAdminInvites = () => {
       </div>
 
       <div className="surface mt-6 overflow-hidden">
-        <div className="flex flex-col gap-2 border-b border-neutral-200 bg-white/70 px-4 py-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col gap-3 border-b border-neutral-200 bg-white/70 px-4 py-3 md:flex-row md:items-center md:justify-between">
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] md:flex md:flex-wrap md:items-center">
             <input
               className="rounded-md border border-neutral-200 px-3 py-2 text-sm"
               value={query}
@@ -308,6 +317,15 @@ const OrgAdminInvites = () => {
                 </option>
               ))}
             </select>
+            {hasFilters ? (
+              <button
+                type="button"
+                className="btn-ghost px-3 py-2 text-sm"
+                onClick={resetFilters}
+              >
+                Reset filtri
+              </button>
+            ) : null}
           </div>
           <button
             type="button"
@@ -321,7 +339,8 @@ const OrgAdminInvites = () => {
         {error ? (
           <div className="px-4 py-4 text-sm text-red-700">{error}</div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-neutral-200 bg-white/60">
                 <tr>
@@ -349,7 +368,7 @@ const OrgAdminInvites = () => {
                 ) : items.length === 0 ? (
                   <tr>
                     <td className="px-6 py-12 text-center text-sm text-slate-500 bg-slate-50 border-dashed ring-1 ring-inset ring-slate-200/60 rounded-[1.25rem] block m-4" colSpan={4}>
-                      Nessun invito registrato.
+                      {hasFilters ? EMPTY_STATE_COPY.filteredResults.title : EMPTY_STATE_COPY.invites.title}. {hasFilters ? EMPTY_STATE_COPY.filteredResults.description : EMPTY_STATE_COPY.invites.description}
                     </td>
                   </tr>
                 ) : (
@@ -408,6 +427,78 @@ const OrgAdminInvites = () => {
               </tbody>
             </table>
           </div>
+          <div className="divide-y divide-neutral-200/70 md:hidden">
+            {loading ? (
+              <div className="px-4 py-8 text-center text-sm text-neutral-500" role="status">
+                Caricamento inviti...
+              </div>
+            ) : items.length === 0 ? (
+              <div className="px-4 py-8 text-center">
+                <p className="text-sm font-semibold text-neutral-800">
+                  {hasFilters ? EMPTY_STATE_COPY.filteredResults.title : EMPTY_STATE_COPY.invites.title}
+                </p>
+                <p className="mt-1 text-sm text-neutral-500">
+                  {hasFilters ? EMPTY_STATE_COPY.filteredResults.description : EMPTY_STATE_COPY.invites.description}
+                </p>
+              </div>
+            ) : (
+              items.map((item) => {
+                const statusMeta =
+                  referralInviteStatusMeta[item.invite_status] ?? referralInviteStatusMeta.invited;
+                return (
+                  <article
+                    key={item.id}
+                    className={`p-4 ${selectedInviteId === item.id ? "bg-brand/[0.06]" : "bg-white/40"}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="truncate text-sm font-semibold text-neutral-900">
+                          {item.organization_name || "Associazione senza nome"}
+                        </h3>
+                        <p className="mt-1 truncate text-xs text-neutral-500">{item.applicant_email || "-"}</p>
+                      </div>
+                      <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium ${statusMeta.tone}`}>
+                        {statusMeta.label}
+                      </span>
+                    </div>
+                    <dl className="mt-4 grid gap-3 text-xs">
+                      <div>
+                        <dt className="font-semibold uppercase tracking-[0.12em] text-neutral-400">Data invio</dt>
+                        <dd className="mt-1 text-neutral-800">{formatDateTime(item.created_at)}</dd>
+                      </div>
+                      <div>
+                        <dt className="font-semibold uppercase tracking-[0.12em] text-neutral-400">Prossimo passo</dt>
+                        <dd className="mt-1 text-neutral-800">{statusMeta.hint}</dd>
+                      </div>
+                    </dl>
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        className="btn-ghost px-3 py-2 text-sm"
+                        onClick={() => setSelectedInviteId(item.id)}
+                      >
+                        Apri dettaglio
+                      </button>
+                      {item.wheel_enabled ? (
+                        <button
+                          type="button"
+                          className="btn-primary px-3 py-2 text-sm"
+                          onClick={() => {
+                            setSelectedInviteId(item.id);
+                            const panel = document.getElementById("invite-wheel-panel");
+                            panel?.scrollIntoView({ behavior: "smooth", block: "center" });
+                          }}
+                        >
+                          Apri ruota
+                        </button>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })
+            )}
+          </div>
+          </>
         )}
 
         <div className="flex items-center justify-between border-t border-neutral-200 px-4 py-3 text-sm text-neutral-600">
@@ -434,7 +525,7 @@ const OrgAdminInvites = () => {
       <div id="invite-wheel-panel" className="surface mt-6 p-6">
         {!selectedInvite ? (
           <p className="text-sm text-neutral-500">
-            Seleziona un invito per vedere dettagli e disponibilita ruota.
+            Seleziona un invito per vedere dettagli e disponibilità ruota.
           </p>
         ) : (
           <div className="space-y-4">
@@ -477,7 +568,7 @@ const OrgAdminInvites = () => {
                     Ruota premi disponibile
                   </p>
                   <p className="text-sm text-neutral-600">
-                    Questa pratica e approvata dal super admin: puoi procedere con la ruota.
+                    Questa pratica è approvata dal super admin: puoi procedere con la ruota.
                   </p>
                   <button
                     type="button"

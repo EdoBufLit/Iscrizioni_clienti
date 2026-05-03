@@ -837,7 +837,7 @@ def _invite_org_admin(
         subject="Affiliazione approvata - accesso amministratore",
         payload=build_email_payload(
             text_body=(
-                f"La tua richiesta per {organization_name} e stata approvata.\n"
+                f"La tua richiesta per {organization_name} è stata approvata.\n"
                 f"Accedi all'area amministratore: {invite_url}"
             ),
             meta={"admin_id": admin.id, "org_id": admin.org_id},
@@ -904,7 +904,7 @@ def _provision_organization_and_admin(
     if existing_admin.role == AdminRole.SUPER_ADMIN:
         raise HTTPException(
             status_code=409,
-            detail="Email richiedente gia associata a un super admin.",
+            detail="Email richiedente già associata a un super admin.",
         )
 
     if existing_admin.deleted_at is not None:
@@ -913,7 +913,7 @@ def _provision_organization_and_admin(
     if existing_admin.org_id not in {None, organization.id} and existing_admin.is_active:
         raise HTTPException(
             status_code=409,
-            detail="Email richiedente gia associata a un'altra organizzazione.",
+            detail="Email richiedente già associata a un'altra organizzazione.",
         )
 
     existing_admin.org_id = organization.id
@@ -1234,7 +1234,7 @@ def patch_affiliation_draft(
     }:
         raise HTTPException(
             status_code=409,
-            detail="La bozza non e modificabile nello stato corrente.",
+            detail="La bozza non ? modificabile nello stato corrente.",
         )
 
     changed_fields = _apply_patch_to_application(application, body)
@@ -1264,7 +1264,7 @@ def patch_affiliation_draft(
             raise HTTPException(
                 status_code=409,
                 detail={
-                    "message": "Esiste gia una pratica in corso per questi dati.",
+                    "message": "Esiste già una pratica in corso per questi dati.",
                     "resume_url": f"/affiliazione?token={existing_application.public_token}",
                     "public_token": existing_application.public_token,
                 },
@@ -1549,7 +1549,7 @@ def submit_affiliation_draft(
             return _build_affiliation_submit_response(application)
         raise HTTPException(
             status_code=409,
-            detail="La richiesta non puo essere inviata nello stato corrente.",
+            detail="La richiesta non può essere inviata nello stato corrente.",
         )
 
     validation_issues = _submit_validation_issues(application)
@@ -1972,7 +1972,7 @@ def review_affiliation_document(
     if normalized_status == AffiliationDocumentStatus.REJECTED.value and not notes:
         raise HTTPException(
             status_code=400,
-            detail="La nota e obbligatoria quando un documento viene rifiutato.",
+            detail="La nota ? obbligatoria quando un documento viene rifiutato.",
         )
 
     document.status = normalized_status
@@ -2310,7 +2310,7 @@ def delete_affiliation_draft(
     if application.submitted_at is not None:
         raise HTTPException(
             status_code=409,
-            detail="La pratica risulta gia inviata e non puo essere eliminata.",
+            detail="La pratica risulta già inviata e non può essere eliminata.",
         )
 
     db.delete(application)

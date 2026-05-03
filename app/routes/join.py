@@ -78,7 +78,7 @@ def _normalize_payment_method(
         if required:
             raise HTTPException(
                 status_code=400,
-                detail="Modalita di pagamento obbligatoria. Seleziona CASH o BONIFICO.",
+                detail="Modalità di pagamento obbligatoria. Seleziona CASH o BONIFICO.",
             )
         return None
 
@@ -87,14 +87,14 @@ def _normalize_payment_method(
         if required:
             raise HTTPException(
                 status_code=400,
-                detail="Modalita di pagamento obbligatoria. Seleziona CASH o BONIFICO.",
+                detail="Modalità di pagamento obbligatoria. Seleziona CASH o BONIFICO.",
             )
         return None
 
     if normalized not in _ALLOWED_PAYMENT_METHODS:
         raise HTTPException(
             status_code=400,
-            detail="Modalita di pagamento non valida. Valori ammessi: CASH, BONIFICO.",
+            detail="Modalità di pagamento non valida. Valori ammessi: CASH, BONIFICO.",
         )
     return normalized
 
@@ -438,7 +438,7 @@ def api_join_start(
     ):
         raise HTTPException(
             status_code=400,
-            detail="La tessera temporanea non e disponibile per questa associazione.",
+            detail="La tessera temporanea non è disponibile per questa associazione.",
         )
     if organization_requires_membership_payment(org):
         raise HTTPException(
@@ -745,7 +745,7 @@ async def api_join_submit_multipart(
     ):
         raise HTTPException(
             status_code=400,
-            detail="La tessera temporanea non e disponibile per questa associazione.",
+            detail="La tessera temporanea non è disponibile per questa associazione.",
         )
     if organization_requires_membership_payment(org):
         raise HTTPException(

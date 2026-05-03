@@ -77,7 +77,7 @@ def _build_recipient_name(member: Member) -> str | None:
 def normalize_recipient_mode(value: str | None) -> str:
     normalized = _normalize_text(value)
     if normalized not in ALLOWED_RECIPIENT_MODES:
-        raise HTTPException(status_code=422, detail="Modalita destinatari non valida.")
+        raise HTTPException(status_code=422, detail="Modalità destinatari non valida.")
     return normalized
 
 
@@ -266,7 +266,7 @@ def resolve_selected_member_recipients(
     if missing_ids:
         raise HTTPException(
             status_code=422,
-            detail="Uno o piu destinatari selezionati non appartengono alla tua associazione.",
+            detail="Uno o più destinatari selezionati non appartengono alla tua associazione.",
         )
 
     recipients: list[AudienceRecipient] = []

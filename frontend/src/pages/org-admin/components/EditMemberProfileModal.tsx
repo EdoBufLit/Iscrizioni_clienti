@@ -172,7 +172,7 @@ const EditMemberProfileModal = memo(function EditMemberProfileModal({
 
   const liveFiscalCodeError =
     form.fiscal_code.trim() && !fiscalCodeValidation.isFormallyValid
-      ? "Il codice fiscale non e valido. Verifica formato e checksum."
+      ? "Il codice fiscale non ? valido. Verifica formato e checksum."
       : "";
 
   const updateField = (field: keyof FormState, value: string) => {
@@ -261,7 +261,7 @@ const EditMemberProfileModal = memo(function EditMemberProfileModal({
       open={open}
       onClose={onClose}
       title="Modifica anagrafica socio"
-      description="Aggiorna i dati principali del socio. Le modifiche restano tracciate nello storico attivita."
+      description="Aggiorna i dati principali del socio. Le modifiche restano tracciate nello storico attività."
       sizeClassName="max-w-4xl"
       contentClassName="rounded-[28px] border border-neutral-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,246,242,0.98))] p-6 shadow-[0_24px_80px_rgba(15,23,42,0.18)]"
     >

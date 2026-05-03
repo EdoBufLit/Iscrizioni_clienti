@@ -687,7 +687,7 @@ export function GrapesEmailBuilder({
 
         <aside className="builder-rail builder-rail--right">
           <div className="builder-properties-heading">
-            <p className="builder-selection-card__eyebrow">Proprieta blocco</p>
+            <p className="builder-selection-card__eyebrow">Proprietà blocco</p>
             <p className="builder-selection-card__title">
               {selectedElement?.title || selectedSectionLabel || "Seleziona un elemento"}
             </p>
@@ -877,7 +877,7 @@ export function GrapesEmailBuilder({
             </div>
           ) : (
             <div className="builder-empty-state">
-              Seleziona un elemento nel canvas. Qui compariranno solo i controlli utili per modificarlo.
+              Seleziona un elemento nel canvas. Qui comparirànno solo i controlli utili per modificarlo.
             </div>
           )}
 
@@ -931,7 +931,7 @@ export function GrapesEmailBuilder({
 
           <details className="builder-advanced-panel">
             <summary>Avanzate</summary>
-            <p>Proprieta tecniche dell'editor. Usale solo per rifiniture non coperte dai controlli rapidi.</p>
+            <p>Proprietà tecniche dell'editor. Usale solo per rifiniture non coperte dai controlli rapidi.</p>
             <div className="builder-style-panel" ref={stylePanelRef} />
           </details>
         </aside>

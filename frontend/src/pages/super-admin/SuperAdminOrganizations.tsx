@@ -11,6 +11,7 @@ import {
 } from "../../lib/api";
 import Skeleton from "../../components/ui/Skeleton";
 import { useToast } from "../../components/ui/ToastProvider";
+import { organizationAffiliationStatusMeta, resolveStatusMeta } from "../../lib/statusLabels";
 import OrganizationManageModal from "./components/OrganizationManageModal";
 import SuperAdminPienissimoIntegrationCard from "./components/SuperAdminPienissimoIntegrationCard";
 import {
@@ -310,7 +311,7 @@ const SuperAdminOrganizations = () => {
         icon="users"
         eyebrow="Governance"
         title="Associazioni"
-        subtitle="Governance completa delle entita affiliate e configurazione lotti card."
+        subtitle="Governance completa delle entit? affiliate e configurazione lotti card."
         actions={
           <SuperAdminActionButton
             tone="primary"
@@ -324,7 +325,7 @@ const SuperAdminOrganizations = () => {
       />
 
       <section className="sa-kpi-grid sa-kpi-grid--six" aria-label="Metriche associazioni">
-        <SuperAdminKpiCard label="Totale associazioni" value={organizationStats.total.toLocaleString("it-IT")} hint="Entita registrate" icon="users" tone="success" />
+        <SuperAdminKpiCard label="Totale associazioni" value={organizationStats.total.toLocaleString("it-IT")} hint="Entità registrate" icon="users" tone="success" />
         <SuperAdminKpiCard label="Attive" value={organizationStats.active.toLocaleString("it-IT")} hint="Associazioni operative" icon="check" tone="success" />
         <SuperAdminKpiCard label="Archiviate" value={organizationStats.archived.toLocaleString("it-IT")} hint="Non operative" icon="documents" tone="muted" />
         <SuperAdminKpiCard label="Iscrizione automatica" value={organizationStats.auto.toLocaleString("it-IT")} hint="Abilitata" icon="send" tone="info" />
@@ -368,7 +369,7 @@ const SuperAdminOrganizations = () => {
                   applySearchImmediately();
                 }
               }}
-              placeholder="Cerca per nome, slug o localita..."
+              placeholder="Cerca per nome, slug o località..."
               className="theme-input w-full pl-11 pr-11"
             />
             {searchInput && (
@@ -537,13 +538,13 @@ const SuperAdminOrganizations = () => {
 
       <SuperAdminTableShell className="sa-orgs-table-shell overflow-hidden">
         <div data-component="superadmin-orgs-table-v2">
-          <div className="overflow-x-auto">
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr>
                   <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Associazione</th>
                   <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Slug</th>
-                  <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Localita</th>
+                  <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Località</th>
                   <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Stato</th>
                   <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Comunicazioni</th>
                   <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Numerazione tessere</th>
@@ -692,12 +693,119 @@ const SuperAdminOrganizations = () => {
               </tbody>
             </table>
           </div>
+          <div className="divide-y divide-neutral-100 md:hidden">
+            {filteredOrgs.length === 0 ? (
+              <div className="px-5 py-10">
+                <SuperAdminEmptyState
+                  title={q ? "Nessuna corrispondenza" : "Database vuoto"}
+                  description="Modifica i filtri o crea una nuova associazione."
+                  action={
+                    <SuperAdminActionButton tone="primary" icon="plus" onClick={() => openModal("create")}>
+                      Nuova associazione
+                    </SuperAdminActionButton>
+                  }
+                />
+              </div>
+            ) : (
+              filteredOrgs.map((org) => {
+                const affiliationMeta = resolveStatusMeta(
+                  organizationAffiliationStatusMeta,
+                  org.affiliation_status,
+                  "Nessuna pratica",
+                );
+                return (
+                  <article key={org.id} className="p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="sa-avatar sa-avatar--lg shrink-0">
+                        {orgInitials(org.club_display_name || org.name)}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="truncate text-sm font-bold text-neutral-900">{org.name}</h3>
+                        <p className="mt-1 text-xs text-neutral-500">
+                          {org.slug} · {org.city || "-"} {org.province ? `(${org.province})` : ""}
+                        </p>
+                      </div>
+                      {org.is_archived || org.deleted_at ? (
+                        <SuperAdminStatusChip tone="muted" dot>Archiviata</SuperAdminStatusChip>
+                      ) : org.is_active ? (
+                        <SuperAdminStatusChip tone="success" dot>Attiva</SuperAdminStatusChip>
+                      ) : (
+                        <SuperAdminStatusChip tone="warning" dot>Sospesa</SuperAdminStatusChip>
+                      )}
+                    </div>
+                    <dl className="mt-4 grid gap-3 text-xs">
+                      <div>
+                        <dt className="font-bold uppercase tracking-[0.14em] text-neutral-400">Numerazione</dt>
+                        <dd className="mt-1 text-neutral-800">
+                          {org.numbering_mode === "dedicated" ? "Dedicata" : "Condivisa"}
+                          {" · "}
+                          {org.card_min ? `${org.card_min}-${org.card_max}` : "Range non impostato"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="font-bold uppercase tracking-[0.14em] text-neutral-400">Affiliazione</dt>
+                        <dd className="mt-1">
+                          <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${affiliationMeta.tone}`}>
+                            {affiliationMeta.label}
+                          </span>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="font-bold uppercase tracking-[0.14em] text-neutral-400">Comunicazioni</dt>
+                        <dd className="mt-1 text-neutral-800">{org.communications_enabled ? "Attive" : "Non attive"}</dd>
+                      </div>
+                    </dl>
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openModal(org.card_min ? "view-batches" : "range", org)}
+                        className="sa-row-action justify-center"
+                      >
+                        <SuperAdminIcon name="cards" className="h-4 w-4" />
+                        Lotti
+                      </button>
+                      {isSuperAdmin ? (
+                        <button
+                          type="button"
+                          onClick={() => openModal("branding", org)}
+                          className="sa-row-action justify-center"
+                        >
+                          <SuperAdminIcon name="settings" className="h-4 w-4" />
+                          Setup
+                        </button>
+                      ) : null}
+                      {isSuperAdmin ? (
+                        <button
+                          type="button"
+                          onClick={() => openIntegrationModal(org)}
+                          className="sa-row-action justify-center"
+                        >
+                          <SuperAdminIcon name="api" className="h-4 w-4" />
+                          API
+                        </button>
+                      ) : null}
+                      {isSuperAdmin ? (
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(org)}
+                          className="sa-row-action sa-row-action--danger justify-center"
+                        >
+                          <SuperAdminIcon name="trash" className="h-4 w-4" />
+                          Archivia
+                        </button>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })
+            )}
+          </div>
         </div>
       </SuperAdminTableShell>
 
       <SuperAdminTableShell
         title="Registro associazioni"
-        subtitle={`${filteredOrgs.length.toLocaleString("it-IT")} righe visibili su ${total.toLocaleString("it-IT")} entita`}
+        subtitle={`${filteredOrgs.length.toLocaleString("it-IT")} righe visibili su ${total.toLocaleString("it-IT")} entit?`}
         action={isFetching ? <SuperAdminStatusChip tone="info" dot>Aggiornamento</SuperAdminStatusChip> : null}
         className="hidden"
       >

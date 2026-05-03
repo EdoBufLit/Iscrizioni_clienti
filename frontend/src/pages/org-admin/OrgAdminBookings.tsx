@@ -26,6 +26,7 @@ import {
   type AssociationRoomTable,
 } from "../../lib/api";
 import { applySeo } from "../../lib/seo";
+import { DESTRUCTIVE_ACTION_COPY, formatActionObject } from "../../lib/statusLabels";
 import ConfirmModal from "../../components/ui/ConfirmModal";
 import ModalShell from "../../components/ui/ModalShell";
 import Skeleton from "../../components/ui/Skeleton";
@@ -241,7 +242,7 @@ function defaultBookingDecisionMessage(status: "confirmed" | "rejected") {
   if (status === "confirmed") {
     return "Ciao {{nome_contatto}}, la tua prenotazione per {{nome_associazione}} e confermata. Dettagli: {{riepilogo_prenotazione}}.";
   }
-  return "Ciao {{nome_contatto}}, la tua prenotazione per {{nome_associazione}} non puo essere confermata. {{motivo_rigetto}}";
+  return "Ciao {{nome_contatto}}, la tua prenotazione per {{nome_associazione}} non può essere confermata. {{motivo_rigetto}}";
 }
 
 function requestStatusMeta(status: string | null | undefined) {
@@ -371,6 +372,7 @@ export default function OrgAdminBookings() {
   const [assignmentTableId, setAssignmentTableId] = useState<number | "">("");
   const [assignmentTables, setAssignmentTables] = useState<AssociationRoomTable[]>([]);
   const [saving, setSaving] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<null | { type: "room" | "table"; id: number; name: string }>(null);
   
   // Manual booking creation
   const [isCreatingManual, setIsCreatingManual] = useState(false);
@@ -677,10 +679,16 @@ export default function OrgAdminBookings() {
       setRoomDraft(emptyRoomDraft());
       return;
     }
+    setDeleteTarget({ type: "room", id: roomDraft.id, name: roomDraft.name });
+  }
+
+  async function confirmRoomDelete() {
+    if (!deleteTarget || deleteTarget.type !== "room") return;
     setSaving("room-delete");
     try {
-      await deleteOrgAdminRoom(roomDraft.id);
+      await deleteOrgAdminRoom(deleteTarget.id);
       setRoomDraft(emptyRoomDraft());
+      setDeleteTarget(null);
       await refreshRooms(null);
       showToast({ tone: "success", title: "Sala eliminata", message: "La sala e i suoi tavoli sono stati rimossi." });
     } catch (err) {
@@ -727,15 +735,21 @@ export default function OrgAdminBookings() {
       setTableDraft(emptyTableDraft(selectedRoomId));
       return;
     }
+    setDeleteTarget({ type: "table", id: tableDraft.id, name: tableDraft.name });
+  }
+
+  async function confirmTableDelete() {
+    if (!deleteTarget || deleteTarget.type !== "table") return;
     setSaving("table-delete");
     try {
-      await deleteOrgAdminRoomTable(tableDraft.id);
+      await deleteOrgAdminRoomTable(deleteTarget.id);
       setTableDraft(emptyTableDraft(selectedRoomId));
+      setDeleteTarget(null);
       if (selectedRoomId) {
         await loadRoomState(selectedRoomId);
         await refreshRooms(selectedRoomId);
       }
-      showToast({ tone: "success", title: "Tavolo eliminato", message: "Il tavolo e stato rimosso dalla sala." });
+      showToast({ tone: "success", title: "Tavolo eliminato", message: "Il tavolo è stato rimosso dalla sala." });
     } catch (err) {
       showToast({
         tone: "error",
@@ -782,7 +796,7 @@ export default function OrgAdminBookings() {
       setSelectedMapTableId(null);
       await loadBookings();
       if (selectedRoomId) await loadRoomState(selectedRoomId);
-      showToast({ tone: "success", title: "Assegnazione rimossa", message: "La prenotazione non ha piu sala o tavolo." });
+      showToast({ tone: "success", title: "Assegnazione rimossa", message: "La prenotazione non ha più sala o tavolo." });
     } catch (err) {
       showToast({
         tone: "error",
@@ -817,11 +831,11 @@ export default function OrgAdminBookings() {
       setRequestConfirmOpen(false);
       setRequestRejectOpen(false);
       setRequestActionState("success");
-      let message = "Dettaglio prenotazione e stato richiesta aggiornati.";
+      let message = "Dettaglio prenotazione e stato della richiesta aggiornati.";
       if (response.whatsapp_result?.sent) {
         message = "Dettaglio prenotazione aggiornato e messaggio WhatsApp inviato al socio.";
       } else if (response.whatsapp_result?.error) {
-        message = "Dettaglio prenotazione aggiornato, ma il messaggio WhatsApp non e partito.";
+        message = "Dettaglio prenotazione aggiornato, ma il messaggio WhatsApp non ? partito.";
       } else if (response.whatsapp_result?.reason === "missing_phone") {
         message = "Dettaglio prenotazione aggiornato. Nessun WhatsApp inviato: numero non disponibile.";
       }
@@ -1088,7 +1102,7 @@ export default function OrgAdminBookings() {
         {section === "tables" && (
           <ManagementShell
             title="Tavoli"
-            subtitle="Capienza, forma e stato operativo"
+                    subtitle="Capienza, forma e stato operativo"
             main={
               <div className="space-y-4">
                 <Field label="Sala">
@@ -1351,7 +1365,7 @@ export default function OrgAdminBookings() {
         open={requestConfirmOpen === "confirmed"}
         mode="confirmed"
         title="Confermare la richiesta collegata?"
-        description="La richiesta passera a confermata e la prenotazione verra riallineata. Puoi lasciare il messaggio vuoto per usare il template configurato del form oppure personalizzarlo per questa singola risposta."
+        description="La richiesta passerà a confermata e la prenotazione verrà riallineata. Puoi lasciare il messaggio vuoto per usare il template configurato del form oppure personalizzarlo per questa singola risposta."
         confirmLabel="Conferma richiesta"
         confirmState={requestActionState}
         defaultMessage={defaultBookingDecisionMessage("confirmed")}
@@ -1366,7 +1380,7 @@ export default function OrgAdminBookings() {
       <ConfirmModal
         open={requestConfirmOpen === "pending"}
         title="Riportare la richiesta collegata in attesa?"
-        description="La review verra rimossa e la richiesta tornera nello stato pending."
+        description="La review verrà rimossa e la richiesta tornerà nello stato pending."
         confirmLabel="Riporta a pending"
         confirmState={requestActionState}
         onClose={() => {
@@ -1391,6 +1405,38 @@ export default function OrgAdminBookings() {
           setRequestActionError(null);
         }}
         onConfirm={(values) => void handleLinkedRequestDecision("rejected", values.reason, values.whatsappMessage)}
+      />
+      <ConfirmModal
+        open={deleteTarget?.type === "room"}
+        title={DESTRUCTIVE_ACTION_COPY.deleteRoom.title}
+        description="La sala verrà rimossa dall'area prenotazioni insieme ai tavoli collegati."
+        objectName={formatActionObject(deleteTarget?.name, "Sala selezionata")}
+        impact="Controlla di non avere prenotazioni operative collegate prima di procedere."
+        confirmLabel={DESTRUCTIVE_ACTION_COPY.deleteRoom.confirmLabel}
+        tone="danger"
+        confirmState={saving === "room-delete" ? "loading" : "idle"}
+        requireCheckbox
+        checkboxLabel="Confermo l'eliminazione della sala e dei tavoli collegati"
+        onClose={() => {
+          if (saving === "room-delete") return;
+          setDeleteTarget(null);
+        }}
+        onConfirm={() => void confirmRoomDelete()}
+      />
+      <ConfirmModal
+        open={deleteTarget?.type === "table"}
+        title={DESTRUCTIVE_ACTION_COPY.deleteTable.title}
+        description="Il tavolo verrà rimosso dalla sala e non sarà più selezionabile sulla mappa."
+        objectName={formatActionObject(deleteTarget?.name, "Tavolo selezionato")}
+        impact="Le prenotazioni già salvate manterranno lo storico, ma il tavolo non sarà più assegnabile."
+        confirmLabel={DESTRUCTIVE_ACTION_COPY.deleteTable.confirmLabel}
+        tone="danger"
+        confirmState={saving === "table-delete" ? "loading" : "idle"}
+        onClose={() => {
+          if (saving === "table-delete") return;
+          setDeleteTarget(null);
+        }}
+        onConfirm={() => void confirmTableDelete()}
       />
     </div>
   );

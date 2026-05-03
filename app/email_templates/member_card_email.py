@@ -153,7 +153,7 @@ def build_member_card_email(
     # ── Plain text ─────────────────────────────────────────────────────────────
     text_body = (
         "Iscrizione confermata e tessera abilitata.\n"
-        "La tua tessera digitale e pronta.\n\n"
+        "La tua tessera digitale ? pronta.\n\n"
         f"Club: {club_display_name}\n"
         f"Socio: {member_full_name}\n"
         f"Associazione: {association_label or organization_name}\n"
@@ -174,7 +174,7 @@ def build_member_card_email(
         + (f"Apri tessera: {card_view_url}\n" if card_view_url else "")
         + (f"Scarica lo statuto: {statute_url}\n" if statute_url else "")
         + f"Verifica tessera: {verification_url}\n"
-        + "Nota: se sei su iPhone, al momento Google Wallet non e disponibile.\n"
+        + "Nota: se sei su iPhone, al momento Google Wallet non è disponibile.\n"
     )
 
     # ── HTML body ─────────────────────────────────────────────────────────────

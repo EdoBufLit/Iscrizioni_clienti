@@ -232,7 +232,7 @@ export async function ingestPienissimoMember(
 
   if (res.status === 409) {
     const data = await res.json().catch(() => null);
-    throw new Error(data?.message ?? data?.detail ?? "Socio gia presente.");
+    throw new Error(data?.message ?? data?.detail ?? "Socio già presente.");
   }
   if (res.status === 402 || res.status === 403) {
     throw new Error("Servizio tessera non attivo per questa associazione.");

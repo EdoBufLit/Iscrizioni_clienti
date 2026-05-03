@@ -90,7 +90,7 @@ function buildAutomationSummary(
           : "al contatto che compila il form";
   const phoneCopy =
     automation.phone_source === "member_phone"
-      ? "usando il telefono gia salvato"
+      ? "usando il telefono già salvato"
       : automation.phone_source === "custom"
         ? `usando il numero ${automation.custom_phone || "manuale"}`
         : `usando il campo ${automation.phone_field_key || "Telefono"}`;
@@ -339,7 +339,7 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
       setActiveStep("template");
       showToast({
         title: draft.id ? "Automazione aggiornata" : "Automazione creata",
-        message: "La regola WhatsApp e stata salvata.",
+        message: "La regola WhatsApp è stata salvata.",
         tone: "success",
       });
     } catch (err) {
@@ -393,7 +393,7 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
       setSettings(response.settings);
       showToast({
         title: "Reminder aggiornato",
-        message: "Il promemoria WhatsApp verra inviato automaticamente prima dell'evento.",
+        message: "Il promemoria WhatsApp verrà inviato automaticamente prima dell'evento.",
         tone: "success",
       });
     } catch (err) {
@@ -419,7 +419,7 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
       }
       showToast({
         title: "Automazione eliminata",
-        message: "La regola WhatsApp e stata rimossa.",
+        message: "La regola WhatsApp è stata rimossa.",
         tone: "success",
       });
     } catch (err) {
@@ -839,7 +839,7 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
       <ConfirmModal
         open={Boolean(deleteAutomationTarget)}
         title="Eliminare questa regola WhatsApp?"
-        description={`La regola "${deleteAutomationTarget?.name || "selezionata"}" non inviera piu messaggi automatici.`}
+        description={`La regola "${deleteAutomationTarget?.name || "selezionata"}" non invierà più messaggi automatici.`}
         confirmLabel="Elimina regola"
         tone="danger"
         onClose={() => setDeleteAutomationTarget(null)}

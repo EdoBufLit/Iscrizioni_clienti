@@ -181,7 +181,7 @@ const OrgAdminAccounting = () => {
     if (!document.preview_available || !document.preview_url) {
       showToast({
         title: "Preview non disponibile",
-        message: "Questo file non puo essere mostrato inline. Usa Apri o Scarica.",
+        message: "Questo file non può essere mostrato inline. Usa Apri o Scarica.",
         tone: "info",
       });
       return;
@@ -244,7 +244,7 @@ const OrgAdminAccounting = () => {
       await reloadShareLinks(shareDocument.id);
       showToast({
         title: "Link revocato",
-        message: "La condivisione non e piu valida.",
+        message: "La condivisione non ? più valida.",
         tone: "success",
       });
     } catch (err) {

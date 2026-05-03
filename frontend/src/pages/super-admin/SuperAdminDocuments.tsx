@@ -285,7 +285,7 @@ const SuperAdminDocuments = () => {
         onSelect={(key) => setWorkspace(key as "general" | "accounting")}
         items={[
           { key: "general", label: "Documenti", icon: "documents" },
-          { key: "accounting", label: "Contabilita", icon: "wallet" },
+          { key: "accounting", label: "Contabilità", icon: "wallet" },
         ]}
       />
 
@@ -294,7 +294,7 @@ const SuperAdminDocuments = () => {
         <SuperAdminKpiCard label="Documenti generali" value={docStats.general} hint="Comunicazioni non contabili" icon="documents" tone="info" />
         <SuperAdminKpiCard label="Categorie contabili" value={docStats.accounting} hint="Invii accounting" icon="wallet" tone="warning" />
         <SuperAdminKpiCard label="Invii cumulati" value={docStats.recipients} hint="Destinatari documenti" icon="send" tone="success" />
-        <SuperAdminKpiCard label="Associazioni coperte" value={docStats.covered || totals.total} hint={`${totals.accounting} con contabilita attiva`} icon="users" tone="purple" />
+        <SuperAdminKpiCard label="Associazioni coperte" value={docStats.covered || totals.total} hint={`${totals.accounting} con contabilità attiva`} icon="users" tone="purple" />
       </section>
 
       {/* Header & Workspace Switcher */}

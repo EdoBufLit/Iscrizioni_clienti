@@ -378,7 +378,7 @@ def _build_generic_object_payload(*, member: Member, class_id: str, object_id: s
             },
             {
                 "id": "validity",
-                "header": "Validita",
+                "header": "Validità",
                 "body": validity_label,
             },
             {

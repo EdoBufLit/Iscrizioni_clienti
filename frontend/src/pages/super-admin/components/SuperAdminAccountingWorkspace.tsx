@@ -892,7 +892,7 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
                   </p>
                 ) : documentForm.id ? (
                   <p className="mt-3 text-xs font-semibold text-neutral-500">
-                    Nessun nuovo file selezionato: verra mantenuto quello gia registrato.
+                    Nessun nuovo file selezionato: verrà mantenuto quello già registrato.
                   </p>
                 ) : null}
               </div>

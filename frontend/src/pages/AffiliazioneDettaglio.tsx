@@ -68,7 +68,7 @@ const AffiliazioneDettaglio = () => {
           <div className="surface max-w-2xl p-7">
             <h1 className="text-lg font-semibold text-neutral-900">Associazione non trovata</h1>
             <p className="mt-3 text-sm leading-7 text-neutral-600">
-              L'associazione richiesta non e disponibile oppure il collegamento non e corretto.
+              L'associazione richiesta non è disponibile oppure il collegamento non ? corretto.
             </p>
             <div className="mt-6">
               <Link className="btn-primary" to="/associazioni">

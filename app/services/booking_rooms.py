@@ -326,11 +326,11 @@ def validate_booking_assignment(
 ) -> None:
     if table is not None:
         if not bool(table.is_active):
-            raise HTTPException(status_code=422, detail="Il tavolo selezionato non e attivo.")
+            raise HTTPException(status_code=422, detail="Il tavolo selezionato non è attivo.")
         if bool(table.is_out_of_service):
             raise HTTPException(status_code=422, detail="Il tavolo selezionato e fuori servizio.")
     if room is not None and not bool(room.is_active):
-        raise HTTPException(status_code=422, detail="La sala selezionata non e attiva.")
+        raise HTTPException(status_code=422, detail="La sala selezionata non è attiva.")
     if room is None and table is not None:
         raise HTTPException(status_code=422, detail="Sala non valida per il tavolo selezionato.")
     if table is None:
@@ -356,7 +356,7 @@ def validate_booking_assignment(
         raise HTTPException(
             status_code=409,
             detail=(
-                f"Il tavolo {table.name} e gia assegnato a "
+                f"Il tavolo {table.name} ? già assegnato a "
                 f"{conflict.customer_name} per la stessa fascia."
             ),
         )

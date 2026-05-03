@@ -3,7 +3,7 @@ import { applySeo } from "../lib/seo";
 
 const SERVICES = [
   {
-    title: "Contabilita e rendicontazione",
+    title: "Contabilità e rendicontazione",
     description:
       "Gestione contabile ordinaria e straordinaria per associazioni e realta affiliate.",
     items: [
@@ -53,7 +53,7 @@ const Servizi = () => {
     applySeo({
       title: "Servizi",
       description:
-        "Contabilita, gestione associativa, iscrizioni digitali e supporto documentale per associazioni affiliate ad ASSONAM.",
+        "Contabilità, gestione associativa, iscrizioni digitali e supporto documentale per associazioni affiliate ad ASSONAM.",
       canonicalPath: "/servizi",
     });
   }, []);
@@ -68,8 +68,8 @@ const Servizi = () => {
                 <p className="section-title">Servizi</p>
                 <h1 className="section-heading">Aree operative integrate.</h1>
                 <p className="mt-5 text-base leading-8 text-neutral-600">
-                  Ogni servizio e disegnato per offrire continuita amministrativa e controllo
-                  operativo sulle attivita associative.
+                Ogni servizio è disegnato per offrire continuità amministrativa e controllo
+                  operativo sulle attività associative.
                 </p>
               </div>
               <div className="overflow-hidden rounded-2xl border border-white/50 shadow-premium">

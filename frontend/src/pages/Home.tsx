@@ -39,7 +39,7 @@ const HERO_ENTRIES: HeroEntry[] = [
   },
   {
     id: "account",
-    title: "Ho gia un account",
+    title: "Ho già un account",
     cta: "Area Riservata",
     microcopy: "Accedi come Admin o Socio",
     to: "/area-riservata",
@@ -80,7 +80,7 @@ const FAQ_ITEMS: PublicFaqItem[] = [
   {
     question: "Quanto tempo serve?",
     answer:
-      "La compilazione completa richiede in media 10 minuti se hai gia i documenti pronti.",
+      "La compilazione completa richiede in media 10 minuti se hai già i documenti pronti.",
   },
   {
     question: "Quali documenti servono?",

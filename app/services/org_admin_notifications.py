@@ -224,7 +224,7 @@ def notify_org_admins_about_accounting_document(
     cta_url = f"{frontend_base_url}{href}"
     title = "Nuovo documento contabile disponibile"
     body = (
-        f'Il Super Admin ha caricato il documento "{document.title}" nella sezione Contabilita.'
+        f'Il Super Admin ha caricato il documento "{document.title}" nella sezione Contabilità.'
     )
     notification_type = OrgAdminNotificationType.DOCUMENT_ACCOUNTING
 

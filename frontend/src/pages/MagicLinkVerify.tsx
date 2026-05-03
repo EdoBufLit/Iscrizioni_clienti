@@ -39,7 +39,7 @@ const MagicLinkVerify = () => {
         }
         setErrorMessage("Link non valido: ruolo non specificato.");
       } catch {
-        setErrorMessage("Il link di accesso non e valido o e scaduto.");
+        setErrorMessage("Il link di accesso non ? valido o ? scaduto.");
       }
     };
 

@@ -102,7 +102,7 @@ const FullscreenVideoOverlay = ({
                 {preparing ? "Sto preparando il video..." : "Video non ancora disponibile"}
               </h3>
               <p className="text-sm text-neutral-200">
-                La pratica e stata registrata. Appena il rendering termina, il player viene mostrato qui.
+                La pratica è stata registrata. Appena il rendering termina, il player viene mostrato qui.
               </p>
               {errorText ? (
                 <p className="text-sm text-amber-300">{errorText}</p>

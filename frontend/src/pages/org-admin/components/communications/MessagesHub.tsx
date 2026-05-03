@@ -1401,7 +1401,7 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
       title="Eliminare il modello?"
       description={
         templatePendingDelete
-          ? `Il modello "${templatePendingDelete.name}" verra rimosso definitivamente dalla libreria.`
+          ? `Il modello "${templatePendingDelete.name}" verrà rimosso definitivamente dalla libreria.`
           : ""
       }
       confirmLabel="Elimina modello"
@@ -1530,7 +1530,7 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Library</p>
                 <h3 className="mt-2 text-2xl font-bold tracking-tight text-neutral-900">Modelli salvati</h3>
-                <p className="mt-2 text-sm text-neutral-600">Preview piu ampia, azioni immediate e un wizard piu corto per creare o correggere i modelli.</p>
+                <p className="mt-2 text-sm text-neutral-600">Preview più ampia, azioni immediate e un wizard più corto per creare o correggere i modelli.</p>
               </div>
               <button className="btn-primary" type="button" disabled={communicationsLocked} onClick={() => void openTemplateEditor(null)}>
                 Crea modello
@@ -1769,7 +1769,7 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                 </label>
                 <label className={`${labelClass} md:col-span-2`}>
                   Oggetto email
-                  <input className={inputClass} value={campaignForm.subject} onChange={(event) => setCampaignForm((prev) => ({ ...prev, subject: event.target.value }))} placeholder="Oggetto chiaro e leggibile gia in inbox" />
+                  <input className={inputClass} value={campaignForm.subject} onChange={(event) => setCampaignForm((prev) => ({ ...prev, subject: event.target.value }))} placeholder="Oggetto chiaro e leggibile già in inbox" />
                 </label>
                 <label className={`${labelClass} md:col-span-2`}>
                   Titolo principale
@@ -1957,7 +1957,7 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
             <section className="signup-wizard-card px-6 py-7 md:px-10 md:py-10">
               <div className="grid gap-4 sm:grid-cols-2">
                 <StatChip label="Stimati" value={estimate ?? "-"} hint="Conteggio previsto sul pubblico selezionato." />
-                <StatChip label="Form collegato" value={selectedCampaignLinkedForm?.title || "Nessuno"} hint="La CTA puo aprire questo form." />
+                <StatChip label="Form collegato" value={selectedCampaignLinkedForm?.title || "Nessuno"} hint="La CTA può aprire questo form." />
               </div>
             </section>
           </>
@@ -2309,7 +2309,7 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-neutral-500">Stima invio</p>
                   <div className="mt-4 grid gap-3">
                     <StatChip label="Stimati" value={estimate ?? "-"} hint="Conteggio previsto del pubblico scelto." />
-                    <StatChip label="Form collegato" value={selectedCampaignLinkedForm?.title || "Nessuno"} hint="La CTA puo aprire questo form." />
+                    <StatChip label="Form collegato" value={selectedCampaignLinkedForm?.title || "Nessuno"} hint="La CTA può aprire questo form." />
                   </div>
                 </section>
               ) : null}
@@ -2524,7 +2524,7 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                       <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6d5ef4]">Fondamenta del modello</p>
                       <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">Imposta nome, oggetto e collegamenti principali</h2>
                       <p className="mt-3 text-base leading-7 text-slate-500">
-                        Questo wizard e piu corto della campagna: prima definisci l'ossatura riusabile, poi sistemi i blocchi e chiudi con la review.
+                        Questo wizard ? più corto della campagna: prima definisci l'ossatura riusabile, poi sistemi i blocchi e chiudi con la review.
                       </p>
                     </div>
                     <div className="mt-8 grid gap-x-7 gap-y-8 md:grid-cols-2">
@@ -2727,7 +2727,7 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                               {templateForm.is_system
                                 ? "Template di sistema: lo puoi ispezionare ma non salvare."
                                 : templateForm.is_active
-                                  ? "Modello attivo e pronto per essere riusato nelle campagne."
+                                  ? "Modello attivo ? pronto per essere riusato nelle campagne."
                                   : "Modello archiviato: puoi riattivarlo o duplicarlo."}
                             </p>
                           </div>
@@ -2769,7 +2769,7 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
       <div className="-mx-6 md:-mx-8">
         <EditorHeader
           title={templateForm.id ? templateForm.name || "Modello" : "Nuovo modello"}
-          subtitle="Wizard modelli piu corto: essentials, messaggio e review finale con preview ampia."
+          subtitle="Wizard modelli più corto: essentials, messaggio e review finale con preview ampia."
           badge={templateForm.is_system ? "Sistema" : templateForm.is_active ? "Attivo" : "Archiviato"}
           onBack={() => setScreen({ type: "library" })}
           actions={
@@ -3021,7 +3021,7 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                   linkedFormLabel={selectedTemplateLinkedForm ? `Collegato al form ${selectedTemplateLinkedForm?.title}` : "Nessun form collegato"}
                   previewHtml={templatePreview?.body_html}
                   fallbackText={templateForm.body || "Compila oggetto e contenuto per vedere l'anteprima."}
-                  sidebarNote={<div className="rounded-[1.5rem] border border-neutral-200 bg-[#fbfaf6] p-4"><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-500">Stato modello</p><p className="mt-3 text-sm leading-6 text-neutral-600">{templateForm.is_system ? "Template di sistema: puoi ispezionarlo ma non salvarne modifiche." : templateForm.is_active ? "Modello attivo e pronto per essere riusato nelle campagne." : "Modello archiviato: puoi riattivarlo o duplicarlo."}</p></div>}
+                  sidebarNote={<div className="rounded-[1.5rem] border border-neutral-200 bg-[#fbfaf6] p-4"><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-500">Stato modello</p><p className="mt-3 text-sm leading-6 text-neutral-600">{templateForm.is_system ? "Template di sistema: puoi ispezionarlo ma non salvarne modifiche." : templateForm.is_active ? "Modello attivo ? pronto per essere riusato nelle campagne." : "Modello archiviato: puoi riattivarlo o duplicarlo."}</p></div>}
                 />
               </div>
             ) : null}

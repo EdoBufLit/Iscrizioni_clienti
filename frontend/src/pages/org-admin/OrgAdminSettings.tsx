@@ -592,7 +592,7 @@ const OrgAdminSettings = () => {
           <div>
             <h3 className="text-sm font-semibold text-neutral-900">Impostazioni email associazione</h3>
             <p className="mt-1 text-sm text-neutral-500">
-              Configura il mittente visibile delle comunicazioni associazione. Se la configurazione non e completa, il sistema torna automaticamente al mittente ASSONAM.
+              Configura il mittente visibile delle comunicazioni associazione. Se la configurazione non ? completa, il sistema torna automaticamente al mittente ASSONAM.
             </p>
           </div>
           <div className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">
@@ -639,7 +639,7 @@ const OrgAdminSettings = () => {
               onChange={handleEmailSettingsChange("email_from_name_override")}
             />
             <p className="mt-2 text-xs text-neutral-500">
-              Se lasci vuoto, verra usato il nome dell&apos;associazione.
+              Se lasci vuoto, verrà usato il nome dell&apos;associazione.
             </p>
           </div>
 
@@ -657,7 +657,7 @@ const OrgAdminSettings = () => {
               onChange={handleEmailSettingsChange("reply_to_email")}
             />
             <p className="mt-2 text-xs text-neutral-500">
-              Opzionale. Se valorizzato, verra usato come Reply-To in association mode.
+              Opzionale. Se valorizzato, verrà usato come Reply-To in association mode.
             </p>
           </div>
         </div>

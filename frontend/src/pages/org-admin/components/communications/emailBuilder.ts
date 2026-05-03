@@ -206,12 +206,12 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
   {
     id: "assoc-booking-confirmation",
     label: "Conferma prenotazione",
-    description: "Blocco gia pronto per conferme automatiche.",
+    description: "Blocco giè pronto per conferme automatiche.",
     mjml: `
       <mj-section background-color="#edf8f2" padding="18px" border-radius="8px">
         <mj-column>
           <mj-text color="#146c43" font-size="12px" font-weight="700" letter-spacing="1px" text-transform="uppercase">Prenotazione confermata</mj-text>
-          <mj-text color="#0f172a" font-size="20px" font-weight="700">La richiesta e stata confermata</mj-text>
+          <mj-text color="#0f172a" font-size="20px" font-weight="700">La richiesta è stata confermata</mj-text>
           <mj-text color="#475569" font-size="15px" line-height="24px">Ciao {{nome_socio}}, la tua richiesta e ora in stato {{stato_prenotazione}}. Ti aspettiamo.</mj-text>
         </mj-column>
       </mj-section>
@@ -240,7 +240,7 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
         <mj-column>
           <mj-divider border-color="#d7dee7" border-width="1px" />
           <mj-text color="#0f172a" font-size="15px" font-weight="700" padding-top="16px">{{nome_associazione}}</mj-text>
-          <mj-text color="#64748b" font-size="13px" line-height="20px">Questa email e stata inviata dalla tua associazione. Per informazioni rispondi a questo messaggio.</mj-text>
+          <mj-text color="#64748b" font-size="13px" line-height="20px">Questa email è stata inviata dalla tua associazione. Per informazioni rispondi a questo messaggio.</mj-text>
         </mj-column>
       </mj-section>
     `,

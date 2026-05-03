@@ -148,7 +148,7 @@ const SuperAdminLogin = () => {
               </p>
               <p className="auth-media__copy mt-3 text-sm leading-6">
                 Crea e gestisci gli admin delle associazioni affiliate, controlla lo stock tessere
-                e monitora le attivita.
+                e monitora le attività.
               </p>
             </div>
           </div>

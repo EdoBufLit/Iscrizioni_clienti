@@ -173,7 +173,7 @@ const OrgAdminCards = () => {
             <KpiCard label="Tessere attive" value={stock?.used ?? issuedMembersCount} hint="+12% vs mese scorso" tone="success" />
             <KpiCard label="In scadenza" value={pendingWithoutCardCount} hint="Richieste senza tessera" tone="warning" />
             <KpiCard label="Scadute" value={metrics?.cards_remaining === 0 && (metrics?.cards_total ?? 0) > 0 ? "Stock esaurito" : 0} hint="Da rinnovare" tone={(stock?.remaining ?? 0) === 0 && (stock?.total ?? 0) > 0 ? "danger" : "muted"} />
-            <KpiCard label="Lotti disponibili" value={movementsTotal || 0} hint="Con disponibilita" tone="info" />
+            <KpiCard label="Lotti disponibili" value={movementsTotal || 0} hint="Con disponibilità" tone="info" />
           </div>
 
           {(stock?.remaining ?? 0) === 0 && (stock?.total ?? 0) > 0 ? (
@@ -208,7 +208,7 @@ const OrgAdminCards = () => {
               </div>
 
               {movementsTotal === 0 ? (
-                <EmptyState title="Nessun lotto disponibile" description="I lotti assegnati da ASSONAM compariranno qui automaticamente." />
+                <EmptyState title="Nessun lotto disponibile" description="I lotti assegnati da ASSONAM comparirànno qui automaticamente." />
               ) : (
                 <div className="overflow-hidden rounded-[0.85rem] border border-slate-200 bg-white">
                   <div className="overflow-x-auto">
@@ -244,7 +244,7 @@ const OrgAdminCards = () => {
             </SectionPanel>
 
             <aside className="space-y-5">
-              <SectionPanel title="Registro lotti" eyebrow="Disponibilita">
+              <SectionPanel title="Registro lotti" eyebrow="Disponibilità">
                 <div className="space-y-4">
                   <div>
                     <div className="flex items-center justify-between text-sm">
@@ -262,7 +262,7 @@ const OrgAdminCards = () => {
                   <div className="rounded-[0.85rem] border border-slate-200 bg-slate-50 p-4">
                     <p className="text-sm font-semibold text-slate-900">Prossimo lotto automatico</p>
                     <p className="mt-1 text-sm text-slate-500">
-                      Il sistema segnala il riordino quando la disponibilita scende sotto soglia operativa.
+                      Il sistema segnala il riordino quando la disponibilità scende sotto soglia operativa.
                     </p>
                     <StatusChip tone={(stock?.remaining ?? 0) < 25 ? "warning" : "success"}>
                       {(stock?.remaining ?? 0) < 25 ? "Da monitorare" : "Pronto"}
@@ -271,7 +271,7 @@ const OrgAdminCards = () => {
                 </div>
               </SectionPanel>
 
-              <SectionPanel title="Regole emissione" eyebrow="Quota e validita">
+              <SectionPanel title="Regole emissione" eyebrow="Quota e validità">
                 <form className="space-y-4" onSubmit={handleMembershipSettingsSubmit}>
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
                     <label className="block">
@@ -314,7 +314,7 @@ const OrgAdminCards = () => {
                 </form>
               </SectionPanel>
 
-              <SectionPanel title="Totale quote" eyebrow="Contabilita">
+              <SectionPanel title="Totale quote" eyebrow="Contabilità">
                 <p className="text-3xl font-semibold tracking-tight text-slate-950">€ {summaryTotal.toFixed(2)}</p>
                 <p className="mt-2 text-sm text-slate-500">Valore teorico calcolato sulle tessere emesse e sui prezzi quota correnti.</p>
               </SectionPanel>

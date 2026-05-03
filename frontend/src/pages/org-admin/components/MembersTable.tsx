@@ -1,28 +1,12 @@
 import { memo } from "react";
 import Skeleton from "../../../components/ui/Skeleton";
 import { type OrgAdminMember } from "../../../lib/api";
-
-const LIFECYCLE_LABEL: Record<string, string> = {
-  ACTIVE: "ATTIVO",
-  EXPIRED: "SCADUTO",
-  DELETED: "ELIMINATO",
-  PENDING: "IN ATTESA",
-};
-
-const LIFECYCLE_CHIP: Record<string, string> = {
-  ACTIVE: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  EXPIRED: "border-red-200 bg-red-50 text-red-700",
-  DELETED: "border-slate-300 bg-slate-100 text-slate-700",
-  PENDING: "border-amber-200 bg-amber-50 text-amber-700",
-};
-
-const WORKFLOW_LABEL: Record<string, string> = {
-  pending_verification: "Verifica email",
-  pending_docs: "Documenti",
-  pending_cards: "Tessera",
-  rejected: "Rigettato",
-  active: "Attivo",
-};
+import {
+  EMPTY_STATE_COPY,
+  memberLifecycleStatusMeta,
+  memberWorkflowStatusMeta,
+  resolveStatusMeta,
+} from "../../../lib/statusLabels";
 
 const thClass =
   "px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.15em] text-neutral-400";
@@ -71,7 +55,7 @@ const MembersTable = memo(function MembersTable({
               Impossibile caricare l'elenco dei soci
             </p>
             <p className="mt-1 text-sm leading-6 text-red-600">
-              Si e verificato un errore. Ricarica la pagina per riprovare.
+              Si ? verificato un errore. Ricarica la pagina per riprovare.
             </p>
           </div>
         </div>
@@ -85,7 +69,7 @@ const MembersTable = memo(function MembersTable({
       data-tour="admin-members-list"
       data-component="orgadmin-members-table"
     >
-      <div className="overflow-x-auto">
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full text-left">
           <thead className="border-b border-neutral-200/60 bg-slate-50/70">
             <tr>
@@ -127,7 +111,7 @@ const MembersTable = memo(function MembersTable({
                   colSpan={7}
                   className="px-5 py-12 text-center text-sm text-neutral-500"
                 >
-                  Nessun socio corrisponde ai filtri impostati.
+                  {EMPTY_STATE_COPY.filteredResults.title}. {EMPTY_STATE_COPY.filteredResults.description}
                 </td>
               </tr>
             ) : (
@@ -137,6 +121,8 @@ const MembersTable = memo(function MembersTable({
                 const isPienissimoIntegration =
                   sourceLower === "pienissimo" || sourceLower === "pienissimo_api";
                 const isSelected = selectedMemberId === m.id;
+                const lifecycleMeta = resolveStatusMeta(memberLifecycleStatusMeta, m.status);
+                const workflowMeta = resolveStatusMeta(memberWorkflowStatusMeta, m.workflow_status);
 
                 return (
                   <tr
@@ -161,17 +147,14 @@ const MembersTable = memo(function MembersTable({
                       <div className="flex flex-wrap items-center gap-2">
                         {m.status && (
                           <span
-                            className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-                              LIFECYCLE_CHIP[m.status] ??
-                              "border-neutral-200 bg-neutral-50 text-neutral-600"
-                            }`}
+                            className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${lifecycleMeta.tone}`}
                           >
-                            {LIFECYCLE_LABEL[m.status] ?? m.status}
+                            {lifecycleMeta.label}
                           </span>
                         )}
                         {m.workflow_status && m.workflow_status !== "active" && (
-                          <span className="inline-flex items-center rounded-full border border-neutral-200 bg-neutral-100 px-2.5 py-0.5 text-xs font-medium text-neutral-700">
-                            {WORKFLOW_LABEL[m.workflow_status] ?? m.workflow_status}
+                          <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${workflowMeta.tone}`}>
+                            {workflowMeta.label}
                           </span>
                         )}
                         {m.is_paid && (
@@ -228,6 +211,79 @@ const MembersTable = memo(function MembersTable({
             )}
           </tbody>
         </table>
+      </div>
+      <div className="divide-y divide-neutral-200/70 md:hidden">
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="p-4">
+              <Skeleton className="h-4 w-36" />
+              <Skeleton className="mt-3 h-3.5 w-48" />
+              <Skeleton className="mt-4 h-16 w-full rounded-xl" />
+            </div>
+          ))
+        ) : members.length === 0 ? (
+          <div className="px-5 py-10 text-center">
+            <p className="text-sm font-semibold text-neutral-800">{EMPTY_STATE_COPY.filteredResults.title}</p>
+            <p className="mt-1 text-sm text-neutral-500">{EMPTY_STATE_COPY.filteredResults.description}</p>
+          </div>
+        ) : (
+          members.map((member) => {
+            const lifecycleMeta = resolveStatusMeta(memberLifecycleStatusMeta, member.status);
+            const workflowMeta = resolveStatusMeta(memberWorkflowStatusMeta, member.workflow_status);
+            const isSelected = selectedMemberId === member.id;
+            return (
+              <article
+                key={member.id}
+                className={`p-4 ${isSelected ? "bg-emerald-50/70" : "bg-white/40"}`}
+                onClick={() => onSelectMember?.(member.id)}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="truncate text-sm font-semibold text-neutral-900">{member.name}</h3>
+                    <p className="mt-1 truncate text-xs text-neutral-500">{member.email ?? "Email non indicata"}</p>
+                  </div>
+                  <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-medium ${lifecycleMeta.tone}`}>
+                    {lifecycleMeta.label}
+                  </span>
+                </div>
+                <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <dt className="font-semibold uppercase tracking-[0.12em] text-neutral-400">Documenti</dt>
+                    <dd className="mt-1 text-neutral-800">{member.docs_count ?? "-"}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold uppercase tracking-[0.12em] text-neutral-400">Tessera</dt>
+                    <dd className="mt-1 text-neutral-800">
+                      {member.card_number ?? member.card_no ?? "-"}{member.card_year ? ` / ${member.card_year}` : ""}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold uppercase tracking-[0.12em] text-neutral-400">Iscrizione</dt>
+                    <dd className="mt-1 text-neutral-800">
+                      {member.joined_at ? new Date(member.joined_at).toLocaleDateString("it-IT") : "-"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold uppercase tracking-[0.12em] text-neutral-400">Avanzamento</dt>
+                    <dd className="mt-1 text-neutral-800">
+                      {member.workflow_status && member.workflow_status !== "active" ? workflowMeta.label : "Completo"}
+                    </dd>
+                  </div>
+                </dl>
+                <button
+                  type="button"
+                  className="mt-4 w-full rounded-lg border border-brand/20 px-3 py-2 text-sm font-semibold text-brand"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenMember(member.id);
+                  }}
+                >
+                  Apri profilo socio
+                </button>
+              </article>
+            );
+          })
+        )}
       </div>
       {!isLoading && totalPages > 1 && (
         <div className="flex items-center justify-between border-t border-neutral-200/60 px-5 py-4 text-sm text-neutral-600">

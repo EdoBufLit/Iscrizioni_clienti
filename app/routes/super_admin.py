@@ -900,7 +900,7 @@ def _ensure_accounting_enabled_org(db: Session, org_id: int) -> Organization:
     if not bool(org.accounting_enabled):
         raise HTTPException(
             status_code=422,
-            detail="La Contabilita deve essere attiva per l'associazione destinataria.",
+            detail="La Contabilità deve essere attiva per l'associazione destinataria.",
         )
     return org
 
@@ -1031,7 +1031,7 @@ def _resolve_document_targets(
     if kind not in _ALLOWED_SHARED_DOCUMENT_KINDS:
         raise HTTPException(status_code=422, detail="Tipo documento non valido.")
     if target_mode not in _ALLOWED_SHARED_DOCUMENT_TARGET_MODES:
-        raise HTTPException(status_code=422, detail="Modalita destinatari non valida.")
+        raise HTTPException(status_code=422, detail="Modalità destinatari non valida.")
 
     base_query = db.query(Organization).filter(Organization.deleted_at.is_(None))
     if target_mode == "all":
@@ -1062,7 +1062,7 @@ def _resolve_document_targets(
         if target_mode == "single" and len(targets) != 1:
             raise HTTPException(
                 status_code=422,
-                detail="La modalita singola richiede una sola associazione.",
+                detail="La modalità singola richiede una sola associazione.",
             )
 
     if not targets:
@@ -1074,7 +1074,7 @@ def _resolve_document_targets(
             names = ", ".join(org.name for org in invalid_targets[:5])
             raise HTTPException(
                 status_code=422,
-                detail=f"I documenti contabili possono essere inviati solo ad associazioni con contabilita attiva. Destinatari non validi: {names}",
+                detail=f"I documenti contabili possono essere inviati solo ad associazioni con contabilità attiva. Destinatari non validi: {names}",
             )
 
     return targets
@@ -1189,7 +1189,7 @@ def _normalize_integration_scopes(raw_scopes: list[str] | None) -> list[str]:
         {scope.strip() for scope in provided_scopes if scope and scope.strip()}
     )
     if not cleaned_scopes:
-        raise HTTPException(status_code=400, detail="Almeno uno scope e obbligatorio.")
+        raise HTTPException(status_code=400, detail="Almeno uno scope ? obbligatorio.")
 
     invalid_scopes = [
         scope for scope in cleaned_scopes if scope not in _ALLOWED_INTEGRATION_SCOPES
@@ -2306,7 +2306,7 @@ def patch_organization_membership_payment_settings(
     if requires_payment and provider != "sumup":
         raise HTTPException(
             status_code=400,
-            detail="Se il pagamento e obbligatorio il provider deve essere SumUp.",
+            detail="Se il pagamento ? obbligatorio il provider deve essere SumUp.",
         )
     if provider == "sumup":
         if not payment_label:
@@ -2869,7 +2869,7 @@ def delete_accounting_folder(
     if folder.is_default:
         raise HTTPException(
             status_code=409,
-            detail="La cartella di fallback non puo essere eliminata.",
+            detail="La cartella di fallback non può essere eliminata.",
         )
     documents_count = (
         db.query(func.count(AccountingDocument.id))
@@ -2993,7 +2993,7 @@ def delete_accounting_category(
     if category.is_system or category.code == DEFAULT_ACCOUNTING_CATEGORY_CODE:
         raise HTTPException(
             status_code=409,
-            detail="La categoria selezionata non puo essere eliminata.",
+            detail="La categoria selezionata non può essere eliminata.",
         )
     documents_count = (
         db.query(func.count(AccountingDocument.id))
@@ -3929,7 +3929,7 @@ def patch_org_card_lot(
     if linked_members > 0 and (range_changed or year_changed):
         raise HTTPException(
             status_code=409,
-            detail="Impossibile modificare il range o l'anno: esistono tessere gia assegnate",
+            detail="Impossibile modificare il range o l'anno: esistono tessere già assegnate",
         )
 
     if range_changed:
@@ -4028,7 +4028,7 @@ def delete_org_card_lot(
     if assigned > 0 or linked_members > 0:
         raise HTTPException(
             status_code=409,
-            detail="Impossibile eliminare: esistono tessere gia assegnate",
+            detail="Impossibile eliminare: esistono tessere già assegnate",
         )
 
     snapshot = {

@@ -288,7 +288,7 @@ const OrgAdminLayout = () => {
         ],
       },
       {
-        label: "Contabilita",
+        label: "Contabilità",
         items: [
           { to: "/org-admin/contabilita", label: "Movimenti", match: ["/org-admin/contabilita"], icon: "accounting", hidden: !accountingEnabled },
           { to: "/org-admin/documenti", label: "Documenti", match: ["/org-admin/documenti"], icon: "documents" },
@@ -322,7 +322,7 @@ const OrgAdminLayout = () => {
     if (admin?.organization?.accounting_enabled) {
       items.splice(1, 0, {
         key: "accounting",
-        label: "Contabilita",
+        label: "Contabilità",
         to: "/org-admin/contabilita",
         activeMatch: ["/org-admin/contabilita"],
         icon: "chart" as const,

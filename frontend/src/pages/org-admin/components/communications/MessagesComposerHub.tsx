@@ -318,7 +318,7 @@ function CampaignSummaryPanel({
           <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-700">◴</span>
           <div className="min-w-0">
             <p className="text-sm font-semibold text-slate-950">{draft.scheduledAt ? "Programmata" : "Invio ora"}</p>
-            <p className="mt-0.5 text-xs text-slate-500">{draft.scheduledAt || "La campagna verra inviata manualmente."}</p>
+            <p className="mt-0.5 text-xs text-slate-500">{draft.scheduledAt || "La campagna verrà inviata manualmente."}</p>
           </div>
         </div>
         <div className="grid grid-cols-[2.4rem_minmax(0,1fr)] gap-3 p-3">
@@ -1109,7 +1109,7 @@ export function MessagesHub({
     <ConfirmModal
       open={Boolean(deleteTemplateTarget)}
       title="Eliminare il modello?"
-      description="Il modello verra rimosso dalla libreria dell'organizzazione."
+      description="Il modello verrà rimosso dalla libreria dell'organizzazione."
       confirmLabel="Elimina modello"
       tone="danger"
       confirmState={busy === "delete-template" ? "loading" : "idle"}
@@ -1122,7 +1122,7 @@ export function MessagesHub({
     <ConfirmModal
       open={Boolean(deleteCampaignTarget)}
       title="Eliminare la campagna?"
-      description="La campagna verra rimossa dalla libreria dell'organizzazione."
+      description="La campagna verrà rimossa dalla libreria dell'organizzazione."
       confirmLabel="Elimina campagna"
       tone="danger"
       confirmState={busy === "delete-campaign" ? "loading" : "idle"}

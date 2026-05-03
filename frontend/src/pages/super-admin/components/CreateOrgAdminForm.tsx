@@ -40,7 +40,7 @@ const CreateOrgAdminForm = memo(function CreateOrgAdminForm({
         <p className="sa-eyebrow">Invita nuovo amministratore</p>
         <h3 className="text-base font-bold text-neutral-900">Accesso sede locale</h3>
         <p className="text-sm text-neutral-500">
-          L'invito con magic link verra inviato automaticamente all'indirizzo email.
+          L'invito con magic link verrà inviato automaticamente all'indirizzo email.
         </p>
       </div>
 

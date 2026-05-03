@@ -29,7 +29,7 @@ _RENDER_SCRIPT_RELATIVE = Path("dist") / "renderHud.cjs"
 _RENDER_BUILD_META_RELATIVE = Path("dist") / "renderHud.build.json"
 _WELCOME_VIDEO_PUBLIC_ROOT = "/videos/welcome"
 _WELCOME_VIDEO_GENERIC_ERROR = (
-    "Il video di benvenuto non e ancora disponibile. Puoi riprovare la generazione."
+    "Il video di benvenuto non è ancora disponibile. Puoi riprovare la generazione."
 )
 
 

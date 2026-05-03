@@ -1255,7 +1255,7 @@ def _normalize_member_payment_method(
         if required:
             raise HTTPException(
                 status_code=400,
-                detail="Modalita di pagamento obbligatoria. Seleziona CASH o BONIFICO.",
+                detail="Modalità di pagamento obbligatoria. Seleziona CASH o BONIFICO.",
             )
         return None
 
@@ -1264,14 +1264,14 @@ def _normalize_member_payment_method(
         if required:
             raise HTTPException(
                 status_code=400,
-                detail="Modalita di pagamento obbligatoria. Seleziona CASH o BONIFICO.",
+                detail="Modalità di pagamento obbligatoria. Seleziona CASH o BONIFICO.",
             )
         return None
 
     if normalized not in _ALLOWED_MEMBER_PAYMENT_METHODS:
         raise HTTPException(
             status_code=400,
-            detail="Modalita di pagamento non valida. Valori ammessi: CASH, BONIFICO.",
+            detail="Modalità di pagamento non valida. Valori ammessi: CASH, BONIFICO.",
         )
     return normalized
 
@@ -2383,7 +2383,7 @@ def list_org_shared_documents(
     if normalized_kind not in _ORG_SHARED_DOCUMENT_KINDS:
         raise HTTPException(status_code=422, detail="Tipo documento non valido.")
     if normalized_kind == "accounting" and not bool(admin.organization.accounting_enabled):
-        raise HTTPException(status_code=403, detail="Contabilita non abilitata.")
+        raise HTTPException(status_code=403, detail="Contabilità non abilitata.")
 
     documents = (
         db.query(OrganizationSharedDocument)
@@ -2434,7 +2434,7 @@ def download_org_shared_document(
 
     document = assignment.document
     if document.kind == "accounting" and not bool(admin.organization.accounting_enabled):
-        raise HTTPException(status_code=403, detail="Contabilita non abilitata.")
+        raise HTTPException(status_code=403, detail="Contabilità non abilitata.")
 
     full_path = os.path.join(settings.UPLOAD_DIR, document.rel_path)
     if not os.path.exists(full_path):
@@ -2460,7 +2460,7 @@ def get_org_admin_accounting_archive(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
     if not bool(admin.organization.accounting_enabled):
-        raise HTTPException(status_code=403, detail="Contabilita non abilitata.")
+        raise HTTPException(status_code=403, detail="Contabilità non abilitata.")
 
     ensure_accounting_seed_data(db)
 
@@ -2621,7 +2621,7 @@ def preview_org_admin_accounting_document(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
     if not bool(admin.organization.accounting_enabled):
-        raise HTTPException(status_code=403, detail="Contabilita non abilitata.")
+        raise HTTPException(status_code=403, detail="Contabilità non abilitata.")
     document = _get_org_admin_accounting_document_or_404(
         db,
         admin=admin,
@@ -2648,7 +2648,7 @@ def download_org_admin_accounting_document(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
     if not bool(admin.organization.accounting_enabled):
-        raise HTTPException(status_code=403, detail="Contabilita non abilitata.")
+        raise HTTPException(status_code=403, detail="Contabilità non abilitata.")
     document = _get_org_admin_accounting_document_or_404(
         db,
         admin=admin,
@@ -2671,7 +2671,7 @@ def create_org_admin_accounting_share_link(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
     if not bool(admin.organization.accounting_enabled):
-        raise HTTPException(status_code=403, detail="Contabilita non abilitata.")
+        raise HTTPException(status_code=403, detail="Contabilità non abilitata.")
     document = _get_org_admin_accounting_document_or_404(
         db,
         admin=admin,
@@ -2701,7 +2701,7 @@ def list_org_admin_accounting_share_links(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
     if not bool(admin.organization.accounting_enabled):
-        raise HTTPException(status_code=403, detail="Contabilita non abilitata.")
+        raise HTTPException(status_code=403, detail="Contabilità non abilitata.")
     document = _get_org_admin_accounting_document_or_404(
         db,
         admin=admin,
@@ -2730,7 +2730,7 @@ def revoke_org_admin_accounting_share_link(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
     if not bool(admin.organization.accounting_enabled):
-        raise HTTPException(status_code=403, detail="Contabilita non abilitata.")
+        raise HTTPException(status_code=403, detail="Contabilità non abilitata.")
     share_link = (
         db.query(AccountingShareLink)
         .join(AccountingDocument, AccountingDocument.id == AccountingShareLink.document_id)
@@ -4563,14 +4563,14 @@ def spin_referral_reward(
             "wheel_result": wheel_result,
             "wheel_spun_at": existing.get("wheel_spun_at"),
             "wheel_spun_by_org_admin_id": referral.wheel_spun_by_org_admin_id,
-            "message": "Premio gia assegnato per questo referral.",
-            "super_admin_note": "Premio gia registrato nel sistema.",
+            "message": "Premio già assegnato per questo referral.",
+            "super_admin_note": "Premio già registrato nel sistema.",
         }
 
     if not _is_referral_wheel_enabled(referral):
         raise HTTPException(
             status_code=409,
-            detail="La ruota e disponibile solo quando il referral e approvato dal super admin.",
+            detail="La ruota è disponibile solo quando il referral e approvato dal super admin.",
         )
 
     reward = _draw_referral_reward()
@@ -4643,7 +4643,7 @@ def spin_referral_reward(
         "wheel_result": reward,
         "wheel_spun_at": now.isoformat(),
         "wheel_spun_by_org_admin_id": admin.id,
-        "message": "Premio assegnato. Il risultato e stato comunicato al super admin.",
+        "message": "Premio assegnato. Il risultato è stato comunicato al super admin.",
         "super_admin_note": super_admin_note,
     }
 
@@ -4977,7 +4977,7 @@ def create_org_member(
     ):
         raise HTTPException(
             status_code=400,
-            detail="La tessera temporanea non e abilitata per la tua associazione.",
+            detail="La tessera temporanea non ? abilitata per la tua associazione.",
         )
     internal_notes = body.internal_notes.strip() if body.internal_notes else None
     if internal_notes == "":
@@ -5170,7 +5170,7 @@ def update_member_profile(
     ):
         raise HTTPException(
             status_code=400,
-            detail="La tessera temporanea non e abilitata per la tua associazione.",
+            detail="La tessera temporanea non ? abilitata per la tua associazione.",
         )
     membership_fee_snapshot = (
         quantize_membership_amount(body.membership_fee_snapshot)

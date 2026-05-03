@@ -6,7 +6,7 @@ const NotFound = () => {
   useEffect(() => {
     applySeo({
       title: "Pagina non trovata",
-      description: "La pagina richiesta non esiste o non e piu disponibile.",
+      description: "La pagina richiesta non esiste o non ? piè disponibile.",
       noindex: true,
     });
   }, []);
@@ -18,7 +18,7 @@ const NotFound = () => {
           <p className="section-title">Errore 404</p>
           <h1 className="section-heading">Pagina non trovata</h1>
           <p className="mt-4 text-sm leading-7 text-neutral-600">
-            Il percorso richiesto non esiste o non e piu disponibile.
+            Il percorso richiesto non esiste o non ? piè disponibile.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link className="btn-primary px-6 py-2.5" to="/">

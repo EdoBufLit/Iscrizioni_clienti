@@ -9,7 +9,7 @@ export const FOREIGN_BIRTH_PLACES: ForeignBirthPlace[] = [
   { code: "Z102", name: "Austria" },
   { code: "Z103", name: "Belgio" },
   { code: "Z104", name: "Bulgaria" },
-  { code: "Z106", name: "Citta del Vaticano" },
+  { code: "Z106", name: "Città del Vaticano" },
   { code: "Z149", name: "Croazia" },
   { code: "Z107", name: "Danimarca" },
   { code: "Z144", name: "Estonia" },

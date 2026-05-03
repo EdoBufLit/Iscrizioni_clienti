@@ -188,7 +188,7 @@ def _serialize_candidates(candidates: list[Organization]) -> list[dict[str, str 
 
 
 def _render_candidates_reply(candidates: list[dict[str, str | int]]) -> str:
-    lines = ["Ho trovato piu associazioni. Rispondi con il numero corretto:"]
+    lines = ["Ho trovato più associazioni. Rispondi con il numero corretto:"]
     for index, candidate in enumerate(candidates, start=1):
         lines.append(f"{index}. {candidate['name']} ({candidate['slug']})")
     return "\n".join(lines)
@@ -418,7 +418,7 @@ def _handle_order_notes(
 
     return (
         f"Richiesta registrata: {requested_cards} tessere per {association_name}. "
-        "Ti ricontatteremo al piu presto."
+        "Ti ricontatteremo al più presto."
     )
 
 

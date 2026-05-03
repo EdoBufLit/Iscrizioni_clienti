@@ -23,6 +23,7 @@ import {
   type OrgAdminEmailTemplate,
 } from "../../lib/api";
 import { applySeo } from "../../lib/seo";
+import { DESTRUCTIVE_ACTION_COPY, formatActionObject } from "../../lib/statusLabels";
 import { useToast } from "../../components/ui/ToastProvider";
 import { useOrgAdmin } from "./OrgAdminLayout";
 import { FormBuilder } from "../../components/forms/builder/FormBuilder";
@@ -131,16 +132,16 @@ const bookingMappingTargets: Array<{ key: BookingMappingTarget; label: string; h
 
 function defaultWhatsAppConfirmationTemplate(formType: AssociationFormType, bookingEnabled: boolean): string {
   if (bookingEnabled || formType === "booking") {
-    return "Ciao {{nome_contatto}}, la tua prenotazione per {{nome_associazione}} e stata confermata. Dettagli: {{riepilogo_prenotazione}}.";
+    return "Ciao {{nome_contatto}}, la tua prenotazione per {{nome_associazione}} è stata confermata. Dettagli: {{riepilogo_prenotazione}}.";
   }
-  return "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} e stata confermata. Ti ricontatteremo se serviranno altri dettagli.";
+  return "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} è stata confermata. Ti ricontatteremo se serviranno altri dettagli.";
 }
 
 function defaultWhatsAppRejectionTemplate(formType: AssociationFormType, bookingEnabled: boolean): string {
   if (bookingEnabled || formType === "booking") {
-    return "Ciao {{nome_contatto}}, la tua prenotazione per {{nome_associazione}} non puo essere confermata. {{motivo_rigetto}}";
+    return "Ciao {{nome_contatto}}, la tua prenotazione per {{nome_associazione}} non può essere confermata. {{motivo_rigetto}}";
   }
-  return "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} e stata rigettata. {{motivo_rigetto}}";
+  return "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} è stata rigettata. {{motivo_rigetto}}";
 }
 
 const submissionStatusMeta: Record<string, { label: string; className: string }> = {
@@ -389,14 +390,15 @@ export function OrgAdminFormsWorkspace({
   const [realPreviewOpen, setRealPreviewOpen] = useState(false);
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
 
-  const [deleteArmed, setDeleteArmed] = useState(false);
+  const [deleteFormOpen, setDeleteFormOpen] = useState(false);
+  const [deleteActionState, setDeleteActionState] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [activeTab, setActiveTab] = useState<EditorTab>("builder");
 
   const [fieldDraft, setFieldDraft] = useState(emptyFieldDraft(null));
   const [editingFieldId, setEditingFieldId] = useState<number | null>(null);
   const [fieldKeyManual, setFieldKeyManual] = useState(false);
   const [, setSavingField] = useState(false);
-  const [deleteFieldArmed, setDeleteFieldArmed] = useState<number | null>(null);
+  const [deleteFieldConfirmId, setDeleteFieldConfirmId] = useState<number | null>(null);
   const [draggingFieldId, setDraggingFieldId] = useState<number | null>(null);
   const [, setReorderingFields] = useState(false);
 
@@ -516,7 +518,7 @@ export function OrgAdminFormsWorkspace({
       setEditingFieldId(null);
       setFieldKeyManual(false);
     }
-    setDeleteArmed(false);
+    setDeleteFormOpen(false);
   }, [isCreatingForm, selectedForm]);
 
   useEffect(() => {
@@ -673,6 +675,7 @@ export function OrgAdminFormsWorkspace({
     };
   }, [selectedForm?.fields, submissions]);
   const selectedSubmissionStatus = submissionStatusLabel(selectedSubmission?.status);
+  const deleteFieldTarget = selectedForm?.fields.find((field) => field.id === deleteFieldConfirmId) || null;
 
   function resetEditorState() {
     syncWorkspaceQuery({ formId: null, formTab: null });
@@ -684,8 +687,8 @@ export function OrgAdminFormsWorkspace({
     setFieldDraft(emptyFieldDraft(null));
     setEditingFieldId(null);
     setFieldKeyManual(false);
-    setDeleteArmed(false);
-    setDeleteFieldArmed(null);
+    setDeleteFormOpen(false);
+    setDeleteFieldConfirmId(null);
     setSubmissions([]);
     setSelectedSubmission(null);
     setActiveTab("builder");
@@ -725,7 +728,7 @@ export function OrgAdminFormsWorkspace({
     setSelectedForm(detail.form);
     setBuilderDraftFields(decodeBuilderFields(detail.form));
     setForms((current) => current.map((item) => (item.id === detail.form.id ? detail.form : item)));
-    setDeleteArmed(false);
+    setDeleteFormOpen(false);
     setActiveTab(initialTab);
     if (options?.syncQuery !== false) {
       syncWorkspaceQuery({ formId: detail.form.id, formTab: initialTab });
@@ -921,10 +924,13 @@ export function OrgAdminFormsWorkspace({
       showToast({ tone: "error", title: "Form bloccati", message: lockedMessage });
       return;
     }
-    if (!deleteArmed) {
-      setDeleteArmed(true);
-      return;
-    }
+    setDeleteFormOpen(true);
+    return;
+  }
+
+  async function confirmDeleteForm() {
+    if (!selectedFormId) return;
+    setDeleteActionState("loading");
     try {
       await deleteOrgAdminForm(selectedFormId);
       showToast({
@@ -932,9 +938,12 @@ export function OrgAdminFormsWorkspace({
         title: "Form eliminato",
         message: "La pagina pubblica è stata rimossa.",
       });
+      setDeleteActionState("success");
+      setDeleteFormOpen(false);
       resetEditorState();
       await loadForms();
     } catch (err) {
+      setDeleteActionState("error");
       showToast({
         tone: "error",
         title: "Eliminazione non riuscita",
@@ -945,7 +954,7 @@ export function OrgAdminFormsWorkspace({
 
   function handleEditField(field: AssociationFormField) {
     setEditingFieldId(field.id);
-    setDeleteFieldArmed(null);
+    setDeleteFieldConfirmId(null);
     setFieldKeyManual(slugifyKey(field.label) !== field.field_key);
     setFieldDraft({
       field_key: field.field_key,
@@ -962,7 +971,7 @@ export function OrgAdminFormsWorkspace({
   function startNewField(fieldType: AssociationFormFieldType = "short_text") {
     setActiveTab("builder");
     setEditingFieldId(null);
-    setDeleteFieldArmed(null);
+    setDeleteFieldConfirmId(null);
     setFieldKeyManual(false);
     setFieldDraft(emptyFieldDraft(selectedForm, fieldType));
   }
@@ -1031,22 +1040,28 @@ export function OrgAdminFormsWorkspace({
       showToast({ tone: "error", title: "Form bloccati", message: lockedMessage });
       return;
     }
-    if (deleteFieldArmed !== editingFieldId) {
-      setDeleteFieldArmed(editingFieldId);
-      return;
-    }
+    setDeleteFieldConfirmId(editingFieldId);
+    return;
+  }
+
+  async function confirmDeleteField() {
+    if (!selectedFormId || !deleteFieldConfirmId) return;
+    setDeleteActionState("loading");
     try {
-      await deleteOrgAdminFormField(selectedFormId, editingFieldId);
+      await deleteOrgAdminFormField(selectedFormId, deleteFieldConfirmId);
       const detail = await fetchOrgAdminForm(selectedFormId);
       setSelectedForm(detail.form);
       setForms((current) => current.map((item) => (item.id === detail.form.id ? detail.form : item)));
+      setDeleteFieldConfirmId(null);
       startNewField();
+      setDeleteActionState("success");
       showToast({
         tone: "success",
         title: "Campo eliminato",
         message: "La struttura del form è stata aggiornata.",
       });
     } catch (err) {
+      setDeleteActionState("error");
       showToast({
         tone: "error",
         title: "Eliminazione non riuscita",
@@ -1272,11 +1287,11 @@ export function OrgAdminFormsWorkspace({
       setConfirmActionOpen(false);
       setRejectActionOpen(false);
 
-      let message = "Lo stato della richiesta e stato aggiornato.";
+      let message = "Lo stato della richiesta è stato aggiornato.";
       if (response.whatsapp_result?.sent) {
         message = "Richiesta aggiornata e messaggio WhatsApp inviato automaticamente.";
       } else if (response.whatsapp_result?.error) {
-        message = "Richiesta aggiornata, ma il messaggio WhatsApp non e partito.";
+        message = "Richiesta aggiornata, ma il messaggio WhatsApp non ? partito.";
       } else if (response.whatsapp_result?.reason === "missing_phone") {
         message = "Richiesta aggiornata. Nessun WhatsApp inviato: numero non disponibile.";
       }
@@ -1334,7 +1349,7 @@ export function OrgAdminFormsWorkspace({
     setSelectedForm(null);
     setSubmissions([]);
     setSelectedSubmission(null);
-    setDeleteArmed(false);
+    setDeleteFormOpen(false);
     setActiveTab("design");
     setFormDraft(createSeededFormDraft(mode));
     setBuilderDraftFields([]);
@@ -1346,7 +1361,7 @@ export function OrgAdminFormsWorkspace({
   const previewForm = useMemo(
     () => ({
       title: formDraft.title || "Titolo del form pubblico",
-      description: formDraft.description || "Una breve descrizione aiuta a far capire subito perche qualcuno dovrebbe compilare il form.",
+      description: formDraft.description || "Una breve descrizione aiuta a far capire subito perché qualcuno dovrebbe compilare il form.",
       accent_color: formDraft.accent_color || "#0f766e",
       submit_button_text: formDraft.submit_button_text || "Invia richiesta",
       show_logo: formDraft.show_logo,
@@ -2436,7 +2451,7 @@ export function OrgAdminFormsWorkspace({
                         onClick={() => {
                           if (!selectedFormUrl) return;
                           navigator.clipboard.writeText(selectedFormUrl);
-                          showToast({ title: "Link copiato", message: "Il link pubblico del modulo e stato copiato negli appunti.", tone: "success" });
+                          showToast({ title: "Link copiato", message: "Il link pubblico del modulo è stato copiato negli appunti.", tone: "success" });
                         }}
                       >
                         <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
@@ -2484,7 +2499,7 @@ export function OrgAdminFormsWorkspace({
                   onClick={handleDeleteForm}
                   disabled={locked}
                 >
-                  {deleteArmed ? "Conferma elimina form" : "Elimina form"}
+                  Elimina form
                 </button>
               ) : null}
             </div>
@@ -2555,7 +2570,7 @@ export function OrgAdminFormsWorkspace({
         open={confirmActionOpen === "confirmed"}
         mode="confirmed"
         title="Confermare la richiesta?"
-        description="La richiesta passera a confermata. Puoi lasciare il messaggio vuoto per usare il template configurato del form oppure personalizzarlo per questa sola risposta."
+        description="La richiesta passerà a confermata. Puoi lasciare il messaggio vuoto per usare il template configurato del form oppure personalizzarlo per questa sola risposta."
         confirmLabel="Conferma richiesta"
         confirmState={submissionActionState}
         defaultMessage={resolveDecisionMessagePlaceholder("confirmed")}
@@ -2595,6 +2610,40 @@ export function OrgAdminFormsWorkspace({
           setSubmissionActionError(null);
         }}
         onConfirm={(values) => void handleSubmissionDecision("rejected", values.reason, values.whatsappMessage)}
+      />
+      <ConfirmModal
+        open={deleteFormOpen}
+        title={DESTRUCTIVE_ACTION_COPY.deleteForm.title}
+        description="Il link pubblico verrà chiuso e le risposte non saranno più consultabili da questa pagina."
+        objectName={formatActionObject(selectedForm?.title, "Modulo selezionato")}
+        impact="Usa questa azione solo se il modulo non serve più. L'operazione non ? pensata come archiviazione temporanea."
+        confirmLabel={DESTRUCTIVE_ACTION_COPY.deleteForm.confirmLabel}
+        tone="danger"
+        confirmState={deleteActionState}
+        requireCheckbox
+        checkboxLabel="Confermo l'eliminazione del modulo"
+        onClose={() => {
+          if (deleteActionState === "loading") return;
+          setDeleteFormOpen(false);
+          setDeleteActionState("idle");
+        }}
+        onConfirm={() => void confirmDeleteForm()}
+      />
+      <ConfirmModal
+        open={deleteFieldConfirmId !== null}
+        title={DESTRUCTIVE_ACTION_COPY.deleteField.title}
+        description="Il campo verrà rimosso dalla struttura del modulo e dalla preview pubblica."
+        objectName={formatActionObject(deleteFieldTarget?.label, "Campo selezionato")}
+        impact="Prima di procedere verifica che il campo non sia necessario per automazioni o prenotazioni collegate."
+        confirmLabel={DESTRUCTIVE_ACTION_COPY.deleteField.confirmLabel}
+        tone="danger"
+        confirmState={deleteActionState}
+        onClose={() => {
+          if (deleteActionState === "loading") return;
+          setDeleteFieldConfirmId(null);
+          setDeleteActionState("idle");
+        }}
+        onConfirm={() => void confirmDeleteField()}
       />
       </div>
     </div>

@@ -244,7 +244,7 @@ const CreateMemberModal = memo(function CreateMemberModal({
             </div>
             <div>
               <label className="block text-xs font-medium text-neutral-600">
-                Modalita di pagamento (opzionale)
+                Modalità di pagamento (opzionale)
               </label>
               <select
                 className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"

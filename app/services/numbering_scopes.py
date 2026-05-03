@@ -37,8 +37,8 @@ class NumberingUsageState:
         if not self.is_sensitive:
             return None
         return (
-            "Questa modifica influira solo sulle future tessere. "
-            "Le tessere gia esistenti non verranno modificate."
+            "Questa modifica influirà solo sulle future tessere. "
+            "Le tessere già esistenti non verranno modificate."
         )
 
 

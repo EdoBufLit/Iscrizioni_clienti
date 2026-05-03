@@ -133,7 +133,7 @@ export function RoomFloorMap({
           <div className="relative z-10 mx-auto mt-28 max-w-md rounded-[1.8rem] border border-dashed border-slate-300 bg-white/80 px-6 py-10 text-center shadow-sm backdrop-blur">
             <p className="text-sm font-semibold text-slate-900">Nessun tavolo posizionato</p>
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              Crea i tavoli e trascinali qui per costruire una mappa sala leggibile e pronta per l'assegnazione manuale.
+              Crea i tavoli e trascinali qui per costruire una mappa sala leggibile ? pronta per l'assegnazione manuale.
             </p>
           </div>
         ) : null}

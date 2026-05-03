@@ -29,15 +29,15 @@ from app.services.whatsapp_sync import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_FORM_SUBMISSION_WHATSAPP_TEMPLATE = (
-    "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} e stata registrata correttamente. "
+    "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} è stata registrata correttamente. "
     "Ti ricontatteremo presto."
 )
 DEFAULT_FORM_CONFIRMATION_WHATSAPP_TEMPLATE = (
-    "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} e stata confermata. "
+    "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} è stata confermata. "
     "Dettagli: {{riepilogo_prenotazione}}."
 )
 DEFAULT_FORM_REJECTION_WHATSAPP_TEMPLATE = (
-    "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} non puo essere confermata. "
+    "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} non può essere confermata. "
     "{{motivo_rigetto}}"
 )
 
@@ -763,7 +763,7 @@ def _default_submission_template(form: Any) -> str:
     if _is_booking_form(form):
         return (
             "Ciao {{nome_contatto}}, abbiamo ricevuto la tua prenotazione per {{nome_associazione}} "
-            "con questi dettagli: {{riepilogo_prenotazione}}. Ti confermeremo al piu presto."
+            "con questi dettagli: {{riepilogo_prenotazione}}. Ti confermeremo al più presto."
         )
     return DEFAULT_FORM_SUBMISSION_WHATSAPP_TEMPLATE
 
@@ -780,7 +780,7 @@ def _default_confirmation_template(form: Any) -> str:
 def _default_rejection_template(form: Any) -> str:
     if _is_booking_form(form):
         return (
-            "Ciao {{nome_contatto}}, la tua prenotazione per {{nome_associazione}} non puo essere confermata. "
+            "Ciao {{nome_contatto}}, la tua prenotazione per {{nome_associazione}} non può essere confermata. "
             "{{motivo_rigetto}}"
         )
     return DEFAULT_FORM_REJECTION_WHATSAPP_TEMPLATE

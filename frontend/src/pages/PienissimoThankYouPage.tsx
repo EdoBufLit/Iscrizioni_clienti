@@ -188,12 +188,12 @@ const PienissimoThankYouPage = () => {
               <div className="rounded-xl border border-[#c6a04f]/30 bg-[#2d0015]/5 px-4 py-4">
                 <p className="text-base font-semibold text-neutral-800">
                   {isAlreadyIssued
-                    ? "Hai gia una tessera attiva. Puoi scaricarla o verificarla qui."
+                    ? "Hai già una tessera attiva. Puoi scaricarla o verificarla qui."
                     : "Tessera pronta! Scaricala in PDF o verificala."}
                 </p>
                 <p className="mt-1 text-sm text-neutral-500">
                   {isAlreadyIssued
-                    ? "Usa i pulsanti qui sotto per scaricare o verificare la tessera gia emessa."
+                    ? "Usa i pulsanti qui sotto per scaricare o verificare la tessera già emessa."
                     : "Ti abbiamo inviato un'email con la tessera. Se non la ricevi entro 5 minuti, controlla Spam/Promozioni."}
                 </p>
               </div>

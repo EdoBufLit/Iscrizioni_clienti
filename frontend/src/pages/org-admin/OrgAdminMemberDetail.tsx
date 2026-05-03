@@ -225,7 +225,7 @@ export default function OrgAdminMemberDetail() {
       const data = await res.json();
       setSendAccessMessage(
         data.email_status === "queued"
-          ? "Accesso accodato. Verra inviato a breve."
+          ? "Accesso accodato. Verrà inviato a breve."
           : data.email_sent
             ? "Accesso inviato via email."
             : "Invio non riuscito, riprova."
@@ -846,7 +846,7 @@ export default function OrgAdminMemberDetail() {
                   <dd className="text-right font-medium text-neutral-900">{member.member_type || "-"}</dd>
                 </div>
                 <div className="flex items-start justify-between gap-4">
-                  <dt className="text-neutral-500">Modalita di pagamento</dt>
+                  <dt className="text-neutral-500">Modalità di pagamento</dt>
                   <dd className="text-right font-medium text-neutral-900">{paymentMethodSummary}</dd>
                 </div>
                 <div className="flex items-start justify-between gap-4">
@@ -864,11 +864,11 @@ export default function OrgAdminMemberDetail() {
                   Accesso area riservata
                 </p>
                 <p className="mt-1 text-sm text-neutral-700">
-                  {member.has_access ? "Account attivo e credenziali gia presenti." : "Accesso non ancora attivato."}
+                  {member.has_access ? "Account attivo e credenziali già presenti." : "Accesso non ancora attivato."}
                 </p>
                 {!member.is_active && (
                   <p className="mt-1 text-xs text-red-600">
-                    Il socio non e attivo: l'invio credenziali resta disabilitato.
+                    Il socio non è attivo: l'invio credenziali resta disabilitato.
                   </p>
                 )}
                 {lastAccessLabel && (
@@ -984,7 +984,7 @@ export default function OrgAdminMemberDetail() {
             )}
             {canUseCardActions && !member.email && (
               <p className="mt-3 text-xs text-neutral-500">
-                Per inviare la tessera via email e necessario salvare un indirizzo email valido.
+                Per inviare la tessera via email è necessario salvare un indirizzo email valido.
               </p>
             )}
             {canUseCardActions && member.card_verification_url && (
@@ -1105,7 +1105,7 @@ export default function OrgAdminMemberDetail() {
       {rejectingDoc && (
         <RejectDocumentModal
           open={Boolean(rejectingDoc)}
-          docLabel={rejectingDoc.type === "identity" ? "Documento Identita" : rejectingDoc.type === "fiscal_code" ? "Codice Fiscale" : rejectingDoc.type}
+          docLabel={rejectingDoc.type === "identity" ? "Documento Identità" : rejectingDoc.type === "fiscal_code" ? "Codice Fiscale" : rejectingDoc.type}
           initialNote={rejectingDoc.rejection_note}
           isSubmitting={reviewingDocId === rejectingDoc.id}
           error={actionError}
@@ -1267,7 +1267,7 @@ export default function OrgAdminMemberDetail() {
       <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
         <h3 className="text-sm font-semibold text-neutral-900 mb-2">Area Pericolosa</h3>
         <p className="text-sm text-neutral-500 mb-4">
-          Eliminando il socio, verranno rimossi i suoi accessi e non comparira piu negli elenchi attivi.
+          Eliminando il socio, verranno rimossi i suoi accessi e non comparirà più negli elenchi attivi.
         </p>
         <button
           onClick={() => setDeleteConfirmOpen(true)}

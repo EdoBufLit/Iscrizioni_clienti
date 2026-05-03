@@ -215,7 +215,7 @@ def edit_member(
     else:
         normalized_payment_method = payment_method.strip().upper()
         if normalized_payment_method not in {PaymentMethod.CASH.value, PaymentMethod.BONIFICO.value}:
-            raise HTTPException(status_code=400, detail="Modalita di pagamento non valida. Valori ammessi: CASH, BONIFICO.")
+            raise HTTPException(status_code=400, detail="Modalità di pagamento non valida. Valori ammessi: CASH, BONIFICO.")
         member.payment_method = normalized_payment_method
     db.commit()
 

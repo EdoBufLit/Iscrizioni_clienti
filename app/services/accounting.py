@@ -312,7 +312,7 @@ def create_accounting_share_link(
     if not bool(document.is_share_enabled):
         raise HTTPException(
             status_code=403,
-            detail="La condivisione non e abilitata per questo documento.",
+            detail="La condivisione non ? abilitata per questo documento.",
         )
     if expires_at is not None and expires_at <= datetime.utcnow():
         raise HTTPException(
@@ -354,5 +354,5 @@ def resolve_accounting_share_link(
     if link.expires_at is not None and link.expires_at <= datetime.utcnow():
         raise HTTPException(status_code=410, detail="Link di condivisione scaduto.")
     if not bool(link.document.is_share_enabled):
-        raise HTTPException(status_code=410, detail="Condivisione non piu disponibile.")
+        raise HTTPException(status_code=410, detail="Condivisione non piè disponibile.")
     return link

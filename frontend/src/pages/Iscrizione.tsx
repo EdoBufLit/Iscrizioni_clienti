@@ -92,11 +92,11 @@ function validateStep1(
   adultsOnlyEnabled: boolean,
 ): Record<string, string> {
   const e: Record<string, string> = {};
-  if (!f.nome.trim()) e.nome = "Il campo nome e obbligatorio.";
-  if (!f.cognome.trim()) e.cognome = "Il campo cognome e obbligatorio.";
+  if (!f.nome.trim()) e.nome = "Il campo nome ? obbligatorio.";
+  if (!f.cognome.trim()) e.cognome = "Il campo cognome ? obbligatorio.";
   if (!f.dataNascita) e.dataNascita = "Inserisci la data di nascita.";
   else if (adultsOnlyEnabled && !isAtLeast18YearsOld(f.dataNascita)) {
-    e.dataNascita = "Per questa associazione l'iscrizione e consentita solo ai maggiori di 18 anni.";
+    e.dataNascita = "Per questa associazione l'iscrizione è consentita solo ai maggiori di 18 anni.";
   }
   if (!f.sesso) e.sesso = "Seleziona il sesso.";
   if (f.statoEsteroNascita) {
@@ -104,12 +104,12 @@ function validateStep1(
       e.comuneNascita = "Seleziona lo stato estero di nascita.";
     }
   } else if (!f.comuneNascita.trim()) {
-    e.comuneNascita = "Il comune di nascita e obbligatorio.";
+    e.comuneNascita = "Il comune di nascita ? obbligatorio.";
   } else if (!f.comuneNascitaCode) {
     e.comuneNascita = "Seleziona un comune valido dall'elenco.";
   }
   if (!f.codiceFiscale.trim()) {
-    e.codiceFiscale = "Il codice fiscale e obbligatorio.";
+    e.codiceFiscale = "Il codice fiscale ? obbligatorio.";
   } else if (
     !validateCodiceFiscale({
       fiscalCode: f.codiceFiscale,
@@ -120,16 +120,16 @@ function validateStep1(
       birthPlaceCode: f.comuneNascitaCode,
     }).isFormallyValid
   ) {
-    e.codiceFiscale = "Il codice fiscale non e valido. Verifica formato e checksum.";
+    e.codiceFiscale = "Il codice fiscale non ? valido. Verifica formato e checksum.";
   }
   if (!f.email.trim()) {
-    e.email = "L'indirizzo email e obbligatorio.";
+    e.email = "L'indirizzo email ? obbligatorio.";
   } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email)) {
     e.email = "L'indirizzo email non sembra valido.";
   }
-  if (!f.telefono.trim()) e.telefono = "Il numero di telefono e obbligatorio.";
+  if (!f.telefono.trim()) e.telefono = "Il numero di telefono ? obbligatorio.";
   if (!requireOnlinePayment && !f.modalitaPagamento) {
-    e.modalitaPagamento = "Seleziona la modalita di pagamento.";
+    e.modalitaPagamento = "Seleziona la modalità di pagamento.";
   }
   if (!f.password || f.password.length < MEMBER_PASSWORD_MIN_LENGTH) {
     e.password = `La password deve avere almeno ${MEMBER_PASSWORD_MIN_LENGTH} caratteri.`;
@@ -144,13 +144,13 @@ function validateStep2(
 ): Record<string, string> {
   const e: Record<string, string> = {};
   if (requireMembershipDocument && !f.documentoIdentita) {
-    e.documentoIdentita = "Carica il documento di identita per procedere.";
+    e.documentoIdentita = "Carica il documento di identità per procedere.";
   }
   if (!f.privacy) {
-    e.privacy = "E necessario dichiarare di aver letto l'informativa privacy per procedere.";
+    e.privacy = "È necessario dichiarare di aver letto l'informativa privacy per procedere.";
   }
   if (hasStatute && !f.statuto) {
-    e.statuto = "E necessario accettare lo statuto dell'associazione per procedere.";
+    e.statuto = "È necessario accettare lo statuto dell'associazione per procedere.";
   }
   return e;
 }
@@ -604,7 +604,7 @@ const Iscrizione = () => {
   });
   const liveFiscalCodeError =
     form.codiceFiscale.trim() && !fiscalCodeValidation.isFormallyValid
-      ? "Il codice fiscale non e valido. Verifica formato e checksum."
+      ? "Il codice fiscale non ? valido. Verifica formato e checksum."
       : "";
   const fiscalCodeWarning =
     form.codiceFiscale.trim() &&
@@ -616,7 +616,7 @@ const Iscrizione = () => {
     adultsOnlyBannerEnabled &&
     form.dataNascita &&
     !isAtLeast18YearsOld(form.dataNascita)
-      ? "Per questa associazione l'iscrizione e consentita solo ai maggiori di 18 anni."
+      ? "Per questa associazione l'iscrizione è consentita solo ai maggiori di 18 anni."
       : "";
 
   const updateField = (field: keyof FormData, value: string | boolean | File | null) => {
@@ -796,7 +796,7 @@ const Iscrizione = () => {
     if (membershipDocumentRequired && !form.documentoIdentita) {
       setErrors((prev) => ({
         ...prev,
-        documentoIdentita: "Carica il documento di identita per completare l'iscrizione.",
+        documentoIdentita: "Carica il documento di identità per completare l'iscrizione.",
       }));
       setSubmitError("Completa il caricamento del documento richiesto per inviare la richiesta.");
       moveToStep(2, -1);
@@ -804,7 +804,7 @@ const Iscrizione = () => {
     }
 
     if (!membershipPaymentRequired && !form.modalitaPagamento) {
-      setSubmitError("Seleziona la modalita di pagamento.");
+      setSubmitError("Seleziona la modalità di pagamento.");
       return;
     }
 
@@ -917,7 +917,7 @@ const Iscrizione = () => {
     : form.statoEsteroNascita
       ? form.comuneNascitaCode
         ? `Codice Stato estero: ${form.comuneNascitaCode}`
-        : "Seleziona lo Stato estero: il codice fiscale verra calcolato con il relativo codice catastale."
+        : "Seleziona lo Stato estero: il codice fiscale verrà calcolato con il relativo codice catastale."
     : municipalityLookupError
       ? municipalityLookupError
       : form.comuneNascitaCode
@@ -960,7 +960,7 @@ const Iscrizione = () => {
           <div className="surface mx-auto max-w-2xl p-8">
             <h1 className="text-lg font-semibold text-neutral-900">Associazione non trovata</h1>
             <p className="mt-3 text-sm leading-7 text-neutral-600">
-              Il collegamento non e corretto oppure l'associazione non e disponibile.
+              Il collegamento non ? corretto oppure l'associazione non è disponibile.
             </p>
             <div className="mt-6">
               <Link className="btn-primary" to="/associazioni">
@@ -985,7 +985,7 @@ const Iscrizione = () => {
               Richiesta registrata
             </h1>
             <p className="mx-auto mt-4 max-w-xl text-lg leading-8 text-slate-500">
-              La richiesta di iscrizione a <span className="font-semibold text-slate-950">{associationName}</span> e stata inviata correttamente. Se l'account e stato creato, verrai reindirizzato alla tua area riservata.
+              La richiesta di iscrizione a <span className="font-semibold text-slate-950">{associationName}</span> è stata inviata correttamente. Se l'account è stato creato, verrai reindirizzato alla tua area riservata.
             </p>
             <div className="mt-8 rounded-[1.6rem] border border-slate-200 bg-slate-50/70 px-6 py-5">
               <p className="text-sm leading-7 text-slate-500">
@@ -1355,7 +1355,7 @@ const Iscrizione = () => {
                         ) : (
                           <SelectField
                             id="modalitaPagamento"
-                            label="Modalita di pagamento"
+                            label="Modalità di pagamento"
                             error={errors.modalitaPagamento}
                             value={form.modalitaPagamento}
                             onChange={(event) =>
@@ -1404,10 +1404,10 @@ const Iscrizione = () => {
                     <div className="signup-wizard-card px-6 py-7 md:px-10 md:py-10">
                       <CardHeader
                         iconPath="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
-                        title="Documento di identita"
+                        title="Documento di identità"
                         description={
                           membershipDocumentRequired
-                            ? "Carica una copia leggibile del documento in corso di validita. Questo passaggio e obbligatorio."
+                            ? "Carica una copia leggibile del documento in corso di validità. Questo passaggio ? obbligatorio."
                             : "Se preferisci, puoi allegare subito un documento valido. Il passaggio resta facoltativo."
                         }
                         rightSlot={
@@ -1512,7 +1512,7 @@ const Iscrizione = () => {
 
                       {!org.has_statute ? (
                         <div className="mt-8 rounded-[1.6rem] border border-amber-200 bg-amber-50/70 px-6 py-5 text-base leading-7 text-amber-800">
-                          Lo statuto non e ancora disponibile per questa associazione. Puoi comunque proseguire con la sola presa visione dell'informativa privacy.
+                          Lo statuto non è ancora disponibile per questa associazione. Puoi comunque proseguire con la sola presa visione dell'informativa privacy.
                         </div>
                       ) : null}
 
@@ -1650,13 +1650,13 @@ const Iscrizione = () => {
                               </>
                             ) : (
                               <SummaryItem
-                                label="Modalita di pagamento"
+                                label="Modalità di pagamento"
                                 value={paymentMethodLabel}
                                 muted={paymentMethodLabel === "-"}
                               />
                             )}
                             <SummaryItem
-                              label="Documento d'identita allegato"
+                              label="Documento d'identità allegato"
                               value={
                                 form.documentoIdentita?.name ||
                                 (membershipDocumentRequired

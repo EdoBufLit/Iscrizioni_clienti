@@ -401,7 +401,7 @@ export function CommunicationsOverview({
           ) : (
             <div className="org-empty-state">
               <p className="org-empty-state__title">Nessuna attività recente</p>
-              <p className="org-empty-state__description">Le campagne inviate e i form aggiornati compariranno qui.</p>
+              <p className="org-empty-state__description">Le campagne inviate e i form aggiornati comparirànno qui.</p>
             </div>
           )}
         </SectionPanel>

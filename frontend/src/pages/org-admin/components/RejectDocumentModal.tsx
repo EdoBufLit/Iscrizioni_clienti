@@ -83,7 +83,7 @@ const RejectDocumentModal = memo(function RejectDocumentModal({
             onClick={() => {
               const trimmed = note.trim();
               if (!trimmed) {
-                setLocalError("La motivazione e obbligatoria.");
+                setLocalError("La motivazione ? obbligatoria.");
                 return;
               }
               onConfirm(trimmed);

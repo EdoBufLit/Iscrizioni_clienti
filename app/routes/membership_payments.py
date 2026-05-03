@@ -114,9 +114,9 @@ async def _upsert_member_for_checkout(
     id_document: UploadFile | None,
 ) -> Member:
     if org.statute_pdf_path and not accept_statute:
-        raise HTTPException(status_code=400, detail="E necessario accettare lo statuto per procedere.")
+        raise HTTPException(status_code=400, detail="È necessario accettare lo statuto per procedere.")
     if not accept_privacy:
-        raise HTTPException(status_code=400, detail="E necessario accettare l'informativa privacy.")
+        raise HTTPException(status_code=400, detail="È necessario accettare l'informativa privacy.")
     if password and len(password) < MIN_MEMBER_PASSWORD_LENGTH:
         raise HTTPException(status_code=400, detail=f"La password deve avere almeno {MIN_MEMBER_PASSWORD_LENGTH} caratteri.")
 
@@ -127,7 +127,7 @@ async def _upsert_member_for_checkout(
     ):
         raise HTTPException(
             status_code=400,
-            detail="La tessera temporanea non e disponibile per questa associazione.",
+            detail="La tessera temporanea non è disponibile per questa associazione.",
         )
 
     normalized_email = email.strip().lower()
@@ -173,7 +173,7 @@ async def _upsert_member_for_checkout(
     if require_membership_document and not id_document and not existing_identity_document:
         raise HTTPException(
             status_code=400,
-            detail="Per completare l'iscrizione e necessario caricare il documento di identita.",
+            detail="Per completare l'iscrizione è necessario caricare il documento di identità.",
         )
 
     client_ip = get_client_ip(request)
@@ -348,7 +348,7 @@ async def create_membership_payment_checkout(
     )
     if latest_payment:
         if payment_status_is_paid(latest_payment.status):
-            raise HTTPException(status_code=409, detail="La quota associativa risulta gia pagata.")
+            raise HTTPException(status_code=409, detail="La quota associativa risulta già pagata.")
         if latest_payment.status == MembershipPaymentStatus.PENDING.value and latest_payment.sumup_checkout_id:
             verified_payload = verify_sumup_checkout(org, latest_payment)
             update_payment_state_from_sumup(
@@ -359,7 +359,7 @@ async def create_membership_payment_checkout(
             )
             if payment_status_is_paid(latest_payment.status):
                 db.commit()
-                raise HTTPException(status_code=409, detail="La quota associativa risulta gia pagata.")
+                raise HTTPException(status_code=409, detail="La quota associativa risulta già pagata.")
             if latest_payment.status == MembershipPaymentStatus.PENDING.value and latest_payment.hosted_checkout_url:
                 db.commit()
                 return {

@@ -171,11 +171,11 @@ def default_form_whatsapp_confirmation_template(form_type: Any, *, booking_enabl
     normalized_form_type = normalize_form_type(form_type, booking_enabled=booking_enabled)
     if booking_enabled or normalized_form_type == "booking":
         return (
-            "Ciao {{nome_contatto}}, la tua prenotazione per {{nome_associazione}} e stata confermata. "
+            "Ciao {{nome_contatto}}, la tua prenotazione per {{nome_associazione}} è stata confermata. "
             "Dettagli: {{riepilogo_prenotazione}}."
         )
     return (
-        "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} e stata confermata. "
+        "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} è stata confermata. "
         "Ti ricontatteremo se serviranno altri dettagli."
     )
 
@@ -184,11 +184,11 @@ def default_form_whatsapp_rejection_template(form_type: Any, *, booking_enabled:
     normalized_form_type = normalize_form_type(form_type, booking_enabled=booking_enabled)
     if booking_enabled or normalized_form_type == "booking":
         return (
-            "Ciao {{nome_contatto}}, la tua prenotazione per {{nome_associazione}} non puo essere confermata. "
+            "Ciao {{nome_contatto}}, la tua prenotazione per {{nome_associazione}} non può essere confermata. "
             "{{motivo_rigetto}}"
         )
     return (
-        "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} e stata rigettata. "
+        "Ciao {{nome_contatto}}, la tua richiesta per {{titolo_form}} è stata rigettata. "
         "{{motivo_rigetto}}"
     )
 
@@ -821,7 +821,7 @@ def _validate_single_value(field: FormField, value: Any) -> tuple[Any, str | Non
         if normalized not in options:
             raise HTTPException(
                 status_code=422,
-                detail=f"Il valore selezionato per '{field.label}' non e valido.",
+                detail=f"Il valore selezionato per '{field.label}' non ? valido.",
             )
         return normalized, None
     if field_type == "checkbox":
@@ -836,7 +836,7 @@ def _validate_single_value(field: FormField, value: Any) -> tuple[Any, str | Non
         if invalid:
             raise HTTPException(
                 status_code=422,
-                detail=f"Il valore selezionato per '{field.label}' non e valido.",
+                detail=f"Il valore selezionato per '{field.label}' non ? valido.",
             )
         return normalized_values, None
     if field_type == FIELD_TYPE_CONSENT:
@@ -867,14 +867,14 @@ def validate_form_submission_payload(
             if field.is_required and not normalized_value:
                 raise HTTPException(
                     status_code=422,
-                    detail=f"Il campo '{field.label}' e obbligatorio.",
+                    detail=f"Il campo '{field.label}' ? obbligatorio.",
                 )
         else:
             empty = normalized_value in (None, "", [])
             if field.is_required and empty:
                 raise HTTPException(
                     status_code=422,
-                    detail=f"Il campo '{field.label}' e obbligatorio.",
+                    detail=f"Il campo '{field.label}' ? obbligatorio.",
                 )
         normalized_payload[field.field_key] = normalized_value
         if detected_email and submitter_email is None:
@@ -900,7 +900,7 @@ def ensure_submission_allowed(
         if already_sent is not None:
             raise HTTPException(
                 status_code=409,
-                detail="Hai gia inviato questo form.",
+                detail="Hai già inviato questo form.",
             )
         return
 
@@ -913,7 +913,7 @@ def ensure_submission_allowed(
             if isinstance(value, str) and value.strip().lower() == submitter_email:
                 raise HTTPException(
                     status_code=409,
-                    detail="Questo indirizzo email ha gia inviato il form.",
+                    detail="Questo indirizzo email ha già inviato il form.",
                 )
 
 
@@ -1124,11 +1124,11 @@ def enqueue_submission_notifications(
         else:
             confirmation_text = (
                 f"Abbiamo ricevuto la tua richiesta per '{form.title}'.\n\n"
-                f"{form.success_message or 'Ti ricontatteremo al piu presto.'}"
+                f"{form.success_message or 'Ti ricontatteremo al più presto.'}"
             )
             confirmation_html = (
                 f"<p>Abbiamo ricevuto la tua richiesta per <strong>{html.escape(form.title)}</strong>.</p>"
-                f"<p>{html.escape(form.success_message or 'Ti ricontatteremo al piu presto.')}</p>"
+                f"<p>{html.escape(form.success_message or 'Ti ricontatteremo al più presto.')}</p>"
             )
             enqueue_email(
                 db,

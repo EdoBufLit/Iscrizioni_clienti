@@ -280,7 +280,7 @@ SYSTEM_EMAIL_TEMPLATES = [
         body_text=(
             "Ciao {{nome_socio}},\n\n"
             "benvenuto in {{nome_associazione}}.\n"
-            "La tua tessera numero {{numero_tessera}} e stata registrata correttamente.\n\n"
+            "La tua tessera numero {{numero_tessera}} è stata registrata correttamente.\n\n"
             "Per eventuali aggiornamenti puoi usare questo link: {{link_documento}}"
         ),
     ),
@@ -291,18 +291,18 @@ SYSTEM_EMAIL_TEMPLATES = [
         subject="Iscrizione approvata per {{nome_socio}}",
         body_text=(
             "Ciao {{nome_socio}},\n\n"
-            "la tua iscrizione a {{nome_associazione}} e stata approvata.\n"
-            "La tua tessera numero {{numero_tessera}} e attiva fino al {{data_scadenza}}."
+            "la tua iscrizione a {{nome_associazione}} è stata approvata.\n"
+            "La tua tessera numero {{numero_tessera}} è attiva fino al {{data_scadenza}}."
         ),
     ),
     _system_template(
         name="Tessera disponibile",
         category="membership",
         template_type=EMAIL_TEMPLATE_TYPE_GENERIC_NOTICE,
-        subject="La tua tessera {{numero_tessera}} e disponibile",
+        subject="La tua tessera {{numero_tessera}} è disponibile",
         body_text=(
             "Ciao {{nome_socio}},\n\n"
-            "la tua tessera di {{nome_associazione}} e disponibile.\n"
+            "la tua tessera di {{nome_associazione}} è disponibile.\n"
             "Numero tessera: {{numero_tessera}}\n"
             "Scadenza: {{data_scadenza}}"
         ),
@@ -347,7 +347,7 @@ SYSTEM_EMAIL_TEMPLATES = [
         subject="Nuovo documento disponibile per {{nome_socio}}",
         body_text=(
             "Ciao {{nome_socio}},\n\n"
-            "e disponibile un nuovo documento relativo a {{nome_associazione}}.\n"
+            "È disponibile un nuovo documento relativo a {{nome_associazione}}.\n"
             "Puoi consultarlo qui: {{link_documento}}"
         ),
     ),
@@ -369,7 +369,7 @@ SYSTEM_EMAIL_TEMPLATES = [
         subject="Aggiornamenti da {{nome_associazione}}",
         body_text=(
             "Ciao {{nome_socio}},\n\n"
-            "ecco gli aggiornamenti piu importanti della settimana da {{nome_associazione}}.\n\n"
+            "ecco gli aggiornamenti più importanti della settimana da {{nome_associazione}}.\n\n"
             "{{messaggio_org}}"
         ),
     ),
@@ -391,7 +391,7 @@ SYSTEM_EMAIL_TEMPLATES = [
         subject="Prenotazione confermata - {{nome_associazione}}",
         body_text=(
             "Ciao {{nome_socio}},\n\n"
-            "la tua prenotazione per {{nome_evento}} e stata confermata.\n"
+            "la tua prenotazione per {{nome_evento}} è stata confermata.\n"
             "Dettagli: {{data_evento}}\n"
             "Stato: {{stato_prenotazione}}"
         ),
@@ -403,7 +403,7 @@ SYSTEM_EMAIL_TEMPLATES = [
         subject="Prenotazione non confermata - {{nome_associazione}}",
         body_text=(
             "Ciao {{nome_socio}},\n\n"
-            "la tua richiesta per {{nome_evento}} non puo essere confermata.\n"
+            "la tua richiesta per {{nome_evento}} non può essere confermata.\n"
             "{{messaggio_org}}"
         ),
     ),

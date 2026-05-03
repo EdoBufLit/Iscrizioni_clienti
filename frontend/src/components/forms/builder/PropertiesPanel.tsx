@@ -18,7 +18,7 @@ export function PropertiesPanel({ selectedField, onChange, locked }: Props) {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6V4m0 2a2 2 0 1 0 0 4m0-4a2 2 0 1 1 0 4m-6 8a2 2 0 1 0 0-4m0 4a2 2 0 1 1 0-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 1 0 0-4m0 4a2 2 0 1 1 0-4m0 4v2m0-6V4" />
         </svg>
         <p className="text-sm font-semibold text-slate-700">Nessun campo selezionato</p>
-        <p className="mt-1 text-xs">Clicca un elemento nel canvas per modificarne le proprieta.</p>
+        <p className="mt-1 text-xs">Clicca un elemento nel canvas per modificarne le proprietà.</p>
       </div>
     );
   }
@@ -37,14 +37,14 @@ export function PropertiesPanel({ selectedField, onChange, locked }: Props) {
   return (
     <div className="space-y-6">
       <div className="form-builder-properties__header border-b pb-4">
-        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Proprieta campo</p>
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Proprietà campo</p>
         <h3 className="mt-2 text-base font-semibold text-slate-950">{selectedField.label || "Campo selezionato"}</h3>
       </div>
 
       <div className="space-y-5">
         {isStructural ? (
           <div className="form-builder-properties-note rounded-[0.75rem] border border-dashed p-4 text-center">
-            <p className="text-xs text-slate-500">Questo elemento non ha proprieta configurabili.</p>
+            <p className="text-xs text-slate-500">Questo elemento non ha proprietà configurabili.</p>
           </div>
         ) : (
           <>

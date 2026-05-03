@@ -57,7 +57,7 @@ def _normalize_payment_method(raw_value: str | None) -> str | None:
     if normalized not in _ALLOWED_PAYMENT_METHODS:
         raise HTTPException(
             status_code=400,
-            detail="Modalita di pagamento non valida. Valori ammessi: CASH, BONIFICO.",
+            detail="Modalità di pagamento non valida. Valori ammessi: CASH, BONIFICO.",
         )
     return normalized
 
@@ -310,7 +310,7 @@ async def resubmit_document(
         raise HTTPException(status_code=404, detail="Document not found")
 
     if doc.status != DocStatus.REJECTED.value:
-        raise HTTPException(status_code=400, detail="Il documento puo essere reinviato solo se rigettato.")
+        raise HTTPException(status_code=400, detail="Il documento può essere reinviato solo se rigettato.")
 
     sub_path = f"{member.org_id}/{member.id}"
     rel_path, size_bytes, sha256 = await save_upload_file(document, sub_directory=sub_path)

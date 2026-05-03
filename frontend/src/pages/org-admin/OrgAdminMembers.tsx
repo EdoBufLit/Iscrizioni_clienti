@@ -418,7 +418,7 @@ function MemberSidePanel({
   if (!member) {
     return (
       <DetailPanel title="Dettaglio socio" eyebrow="Master detail">
-        <EmptyState title="Nessun socio selezionato" description="Seleziona una riga per vedere tessera, stato e attivita recente." />
+        <EmptyState title="Nessun socio selezionato" description="Seleziona una riga per vedere tessera, stato e attività recente." />
       </DetailPanel>
     );
   }
@@ -467,7 +467,7 @@ function MemberSidePanel({
         </div>
 
         <div className="rounded-[0.85rem] border border-slate-200 bg-white p-4">
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Attivita recente</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Attività recente</p>
           <div className="mt-3 space-y-3 text-sm">
             <div className="flex justify-between gap-3">
               <span className="text-slate-600">Documenti caricati</span>

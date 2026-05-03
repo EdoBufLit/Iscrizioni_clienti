@@ -28,7 +28,7 @@ const OrgAdminLogin = () => {
       await requestOrgAdminMagicLink(email.trim());
       setSent(true);
     } catch {
-      setError("Si e verificato un errore. Riprova piu tardi.");
+      setError("Si ? verificato un errore. Riprova più tardi.");
     } finally {
       setSubmitting(false);
     }

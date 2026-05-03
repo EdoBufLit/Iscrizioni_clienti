@@ -4689,3 +4689,39 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Verifiche OK: `python -m pytest -q tests/test_org_admin_communications.py::test_org_admin_whatsapp_automations_create_list_and_update`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
 - Smoke builder campagne live su `https://assonam.it/org-admin/comunicazioni?tab=campagne&mode=create`: autenticazione con magic-link temporaneo live, screenshot in `tasks/screenshots/live-builder-smoke-20260501/`, nessuna response 4xx/5xx, nessun errore console, rail sinistro con superfici bianche e nessun fondo opaco scuro.
 - Smoke `/associazioni` dark locale mockato: screenshot in `tasks/screenshots/associazioni-dark-smoke-20260501/`, plate `rgb(248, 250, 252)` e icona `rgb(15, 118, 110)`.
+
+## Plan (Microcopy, conferme distruttive e responsive tabelle/filtri - May 3, 2026)
+- [x] Inventariare testi visibili e status ancora dispersi in Org Admin, Super Admin e flussi pubblici; creare una mappa prioritaria di label, stati, errori, successi ed empty state da centralizzare.
+- [x] Introdurre/rafforzare primitive leggere per microcopy: `statusLabels`, action labels contestuali, helper per error/success copy e linee guida per usare "modulo" vs "form" senza cambiare nomi tecnici/API.
+- [ ] Correggere microcopy sulle superfici ad alto traffico residue: Affiliazioni, Iscrizione, Super Admin Affiliazioni/Documenti e accounting.
+- [x] Inventariare tutte le azioni distruttive residue: eliminazione sale, tavoli, assegnazioni, form/campi, lotti, admin, documenti, cartelle/categorie, campagne/modelli/asset e associazioni.
+- [x] Standardizzare le conferme distruttive con `ConfirmModal`/`ModalShell`: titolo specifico, descrizione impatto, oggetto coinvolto, CTA contestuale, loading state, errore inline e toast successivo.
+- [x] Ridurre conferme testuali tipo "digita ELIMINA" ai soli purge irreversibili; per azioni normali usare checkbox "Confermo..." o conferma modale semplice.
+- [x] Definire pattern responsive condiviso per tabelle: desktop tabella completa, tablet colonne essenziali, mobile card verticali con label/valore e azioni in menu/bottom sheet.
+- [x] Definire pattern filtri responsive: toolbar desktop, barra compatta tablet, bottone "Filtri" mobile con drawer/bottom sheet, badge filtri attivi e comando "Reset".
+- [x] Applicare la prima tranche sulle superfici operative con maggiore impatto immediato: `MembersTable`, `OrgAdminInvites`, `OrgAdminBookings`, `OrgAdminForms` e `SuperAdminOrganizations`.
+- [ ] Applicare la seconda tranche a `SuperAdminAffiliations`, `SuperAdminDocuments`, accounting e liste Comunicazioni rimaste solo table/overflow.
+- [x] Verificare ogni tranche con `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, smoke browser a 375/768/1024/1440px, controllo light/dark e test backend solo dove cambiano contratti dati.
+
+## Review (Microcopy, conferme distruttive e responsive tabelle/filtri - May 3, 2026)
+- `frontend/src/lib/statusLabels.ts` ora contiene copy condivisa per empty state, azioni distruttive e status soci/workflow/affiliazione organizzazione, cosi le superfici toccate non duplicano piu label e fallback.
+- `ConfirmModal` supporta oggetto coinvolto, testo di impatto, errore inline e checkbox opzionale per azioni piu rischiose.
+- Prenotazioni: eliminazione sale e tavoli passa da azione immediata a conferma modale con oggetto, impatto e loading state.
+- Form/Sondaggi: eliminazione modulo e campo passa da doppio click/arm state a `ConfirmModal`; il copy usa "modulo" nella UI primaria.
+- Responsive prima tranche: `MembersTable`, `OrgAdminInvites` e `SuperAdminOrganizations` mantengono tabella desktop ma su mobile mostrano card verticali con label/valore e azioni esplicite.
+- Filtri: `OrgAdminInvites` ora espone reset filtri contestuale; `MembersTable` e `SuperAdminOrganizations` mantengono i filtri esistenti con risultato mobile leggibile.
+- Verifiche eseguite: `npm --prefix frontend run typecheck` OK; `npm --prefix frontend run build` OK con solo warning Vite chunk grandi gia noto.
+
+## Plan (Accenti italiani microcopy visibile - May 3, 2026)
+- [x] Aggiungere lesson sulla correzione: microcopy globale include anche accenti italiani, non solo status/label centralizzati.
+- [x] Scansionare frontend, messaggi API, email e WhatsApp template per forme non accentate frequenti senza toccare path/slug/enum/chiavi tecniche.
+- [x] Correggere le occorrenze user-facing ad alta confidenza: `?`, `gi?`, `pu?`, `pi?`, `perch?`, `cos?`, `verr?`, `sar?`, `modalit?`, `validit?`, `attivit?`, `contabilit?`, `localit?`, `disponibilit?`, `identit?`, `citt?`.
+- [x] Eseguire typecheck/build frontend e almeno py_compile sui moduli backend toccati.
+- [x] Documentare review con pattern rimasti esclusi se tecnici o non sicuri.
+
+## Review (Accenti italiani microcopy visibile - May 3, 2026)
+- Corretta la microcopy visibile in frontend, messaggi API, template email/WhatsApp e testi pubblici ad alta confidenza.
+- Riparate anche le conversioni non valide emerse durante la passata meccanica (`?` e mojibake UTF-8).
+- Lasciati invariati slug, route e identificatori tecnici, ad esempio `/org-admin/contabilita`, `modalitaPagamento`, enum e chiavi API.
+- Scansione finale sulle forme frequenti e sui caratteri corrotti: `TOTAL=0`.
+- Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `python -m compileall -q app`.
