@@ -7,6 +7,7 @@ from app.config import settings
 from app.db import SessionLocal
 from app.models import AdminRole, AdminUser, Organization
 from app.models_affiliation import AffiliationApplication, AffiliationVideoMode, VideoJob, VideoJobStatus
+from app.utils import clear_captured_emails, get_captured_emails
 
 
 @pytest.fixture
@@ -263,7 +264,9 @@ def test_super_admin_affiliations_summary_uses_filtered_dataset_not_page(client,
     }
 
 
-def test_affiliation_approve_requires_docs_and_payment_verification(client, db):
+def test_affiliation_approve_requires_docs_and_payment_verification(client, db, drain_email_outbox, monkeypatch):
+    monkeypatch.setattr(settings, "EMAIL_MODE", "test", raising=False)
+    monkeypatch.setattr(settings, "ASSONAM_WHATSAPP_BOT_NUMBER", "+390299914307", raising=False)
     email = f"draft-approve-{uuid.uuid4().hex[:10]}@example.com"
     draft = _create_draft(client, email=email)
     token = draft["public_token"]
@@ -310,6 +313,7 @@ def test_affiliation_approve_requires_docs_and_payment_verification(client, db):
     assert verify_payment.status_code == 200, verify_payment.text
     assert verify_payment.json()["payment_status"] == "verified"
 
+    clear_captured_emails()
     approve_response = client.post(
         f"/api/super-admin/affiliations/{application_id}/approve",
         json={"notes": "Approvata dopo verifiche complete"},
@@ -337,6 +341,17 @@ def test_affiliation_approve_requires_docs_and_payment_verification(client, db):
     )
     assert org_admin is not None
     assert (org_admin.email or "").lower() == email.lower()
+
+    drain_email_outbox()
+    captured = get_captured_emails()
+    invite = next((message for message in captured if message["to"] == email.lower()), None)
+    assert invite is not None
+    assert "Comunicazioni" in (invite["html_body"] or "")
+    assert "150 euro" in (invite["html_body"] or "")
+    assert invite["attachments"]
+    assert invite["attachments"][0]["filename"] == "guida-assonam-area-admin.pdf"
+    assert invite["attachments"][0]["content_type"] == "application/pdf"
+    assert invite["attachments"][0]["size"] > 1000
 
 
 def test_affiliation_draft_reports_video_ready_when_latest_job_failed_but_file_exists(

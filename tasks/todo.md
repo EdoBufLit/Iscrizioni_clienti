@@ -4725,3 +4725,33 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Lasciati invariati slug, route e identificatori tecnici, ad esempio `/org-admin/contabilita`, `modalitaPagamento`, enum e chiavi API.
 - Scansione finale sulle forme frequenti e sui caratteri corrotti: `TOTAL=0`.
 - Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `python -m compileall -q app`.
+
+## Plan (Guida automatica nuovi org admin - May 3, 2026)
+- [x] Individuare il flusso reale di creazione org admin da Super Admin e il trasporto email/outbox esistente.
+- [x] Estendere l'outbox email per allegati PDF generici senza rompere le immagini inline già usate.
+- [x] Creare una guida ASSO.N.A.M. breve e chiara in PDF, con immagini/illustrazioni esplicative, numero bot WhatsApp, avvisi tessere in esaurimento, area riservata e modulo Comunicazioni da 150 euro.
+- [x] Rendere la mail di invito org admin una mail HTML completa, con guida nel corpo e PDF allegato.
+- [x] Coprire il flusso con test su invito Super Admin e approvazione affiliazione dove nasce un org admin.
+- [x] Eseguire test mirati, compile Python e documentare l'esito.
+
+## Review (Guida automatica nuovi org admin - May 3, 2026)
+- Aggiunto payload email di benvenuto org admin con corpo HTML chiaro, riepilogo operativo e allegato `guida-assonam-area-admin.pdf`.
+- La guida PDF viene generata server-side con ReportLab e include illustrazioni/cards su area riservata, richiesta nuove tessere via bot WhatsApp, avvisi scorte via WhatsApp/email e modulo Comunicazioni opzionale da 150 euro.
+- Il numero bot usa `ASSONAM_WHATSAPP_BOT_NUMBER`, poi `TWILIO_WHATSAPP_FROM`, poi fallback `+390299914307`.
+- Il flusso è collegato sia alla creazione admin da Super Admin sia all'admin creato dopo approvazione affiliazione.
+- Esteso l'outbox e i transport SMTP/Mailtrap per allegati generici senza cambiare il comportamento delle immagini inline esistenti.
+- Verifiche OK: `python -m pytest -q tests/test_email_flows.py::test_super_admin_create_flow_email tests/test_email_flows.py::test_org_admin_magic_link_flow tests/test_affiliation_flow.py::test_affiliation_approve_requires_docs_and_payment_verification`, `python -m compileall -q app`, `git diff --check`.
+
+## Plan (KPI consumo email comunicazioni e report mensile - May 4, 2026)
+- [x] Individuare la panoramica Comunicazioni org admin e i KPI attuali da sostituire.
+- [x] Verificare dove vengono tracciati invii email/campagne e come viene letto il flag `communications_enabled`.
+- [x] Aggiungere un endpoint/serializzazione usage mensile con limite 5.000 email e conteggio extra oltre soglia.
+- [x] Sostituire i KPI "Email configurata" e "Bozze aperte" con "Email usate" e "Email extra", includendo nota costo 1 cent oltre limite.
+- [x] Implementare job mensile idempotente per inviare al super admin personale il riepilogo per tutte le org con Comunicazioni attivo, anche con extra pari a zero.
+- [x] Aggiungere o aggiornare test mirati backend/frontend e verificare compilazione/build.
+
+## Review (KPI consumo email comunicazioni e report mensile - May 4, 2026)
+- Panoramica Comunicazioni: sostituiti i KPI "Bozze aperte" ed "Email configurata" con "Email usate" (`usate / 5.000`) ed "Email extra" (totale EUR dovuto), con nota piccola `0,01 EUR` per email oltre limite.
+- Backend: aggiunto `GET /api/org-admin/communications/usage`, conteggiando gli invii campagna riusciti nel mese corrente da `EmailCampaignRecipient.sent_at` solo per org con modulo Comunicazioni attivo.
+- Report mensile: il worker email accoda una mail al `SUPER_ADMIN_EMAIL` per il mese appena chiuso, con dedupe key per inviarla una sola volta; include tutte le org attive con Comunicazioni attivo, anche quando extra e importo sono zero.
+- Verifiche OK: test mirati usage/report/worker, `python -m compileall -q app`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.

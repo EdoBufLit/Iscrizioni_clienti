@@ -397,7 +397,8 @@ def test_org_admin_deleted_flow(client):
     assert res.status_code == 200 # Anti-enumeration
     assert len(get_captured_emails()) == 0 # No email sent
 
-def test_super_admin_create_flow_email(client, drain_email_outbox):
+def test_super_admin_create_flow_email(client, drain_email_outbox, monkeypatch):
+    monkeypatch.setattr(settings, "ASSONAM_WHATSAPP_BOT_NUMBER", "+390299914307", raising=False)
     # Login as super admin
     client.post("/api/super-admin/auth/login", json={"email": "admin@assonam.it", "password": "admin"})
 
@@ -413,6 +414,18 @@ def test_super_admin_create_flow_email(client, drain_email_outbox):
     captured = get_captured_emails()
     assert len(captured) == 1
     assert captured[0]["to"] == email
+    assert "Invito area amministrazione associazione" in captured[0]["subject"]
+    assert "Benvenuto nell'area amministratore" in (captured[0]["html_body"] or "")
+    assert "150 euro" in (captured[0]["html_body"] or "")
+    assert "+39" in (captured[0]["html_body"] or "")
+    assert captured[0]["attachments"] == [
+        {
+            "filename": "guida-assonam-area-admin.pdf",
+            "content_type": "application/pdf",
+            "size": captured[0]["attachments"][0]["size"],
+        }
+    ]
+    assert captured[0]["attachments"][0]["size"] > 1000
 
     body = captured[0]["body"]
     import re

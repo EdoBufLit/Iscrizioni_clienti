@@ -69,6 +69,25 @@ def _serialize_inline_images(inline_images: list[dict] | None) -> list[dict]:
     return serialized
 
 
+def _serialize_attachments(attachments: list[dict] | None) -> list[dict]:
+    serialized = []
+    for item in attachments or []:
+        data = item.get("data")
+        if not isinstance(data, (bytes, bytearray)) or not data:
+            continue
+        serialized.append(
+            {
+                "filename": str(item.get("filename") or "attachment.bin").strip()
+                or "attachment.bin",
+                "content_type": str(
+                    item.get("content_type") or "application/octet-stream"
+                ).strip(),
+                "data_b64": base64.b64encode(bytes(data)).decode("ascii"),
+            }
+        )
+    return serialized
+
+
 def _deserialize_inline_images(inline_images: list[dict] | None) -> list[dict]:
     decoded = []
     for item in inline_images or []:
@@ -86,11 +105,31 @@ def _deserialize_inline_images(inline_images: list[dict] | None) -> list[dict]:
     return decoded
 
 
+def _deserialize_attachments(attachments: list[dict] | None) -> list[dict]:
+    decoded = []
+    for item in attachments or []:
+        data_b64 = str(item.get("data_b64") or "").strip()
+        if not data_b64:
+            continue
+        decoded.append(
+            {
+                "filename": str(item.get("filename") or "attachment.bin").strip()
+                or "attachment.bin",
+                "content_type": str(
+                    item.get("content_type") or "application/octet-stream"
+                ).strip(),
+                "data": base64.b64decode(data_b64),
+            }
+        )
+    return decoded
+
+
 def build_email_payload(
     *,
     text_body: str,
     html_body: str | None = None,
     inline_images: list[dict] | None = None,
+    attachments: list[dict] | None = None,
     meta: dict[str, Any] | None = None,
     sender: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -98,6 +137,7 @@ def build_email_payload(
         "text_body": text_body,
         "html_body": html_body,
         "inline_images": _serialize_inline_images(inline_images),
+        "attachments": _serialize_attachments(attachments),
         "meta": meta or {},
         "sender": copy.deepcopy(sender) if sender is not None else build_sender_payload(),
     }
@@ -372,6 +412,7 @@ def _send_claimed_job(job: ClaimedEmailOutboxJob) -> str:
     text_body = str(payload.get("text_body") or "").strip()
     html_body = payload.get("html_body")
     inline_images = _deserialize_inline_images(payload.get("inline_images"))
+    attachments = _deserialize_attachments(payload.get("attachments"))
     sender = payload.get("sender") if isinstance(payload, dict) else None
     sender_mode = "system"
     association = None
@@ -388,6 +429,7 @@ def _send_claimed_job(job: ClaimedEmailOutboxJob) -> str:
         text_body=text_body,
         html_body=str(html_body) if html_body is not None else None,
         inline_images=inline_images or None,
+        attachments=attachments or None,
         mode=sender_mode,
         association=association,
         reply_to=reply_to,

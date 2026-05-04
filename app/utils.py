@@ -6,6 +6,8 @@ import smtplib
 import socket
 import uuid
 import base64
+from email import encoders
+from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -187,6 +189,7 @@ def _build_message(
     text_body: str,
     html_body: Optional[str] = None,
     inline_images: Optional[List[dict]] = None,
+    attachments: Optional[List[dict]] = None,
     from_header: str,
     reply_to: Optional[str] = None,
 ) -> tuple[object, str]:
@@ -195,18 +198,28 @@ def _build_message(
     safe_from = _sanitize_header_value(from_header)
 
     has_inline_images = bool(inline_images)
-    if has_inline_images:
+    has_attachments = bool(attachments)
+    if has_attachments:
+        msg = MIMEMultipart("mixed")
+        body_root = MIMEMultipart("related") if has_inline_images else MIMEMultipart("alternative")
+        msg.attach(body_root)
+    elif has_inline_images:
         msg = MIMEMultipart("related")
+        body_root = msg
+    else:
+        msg = MIMEMultipart("alternative")
+        body_root = msg
+
+    if has_inline_images:
         alt = MIMEMultipart("alternative")
         alt.attach(MIMEText(text_body, "plain", "utf-8"))
         if html_body:
             alt.attach(MIMEText(html_body, "html", "utf-8"))
-        msg.attach(alt)
+        body_root.attach(alt)
     else:
-        msg = MIMEMultipart("alternative")
-        msg.attach(MIMEText(text_body, "plain", "utf-8"))
+        body_root.attach(MIMEText(text_body, "plain", "utf-8"))
         if html_body:
-            msg.attach(MIMEText(html_body, "html", "utf-8"))
+            body_root.attach(MIMEText(html_body, "html", "utf-8"))
 
     provider_message_id = make_msgid()
     msg["From"] = safe_from
@@ -233,7 +246,25 @@ def _build_message(
             image_part = MIMEImage(bytes(data), _subtype=subtype)
             image_part.add_header("Content-ID", f"<{cid}>")
             image_part.add_header("Content-Disposition", "inline", filename=filename)
-            msg.attach(image_part)
+            body_root.attach(image_part)
+
+    for attachment in attachments or []:
+        data = attachment.get("data") or b""
+        if not isinstance(data, (bytes, bytearray)) or not data:
+            continue
+        content_type = str(
+            attachment.get("content_type") or "application/octet-stream"
+        ).strip().lower()
+        filename = str(attachment.get("filename") or "attachment.bin").strip() or "attachment.bin"
+        if "/" in content_type:
+            maintype, subtype = content_type.split("/", 1)
+        else:
+            maintype, subtype = "application", "octet-stream"
+        part = MIMEBase(maintype, subtype)
+        part.set_payload(bytes(data))
+        encoders.encode_base64(part)
+        part.add_header("Content-Disposition", "attachment", filename=filename)
+        msg.attach(part)
 
     return msg, provider_message_id
 
@@ -277,6 +308,7 @@ def _capture_email_for_tests(
     text_body: str,
     html_body: str | None,
     inline_images: list[dict] | None,
+    attachments: list[dict] | None,
     sender_selection: EmailSenderSelection,
     provider_message_id: str,
     transport: str,
@@ -295,6 +327,14 @@ def _capture_email_for_tests(
                     "size": len(item.get("data") or b""),
                 }
                 for item in (inline_images or [])
+            ],
+            "attachments": [
+                {
+                    "filename": str(item.get("filename") or ""),
+                    "content_type": str(item.get("content_type") or ""),
+                    "size": len(item.get("data") or b""),
+                }
+                for item in (attachments or [])
             ],
             "from_name": sender_selection.from_name,
             "from_email": sender_selection.from_email,
@@ -350,8 +390,11 @@ def _extract_provider_message_id(payload: object, fallback: str) -> str:
     return fallback
 
 
-def _build_mailtrap_attachments(inline_images: list[dict] | None) -> list[dict]:
-    attachments: list[dict] = []
+def _build_mailtrap_attachments(
+    inline_images: list[dict] | None,
+    file_attachments: list[dict] | None = None,
+) -> list[dict]:
+    built_attachments: list[dict] = []
     for item in inline_images or []:
         data = item.get("data")
         if not isinstance(data, (bytes, bytearray)) or not data:
@@ -367,8 +410,23 @@ def _build_mailtrap_attachments(inline_images: list[dict] | None) -> list[dict]:
         if cid:
             attachment["disposition"] = "inline"
             attachment["content_id"] = cid
-        attachments.append(attachment)
-    return attachments
+        built_attachments.append(attachment)
+    for item in file_attachments or []:
+        data = item.get("data")
+        if not isinstance(data, (bytes, bytearray)) or not data:
+            continue
+        built_attachments.append(
+            {
+                "content": base64.b64encode(bytes(data)).decode("ascii"),
+                "filename": str(item.get("filename") or "attachment.bin").strip()
+                or "attachment.bin",
+                "type": str(
+                    item.get("content_type") or "application/octet-stream"
+                ).strip(),
+                "disposition": "attachment",
+            }
+        )
+    return built_attachments
 
 
 def _is_retryable_http_status(status_code: int) -> bool:
@@ -409,6 +467,7 @@ def send_association_email_via_mailtrap_api(
     text_body: str,
     html_body: Optional[str] = None,
     inline_images: Optional[List[dict]] = None,
+    attachments: Optional[List[dict]] = None,
     sender_selection: EmailSenderSelection,
 ) -> str:
     provider_message_id = make_msgid()
@@ -427,6 +486,7 @@ def send_association_email_via_mailtrap_api(
             text_body=text_body,
             html_body=html_body,
             inline_images=inline_images or None,
+            attachments=attachments or None,
             sender_selection=sender_selection,
             provider_message_id=provider_message_id,
             transport="mailtrap_api",
@@ -459,9 +519,12 @@ def send_association_email_via_mailtrap_api(
         payload["html"] = html_body
     if sender_selection.reply_to:
         payload["reply_to"] = {"email": sender_selection.reply_to}
-    attachments = _build_mailtrap_attachments(inline_images or None)
-    if attachments:
-        payload["attachments"] = attachments
+    mailtrap_attachments = _build_mailtrap_attachments(
+        inline_images or None,
+        attachments or None,
+    )
+    if mailtrap_attachments:
+        payload["attachments"] = mailtrap_attachments
 
     try:
         response = requests.post(
@@ -535,6 +598,7 @@ def send_email_via_smtp_low_level(
     text_body: str,
     html_body: Optional[str] = None,
     inline_images: Optional[List[dict]] = None,
+    attachments: Optional[List[dict]] = None,
     mode: str = "system",
     association: object | None = None,
     reply_to: Optional[str] = None,
@@ -570,6 +634,7 @@ def send_email_via_smtp_low_level(
         text_body=text_body,
         html_body=html_body,
         inline_images=inline_images,
+        attachments=attachments,
         from_header=sender_selection.from_header,
         reply_to=sender_selection.reply_to,
     )
@@ -581,6 +646,7 @@ def send_email_via_smtp_low_level(
             text_body=text_body,
             html_body=html_body,
             inline_images=inline_images or None,
+            attachments=attachments or None,
             sender_selection=sender_selection,
             provider_message_id=provider_message_id,
             transport="smtp",
@@ -672,6 +738,7 @@ def send_email_via_transport_low_level(
     text_body: str,
     html_body: Optional[str] = None,
     inline_images: Optional[List[dict]] = None,
+    attachments: Optional[List[dict]] = None,
     mode: str = "system",
     association: object | None = None,
     reply_to: Optional[str] = None,
@@ -699,6 +766,7 @@ def send_email_via_transport_low_level(
             text_body=text_body,
             html_body=html_body,
             inline_images=inline_images,
+            attachments=attachments,
             sender_selection=sender_selection,
         )
     return send_email_via_smtp_low_level(
@@ -707,6 +775,7 @@ def send_email_via_transport_low_level(
         text_body=text_body,
         html_body=html_body,
         inline_images=inline_images,
+        attachments=attachments,
         mode=mode,
         association=association,
         reply_to=reply_to,
@@ -721,6 +790,7 @@ def send_email_html(
     text_body: str,
     html_body: str,
     inline_images: Optional[List[dict]] = None,
+    attachments: Optional[List[dict]] = None,
     mode: str = "system",
     association: object | None = None,
     reply_to: Optional[str] = None,
@@ -736,6 +806,7 @@ def send_email_html(
             text_body=text_body,
             html_body=html_body,
             inline_images=inline_images,
+            attachments=attachments,
             mode=mode,
             association=association,
             reply_to=reply_to,

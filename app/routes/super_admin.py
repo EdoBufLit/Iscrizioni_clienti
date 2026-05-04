@@ -55,6 +55,7 @@ from app.services.org_admin_notifications import (
     notify_org_admins_about_accounting_document,
     notify_org_admins_about_shared_document,
 )
+from app.services.org_admin_welcome_guide import build_org_admin_welcome_email_payload
 from app.services.statute_upload import (
     enforce_statute_request_size_from_headers,
     save_statute_pdf,
@@ -1720,6 +1721,40 @@ def super_admin_member_detail(
     }
 
 
+def _enqueue_org_admin_welcome_invite(
+    db: Session,
+    *,
+    admin: AdminUser,
+    org: Organization,
+) -> str:
+    token_str = generate_token()
+    token = OrgAdminToken(
+        admin_id=admin.id,
+        token_hash=hash_token(token_str),
+        expires_at=datetime.utcnow()
+        + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES),
+    )
+    db.add(token)
+    db.flush()
+
+    link = f"{settings.BASE_URL}/api/org-admin/auth/verify?token={token_str}"
+    return enqueue_email(
+        db,
+        email_type="org_admin_invite",
+        to_email=admin.email,
+        subject="Invito area amministrazione associazione",
+        payload=build_org_admin_welcome_email_payload(
+            organization_name=org.name,
+            invite_url=link,
+            meta={
+                "admin_id": admin.id,
+                "org_id": admin.org_id,
+            },
+        ),
+        priority=1,
+    )
+
+
 @router.post("/org-admins")
 def create_org_admin(
     request: Request,
@@ -1748,6 +1783,7 @@ def create_org_admin(
             existing.is_active = True
             existing.password_hash = ""  # Reset credentials
             existing.org_id = body.org_id
+            outbox_id = _enqueue_org_admin_welcome_invite(db, admin=existing, org=org)
             db.commit()
 
             audit.org_admin_restored_on_create(
@@ -1766,6 +1802,8 @@ def create_org_admin(
                 if existing.created_at
                 else None,
                 "restored": True,
+                "email_status": "queued",
+                "outbox_id": outbox_id,
             }
         else:
             raise HTTPException(status_code=409, detail="admin_exists")
@@ -1780,32 +1818,7 @@ def create_org_admin(
     db.add(admin)
     db.flush()
 
-    # Send first magic-link invite
-    token_str = generate_token()
-    token = OrgAdminToken(
-        admin_id=admin.id,
-        token_hash=hash_token(token_str),
-        expires_at=datetime.utcnow()
-        + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES),
-    )
-    db.add(token)
-    db.flush()
-
-    link = f"{settings.BASE_URL}/api/org-admin/auth/verify?token={token_str}"
-    outbox_id = enqueue_email(
-        db,
-        email_type="org_admin_invite",
-        to_email=email_norm,
-        subject="Invito area amministrazione associazione",
-        payload=build_email_payload(
-            text_body=f"Sei stato invitato come amministratore di {org.name}.\nAccedi qui: {link}",
-            meta={
-                "admin_id": admin.id,
-                "org_id": admin.org_id,
-            },
-        ),
-        priority=1,
-    )
+    outbox_id = _enqueue_org_admin_welcome_invite(db, admin=admin, org=org)
     db.commit()
 
     audit.org_admin_created(

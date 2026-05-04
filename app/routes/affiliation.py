@@ -57,7 +57,8 @@ from app.services.affiliation_identity import (
     normalize_affiliation_email,
     sync_affiliation_identity_fields,
 )
-from app.services.email_outbox import build_email_payload, enqueue_email
+from app.services.email_outbox import enqueue_email
+from app.services.org_admin_welcome_guide import build_org_admin_welcome_email_payload
 from app.utils import generate_token, hash_token, save_upload_file
 
 logger = logging.getLogger(__name__)
@@ -835,11 +836,9 @@ def _invite_org_admin(
         email_type="affiliation_approved_org_admin_invite",
         to_email=admin.email,
         subject="Affiliazione approvata - accesso amministratore",
-        payload=build_email_payload(
-            text_body=(
-                f"La tua richiesta per {organization_name} è stata approvata.\n"
-                f"Accedi all'area amministratore: {invite_url}"
-            ),
+        payload=build_org_admin_welcome_email_payload(
+            organization_name=organization_name,
+            invite_url=invite_url,
             meta={"admin_id": admin.id, "org_id": admin.org_id},
         ),
         priority=1,
