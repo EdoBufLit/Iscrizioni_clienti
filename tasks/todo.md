@@ -1,3 +1,19 @@
+## Plan (Fix WhatsApp prenotazioni duplicate e dettagli evento - May 4, 2026)
+- [x] Confermare nel codice il motivo dei due WhatsApp su submit prenotazione.
+- [x] Aggiungere dettagli evento configurabili dall'org admin sul modulo prenotazione: data, orario e note evento.
+- [x] Usare i dettagli evento come sorgente primaria per booking e template WhatsApp, lasciando fallback ai campi form legacy.
+- [x] Evitare doppio invio WhatsApp quando auto-risposta modulo e regola WhatsApp attiva coprono lo stesso evento.
+- [x] Aggiornare UI/API/test e bootstrap schema locale.
+- [x] Eseguire verifiche mirate e documentare review.
+
+## Review (Fix WhatsApp prenotazioni duplicate e dettagli evento - May 4, 2026)
+- Causa doppio invio confermata: sul submit pubblico partivano sia `whatsapp_auto_reply_enabled` del modulo sia le regole attive in `whatsapp_automations` collegate allo stesso form.
+- Correzione: se esiste una regola WhatsApp attiva verso il compilatore per l'evento corrente, l'auto-risposta legacy del modulo viene saltata e resta un solo messaggio.
+- Aggiunti su `forms` i dettagli evento gestiti dall'org admin: `booking_event_date`, `booking_event_time`, `booking_event_details`; sono esposti in UI dentro `Comunicazioni > Moduli > Impostazioni > Prenotazioni`.
+- Booking, agenda e placeholder WhatsApp usano prima i dettagli evento del form; i campi compilati dall'utente restano fallback per moduli legacy.
+- Verifiche OK: `python -m py_compile ...`, `alembic heads`, test mirati WhatsApp, `python -m pytest -q tests\test_forms_module.py tests\test_org_admin_communications.py` (`38 passed`), `npm --prefix frontend run typecheck`, `npm --prefix frontend run build` con solo warning Vite chunk grandi preesistente.
+
+
 ## Plan (Prossime modifiche immediate ASSONAM - Apr 28, 2026)
 - [x] Aggiungere summary server-side a Super Admin Affiliazioni e usare KPI non derivati dalla pagina corrente.
 - [x] Migliorare Org Admin Inviti con ricerca debounced, reset pagina su filtri e ToastProvider.

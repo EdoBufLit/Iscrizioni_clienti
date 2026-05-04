@@ -1092,6 +1092,9 @@ export type AssociationForm = {
   booking_notification_enabled: boolean;
   booking_auto_assign_enabled: boolean;
   booking_field_mapping: Record<string, string>;
+  booking_event_date: string | null;
+  booking_event_time: string | null;
+  booking_event_details: string | null;
   survey_post_event_enabled: boolean;
   survey_post_event_delay_hours: number;
   survey_post_event_message_template: string | null;
@@ -1145,6 +1148,9 @@ export type AssociationForm = {
     booking_requires_manual_confirmation: boolean;
     booking_notification_enabled: boolean;
     booking_field_mapping: Record<string, string>;
+    booking_event_date: string | null;
+    booking_event_time: string | null;
+    booking_event_details: string | null;
     survey_post_event_enabled: boolean;
     survey_post_event_delay_hours: number;
     survey_post_event_message_template: string | null;
@@ -2047,6 +2053,9 @@ export async function createOrgAdminForm(data: {
   booking_notification_enabled?: boolean;
   booking_auto_assign_enabled?: boolean;
   booking_field_mapping?: Record<string, string>;
+  booking_event_date?: string | null;
+  booking_event_time?: string | null;
+  booking_event_details?: string | null;
   survey_post_event_enabled?: boolean;
   survey_post_event_delay_hours?: number;
   survey_post_event_message_template?: string | null;
@@ -2101,6 +2110,9 @@ export async function updateOrgAdminForm(
   booking_notification_enabled?: boolean;
   booking_auto_assign_enabled?: boolean;
   booking_field_mapping?: Record<string, string>;
+  booking_event_date?: string | null;
+  booking_event_time?: string | null;
+  booking_event_details?: string | null;
   survey_post_event_enabled?: boolean;
   survey_post_event_delay_hours?: number;
   survey_post_event_message_template?: string | null;

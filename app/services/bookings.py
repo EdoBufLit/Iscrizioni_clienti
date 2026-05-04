@@ -309,10 +309,19 @@ def create_booking_from_submission(
     customer_name = _normalize_text(_mapped_payload_value(mapping, "customer_name", validated_payload)) or _guess_customer_name(validated_payload)
     customer_email = _normalize_text(_mapped_payload_value(mapping, "customer_email", validated_payload))
     customer_phone = _normalize_text(_mapped_payload_value(mapping, "customer_phone", validated_payload))
-    booking_date = _normalize_booking_date(_mapped_payload_value(mapping, "booking_date", validated_payload))
-    booking_time = _normalize_booking_time(_mapped_payload_value(mapping, "booking_time", validated_payload))
+    booking_date = _normalize_booking_date(getattr(form, "booking_event_date", None)) or _normalize_booking_date(
+        _mapped_payload_value(mapping, "booking_date", validated_payload)
+    )
+    booking_time = _normalize_booking_time(getattr(form, "booking_event_time", None)) or _normalize_booking_time(
+        _mapped_payload_value(mapping, "booking_time", validated_payload)
+    )
     party_size = _normalize_party_size(_mapped_payload_value(mapping, "party_size", validated_payload))
+    event_details = _normalize_text(getattr(form, "booking_event_details", None))
     notes = _normalize_text(_mapped_payload_value(mapping, "notes", validated_payload))
+    if event_details and notes:
+        notes = f"{event_details}\n\nNote richiesta: {notes}"
+    elif event_details:
+        notes = event_details
 
     status = (
         BookingStatus.PENDING.value

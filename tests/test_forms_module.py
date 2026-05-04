@@ -744,6 +744,127 @@ def test_public_form_submit_runs_whatsapp_automation_rules(client, db, monkeypat
         settings.ENABLE_WHATSAPP_EVOLUTION = original_enabled
 
 
+def test_booking_submit_sends_one_whatsapp_and_uses_org_event_details(client, db, monkeypatch):
+    original_enabled = settings.ENABLE_WHATSAPP_EVOLUTION
+    settings.ENABLE_WHATSAPP_EVOLUTION = True
+    try:
+        org, admin = _create_org_admin(db)
+        _login_org_admin(client, db, admin.id)
+        public_slug = f"evento-fisso-{uuid.uuid4().hex[:6]}"
+
+        create_res = client.post(
+            "/api/org-admin/forms",
+            json={
+                "title": "Prenotazione evento",
+                "public_slug": public_slug,
+                "is_active": True,
+                "visibility": "public",
+                "form_type": "booking",
+                "booking_enabled": True,
+                "booking_event_date": "2026-06-18",
+                "booking_event_time": "21:15",
+                "booking_event_details": "Ingresso principale, presentarsi 15 minuti prima.",
+                "whatsapp_auto_reply_enabled": True,
+                "whatsapp_auto_reply_template": "Legacy {{data_prenotazione}} {{orario_prenotazione}}",
+            },
+        )
+        assert create_res.status_code == 201, create_res.text
+        form = create_res.json()["form"]
+        form_id = form["id"]
+        assert form["booking_event_date"] == "2026-06-18"
+        assert form["booking_event_time"] == "21:15"
+
+        for index, field in enumerate(
+            [
+                {"field_type": "short_text", "label": "Nome", "field_key": "nome"},
+                {"field_type": "phone", "label": "Telefono", "field_key": "telefono"},
+                {"field_type": "date", "label": "Data scelta", "field_key": "data_prenotazione"},
+                {"field_type": "short_text", "label": "Orario scelto", "field_key": "orario_prenotazione"},
+            ]
+        ):
+            field_res = client.post(
+                f"/api/org-admin/forms/{form_id}/fields",
+                json={**field, "is_required": True, "sort_order": index * 10},
+            )
+            assert field_res.status_code == 201, field_res.text
+
+        automation_res = client.post(
+            "/api/org-admin/communications/whatsapp/automations",
+            json={
+                "name": "Prenotazione ricevuta",
+                "form_id": form_id,
+                "source_type": "public_form",
+                "trigger_event": "booking_created",
+                "recipient_type": "submitter",
+                "phone_source": "form_field",
+                "phone_field_key": "telefono",
+                "template_name": "Prenotazione ricevuta",
+                "template_body": (
+                    "Ciao {{nome_contatto}}, prenotazione ricevuta per {{slot_prenotazione}}. "
+                    "{{dettagli_evento}}"
+                ),
+                "is_active": True,
+            },
+        )
+        assert automation_res.status_code == 201, automation_res.text
+
+        connection = get_or_create_connection(db, org)
+        connection.status = "connected"
+        connection.phone_number = "+393404244452"
+        db.commit()
+
+        sent_payloads: list[dict[str, str]] = []
+
+        class _FakeSendResult:
+            def __init__(self, message_id: str):
+                self.external_message_id = message_id
+                self.status = "sent"
+                self.raw = {"id": message_id, "status": "sent"}
+
+        def fake_send_text(self, instance_name: str, *, number: str, text: str):
+            sent_payloads.append(
+                {
+                    "instance_name": instance_name,
+                    "number": number,
+                    "text": text,
+                }
+            )
+            return _FakeSendResult(f"wamid-booking-{uuid.uuid4().hex[:10]}")
+
+        monkeypatch.setattr(
+            "app.services.whatsapp_automation.EvolutionLiteClient.send_text",
+            fake_send_text,
+        )
+
+        submit_res = client.post(
+            f"/api/forms/{org.slug}/{public_slug}/submit",
+            json={
+                "nome": "Sara Rossi",
+                "telefono": "333 1112233",
+                "data_prenotazione": "2026-01-01",
+                "orario_prenotazione": "10:00",
+            },
+        )
+        assert submit_res.status_code == 200, submit_res.text
+        assert sent_payloads == [
+            {
+                "instance_name": f"assonam-org-{org.id}",
+                "number": "+393331112233",
+                "text": (
+                    "Ciao Sara Rossi, prenotazione ricevuta per il 2026-06-18 alle 21:15. "
+                    "Ingresso principale, presentarsi 15 minuti prima."
+                ),
+            }
+        ]
+
+        booking = db.query(Booking).filter(Booking.form_id == form_id).one()
+        assert booking.booking_date.isoformat() == "2026-06-18"
+        assert booking.booking_time == "21:15"
+        assert "Ingresso principale" in (booking.notes or "")
+    finally:
+        settings.ENABLE_WHATSAPP_EVOLUTION = original_enabled
+
+
 def test_org_admin_can_create_manual_booking_from_agenda(client, db):
     org, admin = _create_org_admin(db)
     _login_org_admin(client, db, admin.id)

@@ -167,6 +167,29 @@ def normalize_form_whatsapp_template(value: Any) -> str | None:
     return normalized[:4096]
 
 
+def normalize_booking_event_date(value: Any) -> date | None:
+    if isinstance(value, date):
+        return value
+    normalized = _normalize_text(value)
+    if normalized is None:
+        return None
+    try:
+        return date.fromisoformat(normalized)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail="Data evento prenotazione non valida.") from exc
+
+
+def normalize_booking_event_time(value: Any) -> str | None:
+    normalized = _normalize_text(value)
+    if normalized is None:
+        return None
+    if re.fullmatch(r"^(?:[01]\d|2[0-3]):[0-5]\d$", normalized):
+        return normalized
+    if re.fullmatch(r"^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$", normalized):
+        return normalized[:5]
+    raise HTTPException(status_code=422, detail="Orario evento prenotazione non valido.")
+
+
 def default_form_whatsapp_confirmation_template(form_type: Any, *, booking_enabled: bool = False) -> str:
     normalized_form_type = normalize_form_type(form_type, booking_enabled=booking_enabled)
     if booking_enabled or normalized_form_type == "booking":
@@ -494,6 +517,13 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
         "booking_field_mapping": normalize_booking_field_mapping(
             getattr(form, "booking_field_mapping", None) or {}
         ),
+        "booking_event_date": (
+            form.booking_event_date.isoformat()
+            if getattr(form, "booking_event_date", None)
+            else None
+        ),
+        "booking_event_time": getattr(form, "booking_event_time", None),
+        "booking_event_details": getattr(form, "booking_event_details", None),
         "survey_post_event_enabled": bool(getattr(form, "survey_post_event_enabled", False)),
         "survey_post_event_delay_hours": int(getattr(form, "survey_post_event_delay_hours", 2) or 2),
         "survey_post_event_message_template": getattr(form, "survey_post_event_message_template", None),
@@ -557,6 +587,13 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
             "booking_field_mapping": normalize_booking_field_mapping(
                 getattr(form, "booking_field_mapping", None) or {}
             ),
+            "booking_event_date": (
+                form.booking_event_date.isoformat()
+                if getattr(form, "booking_event_date", None)
+                else None
+            ),
+            "booking_event_time": getattr(form, "booking_event_time", None),
+            "booking_event_details": getattr(form, "booking_event_details", None),
             "survey_post_event_enabled": bool(getattr(form, "survey_post_event_enabled", False)),
             "survey_post_event_delay_hours": int(getattr(form, "survey_post_event_delay_hours", 2) or 2),
             "survey_post_event_message_template": getattr(form, "survey_post_event_message_template", None),
@@ -663,6 +700,9 @@ def apply_form_updates(
     booking_notification_enabled: bool,
     booking_auto_assign_enabled: bool,
     booking_field_mapping: Any,
+    booking_event_date: Any,
+    booking_event_time: Any,
+    booking_event_details: Any,
     survey_post_event_enabled: bool,
     survey_post_event_delay_hours: int | None,
     survey_post_event_message_template: Any,
@@ -706,6 +746,9 @@ def apply_form_updates(
     form.booking_notification_enabled = bool(booking_notification_enabled)
     form.booking_auto_assign_enabled = bool(booking_auto_assign_enabled)
     form.booking_field_mapping = normalize_booking_field_mapping(booking_field_mapping)
+    form.booking_event_date = normalize_booking_event_date(booking_event_date)
+    form.booking_event_time = normalize_booking_event_time(booking_event_time)
+    form.booking_event_details = _normalize_multiline_text(booking_event_details)
     form.survey_post_event_enabled = bool(survey_post_event_enabled)
     try:
         normalized_delay = int(survey_post_event_delay_hours or 2)

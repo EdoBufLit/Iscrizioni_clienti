@@ -2161,6 +2161,9 @@ class CreateAssociationFormBody(BaseModel):
     booking_notification_enabled: bool = True
     booking_auto_assign_enabled: bool = False
     booking_field_mapping: dict[str, str] = Field(default_factory=dict)
+    booking_event_date: Optional[date] = None
+    booking_event_time: Optional[str] = Field(default=None, max_length=16)
+    booking_event_details: Optional[str] = None
     survey_post_event_enabled: bool = False
     survey_post_event_delay_hours: int = Field(default=2, ge=0, le=336)
     survey_post_event_message_template: Optional[str] = None
@@ -2197,6 +2200,9 @@ class UpdateAssociationFormBody(BaseModel):
     booking_notification_enabled: bool = True
     booking_auto_assign_enabled: bool = False
     booking_field_mapping: dict[str, str] = Field(default_factory=dict)
+    booking_event_date: Optional[date] = None
+    booking_event_time: Optional[str] = Field(default=None, max_length=16)
+    booking_event_details: Optional[str] = None
     survey_post_event_enabled: bool = False
     survey_post_event_delay_hours: int = Field(default=2, ge=0, le=336)
     survey_post_event_message_template: Optional[str] = None
@@ -6167,6 +6173,9 @@ def create_association_form(
         booking_notification_enabled=body.booking_notification_enabled,
         booking_auto_assign_enabled=body.booking_auto_assign_enabled,
         booking_field_mapping=body.booking_field_mapping,
+        booking_event_date=body.booking_event_date,
+        booking_event_time=body.booking_event_time,
+        booking_event_details=body.booking_event_details,
         survey_post_event_enabled=body.survey_post_event_enabled,
         survey_post_event_delay_hours=body.survey_post_event_delay_hours,
         survey_post_event_message_template=body.survey_post_event_message_template,
@@ -6236,6 +6245,9 @@ def update_association_form(
         booking_notification_enabled=body.booking_notification_enabled,
         booking_auto_assign_enabled=body.booking_auto_assign_enabled,
         booking_field_mapping=body.booking_field_mapping,
+        booking_event_date=body.booking_event_date,
+        booking_event_time=body.booking_event_time,
+        booking_event_details=body.booking_event_details,
         survey_post_event_enabled=body.survey_post_event_enabled,
         survey_post_event_delay_hours=body.survey_post_event_delay_hours,
         survey_post_event_message_template=body.survey_post_event_message_template,
@@ -6311,6 +6323,9 @@ def duplicate_association_form(
         booking_success_message_override=getattr(source_form, "booking_success_message_override", None),
         booking_notification_enabled=bool(getattr(source_form, "booking_notification_enabled", True)),
         booking_field_mapping=getattr(source_form, "booking_field_mapping", None) or {},
+        booking_event_date=getattr(source_form, "booking_event_date", None),
+        booking_event_time=getattr(source_form, "booking_event_time", None),
+        booking_event_details=getattr(source_form, "booking_event_details", None),
         notify_admin_on_submit=bool(source_form.notify_admin_on_submit),
         send_user_confirmation=bool(source_form.send_user_confirmation),
         whatsapp_auto_reply_enabled=bool(getattr(source_form, "whatsapp_auto_reply_enabled", False)),

@@ -1373,6 +1373,9 @@ class Form(Base):
         Boolean, nullable=False, default=False, server_default="false"
     )
     booking_field_mapping = Column(GENERIC_JSON_TYPE, nullable=True)
+    booking_event_date = Column(Date, nullable=True)
+    booking_event_time = Column(String, nullable=True)
+    booking_event_details = Column(Text, nullable=True)
     survey_post_event_enabled = Column(
         Boolean, nullable=False, default=False, server_default="false", index=True
     )

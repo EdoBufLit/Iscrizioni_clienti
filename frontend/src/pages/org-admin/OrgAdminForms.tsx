@@ -238,6 +238,9 @@ function emptyFormDraft() {
     booking_notification_enabled: true,
     booking_auto_assign_enabled: false,
     booking_field_mapping: {} as Record<string, string>,
+    booking_event_date: "",
+    booking_event_time: "",
+    booking_event_details: "",
     survey_post_event_enabled: false,
     survey_post_event_delay_hours: 2,
     survey_post_event_message_template: "",
@@ -496,6 +499,9 @@ export function OrgAdminFormsWorkspace({
       booking_notification_enabled: Boolean(selectedForm.booking_notification_enabled),
       booking_auto_assign_enabled: Boolean(selectedForm.booking_auto_assign_enabled),
       booking_field_mapping: selectedForm.booking_field_mapping || {},
+      booking_event_date: selectedForm.booking_event_date || "",
+      booking_event_time: selectedForm.booking_event_time || "",
+      booking_event_details: selectedForm.booking_event_details || "",
       survey_post_event_enabled: Boolean(selectedForm.survey_post_event_enabled),
       survey_post_event_delay_hours: selectedForm.survey_post_event_delay_hours || 2,
       survey_post_event_message_template: selectedForm.survey_post_event_message_template || "",
@@ -852,6 +858,9 @@ export function OrgAdminFormsWorkspace({
         booking_success_message_override: formDraft.booking_success_message_override || null,
         booking_auto_assign_enabled: formDraft.booking_auto_assign_enabled,
         booking_field_mapping: formDraft.booking_field_mapping || {},
+        booking_event_date: formDraft.booking_event_date || null,
+        booking_event_time: formDraft.booking_event_time || null,
+        booking_event_details: formDraft.booking_event_details || null,
         form_type: mode === "surveys" ? "survey" : formDraft.form_type,
         survey_post_event_enabled: formDraft.survey_post_event_enabled,
         survey_post_event_delay_hours: formDraft.survey_post_event_delay_hours,
@@ -1671,6 +1680,46 @@ export function OrgAdminFormsWorkspace({
                 <label className="inline-flex items-center gap-2">
                   <input type="checkbox" disabled={locked} checked={formDraft.booking_auto_assign_enabled} onChange={(event) => syncFormDraft("booking_auto_assign_enabled", event.target.checked)} className="rounded border-neutral-300 text-brand" />
                   Auto assegna tavolo
+                </label>
+              </div>
+              <div className="space-y-3 rounded-[1rem] border border-emerald-200 bg-emerald-50/60 p-4">
+                <div>
+                  <p className="text-sm font-semibold text-neutral-900">Evento fissato dall'organizzazione</p>
+                  <p className="mt-1 text-xs leading-5 text-neutral-600">
+                    Questi dati vengono usati per agenda, conferme WhatsApp e promemoria. I campi data/orario compilati dall'utente restano solo fallback per i moduli legacy.
+                  </p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className={labelClass}>
+                    Data evento
+                    <input
+                      className={inputClass}
+                      type="date"
+                      disabled={locked}
+                      value={formDraft.booking_event_date}
+                      onChange={(event) => syncFormDraft("booking_event_date", event.target.value)}
+                    />
+                  </label>
+                  <label className={labelClass}>
+                    Orario evento
+                    <input
+                      className={inputClass}
+                      type="time"
+                      disabled={locked}
+                      value={formDraft.booking_event_time}
+                      onChange={(event) => syncFormDraft("booking_event_time", event.target.value)}
+                    />
+                  </label>
+                </div>
+                <label className={labelClass}>
+                  Dettagli evento per WhatsApp
+                  <textarea
+                    className={`${inputClass} min-h-[86px]`}
+                    disabled={locked}
+                    value={formDraft.booking_event_details}
+                    onChange={(event) => syncFormDraft("booking_event_details", event.target.value)}
+                    placeholder="Es. Serata al Centro Congressi, ingresso da via Roma 12. Presentarsi 15 minuti prima."
+                  />
                 </label>
               </div>
               <div className="space-y-3 rounded-[1rem] border border-neutral-200 bg-neutral-50 p-4">

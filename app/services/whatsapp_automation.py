@@ -133,6 +133,8 @@ def maybe_send_form_submission_whatsapp_message(
     organization = getattr(form, "organization", None)
     if organization is None or not bool(getattr(organization, "communications_enabled", False)):
         return {"sent": False, "reason": "communications_disabled"}
+    if _has_active_submitter_whatsapp_automation_for_submission(db, form=form, booking=booking):
+        return {"sent": False, "reason": "submitter_automation_configured"}
 
     candidate = prepare_form_submission_whatsapp_candidate(
         form=form,
@@ -193,6 +195,33 @@ def maybe_send_form_submission_whatsapp_message(
         **send_result,
         "source": candidate["source"],
     }
+
+
+def _has_active_submitter_whatsapp_automation_for_submission(
+    db: Session,
+    *,
+    form: Form | Any,
+    booking: Booking | None,
+) -> bool:
+    form_id = getattr(form, "id", None)
+    association_id = getattr(form, "association_id", None)
+    if form_id is None or association_id is None:
+        return False
+    active_events = _resolve_form_submission_events(form=form, booking=booking)
+    if not active_events:
+        return False
+    return (
+        db.query(WhatsAppAutomation.id)
+        .filter(
+            WhatsAppAutomation.association_id == int(association_id),
+            WhatsAppAutomation.form_id == int(form_id),
+            WhatsAppAutomation.is_active.is_(True),
+            WhatsAppAutomation.recipient_type == "submitter",
+            WhatsAppAutomation.trigger_event.in_(active_events),
+        )
+        .first()
+        is not None
+    )
 
 
 def maybe_send_form_submission_whatsapp_automations(
@@ -464,12 +493,6 @@ def _build_form_submission_whatsapp_context(
             "nome_contatto": contact_name or "",
             "numero_whatsapp": phone_number or "",
             "id_richiesta": str(submission.id),
-            "data_prenotazione": booking_details["data_prenotazione"],
-            "orario_prenotazione": booking_details["orario_prenotazione"],
-            "numero_persone": booking_details["numero_persone"],
-            "slot_prenotazione": booking_details["slot_prenotazione"],
-            "persone_prenotazione": booking_details["persone_prenotazione"],
-            "riepilogo_prenotazione": booking_details["riepilogo_prenotazione"],
         },
     )
     if contact_name:
@@ -479,6 +502,17 @@ def _build_form_submission_whatsapp_context(
         if not normalized_key:
             continue
         context[normalized_key] = _stringify_template_value(value)
+    context.update(
+        {
+            "data_prenotazione": booking_details["data_prenotazione"],
+            "orario_prenotazione": booking_details["orario_prenotazione"],
+            "dettagli_evento": booking_details["dettagli_evento"],
+            "numero_persone": booking_details["numero_persone"],
+            "slot_prenotazione": booking_details["slot_prenotazione"],
+            "persone_prenotazione": booking_details["persone_prenotazione"],
+            "riepilogo_prenotazione": booking_details["riepilogo_prenotazione"],
+        }
+    )
     if extra_context:
         for key, value in extra_context.items():
             normalized_key = str(key or "").strip()
@@ -792,16 +826,28 @@ def _resolve_booking_details_from_submission(
     payload: dict[str, Any],
     booking: Booking | None,
 ) -> dict[str, str]:
+    form_event_date = getattr(form, "booking_event_date", None)
+    form_event_time = str(getattr(form, "booking_event_time", "") or "").strip()
+    form_event_details = str(getattr(form, "booking_event_details", "") or "").strip()
     booking_date = (
+        form_event_date.isoformat()
+        if hasattr(form_event_date, "isoformat")
+        else str(form_event_date or "").strip()
+    ) or (
         booking.booking_date.isoformat()
         if booking is not None and getattr(booking, "booking_date", None)
-        else _resolve_booking_payload_value(form=form, payload=payload, target="booking_date")
-    )
-    booking_time = (
+        else ""
+    ) or _resolve_booking_payload_value(form=form, payload=payload, target="booking_date")
+    booking_time = form_event_time or (
         str(getattr(booking, "booking_time", "") or "").strip()
         if booking is not None
         else ""
     ) or _resolve_booking_payload_value(form=form, payload=payload, target="booking_time")
+    event_details = form_event_details or (
+        str(getattr(booking, "notes", "") or "").strip()
+        if booking is not None
+        else ""
+    )
     party_size = (
         str(getattr(booking, "party_size", "") or "").strip()
         if booking is not None
@@ -818,11 +864,20 @@ def _resolve_booking_details_from_submission(
         party_size=party_size,
         include_fallback=is_booking,
     )
-    summary_parts = [part for part in (slot_summary, f"per {people_summary}" if people_summary else "") if part]
+    summary_parts = [
+        part
+        for part in (
+            slot_summary,
+            f"per {people_summary}" if people_summary else "",
+            event_details,
+        )
+        if part
+    ]
 
     return {
         "data_prenotazione": booking_date or ("data da confermare" if is_booking else ""),
         "orario_prenotazione": booking_time or ("orario da confermare" if is_booking else ""),
+        "dettagli_evento": event_details,
         "numero_persone": party_size,
         "slot_prenotazione": slot_summary,
         "persone_prenotazione": people_summary,
