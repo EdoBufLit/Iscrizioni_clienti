@@ -84,6 +84,7 @@ from app.services.email_campaigns import (
     send_campaign,
     update_campaign_draft,
 )
+from app.services.communications_email_usage import calculate_org_monthly_email_usage
 from app.services.email_templates import (
     AVAILABLE_TEMPLATE_VARIABLES,
     EMAIL_TEMPLATE_CHANNEL,
@@ -2820,6 +2821,19 @@ def get_communications_settings(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return _serialize_org_admin_communications_settings(admin.organization)
+
+
+@router.get("/communications/usage")
+def get_communications_usage(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    _require_active_communications_module(admin.organization)
+    return calculate_org_monthly_email_usage(db, org_id=admin.org_id)
 
 
 @router.put("/communications/settings")

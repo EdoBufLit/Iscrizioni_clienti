@@ -4943,6 +4943,14 @@ body.dashboard-perf-mode .btn-ghost:hover {
   line-height: 1.35;
 }
 
+.org-admin-v2 .comm-kpi-card__notice {
+  margin: 0.55rem 0 0;
+  color: color-mix(in srgb, var(--oa-muted) 86%, var(--oa-text));
+  font-size: 0.74rem;
+  font-weight: 620;
+  line-height: 1.35;
+}
+
 .org-admin-v2 .comm-kpi-card__badge {
   display: inline-flex;
   min-height: 1.95rem;

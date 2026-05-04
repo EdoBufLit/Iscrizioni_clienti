@@ -15,6 +15,8 @@ from app.models import (
     Booking,
     BookingEvent,
     EmailCampaign,
+    EmailCampaignRecipient,
+    EmailOutbox,
     Form,
     Member,
     OrgAdminToken,
@@ -27,7 +29,12 @@ from app.services.booking_whatsapp_reminders import (
     process_booking_whatsapp_reminders,
     process_post_event_survey_whatsapp,
 )
+from app.services import communications_email_usage as email_usage_service
 from app.services.email_campaigns import process_scheduled_campaigns
+from app.services.communications_email_usage import (
+    MONTHLY_OVERAGE_REPORT_EMAIL_TYPE,
+    enqueue_monthly_overage_report,
+)
 from app.services.whatsapp_evolution import EvolutionSendTextResult
 from app.utils import clear_captured_emails, get_captured_emails, hash_token
 
@@ -112,6 +119,38 @@ def _create_member(
     return member
 
 
+def _create_sent_campaign_recipients(
+    db,
+    *,
+    org_id: int,
+    count: int,
+    sent_at: datetime,
+    subject: str = "Report usage",
+) -> EmailCampaign:
+    campaign = EmailCampaign(
+        association_id=org_id,
+        subject=subject,
+        audience_type="active_members",
+        status="sent",
+        sent_at=sent_at,
+    )
+    db.add(campaign)
+    db.flush()
+    for index in range(count):
+        db.add(
+            EmailCampaignRecipient(
+                campaign_id=campaign.id,
+                association_id=org_id,
+                recipient_email=f"usage-{campaign.id}-{index}@example.com",
+                delivery_status="sent",
+                sent_at=sent_at,
+            )
+        )
+    db.commit()
+    db.refresh(campaign)
+    return campaign
+
+
 def test_org_admin_communications_settings_and_test_email(client, db):
     original_mode = settings.EMAIL_MODE
     original_domain = settings.MAIL_FROM_DOMAIN
@@ -161,6 +200,92 @@ def test_org_admin_communications_settings_and_test_email(client, db):
     finally:
         settings.EMAIL_MODE = original_mode
         settings.MAIL_FROM_DOMAIN = original_domain
+        clear_captured_emails()
+
+
+def test_org_admin_communications_usage_counts_current_month_overage(client, db, monkeypatch):
+    monkeypatch.setattr(email_usage_service, "COMMUNICATIONS_MONTHLY_EMAIL_LIMIT", 2)
+    org, admin = _create_org_admin(db, communications_enabled=True)
+    _create_sent_campaign_recipients(
+        db,
+        org_id=org.id,
+        count=3,
+        sent_at=datetime(2026, 5, 3, 10, 0, 0),
+    )
+    _create_sent_campaign_recipients(
+        db,
+        org_id=org.id,
+        count=4,
+        sent_at=datetime(2026, 4, 30, 10, 0, 0),
+    )
+    _login_org_admin(client, db, admin.id)
+
+    res = client.get("/api/org-admin/communications/usage")
+    assert res.status_code == 200, res.text
+    payload = res.json()
+    assert payload["included_limit"] == 2
+    assert payload["used"] == 3
+    assert payload["extra"] == 1
+    assert payload["extra_cost_cents"] == 1
+
+
+def test_monthly_communications_overage_report_includes_zero_extra_and_dedupes(
+    client,
+    db,
+    drain_email_outbox,
+    monkeypatch,
+):
+    original_mode = settings.EMAIL_MODE
+    original_super_admin_email = settings.SUPER_ADMIN_EMAIL
+    settings.EMAIL_MODE = "test"
+    settings.SUPER_ADMIN_EMAIL = "super.personale@example.com"
+    monkeypatch.setattr(email_usage_service, "COMMUNICATIONS_MONTHLY_EMAIL_LIMIT", 2)
+    clear_captured_emails()
+    try:
+        org_with_extra, _ = _create_org_admin(db, communications_enabled=True)
+        org_zero_extra, _ = _create_org_admin(db, communications_enabled=True)
+        org_disabled, _ = _create_org_admin(db, communications_enabled=False)
+        _create_sent_campaign_recipients(
+            db,
+            org_id=org_with_extra.id,
+            count=3,
+            sent_at=datetime(2026, 4, 20, 12, 0, 0),
+        )
+        _create_sent_campaign_recipients(
+            db,
+            org_id=org_disabled.id,
+            count=10,
+            sent_at=datetime(2026, 4, 20, 12, 0, 0),
+        )
+
+        first = enqueue_monthly_overage_report(db, now=datetime(2026, 5, 1, 8, 0, 0))
+        second = enqueue_monthly_overage_report(db, now=datetime(2026, 5, 2, 8, 0, 0))
+        assert first["enqueued"] is True
+        assert second["enqueued"] is False
+
+        outbox_rows = (
+            db.query(EmailOutbox)
+            .filter(EmailOutbox.email_type == MONTHLY_OVERAGE_REPORT_EMAIL_TYPE)
+            .all()
+        )
+        assert len(outbox_rows) == 1
+        assert outbox_rows[0].to_email == "super.personale@example.com"
+        report = outbox_rows[0].payload_json["meta"]["report"]
+        names = {row["org_name"]: row for row in report["rows"]}
+        assert org_with_extra.name in names
+        assert org_zero_extra.name in names
+        assert org_disabled.name not in names
+        assert names[org_with_extra.name]["extra"] == 1
+        assert names[org_zero_extra.name]["extra"] == 0
+
+        drain_email_outbox()
+        captured = get_captured_emails()
+        assert len(captured) == 1
+        assert captured[0]["to"] == "super.personale@example.com"
+        assert org_zero_extra.name in captured[0]["text_body"]
+    finally:
+        settings.EMAIL_MODE = original_mode
+        settings.SUPER_ADMIN_EMAIL = original_super_admin_email
         clear_captured_emails()
 
 

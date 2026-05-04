@@ -6,6 +6,9 @@ import time
 
 from app.config import settings
 from app.services.booking_whatsapp_reminders import process_booking_communications_once
+from app.services.communications_email_usage import (
+    process_monthly_communications_overage_report_once,
+)
 from app.services.email_campaigns import process_scheduled_campaigns_once
 from app.services.email_outbox import process_outbox_once
 
@@ -41,6 +44,7 @@ def main() -> int:
         stats = {
             "booking_communications": process_booking_communications_once(),
             "scheduled_campaigns": process_scheduled_campaigns_once(),
+            "monthly_communications_overage": process_monthly_communications_overage_report_once(),
             "email": process_outbox_once(limit=args.limit),
         }
         logger.info("email_worker_cycle %s", stats)
@@ -50,6 +54,7 @@ def main() -> int:
         stats = {
             "booking_communications": process_booking_communications_once(),
             "scheduled_campaigns": process_scheduled_campaigns_once(),
+            "monthly_communications_overage": process_monthly_communications_overage_report_once(),
             "email": process_outbox_once(limit=args.limit),
         }
         logger.info("email_worker_cycle %s", stats)

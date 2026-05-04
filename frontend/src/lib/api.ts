@@ -727,6 +727,18 @@ export type OrgAdminCommunicationSettings = {
   association_email_sender: NonNullable<OrgAdminOrganizationDetail["association_email_sender"]>;
 };
 
+export type OrgAdminCommunicationUsage = {
+  period_start: string;
+  period_end: string;
+  period_label: string;
+  included_limit: number;
+  used: number;
+  extra: number;
+  extra_cost_cents: number;
+  extra_cost_eur: number;
+  unit_extra_cost_cents: number;
+};
+
 export type OrgAdminWhatsAppConnectionStatus =
   | "not_connected"
   | "qr_required"
@@ -1503,6 +1515,13 @@ export async function fetchOrgAdminCommunicationSettings(): Promise<OrgAdminComm
   const res = await fetch("/api/org-admin/communications/settings");
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento impostazioni comunicazioni"));
+  return res.json();
+}
+
+export async function fetchOrgAdminCommunicationUsage(): Promise<OrgAdminCommunicationUsage> {
+  const res = await fetch("/api/org-admin/communications/usage");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento consumo email comunicazioni"));
   return res.json();
 }
 

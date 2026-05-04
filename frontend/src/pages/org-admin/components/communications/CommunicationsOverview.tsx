@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Skeleton from "../../../../components/ui/Skeleton";
 import {
   fetchOrgAdminCommunicationSettings,
+  fetchOrgAdminCommunicationUsage,
   fetchOrgAdminEmailCampaigns,
   fetchOrgAdminForms,
+  type OrgAdminCommunicationUsage,
 } from "../../../../lib/api";
 import { useOrgAdmin } from "../../OrgAdminLayout";
 import { ActionCard, SectionPanel, StatusChip } from "../OrgAdminPrimitives";
@@ -32,6 +34,14 @@ function formatDate(value?: string | null) {
 
 function formatUpdatedAt() {
   return new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatInteger(value: number | null | undefined) {
+  return new Intl.NumberFormat("it-IT").format(Number(value || 0));
+}
+
+function formatEuroFromCents(value: number | null | undefined) {
+  return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(Number(value || 0) / 100);
 }
 
 function KpiIcon({ name }: { name: "send" | "draft" | "form" | "whatsapp" | "mail" | "clock" | "check" }) {
@@ -114,6 +124,7 @@ function CommunicationsKpiCard({
   icon,
   tone,
   footer,
+  notice,
   badge,
   badgeIcon,
 }: {
@@ -123,6 +134,7 @@ function CommunicationsKpiCard({
   icon: "send" | "draft" | "form" | "whatsapp" | "mail";
   tone: "success" | "info" | "warning" | "muted";
   footer: string;
+  notice?: string;
   badge?: string;
   badgeIcon?: "check";
 }) {
@@ -144,6 +156,7 @@ function CommunicationsKpiCard({
             ) : null}
           </div>
           <p className="comm-kpi-card__description">{description}</p>
+          {notice ? <p className="comm-kpi-card__notice">{notice}</p> : null}
         </div>
       </div>
       <div className="comm-kpi-card__footer">
@@ -177,6 +190,7 @@ export function CommunicationsOverview({
     domainLabel: string;
     configured: boolean;
   } | null>(null);
+  const [usage, setUsage] = useState<OrgAdminCommunicationUsage | null>(null);
   const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
 
   useEffect(() => {
@@ -185,11 +199,14 @@ export function CommunicationsOverview({
 
     Promise.all([
       fetchOrgAdminCommunicationSettings().catch(() => null),
+      fetchOrgAdminCommunicationUsage().catch(() => null),
       fetchOrgAdminEmailCampaigns().catch(() => ({ items: [] })),
       fetchOrgAdminForms().catch(() => ({ items: [] })),
     ])
-      .then(([settingsData, campaignData, formData]) => {
+      .then(([settingsData, usageData, campaignData, formData]) => {
         if (cancelled) return;
+
+        setUsage(usageData);
 
         const campaigns = campaignData.items || [];
         const forms = formData.items || [];
@@ -272,6 +289,9 @@ export function CommunicationsOverview({
   const updatedAt = useMemo(() => formatUpdatedAt(), []);
   const sentArchiveShare = stats.totalCampaigns > 0 ? Math.round((stats.sentCampaigns / stats.totalCampaigns) * 100) : 0;
   const publishedFormsShare = stats.totalForms > 0 ? Math.round((stats.activeForms / stats.totalForms) * 100) : 0;
+  const usageLimit = usage?.included_limit ?? 5000;
+  const usagePercent = usageLimit > 0 ? Math.min(100, Math.round(((usage?.used ?? 0) / usageLimit) * 100)) : 0;
+  const extraCostNotice = "Costo email aggiuntive: 0,01 EUR per ogni email oltre limite.";
 
   if (loading) {
     return (
@@ -296,13 +316,14 @@ export function CommunicationsOverview({
           badge={sentArchiveShare > 0 ? `${sentArchiveShare}%` : undefined}
         />
         <CommunicationsKpiCard
-          label="Bozze aperte"
-          value={stats.drafts}
-          description={stats.drafts ? `${stats.totalCampaigns} campagne totali` : "Nessuna bozza in lavorazione"}
-          icon="draft"
+          label="Email usate"
+          value={`${formatInteger(usage?.used)} / ${formatInteger(usageLimit)}`}
+          description={usage?.period_label ? `Consumo del mese: ${usage.period_label}` : "Consumo mensile comunicazioni"}
+          icon="mail"
           tone="info"
           footer={`Aggiornato oggi, ${updatedAt}`}
-          badge={stats.drafts ? `${stats.drafts}` : "-"}
+          notice={extraCostNotice}
+          badge={`${usagePercent}%`}
         />
         <CommunicationsKpiCard
           label="Form attivi"
@@ -323,14 +344,14 @@ export function CommunicationsOverview({
           badge={whatsappEnabled ? "Operativo" : "Non attivo"}
         />
         <CommunicationsKpiCard
-          label="Email configurata"
-          value={senderInfo?.configured ? "Sì" : "No"}
-          description={senderInfo?.domainLabel || "Mittente da verificare"}
+          label="Email extra"
+          value={formatEuroFromCents(usage?.extra_cost_cents)}
+          description={`${formatInteger(usage?.extra)} email oltre le ${formatInteger(usageLimit)} incluse`}
           icon="mail"
-          tone={senderInfo?.configured ? "info" : "warning"}
+          tone={usage && usage.extra > 0 ? "warning" : "muted"}
           footer={`Aggiornato oggi, ${updatedAt}`}
-          badge={senderInfo?.configured ? "Verificata" : "Da verificare"}
-          badgeIcon={senderInfo?.configured ? "check" : undefined}
+          notice={extraCostNotice}
+          badge={usage && usage.extra > 0 ? "Extra attive" : "Zero extra"}
         />
       </div>
 
