@@ -19,6 +19,7 @@ frontend/.claude/
 nul
 test_qa.db
 .pytest_cache/
+.desloppify/
 /secrets/*
 !/secrets/README.md
 /secrets/*.json

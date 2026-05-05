@@ -27,7 +27,7 @@ from app.services.org_branding import resolve_card_logo_url, resolve_club_displa
 from app import audit
 import os
 import logging
-import hashlib
+from app.log_redaction import hash_identifier, redact_for_log, redact_url
 
 logger = logging.getLogger(__name__)
 
@@ -42,10 +42,7 @@ _ACCOUNT_NOT_ACTIVE_DETAIL = "account non attivo"
 
 
 def _hash_email_for_log(email: str | None) -> str:
-    normalized = (email or "").strip().lower()
-    if not normalized:
-        return "unknown"
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+    return hash_identifier(email)
 
 
 def _normalize_payment_method(raw_value: str | None) -> str | None:
@@ -206,7 +203,7 @@ def get_my_organization_statute(request: Request, db: Session = Depends(get_db))
         logger.warning(
             "Statute metadata requested but file missing on disk for org_id=%s rel_path=%s",
             org.id,
-            org.statute_pdf_path,
+            redact_for_log(org.statute_pdf_path),
         )
         return {
             "available": False,
@@ -254,7 +251,8 @@ def create_google_wallet_save_link(request: Request, db: Session = Depends(get_d
     try:
         result = generate_google_wallet_save_link_for_member(member)
     except GoogleWalletConfigError as exc:
-        logger.warning("Google Wallet config error for member_id=%s: %s", member.id, str(exc))
+        safe_error = str(redact_for_log(str(exc)))
+        logger.warning("Google Wallet config error for member_id=%s: %s", member.id, safe_error)
         member.google_wallet_last_error = str(exc)
         db.commit()
         raise HTTPException(status_code=500, detail=str(exc))
@@ -264,7 +262,7 @@ def create_google_wallet_save_link(request: Request, db: Session = Depends(get_d
             "Google Wallet API error for member_id=%s status=%s response=%s",
             member.id,
             exc.status_code,
-            (exc.response_body or "")[:500],
+            redact_for_log((exc.response_body or "")[:500]),
         )
         member.google_wallet_last_error = f"{detail}: {str(exc)}"
         db.commit()
@@ -438,7 +436,7 @@ def api_auth_login(request: Request, email: str = Form(...), password: str = For
             frontend_base = str(request.base_url).rstrip("/")
 
         link = f"{frontend_base}/auth/verify?token={token_str}&role=member"
-        logger.info("Generated member magic link: %s", link.replace(token_str, "***"))
+        logger.info("Generated member magic link: %s", redact_url(link))
 
         enqueue_email(
             db,
@@ -505,7 +503,7 @@ def api_auth_password_reset_request(
             frontend_base = str(request.base_url).rstrip("/")
 
         link = f"{frontend_base}/recupera-password?token={token_str}"
-        logger.info("Generated member password reset link: %s", link.replace(token_str, "***"))
+        logger.info("Generated member password reset link: %s", redact_url(link))
 
         enqueue_email(
             db,

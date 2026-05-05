@@ -1,5 +1,4 @@
 import csv
-import hashlib
 import io
 import json
 
@@ -230,6 +229,7 @@ from app.services.wallet_asset_upload import (
     save_wallet_logo_file,
 )
 from app.config import settings
+from app.log_redaction import hash_identifier, redact_for_log, redact_url
 from app.middleware import auth_limiter, get_client_ip
 from app import audit
 import logging
@@ -269,10 +269,7 @@ def _get_current_org_admin(request: Request, db: Session):
 
 
 def _hash_email_for_log(email: str | None) -> str:
-    normalized = (email or "").strip().lower()
-    if not normalized:
-        return "unknown"
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+    return hash_identifier(email)
 
 
 def _normalize_login_email(email: str | None) -> str:
@@ -1340,7 +1337,7 @@ def _send_member_magic_link(
         frontend_base = str(request.base_url).rstrip("/")
 
     link = f"{frontend_base}/auth/verify?token={token_str}&role=member"
-    logger.info("Generated member magic link: %s", link.replace(token_str, "***"))
+    logger.info("Generated member magic link: %s", redact_url(link))
 
     outbox_id = enqueue_email(
         db,
@@ -1720,14 +1717,14 @@ def request_magic_link(
 
         link = f"{frontend_base}/auth/verify?token={token_str}&role=org_admin"
         logger.info(
-            "Generated org-admin magic link: %s", link.replace(token_str, "***")
+            "Generated org-admin magic link: %s", redact_url(link)
         )
 
         logger.info(
             "org_admin_magic_link_send_enqueuing email_hash=%s admin_id=%s normalized_to_email=%s",
             email_hash,
             admin.id,
-            normalized_email,
+            redact_for_log(normalized_email),
         )
         outbox_id = enqueue_email(
             db,
@@ -3338,7 +3335,7 @@ def delete_communication_asset(
         try:
             os.remove(file_path)
         except OSError:
-            logger.warning("Failed to delete communication asset file path=%s", file_path)
+            logger.warning("Failed to delete communication asset file path=%s", redact_for_log(file_path))
 
     db.delete(asset)
     db.commit()
@@ -4019,8 +4016,8 @@ async def upload_statute(
                 getattr(request.state, "request_id", None),
                 admin.org_id,
                 request.headers.get("content-length"),
-                file.filename,
-                file.content_type,
+                redact_for_log(file.filename),
+                redact_for_log(file.content_type),
             )
         raise
 
@@ -4118,8 +4115,8 @@ async def upload_wallet_assets(
                 getattr(request.state, "request_id", None),
                 admin.org_id,
                 request.headers.get("content-length"),
-                getattr(logo, "filename", None),
-                getattr(hero_image, "filename", None),
+                redact_for_log(getattr(logo, "filename", None)),
+                redact_for_log(getattr(hero_image, "filename", None)),
             )
         raise
 

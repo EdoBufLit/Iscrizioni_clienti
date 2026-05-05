@@ -40,6 +40,7 @@ from app.services.email_outbox import build_email_payload, enqueue_email
 from app.security import hash_api_key, verify_password
 from app.utils import generate_token, hash_token, save_upload_file
 from app.config import settings
+from app.log_redaction import hash_identifier, redact_for_log
 from app.middleware import auth_limiter, get_client_ip
 from app import audit
 from app.services.association_delete import delete_association_and_release_range
@@ -1102,7 +1103,7 @@ def super_admin_login(
     if not admin:
         logger.warning(
             "super_admin_login: no admin found for email (hash=%s)",
-            body.email[:3] + "***",
+            hash_identifier(body.email),
         )
         audit.super_admin_login_failed(ip=get_client_ip(request))
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -3326,8 +3327,8 @@ async def upload_org_statute(
                 getattr(request.state, "request_id", None),
                 org_id,
                 request.headers.get("content-length"),
-                file.filename,
-                file.content_type,
+                redact_for_log(file.filename),
+                redact_for_log(file.content_type),
             )
         raise
 

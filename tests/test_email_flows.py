@@ -334,6 +334,13 @@ def test_org_admin_magic_link_normalizes_email_and_logs_flow(
     assert "org_admin_magic_link_request_received" in caplog.text
     assert "normalization_changed=True" in caplog.text
     assert "org_admin_magic_link_send_enqueued" in caplog.text
+    route_logs = "\n".join(
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "app.routes.org_admin"
+    )
+    assert email not in route_logs
+    assert email.upper() not in route_logs
 
 
 def test_org_admin_inactive_magic_link_is_logged_without_enqueue(
@@ -373,6 +380,12 @@ def test_org_admin_inactive_magic_link_is_logged_without_enqueue(
     assert len(get_captured_emails()) == 0
     assert "org_admin_magic_link_blocked" in caplog.text
     assert "block_reason=admin_inactive" in caplog.text
+    route_logs = "\n".join(
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "app.routes.org_admin"
+    )
+    assert email not in route_logs
 
 def test_org_admin_deleted_flow(client):
     # Login as super admin
