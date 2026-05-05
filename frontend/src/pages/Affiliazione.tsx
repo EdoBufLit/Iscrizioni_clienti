@@ -17,6 +17,7 @@ import { affiliationDocumentStatusMeta, resolveStatusMeta } from "../lib/statusL
 import { publicUploadHint, validatePublicDocumentUpload } from "../lib/uploadValidation";
 import { useStatePlatformCapabilities } from "../hooks/useStatePlatformCapabilities";
 import FullscreenVideoOverlay from "../components/affiliation/FullscreenVideoOverlay";
+import { useUnsavedChangesGuard } from "../components/ui/UnsavedChangesProvider";
 
 type PersonForm = {
   role: string;
@@ -760,6 +761,20 @@ const Affiliazione = () => {
         : "Sto generando il video...";
   const normalizedDraftStatus = String(currentApplication?.status || "").trim().toLowerCase();
   const hasRealSubmission = Boolean(submitResult) || SUBMITTED_STATUSES.has(normalizedDraftStatus);
+  const hasUnsavedAffiliationChanges = useMemo(() => {
+    if (loading || saving || submitting || hasRealSubmission || showIntroScreen) return false;
+    const baselineForm = draft ? toFormState(draft) : buildEmptyForm();
+    const baselinePeople = draft ? toPeople(draft) : buildDefaultPeople();
+    return JSON.stringify(form) !== JSON.stringify(baselineForm)
+      || JSON.stringify(people) !== JSON.stringify(baselinePeople);
+  }, [draft, form, hasRealSubmission, loading, people, saving, showIntroScreen, submitting]);
+
+  useUnsavedChangesGuard({
+    when: hasUnsavedAffiliationChanges,
+    title: "Affiliazione non salvata",
+    message: "Hai dati di affiliazione non ancora salvati. Se esci ora, le ultime modifiche andranno perse.",
+    blockOnSearchChange: false,
+  });
   const progressActiveStep = Math.min(5, Math.max(1, currentStep));
   const progressPercent = ((progressActiveStep - 1) / (WIZARD_PROGRESS_STEPS.length - 1)) * 100;
   const stepErrors = validation.stepErrors[currentStep] || [];

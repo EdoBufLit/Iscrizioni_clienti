@@ -33,6 +33,7 @@ import { ImageUpload } from "../../components/forms/builder/ImageUpload";
 import ConfirmModal from "../../components/ui/ConfirmModal";
 import SubmissionDecisionModal from "../../components/ui/SubmissionDecisionModal";
 import Skeleton from "../../components/ui/Skeleton";
+import { useUnsavedChangesGuard } from "../../components/ui/UnsavedChangesProvider";
 import { EmptyState, KpiCard, SectionPanel, StatusChip } from "./components/OrgAdminPrimitives";
 
 const inputClass =
@@ -269,6 +270,71 @@ function createSeededFormDraft(mode: "forms" | "surveys" = "forms") {
   };
 }
 
+function draftFromAssociationForm(form: AssociationForm) {
+  return {
+    ...emptyFormDraft(),
+    title: form.title || "",
+    description: form.description || "",
+    accent_color: form.accent_color || "#0f766e",
+    submit_button_text: form.submit_button_text || "Invia richiesta",
+    show_logo: Boolean(form.show_logo),
+    cover_image_url: form.cover_image_url || "",
+    page_style: (form.page_style as PageStyleOption) || "editorial",
+    public_slug: form.public_slug || "",
+    is_active: Boolean(form.is_active),
+    visibility: form.visibility,
+    success_message: form.success_message || "",
+    notification_email: form.notification_email || "",
+    allow_multiple_submissions: Boolean(form.allow_multiple_submissions),
+    form_type: form.form_type || "generic",
+    booking_enabled: Boolean(form.booking_enabled || form.create_booking),
+    booking_requires_manual_confirmation: Boolean(form.booking_requires_manual_confirmation),
+    booking_success_message_override: form.booking_success_message_override || "",
+    booking_notification_enabled: Boolean(form.booking_notification_enabled),
+    booking_auto_assign_enabled: Boolean(form.booking_auto_assign_enabled),
+    booking_field_mapping: form.booking_field_mapping || {},
+    booking_event_date: form.booking_event_date || "",
+    booking_event_time: form.booking_event_time || "",
+    booking_event_details: form.booking_event_details || "",
+    survey_post_event_enabled: Boolean(form.survey_post_event_enabled),
+    survey_post_event_delay_hours: form.survey_post_event_delay_hours || 2,
+    survey_post_event_message_template: form.survey_post_event_message_template || "",
+    notify_admin_on_submit: Boolean(form.notify_admin_on_submit),
+    send_user_confirmation: Boolean(form.send_user_confirmation),
+    whatsapp_auto_reply_enabled: Boolean(form.whatsapp_auto_reply_enabled),
+    whatsapp_auto_reply_template: form.whatsapp_auto_reply_template || "",
+    whatsapp_confirmation_template: form.whatsapp_confirmation_template || "",
+    whatsapp_rejection_template: form.whatsapp_rejection_template || "",
+    admin_notification_template_id: form.admin_notification_template_id,
+    user_confirmation_template_id: form.user_confirmation_template_id,
+    create_internal_request: Boolean(form.create_internal_request),
+    create_booking: Boolean(form.create_booking),
+  };
+}
+
+function serializeFormDraft(value: ReturnType<typeof emptyFormDraft>) {
+  return JSON.stringify(value);
+}
+
+function serializeBuilderFields(fields: BuilderField[]) {
+  return JSON.stringify(
+    fields.map((field, index) => ({
+      id: field.id > 0 ? field.id : null,
+      index,
+      type: field.type,
+      key: field.key,
+      label: field.label,
+      placeholder: field.placeholder,
+      helpText: field.helpText,
+      required: field.required,
+      optionsText: field.optionsText,
+      width: field.width,
+      hideLabel: field.hideLabel,
+      surveyKind: field.surveyKind || null,
+    })),
+  );
+}
+
 function emptyFieldDraft(form?: AssociationForm | null, fieldType: AssociationFormFieldType = "short_text") {
   const option = fieldTypeOptions.find((item) => item.value === fieldType);
   const label = option ? option.label : "Nuovo campo";
@@ -478,44 +544,7 @@ export function OrgAdminFormsWorkspace({
       setFieldKeyManual(false);
       return;
     }
-    setFormDraft({
-      title: selectedForm.title || "",
-      description: selectedForm.description || "",
-      accent_color: selectedForm.accent_color || "#0f766e",
-      submit_button_text: selectedForm.submit_button_text || "Invia richiesta",
-      show_logo: Boolean(selectedForm.show_logo),
-      cover_image_url: selectedForm.cover_image_url || "",
-      page_style: (selectedForm.page_style as PageStyleOption) || "editorial",
-      public_slug: selectedForm.public_slug || "",
-      is_active: Boolean(selectedForm.is_active),
-      visibility: selectedForm.visibility,
-      success_message: selectedForm.success_message || "",
-      notification_email: selectedForm.notification_email || "",
-      allow_multiple_submissions: Boolean(selectedForm.allow_multiple_submissions),
-      form_type: selectedForm.form_type || "generic",
-      booking_enabled: Boolean(selectedForm.booking_enabled || selectedForm.create_booking),
-      booking_requires_manual_confirmation: Boolean(selectedForm.booking_requires_manual_confirmation),
-      booking_success_message_override: selectedForm.booking_success_message_override || "",
-      booking_notification_enabled: Boolean(selectedForm.booking_notification_enabled),
-      booking_auto_assign_enabled: Boolean(selectedForm.booking_auto_assign_enabled),
-      booking_field_mapping: selectedForm.booking_field_mapping || {},
-      booking_event_date: selectedForm.booking_event_date || "",
-      booking_event_time: selectedForm.booking_event_time || "",
-      booking_event_details: selectedForm.booking_event_details || "",
-      survey_post_event_enabled: Boolean(selectedForm.survey_post_event_enabled),
-      survey_post_event_delay_hours: selectedForm.survey_post_event_delay_hours || 2,
-      survey_post_event_message_template: selectedForm.survey_post_event_message_template || "",
-      notify_admin_on_submit: Boolean(selectedForm.notify_admin_on_submit),
-      send_user_confirmation: Boolean(selectedForm.send_user_confirmation),
-      whatsapp_auto_reply_enabled: Boolean(selectedForm.whatsapp_auto_reply_enabled),
-      whatsapp_auto_reply_template: selectedForm.whatsapp_auto_reply_template || "",
-      whatsapp_confirmation_template: selectedForm.whatsapp_confirmation_template || "",
-      whatsapp_rejection_template: selectedForm.whatsapp_rejection_template || "",
-      admin_notification_template_id: selectedForm.admin_notification_template_id,
-      user_confirmation_template_id: selectedForm.user_confirmation_template_id,
-      create_internal_request: Boolean(selectedForm.create_internal_request),
-      create_booking: Boolean(selectedForm.create_booking),
-    });
+    setFormDraft(draftFromAssociationForm(selectedForm));
     const firstField = selectedForm.fields[0] || null;
     if (firstField) {
       handleEditField(firstField);
@@ -682,6 +711,30 @@ export function OrgAdminFormsWorkspace({
   }, [selectedForm?.fields, submissions]);
   const selectedSubmissionStatus = submissionStatusLabel(selectedSubmission?.status);
   const deleteFieldTarget = selectedForm?.fields.find((field) => field.id === deleteFieldConfirmId) || null;
+  const hasUnsavedFormWorkspaceChanges = useMemo(() => {
+    if (loading || savingForm || locked || activeTab === "responses") return false;
+    if (isCreatingForm) {
+      return (
+        serializeFormDraft(formDraft) !== serializeFormDraft(createSeededFormDraft(mode))
+        || builderDraftFields.length > 0
+      );
+    }
+    if (!selectedForm) return false;
+    return (
+      serializeFormDraft(formDraft) !== serializeFormDraft(draftFromAssociationForm(selectedForm))
+      || serializeBuilderFields(builderDraftFields) !== serializeBuilderFields(decodeBuilderFields(selectedForm))
+    );
+  }, [activeTab, builderDraftFields, formDraft, isCreatingForm, loading, locked, mode, savingForm, selectedForm]);
+
+  useUnsavedChangesGuard({
+    when: hasUnsavedFormWorkspaceChanges,
+    title: mode === "surveys" ? "Sondaggio non salvato" : "Form non salvato",
+    message:
+      mode === "surveys"
+        ? "Hai modifiche al sondaggio non ancora salvate. Se esci ora, le perderai."
+        : "Hai modifiche al form non ancora salvate. Se esci ora, le perderai.",
+    blockOnSearchChange: false,
+  });
 
   function resetEditorState() {
     syncWorkspaceQuery({ formId: null, formTab: null });

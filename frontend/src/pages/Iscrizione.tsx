@@ -5,6 +5,7 @@ import {
   type ReactNode,
   type SelectHTMLAttributes,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -27,6 +28,7 @@ import { FOREIGN_BIRTH_PLACES, findForeignBirthPlaceByCode } from "../lib/foreig
 import { applySeo } from "../lib/seo";
 import { publicUploadHint, validatePublicDocumentUpload } from "../lib/uploadValidation";
 import Skeleton from "../components/ui/Skeleton";
+import { useUnsavedChangesGuard } from "../components/ui/UnsavedChangesProvider";
 
 const MEMBER_PASSWORD_MIN_LENGTH = 8;
 
@@ -85,6 +87,18 @@ const initial: FormData = {
   privacy: false,
   statuto: false,
 };
+
+const serializeMembershipForm = (value: FormData) =>
+  JSON.stringify({
+    ...value,
+    documentoIdentita: value.documentoIdentita
+      ? {
+          name: value.documentoIdentita.name,
+          size: value.documentoIdentita.size,
+          lastModified: value.documentoIdentita.lastModified,
+        }
+      : null,
+  });
 
 function validateStep1(
   f: FormData,
@@ -454,6 +468,17 @@ const Iscrizione = () => {
   const [municipalityLoading, setMunicipalityLoading] = useState(false);
   const [municipalityLookupError, setMunicipalityLookupError] = useState("");
   const [showMunicipalitySuggestions, setShowMunicipalitySuggestions] = useState(false);
+
+  const hasUnsavedMembershipChanges = useMemo(
+    () => !submitted && !submitting && serializeMembershipForm(form) !== serializeMembershipForm(initial),
+    [form, submitted, submitting],
+  );
+
+  useUnsavedChangesGuard({
+    when: hasUnsavedMembershipChanges,
+    title: "Iscrizione non inviata",
+    message: "Hai compilato dati dell'iscrizione che non sono ancora stati inviati. Se esci ora, li perderai.",
+  });
 
   useEffect(() => {
     if (!slug) return;

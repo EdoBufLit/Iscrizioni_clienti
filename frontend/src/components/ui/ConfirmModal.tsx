@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import AsyncActionButton, { type AsyncActionState } from "./AsyncActionButton";
 import ModalShell from "./ModalShell";
 
@@ -36,6 +36,7 @@ const ConfirmModal = ({
   onConfirm,
 }: ConfirmModalProps) => {
   const [confirmed, setConfirmed] = useState(false);
+  const checkboxId = useId();
 
   useEffect(() => {
     if (!open) setConfirmed(false);
@@ -65,8 +66,12 @@ const ConfirmModal = ({
         </p>
       </div>
       {requireCheckbox ? (
-        <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700">
+        <label
+          htmlFor={checkboxId}
+          className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700"
+        >
           <input
+            id={checkboxId}
             type="checkbox"
             className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-brand focus:ring-brand"
             checked={confirmed}
@@ -76,7 +81,10 @@ const ConfirmModal = ({
         </label>
       ) : null}
       {errorMessage ? (
-        <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+        <p
+          className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
+          role="alert"
+        >
           {errorMessage}
         </p>
       ) : null}

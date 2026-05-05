@@ -1,3 +1,18 @@
+## Plan (Unsaved changes warning e accessibilita core - May 5, 2026)
+- [x] Introdurre guard centralizzato per modifiche non salvate con `beforeunload` e blocco navigazione interna.
+- [x] Migrare il bootstrap router a `RouterProvider/createBrowserRouter` per supportare `useBlocker`.
+- [x] Applicare dirty guard a iscrizione socio, affiliazione, form/sondaggi, campagne/modelli e impostazioni org admin.
+- [x] Rafforzare accessibilita delle primitive: `ModalShell`, `ConfirmModal` e verificare `ToastProvider` gia accessibile.
+- [x] Correggere i punti WCAG AA core sulle superfici toccate: focus trap/restore, blocco scroll modali, stato alert/status e checkbox con `htmlFor/id`.
+- [x] Verificare con typecheck/build e documentare risultati.
+
+## Review (Unsaved changes warning e accessibilita core - May 5, 2026)
+- Aggiunto `UnsavedChangesProvider` con `beforeunload`, blocco navigazione interna tramite `useBlocker` e conferma distruttiva standard prima di perdere bozze locali.
+- Router frontend migrato a `createBrowserRouter`/`RouterProvider`; `App` resta il contenitore delle route esistenti, ma ora i blocker React Router sono supportati.
+- Dirty guard applicati a iscrizione socio, affiliazione pubblica, workspace form/sondaggi, builder campagne/modelli e impostazioni org admin. Le query interne dei form non aprono warning inutili.
+- Accessibilita core: `ModalShell` blocca lo scroll, ripristina il focus e accetta focus iniziale; `ConfirmModal` usa checkbox associata e messaggi errore `role=alert`; `ToastProvider` era gia con `aria-live`, `role=status/alert` e limite 3 toast.
+- Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`, smoke preview HTTP su `http://127.0.0.1:4174/` con risposta `200`. Resta solo warning Vite preesistente sui chunk grandi.
+
 ## Plan (Fix WhatsApp prenotazioni duplicate e dettagli evento - May 4, 2026)
 - [x] Confermare nel codice il motivo dei due WhatsApp su submit prenotazione.
 - [x] Aggiungere dettagli evento configurabili dall'org admin sul modulo prenotazione: data, orario e note evento.

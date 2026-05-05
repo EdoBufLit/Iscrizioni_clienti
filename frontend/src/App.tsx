@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Layout from "./components/Layout";
 import { ToastProvider } from "./components/ui/ToastProvider";
+import { UnsavedChangesProvider } from "./components/ui/UnsavedChangesProvider";
 import Home from "./pages/Home";
 import Associazioni from "./pages/Associazioni";
 import { useStatePlatformCapabilities } from "./hooks/useStatePlatformCapabilities";
@@ -75,8 +76,9 @@ const App = () => {
   return (
     <ErrorBoundary>
       <ToastProvider>
-        <Suspense fallback={<Loading />}>
-          <Routes>
+        <UnsavedChangesProvider>
+          <Suspense fallback={<Loading />}>
+            <Routes>
             <Route element={<Layout />}>
               <Route index element={<Home />} />
               <Route path="servizi" element={<Servizi />} />
@@ -159,8 +161,9 @@ const App = () => {
               </Route>
               <Route path="*" element={<NotFound />} />
             </Route>
-          </Routes>
-        </Suspense>
+            </Routes>
+          </Suspense>
+        </UnsavedChangesProvider>
       </ToastProvider>
     </ErrorBoundary>
   );

@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useId, useRef } from "react";
+import { type ReactNode, type RefObject, useEffect, useId, useRef } from "react";
 
 type ModalShellProps = {
   open: boolean;
@@ -12,6 +12,7 @@ type ModalShellProps = {
   closeOnOverlay?: boolean;
   closeOnEscape?: boolean;
   contentClassName?: string;
+  initialFocusRef?: RefObject<HTMLElement>;
 };
 
 const ModalShell = ({
@@ -26,6 +27,7 @@ const ModalShell = ({
   closeOnOverlay = true,
   closeOnEscape = true,
   contentClassName = "p-6",
+  initialFocusRef,
 }: ModalShellProps) => {
   const titleId = useId();
   const descriptionId = useId();
@@ -39,11 +41,16 @@ const ModalShell = ({
 
     previousFocusRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const panel = panelRef.current;
     const focusableSelector =
-      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
-    const focusable = Array.from(panel?.querySelectorAll<HTMLElement>(focusableSelector) ?? []);
-    (focusable[0] ?? panel)?.focus();
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [contenteditable="true"], [tabindex]:not([tabindex="-1"])';
+    window.requestAnimationFrame(() => {
+      const focusable = Array.from(panel?.querySelectorAll<HTMLElement>(focusableSelector) ?? [])
+        .filter((node) => !node.hasAttribute("disabled") && node.tabIndex !== -1);
+      (initialFocusRef?.current ?? focusable[0] ?? panel)?.focus();
+    });
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && closeOnEscape) {
@@ -77,11 +84,14 @@ const ModalShell = ({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => {
+      document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
-      previousFocusRef.current?.focus();
+      if (previousFocusRef.current && document.contains(previousFocusRef.current)) {
+        previousFocusRef.current.focus();
+      }
       previousFocusRef.current = null;
     };
-  }, [closeOnEscape, onClose, open]);
+  }, [closeOnEscape, initialFocusRef, onClose, open]);
 
   if (!open) {
     return null;

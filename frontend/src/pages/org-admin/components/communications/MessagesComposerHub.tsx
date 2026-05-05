@@ -5,6 +5,7 @@ import ConfirmModal from "../../../../components/ui/ConfirmModal";
 import PromptModal from "../../../../components/ui/PromptModal";
 import Skeleton from "../../../../components/ui/Skeleton";
 import { useToast } from "../../../../components/ui/ToastProvider";
+import { useUnsavedChangesGuard } from "../../../../components/ui/UnsavedChangesProvider";
 import {
   AuthError,
   createOrgAdminEmailCampaign,
@@ -217,6 +218,75 @@ function mapCampaignToDraft(campaign: OrgAdminEmailCampaign): CampaignDraft {
     grapesjsProjectJson: campaign.grapesjs_project_json || null,
     status: campaign.status,
   };
+}
+
+function serializeTemplateDraft(draft: TemplateDraft) {
+  return JSON.stringify({
+    id: draft.id,
+    sourceTemplateId: draft.sourceTemplateId,
+    name: draft.name,
+    subject: draft.subject,
+    templateType: draft.templateType,
+    linkedFormId: draft.linkedFormId,
+    editorStatus: draft.editorStatus,
+    isSystem: draft.isSystem,
+    isActive: draft.isActive,
+    compiledHtml: draft.compiledHtml,
+    mjmlSource: draft.mjmlSource,
+    bodyText: draft.bodyText,
+    grapesjsProjectJson: draft.grapesjsProjectJson,
+  });
+}
+
+function serializeCampaignDraft(draft: CampaignDraft, selectedMembers: OrgAdminMember[]) {
+  const selectedMemberIds =
+    draft.recipientMode === "selected_members"
+      ? selectedMembers.map((member) => member.id).sort((left, right) => left - right)
+      : [];
+  return JSON.stringify({
+    id: draft.id,
+    sourceTemplateId: draft.sourceTemplateId,
+    name: draft.name,
+    subject: draft.subject,
+    templateType: draft.templateType,
+    linkedFormId: draft.linkedFormId,
+    audienceType: draft.audienceType,
+    recipientMode: draft.recipientMode,
+    scheduledAt: draft.scheduledAt,
+    editorStatus: draft.editorStatus,
+    compiledHtml: draft.compiledHtml,
+    mjmlSource: draft.mjmlSource,
+    bodyText: draft.bodyText,
+    grapesjsProjectJson: draft.grapesjsProjectJson,
+    status: draft.status,
+    memberIds: selectedMemberIds,
+  });
+}
+
+function templateDraftHasMeaningfulContent(draft: TemplateDraft) {
+  return Boolean(
+    draft.name.trim()
+      || draft.subject.trim()
+      || draft.compiledHtml.trim()
+      || draft.bodyText.trim()
+      || draft.grapesjsProjectJson
+      || draft.sourceTemplateId
+      || draft.linkedFormId,
+  );
+}
+
+function campaignDraftHasMeaningfulContent(draft: CampaignDraft, selectedMembers: OrgAdminMember[]) {
+  return Boolean(
+    draft.name.trim()
+      || draft.subject.trim()
+      || draft.compiledHtml.trim()
+      || draft.bodyText.trim()
+      || draft.grapesjsProjectJson
+      || draft.sourceTemplateId
+      || draft.linkedFormId
+      || draft.scheduledAt
+      || selectedMembers.length > 0,
+  );
 }
 
 function TemplateTypeBadge({ value }: { value: OrgAdminEmailTemplateType | string | null | undefined }) {
@@ -544,6 +614,8 @@ export function MessagesHub({
   const [campaignStep, setCampaignStep] = useState<CampaignStep>("type");
   const [templateDraft, setTemplateDraft] = useState<TemplateDraft>(() => emptyTemplateDraft());
   const [campaignDraft, setCampaignDraft] = useState<CampaignDraft>(() => emptyCampaignDraft());
+  const [templateSavedSnapshot, setTemplateSavedSnapshot] = useState(() => serializeTemplateDraft(emptyTemplateDraft()));
+  const [campaignSavedSnapshot, setCampaignSavedSnapshot] = useState(() => serializeCampaignDraft(emptyCampaignDraft(), []));
   const [previewState, setPreviewState] = useState<PreviewState | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
@@ -624,9 +696,11 @@ export function MessagesHub({
     if (loading) return;
     if (searchParams.get("mode") !== "create") return;
     const linkedFormId = searchParams.get("formId") ? Number(searchParams.get("formId")) : null;
+    const nextDraft = emptyCampaignDraft(Number.isFinite(linkedFormId) ? linkedFormId : null);
     setSubtab(forcedSubtab ?? "campaigns");
     setCampaignStep("type");
-    setCampaignDraft(emptyCampaignDraft(Number.isFinite(linkedFormId) ? linkedFormId : null));
+    setCampaignDraft(nextDraft);
+    setCampaignSavedSnapshot(serializeCampaignDraft(nextDraft, []));
     setView({ kind: "campaign-builder", campaignId: null });
   }, [loading, searchParams]);
 
@@ -720,6 +794,28 @@ export function MessagesHub({
     if (!campaignDraft.sourceTemplateId) return "Base vuota guidata";
     return templates.find((template) => template.id === campaignDraft.sourceTemplateId)?.name || "Template selezionato";
   }, [campaignDraft.sourceTemplateId, templates]);
+  const hasUnsavedMessagesBuilderChanges = useMemo(() => {
+    if (loading || busy) return false;
+    if (view.kind === "template-builder") {
+      if (templateDraft.isSystem) return false;
+      if (templateDraft.id) return serializeTemplateDraft(templateDraft) !== templateSavedSnapshot;
+      return templateDraftHasMeaningfulContent(templateDraft);
+    }
+    if (view.kind === "campaign-builder") {
+      if (campaignDraft.id) return serializeCampaignDraft(campaignDraft, selectedMembers) !== campaignSavedSnapshot;
+      return campaignDraftHasMeaningfulContent(campaignDraft, selectedMembers);
+    }
+    return false;
+  }, [busy, campaignDraft, campaignSavedSnapshot, loading, selectedMembers, templateDraft, templateSavedSnapshot, view.kind]);
+
+  useUnsavedChangesGuard({
+    when: hasUnsavedMessagesBuilderChanges,
+    title: view.kind === "template-builder" ? "Modello non salvato" : "Campagna non salvata",
+    message:
+      view.kind === "template-builder"
+        ? "Hai modifiche al modello email non ancora salvate. Se esci ora, le perderai."
+        : "Hai modifiche alla campagna non ancora salvate. Se esci ora, le perderai.",
+  });
 
   async function refreshPreview(input: { subject: string; compiledHtml: string; linkedFormId: number | null }) {
     setPreviewLoading(true);
@@ -769,11 +865,15 @@ export function MessagesHub({
     try {
       if (templateId == null) {
         const linkedFormId = searchParams.get("formId") ? Number(searchParams.get("formId")) : null;
-        setTemplateDraft(emptyTemplateDraft(Number.isFinite(linkedFormId) ? linkedFormId : null));
+        const draft = emptyTemplateDraft(Number.isFinite(linkedFormId) ? linkedFormId : null);
+        setTemplateDraft(draft);
+        setTemplateSavedSnapshot(serializeTemplateDraft(draft));
         setTemplateStep("type");
       } else {
         const res = await fetchOrgAdminEmailTemplate(templateId);
-        setTemplateDraft(mapTemplateToDraft(res.template));
+        const draft = mapTemplateToDraft(res.template);
+        setTemplateDraft(draft);
+        setTemplateSavedSnapshot(serializeTemplateDraft(draft));
         setTemplateStep("review");
       }
       setPreviewState(null);
@@ -794,7 +894,9 @@ export function MessagesHub({
     try {
       if (campaignId == null) {
         const linkedFormId = searchParams.get("formId") ? Number(searchParams.get("formId")) : null;
-        setCampaignDraft(emptyCampaignDraft(Number.isFinite(linkedFormId) ? linkedFormId : null));
+        const draft = emptyCampaignDraft(Number.isFinite(linkedFormId) ? linkedFormId : null);
+        setCampaignDraft(draft);
+        setCampaignSavedSnapshot(serializeCampaignDraft(draft, []));
         setCampaignStep("type");
         setSelectedMembers([]);
       } else {
@@ -804,9 +906,12 @@ export function MessagesHub({
         setCampaignStep("preview");
         if (draft.recipientMode === "selected_members" && draft.memberIds.length) {
           const memberLookup = await searchOrgAdminCommunicationMembers({ limit: 25 });
-          setSelectedMembers(memberLookup.items.filter((member) => draft.memberIds.includes(member.id)));
+          const members = memberLookup.items.filter((member) => draft.memberIds.includes(member.id));
+          setSelectedMembers(members);
+          setCampaignSavedSnapshot(serializeCampaignDraft(draft, members));
         } else {
           setSelectedMembers([]);
+          setCampaignSavedSnapshot(serializeCampaignDraft(draft, []));
         }
       }
       setPreviewState(null);
@@ -914,7 +1019,9 @@ export function MessagesHub({
 
       const saved = response.template;
       await refreshLibrary();
-      setTemplateDraft(mapTemplateToDraft(saved));
+      const nextDraft = mapTemplateToDraft(saved);
+      setTemplateDraft(nextDraft);
+      setTemplateSavedSnapshot(serializeTemplateDraft(nextDraft));
       showToast({
         tone: "success",
         message: templateDraft.id ? "Modello aggiornato." : "Modello creato.",
@@ -981,7 +1088,9 @@ export function MessagesHub({
       }
 
       await refreshLibrary();
-      setCampaignDraft(mapCampaignToDraft(savedCampaign));
+      const nextDraft = mapCampaignToDraft(savedCampaign);
+      setCampaignDraft(nextDraft);
+      setCampaignSavedSnapshot(serializeCampaignDraft(nextDraft, selectedMembers));
       setView({ kind: "campaign-builder", campaignId: savedCampaign.id });
       if (sendAfter) {
         backToLibrary();

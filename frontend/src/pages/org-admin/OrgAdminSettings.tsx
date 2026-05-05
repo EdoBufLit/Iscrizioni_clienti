@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   fetchOrgAdminOrganization,
@@ -11,6 +11,7 @@ import {
 } from "../../lib/api";
 import Skeleton from "../../components/ui/Skeleton";
 import { useToast } from "../../components/ui/ToastProvider";
+import { useUnsavedChangesGuard } from "../../components/ui/UnsavedChangesProvider";
 
 const inputClass =
   "mt-1 w-full rounded-md border border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20";
@@ -91,6 +92,34 @@ function buildAssociationEmailPreview(input: {
   };
 }
 
+function organizationFormSnapshot(org: OrgAdminOrganizationDetail | null) {
+  return {
+    name: org?.name || "",
+    description: org?.description || "",
+    city: org?.city || "",
+    province: org?.province || "",
+    email: org?.email || "",
+    phone: org?.phone || "",
+    website: org?.website || "",
+  };
+}
+
+function organizationEmailSettingsSnapshot(org: OrgAdminOrganizationDetail | null) {
+  return {
+    sender_email_local_part: org?.sender_email_local_part || "",
+    email_from_name_override: org?.email_from_name_override || "",
+    reply_to_email: org?.reply_to_email || "",
+  };
+}
+
+function organizationWalletSnapshot(org: OrgAdminOrganizationDetail | null) {
+  return {
+    wallet_bg_color: org?.wallet_bg_color || org?.wallet_effective_bg_color || "#0B3C75",
+    wallet_title_override: org?.wallet_title_override || org?.wallet_effective_title_override || "",
+    wallet_is_test_prefix: Boolean(org?.wallet_is_test_prefix),
+  };
+}
+
 const OrgAdminSettings = () => {
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -146,26 +175,9 @@ const OrgAdminSettings = () => {
     fetchOrgAdminOrganization()
       .then((data) => {
         setOrg(data);
-        setForm({
-          name: data.name || "",
-          description: data.description || "",
-          city: data.city || "",
-          province: data.province || "",
-          email: data.email || "",
-          phone: data.phone || "",
-          website: data.website || "",
-        });
-        setWalletForm({
-          wallet_bg_color: data.wallet_bg_color || data.wallet_effective_bg_color || "#0B3C75",
-          wallet_title_override:
-            data.wallet_title_override || data.wallet_effective_title_override || "",
-          wallet_is_test_prefix: Boolean(data.wallet_is_test_prefix),
-        });
-        setEmailSettingsForm({
-          sender_email_local_part: data.sender_email_local_part || "",
-          email_from_name_override: data.email_from_name_override || "",
-          reply_to_email: data.reply_to_email || "",
-        });
+        setForm(organizationFormSnapshot(data));
+        setWalletForm(organizationWalletSnapshot(data));
+        setEmailSettingsForm(organizationEmailSettingsSnapshot(data));
       })
       .catch((err) => {
         if (err instanceof AuthError) {
@@ -440,6 +452,44 @@ const OrgAdminSettings = () => {
     systemSender: org?.system_email_sender,
   });
   const communicationsLocked = !Boolean(org?.communications_enabled);
+  const hasUnsavedSettingsChanges = useMemo(() => {
+    if (
+      loading
+      || saving
+      || emailSettingsSaving
+      || uploading
+      || walletSaving
+      || walletAssetsUploading
+    ) {
+      return false;
+    }
+    return (
+      JSON.stringify(form) !== JSON.stringify(organizationFormSnapshot(org))
+      || JSON.stringify(emailSettingsForm) !== JSON.stringify(organizationEmailSettingsSnapshot(org))
+      || JSON.stringify(walletForm) !== JSON.stringify(organizationWalletSnapshot(org))
+      || Boolean(statuteFile || walletLogoFile || walletHeroFile)
+    );
+  }, [
+    emailSettingsForm,
+    emailSettingsSaving,
+    form,
+    loading,
+    org,
+    saving,
+    statuteFile,
+    uploading,
+    walletAssetsUploading,
+    walletForm,
+    walletHeroFile,
+    walletLogoFile,
+    walletSaving,
+  ]);
+
+  useUnsavedChangesGuard({
+    when: hasUnsavedSettingsChanges,
+    title: "Impostazioni non salvate",
+    message: "Hai modifiche o file selezionati non ancora salvati. Se esci ora, li perderai.",
+  });
 
   if (loading) {
     return (

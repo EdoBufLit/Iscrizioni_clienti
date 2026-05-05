@@ -1,12 +1,14 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+import { RouterProvider, createBrowserRouter } from "react-router-dom";
 import { registerSW } from "virtual:pwa-register";
 import App from "./App";
 import "./index.css";
 import "./theme.css";
 import { ThemeProvider } from "./components/theme/ThemeProvider";
 import { isPerfEnabled } from "./lib/perfConfig";
+
+const router = createBrowserRouter([{ path: "*", element: <App /> }]);
 
 if (isPerfEnabled() && !(window as Window & { __perfInit?: boolean }).__perfInit) {
   (window as Window & { __perfInit?: boolean }).__perfInit = true;
@@ -30,9 +32,7 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ThemeProvider>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </ThemeProvider>
   </React.StrictMode>
 );
