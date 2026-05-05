@@ -44,6 +44,20 @@ def repair_db():
             )
             """,
         )
+        ensure_table(
+            cursor,
+            "org_admin_sessions",
+            """
+            CREATE TABLE org_admin_sessions (
+                id INTEGER PRIMARY KEY,
+                admin_id INTEGER NOT NULL REFERENCES admin_users(id),
+                token_hash VARCHAR NOT NULL UNIQUE,
+                expires_at DATETIME NOT NULL,
+                revoked_at DATETIME,
+                created_at DATETIME NOT NULL
+            )
+            """,
+        )
 
         # 2. Check/Add Columns for 'organizations'
         # Extended details columns might be missing in broken migrations

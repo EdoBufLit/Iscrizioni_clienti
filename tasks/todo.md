@@ -1,3 +1,44 @@
+## Plan (Sprint 1 interventi sicuri Desloppify - May 5, 2026)
+- [x] Aggiungere helper centralizzato per redigere dati sensibili nei log senza cambiare audit DB o payload API.
+- [x] Applicare la redazione solo ai log in `member.py`, `org_admin.py` e `super_admin.py`.
+- [x] Classificare gli SHA1 in video affiliazione e sync WhatsApp come fingerprint/deduplica non-security, mantenendo formato digest.
+- [x] Aggiungere guard puntuali su subprocess/path video affiliazione senza cambiare stati/job/flussi.
+- [x] Sostituire preview HTML non sandboxate in `MessagesHub.tsx` e chiarire lo svuotamento controllato in Grapes builder.
+- [x] Aggiungere test mirati e verificare backend/frontend.
+
+## Review (Sprint 1 interventi sicuri Desloppify - May 5, 2026)
+- Aggiunto `app/log_redaction.py` per redigere email, telefono, codice fiscale, token/segreti, URL firmati/query sensibili, payload pagamento/WhatsApp e metadati documenti nei log.
+- Applicato l'helper solo ai logger in `member.py`, `org_admin.py` e `super_admin.py`; audit DB, payload API e logiche business restano invariati.
+- Gli SHA1 in `affiliation_video.py` e `whatsapp_sync.py` sono stati classificati come non-security fingerprint/deduplica con `usedforsecurity=False` e fallback compatibile, senza cambiare formato digest.
+- Video affiliazione: subprocess resta con lista argomenti e senza shell; aggiunti guard per renderer dir/script, output dir e path renderer restituito.
+- Frontend Comunicazioni: le preview HTML legacy in `MessagesHub.tsx` ora usano iframe sandboxato; `GrapesEmailBuilder.tsx` svuota il container con `replaceChildren()`.
+- Verifiche OK: `python -m py_compile ...`, test mirati (`10 passed`), `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`; restano warning deprecation/chunk size preesistenti.
+
+## Plan (Desloppify quality loop - May 5, 2026)
+- [ ] Installare/aggiornare `desloppify[full]` con Python 3.11+ e installare la guida workflow per Codex.
+- [ ] Aggiungere `.desloppify/` a `.gitignore` per evitare commit di stato locale.
+- [ ] Escludere prima della scan solo directory ovvie generate/locali: cache, build output, node_modules, test output, runtime media/output e temp workspace.
+- [ ] Eseguire `desloppify scan --path .`, seguire le istruzioni agent stampate dal tool e usare `desloppify next` come coda principale.
+- [ ] Per ogni item della coda: capire il problema, correggerlo in modo robusto, verificare, eseguire il resolve command e ripetere `desloppify next`.
+- [ ] Usare `desloppify backlog` solo se serve contesto piu ampio, e `plan`/`plan queue` solo per riordinare priorita o cluster correlati.
+- [ ] Rescansionare periodicamente, massimizzare lo strict score con miglioramenti reali e documentare review finale con comandi/verifiche.
+
+## Plan (Sessione persistente org admin 30 giorni - May 5, 2026)
+- [x] Aggiornare modello/config/schema per sessioni persistenti org admin con durata default 30 giorni.
+- [x] Creare cookie HttpOnly dedicato `org_admin_session` su verifica magic link e ripristinare la sessione breve quando valido.
+- [x] Revocare/cancellare la sessione persistente su logout e bloccare restore per admin disattivati, cancellati o token scaduti.
+- [x] Estendere CSRF per richieste org-admin autenticate solo dal cookie persistente.
+- [x] Aggiungere migration Alembic, repair SQLite/init_db e test mirati su verify, persistenza, scadenza, logout, disattivazione e CSRF.
+- [x] Eseguire verifiche e documentare review finale.
+
+## Review (Sessione persistente org admin 30 giorni - May 5, 2026)
+- Aggiunta sessione persistente org admin su tabella `org_admin_sessions`, con token hashato, scadenza configurabile via `ORG_ADMIN_SESSION_DAYS` e default 30 giorni.
+- Il magic link resta one-time e valido 15 minuti; dopo verify crea anche il cookie HttpOnly `org_admin_session` senza modificare la durata del cookie globale `session`.
+- I resolver org admin ripristinano `request.session["org_admin_id"]` dal cookie persistente valido e rifiutano admin disattivati, cancellati, sessioni scadute o revocate.
+- Logout revoca la sessione persistente corrente e cancella il cookie dedicato; CSRF ora considera anche `org_admin_session` per richieste unsafe org-admin.
+- Aggiornati Alembic, `init_db.py`, repair SQLite e `ENV_REQUIRED.md`.
+- Verifiche OK: `python -m py_compile` sui moduli toccati, `alembic heads`, test mirati org-admin persistenti (`7 passed`), `python -m pytest -q tests\test_email_flows.py` (`14 passed`) e `git diff --check` senza errori; restano solo warning CRLF/deprecation preesistenti.
+
 ## Plan (Unsaved changes warning e accessibilita core - May 5, 2026)
 - [x] Introdurre guard centralizzato per modifiche non salvate con `beforeunload` e blocco navigazione interna.
 - [x] Migrare il bootstrap router a `RouterProvider/createBrowserRouter` per supportare `useBlocker`.
@@ -4786,3 +4827,14 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Backend: aggiunto `GET /api/org-admin/communications/usage`, conteggiando gli invii campagna riusciti nel mese corrente da `EmailCampaignRecipient.sent_at` solo per org con modulo Comunicazioni attivo.
 - Report mensile: il worker email accoda una mail al `SUPER_ADMIN_EMAIL` per il mese appena chiuso, con dedupe key per inviarla una sola volta; include tutte le org attive con Comunicazioni attivo, anche quando extra e importo sono zero.
 - Verifiche OK: test mirati usage/report/worker, `python -m compileall -q app`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.
+
+## Plan (Banner maggiorenni dark mode - May 5, 2026)
+- [x] Individuare markup e classi del banner maggiorenni nel flusso pubblico di iscrizione.
+- [x] Correggere solo la variante dark mode mantenendo invariata la resa light mode approvata.
+- [x] Eseguire verifica frontend mirata con typecheck/build e controllo diff.
+- [x] Documentare risultato e verifiche.
+
+## Review (Banner maggiorenni dark mode - May 5, 2026)
+- Il banner maggiorenni in `Iscrizione.tsx` ora ha classi scoped dedicate per contenitore, icona, titolo e testo.
+- In dark mode `index.css` sovrascrive solo quel banner con superficie scura, bordo/accento rose e testo ad alto contrasto; la light mode resta sulle classi Tailwind gia approvate.
+- Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check` sui file toccati. La build mantiene solo il warning Vite sui chunk grandi gia noto.

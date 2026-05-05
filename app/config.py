@@ -77,6 +77,7 @@ class Settings:
     ALGORITHM: str = "HS256"
 
     LOGIN_TOKEN_EXPIRE_MINUTES: int = 15
+    ORG_ADMIN_SESSION_DAYS: int = int(os.getenv("ORG_ADMIN_SESSION_DAYS", "30"))
     JOIN_TOKEN_EXPIRE_MINUTES: int = 120
 
     BASE_URL: str = os.getenv("BASE_URL", "http://localhost:8000")

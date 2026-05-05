@@ -9,6 +9,7 @@ All environment variables used by the application. Variables marked **required**
 | `SECRET_KEY` | **Yes** | `supersecretkey` | Secret key for signing session cookies and tokens. Use a long random string in production. |
 | `BASE_URL` | **Yes** | `http://localhost:8000` | Public base URL of the application (e.g. `https://app.assonam.it`). Used for API redirects. |
 | `FRONTEND_URL` | **Yes** | _(empty)_ | Public URL of the frontend (e.g. `https://assonam.it`). Used for magic links. If missing, falls back to `BASE_URL` + `/app`. |
+| `ORG_ADMIN_SESSION_DAYS` | No | `30` | Duration in days for the persistent org-admin browser session cookie. |
 | `INGEST_RATE_LIMIT_MAX_REQUESTS` | No | `20` | Max public ingest calls allowed per `org_slug + client_ip` within the rate-limit window. |
 | `INGEST_RATE_LIMIT_WINDOW_SECONDS` | No | `300` | Duration (seconds) of the public ingest rate-limit window. |
 | `DATABASE_URL` | No | `sqlite:///./data/app.db` (local) or `sqlite:////app/data/app.db` (Docker) | SQLAlchemy database URL. Switch to PostgreSQL with `postgresql+psycopg2://assonam:${POSTGRES_PASSWORD}@db:5432/assonam`. |

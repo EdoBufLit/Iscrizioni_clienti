@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import get_db
-from app.models import AdminRole, AdminUser, WhatsAppConnection
+from app.models import AdminUser, WhatsAppConnection
+from app.services.org_admin_sessions import get_current_org_admin_from_request
 from app.services.whatsapp_evolution import (
     EvolutionApiError,
     EvolutionContact,
@@ -74,19 +75,7 @@ def _serialize_contact(contact: EvolutionContact) -> dict[str, str | None]:
 
 
 def _get_current_org_admin(request: Request, db: Session) -> AdminUser | None:
-    admin_id = request.session.get("org_admin_id")
-    if not admin_id:
-        return None
-    return (
-        db.query(AdminUser)
-        .filter(
-            AdminUser.id == admin_id,
-            AdminUser.role == AdminRole.ORG_ADMIN,
-            AdminUser.is_active.is_(True),
-            AdminUser.deleted_at.is_(None),
-        )
-        .first()
-    )
+    return get_current_org_admin_from_request(request, db)
 
 
 def _require_whatsapp_feature_enabled() -> None:

@@ -23,6 +23,7 @@ from app.models import (
     NumberingScope,
     AdminUser,
     AdminRole,
+    OrgAdminSession,
     AffiliationApplication,
     CardBatch,
     EmailOutbox,
@@ -316,6 +317,13 @@ def init_db():
             "run 'alembic upgrade head' to align schema history."
         )
         MembershipPayment.__table__.create(bind=engine, checkfirst=True)
+
+    if "org_admin_sessions" not in inspect(engine).get_table_names():
+        logger.warning(
+            "org_admin_sessions table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        OrgAdminSession.__table__.create(bind=engine, checkfirst=True)
 
     # Legacy column migrations - DEPRECATED, kept for backwards compatibility
     with engine.begin() as conn:

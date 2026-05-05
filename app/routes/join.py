@@ -15,7 +15,6 @@ from app.models import (
     TokenType,
     MemberDocument,
     AdminUser,
-    AdminRole,
 )
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
@@ -31,6 +30,7 @@ from app.services.member_cleanup import (
     purge_deleted_members_permanently,
 )
 from app.services.member_activity import is_member_active
+from app.services.org_admin_sessions import get_current_org_admin_from_request
 from app.services.member_membership import (
     apply_membership_defaults,
     normalize_membership_type,
@@ -343,16 +343,12 @@ def check_signup_allowed(
         )
 
     # Also check current session if authenticated as admin (double check)
-    current_admin_id = request.session.get("org_admin_id")
-    if current_admin_id:
-        current_admin = (
-            db.query(AdminUser).filter(AdminUser.id == current_admin_id).first()
+    current_admin = get_current_org_admin_from_request(request, db)
+    if current_admin and current_admin.org_id == org_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Gli amministratori non possono iscriversi come soci.",
         )
-        if current_admin and current_admin.org_id == org_id:
-            raise HTTPException(
-                status_code=403,
-                detail="Gli amministratori non possono iscriversi come soci.",
-            )
 
     # 2. Uniqueness / Resubmission Check
     # Find latest member record (including deleted, but filtered manually if needed)

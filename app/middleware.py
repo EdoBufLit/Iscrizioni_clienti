@@ -101,6 +101,7 @@ _CSRF_PROTECTED_PATH_PREFIXES = (
     "/api/super-admin/",
     "/api/me/onboarding/",
 )
+_SESSION_AUTH_COOKIE_NAMES = {"session", "org_admin_session"}
 
 
 class SessionCsrfMiddleware(BaseHTTPMiddleware):
@@ -113,7 +114,7 @@ class SessionCsrfMiddleware(BaseHTTPMiddleware):
         requires_check = (
             method in _CSRF_UNSAFE_METHODS
             and path.startswith(_CSRF_PROTECTED_PATH_PREFIXES)
-            and "session" in request.cookies
+            and bool(_SESSION_AUTH_COOKIE_NAMES.intersection(request.cookies.keys()))
             and bool(_CSRF_ALLOWED_ORIGINS)
         )
 

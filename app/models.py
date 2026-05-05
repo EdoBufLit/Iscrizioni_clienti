@@ -836,6 +836,12 @@ class AdminUser(Base):
         back_populates="created_by_user",
         foreign_keys="BookingEvent.created_by_user_id",
     )
+    persistent_sessions = relationship(
+        "OrgAdminSession",
+        back_populates="admin",
+        foreign_keys="OrgAdminSession.admin_id",
+        cascade="all, delete-orphan",
+    )
     reviewed_form_submissions = relationship(
         "FormSubmission",
         back_populates="reviewed_by_admin",
@@ -1983,6 +1989,23 @@ class OrgAdminToken(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     admin = relationship("AdminUser")
+
+
+class OrgAdminSession(Base):
+    __tablename__ = "org_admin_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=False, index=True)
+    token_hash = Column(String, nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    revoked_at = Column(DateTime, nullable=True, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    admin = relationship(
+        "AdminUser",
+        back_populates="persistent_sessions",
+        foreign_keys=[admin_id],
+    )
 
 
 class OnboardingTour(Base):

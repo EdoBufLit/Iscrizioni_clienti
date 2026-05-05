@@ -4,7 +4,7 @@ import uuid
 from app.config import settings
 from app.db import SessionLocal
 from app.utils import get_captured_emails, clear_captured_emails, generate_token, hash_token
-from app.models import Member, MemberStatus, AdminUser, AdminRole, Organization, CardBatch, Token, TokenType
+from app.models import Member, MemberStatus, AdminUser, AdminRole, Organization, CardBatch, Token, TokenType, OrgAdminSession
 from app.security import get_password_hash, verify_password
 from datetime import datetime, timedelta
 from unittest.mock import patch
@@ -299,6 +299,182 @@ def test_org_admin_magic_link_flow(client, drain_email_outbox):
     me_res = client.get("/api/org-admin/auth/me")
     assert me_res.status_code == 200
     assert me_res.json()["email"] == email
+
+
+def _create_org_admin_for_persistent_session(client, drain_email_outbox) -> tuple[str, int]:
+    client.cookies.clear()
+    client.post(
+        "/api/super-admin/auth/login",
+        json={"email": "admin@assonam.it", "password": "admin"},
+    )
+    email = f"persistent.admin.{uuid.uuid4().hex[:8]}@example.com"
+    create_res = client.post(
+        "/api/super-admin/org-admins", json={"email": email, "org_id": 1}
+    )
+    assert create_res.status_code == 200
+    drain_email_outbox()
+    client.post("/api/super-admin/auth/logout")
+    clear_captured_emails()
+    client.cookies.clear()
+    return email, create_res.json()["id"]
+
+
+def _verify_org_admin_magic_link_and_get_cookie(
+    client, drain_email_outbox, email: str
+) -> str:
+    res = client.post("/api/org-admin/auth/magic-link", data={"email": email})
+    assert res.status_code == 200
+    drain_email_outbox()
+    captured = get_captured_emails()
+    assert len(captured) == 1
+
+    import re
+
+    match = re.search(r"token=([a-zA-Z0-9_-]+)", captured[0]["body"])
+    assert match
+    verify_res = client.get(
+        f"/api/org-admin/auth/verify?token={match.group(1)}",
+        follow_redirects=False,
+    )
+    assert verify_res.status_code == 302
+    assert "org_admin_session=" in verify_res.headers.get("set-cookie", "")
+    persistent_cookie = client.cookies.get("org_admin_session")
+    assert persistent_cookie
+    return persistent_cookie
+
+
+def test_org_admin_magic_link_sets_persistent_session_cookie(
+    client, drain_email_outbox
+):
+    email, _admin_id = _create_org_admin_for_persistent_session(
+        client, drain_email_outbox
+    )
+    _verify_org_admin_magic_link_and_get_cookie(client, drain_email_outbox, email)
+
+    me_res = client.get("/api/org-admin/auth/me")
+    assert me_res.status_code == 200
+    assert me_res.json()["email"] == email
+
+
+def test_org_admin_persistent_session_restores_short_session(
+    client, drain_email_outbox
+):
+    email, _admin_id = _create_org_admin_for_persistent_session(
+        client, drain_email_outbox
+    )
+    persistent_cookie = _verify_org_admin_magic_link_and_get_cookie(
+        client, drain_email_outbox, email
+    )
+
+    client.cookies.clear()
+    client.cookies.set("org_admin_session", persistent_cookie)
+    me_res = client.get("/api/org-admin/auth/me")
+    assert me_res.status_code == 200
+    assert me_res.json()["email"] == email
+    assert client.cookies.get("session")
+
+
+def test_org_admin_expired_persistent_session_does_not_authenticate(
+    client, drain_email_outbox
+):
+    email, _admin_id = _create_org_admin_for_persistent_session(
+        client, drain_email_outbox
+    )
+    persistent_cookie = _verify_org_admin_magic_link_and_get_cookie(
+        client, drain_email_outbox, email
+    )
+
+    db = SessionLocal()
+    try:
+        session = (
+            db.query(OrgAdminSession)
+            .filter(OrgAdminSession.token_hash == hash_token(persistent_cookie))
+            .first()
+        )
+        assert session is not None
+        session.expires_at = datetime.utcnow() - timedelta(minutes=1)
+        db.commit()
+    finally:
+        db.close()
+
+    client.cookies.clear()
+    client.cookies.set("org_admin_session", persistent_cookie)
+    me_res = client.get("/api/org-admin/auth/me")
+    assert me_res.status_code == 401
+
+
+def test_org_admin_logout_revokes_persistent_session(client, drain_email_outbox):
+    email, _admin_id = _create_org_admin_for_persistent_session(
+        client, drain_email_outbox
+    )
+    persistent_cookie = _verify_org_admin_magic_link_and_get_cookie(
+        client, drain_email_outbox, email
+    )
+
+    logout_res = client.post("/api/org-admin/auth/logout")
+    assert logout_res.status_code == 200
+    assert client.cookies.get("org_admin_session") is None
+
+    db = SessionLocal()
+    try:
+        session = (
+            db.query(OrgAdminSession)
+            .filter(OrgAdminSession.token_hash == hash_token(persistent_cookie))
+            .first()
+        )
+        assert session is not None
+        assert session.revoked_at is not None
+    finally:
+        db.close()
+
+    client.cookies.clear()
+    client.cookies.set("org_admin_session", persistent_cookie)
+    me_res = client.get("/api/org-admin/auth/me")
+    assert me_res.status_code == 401
+
+
+def test_org_admin_inactive_admin_cannot_use_persistent_session(
+    client, drain_email_outbox
+):
+    email, admin_id = _create_org_admin_for_persistent_session(
+        client, drain_email_outbox
+    )
+    persistent_cookie = _verify_org_admin_magic_link_and_get_cookie(
+        client, drain_email_outbox, email
+    )
+
+    db = SessionLocal()
+    try:
+        admin = db.query(AdminUser).filter(AdminUser.id == admin_id).first()
+        assert admin is not None
+        admin.is_active = False
+        db.commit()
+    finally:
+        db.close()
+
+    client.cookies.clear()
+    client.cookies.set("org_admin_session", persistent_cookie)
+    me_res = client.get("/api/org-admin/auth/me")
+    assert me_res.status_code == 401
+
+
+def test_org_admin_persistent_session_cookie_triggers_csrf_check(
+    client, drain_email_outbox
+):
+    email, _admin_id = _create_org_admin_for_persistent_session(
+        client, drain_email_outbox
+    )
+    persistent_cookie = _verify_org_admin_magic_link_and_get_cookie(
+        client, drain_email_outbox, email
+    )
+
+    client.cookies.clear()
+    client.cookies.set("org_admin_session", persistent_cookie)
+    res = client.post(
+        "/api/org-admin/auth/logout",
+        headers={"Origin": "https://evil.example"},
+    )
+    assert res.status_code == 403
 
 
 def test_org_admin_magic_link_normalizes_email_and_logs_flow(

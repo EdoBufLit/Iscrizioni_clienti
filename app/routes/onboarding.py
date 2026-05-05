@@ -12,12 +12,11 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import (
-    AdminRole,
-    AdminUser,
     Member,
     MemberStatus,
     OnboardingTour,
 )
+from app.services.org_admin_sessions import get_current_org_admin_from_request
 
 router = APIRouter(prefix="/api/me/onboarding", tags=["onboarding"])
 
@@ -33,20 +32,9 @@ class TourStatusResponse(BaseModel):
 def _get_user_context(request: Request, db: Session):
     """Returns (user_id, role, tour_key) based on session."""
     # Check org_admin first
-    org_admin_id = request.session.get("org_admin_id")
-    if org_admin_id:
-        admin = (
-            db.query(AdminUser)
-            .filter(
-                AdminUser.id == org_admin_id,
-                AdminUser.role == AdminRole.ORG_ADMIN,
-                AdminUser.is_active.is_(True),
-                AdminUser.deleted_at.is_(None),
-            )
-            .first()
-        )
-        if admin:
-            return admin.id, "org_admin", "org_admin_dashboard_v1"
+    admin = get_current_org_admin_from_request(request, db)
+    if admin:
+        return admin.id, "org_admin", "org_admin_dashboard_v1"
 
     # Check member
     member_id = request.session.get("member_id")

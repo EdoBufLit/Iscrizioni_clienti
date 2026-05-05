@@ -219,6 +219,13 @@ from app.services.org_branding import (
     resolve_club_display_name,
     wallet_branding_defaults,
 )
+from app.services.org_admin_sessions import (
+    clear_org_admin_session_cookie,
+    create_org_admin_persistent_session,
+    get_current_org_admin_from_request,
+    revoke_current_org_admin_persistent_session,
+    set_org_admin_session_cookie,
+)
 from app.services.statute_upload import (
     enforce_statute_request_size_from_headers,
     save_statute_pdf,
@@ -252,20 +259,7 @@ def _get_current_org_admin(request: Request, db: Session):
     have a valid org_admin session. This prevents confusing authorization
     failures when both sessions coexist.
     """
-    admin_id = request.session.get("org_admin_id")
-    if not admin_id:
-        return None
-    admin = (
-        db.query(AdminUser)
-        .filter(
-            AdminUser.id == admin_id,
-            AdminUser.role == AdminRole.ORG_ADMIN,
-            AdminUser.is_active.is_(True),
-            AdminUser.deleted_at.is_(None),  # Added deleted_at filter
-        )
-        .first()
-    )
-    return admin
+    return get_current_org_admin_from_request(request, db)
 
 
 def _hash_email_for_log(email: str | None) -> str:
@@ -1818,14 +1812,23 @@ def verify_magic_link(
         )
         raise HTTPException(status_code=400, detail="Invalid or expired token")
 
-    # Mark token as used (one-time)
+    # Mark token as used (one-time) and create the persistent org-admin session.
     token_entry.used_at = datetime.utcnow()
+    persistent_session, persistent_token = create_org_admin_persistent_session(
+        db, admin
+    )
     db.commit()
     logger.info(
         "org_admin_magic_link_verify_token_consumed token_hash_prefix=%s admin_id=%s used_at=%s",
         token_hash_prefix,
         admin.id,
         token_entry.used_at.isoformat() if token_entry.used_at else None,
+    )
+    logger.info(
+        "org_admin_persistent_session_created admin_id=%s session_id=%s expires_at=%s",
+        admin.id,
+        persistent_session.id,
+        persistent_session.expires_at.isoformat(),
     )
 
     # Create session
@@ -1843,13 +1846,18 @@ def verify_magic_link(
 
     from fastapi.responses import RedirectResponse
 
-    return RedirectResponse(url="/org-admin", status_code=302)
+    response = RedirectResponse(url="/org-admin", status_code=302)
+    set_org_admin_session_cookie(response, persistent_token)
+    return response
 
 
 @auth_router.post("/logout")
-def logout(request: Request):
+def logout(request: Request, response: Response, db: Session = Depends(get_db)):
     """Clear the org-admin session."""
+    revoke_current_org_admin_persistent_session(request, db)
+    db.commit()
     request.session.pop("org_admin_id", None)
+    clear_org_admin_session_cookie(response)
     return {"ok": True}
 
 

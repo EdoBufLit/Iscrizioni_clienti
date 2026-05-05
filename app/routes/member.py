@@ -24,6 +24,7 @@ from app.services.member_membership import (
     resolve_member_valid_until,
 )
 from app.services.org_branding import resolve_card_logo_url, resolve_club_display_name
+from app.services.org_admin_sessions import get_current_org_admin_from_request
 from app import audit
 import os
 import logging
@@ -790,16 +791,9 @@ def api_auth_whoami(request: Request, db: Session = Depends(get_db)):
             return {"authenticated": True, "role": "super_admin", "redirect_to": "/super-admin/org-admins"}
 
     # 2. Org admin
-    org_admin_id = request.session.get("org_admin_id")
-    if org_admin_id:
-        admin = db.query(AdminUser).filter(
-            AdminUser.id == org_admin_id,
-            AdminUser.role == AdminRole.ORG_ADMIN,
-            AdminUser.is_active.is_(True),
-            AdminUser.deleted_at.is_(None),
-        ).first()
-        if admin:
-            return {"authenticated": True, "role": "org_admin", "redirect_to": "/org-admin"}
+    admin = get_current_org_admin_from_request(request, db)
+    if admin:
+        return {"authenticated": True, "role": "org_admin", "redirect_to": "/org-admin"}
 
     # 3. Member
     member_id = request.session.get("member_id")

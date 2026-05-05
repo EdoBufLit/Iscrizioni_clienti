@@ -26,7 +26,8 @@ from app.integrations.stripe_connect_demo.service import (
     list_demo_products_for_org,
     list_demo_storefront_products,
 )
-from app.models import AdminRole, AdminUser, Organization
+from app.models import AdminUser, Organization
+from app.services.org_admin_sessions import get_current_org_admin_from_request
 
 logger = logging.getLogger(__name__)
 
@@ -46,19 +47,7 @@ class StorefrontCheckoutBody(BaseModel):
 
 
 def _org_admin_or_401(request: Request, db: Session) -> AdminUser:
-    admin_id = request.session.get("org_admin_id")
-    if not admin_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    admin = (
-        db.query(AdminUser)
-        .filter(
-            AdminUser.id == admin_id,
-            AdminUser.role == AdminRole.ORG_ADMIN,
-            AdminUser.is_active.is_(True),
-            AdminUser.deleted_at.is_(None),
-        )
-        .first()
-    )
+    admin = get_current_org_admin_from_request(request, db)
     if admin is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return admin
