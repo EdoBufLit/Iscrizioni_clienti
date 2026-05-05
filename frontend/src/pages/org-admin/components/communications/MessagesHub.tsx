@@ -118,6 +118,18 @@ const campaignWizardSteps: Array<{ key: CampaignWizardStep; label: string; hint:
   { key: "audience", label: "Destinatari", hint: "Segmento, soci selezionati e CTA." },
   { key: "review", label: "Review", hint: "Stile, anteprima grande e azione finale." },
 ];
+
+function SandboxedEmailPreview({ html, title }: { html: string; title: string }) {
+  return (
+    <iframe
+      title={title}
+      srcDoc={html}
+      sandbox=""
+      referrerPolicy="no-referrer"
+      className="min-h-[36rem] w-full border-0 bg-white"
+    />
+  );
+}
 const templateWizardSteps: Array<{ key: TemplateWizardStep; label: string; hint: string }> = [
   { key: "essentials", label: "Essentials", hint: "Nome, categoria, oggetto e collegamenti." },
   { key: "message", label: "Messaggio", hint: "Blocchi riordinabili e contenuto." },
@@ -575,7 +587,7 @@ function PreviewCanvas(props: {
               </div>
               <div className="max-h-[44rem] overflow-auto bg-white p-3 md:p-5">
                 {props.previewHtml ? (
-                  <div dangerouslySetInnerHTML={{ __html: props.previewHtml }} />
+                  <SandboxedEmailPreview html={props.previewHtml} title={`Anteprima email ${props.title}`} />
                 ) : (
                   <div className="rounded-[1.4rem] border border-dashed border-neutral-200 bg-neutral-50 px-6 py-10 text-sm leading-7 text-neutral-500">
                     {props.fallbackText}
@@ -1658,7 +1670,7 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                   <h3 className="mt-2 text-xl font-semibold text-neutral-900">{selectedCampaign.subject}</h3>
                   <div className="mt-5 rounded-[1.4rem] border border-neutral-200 bg-neutral-50 p-5 text-sm leading-7 text-neutral-700">
                     {selectedCampaign.body_html ? (
-                      <div dangerouslySetInnerHTML={{ __html: selectedCampaign.body_html }} />
+                      <SandboxedEmailPreview html={selectedCampaign.body_html} title="Anteprima contenuto campagna" />
                     ) : (
                       <div className="whitespace-pre-wrap">{selectedCampaign.body_text || "-"}</div>
                     )}
@@ -2442,7 +2454,7 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                   </div>
                   <div className="rounded-[1.2rem] bg-white p-3">
                     {campaignPreview?.body_html ? (
-                      <div dangerouslySetInnerHTML={{ __html: campaignPreview?.body_html ?? "" }} />
+                      <SandboxedEmailPreview html={campaignPreview?.body_html || ""} title="Anteprima campagna" />
                     ) : (
                       <div className="whitespace-pre-wrap text-sm leading-6 text-neutral-600">{campaignForm.body || "Compila oggetto e contenuto per vedere l'anteprima."}</div>
                     )}
@@ -3002,7 +3014,7 @@ export function MessagesHub({ communicationsLocked }: MessagesHubProps) {
                     </div>
                     <div className="rounded-[1.2rem] bg-white p-3">
                       {templatePreview?.body_html ? (
-                        <div dangerouslySetInnerHTML={{ __html: templatePreview?.body_html ?? "" }} />
+                        <SandboxedEmailPreview html={templatePreview?.body_html || ""} title="Anteprima modello" />
                       ) : (
                         <div className="whitespace-pre-wrap text-sm leading-6 text-neutral-600">{templateForm.body || "Compila oggetto e contenuto per vedere l'anteprima."}</div>
                       )}

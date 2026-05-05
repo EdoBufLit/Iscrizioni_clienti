@@ -993,7 +993,8 @@ function renderNativeBlocks(
   onBlockClick?: (block: BuilderBlockDefinition) => void,
 ) {
   if (!editor || !container) return;
-  container.innerHTML = "";
+  // This only clears a container owned by this component; it never injects untrusted HTML.
+  container.replaceChildren();
   const rendered = editor.BlockManager.render(undefined, { external: true });
   if (rendered) {
     container.appendChild(rendered);
