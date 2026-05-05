@@ -197,7 +197,8 @@ def _iter_renderer_source_files(renderer_dir: Path) -> list[Path]:
 
 
 def _compute_renderer_source_fingerprint(renderer_dir: Path) -> str:
-    digest = hashlib.sha1()
+    # Non-security fingerprint: this only invalidates the local renderer build cache.
+    digest = _new_non_security_sha1()
     files = _iter_renderer_source_files(renderer_dir)
     if not files:
         digest.update(b"missing-renderer-sources")
@@ -211,6 +212,37 @@ def _compute_renderer_source_fingerprint(renderer_dir: Path) -> str:
             continue
         digest.update(f"{relative}:{stats.st_size}:{int(stats.st_mtime)}\n".encode("utf-8"))
     return digest.hexdigest()
+
+
+def _new_non_security_sha1():
+    try:
+        return hashlib.sha1(usedforsecurity=False)
+    except TypeError:
+        return hashlib.sha1()
+
+
+def _resolve_directory(path: Path, *, label: str) -> Path:
+    resolved = path.resolve()
+    if not resolved.exists() or not resolved.is_dir():
+        raise RuntimeError(f"{label} directory not found: {resolved}")
+    return resolved
+
+
+def _resolve_child_path(path: Path, parent: Path, *, label: str) -> Path:
+    resolved = path.resolve()
+    try:
+        resolved.relative_to(parent)
+    except ValueError as exc:
+        raise RuntimeError(f"{label} must stay inside {parent}") from exc
+    return resolved
+
+
+def _path_is_relative_to(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+        return True
+    except ValueError:
+        return False
 
 
 def _read_renderer_build_meta(meta_path: Path) -> dict[str, Any] | None:
@@ -241,9 +273,18 @@ def _write_renderer_build_meta(
 
 
 def _ensure_renderer_build(renderer_dir: Path) -> Path:
-    render_script = renderer_dir / _RENDER_SCRIPT_RELATIVE
-    build_meta_path = renderer_dir / _RENDER_BUILD_META_RELATIVE
-    source_fingerprint = _compute_renderer_source_fingerprint(renderer_dir)
+    renderer_root = _resolve_directory(renderer_dir, label="Renderer")
+    render_script = _resolve_child_path(
+        renderer_root / _RENDER_SCRIPT_RELATIVE,
+        renderer_root,
+        label="Render script",
+    )
+    build_meta_path = _resolve_child_path(
+        renderer_root / _RENDER_BUILD_META_RELATIVE,
+        renderer_root,
+        label="Render build metadata",
+    )
+    source_fingerprint = _compute_renderer_source_fingerprint(renderer_root)
     build_meta = _read_renderer_build_meta(build_meta_path)
 
     if (
@@ -253,7 +294,7 @@ def _ensure_renderer_build(renderer_dir: Path) -> Path:
     ):
         logger.info(
             "affiliation_video_build_cache_hit renderer_dir=%s source_fingerprint=%s",
-            renderer_dir,
+            renderer_root,
             source_fingerprint,
         )
         return render_script
@@ -267,13 +308,13 @@ def _ensure_renderer_build(renderer_dir: Path) -> Path:
         rebuild_reason = "source_fingerprint_changed"
     logger.info(
         "affiliation_video_build_start renderer_dir=%s source_fingerprint=%s rebuild_reason=%s",
-        renderer_dir,
+        renderer_root,
         source_fingerprint,
         rebuild_reason,
     )
     subprocess.run(
         [npm_binary, "run", "build"],
-        cwd=str(renderer_dir),
+        cwd=str(renderer_root),
         check=True,
         capture_output=True,
         text=True,
@@ -289,7 +330,7 @@ def _ensure_renderer_build(renderer_dir: Path) -> Path:
     build_ms = int((datetime.utcnow() - build_started_at).total_seconds() * 1000)
     logger.info(
         "affiliation_video_build_end renderer_dir=%s build_ms=%s source_fingerprint=%s",
-        renderer_dir,
+        renderer_root,
         build_ms,
         source_fingerprint,
     )
@@ -316,9 +357,17 @@ def public_welcome_video_url(application_id: int) -> str:
 
 
 def _target_video_path(application_id: int) -> tuple[str, Path]:
+    output_root = _resolve_directory(
+        Path(settings.AFFILIATION_VIDEO_OUTPUT_DIR),
+        label="Affiliation video output",
+    )
     file_name = f"{application_id}.mp4"
     relative = os.path.join("welcome", file_name)
-    absolute = Path(settings.AFFILIATION_VIDEO_OUTPUT_DIR) / file_name
+    absolute = _resolve_child_path(
+        output_root / file_name,
+        output_root,
+        label="Affiliation video output path",
+    )
     absolute.parent.mkdir(parents=True, exist_ok=True)
     return relative.replace("\\", "/"), absolute
 
@@ -398,11 +447,7 @@ def _render_job(db: Session, job: VideoJob) -> None:
         job.finished_at = datetime.utcnow()
         return
 
-    renderer_dir = Path(settings.AFFILIATION_VIDEO_RENDERER_DIR)
-    if not renderer_dir.exists():
-        raise RuntimeError(
-            f"Renderer directory not found: {settings.AFFILIATION_VIDEO_RENDERER_DIR}"
-        )
+    renderer_dir = _resolve_directory(Path(settings.AFFILIATION_VIDEO_RENDERER_DIR), label="Renderer")
 
     render_script = _ensure_renderer_build(renderer_dir)
     org_name = (
@@ -469,9 +514,16 @@ def _render_job(db: Session, job: VideoJob) -> None:
     )
     source_path = Path(str(payload.get("path") or "").strip()) if payload else absolute_path
     if source_path and _video_file_is_ready(source_path):
-        if source_path.resolve() != absolute_path.resolve():
+        resolved_source = source_path.resolve()
+        allowed_roots = [
+            Path(settings.AFFILIATION_VIDEO_OUTPUT_DIR).resolve(),
+            renderer_dir.resolve(),
+        ]
+        if not any(_path_is_relative_to(resolved_source, root) for root in allowed_roots):
+            raise RuntimeError("Renderer output path is outside allowed video directories.")
+        if resolved_source != absolute_path.resolve():
             absolute_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source_path, absolute_path)
+            shutil.copyfile(resolved_source, absolute_path)
     finalize_ms = int((datetime.utcnow() - finalize_started_at).total_seconds() * 1000)
     logger.info(
         "affiliation_video_finalize_end job_id=%s application_id=%s finalize_ms=%s output_ready=%s",
