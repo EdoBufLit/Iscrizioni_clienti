@@ -1053,14 +1053,14 @@ const Iscrizione = () => {
           </header>
 
           {adultsOnlyBannerEnabled ? (
-            <div className="mx-auto mt-8 max-w-3xl rounded-[1.8rem] border border-rose-200 bg-[linear-gradient(135deg,rgba(255,241,242,0.98),rgba(255,255,255,0.96))] px-5 py-5 text-left shadow-[0_24px_50px_-38px_rgba(225,29,72,0.5)] md:px-7 md:py-6">
+            <div className="signup-adults-only-banner mx-auto mt-8 max-w-3xl rounded-[1.8rem] border border-rose-200 bg-[linear-gradient(135deg,rgba(255,241,242,0.98),rgba(255,255,255,0.96))] px-5 py-5 text-left shadow-[0_24px_50px_-38px_rgba(225,29,72,0.5)] md:px-7 md:py-6">
               <div className="flex items-start gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+                <div className="signup-adults-only-banner__icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
                   {iconFor("M12 8.5h.01M11 12h1v4h1m-8 3.25h14a2.25 2.25 0 0 0 2.25-2.25v-10.5A2.25 2.25 0 0 0 19 4.25H5A2.25 2.25 0 0 0 2.75 6.5V17A2.25 2.25 0 0 0 5 19.25Z", "h-6 w-6")}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-lg font-semibold text-slate-950">Avviso importante</p>
-                  <p className="mt-2 text-base leading-7 text-slate-700">
+                  <p className="signup-adults-only-banner__title text-lg font-semibold text-slate-950">Avviso importante</p>
+                  <p className="signup-adults-only-banner__copy mt-2 text-base leading-7 text-slate-700">
                     Iscrizione consentita solo ai maggiori di 18 anni.
                   </p>
                 </div>
