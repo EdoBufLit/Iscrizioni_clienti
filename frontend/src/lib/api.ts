@@ -1837,13 +1837,20 @@ export async function createMembershipPaymentCheckout(
     body.append("id_document", data.id_document);
   }
 
-  const res = await fetch(
-    `/api/public/orgs/${encodeURIComponent(orgSlug)}/membership-payment/create-checkout`,
-    {
-      method: "POST",
-      body,
-    },
-  );
+  let res: Response;
+  try {
+    res = await fetch(
+      `/api/public/orgs/${encodeURIComponent(orgSlug)}/membership-payment/create-checkout`,
+      {
+        method: "POST",
+        body,
+      },
+    );
+  } catch {
+    throw new Error(
+      "Connessione interrotta durante la creazione del pagamento. I dati non sono stati inviati: controlla la rete e riprova da questo riepilogo.",
+    );
+  }
   if (res.status === 404) throw new Error("Associazione non trovata.");
   if (!res.ok) {
     const payload = await res.json().catch(() => null);

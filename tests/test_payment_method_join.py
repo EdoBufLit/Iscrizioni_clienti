@@ -104,4 +104,4 @@ def test_join_submit_without_payment_method_returns_400(client, db):
     resp = _join_submit(client, org.slug, email, None)
     assert resp.status_code == 400, resp.text
     payload = resp.json()
-    assert "Modalita di pagamento obbligatoria" in payload.get("detail", "")
+    assert "Modalità di pagamento obbligatoria" in payload.get("detail", "")

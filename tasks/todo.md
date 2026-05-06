@@ -4838,3 +4838,15 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Il banner maggiorenni in `Iscrizione.tsx` ora ha classi scoped dedicate per contenitore, icona, titolo e testo.
 - In dark mode `index.css` sovrascrive solo quel banner con superficie scura, bordo/accento rose e testo ad alto contrasto; la light mode resta sulle classi Tailwind gia approvate.
 - Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check` sui file toccati. La build mantiene solo il warning Vite sui chunk grandi gia noto.
+
+## Plan (Checkout quota Frutta e Verdura - May 6, 2026)
+- [x] Incrociare orari segnalati, screenshot, tentativi test e log live per distinguere errore client-side da errore backend/SumUp.
+- [x] Rendere il messaggio frontend del network failure piu chiaro e recuperabile senza perdere il riepilogo gia compilato.
+- [x] Aggiungere osservabilita backend al checkout quota associativa con request id, IP, user-agent e stato creazione/riuso checkout.
+- [x] Eseguire test mirati backend/frontend, build e controllo diff prima del push.
+
+## Review (Checkout quota Frutta e Verdura - May 6, 2026)
+- Diagnosi live: alle 19:32 italiane la navigazione e le API GET sono arrivate al server, ma non risulta alcuna POST di creazione checkout; i test successivi alle 19:42/19:46 hanno creato checkout correttamente.
+- Frontend: il fallimento di rete durante `create-checkout` non espone piu il raw `Failed to fetch`, ma un messaggio in italiano che invita a riprovare dal riepilogo.
+- Backend: il checkout SumUp ora logga start, riuso checkout pending, creazione riuscita ed errori SumUp con contesto di request.
+- Verifiche OK: `python -m pytest -q tests/test_membership_payments_sumup.py tests/test_payment_method_join.py`, `python -m compileall -q app`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.

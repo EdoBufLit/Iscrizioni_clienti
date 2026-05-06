@@ -310,7 +310,17 @@ async def create_membership_payment_checkout(
     id_document: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
-    join_limiter.check(get_client_ip(request))
+    request_id = get_request_id(request)
+    client_ip = get_client_ip(request)
+    user_agent = request.headers.get("user-agent")
+    logger.info(
+        "membership_payment_checkout_start request_id=%s org_slug=%s ip=%s user_agent=%s",
+        request_id,
+        org_slug,
+        client_ip,
+        user_agent,
+    )
+    join_limiter.check(client_ip)
     org = _get_active_org_by_slug(db, org_slug)
     if not organization_requires_membership_payment(org) or not organization_has_sumup_config(org):
         raise HTTPException(status_code=400, detail="Pagamento online non disponibile per questa associazione.")
@@ -362,6 +372,14 @@ async def create_membership_payment_checkout(
                 raise HTTPException(status_code=409, detail="La quota associativa risulta già pagata.")
             if latest_payment.status == MembershipPaymentStatus.PENDING.value and latest_payment.hosted_checkout_url:
                 db.commit()
+                logger.info(
+                    "membership_payment_checkout_reused request_id=%s org_slug=%s org_id=%s member_id=%s payment_id=%s",
+                    request_id,
+                    org_slug,
+                    org.id,
+                    member.id,
+                    latest_payment.id,
+                )
                 return {
                     "payment_id": latest_payment.id,
                     "hosted_checkout_url": latest_payment.hosted_checkout_url,
@@ -389,13 +407,36 @@ async def create_membership_payment_checkout(
         request=request,
         payment_id=payment.id,
     )
-    create_payload = create_sumup_hosted_checkout(
-        org=org,
-        member=member,
-        payment=payment,
-        redirect_url=redirect_url,
-        return_url=return_url,
-    )
+    try:
+        create_payload = create_sumup_hosted_checkout(
+            org=org,
+            member=member,
+            payment=payment,
+            redirect_url=redirect_url,
+            return_url=return_url,
+        )
+    except HTTPException as exc:
+        logger.warning(
+            "membership_payment_checkout_sumup_http_error request_id=%s org_slug=%s org_id=%s member_id=%s payment_id=%s status_code=%s detail=%s",
+            request_id,
+            org_slug,
+            org.id,
+            member.id,
+            payment.id,
+            exc.status_code,
+            exc.detail,
+        )
+        raise
+    except Exception:
+        logger.exception(
+            "membership_payment_checkout_sumup_unexpected_error request_id=%s org_slug=%s org_id=%s member_id=%s payment_id=%s",
+            request_id,
+            org_slug,
+            org.id,
+            member.id,
+            payment.id,
+        )
+        raise
     hosted_checkout = create_payload.get("hosted_checkout") or {}
     hosted_checkout_url = (
         create_payload.get("hosted_checkout_url")
@@ -405,6 +446,16 @@ async def create_membership_payment_checkout(
     )
     sumup_checkout_id = create_payload.get("id") or create_payload.get("checkout_id")
     if not hosted_checkout_url or not sumup_checkout_id:
+        logger.warning(
+            "membership_payment_checkout_sumup_incomplete request_id=%s org_slug=%s org_id=%s member_id=%s payment_id=%s has_url=%s has_checkout_id=%s",
+            request_id,
+            org_slug,
+            org.id,
+            member.id,
+            payment.id,
+            bool(hosted_checkout_url),
+            bool(sumup_checkout_id),
+        )
         raise HTTPException(status_code=502, detail="Risposta checkout SumUp incompleta.")
 
     payment.sumup_checkout_id = str(sumup_checkout_id)
@@ -423,12 +474,20 @@ async def create_membership_payment_checkout(
             "member_id": member.id,
             "checkout_reference": payment.checkout_reference,
             "sumup_checkout_id": payment.sumup_checkout_id,
-            "request_id": get_request_id(request),
+            "request_id": request_id,
         },
-        ip=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
+        ip=client_ip,
+        user_agent=user_agent,
     )
     db.commit()
+    logger.info(
+        "membership_payment_checkout_created request_id=%s org_slug=%s org_id=%s member_id=%s payment_id=%s",
+        request_id,
+        org_slug,
+        org.id,
+        member.id,
+        payment.id,
+    )
     return {"payment_id": payment.id, "hosted_checkout_url": payment.hosted_checkout_url}
 
 
