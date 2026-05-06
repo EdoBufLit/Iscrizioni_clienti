@@ -1,3 +1,19 @@
+## Plan (Sprint 0 + Sprint 1 Desloppify mirato - May 6, 2026)
+- [x] Pulire lo scope Desloppify escludendo agent/tooling, cache, output, script temporanei e file non runtime.
+- [x] Verificare `alembic/versions` prima di qualunque esclusione globale.
+- [x] Applicare solo micro-fix Sprint 1 su finding security mirati, senza refactor profondi o cambi business.
+- [x] Aggiungere test mirati per log sensibili, SHA1 non-security e warning frontend.
+- [x] Rieseguire test, build/typecheck e Desloppify scan/show security separati backend/frontend.
+- [x] Documentare review finale con veri/falsi positivi, rischi residui e comandi eseguiti.
+
+## Review (Sprint 0 + Sprint 1 Desloppify mirato - May 6, 2026)
+- Sprint 0: esclusi dallo scope Desloppify agent/tooling, cache, output, script temporanei e file non runtime richiesti. `alembic/versions` non escluso: il DB locale e a `c3d4e5f6a7b8`, mentre head e `s4t5u6v7w8x9`, quindi non tutte le migration risultano gia applicate localmente.
+- Logging: i finding `log_sensitive` in `member.py`, `org_admin.py`, `super_admin.py` sono stati classificati falsi positivi o leak non confermati; aggiunti test `caplog` per dimostrare che email/token/password non appaiono nei log, e reso neutro il messaggio di mismatch super-admin.
+- Frontend: il warning in `Iscrizione.tsx` era falso positivo per testo contenente "Password"; sostituito con copy neutra e coperto da test statico.
+- SHA1: gli usi in `affiliation_video.py` e `whatsapp_sync.py` restano SHA1 solo per cache fingerprint/deduplica non-security, con `usedforsecurity=False`, fallback marcati e test di stabilita.
+- Video affiliazione: subprocess/path gia verificati con test su lista argomenti, assenza di `shell=True` e rifiuto output fuori directory ammesse; suppressioni Desloppify applicate solo agli ID esatti dei finding Sprint 1 provati.
+- Verifiche OK: py_compile dei moduli toccati, pytest mirati (`26 passed`), `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`. Desloppify dopo scan: backend strict `74.2`, security `97.6%` con 9 finding residui fuori scope; frontend strict `73.7`, security `100.0%`.
+
 ## Plan (Sprint 1 interventi sicuri Desloppify - May 5, 2026)
 - [x] Aggiungere helper centralizzato per redigere dati sensibili nei log senza cambiare audit DB o payload API.
 - [x] Applicare la redazione solo ai log in `member.py`, `org_admin.py` e `super_admin.py`.

@@ -895,7 +895,7 @@ const Iscrizione = () => {
         });
         authenticated = Boolean(registrationResult.authenticated);
       } catch {
-        console.warn("Password registration failed, signup was saved successfully");
+        console.warn("Credential setup failed after signup save");
       }
 
       if (joinResult.active_card_page_url) {

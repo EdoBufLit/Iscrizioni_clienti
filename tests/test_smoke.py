@@ -321,6 +321,25 @@ def test_super_admin_login_bad_credentials(client):
     assert r.status_code == 401
 
 
+def test_super_admin_login_password_mismatch_log_does_not_expose_secret(client, caplog):
+    caplog.set_level("WARNING", logger="app.routes.super_admin")
+    r = client.post(
+        "/api/super-admin/auth/login",
+        json={"email": "admin@assonam.it", "password": "not-the-password"},
+    )
+    assert r.status_code == 401
+
+    route_logs = "\n".join(
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "app.routes.super_admin"
+    )
+    assert "credential mismatch" in route_logs
+    assert "password mismatch" not in route_logs
+    assert "not-the-password" not in route_logs
+    assert "admin@assonam.it" not in route_logs
+
+
 def test_super_admin_logout(client):
     r = client.post("/api/super-admin/auth/logout")
     assert r.status_code == 200

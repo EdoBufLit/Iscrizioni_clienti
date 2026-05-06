@@ -24,7 +24,7 @@ def setup_test_env():
     settings.EMAIL_MODE = original_mode
     clear_captured_emails()
 
-def test_member_magic_link_flow(client, drain_email_outbox):
+def test_member_magic_link_flow(client, drain_email_outbox, caplog):
     # 1. Create Member
     email = "test.member@example.com"
     # We can use a direct DB insert or just rely on register if needed, but direct is safer for isolation
@@ -85,6 +85,8 @@ def test_member_magic_link_flow(client, drain_email_outbox):
 
     # Now valid login request (case insensitive)
     clear_captured_emails()
+    caplog.set_level("INFO", logger="app.routes.member")
+    caplog.clear()
     res = client.post("/api/auth/login", data={"email": " Test.Member@Example.com "})
     assert res.status_code == 200
     drain_email_outbox()
@@ -102,6 +104,14 @@ def test_member_magic_link_flow(client, drain_email_outbox):
     match = re.search(r"token=([a-zA-Z0-9_-]+)", body)
     assert match
     token = match.group(1)
+    route_logs = "\n".join(
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "app.routes.member"
+    )
+    assert email not in route_logs
+    assert "Test.Member@Example.com" not in route_logs
+    assert token not in route_logs
 
     # Verify
     verify_res = client.get(f"/member/auth?token={token}", follow_redirects=False)
@@ -116,7 +126,9 @@ def test_member_magic_link_flow(client, drain_email_outbox):
     assert me_res.json()["email"] == email
 
 
-def test_member_password_reset_flow_is_one_time_and_non_enumerating(client, drain_email_outbox):
+def test_member_password_reset_flow_is_one_time_and_non_enumerating(
+    client, drain_email_outbox, caplog
+):
     unknown_res = client.post(
         "/api/auth/password-reset/request",
         data={"email": f"missing.{uuid.uuid4().hex[:8]}@example.com"},
@@ -158,6 +170,8 @@ def test_member_password_reset_flow_is_one_time_and_non_enumerating(client, drai
         db.close()
 
     clear_captured_emails()
+    caplog.set_level("INFO", logger="app.routes.member")
+    caplog.clear()
     res = client.post("/api/auth/password-reset/request", data={"email": f"  {email.upper()}  "})
     assert res.status_code == 200
     drain_email_outbox()
@@ -172,6 +186,14 @@ def test_member_password_reset_flow_is_one_time_and_non_enumerating(client, drai
     match = re.search(r"token=([a-zA-Z0-9_-]+)", captured[0]["body"])
     assert match
     token = match.group(1)
+    route_logs = "\n".join(
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "app.routes.member"
+    )
+    assert email not in route_logs
+    assert email.upper() not in route_logs
+    assert token not in route_logs
 
     short_res = client.post(
         "/api/auth/password-reset/confirm",
@@ -507,6 +529,11 @@ def test_org_admin_magic_link_normalizes_email_and_logs_flow(
     captured = get_captured_emails()
     assert len(captured) == 1
     assert captured[0]["to"] == email
+    import re
+
+    match = re.search(r"token=([a-zA-Z0-9_-]+)", captured[0]["body"])
+    assert match
+    token = match.group(1)
     assert "org_admin_magic_link_request_received" in caplog.text
     assert "normalization_changed=True" in caplog.text
     assert "org_admin_magic_link_send_enqueued" in caplog.text
@@ -517,6 +544,7 @@ def test_org_admin_magic_link_normalizes_email_and_logs_flow(
     )
     assert email not in route_logs
     assert email.upper() not in route_logs
+    assert token not in route_logs
 
 
 def test_org_admin_inactive_magic_link_is_logged_without_enqueue(

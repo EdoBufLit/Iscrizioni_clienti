@@ -1090,7 +1090,8 @@ def _draw_referral_reward() -> dict[str, str]:
             "delivery_timing": "Applicazione automatica sulla prossima fattura annuale.",
         }
 
-    draw = random.randint(1, total_weight)
+    # Non-security draw for referral rewards; not used for tokens, auth, or crypto.
+    draw = random.randint(1, total_weight)  # nosec B311
     cumulative = 0
     for option in REFERRAL_REWARD_OPTIONS:
         cumulative += int(option.get("weight", 0))

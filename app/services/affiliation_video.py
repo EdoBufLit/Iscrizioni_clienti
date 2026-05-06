@@ -198,7 +198,7 @@ def _iter_renderer_source_files(renderer_dir: Path) -> list[Path]:
 
 def _compute_renderer_source_fingerprint(renderer_dir: Path) -> str:
     # Non-security fingerprint: this only invalidates the local renderer build cache.
-    digest = _new_non_security_sha1()
+    digest = _new_non_security_sha1()  # nosec B324 - non-security cache fingerprint.
     files = _iter_renderer_source_files(renderer_dir)
     if not files:
         digest.update(b"missing-renderer-sources")
@@ -216,9 +216,9 @@ def _compute_renderer_source_fingerprint(renderer_dir: Path) -> str:
 
 def _new_non_security_sha1():
     try:
-        return hashlib.sha1(usedforsecurity=False)
+        return hashlib.sha1(usedforsecurity=False)  # nosec B324 - non-security cache fingerprint.
     except TypeError:
-        return hashlib.sha1()
+        return hashlib.sha1()  # nosec B324 - compatibility fallback; non-security only.
 
 
 def _resolve_directory(path: Path, *, label: str) -> Path:

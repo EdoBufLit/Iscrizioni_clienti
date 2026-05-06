@@ -1236,8 +1236,12 @@ def _build_message_dedupe_key(
     serialized = json.dumps(payload or {}, sort_keys=True, default=str, ensure_ascii=True)
     # Non-security digest: stable dedupe key for webhook payloads without provider message IDs.
     try:
-        digest = hashlib.sha1(serialized.encode("utf-8"), usedforsecurity=False).hexdigest()
+        digest = hashlib.sha1(  # nosec B324 - non-security webhook dedupe digest.
+            serialized.encode("utf-8"), usedforsecurity=False
+        ).hexdigest()
     except TypeError:
-        digest = hashlib.sha1(serialized.encode("utf-8")).hexdigest()
+        digest = hashlib.sha1(  # nosec B324 - compatibility fallback; non-security only.
+            serialized.encode("utf-8")
+        ).hexdigest()
     prefix = instance_name or "instance"
     return f"message:{prefix}:hash:{digest}"

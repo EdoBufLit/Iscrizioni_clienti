@@ -1116,7 +1116,7 @@ def super_admin_login(
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     if not verify_password(body.password, admin.password_hash):
-        logger.warning("super_admin_login: password mismatch for admin id=%d", admin.id)
+        logger.warning("super_admin_login: credential mismatch for admin id=%d", admin.id)
         audit.super_admin_login_failed(ip=get_client_ip(request))
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
