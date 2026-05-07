@@ -1,3 +1,16 @@
+## Plan (Fix build pre-deploy npm ci - May 7, 2026)
+- [x] Recuperare il log completo GitHub Actions del workflow fallito.
+- [x] Riprodurre il problema come clean install compatibile con Docker/npm 10.
+- [x] Allineare Vitest alla major Vite usata dal progetto senza cambiare Dockerfile.
+- [x] Verificare test frontend, typecheck, build e `npm@10 ci`.
+- [x] Committare e pushare il fix.
+
+## Review (Fix build pre-deploy npm ci - May 7, 2026)
+- Root cause: `vitest@4.1.5` introduceva `vite@8` nel lock, mentre il progetto usa `vite@5.4.x`; nel container `node:20-alpine`/npm `10.8.2`, `npm ci` falliva per lock incompleto su `@emnapi/core`, `@emnapi/runtime` ed `esbuild@0.28.0`.
+- Fix: pin di `vitest` a `2.1.9`, compatibile con `vite@5`, rigenerando `frontend/package-lock.json` senza nested `vite@8`.
+- Verifiche OK: `npx -y npm@10.8.2 --prefix frontend ci`, `npm --prefix frontend run test:run`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.
+- Nota: Docker build locale non eseguito per Docker Desktop Linux engine non disponibile; il controllo che falliva nel container (`npm@10 ci`) e stato riprodotto con la stessa major npm.
+
 ## Plan (Smoke manuale pre-push - May 7, 2026)
 - [x] Avviare backend locale e verificare health/version/API base.
 - [x] Avviare frontend locale e verificare caricamento pagine pubbliche principali.
