@@ -1,3 +1,17 @@
+## Plan (Smoke manuale pre-push - May 7, 2026)
+- [x] Avviare backend locale e verificare health/version/API base.
+- [x] Avviare frontend locale e verificare caricamento pagine pubbliche principali.
+- [x] Eseguire smoke su login/aree admin con controlli non distruttivi.
+- [x] Verificare che build/test Sprint 2/3 restino verdi dopo lo smoke.
+- [x] Documentare risultati e pushare il branch corrente.
+
+## Review (Smoke manuale pre-push - May 7, 2026)
+- Backend smoke avviato su DB SQLite temporaneo `tmp_pre_push_smoke.db`, con `health`, `api/version`, login socio, magic login org-admin e login super-admin verificati.
+- Smoke browser Playwright via Vite proxy temporaneo su `http://127.0.0.1:5174` verso backend `http://127.0.0.1:8010`: 35 superfici navigate, 0 failure, 0 page error, 0 console error inatteso e 0 response 4xx/5xx inattesa.
+- Superfici coperte: pubbliche (`/`, servizi, associazioni, dettaglio associazione, iscrizione, login, reset password, affiliazione, contatti, privacy), area socio (`dashboard`, profilo, documenti), org-admin (dashboard, inviti, soci, tessere, prenotazioni, documenti, comunicazioni, campagne, moduli, WhatsApp, billing, contabilita, associazione) e super-admin (org-admins, associazioni, affiliazioni, documenti, registro lotti, soci).
+- Note ambiente: FastAPI statico su `/associazioni` produce redirect loop per collisione route backend/SPA, quindi lo smoke frontend valido e stato eseguito via Vite come SPA. Il proxy Vite cross-port genera 403 CSRF attesi su `api/me/onboarding/start`; sono stati esclusi solo come rumore di ambiente, non come regressioni applicative.
+- Evidenze locali non committate: screenshot e `summary.json` in `tasks/screenshots/prepush-smoke-vite-20260507-final/`.
+
 ## Plan (Sprint 2 + Sprint 3 Desloppify - May 7, 2026)
 - [x] Chiudere security residua backend con micro-fix, commenti non-security e suppression solo per falsi positivi provati.
 - [x] Aggiungere test backend mirati per fallback/logging e classificazioni non-security.
