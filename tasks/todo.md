@@ -1,3 +1,19 @@
+## Plan (Sprint 2 + Sprint 3 Desloppify - May 7, 2026)
+- [x] Chiudere security residua backend con micro-fix, commenti non-security e suppression solo per falsi positivi provati.
+- [x] Aggiungere test backend mirati per fallback/logging e classificazioni non-security.
+- [x] Introdurre harness test frontend con Vitest/React Testing Library/jsdom.
+- [x] Sostituire o affiancare test statici frontend con test DOM/comportamentali mirati.
+- [x] Rieseguire pytest, test frontend, typecheck/build e scan/show Desloppify separati.
+- [x] Documentare review finale e committare solo file pertinenti.
+
+## Review (Sprint 2 + Sprint 3 Desloppify - May 7, 2026)
+- Sprint 2: chiusi i residui security backend con micro-fix reversibili: identificatori pubblici marcati non-secret, jitter email classificato non-security, marker worker reso configurabile/risolto, fallback grafici/email/PDF ora loggano senza ingoiare eccezioni in silenzio.
+- Sprint 2: applicate suppression Desloppify solo agli ID esatti dopo test/commenti; `desloppify --lang python show security --status open --no-budget` e `desloppify --lang typescript show security --status open --no-budget` risultano puliti al 100%.
+- Sprint 3: aggiunto harness Vitest/React Testing Library/jsdom e rimpiazzato il test statico Python sulla preview HTML con test DOM su iframe sandboxato, `referrerPolicy` e svuotamento controllato del container.
+- Desloppify: backend strict `74.3` e security `100.0`; frontend strict `72.0` e security `100.0`. Il frontend ora mostra `Test health 0.5%` perche il nuovo harness ha attivato il rilevatore di copertura, aprendo debito reale sui flussi frontend critici.
+- Verifiche OK: `python -m pytest -q tests\test_desloppify_sprint2_security.py tests\test_security_hardening_audit.py tests\test_log_redaction.py` (`17 passed`), `npm --prefix frontend run test:run` (`6 passed`), `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
+- Rischi residui: `npm --prefix frontend audit --omit=dev` segnala 2 high su `grapesjs -> underscore`; non corretto in questo sprint perche richiede valutazione compatibilita del builder. Restano warning Vite sui chunk grandi e warning deprecation Python preesistenti.
+
 ## Plan (Sprint 0 + Sprint 1 Desloppify mirato - May 6, 2026)
 - [x] Pulire lo scope Desloppify escludendo agent/tooling, cache, output, script temporanei e file non runtime.
 - [x] Verificare `alembic/versions` prima di qualunque esclusione globale.
@@ -4866,3 +4882,16 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Frontend: il fallimento di rete durante `create-checkout` non espone piu il raw `Failed to fetch`, ma un messaggio in italiano che invita a riprovare dal riepilogo.
 - Backend: il checkout SumUp ora logga start, riuso checkout pending, creazione riuscita ed errori SumUp con contesto di request.
 - Verifiche OK: `python -m pytest -q tests/test_membership_payments_sumup.py tests/test_payment_method_join.py`, `python -m compileall -q app`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
+
+## Plan (Cleanup spazio server Hetzner ASSO.N.A.M. - May 6, 2026)
+- [x] Verificare accesso SSH root a `157.90.31.105` e misurare spazio con `df -h`, inode e usage Docker.
+- [x] Individuare i maggiori consumatori senza cancellare dati applicativi: Docker images/build cache, log, journal, apt cache, temp.
+- [x] Liberare spazio con cleanup conservativo, evitando volumi DB e directory dati runtime.
+- [x] Verificare spazio libero, stato Docker/Postgres/app e readiness HTTP essenziale.
+- [x] Documentare risultato e comandi principali.
+
+## Review (Cleanup spazio server Hetzner ASSO.N.A.M. - May 6, 2026)
+- Diagnosi iniziale: `/dev/sda1` era al 100% con 22 MB liberi; inode OK al 47%. Il peso era in `/var/lib/containerd` e in immagini Docker dangling/intermediate; `docker system df -v` mostrava molte immagini `<none>:<none>` non usate.
+- Cleanup eseguito: `docker image prune -f`, `apt-get clean`, `journalctl --vacuum-size=100M`. Non sono stati toccati volumi Docker, incluso `app_pgdata`.
+- Risultato spazio: root filesystem passato da `36G used / 22M avail / 100%` a `9.3G used / 27G avail / 26%`; inode passati a 8% usati.
+- Verifiche runtime: container `app-web-1`, worker, Evolution API, video worker e `app-db-1` risultano up; `docker exec app-db-1 pg_isready -U postgres` OK; `https://assonam.it/` risponde `HTTP/2 200`; `https://www.assonam.it/` redirige a `https://assonam.it/`.
