@@ -296,9 +296,9 @@ def maybe_send_member_card_ready_email(db: Session, request: Request, member_id:
     member_query = db.query(Member).filter(Member.id == member_id)
     try:
         member_query = member_query.with_for_update()
-    except Exception:
+    except Exception as exc:
         # SQLite does not support FOR UPDATE; the normal query is still fine for tests/dev.
-        pass
+        logger.debug("Member card ready email proceeding without row lock: %s", exc)
 
     member = member_query.first()
     if not member:
@@ -378,8 +378,8 @@ def queue_member_card_email(
     member_query = db.query(Member).filter(Member.id == member_id)
     try:
         member_query = member_query.with_for_update()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Manual member card email proceeding without row lock: %s", exc)
 
     member = member_query.first()
     if not member:

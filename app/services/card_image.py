@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import logging
 import os
 
 # Palette (RGB)
@@ -17,6 +18,7 @@ _MUTED = (201, 168, 176)
 _GREEN = (74, 222, 128)
 _RED = (248, 113, 113)
 _OASI2_LOGO_SHIFT_X = -4
+logger = logging.getLogger(__name__)
 
 # Credit-card ratio canvas (1.586 : 1)
 _W = 856
@@ -49,12 +51,20 @@ def _load_font(
     for path in candidates:
         try:
             return ImageFont.truetype(path, size)
-        except Exception:
+        except Exception as exc:
+            logger.debug(
+                "Unable to load card font candidate path=%s size=%s bold=%s: %s",
+                path,
+                size,
+                bold,
+                exc,
+            )
             continue
 
     try:
         return ImageFont.load_default(size=size)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Unable to load sized default card font size=%s: %s", size, exc)
         return ImageFont.load_default()
 
 
@@ -81,8 +91,8 @@ def _paste_logo(
         px = dest_x + (max_w - logo.width) // 2
         py = dest_y + (max_h - logo.height) // 2
         img.paste(logo, (px, py), logo)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Unable to paste card logo path=%s: %s", logo_path, exc)
 
 
 def generate_card_image_bytes(

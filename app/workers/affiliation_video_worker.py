@@ -13,7 +13,10 @@ from app.config import settings
 from app.db import SessionLocal
 
 logger = logging.getLogger(__name__)
-READY_MARKER_PATH = Path("/tmp/worker.ready")
+# Container-local readiness marker only; it never stores user data.
+READY_MARKER_PATH = Path(
+    os.getenv("AFFILIATION_VIDEO_READY_MARKER", "/tmp/worker.ready")
+).resolve()  # nosec B108
 
 
 def _env_bool(name: str, default: bool = False) -> bool:

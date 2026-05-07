@@ -296,7 +296,8 @@ def compute_backoff(attempts: int) -> datetime:
     base_seconds = _RETRY_SCHEDULE_SECONDS[
         min(normalized_attempts - 1, len(_RETRY_SCHEDULE_SECONDS) - 1)
     ]
-    jitter_multiplier = random.uniform(0.85, 1.15)
+    # Non-security jitter to avoid synchronized email retries; not used for tokens or selection.
+    jitter_multiplier = random.uniform(0.85, 1.15)  # nosec B311
     delay_seconds = max(5, int(round(base_seconds * jitter_multiplier)))
     return utcnow_aware() + timedelta(seconds=delay_seconds)
 

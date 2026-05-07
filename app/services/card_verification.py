@@ -9,7 +9,8 @@ from typing import Optional, TypedDict
 from app.config import settings
 from app.services.member_activity import is_card_active
 
-_TOKEN_PREFIX = "card-verify-v1"
+# HMAC domain separator/version string; not a secret.
+_TOKEN_PREFIX = "card-verify-v1"  # nosec hardcoded_secret_name
 
 
 class CardVerificationPayload(TypedDict):

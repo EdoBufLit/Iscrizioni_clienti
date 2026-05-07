@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import io
+import logging
 import os
 import re
 from textwrap import wrap
@@ -13,6 +14,8 @@ from reportlab.pdfgen import canvas
 
 from app.config import settings
 from app.services.email_outbox import build_email_payload
+
+logger = logging.getLogger(__name__)
 
 _BRAND = colors.HexColor("#0f5c58")
 _BRAND_DARK = colors.HexColor("#113335")
@@ -240,8 +243,8 @@ def generate_org_admin_welcome_guide_pdf(
     if os.path.exists(logo_path):
         try:
             c.drawImage(ImageReader(logo_path), margin, page_h - 92, 88, 52, mask="auto", preserveAspectRatio=True)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Unable to draw org admin welcome guide logo path=%s: %s", logo_path, exc)
     c.setFillColor(colors.white)
     c.setFont("Helvetica-Bold", 24)
     c.drawString(margin, page_h - 116, "Guida rapida ASSO.N.A.M.")

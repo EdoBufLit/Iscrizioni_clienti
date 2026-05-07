@@ -14,7 +14,8 @@ from app.models import IntegrationApiKey
 pwd_context = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
 
 MIN_MEMBER_PASSWORD_LENGTH = 8
-INTEGRATION_API_KEY_HEADER = "X-ASSONAM-API-KEY"
+# Header name only; the secret value is supplied by clients and stored hashed.
+INTEGRATION_API_KEY_HEADER = "X-ASSONAM-API-KEY"  # nosec hardcoded_secret_name
 
 
 @dataclass(frozen=True)
