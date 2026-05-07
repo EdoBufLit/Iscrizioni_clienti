@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
@@ -85,6 +86,11 @@ export default defineConfig(({ mode }) => ({
   base: "/",
   esbuild: {
     drop: mode === "production" ? ["console", "debugger"] : [],
+  },
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.ts"],
+    globals: true,
   },
   server: {
     proxy: {

@@ -47,6 +47,7 @@ import {
 import Skeleton from "../../../../components/ui/Skeleton";
 import { useToast } from "../../../../components/ui/ToastProvider";
 import ConfirmModal from "../../../../components/ui/ConfirmModal";
+import SandboxedEmailPreview from "./SandboxedEmailPreview";
 
 type MessagesHubProps = { communicationsLocked: boolean };
 type Mode = "text" | "html";
@@ -119,17 +120,6 @@ const campaignWizardSteps: Array<{ key: CampaignWizardStep; label: string; hint:
   { key: "review", label: "Review", hint: "Stile, anteprima grande e azione finale." },
 ];
 
-function SandboxedEmailPreview({ html, title }: { html: string; title: string }) {
-  return (
-    <iframe
-      title={title}
-      srcDoc={html}
-      sandbox=""
-      referrerPolicy="no-referrer"
-      className="min-h-[36rem] w-full border-0 bg-white"
-    />
-  );
-}
 const templateWizardSteps: Array<{ key: TemplateWizardStep; label: string; hint: string }> = [
   { key: "essentials", label: "Essentials", hint: "Nome, categoria, oggetto e collegamenti." },
   { key: "message", label: "Messaggio", hint: "Blocchi riordinabili e contenuto." },

@@ -16,6 +16,7 @@ import {
   sortAssetsByDate,
   type BuilderBlockDefinition,
 } from "./emailBuilder";
+import { clearElement } from "./domUtils";
 
 type BuilderSnapshot = {
   compiledHtml: string;
@@ -993,8 +994,7 @@ function renderNativeBlocks(
   onBlockClick?: (block: BuilderBlockDefinition) => void,
 ) {
   if (!editor || !container) return;
-  // This only clears a container owned by this component; it never injects untrusted HTML.
-  container.replaceChildren();
+  clearElement(container);
   const rendered = editor.BlockManager.render(undefined, { external: true });
   if (rendered) {
     container.appendChild(rendered);
