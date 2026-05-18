@@ -1,3 +1,30 @@
+## Plan (Fix accento visuale builder form/sondaggi - May 18, 2026)
+- [x] Verificare dove `accent_color` viene applicato nella preview pubblica del builder.
+- [x] Propagare il colore accento a hero, card, sezioni, divider, focus e stati selezionati oltre al solo bottone.
+- [x] Verificare typecheck/build frontend e smoke browser con un colore custom.
+- [x] Documentare risultato e rischi residui.
+
+## Review (Fix accento visuale builder form/sondaggi - May 18, 2026)
+- Root cause: `FormPublicCanvas` usava `accent_color` quasi solo sul bottone di submit; focus, radio/checkbox e alcuni stati erano poco visibili nella preview non interattiva.
+- Fix: introdotto token CSS dinamico `--form-accent` e applicato a badge associazione, linea hero, bordo/top accent della card, titoli sezione, separatori, required marker, focus/stati selezionati e CTA.
+- Hardening dark/admin: rimossi `bg-white`/`shadow-sm` dai punti del canvas pubblico che venivano sovrascritti dalle regole globali `.org-admin-v2`, sostituendoli con regole scoped del canvas.
+- Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
+- Smoke browser locale con accento `#2563eb`: `--form-accent` propagato; badge associazione, card, titolo sezione, bordo sezione, required marker, divider e bottone leggono il blu custom, non solo la CTA.
+- Rischi residui: resta il warning Vite preesistente sui chunk grandi.
+
+## Plan (Fix overflow builder form/sondaggi - May 18, 2026)
+- [x] Confermare il punto condiviso usato da Form pubblici e Sondaggi.
+- [x] Rimuovere il clipping verticale del tab builder senza cambiare logica drag/drop o persistenza.
+- [x] Verificare typecheck/build frontend e smoke browser del builder con molti campi.
+- [x] Documentare risultato, evidenza e rischi residui.
+
+## Review (Fix overflow builder form/sondaggi - May 18, 2026)
+- Root cause: il tab builder in `OrgAdminForms.tsx` aveva altezza fissa `h-[calc(100vh-210px)]` e `overflow-hidden`, quindi il canvas centrale veniva tagliato quando i campi superavano il viewport.
+- Fix: sostituito con `min-h-[calc(100vh-210px)] overflow-visible`, lasciando invariati `FormBuilder`, drag/drop, salvataggio e pannelli laterali sticky/scrollabili.
+- Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
+- Smoke browser locale su backend FastAPI + SPA buildata: Form pubblici con 30 campi (`scrollHeight 4886`, `clientHeight 720`, ultimo campo raggiungibile) e Sondaggi con 28 domande (`scrollHeight 4939`, `clientHeight 720`, ultimo campo raggiungibile).
+- Rischi residui: nessun cambio funzionale alla persistenza; resta il warning Vite preesistente sui chunk grandi.
+
 ## Plan (Fix build pre-deploy npm ci - May 7, 2026)
 - [x] Recuperare il log completo GitHub Actions del workflow fallito.
 - [x] Riprodurre il problema come clean install compatibile con Docker/npm 10.

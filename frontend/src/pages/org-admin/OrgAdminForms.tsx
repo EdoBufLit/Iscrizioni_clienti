@@ -1440,7 +1440,7 @@ export function OrgAdminFormsWorkspace({
   );
 
   const builderTab = (
-    <div className="h-[calc(100vh-210px)] overflow-hidden">
+    <div className="min-h-[calc(100vh-210px)] overflow-visible">
       <FormBuilder
         fields={builderDraftFields}
         onChange={setBuilderDraftFields}

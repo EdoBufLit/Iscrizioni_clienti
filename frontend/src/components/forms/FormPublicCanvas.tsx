@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import type { AssociationFormField, PublicAssociationForm } from "../../lib/api";
 import { decodeField } from "./builder/utils";
 
@@ -56,7 +57,7 @@ function getPageTheme(pageStyle: string | null | undefined) {
       hero: "bg-gradient-to-br from-white/10 to-transparent border-b border-white/10",
       title: "font-sans text-3xl sm:text-4xl md:text-5xl font-black tracking-tight text-white",
       body: "text-white/70",
-      card: "bg-white/5 border border-white/10 rounded-2xl p-6",
+      card: "border rounded-2xl p-6",
     };
   }
   // Editorial
@@ -66,7 +67,7 @@ function getPageTheme(pageStyle: string | null | undefined) {
     hero: "bg-transparent",
     title: "font-serif text-3xl sm:text-4xl md:text-5xl font-medium tracking-tight text-neutral-900",
     body: "text-neutral-600 font-serif",
-    card: "bg-white border border-neutral-200/60 rounded-xl p-6 shadow-sm",
+    card: "border rounded-xl p-6",
   };
 }
 
@@ -97,8 +98,12 @@ function renderField(props: {
   // Render Virtual Types
   if (decoded.type === "section_title") {
     return (
-      <div key={decoded.key} style={containerStyle} className="pt-6 pb-2">
-        <h3 className={`text-xl font-bold ${labelColor} ${theme.title.includes("serif") ? "font-serif" : "font-sans"}`}>
+      <div
+        key={decoded.key}
+        style={containerStyle}
+        className="form-public-canvas__section-title-block border-l-4 py-2 pl-4"
+      >
+        <h3 className={`form-public-canvas__section-title text-xl font-bold ${labelColor} ${theme.title.includes("serif") ? "font-serif" : "font-sans"}`}>
           {decoded.label}
         </h3>
       </div>
@@ -114,7 +119,7 @@ function renderField(props: {
     );
   }
   if (decoded.type === "divider") {
-    return <hr key={decoded.key} style={containerStyle} className={`my-6 ${isSpotlight ? "border-white/10" : "border-neutral-200"}`} />;
+    return <hr key={decoded.key} style={containerStyle} className="form-public-canvas__divider my-6" />;
   }
   if (decoded.type === "spacer") {
     return <div key={decoded.key} style={containerStyle} className="h-10" />;
@@ -125,7 +130,8 @@ function renderField(props: {
     if (decoded.hideLabel) return null;
     return (
       <span className={`block text-sm font-semibold mb-1 ${labelColor}`}>
-        {decoded.label} {decoded.required && <span className="text-red-500 ml-0.5">*</span>}
+        <span className="form-public-canvas__label">{decoded.label}</span>
+        {decoded.required && <span className="form-public-canvas__required ml-0.5">*</span>}
       </span>
     );
   };
@@ -137,7 +143,7 @@ function renderField(props: {
 
   if (decoded.type === "long_text") {
     return (
-      <label key={decoded.key} style={containerStyle} className="block">
+      <label key={decoded.key} style={containerStyle} className="form-public-canvas__field block">
         {renderLabel()}
         <textarea
           className={`${inputClass} min-h-[120px]`}
@@ -155,7 +161,7 @@ function renderField(props: {
   if (decoded.type === "select") {
     const options = decoded.optionsText.split(",").map((s) => s.trim()).filter(Boolean);
     return (
-      <label key={decoded.key} style={containerStyle} className="block">
+      <label key={decoded.key} style={containerStyle} className="form-public-canvas__field block">
         {renderLabel()}
         <select
           className={inputClass}
@@ -188,7 +194,8 @@ function renderField(props: {
       <fieldset key={decoded.key} style={containerStyle} className="block">
         {!decoded.hideLabel && (
           <legend className={`text-sm font-semibold mb-3 ${labelColor}`}>
-            {decoded.label} {decoded.required && <span className="text-red-500 ml-0.5">*</span>}
+            <span className="form-public-canvas__label">{decoded.label}</span>
+            {decoded.required && <span className="form-public-canvas__required ml-0.5">*</span>}
           </legend>
         )}
         <div className={`grid gap-2 ${decoded.type === "nps_0_10" ? "grid-cols-6 sm:grid-cols-11" : "grid-cols-5"}`}>
@@ -233,12 +240,13 @@ function renderField(props: {
       <fieldset key={decoded.key} style={containerStyle} className="block">
         {!decoded.hideLabel && (
           <legend className={`text-sm font-semibold mb-2 ${labelColor}`}>
-            {decoded.label} {decoded.required && <span className="text-red-500 ml-0.5">*</span>}
+            <span className="form-public-canvas__label">{decoded.label}</span>
+            {decoded.required && <span className="form-public-canvas__required ml-0.5">*</span>}
           </legend>
         )}
         <div className="grid gap-2">
           {options.map((option) => (
-            <label key={option} className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition-colors cursor-pointer ${optionCardClass}`}>
+            <label key={option} className={`form-public-canvas__option flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition-colors cursor-pointer ${optionCardClass}`}>
               <input
                 type="radio"
                 name={decoded.key}
@@ -265,12 +273,13 @@ function renderField(props: {
       <fieldset key={decoded.key} style={containerStyle} className="block">
         {!decoded.hideLabel && (
           <legend className={`text-sm font-semibold mb-2 ${labelColor}`}>
-            {decoded.label} {decoded.required && <span className="text-red-500 ml-0.5">*</span>}
+            <span className="form-public-canvas__label">{decoded.label}</span>
+            {decoded.required && <span className="form-public-canvas__required ml-0.5">*</span>}
           </legend>
         )}
         <div className="grid gap-2">
           {options.map((option) => (
-            <label key={option} className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition-colors cursor-pointer ${optionCardClass}`}>
+            <label key={option} className={`form-public-canvas__option flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition-colors cursor-pointer ${optionCardClass}`}>
               <input
                 type="checkbox"
                 disabled={disabled}
@@ -295,7 +304,7 @@ function renderField(props: {
 
   if (decoded.type === "consent") {
     return (
-      <label key={decoded.key} style={containerStyle} className={`flex items-start gap-3 rounded-xl px-4 py-4 text-sm cursor-pointer transition-colors ${optionCardClass}`}>
+      <label key={decoded.key} style={containerStyle} className={`form-public-canvas__option flex items-start gap-3 rounded-xl px-4 py-4 text-sm cursor-pointer transition-colors ${optionCardClass}`}>
         <input
           type="checkbox"
           className="mt-1 w-4 h-4 rounded text-brand bg-transparent"
@@ -306,7 +315,7 @@ function renderField(props: {
           style={!isSpotlight ? { accentColor } : {}}
         />
         <span>
-          <span className={`font-semibold ${labelColor}`}>{decoded.label}</span>
+          <span className={`form-public-canvas__label font-semibold ${labelColor}`}>{decoded.label}</span>
           {decoded.helpText ? <span className={`mt-1 block text-xs font-medium ${helpColor}`}>{decoded.helpText}</span> : null}
         </span>
       </label>
@@ -315,7 +324,7 @@ function renderField(props: {
 
   if (decoded.type === "file_upload") {
     return (
-      <label key={decoded.key} style={containerStyle} className="block">
+      <label key={decoded.key} style={containerStyle} className="form-public-canvas__field block">
         {renderLabel()}
         <input
           className={inputClass}
@@ -343,7 +352,7 @@ function renderField(props: {
             : "text";
 
   return (
-    <label key={decoded.key} style={containerStyle} className="block">
+    <label key={decoded.key} style={containerStyle} className="form-public-canvas__field block">
       {renderLabel()}
       <input
         className={inputClass}
@@ -371,15 +380,102 @@ export function FormPublicCanvas({
   const theme = getPageTheme(form.page_style);
   const pageStyle = (form.page_style || "editorial").toLowerCase();
   const sortedFields = [...form.fields].sort((left, right) => left.sort_order - right.sort_order);
+  const canvasStyle = { "--form-accent": accentColor } as CSSProperties;
 
   // Dynamic styles
-  const btnStyle = { backgroundColor: accentColor, color: "#ffffff" };
+  const btnStyle = {
+    backgroundColor: accentColor,
+    color: "#ffffff",
+    boxShadow: "0 18px 38px -24px var(--form-accent)",
+  };
   const customFocusStyle = `
     .form-public-canvas-container input:focus,
     .form-public-canvas-container select:focus,
     .form-public-canvas-container textarea:focus {
-      border-color: ${accentColor}88 !important;
-      box-shadow: 0 0 0 3px ${accentColor}22 !important;
+      border-color: var(--form-accent) !important;
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--form-accent) 20%, transparent) !important;
+    }
+
+    .form-public-canvas-container .form-public-canvas__hero-accent {
+      background: linear-gradient(90deg, transparent, var(--form-accent), transparent);
+    }
+
+    .form-public-canvas-container .form-public-canvas__association {
+      border-color: color-mix(in srgb, var(--form-accent) 28%, transparent) !important;
+      color: var(--form-accent) !important;
+      background: #ffffff !important;
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--form-accent) 10%, transparent), 0 12px 28px -24px var(--form-accent);
+    }
+
+    .form-public-canvas-container .form-public-canvas__card {
+      border-color: color-mix(in srgb, var(--form-accent) 24%, transparent) !important;
+      box-shadow: inset 0 4px 0 var(--form-accent), 0 22px 52px -42px color-mix(in srgb, var(--form-accent) 50%, #0f172a) !important;
+    }
+
+    .form-public-canvas-container[data-page-style="editorial"] .form-public-canvas__card,
+    .form-public-canvas-container[data-page-style="minimal"] .form-public-canvas__card {
+      background: #ffffff !important;
+      color: #111827 !important;
+    }
+
+    .form-public-canvas-container .form-public-canvas__section-title-block {
+      border-color: var(--form-accent) !important;
+    }
+
+    .form-public-canvas-container .form-public-canvas__section-title,
+    .form-public-canvas-container .form-public-canvas__required {
+      color: var(--form-accent) !important;
+    }
+
+    .org-admin-v2 .form-public-canvas-container .form-public-canvas__association {
+      border-color: color-mix(in srgb, var(--form-accent) 28%, transparent) !important;
+      background: #ffffff !important;
+      color: var(--form-accent) !important;
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--form-accent) 10%, transparent), 0 12px 28px -24px var(--form-accent) !important;
+    }
+
+    .org-admin-v2 .form-public-canvas-container[data-page-style="editorial"] .form-public-canvas__card,
+    .org-admin-v2 .form-public-canvas-container[data-page-style="minimal"] .form-public-canvas__card {
+      border-color: color-mix(in srgb, var(--form-accent) 24%, transparent) !important;
+      background: #ffffff !important;
+      color: #111827 !important;
+      box-shadow: inset 0 4px 0 var(--form-accent), 0 22px 52px -42px color-mix(in srgb, var(--form-accent) 50%, #0f172a) !important;
+    }
+
+    .org-admin-v2 .form-public-canvas-container .form-public-canvas__section-title,
+    .org-admin-v2 .form-public-canvas-container .form-public-canvas__required {
+      color: var(--form-accent) !important;
+    }
+
+    .form-public-canvas-container .form-public-canvas__divider {
+      border-color: color-mix(in srgb, var(--form-accent) 34%, transparent) !important;
+    }
+
+    .form-public-canvas-container .form-public-canvas__field:focus-within .form-public-canvas__label,
+    .form-public-canvas-container .form-public-canvas__option:has(input:checked) .form-public-canvas__label {
+      color: var(--form-accent) !important;
+    }
+
+    .form-public-canvas-container .form-public-canvas__option:has(input:checked) {
+      border-color: color-mix(in srgb, var(--form-accent) 62%, transparent) !important;
+      background: color-mix(in srgb, var(--form-accent) 9%, white) !important;
+      color: color-mix(in srgb, var(--form-accent) 70%, #0f172a) !important;
+    }
+
+    .form-public-canvas-container[data-page-style="spotlight"] .form-public-canvas__association,
+    .form-public-canvas-container[data-page-style="spotlight"] .form-public-canvas__section-title,
+    .form-public-canvas-container[data-page-style="spotlight"] .form-public-canvas__required {
+      color: color-mix(in srgb, var(--form-accent) 62%, white) !important;
+    }
+
+    .form-public-canvas-container[data-page-style="spotlight"] .form-public-canvas__card {
+      background: linear-gradient(180deg, color-mix(in srgb, var(--form-accent) 12%, rgba(255,255,255,0.05)), rgba(255,255,255,0.04));
+      border-color: color-mix(in srgb, var(--form-accent) 34%, rgba(255,255,255,0.12)) !important;
+    }
+
+    .form-public-canvas-container[data-page-style="spotlight"] .form-public-canvas__option:has(input:checked) {
+      background: color-mix(in srgb, var(--form-accent) 18%, rgba(255,255,255,0.08)) !important;
+      color: #ffffff !important;
     }
   `;
 
@@ -387,6 +483,7 @@ export function FormPublicCanvas({
     <div
       className={`form-public-canvas-container w-full min-h-full ${theme.shell} transition-colors duration-300`}
       data-page-style={pageStyle}
+      style={canvasStyle}
     >
       <style>{customFocusStyle}</style>
       
@@ -402,11 +499,12 @@ export function FormPublicCanvas({
       <div className={`${theme.hero} px-6 py-10 md:py-16 text-center`}>
         <div className="max-w-3xl mx-auto flex flex-col items-center">
           {form.show_logo && form.association?.name && (
-            <div className="mb-6 inline-flex max-w-full items-center justify-center rounded-2xl border border-neutral-100 bg-white px-5 py-3 text-sm font-semibold text-neutral-900 shadow-sm">
+            <div className="form-public-canvas__association mb-6 inline-flex max-w-full items-center justify-center rounded-2xl border px-5 py-3 text-sm font-semibold">
               <span className="truncate">{form.association.name}</span>
             </div>
           )}
           <h1 className={`form-public-canvas__title ${theme.title}`}>{form.title}</h1>
+          <span className="form-public-canvas__hero-accent mt-5 h-1 w-24 rounded-full" aria-hidden="true" />
           {form.description && (
             <p className={`form-public-canvas__description mt-5 text-sm md:text-base max-w-2xl mx-auto leading-relaxed ${theme.body}`}>
               {form.description}
@@ -418,7 +516,7 @@ export function FormPublicCanvas({
       {/* Form Content */}
       <div className={`max-w-3xl mx-auto px-6 py-8 md:py-12 ${theme.surface}`}>
         <form
-          className={`flex flex-wrap gap-y-6 gap-x-4 ${theme.card}`}
+          className={`form-public-canvas__card flex flex-wrap gap-y-6 gap-x-4 ${theme.card}`}
           onSubmit={(event) => {
             event.preventDefault();
             onSubmit?.();
