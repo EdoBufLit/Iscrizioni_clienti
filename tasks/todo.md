@@ -5021,3 +5021,17 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Staging selettivo: incluse solo patch WhatsApp webhook/worker, editor mail conferma form, campo `Orario`, test e documentazione task; lasciate fuori modifiche non correlate gia presenti nel worktree.
 - Cleanup Hetzner conservativo: `docker image prune -f` e `docker builder prune -f --filter until=24h`, senza `docker system prune`, senza volumi. Root filesystem passato da `15G used / 22G avail / 41%` a `12G used / 25G avail / 32%`.
 - Verifiche pre-push gia eseguite: `python -m pytest -q tests/test_forms_module.py`, `python -m compileall -q app`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.
+
+## Plan (Fix deploy falliti post-push - May 19, 2026)
+- [x] Verificare sul server Hetzner spazio, inode, owner/permessi della working copy e stato Git in `APP_PATH`.
+- [x] Riparare in modo conservativo il checkout persistente che fallisce con `insufficient permission for adding an object to repository database .git/objects`.
+- [x] Aggiornare il workflow deploy per prevenire il blocco prima di `git fetch`, con controllo disco/permessi e cleanup Git prudente.
+- [x] Rilanciare o simulare il percorso critico del deploy fino al checkout, poi verificare servizi Docker e HTTP pubblico.
+- [x] Documentare causa, fix e verifiche.
+
+## Review (Fix deploy falliti post-push - May 19, 2026)
+- Causa: alcune directory/oggetti in `/opt/assonam/app/.git/objects` erano non scrivibili dall'utente `deploy`, quindi la GitHub Action falliva su `git fetch` con `insufficient permission for adding an object`.
+- Riparazione server: eseguito `chown -R deploy:deploy /opt/assonam/app/.git`, verificato `git fetch` come `deploy`, poi riallineato il checkout a `origin/feat/redesign-landing-wizard` commit `52dc2b8d`.
+- Rollout manuale completato: pull immagine runtime branch, migration Alembic a `t5u6v7w8x9y0`, recreate di `web`, `email-worker`, `low-cards-worker` e `whatsapp-webhook-worker` sulla stessa immagine.
+- Workflow aggiornato: controllo disco/inode e permessi `.git` prima del fetch, migration Docker Compose con stdin chiuso, pull/rollout/wait includono `whatsapp-webhook-worker`.
+- Verifiche live OK: working tree server pulito, `/` al 32%, container runtime healthy/running, `https://assonam.it/`, `/api/capabilities` e `/api/organizations` rispondono 200.

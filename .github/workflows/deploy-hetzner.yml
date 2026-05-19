@@ -252,6 +252,39 @@ jobs:
             fi
             export COMPOSE_PROJECT_NAME="app"
             echo "[deploy] COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}"
+
+            repair_git_permissions() {
+              if [ ! -d ".git" ]; then
+                return
+              fi
+
+              echo "[deploy] Checking persistent checkout permissions"
+              df -h /
+              df -ih /
+
+              current_owner="$(id -u):$(id -g)"
+              if [ "$(id -u)" = "0" ]; then
+                chown -R "$current_owner" .git
+              elif command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
+                sudo chown -R "$current_owner" .git
+              fi
+              chmod -R u+rwX .git || true
+
+              if [ ! -w ".git/objects" ]; then
+                echo "::error::.git/objects is not writable by deploy user $(id -un). Fix ownership on $PWD before fetching."
+                stat -c '%U:%G %a %n' .git .git/objects || true
+                exit 1
+              fi
+
+              first_unwritable_dir="$(find .git/objects -type d ! -writable -print -quit 2>/dev/null || true)"
+              if [ -n "$first_unwritable_dir" ]; then
+                echo "::error::Git object directory is not writable by deploy user $(id -un): $first_unwritable_dir"
+                stat -c '%U:%G %a %n' "$first_unwritable_dir" || true
+                exit 1
+              fi
+            }
+
+            repair_git_permissions
             git fetch --all
 
             mkdir -p .git/info
@@ -517,11 +550,11 @@ jobs:
 
             if [ "$APP_RUNTIME_CHANGED" = "true" ]; then
               echo "[deploy] Pulling refreshed app-runtime image"
-              docker compose $COMPOSE_FILES --profile ops pull web email-worker low-cards-worker migrate
+              docker compose $COMPOSE_FILES --profile ops pull web email-worker low-cards-worker whatsapp-webhook-worker migrate
               log_memory_snapshot "after_app_pull"
 
               echo "[deploy] Running Alembic migrations from pulled runtime image"
-              docker compose $COMPOSE_FILES --profile ops run --rm --no-deps migrate
+              docker compose $COMPOSE_FILES --profile ops run -T --rm --no-deps migrate </dev/null
               log_memory_snapshot "after_migrate"
             fi
 
@@ -529,9 +562,10 @@ jobs:
               echo "[deploy] Rolling out app-runtime services"
               docker compose $COMPOSE_FILES up -d --no-deps web
               wait_for_service_ready "" web 120
-              docker compose $COMPOSE_FILES up -d --no-deps email-worker low-cards-worker
+              docker compose $COMPOSE_FILES up -d --no-deps email-worker low-cards-worker whatsapp-webhook-worker
               wait_for_service_ready "" email-worker 120
               wait_for_service_ready "" low-cards-worker 120
+              wait_for_service_ready "" whatsapp-webhook-worker 120
               log_memory_snapshot "after_app_rollout"
             else
               echo "[deploy] Skipping app-runtime rollout; no app image or compose changes detected."
