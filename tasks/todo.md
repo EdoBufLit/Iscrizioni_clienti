@@ -5012,5 +5012,12 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - [x] Controllare branch, stato worktree e spazio disco locale/server prima del push.
 - [x] Eseguire prune conservativo su Hetzner senza toccare volumi Docker o dati applicativi.
 - [x] Stagiare solo file pertinenti alle patch WhatsApp e form/email/orario, lasciando fuori modifiche non correlate.
-- [ ] Creare commit descrittivo e pushare `feat/redesign-landing-wizard`.
-- [ ] Verificare stato post-push e documentare risultato.
+- [x] Creare commit descrittivo e pushare `feat/redesign-landing-wizard`.
+- [x] Verificare stato post-push e documentare risultato.
+
+## Review (Push feature form e cleanup disco - May 19, 2026)
+- Commit creato su `feat/redesign-landing-wizard`: `f95fd18b Stabilize WhatsApp webhooks and improve form emails`.
+- Push completato su `origin/feat/redesign-landing-wizard`.
+- Staging selettivo: incluse solo patch WhatsApp webhook/worker, editor mail conferma form, campo `Orario`, test e documentazione task; lasciate fuori modifiche non correlate gia presenti nel worktree.
+- Cleanup Hetzner conservativo: `docker image prune -f` e `docker builder prune -f --filter until=24h`, senza `docker system prune`, senza volumi. Root filesystem passato da `15G used / 22G avail / 41%` a `12G used / 25G avail / 32%`.
+- Verifiche pre-push gia eseguite: `python -m pytest -q tests/test_forms_module.py`, `python -m compileall -q app`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.
