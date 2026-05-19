@@ -7,6 +7,8 @@ import logging
 import uuid
 from typing import Any
 
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -734,27 +736,84 @@ def _get_or_create_chat(
             primary_chat.display_name = safe_display_name
         return primary_chat
 
-    chat = (
-        db.query(WhatsAppChat)
-        .filter(
-            WhatsAppChat.connection_id == connection.id,
-            WhatsAppChat.external_chat_id == normalized_external_chat_id,
-        )
-        .first()
+    chat = _find_chat_by_external_id(
+        db,
+        connection=connection,
+        external_chat_id=normalized_external_chat_id,
     )
     if chat is None:
-        chat = WhatsAppChat(
-            org_id=connection.org_id,
-            connection_id=connection.id,
+        chat = _insert_chat_if_missing(
+            db,
+            connection=connection,
             external_chat_id=normalized_external_chat_id,
             display_name=safe_display_name,
         )
-        db.add(chat)
-        db.flush()
-        return chat
+        if chat is None:
+            chat = WhatsAppChat(
+                org_id=connection.org_id,
+                connection_id=connection.id,
+                external_chat_id=normalized_external_chat_id,
+                display_name=safe_display_name,
+            )
+            db.add(chat)
+            db.flush()
+            return chat
     if _should_replace_display_name(chat.display_name, safe_display_name):
         chat.display_name = safe_display_name
     return chat
+
+
+def _find_chat_by_external_id(
+    db: Session,
+    *,
+    connection: WhatsAppConnection,
+    external_chat_id: str,
+) -> WhatsAppChat | None:
+    return (
+        db.query(WhatsAppChat)
+        .filter(
+            WhatsAppChat.connection_id == connection.id,
+            WhatsAppChat.external_chat_id == external_chat_id,
+        )
+        .first()
+    )
+
+
+def _insert_chat_if_missing(
+    db: Session,
+    *,
+    connection: WhatsAppConnection,
+    external_chat_id: str,
+    display_name: str | None,
+) -> WhatsAppChat | None:
+    bind = db.get_bind()
+    dialect_name = bind.dialect.name if bind is not None else ""
+    insert_factory = None
+    if dialect_name == "postgresql":
+        insert_factory = postgresql_insert
+    elif dialect_name == "sqlite":
+        insert_factory = sqlite_insert
+    if insert_factory is None:
+        return None
+
+    stmt = (
+        insert_factory(WhatsAppChat.__table__)
+        .values(
+            org_id=connection.org_id,
+            connection_id=connection.id,
+            external_chat_id=external_chat_id,
+            display_name=display_name,
+        )
+        .on_conflict_do_nothing(
+            index_elements=["connection_id", "external_chat_id"],
+        )
+    )
+    db.execute(stmt)
+    return _find_chat_by_external_id(
+        db,
+        connection=connection,
+        external_chat_id=external_chat_id,
+    )
 
 
 def _find_chat_candidates(

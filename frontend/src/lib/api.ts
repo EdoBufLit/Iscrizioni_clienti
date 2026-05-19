@@ -1041,6 +1041,7 @@ export type AssociationFormFieldType =
   | "phone"
   | "number"
   | "date"
+  | "time"
   | "select"
   | "radio"
   | "checkbox"

@@ -175,9 +175,21 @@ def test_org_admin_forms_crud_public_submit_and_export(client, db):
     )
     assert slot_field_res.status_code == 201, slot_field_res.text
 
+    time_field_res = client.post(
+        f"/api/org-admin/forms/{form_id}/fields",
+        json={
+            "field_type": "time",
+            "label": "Orario",
+            "field_key": "orario",
+            "is_required": True,
+            "sort_order": 3,
+        },
+    )
+    assert time_field_res.status_code == 201, time_field_res.text
+
     list_res = client.get("/api/org-admin/forms")
     assert list_res.status_code == 200, list_res.text
-    assert list_res.json()["items"][0]["field_count"] == 3
+    assert list_res.json()["items"][0]["field_count"] == 4
 
     duplicate_res = client.post(f"/api/org-admin/forms/{form_id}/duplicate", json={})
     assert duplicate_res.status_code == 201, duplicate_res.text
@@ -199,6 +211,7 @@ def test_org_admin_forms_crud_public_submit_and_export(client, db):
             "nome_socio": "Mario Rossi",
             "email": "mario@example.com",
             "turno": "Cena",
+            "orario": "20:30",
         },
     )
     assert submit_res.status_code == 200, submit_res.text
@@ -210,6 +223,7 @@ def test_org_admin_forms_crud_public_submit_and_export(client, db):
             "nome_socio": "Mario Rossi",
             "email": "mario@example.com",
             "turno": "Cena",
+            "orario": "20:30",
         },
     )
     assert duplicate_submit_res.status_code == 409, duplicate_submit_res.text

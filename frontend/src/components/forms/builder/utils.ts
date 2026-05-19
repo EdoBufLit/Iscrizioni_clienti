@@ -155,6 +155,7 @@ export function encodeField(
       "phone",
       "number",
       "date",
+      "time",
       "select",
       "radio",
       "checkbox",
@@ -224,6 +225,7 @@ export const FORM_PALETTE_ITEMS = [
   { type: "phone", label: "Telefono", icon: "☎" },
   { type: "number", label: "Numero", icon: "123" },
   { type: "date", label: "Data", icon: "◷" },
+  { type: "time", label: "Orario", icon: "00" },
   { type: "select", label: "Menu a tendina", icon: "▾" },
   { type: "radio", label: "Scelta singola", icon: "◉" },
   { type: "checkbox", label: "Scelta multipla", icon: "☑" },
@@ -241,6 +243,7 @@ export const SURVEY_PALETTE_ITEMS = [
   { type: "rating_1_5", label: "Valutazione 1-5", icon: "5" },
   { type: "nps_0_10", label: "NPS 0-10", icon: "10" },
   { type: "date", label: "Data", icon: "D" },
+  { type: "time", label: "Orario", icon: "H" },
   { type: "consent", label: "Consenso privacy", icon: "OK" },
 ] as const;
 

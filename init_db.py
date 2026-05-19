@@ -27,6 +27,7 @@ from app.models import (
     AffiliationApplication,
     CardBatch,
     EmailOutbox,
+    WhatsAppWebhookEvent,
     WhatsAppSession,
     WhatsAppConnection,
     WhatsAppChat,
@@ -142,6 +143,13 @@ def init_db():
             "run 'alembic upgrade head' to align schema history."
         )
         EmailOutbox.__table__.create(bind=engine, checkfirst=True)
+
+    if "whatsapp_webhook_events" not in inspect(engine).get_table_names():
+        logger.warning(
+            "whatsapp_webhook_events table not found. Creating it idempotently at startup; "
+            "run 'alembic upgrade head' to align schema history."
+        )
+        WhatsAppWebhookEvent.__table__.create(bind=engine, checkfirst=True)
 
     if "whatsapp_sessions" not in inspect(engine).get_table_names():
         logger.warning(

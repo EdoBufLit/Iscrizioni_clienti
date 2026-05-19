@@ -35,6 +35,9 @@ x-app-env: &app-env
   ENABLE_WHATSAPP_EVOLUTION: ${ENABLE_WHATSAPP_EVOLUTION:-false}
   EVOLUTION_API_BASE_URL: ${EVOLUTION_API_BASE_URL:-http://evolution-api:8080}
   EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-}
+  WHATSAPP_WEBHOOK_BATCH_SIZE: ${WHATSAPP_WEBHOOK_BATCH_SIZE:-50}
+  WHATSAPP_WEBHOOK_POLL_SECONDS: ${WHATSAPP_WEBHOOK_POLL_SECONDS:-2}
+  WHATSAPP_WEBHOOK_STALE_AFTER_SECONDS: ${WHATSAPP_WEBHOOK_STALE_AFTER_SECONDS:-300}
   OPENAI_API_KEY: ${OPENAI_API_KEY}
   OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
   LOW_CARDS_ALERT_JOB_INTERVAL_SECONDS: ${LOW_CARDS_ALERT_JOB_INTERVAL_SECONDS:-300}
@@ -144,6 +147,22 @@ services:
       timeout: 5s
       retries: 3
     mem_limit: ${LOW_CARDS_WORKER_MEM_LIMIT:-512m}
+    restart: always
+
+  whatsapp-webhook-worker:
+    image: ${APP_RUNTIME_IMAGE:-assonam/app-runtime:local}
+    depends_on:
+      - db
+    command: python -m app.workers.whatsapp_webhook_worker
+    volumes:
+      - ./data:/app/data
+    environment: *app-env
+    healthcheck:
+      test: ["CMD", "python", "-c", "print('ok')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    mem_limit: ${WHATSAPP_WEBHOOK_WORKER_MEM_LIMIT:-512m}
     restart: always
 
   affiliation-video-worker:

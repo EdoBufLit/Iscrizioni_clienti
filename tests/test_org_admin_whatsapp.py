@@ -1,22 +1,33 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import inspect
 import uuid
 
 import pytest
+from sqlalchemy.exc import OperationalError
 
 from app.config import settings
 from app.db import SessionLocal
-from app.models import AdminRole, AdminUser, OrgAdminToken, Organization, WhatsAppChat, WhatsAppMessage
+from app.models import (
+    AdminRole,
+    AdminUser,
+    OrgAdminToken,
+    Organization,
+    WhatsAppChat,
+    WhatsAppMessage,
+    WhatsAppWebhookEvent,
+    WhatsAppWebhookEventStatus,
+)
 from app.services.whatsapp_evolution import EvolutionLiteClient
 from app.services.whatsapp_evolution import (
     EvolutionConnectionSnapshot,
-    EvolutionContact,
     EVOLUTION_WEBHOOK_EVENTS,
     EvolutionSendTextResult,
     parse_connection_snapshot,
 )
 from app.services.whatsapp_sync import apply_connection_snapshot, get_or_create_connection
+from app.services.whatsapp_webhook_outbox import drain_webhook_outbox_for_tests
 from app.utils import hash_token
 
 
@@ -74,6 +85,19 @@ def _create_org_admin(db, *, communications_enabled: bool) -> tuple[Organization
     db.commit()
     db.refresh(admin)
     return org, admin
+
+
+def _post_evolution_webhook(client, payload: dict, *, drain: bool = True):
+    response = client.post(
+        "/api/internal/whatsapp/evolution",
+        json=payload,
+        headers={"X-Evolution-ApiKey": settings.EVOLUTION_API_KEY},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json().get("queued") is True
+    if drain:
+        drain_webhook_outbox_for_tests()
+    return response
 
 
 def test_whatsapp_feature_flag_disabled_returns_not_found(client, db):
@@ -210,28 +234,22 @@ def test_whatsapp_connect_send_and_disconnect(client, db, monkeypatch):
     assert disconnect_res.json()["connection"]["status"] == "not_connected"
 
 
-def test_whatsapp_contacts_and_draft_chat(client, db, monkeypatch):
+def test_whatsapp_contacts_and_draft_chat(client, db):
     org, admin = _create_org_admin(db, communications_enabled=True)
     _login_org_admin(client, db, admin.id)
     connection = get_or_create_connection(db, org)
     connection.status = "connected"
     connection.phone_number = "+393404244452"
-    db.commit()
-
-    monkeypatch.setattr(
-        "app.routes.whatsapp_evolution.EvolutionLiteClient.list_contacts",
-        lambda self, instance_name: [
-            EvolutionContact(
-                remote_jid="393331234567@s.whatsapp.net",
-                display_name="Mario Rossi",
-                phone_number="+393331234567",
-                profile_pic_url=None,
-                created_at=None,
-                updated_at=datetime(2026, 3, 18, 21, 35, 0),
-                raw={},
-            )
-        ],
+    db.add(
+        WhatsAppChat(
+            org_id=org.id,
+            connection_id=connection.id,
+            external_chat_id="393331234567@s.whatsapp.net",
+            display_name="Mario Rossi",
+            updated_at=datetime(2026, 3, 18, 21, 35, 0),
+        )
     )
+    db.commit()
 
     contacts_res = client.get("/api/org-admin/communications/whatsapp/contacts")
     assert contacts_res.status_code == 200, contacts_res.text
@@ -260,21 +278,19 @@ def test_internal_webhook_syncs_connection_messages_and_dedupes(client, db):
     db.commit()
     db.refresh(connection)
 
-    qr_res = client.post(
-        "/api/internal/whatsapp/evolution",
-        json={
+    qr_res = _post_evolution_webhook(
+        client,
+        {
             "event": "qrcode.updated",
             "instance": connection.instance_name,
             "date_time": "2026-03-18T18:10:00Z",
             "data": {"qrcode": {"base64": "data:image/png;base64,test-qr"}},
         },
-        headers={"X-Evolution-ApiKey": settings.EVOLUTION_API_KEY},
     )
-    assert qr_res.status_code == 200, qr_res.text
 
-    connection_res = client.post(
-        "/api/internal/whatsapp/evolution",
-        json={
+    connection_res = _post_evolution_webhook(
+        client,
+        {
             "event": "connection.update",
             "instance": connection.instance_name,
             "date_time": "2026-03-18T18:11:00Z",
@@ -286,9 +302,7 @@ def test_internal_webhook_syncs_connection_messages_and_dedupes(client, db):
                 },
             },
         },
-        headers={"X-Evolution-ApiKey": settings.EVOLUTION_API_KEY},
     )
-    assert connection_res.status_code == 200, connection_res.text
 
     message_payload = {
         "event": "messages.upsert",
@@ -309,23 +323,14 @@ def test_internal_webhook_syncs_connection_messages_and_dedupes(client, db):
             ]
         },
     }
-    first_message_res = client.post(
-        "/api/internal/whatsapp/evolution",
-        json=message_payload,
-        headers={"X-Evolution-ApiKey": settings.EVOLUTION_API_KEY},
-    )
-    assert first_message_res.status_code == 200, first_message_res.text
+    first_message_res = _post_evolution_webhook(client, message_payload)
 
-    duplicate_message_res = client.post(
-        "/api/internal/whatsapp/evolution",
-        json=message_payload,
-        headers={"X-Evolution-ApiKey": settings.EVOLUTION_API_KEY},
-    )
-    assert duplicate_message_res.status_code == 200, duplicate_message_res.text
+    duplicate_message_res = _post_evolution_webhook(client, message_payload)
+    assert duplicate_message_res.json()["event_id"] == first_message_res.json()["event_id"]
 
-    outbound_res = client.post(
-        "/api/internal/whatsapp/evolution",
-        json={
+    outbound_res = _post_evolution_webhook(
+        client,
+        {
             "event": "send.message",
             "instance": connection.instance_name,
             "date_time": "2026-03-18T18:13:00Z",
@@ -339,13 +344,11 @@ def test_internal_webhook_syncs_connection_messages_and_dedupes(client, db):
                 "messageTimestamp": 1773857580,
             },
         },
-        headers={"X-Evolution-ApiKey": settings.EVOLUTION_API_KEY},
     )
-    assert outbound_res.status_code == 200, outbound_res.text
 
-    update_res = client.post(
-        "/api/internal/whatsapp/evolution",
-        json={
+    update_res = _post_evolution_webhook(
+        client,
+        {
             "event": "messages.update",
             "instance": connection.instance_name,
             "date_time": "2026-03-18T18:14:00Z",
@@ -360,9 +363,7 @@ def test_internal_webhook_syncs_connection_messages_and_dedupes(client, db):
                 }
             ],
         },
-        headers={"X-Evolution-ApiKey": settings.EVOLUTION_API_KEY},
     )
-    assert update_res.status_code == 200, update_res.text
 
     status_res = client.get("/api/org-admin/communications/whatsapp/connection")
     assert status_res.status_code == 200, status_res.text
@@ -391,6 +392,84 @@ def test_internal_webhook_syncs_connection_messages_and_dedupes(client, db):
     chats_res_after_read = client.get("/api/org-admin/communications/whatsapp/chats")
     assert chats_res_after_read.status_code == 200, chats_res_after_read.text
     assert chats_res_after_read.json()["items"][0]["unread_count"] == 0
+
+
+def test_internal_webhook_route_is_sync_to_keep_event_loop_responsive():
+    from app.routes.whatsapp_evolution import receive_evolution_webhook
+
+    assert not inspect.iscoroutinefunction(receive_evolution_webhook)
+
+
+def test_internal_webhook_transient_db_conflict_retries_in_worker(client, db, monkeypatch):
+    org, _admin = _create_org_admin(db, communications_enabled=True)
+    connection = get_or_create_connection(db, org)
+    db.commit()
+
+    class DeadlockOrig(Exception):
+        pgcode = "40P01"
+
+    def fake_ingest(_db, *, payload):
+        raise OperationalError("insert whatsapp chat", {}, DeadlockOrig("deadlock detected"))
+
+    monkeypatch.setattr("app.services.whatsapp_webhook_outbox.ingest_evolution_webhook", fake_ingest)
+
+    response = _post_evolution_webhook(
+        client,
+        {
+            "event": "messages.upsert",
+            "instance": connection.instance_name,
+            "data": {
+                "messages": [
+                    {
+                        "key": {
+                            "id": "wamid-deadlock-test",
+                            "remoteJid": "393331234567@s.whatsapp.net",
+                            "fromMe": False,
+                        },
+                        "message": {"conversation": "test"},
+                    }
+                ]
+            },
+        },
+        drain=False,
+    )
+    stats = drain_webhook_outbox_for_tests(max_loops=1)
+
+    assert response.status_code == 200, response.text
+    assert stats["claimed"] == 1
+    assert stats["retry_scheduled"] == 1
+    event = db.query(WhatsAppWebhookEvent).filter(WhatsAppWebhookEvent.id == response.json()["event_id"]).first()
+    assert event is not None
+    assert event.status == WhatsAppWebhookEventStatus.FAILED.value
+
+
+def test_internal_webhook_queues_and_worker_skips_high_volume_contact_events(client, db, monkeypatch):
+    org, _admin = _create_org_admin(db, communications_enabled=True)
+    connection = get_or_create_connection(db, org)
+    db.commit()
+
+    def fail_if_ingested(_db, *, payload):
+        raise AssertionError("high volume contact events should not hit the database ingester")
+
+    monkeypatch.setattr("app.services.whatsapp_webhook_outbox.ingest_evolution_webhook", fail_if_ingested)
+
+    response = _post_evolution_webhook(
+        client,
+        {
+            "event": "contacts.update",
+            "instance": connection.instance_name,
+            "data": {"remoteJid": "393331234567@s.whatsapp.net"},
+        },
+        drain=False,
+    )
+    stats = drain_webhook_outbox_for_tests(max_loops=1)
+
+    assert response.status_code == 200, response.text
+    assert stats["claimed"] == 1
+    assert stats["skipped"] == 1
+    event = db.query(WhatsAppWebhookEvent).filter(WhatsAppWebhookEvent.id == response.json()["event_id"]).first()
+    assert event is not None
+    assert event.status == WhatsAppWebhookEventStatus.SKIPPED.value
 
 
 def test_internal_webhook_merges_alias_chat_ids_and_prefers_better_contact_name(client, db):
@@ -432,9 +511,9 @@ def test_internal_webhook_merges_alias_chat_ids_and_prefers_better_contact_name(
     )
     db.commit()
 
-    webhook_res = client.post(
-        "/api/internal/whatsapp/evolution",
-        json={
+    webhook_res = _post_evolution_webhook(
+        client,
+        {
             "event": "messages.upsert",
             "instance": connection.instance_name,
             "date_time": "2026-03-18T18:15:00Z",
@@ -453,9 +532,7 @@ def test_internal_webhook_merges_alias_chat_ids_and_prefers_better_contact_name(
                 ]
             },
         },
-        headers={"X-Evolution-ApiKey": settings.EVOLUTION_API_KEY},
     )
-    assert webhook_res.status_code == 200, webhook_res.text
 
     chats_res = client.get("/api/org-admin/communications/whatsapp/chats")
     assert chats_res.status_code == 200, chats_res.text
@@ -504,9 +581,9 @@ def test_whatsapp_sync_does_not_use_own_profile_name_for_chats(client, db):
     db.add(bad_chat)
     db.commit()
 
-    outbound_res = client.post(
-        "/api/internal/whatsapp/evolution",
-        json={
+    outbound_res = _post_evolution_webhook(
+        client,
+        {
             "event": "send.message",
             "instance": connection.instance_name,
             "date_time": "2026-03-18T18:15:00Z",
@@ -521,9 +598,7 @@ def test_whatsapp_sync_does_not_use_own_profile_name_for_chats(client, db):
                 "messageTimestamp": 1773857700,
             },
         },
-        headers={"X-Evolution-ApiKey": settings.EVOLUTION_API_KEY},
     )
-    assert outbound_res.status_code == 200, outbound_res.text
 
     chats_res = client.get("/api/org-admin/communications/whatsapp/chats")
     assert chats_res.status_code == 200, chats_res.text
@@ -531,9 +606,9 @@ def test_whatsapp_sync_does_not_use_own_profile_name_for_chats(client, db):
     assert payload["total"] == 1
     assert payload["items"][0]["display_name"] == "+393331234567"
 
-    contact_res = client.post(
-        "/api/internal/whatsapp/evolution",
-        json={
+    contact_res = _post_evolution_webhook(
+        client,
+        {
             "event": "contacts.upsert",
             "instance": connection.instance_name,
             "date_time": "2026-03-18T18:16:00Z",
@@ -542,9 +617,7 @@ def test_whatsapp_sync_does_not_use_own_profile_name_for_chats(client, db):
                 "pushName": "Mario Rossi",
             },
         },
-        headers={"X-Evolution-ApiKey": settings.EVOLUTION_API_KEY},
     )
-    assert contact_res.status_code == 200, contact_res.text
 
     chats_res = client.get("/api/org-admin/communications/whatsapp/chats")
     assert chats_res.status_code == 200, chats_res.text

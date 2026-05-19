@@ -4949,3 +4949,68 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Cleanup eseguito: `docker image prune -f`, `apt-get clean`, `journalctl --vacuum-size=100M`. Non sono stati toccati volumi Docker, incluso `app_pgdata`.
 - Risultato spazio: root filesystem passato da `36G used / 22M avail / 100%` a `9.3G used / 27G avail / 26%`; inode passati a 8% usati.
 - Verifiche runtime: container `app-web-1`, worker, Evolution API, video worker e `app-db-1` risultano up; `docker exec app-db-1 pg_isready -U postgres` OK; `https://assonam.it/` risponde `HTTP/2 200`; `https://www.assonam.it/` redirige a `https://assonam.it/`.
+
+## Plan (Incidente sito down Hetzner - May 19, 2026)
+- [x] Connettersi via SSH root a `157.90.31.105` e rilevare stato host: disco, memoria, Docker, processi e porte HTTP/HTTPS.
+- [x] Identificare il servizio rotto leggendo `docker compose ps`, log recenti dei container e stato proxy/app/database.
+- [x] Applicare la correzione minima e reversibile necessaria a ripristinare il sito, evitando dati applicativi e volumi DB.
+- [x] Verificare da host e da esterno che il sito risponda correttamente su HTTP/HTTPS.
+- [x] Documentare causa, intervento, verifiche e rischi residui.
+
+## Review (Incidente sito down Hetzner - May 19, 2026)
+- Causa live: il container web era up ma non rispondeva; Nginx produceva 504 verso `127.0.0.1:8000`. PostgreSQL mostrava transazioni `idle in transaction` aperte dal web e i log indicavano deadlock/raffica webhook WhatsApp Evolution dopo eventi contatto/chat.
+- Ripristino immediato: riavviato `app-web-1`, poi isolato temporaneamente `app-evolution-api-1` quando la raffica continuava a saturare il backend. Nessun volume DB o dato applicativo e stato toccato.
+- Fix applicativo deployato sul server: webhook Evolution reso route sincrona FastAPI, gestione rollback/200 per conflitti DB transitori, creazione chat con `ON CONFLICT DO NOTHING`, fast-ack per eventi rumorosi `contacts.set`, `contacts.update` e `chats.*`.
+- Evolution API e stata riattivata ed e healthy; dopo il picco iniziale gli smoke interni ed esterni restano 200, senza nuovi 504 Nginx recenti.
+- Verifiche OK: `python -m pytest -q tests/test_org_admin_whatsapp.py`, `python -m compileall -q app`, build/recreate Docker `web` su Hetzner, `https://assonam.it/`, `/api/capabilities`, `/api/organizations`, `/sw.js`.
+
+## Plan (Patch worker webhook WhatsApp - May 19, 2026)
+- [x] Modellare una coda persistente `whatsapp_webhook_events` con migration, dedupe key, status, attempts e retry.
+- [x] Cambiare `/api/internal/whatsapp/evolution` per fare solo enqueue idempotente e risposta veloce, senza processamento DB pesante nel web.
+- [x] Aggiungere service e worker `whatsapp-webhook-worker` con batch limit, retry/backoff e gestione dei conflitti transitori.
+- [x] Aggiornare compose/deploy e bootstrap locale per avviare il worker separato.
+- [x] Coprire enqueue/worker con test mirati e rieseguire test WhatsApp esistenti.
+- [x] Deployare su Hetzner, eseguire migration, riattivare/monitorare Evolution API e smoke HTTP esterni.
+
+## Review (Patch worker webhook WhatsApp - May 19, 2026)
+- Aggiunta la tabella `whatsapp_webhook_events` con migration `t5u6v7w8x9y0`, dedupe key unica, status, attempts, next retry e indici dispatch.
+- Il webhook Evolution ora valida/autentica e accoda soltanto, poi risponde 200; il processamento DB pesante e stato spostato nel nuovo worker `python -m app.workers.whatsapp_webhook_worker`.
+- Il worker processa gli eventi utili, salta gli eventi ad alto volume `contacts.set`, `contacts.update` e `chats.*`, e mette in retry con backoff i conflitti DB o errori transitori.
+- Deploy live completato: build runtime, `alembic upgrade head`, recreate `web`, avvio `app-whatsapp-webhook-worker-1`, riattivazione `app-evolution-api-1`.
+- Verifiche live: Evolution e worker healthy; coda con eventi `processed`, zero retry; nessun 504 Nginx recente; `https://assonam.it/`, `/api/capabilities`, `/api/organizations`, `/sw.js` rispondono 200.
+- Verifiche locali OK: `python -m pytest -q tests/test_org_admin_whatsapp.py`, `python -m compileall -q app`, `python -m alembic heads`.
+
+## Plan (Secondo incidente sito down Hetzner - May 19, 2026)
+- [x] Verificare stato host, Nginx, Docker, DB e risposta HTTP esterna/interna.
+- [x] Misurare coda `whatsapp_webhook_events`, log web/worker/Evolution e transazioni DB per capire se la nuova patch ha spostato o creato saturazione.
+- [x] Ripristinare subito il sito isolando il componente responsabile e riavviando solo i servizi necessari.
+- [x] Applicare patch correttiva minima se la causa e nel worker/coda WhatsApp.
+- [x] Verificare smoke live e documentare causa/intervento.
+
+## Review (Secondo incidente sito down Hetzner - May 19, 2026)
+- Causa del secondo down: la coda webhook non era arretrata, ma le route GET dell'inbox WhatsApp org-admin chiamavano ancora Evolution in modo sincrono (`chats`, `contacts`, `messages`) mentre tenevano aperta la sessione DB. Con polling ripetuto dall'admin, il web ha saturato il pool SQLAlchemy e Nginx ha iniziato a servire 504.
+- Ripristino immediato: fermati temporaneamente `app-evolution-api-1` e `app-whatsapp-webhook-worker-1`, riavviato `app-web-1`; homepage e API pubbliche sono tornate 200.
+- Fix deployato: le GET WhatsApp leggono solo lo stato locale nel DB; i contatti/chat/messaggi arrivano dal worker webhook asincrono, non da fetch live verso Evolution. Il test contatti e stato aggiornato sul nuovo contratto locale.
+- Riattivazione controllata: ricreato `app-web-1`, riavviati Evolution API e worker WhatsApp; entrambi healthy. La coda processa/salta gli eventi senza backlog e senza retry.
+- Verifiche OK: `python -m pytest -q tests/test_org_admin_whatsapp.py`, `python -m compileall -q app`, `git diff --check` sui file toccati, smoke esterno `https://assonam.it/`, `/api/capabilities`, `/api/organizations` 200, DB con `idle_in_tx_over_10s = 0`.
+
+## Plan (Editor mail conferma form e campo orario - May 19, 2026)
+- [x] Individuare modello/API dei template email collegati ai form e rendering dei campi nel builder pubblico/admin.
+- [x] Aggiungere nello spazio Notifiche email una preview reale e un editor rapido per la mail di conferma utente.
+- [x] Aggiungere al form builder il campo `Orario`, con input ora/minuti nel builder e nella compilazione pubblica.
+- [x] Aggiornare tipi/test e verificare typecheck/build frontend piu test backend mirati se cambiano contratti.
+- [x] Documentare risultato e rischi residui.
+
+## Review (Editor mail conferma form e campo orario - May 19, 2026)
+- In `Notifiche email` il template conferma utente ora ha editor rapido per nome modello, oggetto e testo, placeholder rapidi e anteprima renderizzata tramite endpoint preview; i template di sistema vengono salvati come copia modificabile dell'associazione.
+- Il nuovo campo `Orario` entra nei tipi form come `time`, e validato backend come `HH:MM`; il canvas pubblico usa input HTML `type="time"` e la preview builder mostra un valore realistico.
+- Aggiornata la palette builder per Form e Sondaggi, il tipo frontend API e la selezione campo per automazioni WhatsApp/prenotazioni dove serve un orario.
+- Verifiche OK: `python -m pytest -q tests/test_forms_module.py` (`17 passed`), `python -m compileall -q app`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.
+- Nota: la build mantiene il warning Vite preesistente sui chunk grandi.
+
+## Plan (Push feature form e cleanup disco - May 19, 2026)
+- [x] Controllare branch, stato worktree e spazio disco locale/server prima del push.
+- [x] Eseguire prune conservativo su Hetzner senza toccare volumi Docker o dati applicativi.
+- [x] Stagiare solo file pertinenti alle patch WhatsApp e form/email/orario, lasciando fuori modifiche non correlate.
+- [ ] Creare commit descrittivo e pushare `feat/redesign-landing-wizard`.
+- [ ] Verificare stato post-push e documentare risultato.

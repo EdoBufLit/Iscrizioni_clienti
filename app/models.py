@@ -247,6 +247,14 @@ class EmailOutboxStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+class WhatsAppWebhookEventStatus(str, enum.Enum):
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    PROCESSED = "processed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+
 class BookingStatus(str, enum.Enum):
     NEW = "new"
     PENDING = "pending"
@@ -610,6 +618,57 @@ class WhatsAppSession(Base):
         nullable=False,
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
+    )
+
+
+class WhatsAppWebhookEvent(Base):
+    __tablename__ = "whatsapp_webhook_events"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_name = Column(String, nullable=False, index=True)
+    instance_name = Column(String, nullable=False, index=True)
+    payload_json = Column(GENERIC_JSON_TYPE, nullable=False, default=dict)
+    status = Column(
+        String,
+        nullable=False,
+        default=WhatsAppWebhookEventStatus.QUEUED.value,
+        server_default=WhatsAppWebhookEventStatus.QUEUED.value,
+        index=True,
+    )
+    priority = Column(Integer, nullable=False, default=5, server_default="5", index=True)
+    attempts = Column(Integer, nullable=False, default=0, server_default="0")
+    next_retry_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utcnow_aware,
+        server_default=sa.func.now(),
+        index=True,
+    )
+    last_error = Column(Text, nullable=True)
+    dedupe_key = Column(String, nullable=False, unique=True, index=True)
+    processed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utcnow_aware,
+        server_default=sa.func.now(),
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utcnow_aware,
+        onupdate=utcnow_aware,
+        server_default=sa.func.now(),
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_whatsapp_webhook_events_dispatch",
+            "status",
+            "priority",
+            "next_retry_at",
+            "created_at",
+        ),
     )
 
 

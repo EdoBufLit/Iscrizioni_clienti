@@ -135,6 +135,11 @@ class Settings:
         "http://evolution-api:8080",
     )
     EVOLUTION_API_KEY: str = os.getenv("EVOLUTION_API_KEY", "")
+    WHATSAPP_WEBHOOK_BATCH_SIZE: int = int(os.getenv("WHATSAPP_WEBHOOK_BATCH_SIZE", "50"))
+    WHATSAPP_WEBHOOK_POLL_SECONDS: int = int(os.getenv("WHATSAPP_WEBHOOK_POLL_SECONDS", "2"))
+    WHATSAPP_WEBHOOK_STALE_AFTER_SECONDS: int = int(
+        os.getenv("WHATSAPP_WEBHOOK_STALE_AFTER_SECONDS", "300")
+    )
     LOW_CARDS_ALERT_JOB_INTERVAL_SECONDS: int = int(
         os.getenv("LOW_CARDS_ALERT_JOB_INTERVAL_SECONDS", "300")
     )

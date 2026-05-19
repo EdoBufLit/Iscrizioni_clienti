@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   buildOrgAdminFormSubmissionsExportUrl,
+  createOrgAdminEmailTemplate,
   createOrgAdminForm,
   createOrgAdminFormField,
   deleteOrgAdminForm,
@@ -11,7 +12,9 @@ import {
   fetchOrgAdminFormSubmission,
   fetchOrgAdminFormSubmissions,
   setOrgAdminFormActive,
+  previewOrgAdminEmailTemplate,
   updateOrgAdminFormSubmissionStatus,
+  updateOrgAdminEmailTemplate,
   updateOrgAdminForm,
   updateOrgAdminFormField,
   type AssociationForm,
@@ -113,6 +116,7 @@ const fieldTypeOptions: Array<{
   { value: "phone", label: "Telefono", icon: "☎", hint: "Numero di contatto rapido." },
   { value: "number", label: "Numero", icon: "123", hint: "Quantità, posti o valori numerici." },
   { value: "date", label: "Data", icon: "◷", hint: "Per appuntamenti, scadenze o disponibilità." },
+  { value: "time", label: "Orario", icon: "00", hint: "Ora e minuti, ad esempio 20:30." },
   { value: "select", label: "Select", icon: "▾", hint: "Una scelta da menu." },
   { value: "radio", label: "Radio", icon: "◉", hint: "Una scelta tra poche opzioni visibili." },
   { value: "checkbox", label: "Checkbox", icon: "☑", hint: "Più opzioni selezionabili." },
@@ -335,6 +339,67 @@ function serializeBuilderFields(fields: BuilderField[]) {
   );
 }
 
+type UserConfirmationEmailDraft = {
+  id: number | null;
+  sourceTemplateId: number | null;
+  isSystemSource: boolean;
+  name: string;
+  subject: string;
+  bodyText: string;
+};
+
+type UserConfirmationPreview = {
+  subject: string;
+  bodyHtml: string | null;
+  bodyText: string | null;
+};
+
+function stripHtmlToText(value: string | null | undefined): string {
+  return String(value || "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .trim();
+}
+
+function defaultUserConfirmationEmailDraft(formTitle: string): UserConfirmationEmailDraft {
+  const title = formTitle.trim() || "{{titolo_form}}";
+  return {
+    id: null,
+    sourceTemplateId: null,
+    isSystemSource: false,
+    name: `${title} - conferma utente`,
+    subject: `Conferma invio: ${title}`,
+    bodyText:
+      "Ciao {{nome_socio}},\n\n" +
+      "abbiamo ricevuto la tua richiesta per {{titolo_form}}.\n\n" +
+      "Ti ricontatteremo se serviranno altri dettagli.\n\n" +
+      "{{nome_associazione}}",
+  };
+}
+
+function buildUserConfirmationEmailDraft(
+  template: OrgAdminEmailTemplate | null | undefined,
+  formTitle: string,
+): UserConfirmationEmailDraft {
+  if (!template) {
+    return defaultUserConfirmationEmailDraft(formTitle);
+  }
+  const fallback = defaultUserConfirmationEmailDraft(formTitle);
+  return {
+    id: template.is_system ? null : template.id,
+    sourceTemplateId: template.id,
+    isSystemSource: Boolean(template.is_system),
+    name: template.is_system ? `${formTitle || "Form"} - conferma utente` : template.name,
+    subject: template.subject || fallback.subject,
+    bodyText: template.body_text || stripHtmlToText(template.compiled_html || template.body_html) || fallback.bodyText,
+  };
+}
+
 function emptyFieldDraft(form?: AssociationForm | null, fieldType: AssociationFormFieldType = "short_text") {
   const option = fieldTypeOptions.find((item) => item.value === fieldType);
   const label = option ? option.label : "Nuovo campo";
@@ -359,6 +424,7 @@ function buildPreviewValues(fields: AssociationFormField[]): Record<string, unkn
     else if (field.field_type === "email") values[field.field_key] = "mario@example.com";
     else if (field.field_type === "phone") values[field.field_key] = "+39 333 1234567";
     else if (field.field_type === "date") values[field.field_key] = "2026-03-20";
+    else if (field.field_type === "time") values[field.field_key] = "20:30";
     else if (field.field_type === "number") values[field.field_key] = "2";
     else values[field.field_key] = "Anteprima contenuto";
   }
@@ -449,6 +515,7 @@ export function OrgAdminFormsWorkspace({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [forms, setForms] = useState<AssociationForm[]>([]);
+  const [localTemplates, setLocalTemplates] = useState<OrgAdminEmailTemplate[]>(availableTemplates);
   const [selectedFormId, setSelectedFormId] = useState<number | null>(null);
   const [isCreatingForm, setIsCreatingForm] = useState(false);
   const [selectedForm, setSelectedForm] = useState<AssociationForm | null>(null);
@@ -462,6 +529,12 @@ export function OrgAdminFormsWorkspace({
   const [deleteFormOpen, setDeleteFormOpen] = useState(false);
   const [deleteActionState, setDeleteActionState] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [activeTab, setActiveTab] = useState<EditorTab>("builder");
+  const [userEmailDraft, setUserEmailDraft] = useState<UserConfirmationEmailDraft>(() =>
+    defaultUserConfirmationEmailDraft(""),
+  );
+  const [userEmailPreview, setUserEmailPreview] = useState<UserConfirmationPreview | null>(null);
+  const [userEmailPreviewLoading, setUserEmailPreviewLoading] = useState(false);
+  const [savingUserEmailTemplate, setSavingUserEmailTemplate] = useState(false);
 
   const [fieldDraft, setFieldDraft] = useState(emptyFieldDraft(null));
   const [editingFieldId, setEditingFieldId] = useState<number | null>(null);
@@ -498,6 +571,10 @@ export function OrgAdminFormsWorkspace({
       noindex: true,
     });
   }, [embedded]);
+
+  useEffect(() => {
+    setLocalTemplates(availableTemplates);
+  }, [availableTemplates]);
 
   useEffect(() => {
     if (adminLoading || !admin) return;
@@ -603,6 +680,53 @@ export function OrgAdminFormsWorkspace({
       })),
     [sortedFields],
   );
+  const activeTemplates = useMemo(
+    () => localTemplates.filter((item) => item.is_active),
+    [localTemplates],
+  );
+  const selectedUserConfirmationTemplate = useMemo(
+    () => activeTemplates.find((item) => item.id === formDraft.user_confirmation_template_id) || null,
+    [activeTemplates, formDraft.user_confirmation_template_id],
+  );
+  useEffect(() => {
+    setUserEmailDraft(buildUserConfirmationEmailDraft(selectedUserConfirmationTemplate, formDraft.title));
+  }, [formDraft.user_confirmation_template_id, selectedUserConfirmationTemplate, selectedForm?.id]);
+
+  useEffect(() => {
+    if (!formDraft.send_user_confirmation) {
+      setUserEmailPreview(null);
+      setUserEmailPreviewLoading(false);
+      return;
+    }
+    const previewDraft = userEmailDraft;
+    const timer = window.setTimeout(() => {
+      setUserEmailPreviewLoading(true);
+      previewOrgAdminEmailTemplate({
+        template_id: previewDraft.sourceTemplateId || undefined,
+        subject: previewDraft.subject,
+        body_text: previewDraft.bodyText,
+        body_html: null,
+        compiled_html: null,
+        linked_form_id: selectedFormId || undefined,
+      })
+        .then((response) => {
+          setUserEmailPreview({
+            subject: response.preview.subject,
+            bodyHtml: response.preview.body_html,
+            bodyText: response.preview.body_text,
+          });
+        })
+        .catch(() => {
+          setUserEmailPreview({
+            subject: previewDraft.subject,
+            bodyHtml: null,
+            bodyText: previewDraft.bodyText,
+          });
+        })
+        .finally(() => setUserEmailPreviewLoading(false));
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [formDraft.send_user_confirmation, selectedFormId, userEmailDraft]);
   const previewValues = useMemo(
     () => buildPreviewValues(previewFields),
     [previewFields],
@@ -750,6 +874,8 @@ export function OrgAdminFormsWorkspace({
     setDeleteFieldConfirmId(null);
     setSubmissions([]);
     setSelectedSubmission(null);
+    setUserEmailDraft(defaultUserConfirmationEmailDraft(""));
+    setUserEmailPreview(null);
     setActiveTab("builder");
     setRealPreviewOpen(false);
   }
@@ -876,6 +1002,65 @@ export function OrgAdminFormsWorkspace({
         [target]: fieldKey,
       },
     }));
+  }
+
+  async function handleSaveUserConfirmationTemplate() {
+    if (locked) {
+      showToast({ tone: "error", title: "Form bloccati", message: lockedMessage });
+      return;
+    }
+    const subject = userEmailDraft.subject.trim();
+    const bodyText = userEmailDraft.bodyText.trim();
+    if (!subject || !bodyText) {
+      showToast({
+        tone: "error",
+        title: "Mail incompleta",
+        message: "Oggetto e contenuto della conferma utente sono obbligatori.",
+      });
+      return;
+    }
+
+    setSavingUserEmailTemplate(true);
+    try {
+      const payload = {
+        name: userEmailDraft.name.trim() || `${formDraft.title || "Form"} - conferma utente`,
+        category: "forms",
+        template_type: "generic_notice" as const,
+        subject,
+        body_text: bodyText,
+        body_html: null,
+        compiled_html: null,
+        mjml_source: null,
+        grapesjs_project_json: null,
+        channel: "email",
+        is_active: true,
+        editor_status: "ready" as const,
+        linked_form_id: selectedFormId || null,
+      };
+      const response =
+        userEmailDraft.id && !userEmailDraft.isSystemSource
+          ? await updateOrgAdminEmailTemplate(userEmailDraft.id, payload)
+          : await createOrgAdminEmailTemplate(payload);
+      setLocalTemplates((current) => {
+        const others = current.filter((item) => item.id !== response.template.id);
+        return [...others, response.template].sort((left, right) => left.name.localeCompare(right.name));
+      });
+      syncFormDraft("user_confirmation_template_id", response.template.id);
+      setUserEmailDraft(buildUserConfirmationEmailDraft(response.template, formDraft.title));
+      showToast({
+        tone: "success",
+        title: "Mail conferma salvata",
+        message: "Il modello è selezionato per questo form. Salva il form per rendere definitiva l'associazione.",
+      });
+    } catch (err) {
+      showToast({
+        tone: "error",
+        title: "Mail non salvata",
+        message: err instanceof Error ? err.message : "Errore salvataggio modello email.",
+      });
+    } finally {
+      setSavingUserEmailTemplate(false);
+    }
   }
 
   async function handleSaveForm(event?: FormEvent) {
@@ -1848,22 +2033,121 @@ export function OrgAdminFormsWorkspace({
         ) : null}
 
         <section className="rounded-[1.35rem] border border-neutral-200 bg-white p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.16)]">
-          <h3 className="text-sm font-semibold text-neutral-900">Notifiche email</h3>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-neutral-900">Notifiche email</h3>
+              <p className="mt-1 text-xs leading-5 text-neutral-500">
+                Seleziona, modifica e controlla la mail che riceve chi compila il form.
+              </p>
+            </div>
+            {formDraft.send_user_confirmation ? (
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-700">
+                Conferma attiva
+              </span>
+            ) : (
+              <span className="rounded-full bg-neutral-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-neutral-500">
+                Conferma disattiva
+              </span>
+            )}
+          </div>
           <div className="mt-4 space-y-4">
             <label className={labelClass}>
               Template notifica admin
               <select className={inputClass} disabled={locked} value={formDraft.admin_notification_template_id ?? ""} onChange={(event) => syncFormDraft("admin_notification_template_id", event.target.value ? Number(event.target.value) : null)}>
                 <option value="">Riepilogo automatico standard</option>
-                {availableTemplates.filter((item) => item.is_active).map((template) => (<option key={`admin-${template.id}`} value={template.id}>{template.name}</option>))}
+                {activeTemplates.map((template) => (<option key={`admin-${template.id}`} value={template.id}>{template.name}</option>))}
               </select>
             </label>
             <label className={labelClass}>
               Template conferma utente
               <select className={inputClass} disabled={locked} value={formDraft.user_confirmation_template_id ?? ""} onChange={(event) => syncFormDraft("user_confirmation_template_id", event.target.value ? Number(event.target.value) : null)}>
                 <option value="">Conferma automatica standard</option>
-                {availableTemplates.filter((item) => item.is_active).map((template) => (<option key={`user-${template.id}`} value={template.id}>{template.name}</option>))}
+                {activeTemplates.map((template) => (<option key={`user-${template.id}`} value={template.id}>{template.name}</option>))}
               </select>
             </label>
+            <div className="grid gap-4 rounded-[1.1rem] border border-neutral-200 bg-neutral-50/70 p-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(360px,1.1fr)]">
+              <div className="space-y-3">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-500">Editor rapido conferma utente</p>
+                  <p className="mt-1 text-xs leading-5 text-neutral-500">
+                    I template di sistema vengono salvati come copia modificabile dell'associazione.
+                  </p>
+                </div>
+                <label className={labelClass}>
+                  Nome modello
+                  <input
+                    className={inputClass}
+                    disabled={locked}
+                    value={userEmailDraft.name}
+                    onChange={(event) => setUserEmailDraft((current) => ({ ...current, name: event.target.value }))}
+                  />
+                </label>
+                <label className={labelClass}>
+                  Oggetto
+                  <input
+                    className={inputClass}
+                    disabled={locked}
+                    value={userEmailDraft.subject}
+                    onChange={(event) => setUserEmailDraft((current) => ({ ...current, subject: event.target.value }))}
+                  />
+                </label>
+                <label className={labelClass}>
+                  Testo email
+                  <textarea
+                    className={`${inputClass} min-h-[180px] resize-y leading-6`}
+                    disabled={locked}
+                    value={userEmailDraft.bodyText}
+                    onChange={(event) => setUserEmailDraft((current) => ({ ...current, bodyText: event.target.value }))}
+                  />
+                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  {["{{nome_socio}}", "{{titolo_form}}", "{{nome_associazione}}", "{{email_destinatario}}"].map((placeholder) => (
+                    <button
+                      key={placeholder}
+                      type="button"
+                      className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900"
+                      disabled={locked}
+                      onClick={() => setUserEmailDraft((current) => ({ ...current, bodyText: `${current.bodyText}${current.bodyText.endsWith(" ") || current.bodyText.endsWith("\n") ? "" : " "}${placeholder}` }))}
+                    >
+                      {placeholder}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="btn-primary w-full justify-center py-2.5 text-sm disabled:opacity-60"
+                  disabled={locked || savingUserEmailTemplate}
+                  onClick={() => void handleSaveUserConfirmationTemplate()}
+                >
+                  {savingUserEmailTemplate ? "Salvataggio..." : userEmailDraft.id ? "Salva modifiche mail" : "Crea mail modificabile"}
+                </button>
+              </div>
+              <div className="rounded-[1rem] border border-neutral-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3 border-b border-neutral-100 pb-3">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-500">Anteprima reale</p>
+                    <p className="mt-1 text-sm font-semibold text-neutral-950">
+                      {userEmailPreview?.subject || userEmailDraft.subject || "Oggetto email"}
+                    </p>
+                  </div>
+                  {userEmailPreviewLoading ? <span className="text-xs font-semibold text-neutral-400">Aggiorno...</span> : null}
+                </div>
+                <div className="mt-4 h-[22rem] overflow-hidden rounded-[0.85rem] border border-neutral-100 bg-white">
+                  {userEmailPreview?.bodyHtml ? (
+                    <iframe
+                      title="Anteprima mail conferma utente"
+                      className="h-full w-full bg-white"
+                      sandbox=""
+                      srcDoc={userEmailPreview.bodyHtml}
+                    />
+                  ) : (
+                    <div className="h-full overflow-auto whitespace-pre-wrap p-4 text-sm leading-6 text-neutral-700">
+                      {userEmailPreview?.bodyText || userEmailDraft.bodyText || "Compila il testo per vedere la preview."}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </section>
       </div>

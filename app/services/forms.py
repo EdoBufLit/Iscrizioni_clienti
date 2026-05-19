@@ -50,6 +50,7 @@ ALLOWED_FORM_FIELD_TYPES = {
     "phone",
     "number",
     "date",
+    "time",
     "select",
     "radio",
     "checkbox",
@@ -856,6 +857,18 @@ def _validate_single_value(field: FormField, value: Any) -> tuple[Any, str | Non
                 detail=f"Il campo '{field.label}' richiede una data valida.",
             ) from exc
         return parsed.isoformat(), None
+    if field_type == "time":
+        normalized = _normalize_text(value)
+        if normalized is None:
+            return "", None
+        if re.fullmatch(r"^(?:[01]\d|2[0-3]):[0-5]\d$", normalized):
+            return normalized, None
+        if re.fullmatch(r"^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$", normalized):
+            return normalized[:5], None
+        raise HTTPException(
+            status_code=422,
+            detail=f"Il campo '{field.label}' richiede un orario valido.",
+        )
     if field_type in {"select", "radio"}:
         normalized = _normalize_text(value)
         options = list(field.options_json or [])

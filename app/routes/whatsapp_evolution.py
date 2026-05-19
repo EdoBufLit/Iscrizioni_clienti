@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
@@ -12,7 +13,6 @@ from app.models import AdminUser, WhatsAppConnection
 from app.services.org_admin_sessions import get_current_org_admin_from_request
 from app.services.whatsapp_evolution import (
     EvolutionApiError,
-    EvolutionContact,
     EvolutionLiteClient,
     normalize_phone,
 )
@@ -22,20 +22,16 @@ from app.services.whatsapp_sync import (
     create_pending_outbound_message,
     finalize_outbound_send,
     get_chat_for_connection,
-    get_connection_by_instance_name,
     get_messages_for_chat,
     get_or_create_chat_for_number,
     get_or_create_connection,
-    ingest_evolution_webhook,
     list_chats_for_connection,
     mark_outbound_message_failed,
     serialize_chat,
     serialize_connection,
     serialize_message,
-    sync_contacts_into_chats,
-    sync_remote_chats_into_store,
-    sync_remote_messages_into_store,
 )
+from app.services.whatsapp_webhook_outbox import enqueue_whatsapp_webhook_event
 
 logger = logging.getLogger(__name__)
 
@@ -62,16 +58,6 @@ class OpenWhatsAppChatBody(BaseModel):
 
     number: str = Field(..., min_length=5, max_length=64)
     display_name: str | None = Field(default=None, max_length=255)
-
-
-def _serialize_contact(contact: EvolutionContact) -> dict[str, str | None]:
-    return {
-        "remote_jid": contact.remote_jid,
-        "display_name": contact.display_name or contact.phone_number or contact.remote_jid,
-        "phone_number": contact.phone_number,
-        "profile_pic_url": contact.profile_pic_url,
-        "updated_at": contact.updated_at.isoformat() if contact.updated_at else None,
-    }
 
 
 def _get_current_org_admin(request: Request, db: Session) -> AdminUser | None:
@@ -197,25 +183,6 @@ def list_whatsapp_chats(
     connection = _get_existing_connection(db, org_id=admin.organization.id)
     if connection is None:
         return {"items": [], "total": 0}
-    if connection.status == "connected":
-        client = EvolutionLiteClient()
-        try:
-            remote_contacts = client.list_contacts(connection.instance_name)
-        except EvolutionApiError as exc:
-            logger.warning(
-                "whatsapp_evolution_contact_sync_failed org=%s detail=%s",
-                admin.organization.id,
-                str(exc),
-            )
-        else:
-            sync_contacts_into_chats(db, connection=connection, contacts=remote_contacts)
-        try:
-            remote_chats = client.list_chats(connection.instance_name)
-        except EvolutionApiError as exc:
-            logger.warning("whatsapp_evolution_chat_sync_failed org=%s detail=%s", admin.organization.id, str(exc))
-        else:
-            sync_remote_chats_into_store(db, connection=connection, chats=remote_chats)
-            db.commit()
     if cleanup_own_profile_chat_names(db, connection=connection):
         db.commit()
     items = [serialize_chat(chat) for chat in list_chats_for_connection(db, connection=connection)]
@@ -232,14 +199,16 @@ def list_whatsapp_contacts(
     connection = _get_existing_connection(db, org_id=admin.organization.id)
     if connection is None or connection.status != "connected":
         return {"items": [], "total": 0}
-    client = EvolutionLiteClient()
-    try:
-        contacts = client.list_contacts(connection.instance_name)
-    except EvolutionApiError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    sync_contacts_into_chats(db, connection=connection, contacts=contacts)
-    db.commit()
-    items = [_serialize_contact(contact) for contact in contacts]
+    items = [
+        {
+            "remote_jid": chat.external_chat_id,
+            "display_name": chat.display_name or normalize_phone(chat.external_chat_id) or chat.external_chat_id,
+            "phone_number": normalize_phone(chat.external_chat_id),
+            "profile_pic_url": None,
+            "updated_at": chat.updated_at.isoformat() if chat.updated_at else None,
+        }
+        for chat in list_chats_for_connection(db, connection=connection)
+    ]
     return {"items": items, "total": len(items)}
 
 
@@ -257,29 +226,6 @@ def list_whatsapp_messages(
     chat = get_chat_for_connection(db, connection=connection, chat_id=chat_id)
     if chat is None:
         raise HTTPException(status_code=404, detail="Chat non trovata.")
-    if connection.status == "connected":
-        client = EvolutionLiteClient()
-        try:
-            remote_messages = client.list_messages(
-                connection.instance_name,
-                remote_jid=chat.external_chat_id,
-            )
-        except EvolutionApiError as exc:
-            logger.warning(
-                "whatsapp_evolution_message_sync_failed org=%s chat=%s detail=%s",
-                admin.organization.id,
-                chat.external_chat_id,
-                str(exc),
-            )
-        else:
-            sync_remote_messages_into_store(
-                db,
-                connection=connection,
-                chat=chat,
-                messages=remote_messages,
-            )
-            db.commit()
-            db.refresh(chat)
     items = [serialize_message(message) for message in get_messages_for_chat(db, chat=chat)]
     db.commit()
     return {
@@ -425,8 +371,8 @@ def start_whatsapp_chat(
 
 
 @internal_router.post("/evolution")
-async def receive_evolution_webhook(
-    request: Request,
+def receive_evolution_webhook(
+    payload: Any = Body(...),
     db: Session = Depends(get_db),
     x_evolution_apikey: str | None = Header(default=None, alias="X-Evolution-ApiKey"),
 ):
@@ -434,15 +380,21 @@ async def receive_evolution_webhook(
     if not x_evolution_apikey or x_evolution_apikey.strip() != settings.EVOLUTION_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid Evolution webhook credentials.")
 
-    payload = await request.json()
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="Payload webhook non valido.")
 
-    ingest_evolution_webhook(db, payload=payload)
-    db.commit()
+    try:
+        event = enqueue_whatsapp_webhook_event(db, payload=payload)
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     logger.info(
-        "whatsapp_evolution_webhook_processed event=%s instance=%s",
-        payload.get("event"),
-        payload.get("instance"),
+        "whatsapp_evolution_webhook_enqueued event=%s instance=%s outbox_id=%s status=%s",
+        event.event_name,
+        event.instance_name,
+        event.id,
+        event.status,
     )
-    return {"ok": True}
+    return {"ok": True, "queued": True, "event_id": event.id}

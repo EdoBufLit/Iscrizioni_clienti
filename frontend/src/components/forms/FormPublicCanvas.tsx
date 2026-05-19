@@ -349,6 +349,8 @@ function renderField(props: {
           ? "number"
           : decoded.type === "date"
             ? "date"
+            : decoded.type === "time"
+              ? "time"
             : "text";
 
   return (

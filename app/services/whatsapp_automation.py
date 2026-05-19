@@ -931,12 +931,12 @@ def _find_form_fields_for_booking_target(*, form: Any, target: str) -> list[Form
             typed_fields.append(field)
         elif target == "party_size" and field_type == "number":
             typed_fields.append(field)
-        elif target == "booking_time" and field_type in {"short_text", "select", "radio"}:
+        elif target == "booking_time" and field_type in {"time", "short_text", "select", "radio"}:
             generic_fields.append(field)
 
         if any(token in field_key or token in field_label for token in _BOOKING_FIELD_HINTS.get(target, ())):
             hinted_fields.append(field)
-        elif field_type in {"short_text", "number", "date", "select", "radio"}:
+        elif field_type in {"short_text", "number", "date", "time", "select", "radio"}:
             generic_fields.append(field)
 
     ordered: list[FormField] = []
