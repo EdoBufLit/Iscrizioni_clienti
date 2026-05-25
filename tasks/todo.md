@@ -5245,3 +5245,18 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Note: resta disponibile anche dopo una conferma/annullamento, salva nota cliente e produce prenotazione gialla con notifica/email admin.
 - Agenda admin: chiudere una prenotazione ora e uno stato valido; non viene piu auto-riaperta la prima card e la chiusura ha transizione.
 - Verifiche OK: pytest reminder/link (`3 passed`), `python -m compileall -q app init_db.py`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, deploy GitHub `26420628349`, smoke live su commit `9371d28`, endpoint principali 200, route `/b/...` rende HTML pubblico e disco Hetzner al 70%.
+
+## Plan (Accesso org admin app-friendly e reminder CTA - May 26, 2026)
+- [x] Aggiungere nella mail magic link org-admin un codice breve utilizzabile direttamente dalla schermata login dell'app/PWA.
+- [x] Aggiungere endpoint backend per verifica codice, con rate limit, scadenza e session cookie persistente come il magic link.
+- [x] Aggiornare UI login org-admin mobile-first: dopo l'invio mail mostra input codice e mantiene il link come fallback.
+- [x] Chiarire/validare reminder WhatsApp: niente anchor HTML nascosti nei messaggi normali, mantenere CTA leggibili e link corto.
+- [x] Aggiungere test backend/frontend mirati, aggiornare lessons, push/deploy e fare prune Docker conservativo se necessario.
+
+## Review (Accesso org admin app-friendly e reminder CTA - May 26, 2026)
+- Login org-admin: la mail contiene ora sia magic link sia codice numerico a 6 cifre, cosi chi parte dall'app/PWA puo restare nella stessa schermata e completare l'accesso senza aprire un browser esterno.
+- Backend: aggiunto endpoint `/api/org-admin/auth/verify-code` con rate limit, scadenza condivisa col magic link, token one-time e cookie persistente uguale al flusso link.
+- Frontend: la schermata dopo invio email mostra input `one-time-code`, validazione a 6 cifre, errore dedicato e opzione per reinviare/cambiare email.
+- Reminder WhatsApp: confermato che nei messaggi testuali non si possono usare anchor HTML nascosti; restano CTA leggibili con short link, piu sicure per Evolution.
+- Verifiche locali OK: pytest mirati login/reminder (`4 passed`), `python -m compileall -q app init_db.py`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.
+- Hetzner: prune conservativo immagini Docker eseguito prima del deploy, disco `/` da 78% a 29%, volumi non toccati.

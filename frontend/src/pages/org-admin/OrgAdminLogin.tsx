@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { requestOrgAdminMagicLink, fetchWhoAmI } from "../../lib/api";
+import { requestOrgAdminMagicLink, fetchWhoAmI, verifyOrgAdminCode } from "../../lib/api";
 
 const OrgAdminLogin = () => {
   const navigate = useNavigate();
@@ -8,6 +8,9 @@ const OrgAdminLogin = () => {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [accessCode, setAccessCode] = useState("");
+  const [codeError, setCodeError] = useState("");
+  const [verifyingCode, setVerifyingCode] = useState(false);
 
   useEffect(() => {
     fetchWhoAmI()
@@ -31,6 +34,24 @@ const OrgAdminLogin = () => {
       setError("Si ? verificato un errore. Riprova più tardi.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const normalizedAccessCode = accessCode.replace(/\D/g, "").slice(0, 6);
+  const canVerifyCode = email.trim().length > 0 && normalizedAccessCode.length === 6 && !verifyingCode;
+
+  const handleCodeSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!canVerifyCode) return;
+    setCodeError("");
+    setVerifyingCode(true);
+    try {
+      const result = await verifyOrgAdminCode(email.trim(), normalizedAccessCode);
+      navigate(result.redirect_to || "/org-admin", { replace: true });
+    } catch {
+      setCodeError("Codice non valido o scaduto. Richiedi una nuova email e riprova.");
+    } finally {
+      setVerifyingCode(false);
     }
   };
 
@@ -91,14 +112,46 @@ const OrgAdminLogin = () => {
                 </svg>
                 <h1 className="auth-title mt-4 text-xl font-semibold">Controlla la tua email</h1>
                 <p className="auth-copy mt-3 text-sm leading-6">
-                  Se l'indirizzo e associato a un account amministratore, riceverai un link per
-                  accedere all'area di gestione.
+                  Se l'indirizzo e associato a un account amministratore, riceverai un link e un
+                  codice a 6 cifre. Per restare nell'app, copia il codice qui sotto.
                 </p>
               </div>
+              <form className="mt-7" onSubmit={handleCodeSubmit}>
+                <label htmlFor="org-admin-code" className="auth-label block text-sm font-medium">
+                  Codice ricevuto via email
+                </label>
+                <input
+                  id="org-admin-code"
+                  className="auth-input mt-1.5 w-full rounded-xl px-4 py-3 text-center text-lg font-semibold tracking-[0.35em] outline-none"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="000000"
+                  maxLength={6}
+                  value={normalizedAccessCode}
+                  onChange={(e) => setAccessCode(e.target.value)}
+                />
+                {codeError ? <p className="mt-3 text-sm font-semibold text-red-600">{codeError}</p> : null}
+                <button
+                  className="btn-primary mt-5 w-full py-2.5 text-sm"
+                  type="submit"
+                  disabled={!canVerifyCode}
+                >
+                  {verifyingCode ? "Verifica in corso..." : "Entra con codice"}
+                </button>
+              </form>
               <div className="auth-divider mt-10 border-t pt-6">
-                <Link className="auth-link text-sm font-medium" to="/">
-                  &larr; Torna alla home
-                </Link>
+                <button
+                  type="button"
+                  className="auth-link text-sm font-medium"
+                  onClick={() => {
+                    setSent(false);
+                    setAccessCode("");
+                    setCodeError("");
+                  }}
+                >
+                  Cambia email o reinvia codice
+                </button>
               </div>
             </div>
             {imagePanel}
@@ -128,7 +181,8 @@ const OrgAdminLogin = () => {
             <div className="mt-10">
               <h1 className="auth-title text-xl font-semibold">Accesso amministratore</h1>
               <p className="auth-copy mt-1.5 text-sm leading-6">
-                Inserisci l'email associata al tuo account per ricevere un link di accesso sicuro.
+                Inserisci l'email associata al tuo account per ricevere un link e un codice di
+                accesso. Il codice ti permette di restare nell'app senza aprire un browser esterno.
               </p>
             </div>
 
@@ -160,7 +214,7 @@ const OrgAdminLogin = () => {
                 disabled={!canSubmit}
                 data-component="org-admin-login-submit"
               >
-                {submitting ? "Invio in corso..." : "Ricevi link di accesso"}
+                {submitting ? "Invio in corso..." : "Ricevi link e codice"}
               </button>
             </form>
 

@@ -323,6 +323,51 @@ def test_org_admin_magic_link_flow(client, drain_email_outbox):
     assert me_res.json()["email"] == email
 
 
+def test_org_admin_magic_code_keeps_login_in_current_client(client, drain_email_outbox):
+    client.post("/api/super-admin/auth/login", json={"email": "admin@assonam.it", "password": "admin"})
+
+    email = f"org.code.{uuid.uuid4().hex[:8]}@example.com"
+    create_res = client.post("/api/super-admin/org-admins", json={"email": email, "org_id": 1})
+    assert create_res.status_code == 200
+    drain_email_outbox()
+    client.post("/api/super-admin/auth/logout")
+    client.cookies.clear()
+    clear_captured_emails()
+
+    res = client.post("/api/org-admin/auth/magic-link", data={"email": email})
+    assert res.status_code == 200
+    drain_email_outbox()
+
+    captured = get_captured_emails()
+    assert len(captured) == 1
+    body = captured[0]["body"]
+    assert "codice" in body.lower()
+
+    import re
+
+    code_match = re.search(r"inserisci questo codice:\s*(\d{6})", body, flags=re.IGNORECASE)
+    assert code_match
+    code = code_match.group(1)
+
+    verify_res = client.post(
+        "/api/org-admin/auth/verify-code",
+        data={"email": f"  {email.upper()}  ", "code": f"{code[:3]} {code[3:]}"},
+    )
+    assert verify_res.status_code == 200, verify_res.text
+    assert verify_res.json()["redirect_to"] == "/org-admin"
+
+    me_res = client.get("/api/org-admin/auth/me")
+    assert me_res.status_code == 200
+    assert me_res.json()["email"] == email
+
+    client.cookies.clear()
+    repeat_res = client.post(
+        "/api/org-admin/auth/verify-code",
+        data={"email": email, "code": code},
+    )
+    assert repeat_res.status_code == 400
+
+
 def _create_org_admin_for_persistent_session(client, drain_email_outbox) -> tuple[str, int]:
     client.cookies.clear()
     client.post(

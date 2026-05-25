@@ -615,6 +615,21 @@ export async function verifyOrgAdminToken(
   if (!res.ok) throw new Error("Invalid or expired token");
 }
 
+export async function verifyOrgAdminCode(
+  email: string,
+  code: string,
+): Promise<{ ok: boolean; redirect_to?: string }> {
+  const body = new FormData();
+  body.append("email", email);
+  body.append("code", code);
+  const res = await fetch("/api/org-admin/auth/verify-code", {
+    method: "POST",
+    body,
+  });
+  if (!res.ok) throw new Error("Invalid or expired code");
+  return res.json();
+}
+
 export async function verifyMemberToken(token: string): Promise<void> {
   // We use normal fetch which follows redirects.
   // Success: redirects to /app/dashboard

@@ -1,4 +1,5 @@
 import csv
+import html
 import io
 import json
 
@@ -273,6 +274,18 @@ def _hash_email_for_log(email: str | None) -> str:
 
 def _normalize_login_email(email: str | None) -> str:
     return (email or "").strip().lower()
+
+
+def _normalize_org_admin_login_code(code: str | None) -> str:
+    return re.sub(r"\D+", "", code or "")[:6]
+
+
+def _org_admin_login_code_token(email: str, code: str) -> str:
+    return f"org-admin-login-code:{_normalize_login_email(email)}:{_normalize_org_admin_login_code(code)}"
+
+
+def _generate_org_admin_login_code() -> str:
+    return f"{secrets.randbelow(1_000_000):06d}"
 
 
 def _resolve_org_admin_magic_link_candidate(
@@ -1695,20 +1708,27 @@ def request_magic_link(
 
     try:
         token_str = generate_token()
+        login_code = _generate_org_admin_login_code()
+        expires_at = datetime.utcnow() + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES)
         token = OrgAdminToken(
             admin_id=admin.id,
             token_hash=hash_token(token_str),
-            expires_at=datetime.utcnow()
-            + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES),
+            expires_at=expires_at,
         )
-        db.add(token)
+        code_token = OrgAdminToken(
+            admin_id=admin.id,
+            token_hash=hash_token(_org_admin_login_code_token(normalized_email, login_code)),
+            expires_at=expires_at,
+        )
+        db.add_all([token, code_token])
         db.flush()
         logger.info(
-            "org_admin_magic_link_token_created email_hash=%s admin_id=%s token_id=%s expires_at=%s",
+            "org_admin_magic_link_token_created email_hash=%s admin_id=%s token_id=%s code_token_id=%s expires_at=%s",
             email_hash,
             admin.id,
             token.id,
-            token.expires_at.isoformat() if token.expires_at else None,
+            code_token.id,
+            expires_at.isoformat(),
         )
 
         frontend_base = settings.FRONTEND_URL.rstrip("/")
@@ -1716,6 +1736,7 @@ def request_magic_link(
             frontend_base = str(request.base_url).rstrip("/")
 
         link = f"{frontend_base}/auth/verify?token={token_str}&role=org_admin"
+        safe_link = html.escape(link, quote=True)
         logger.info(
             "Generated org-admin magic link: %s", redact_url(link)
         )
@@ -1732,10 +1753,27 @@ def request_magic_link(
             to_email=normalized_email,
             subject="Accesso area amministrazione associazione",
             payload=build_email_payload(
-                text_body=f"Clicca qui per accedere: {link}",
+                text_body=(
+                    "Accesso area amministrazione ASSONAM\n\n"
+                    "Se sei nell'app ASSONAM, lascia aperta la schermata di login e inserisci questo codice:\n\n"
+                    f"{login_code}\n\n"
+                    "In alternativa puoi cliccare questo link:\n"
+                    f"{link}\n\n"
+                    "Il codice e il link scadono tra pochi minuti. Se non hai richiesto tu l'accesso, ignora questa email."
+                ),
+                html_body=(
+                    "<div style=\"font-family:Inter,Arial,sans-serif;color:#0f172a;line-height:1.5\">"
+                    "<h1 style=\"font-size:22px;margin:0 0 12px\">Accesso area amministrazione</h1>"
+                    "<p>Se sei nell'app ASSONAM, lascia aperta la schermata di login e inserisci questo codice:</p>"
+                    f"<p style=\"font-size:32px;font-weight:800;letter-spacing:8px;margin:16px 0;color:#00594f\">{login_code}</p>"
+                    f"<p>In alternativa puoi <a href=\"{safe_link}\">aprire il link di accesso</a>.</p>"
+                    "<p style=\"color:#64748b;font-size:13px\">Il codice e il link scadono tra pochi minuti. Se non hai richiesto tu l'accesso, ignora questa email.</p>"
+                    "</div>"
+                ),
                 meta={
                     "admin_id": admin.id,
                     "token_purpose": "org_admin_magic_link",
+                    "code_token_id": code_token.id,
                 },
             ),
             priority=1,
@@ -1855,6 +1893,84 @@ def verify_magic_link(
     response = RedirectResponse(url="/org-admin", status_code=302)
     set_org_admin_session_cookie(response, persistent_token)
     return response
+
+
+@auth_router.post("/verify-code")
+def verify_magic_code(
+    request: Request,
+    response: Response,
+    email: str = Form(...),
+    code: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Verify a short org-admin login code without leaving the app/PWA."""
+    auth_limiter.check(get_client_ip(request))
+    client_ip = get_client_ip(request)
+    normalized_email = _normalize_login_email(email)
+    normalized_code = _normalize_org_admin_login_code(code)
+    if not normalized_email or len(normalized_code) != 6:
+        raise HTTPException(status_code=400, detail="Invalid or expired code")
+
+    token_hash = hash_token(_org_admin_login_code_token(normalized_email, normalized_code))
+    token_hash_prefix = token_hash[:12]
+    logger.info(
+        "org_admin_magic_code_verify_received email_hash=%s token_hash_prefix=%s ip=%s",
+        _hash_email_for_log(normalized_email),
+        token_hash_prefix,
+        client_ip,
+    )
+    token_entry = (
+        db.query(OrgAdminToken)
+        .filter(
+            OrgAdminToken.token_hash == token_hash,
+            OrgAdminToken.expires_at > datetime.utcnow(),
+            OrgAdminToken.used_at.is_(None),
+        )
+        .first()
+    )
+
+    if not token_entry:
+        logger.warning(
+            "org_admin_magic_code_verify_blocked email_hash=%s token_hash_prefix=%s block_reason=token_not_found_or_expired",
+            _hash_email_for_log(normalized_email),
+            token_hash_prefix,
+        )
+        raise HTTPException(status_code=400, detail="Invalid or expired code")
+
+    admin = (
+        db.query(AdminUser)
+        .filter(
+            AdminUser.id == token_entry.admin_id,
+            AdminUser.email == normalized_email,
+            AdminUser.is_active.is_(True),
+            AdminUser.deleted_at.is_(None),
+        )
+        .first()
+    )
+
+    if not admin:
+        logger.warning(
+            "org_admin_magic_code_verify_blocked token_hash_prefix=%s admin_id=%s block_reason=admin_not_eligible",
+            token_hash_prefix,
+            token_entry.admin_id,
+        )
+        raise HTTPException(status_code=400, detail="Invalid or expired code")
+
+    token_entry.used_at = datetime.utcnow()
+    persistent_session, persistent_token = create_org_admin_persistent_session(db, admin)
+    db.commit()
+    logger.info(
+        "org_admin_magic_code_verify_completed token_hash_prefix=%s admin_id=%s org_id=%s session_id=%s",
+        token_hash_prefix,
+        admin.id,
+        admin.org_id,
+        persistent_session.id,
+    )
+
+    request.session["org_admin_id"] = admin.id
+    audit.org_admin_verified(admin_id=admin.id, org_id=admin.org_id, ip=client_ip)
+    set_org_admin_session_cookie(response, persistent_token)
+    return {"ok": True, "redirect_to": "/org-admin"}
 
 
 @auth_router.post("/logout")
