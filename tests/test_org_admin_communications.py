@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 import base64
 import uuid
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import func
@@ -778,7 +779,9 @@ def test_org_admin_campaign_can_be_scheduled_with_design_and_linked_form(client,
 
 def test_booking_whatsapp_reminder_is_automatic_and_deduped(client, db, monkeypatch):
     original_whatsapp = settings.ENABLE_WHATSAPP_EVOLUTION
+    original_timezone = settings.APP_TIMEZONE
     settings.ENABLE_WHATSAPP_EVOLUTION = True
+    settings.APP_TIMEZONE = "Europe/Rome"
     sent_messages: list[dict[str, str]] = []
 
     def fake_send_text(self, instance_name: str, *, number: str, text: str):
@@ -797,6 +800,8 @@ def test_booking_whatsapp_reminder_is_automatic_and_deduped(client, db, monkeypa
         org.booking_whatsapp_reminder_enabled = True
         org.booking_whatsapp_reminder_hours_before = 3
         org.booking_whatsapp_reminder_template = "Reminder {{nome_contatto}} {{data_prenotazione}} {{orario_prenotazione}}"
+        now_utc = datetime(2026, 5, 25, 20, 0, tzinfo=timezone.utc)
+        local_event_at = (now_utc + timedelta(hours=2)).astimezone(ZoneInfo("Europe/Rome"))
         connection = WhatsAppConnection(
             org_id=org.id,
             instance_name=f"reminder-{org.id}",
@@ -808,25 +813,81 @@ def test_booking_whatsapp_reminder_is_automatic_and_deduped(client, db, monkeypa
             status="confirmed",
             customer_name="Giulia Bianchi",
             customer_phone="+393331234567",
-            booking_date=(datetime.utcnow() + timedelta(hours=2)).date(),
-            booking_time=(datetime.utcnow() + timedelta(hours=2)).strftime("%H:%M"),
+            booking_date=local_event_at.date(),
+            booking_time=local_event_at.strftime("%H:%M"),
             party_size=2,
-            confirmed_at=datetime.utcnow(),
+            confirmed_at=now_utc.replace(tzinfo=None),
         )
         db.add_all([connection, booking])
         db.commit()
 
-        stats = process_booking_whatsapp_reminders(db, now=datetime.utcnow())
+        stats = process_booking_whatsapp_reminders(db, now=now_utc)
         assert stats["sent"] == 1
         assert sent_messages[0]["number"] == "+393331234567"
         assert "Giulia Bianchi" in sent_messages[0]["text"]
         assert db.query(BookingEvent).filter(BookingEvent.booking_id == booking.id, BookingEvent.event_type == BOOKING_REMINDER_EVENT).count() == 1
 
-        repeat_stats = process_booking_whatsapp_reminders(db, now=datetime.utcnow())
+        repeat_stats = process_booking_whatsapp_reminders(db, now=now_utc)
         assert repeat_stats["sent"] == 0
         assert len(sent_messages) == 1
     finally:
         settings.ENABLE_WHATSAPP_EVOLUTION = original_whatsapp
+        settings.APP_TIMEZONE = original_timezone
+
+
+def test_booking_whatsapp_reminder_uses_rome_time_for_midnight_booking(db, monkeypatch):
+    original_whatsapp = settings.ENABLE_WHATSAPP_EVOLUTION
+    original_timezone = settings.APP_TIMEZONE
+    settings.ENABLE_WHATSAPP_EVOLUTION = True
+    settings.APP_TIMEZONE = "Europe/Rome"
+    sent_messages: list[dict[str, str]] = []
+
+    def fake_send_text(self, instance_name: str, *, number: str, text: str):
+        sent_messages.append({"instance": instance_name, "number": number, "text": text})
+        return EvolutionSendTextResult(
+            external_message_id=f"reminder-{uuid.uuid4().hex}",
+            status="sent",
+            raw={},
+        )
+
+    monkeypatch.setattr("app.services.whatsapp_automation.EvolutionLiteClient.send_text", fake_send_text)
+    try:
+        db.query(Organization).update({Organization.booking_whatsapp_reminder_enabled: False})
+        db.commit()
+        org, _admin = _create_org_admin(db, communications_enabled=True)
+        org.booking_whatsapp_reminder_enabled = True
+        org.booking_whatsapp_reminder_hours_before = 1
+        org.booking_whatsapp_reminder_template = "Reminder {{data_prenotazione}} {{orario_prenotazione}}"
+        connection = WhatsAppConnection(
+            org_id=org.id,
+            instance_name=f"reminder-midnight-{org.id}",
+            status="connected",
+            phone_number="+390200000000",
+        )
+        booking = Booking(
+            association_id=org.id,
+            status="confirmed",
+            customer_name="Test Mezzanotte",
+            customer_phone="+393331234567",
+            booking_date=date(2026, 5, 26),
+            booking_time="00:00",
+            party_size=2,
+            confirmed_at=datetime(2026, 5, 25, 20, 0),
+        )
+        db.add_all([connection, booking])
+        db.commit()
+
+        stats = process_booking_whatsapp_reminders(
+            db,
+            now=datetime(2026, 5, 25, 21, 0, tzinfo=timezone.utc),
+        )
+
+        assert stats["sent"] == 1
+        assert sent_messages[0]["number"] == "+393331234567"
+        assert "2026-05-26 00:00" in sent_messages[0]["text"]
+    finally:
+        settings.ENABLE_WHATSAPP_EVOLUTION = original_whatsapp
+        settings.APP_TIMEZONE = original_timezone
 
 
 def test_post_event_survey_targets_only_present_bookings(db, monkeypatch):

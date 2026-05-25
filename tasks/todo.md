@@ -5217,3 +5217,15 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Le etichette vengono salvate nel metadata del campo virtuale e lette sia dal canvas builder sia dal form pubblico, mantenendo fallback per i form gia esistenti.
 - Diagnosi WhatsApp: email OK e WhatsApp non rotto; il problema era l'automazione non collegata al form usato, quindi non sono state introdotte modifiche runtime sugli invii.
 - Verifiche locali OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.
+
+## Plan (Timezone reminder prenotazioni WhatsApp - May 25, 2026)
+- [x] Confermare timezone host/container e impatto sul reminder 1 ora prima.
+- [x] Interpretare data/orario prenotazione come timezone applicativa Europe/Rome e confrontare in UTC.
+- [x] Aggiungere test sul caso 00:00 Roma con reminder 1 ora prima.
+- [x] Eseguire compile/test, controllo spazio Hetzner, commit/push/deploy e smoke live.
+
+## Review (Timezone reminder prenotazioni WhatsApp - May 25, 2026)
+- Hetzner e container girano in UTC; gli orari prenotazione sono business-time Italia, quindi il confronto naive faceva slittare il reminder di circa due ore con ora legale.
+- Il worker reminder ora interpreta `booking_date` + `booking_time` in `APP_TIMEZONE`, default `Europe/Rome`, e confronta tutto in UTC.
+- Coperto il caso reale `26/05 00:00` con reminder 1 ora prima: alle `21:00 UTC` parte correttamente per mezzanotte Roma.
+- Verifiche locali OK: pytest mirati reminder (`2 passed`) e `python -m compileall -q app init_db.py`.

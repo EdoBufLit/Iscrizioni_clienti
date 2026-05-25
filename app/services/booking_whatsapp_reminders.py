@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import logging
 import html
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -42,7 +43,7 @@ def process_booking_whatsapp_reminders(
     now: datetime | None = None,
     limit: int = 100,
 ) -> dict[str, int]:
-    current = now or datetime.utcnow()
+    current = _as_utc_datetime(now or datetime.now(timezone.utc))
     stats = {"checked": 0, "sent": 0, "skipped": 0, "failed": 0}
 
     bookings = (
@@ -273,7 +274,22 @@ def _booking_datetime(booking: Booking) -> datetime | None:
             parsed_time = time.fromisoformat(raw_time[:5])
         except Exception:
             parsed_time = time(9, 0)
-    return datetime.combine(booking_date, parsed_time)
+    local_event_at = datetime.combine(booking_date, parsed_time, tzinfo=_booking_timezone())
+    return local_event_at.astimezone(timezone.utc)
+
+
+def _as_utc_datetime(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _booking_timezone() -> ZoneInfo:
+    try:
+        return ZoneInfo((settings.APP_TIMEZONE or "Europe/Rome").strip() or "Europe/Rome")
+    except ZoneInfoNotFoundError:
+        logger.warning("booking_reminder_invalid_timezone value=%s fallback=Europe/Rome", settings.APP_TIMEZONE)
+        return ZoneInfo("Europe/Rome")
 
 
 def _connection_for_org(
