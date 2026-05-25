@@ -5128,3 +5128,10 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Frontend: agenda mobile separa richieste operative e prenotazioni gestite, aggiunge sezione Serate, card verde/rossa/gialla, note gestibili, rifiuto senza messaggio, reset WhatsApp e ricerca soci persistente in URL.
 - Evolution/iPhone: runtime conservativo (`syncFullHistory/readMessages/readStatus/alwaysOnline` disattivati, `rejectCall` attivo), reset connessione e cookie org-admin `SameSite=Lax`.
 - Verifiche OK: `python -m compileall app init_db.py`, `npm run build` in `frontend`, `python -m pytest tests/test_org_admin_communications.py::test_booking_whatsapp_reminder_is_automatic_and_deduped tests/test_org_admin_communications.py::test_post_event_survey_targets_only_present_bookings tests/test_org_admin_member_filters.py::test_org_admin_member_filters -q`.
+
+## Plan (Fix deploy prenotazioni post-push - May 25, 2026)
+- [x] Correggere il crash `SyntaxError: f-string expression part cannot include a backslash` in `booking_customer_actions.py`.
+- [x] Eseguire compile/test mirati prima del commit per evitare un nuovo worker crash-loop.
+- [ ] Commit e push del fix sul branch `feat/redesign-landing-wizard`, mantenendo fuori gli untracked locali non pertinenti.
+- [ ] Collegarsi a Hetzner, aggiornare checkout/immagine in modo controllato, lanciare migration Alembic e ricreare i servizi necessari.
+- [ ] Verificare container, log worker/web e smoke HTTP pubblico/API dopo il deploy.

@@ -238,11 +238,12 @@ def render_booking_action_page(*, token: BookingActionToken, error: str | None =
         form = "<p class='muted'>Questo link e' gia stato usato o e' scaduto.</p>"
     else:
         form = "<form method='post'><button type='submit'>Conferma azione</button></form>"
+    error_html = f"<p class='error'>{html.escape(error)}</p>" if error else ""
     return _page_shell(
         title=action_label,
         body=(
             f"<h1>{html.escape(action_label)}</h1>"
-            f"{'<p class=\"error\">' + html.escape(error) + '</p>' if error else ''}"
+            f"{error_html}"
             f"<div class='summary'>{summary}</div>"
             f"{form}"
         ),
