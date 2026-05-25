@@ -463,6 +463,8 @@ def init_db():
                     """
                 )
             )
+        if "booking_event_series" in table_names:
+            _add_column_if_missing(conn, "booking_event_series", "is_default", "INTEGER DEFAULT 0")
         if "form_submissions" in table_names:
             _add_column_if_missing(conn, "form_submissions", "reviewed_at", "DATETIME")
             _add_column_if_missing(conn, "form_submissions", "reviewed_by_admin_id", "INTEGER")

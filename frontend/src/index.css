@@ -6762,6 +6762,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
 :root[data-theme="dark"] .org-admin-v2 .form-settings-tab section,
 :root[data-theme="dark"] .org-admin-v2 .form-settings-tab .bg-white,
 :root[data-theme="dark"] .org-admin-v2 .form-settings-tab .bg-neutral-50,
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .bg-emerald-50,
 :root[data-theme="dark"] .org-admin-v2 .form-settings-tab .bg-emerald-50\/60,
 :root[data-theme="dark"] .org-admin-v2 .form-settings-tab [class*="bg-[#fc"],
 :root[data-theme="dark"] .org-admin-v2 .form-settings-tab [class*="bg-[#f"] {
@@ -6797,7 +6798,8 @@ body.dashboard-perf-mode .btn-ghost:hover {
 :root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-900,
 :root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-800,
 :root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-700,
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-600 {
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-600,
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-emerald-800 {
   color: var(--fb-text) !important;
 }
 

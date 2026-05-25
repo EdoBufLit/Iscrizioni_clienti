@@ -62,6 +62,7 @@ const PublicFormPage = () => {
       return;
     }
     const dateValue = String(values.__booking_date || "");
+    const timeValue = String(values.__booking_event_time || "");
     if (!dateValue) {
       setBookingEvents([]);
       return;
@@ -69,11 +70,24 @@ const PublicFormPage = () => {
     let cancelled = false;
     setBookingEventsLoading(true);
     const request = orgSlug
-      ? fetchPublicFormBookingEvents(orgSlug, slug, dateValue)
-      : fetchPublicFormBookingEvents(slug, dateValue);
+      ? fetchPublicFormBookingEvents(orgSlug, slug, dateValue, { time: timeValue || null })
+      : fetchPublicFormBookingEvents(slug, dateValue, { time: timeValue || null });
     request
       .then((response) => {
-        if (!cancelled) setBookingEvents(response.items);
+        if (!cancelled) {
+          setBookingEvents(response.items);
+          setValues((current) => {
+            const currentSeriesId = Number(current.__booking_event_series_id || 0) || null;
+            if (currentSeriesId && response.items.some((item) => item.id === currentSeriesId)) {
+              return current;
+            }
+            const preferred = response.items.find((item) => item.is_default) || response.items[0] || null;
+            return {
+              ...current,
+              __booking_event_series_id: preferred ? String(preferred.id) : "",
+            };
+          });
+        }
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : "Serate prenotabili non disponibili.");
@@ -84,7 +98,7 @@ const PublicFormPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [form?.booking_dynamic_events_enabled, orgSlug, slug, values.__booking_date]);
+  }, [form?.booking_dynamic_events_enabled, orgSlug, slug, values.__booking_date, values.__booking_event_time]);
 
   function updateValue(fieldKey: string, nextValue: unknown) {
     setValues((current) => ({ ...current, [fieldKey]: nextValue }));

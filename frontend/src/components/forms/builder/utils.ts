@@ -10,7 +10,8 @@ export type VirtualFieldType =
   | "spacer"
   | "file_upload"
   | "rating_1_5"
-  | "nps_0_10";
+  | "nps_0_10"
+  | "booking_block";
 
 export interface BuilderField {
   id: number;
@@ -45,6 +46,7 @@ export const VIRTUAL_TYPE_PREFIXES: Record<string, string> = {
   file_upload: "__ui_file__",
   rating_1_5: "__survey_rating__",
   nps_0_10: "__survey_nps__",
+  booking_block: "__booking_block__",
 };
 
 const LEGACY_VIRTUAL_TYPE_PREFIXES: Record<string, string> = {
@@ -55,6 +57,7 @@ const LEGACY_VIRTUAL_TYPE_PREFIXES: Record<string, string> = {
   file_upload: "ui_file_",
   rating_1_5: "survey_rating_",
   nps_0_10: "survey_nps_",
+  booking_block: "booking_block_",
 };
 
 export const META_DELIMITER = "|||META:";
@@ -68,6 +71,7 @@ export function createFieldFromPaletteItem(
   const resolvedLabel = label || paletteItem?.label || "Nuovo blocco";
   const isRating = type === "rating_1_5";
   const isNps = type === "nps_0_10";
+  const isBookingBlock = type === "booking_block";
 
   return {
     id: -Date.now(),
@@ -75,13 +79,17 @@ export function createFieldFromPaletteItem(
     key: generateFieldKey(type, resolvedLabel),
     label: resolvedLabel,
     placeholder: "",
-    helpText: isRating
+    helpText: isBookingBlock
+      ? "Data e orario sono liberi; la serata viene proposta se disponibile per la scelta del socio."
+      : isRating
       ? "Lascia una valutazione da 1 a 5."
       : isNps
         ? "Indica quanto consiglieresti questa esperienza."
         : "",
     required: false,
-    optionsText: isRating
+    optionsText: isBookingBlock
+      ? ""
+      : isRating
       ? "1, 2, 3, 4, 5"
       : isNps
         ? "0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10"
@@ -164,6 +172,8 @@ export function encodeField(
   ) {
     apiType = builderField.type as AssociationFormFieldType;
   } else if (builderField.type === "free_text") {
+    apiType = "long_text";
+  } else if (builderField.type === "booking_block") {
     apiType = "long_text";
   } else if (builderField.type === "rating_1_5" || builderField.type === "nps_0_10") {
     apiType = "radio";
@@ -251,4 +261,9 @@ export const PALETTE_ITEMS = [...FORM_PALETTE_ITEMS, ...SURVEY_PALETTE_ITEMS] as
 
 export function getPaletteItems(mode: "forms" | "surveys" = "forms") {
   return mode === "surveys" ? SURVEY_PALETTE_ITEMS : FORM_PALETTE_ITEMS;
+}
+
+export function isBookingBlockField(field: { field_key?: string | null; type?: string | null }): boolean {
+  const fieldKey = String(field.field_key || "");
+  return field.type === "booking_block" || fieldKey.startsWith(VIRTUAL_TYPE_PREFIXES.booking_block);
 }

@@ -2297,6 +2297,7 @@ class UpsertBookingEventSeriesBody(BaseModel):
     event_date: Optional[date] = None
     specific_date: Optional[date] = None
     is_active: bool = True
+    is_default: bool = False
     time_slots: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -2371,6 +2372,7 @@ def _serialize_booking_event_series(series: BookingEventSeries) -> dict[str, obj
         "event_date": series.event_date.isoformat() if series.event_date else None,
         "specific_date": series.event_date.isoformat() if series.event_date else None,
         "is_active": bool(series.is_active),
+        "is_default": bool(getattr(series, "is_default", False)),
         "time_slots": [
             {
                 "id": slot.id,
@@ -7114,6 +7116,7 @@ def list_org_admin_booking_event_series(
     if not include_inactive:
         query = query.filter(BookingEventSeries.is_active.is_(True))
     items = query.order_by(
+        BookingEventSeries.is_default.desc(),
         BookingEventSeries.recurrence_type.asc(),
         BookingEventSeries.weekday.asc().nulls_last(),
         BookingEventSeries.event_date.asc().nulls_last(),
@@ -7136,6 +7139,7 @@ def create_org_admin_booking_event_series(
     _apply_booking_event_series_updates(series, body)
     db.add(series)
     db.flush()
+    _ensure_single_default_booking_event_series(db, series=series)
     _replace_booking_event_series_slots(db, series=series, slots=body.time_slots)
     db.commit()
     db.refresh(series)
@@ -7162,6 +7166,7 @@ def update_org_admin_booking_event_series(
     if series is None:
         raise HTTPException(status_code=404, detail="Serata non trovata.")
     _apply_booking_event_series_updates(series, body)
+    _ensure_single_default_booking_event_series(db, series=series)
     _replace_booking_event_series_slots(db, series=series, slots=body.time_slots)
     db.commit()
     db.refresh(series)
@@ -7205,7 +7210,18 @@ def _apply_booking_event_series_updates(series: BookingEventSeries, body: Upsert
     series.weekday = body.weekday if recurrence_type == "weekly" else None
     series.event_date = event_date if recurrence_type == "date" else None
     series.is_active = bool(body.is_active)
+    series.is_default = bool(body.is_default)
     series.updated_at = datetime.utcnow()
+
+
+def _ensure_single_default_booking_event_series(db: Session, *, series: BookingEventSeries) -> None:
+    if not bool(getattr(series, "is_default", False)):
+        return
+    db.query(BookingEventSeries).filter(
+        BookingEventSeries.association_id == series.association_id,
+        BookingEventSeries.id != series.id,
+        BookingEventSeries.is_default.is_(True),
+    ).update({BookingEventSeries.is_default: False}, synchronize_session=False)
 
 
 def _replace_booking_event_series_slots(

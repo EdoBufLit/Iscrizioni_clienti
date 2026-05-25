@@ -370,6 +370,7 @@ function emptyEventSeriesDraft() {
     weekday: 0 as number | null,
     specific_date: "",
     is_active: true,
+    is_default: false,
     time_slots_text: "19:30, 20:00, 20:30",
   };
 }
@@ -824,6 +825,7 @@ export default function OrgAdminBookings() {
         weekday: selected.weekday,
         specific_date: selected.specific_date || "",
         is_active: selected.is_active,
+        is_default: Boolean(selected.is_default),
         time_slots_text: selected.time_slots.map((slot) => slot.time.slice(0, 5)).join(", "),
       });
     }
@@ -848,6 +850,7 @@ export default function OrgAdminBookings() {
         weekday: eventSeriesDraft.recurrence_type === "weekly" ? eventSeriesDraft.weekday : null,
         specific_date: eventSeriesDraft.recurrence_type === "date" ? eventSeriesDraft.specific_date || null : null,
         is_active: eventSeriesDraft.is_active,
+        is_default: eventSeriesDraft.is_default,
         time_slots: timeSlots,
       };
       const response = eventSeriesDraft.id
@@ -2172,6 +2175,7 @@ function BookingEventSeriesPanel(props: {
       weekday: item.weekday,
       specific_date: item.specific_date || "",
       is_active: item.is_active,
+      is_default: Boolean(item.is_default),
       time_slots_text: item.time_slots.map((slot) => slot.time.slice(0, 5)).join(", "),
     });
   };
@@ -2216,11 +2220,18 @@ function BookingEventSeriesPanel(props: {
                         {when} · {item.time_slots.map((slot) => slot.time.slice(0, 5)).join(", ") || "Nessuno slot"}
                       </p>
                     </div>
-                    <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${
-                      item.is_active ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"
-                    }`}>
-                      {item.is_active ? "Attiva" : "Pausa"}
-                    </span>
+                    <div className="flex flex-col items-end gap-1">
+                      {item.is_default ? (
+                        <span className="rounded-full bg-amber-100 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-amber-800">
+                          Default
+                        </span>
+                      ) : null}
+                      <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${
+                        item.is_active ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"
+                      }`}>
+                        {item.is_active ? "Attiva" : "Pausa"}
+                      </span>
+                    </div>
                   </div>
                 </button>
               );
@@ -2290,6 +2301,11 @@ function BookingEventSeriesPanel(props: {
             label="Serata attiva nei form pubblici"
             checked={props.draft.is_active}
             onChange={(checked) => props.setDraft((current) => ({ ...current, is_active: checked }))}
+          />
+          <Toggle
+            label="Usa come default quando non ci sono eventi per data e orario scelti"
+            checked={props.draft.is_default}
+            onChange={(checked) => props.setDraft((current) => ({ ...current, is_default: checked }))}
           />
           <ActionRow
             primaryLabel={props.draft.id ? "Salva serata" : "Crea serata"}

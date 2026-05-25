@@ -561,12 +561,13 @@ def get_public_form_booking_events_scoped(
     slug: str,
     request: Request,
     date_value: date = Query(alias="date"),
+    time_value: str | None = Query(default=None, alias="time"),
     db: Session = Depends(get_db),
 ):
     member = get_current_member(request, db)
     form = _load_public_form(db, org_slug=org_slug, slug=slug)
     _ensure_form_is_visible(form, member)
-    return _public_booking_events_payload(db, form=form, date_value=date_value)
+    return _public_booking_events_payload(db, form=form, date_value=date_value, time_value=time_value)
 
 
 @router.get("/api/forms/{slug}")
@@ -582,12 +583,13 @@ def get_public_form_booking_events(
     slug: str,
     request: Request,
     date_value: date = Query(alias="date"),
+    time_value: str | None = Query(default=None, alias="time"),
     db: Session = Depends(get_db),
 ):
     member = get_current_member(request, db)
     form = _load_public_form(db, slug=slug)
     _ensure_form_is_visible(form, member)
-    return _public_booking_events_payload(db, form=form, date_value=date_value)
+    return _public_booking_events_payload(db, form=form, date_value=date_value, time_value=time_value)
 
 
 def _public_booking_events_payload(
@@ -595,9 +597,11 @@ def _public_booking_events_payload(
     *,
     form: AssociationForm,
     date_value: date,
+    time_value: str | None = None,
 ) -> dict[str, object]:
     if not bool(getattr(form, "booking_dynamic_events_enabled", False)):
-        return {"items": []}
+        return {"items": [], "using_default": False}
+    normalized_time = _normalize_public_booking_time(time_value)
     items = (
         db.query(BookingEventSeries)
         .options(joinedload(BookingEventSeries.time_slots))
@@ -607,12 +611,25 @@ def _public_booking_events_payload(
             or_(
                 BookingEventSeries.event_date == date_value,
                 BookingEventSeries.weekday == date_value.weekday(),
+                BookingEventSeries.is_default.is_(True),
             ),
         )
-        .order_by(BookingEventSeries.title.asc(), BookingEventSeries.id.asc())
+        .order_by(BookingEventSeries.is_default.desc(), BookingEventSeries.title.asc(), BookingEventSeries.id.asc())
         .all()
     )
+    matching_items = [
+        item
+        for item in items
+        if (
+            not bool(getattr(item, "is_default", False))
+            and (item.event_date == date_value or item.weekday == date_value.weekday())
+            and _series_has_public_time(item, normalized_time)
+        )
+    ]
+    default_items = [item for item in items if bool(getattr(item, "is_default", False))]
+    response_items = matching_items if matching_items else default_items[:1]
     return {
+        "using_default": not bool(matching_items) and bool(response_items),
         "items": [
             {
                 "id": item.id,
@@ -623,6 +640,7 @@ def _public_booking_events_payload(
                 "weekday": item.weekday,
                 "event_date": item.event_date.isoformat() if item.event_date else None,
                 "specific_date": item.event_date.isoformat() if item.event_date else None,
+                "is_default": bool(getattr(item, "is_default", False)),
                 "time_slots": [
                     {
                         "id": slot.id,
@@ -636,10 +654,27 @@ def _public_booking_events_payload(
                     if bool(getattr(slot, "is_active", True))
                 ],
             }
-            for item in items
-            if (item.event_date == date_value or item.weekday == date_value.weekday())
+            for item in response_items
         ]
     }
+
+
+def _normalize_public_booking_time(value: str | None) -> str | None:
+    normalized = str(value or "").strip()[:5]
+    if not normalized:
+        return None
+    return normalized if re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", normalized) else None
+
+
+def _series_has_public_time(series: BookingEventSeries, time_value: str | None) -> bool:
+    if not time_value:
+        return True
+    valid_slots = {
+        str(slot.start_time or "")[:5]
+        for slot in list(series.time_slots or [])
+        if bool(getattr(slot, "is_active", True))
+    }
+    return time_value in valid_slots
 
 
 def _submit_public_form(

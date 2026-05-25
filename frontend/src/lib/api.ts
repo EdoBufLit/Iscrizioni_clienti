@@ -1323,6 +1323,7 @@ export type OrgAdminBookingEventSeries = {
   specific_date: string | null;
   event_date?: string | null;
   is_active: boolean;
+  is_default?: boolean;
   created_at: string | null;
   updated_at: string | null;
   time_slots: BookingEventTimeSlot[];
@@ -2347,14 +2348,17 @@ export async function fetchPublicForm(
 export async function fetchPublicFormBookingEvents(
   orgSlugOrSlug: string,
   slugOrDate: string,
-  maybeDate?: string,
+  maybeDateOrOptions?: string | { time?: string | null },
+  maybeOptions?: { time?: string | null },
 ): Promise<{ items: OrgAdminBookingEventSeries[]; total: number }> {
-  const scoped = Boolean(maybeDate);
-  const dateValue = maybeDate || slugOrDate;
+  const scoped = typeof maybeDateOrOptions === "string";
+  const dateValue = scoped ? maybeDateOrOptions : slugOrDate;
+  const timeValue = scoped ? maybeOptions?.time : maybeDateOrOptions?.time;
   const path = scoped
     ? `/api/forms/${encodeURIComponent(orgSlugOrSlug)}/${encodeURIComponent(slugOrDate)}/booking-events`
     : `/api/forms/${encodeURIComponent(orgSlugOrSlug)}/booking-events`;
   const params = new URLSearchParams({ date: dateValue });
+  if (timeValue) params.set("time", timeValue);
   const res = await fetch(`${path}?${params.toString()}`);
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento serate prenotabili"));
   return normalizeBookingEventSeriesList(await res.json());
@@ -2475,6 +2479,7 @@ type BookingEventSeriesInput = {
   weekday?: number | null;
   specific_date?: string | null;
   is_active?: boolean;
+  is_default?: boolean;
   time_slots?: string[];
 };
 
@@ -2491,6 +2496,7 @@ function normalizeBookingEventSeries(raw: any): OrgAdminBookingEventSeries {
     specific_date: raw?.specific_date ?? raw?.event_date ?? null,
     event_date: raw?.event_date ?? raw?.specific_date ?? null,
     is_active: Boolean(raw?.is_active),
+    is_default: Boolean(raw?.is_default),
     created_at: raw?.created_at ?? null,
     updated_at: raw?.updated_at ?? null,
     time_slots: rawSlots
@@ -2525,6 +2531,7 @@ function bookingEventSeriesRequestBody(data: BookingEventSeriesInput) {
     weekday: data.recurrence_type === "weekly" ? data.weekday ?? null : null,
     event_date: data.recurrence_type === "date" ? data.specific_date ?? null : null,
     is_active: data.is_active ?? true,
+    is_default: data.is_default ?? false,
     time_slots: data.time_slots ?? [],
   };
 }

@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import type { AssociationFormField, OrgAdminBookingEventSeries, PublicAssociationForm } from "../../lib/api";
-import { decodeField } from "./builder/utils";
+import { decodeField, isBookingBlockField } from "./builder/utils";
 
 type FormCanvasForm = Pick<
   PublicAssociationForm,
@@ -395,6 +395,7 @@ export function FormPublicCanvas({
   );
   const selectedSeriesId = Number(values.__booking_event_series_id || 0) || null;
   const selectedSeries = bookingEvents.find((item) => item.id === selectedSeriesId) || null;
+  const hasBookingBlockField = sortedFields.some((field) => isBookingBlockField(field));
   const canvasStyle = { "--form-accent": accentColor } as CSSProperties;
 
   // Dynamic styles
@@ -557,6 +558,80 @@ export function FormPublicCanvas({
     }
   `;
 
+  const renderDynamicBookingBlock = (key = "dynamic-booking-block") => (
+    <div key={key} className="form-public-canvas__dynamic-booking w-full rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+      <div className="mb-4">
+        <p className="text-sm font-bold text-neutral-900">Prenotazione</p>
+        <p className="mt-1 text-xs font-medium leading-5 text-neutral-500">
+          Scegli giorno e orario. Se per quella scelta c'e una serata configurata, la trovi qui sotto; altrimenti resta la prenotazione libera.
+        </p>
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        <label className="form-public-canvas__field block">
+          <span className="form-public-canvas__label mb-1 block text-sm font-semibold text-neutral-800">Giorno *</span>
+          <input
+            className={baseInputClass}
+            type="date"
+            required
+            disabled={!interactive}
+            value={String(values.__booking_date || "")}
+            onChange={(event) => {
+              onValueChange?.("__booking_date", event.target.value);
+              onValueChange?.("__booking_event_series_id", "");
+            }}
+          />
+        </label>
+        <label className="form-public-canvas__field block">
+          <span className="form-public-canvas__label mb-1 block text-sm font-semibold text-neutral-800">Orario *</span>
+          <input
+            className={baseInputClass}
+            type="time"
+            required
+            disabled={!interactive}
+            value={String(values.__booking_event_time || "")}
+            onChange={(event) => {
+              onValueChange?.("__booking_event_time", event.target.value);
+              onValueChange?.("__booking_event_series_id", "");
+            }}
+          />
+        </label>
+        <label className="form-public-canvas__field block">
+          <span className="form-public-canvas__label mb-1 block text-sm font-semibold text-neutral-800">Serata</span>
+          <select
+            className={baseInputClass}
+            disabled={!interactive || bookingEventsLoading || !values.__booking_date || !values.__booking_event_time}
+            value={String(values.__booking_event_series_id || "")}
+            onChange={(event) => onValueChange?.("__booking_event_series_id", event.target.value)}
+          >
+            <option value="">
+              {bookingEventsLoading ? "Controllo serate..." : "Prenotazione libera"}
+            </option>
+            {bookingEvents.map((eventItem) => (
+              <option key={eventItem.id} value={eventItem.id}>
+                {eventItem.name}{eventItem.is_default ? " (default)" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {values.__booking_date && values.__booking_event_time && !bookingEventsLoading ? (
+        <p className={`mt-3 rounded-xl px-3 py-2 text-xs font-semibold ${
+          selectedSeries?.is_default
+            ? "bg-amber-50 text-amber-800"
+            : selectedSeries
+              ? "bg-emerald-50 text-emerald-800"
+              : "bg-neutral-100 text-neutral-700"
+        }`}>
+          {selectedSeries?.is_default
+            ? `Nessuna serata specifica per questa scelta: useremo ${selectedSeries.name}.`
+            : selectedSeries
+              ? `Serata disponibile: ${selectedSeries.name}.`
+              : "Nessuna serata specifica selezionata: la prenotazione resta libera."}
+        </p>
+      ) : null}
+    </div>
+  );
+
   return (
     <div
       className={`form-public-canvas-container w-full min-h-full ${theme.shell} transition-colors duration-300`}
@@ -600,75 +675,7 @@ export function FormPublicCanvas({
             onSubmit?.();
           }}
         >
-          {showDynamicBookingFields ? (
-            <div className="form-public-canvas__dynamic-booking w-full rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
-              <div className="mb-4">
-                <p className="text-sm font-bold text-neutral-900">Prenotazione</p>
-                <p className="mt-1 text-xs font-medium leading-5 text-neutral-500">
-                  Scegli giorno, serata e orario disponibili.
-                </p>
-              </div>
-              <div className="grid gap-4 md:grid-cols-3">
-                <label className="form-public-canvas__field block">
-                  <span className="form-public-canvas__label mb-1 block text-sm font-semibold text-neutral-800">Giorno *</span>
-                  <input
-                    className={baseInputClass}
-                    type="date"
-                    required
-                    disabled={!interactive}
-                    value={String(values.__booking_date || "")}
-                    onChange={(event) => {
-                      onValueChange?.("__booking_date", event.target.value);
-                      onValueChange?.("__booking_event_series_id", "");
-                      onValueChange?.("__booking_event_time", "");
-                    }}
-                  />
-                </label>
-                <label className="form-public-canvas__field block">
-                  <span className="form-public-canvas__label mb-1 block text-sm font-semibold text-neutral-800">Serata *</span>
-                  <select
-                    className={baseInputClass}
-                    required
-                    disabled={!interactive || bookingEventsLoading || !values.__booking_date}
-                    value={String(values.__booking_event_series_id || "")}
-                    onChange={(event) => {
-                      onValueChange?.("__booking_event_series_id", event.target.value);
-                      onValueChange?.("__booking_event_time", "");
-                    }}
-                  >
-                    <option value="">{bookingEventsLoading ? "Caricamento..." : "Seleziona serata"}</option>
-                    {bookingEvents.map((eventItem) => (
-                      <option key={eventItem.id} value={eventItem.id}>
-                        {eventItem.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="form-public-canvas__field block">
-                  <span className="form-public-canvas__label mb-1 block text-sm font-semibold text-neutral-800">Orario *</span>
-                  <select
-                    className={baseInputClass}
-                    required
-                    disabled={!interactive || !selectedSeries}
-                    value={String(values.__booking_event_time || "")}
-                    onChange={(event) => onValueChange?.("__booking_event_time", event.target.value)}
-                  >
-                    <option value="">Seleziona orario</option>
-                    {(selectedSeries?.time_slots || []).map((slot) => (
-                      <option key={slot.id || slot.time} value={slot.time}>
-                        {slot.time.slice(0, 5)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              {values.__booking_date && !bookingEventsLoading && bookingEvents.length === 0 ? (
-                <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                  Nessuna serata prenotabile per il giorno scelto.
-                </p>
-              ) : null}
-            </div>
-          ) : null}
+          {showDynamicBookingFields && !hasBookingBlockField ? renderDynamicBookingBlock() : null}
 
           {sortedFields.length === 0 ? (
             <div className="w-full text-center py-12 text-sm opacity-60">
@@ -676,14 +683,16 @@ export function FormPublicCanvas({
             </div>
           ) : (
             sortedFields.map((field) =>
-              renderField({
-                field,
-                value: values[field.field_key],
-                interactive,
-                accentColor,
-                theme,
-                onValueChange,
-              }),
+              showDynamicBookingFields && isBookingBlockField(field)
+                ? renderDynamicBookingBlock(field.field_key)
+                : renderField({
+                    field,
+                    value: values[field.field_key],
+                    interactive,
+                    accentColor,
+                    theme,
+                    onValueChange,
+                  }),
             )
           )}
 

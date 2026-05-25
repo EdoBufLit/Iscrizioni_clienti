@@ -26,9 +26,10 @@ export function PropertiesPanel({ selectedField, onChange, locked }: Props) {
   const isStructural = ["divider", "spacer"].includes(selectedField.type);
   const isTitle = selectedField.type === "section_title";
   const isFreeText = selectedField.type === "free_text";
+  const isBookingBlock = selectedField.type === "booking_block";
   const isScaleInput = selectedField.type === "rating_1_5" || selectedField.type === "nps_0_10";
   const hasOptions = ["select", "radio", "checkbox", "rating_1_5", "nps_0_10"].includes(selectedField.type);
-  const isStandardInput = !isStructural && !isTitle && !isFreeText;
+  const isStandardInput = !isStructural && !isTitle && !isFreeText && !isBookingBlock;
 
   const handleChange = (key: keyof BuilderField, value: unknown) => {
     onChange({ ...selectedField, [key]: value });
@@ -42,7 +43,14 @@ export function PropertiesPanel({ selectedField, onChange, locked }: Props) {
       </div>
 
       <div className="space-y-5">
-        {isStructural ? (
+        {isBookingBlock ? (
+          <div className="form-builder-properties-note rounded-[0.75rem] border border-dashed p-4">
+            <p className="text-sm font-semibold text-slate-800">Blocco prenotazione automatico</p>
+            <p className="mt-2 text-xs leading-5 text-slate-500">
+              Mostra giorno, orario e serata collegati a Prenotazioni &gt; Serate. Puoi spostarlo su o giu dal canvas; i campi interni si configurano nelle impostazioni prenotazione.
+            </p>
+          </div>
+        ) : isStructural ? (
           <div className="form-builder-properties-note rounded-[0.75rem] border border-dashed p-4 text-center">
             <p className="text-xs text-slate-500">Questo elemento non ha proprietà configurabili.</p>
           </div>
@@ -142,7 +150,7 @@ export function PropertiesPanel({ selectedField, onChange, locked }: Props) {
             </div>
           </div>
 
-          {!isStructural && !isTitle && !isFreeText && (
+          {!isStructural && !isTitle && !isFreeText && !isBookingBlock && (
             <div>
               <label className="group flex cursor-pointer items-center justify-between">
                 <span className="text-sm font-medium text-slate-800">Nascondi etichetta</span>

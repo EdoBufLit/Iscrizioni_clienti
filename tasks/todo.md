@@ -5162,3 +5162,17 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Backend: `booking-event-series` accetta sia payload canonico sia alias frontend, e serializza anche `name/specific_date/time` oltre ai campi canonici.
 - Frontend: le API normalizzano risposte admin/pubbliche e inviano `title/event_date`, quindi la lista serate, il form pubblico e il builder leggono sempre dati coerenti.
 - Verifiche OK: `python -m compileall -q app init_db.py`, pytest mirati serate (`2 passed`), `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, palette builder invariata (`16` form, `11` sondaggi), `git diff --check`.
+
+## Plan (Prenotazioni form settings e blocco serata libero - May 25, 2026)
+- [x] Rimuovere dalla UI impostazioni form il blocco legacy "Evento fissato dall'organizzazione" con data/orario/dettagli.
+- [x] Rendere il blocco prenotazione un blocco canvas spostabile, evitando che appaia fisso sempre in alto.
+- [x] Rendere data/orario prenotazione automatici quando il form usa Serate prenotabili, e auto-mappare almeno email e telefono dai campi form.
+- [x] Aggiungere default serata scelto in Prenotazioni > Serate e usare quel fallback quando non ci sono eventi per data/orario scelti.
+- [x] Aggiornare copy pubblico per chiarire che la prenotazione resta libera anche senza evento, poi verificare light/dark, test e build.
+
+## Review (Prenotazioni form settings e blocco serata libero - May 25, 2026)
+- Impostazioni form: rimosso il blocco legacy "Evento fissato dall'organizzazione"; la configurazione passa da `Usa serate prenotabili` e dal link a `Prenotazioni > Serate`.
+- Builder: il blocco `Prenotazione` viene inserito nel canvas e si puo spostare/riordinare come gli altri blocchi; se manca, resta un fallback automatico.
+- Mapping: con serate attive data e orario non si collegano piu a campi manuali ma arrivano dal blocco prenotazione; email e telefono si auto-mappano ai primi campi compatibili.
+- Serate: aggiunto default org-level in `Prenotazioni > Serate`; il form pubblico accetta data/orario liberi e propone la serata specifica solo se combacia con giorno+orario, altrimenti usa il default se configurato.
+- Verifiche OK: pytest mirati serate/fallback, `python -m compileall -q app init_db.py`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`. La build mantiene solo il warning Vite preesistente sui chunk grandi.

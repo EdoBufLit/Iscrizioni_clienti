@@ -1683,6 +1683,7 @@ class BookingEventSeries(Base):
     weekday = Column(Integer, nullable=True, index=True)
     event_date = Column(Date, nullable=True, index=True)
     is_active = Column(Boolean, nullable=False, default=True, server_default="true", index=True)
+    is_default = Column(Boolean, nullable=False, default=False, server_default="false", index=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

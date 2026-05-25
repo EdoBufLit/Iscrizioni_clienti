@@ -316,20 +316,28 @@ def _resolve_dynamic_booking_event(
     if booking_date is None:
         raise HTTPException(status_code=422, detail="Seleziona una data valida per la prenotazione.")
 
-    try:
-        series_id = int(
-            validated_payload.get("__booking_event_series_id")
-            or validated_payload.get("booking_event_series_id")
-        )
-    except (TypeError, ValueError):
-        raise HTTPException(status_code=422, detail="Seleziona una serata valida.") from None
-
     booking_time = _normalize_booking_time(
         validated_payload.get("__booking_event_time") or validated_payload.get("booking_time")
     )
     if not booking_time or not _TIME_PATTERN.fullmatch(booking_time[:5]):
         raise HTTPException(status_code=422, detail="Seleziona un orario valido.")
     booking_time = booking_time[:5]
+
+    raw_series_id = (
+        validated_payload.get("__booking_event_series_id")
+        or validated_payload.get("booking_event_series_id")
+    )
+    if raw_series_id in (None, ""):
+        return {
+            "booking_date": booking_date,
+            "booking_time": booking_time,
+            "event_details": None,
+        }
+
+    try:
+        series_id = int(raw_series_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="Seleziona una serata valida.") from None
 
     series = (
         db.query(BookingEventSeries)
@@ -341,7 +349,18 @@ def _resolve_dynamic_booking_event(
         )
         .first()
     )
-    if series is None or not _series_matches_date(series, booking_date):
+    if series is None:
+        raise HTTPException(status_code=422, detail="La serata selezionata non e disponibile.")
+    if bool(getattr(series, "is_default", False)):
+        detail_parts = [series.title]
+        if series.description:
+            detail_parts.append(series.description)
+        return {
+            "booking_date": booking_date,
+            "booking_time": booking_time,
+            "event_details": "\n".join(detail_parts),
+        }
+    if not _series_matches_date(series, booking_date):
         raise HTTPException(status_code=422, detail="La serata selezionata non e disponibile per questa data.")
 
     valid_slots = {
