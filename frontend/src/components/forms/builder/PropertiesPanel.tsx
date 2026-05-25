@@ -1,4 +1,4 @@
-import type { BuilderField } from "./utils";
+import type { BookingBlockLabels, BuilderField } from "./utils";
 
 type Props = {
   selectedField: BuilderField | null;
@@ -35,6 +35,16 @@ export function PropertiesPanel({ selectedField, onChange, locked }: Props) {
     onChange({ ...selectedField, [key]: value });
   };
 
+  const handleBookingLabelChange = (key: keyof BookingBlockLabels, value: string) => {
+    onChange({
+      ...selectedField,
+      bookingLabels: {
+        ...(selectedField.bookingLabels || {}),
+        [key]: value,
+      },
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="form-builder-properties__header border-b pb-4">
@@ -44,11 +54,85 @@ export function PropertiesPanel({ selectedField, onChange, locked }: Props) {
 
       <div className="space-y-5">
         {isBookingBlock ? (
-          <div className="form-builder-properties-note rounded-[0.75rem] border border-dashed p-4">
-            <p className="text-sm font-semibold text-slate-800">Blocco prenotazione automatico</p>
-            <p className="mt-2 text-xs leading-5 text-slate-500">
-              Mostra giorno, orario e serata collegati a Prenotazioni &gt; Serate. Puoi spostarlo su o giu dal canvas; i campi interni si configurano nelle impostazioni prenotazione.
-            </p>
+          <div className="space-y-5">
+            <div className="form-builder-properties-note rounded-[0.75rem] border border-dashed p-4">
+              <p className="text-sm font-semibold text-slate-800">Blocco prenotazione automatico</p>
+              <p className="mt-2 text-xs leading-5 text-slate-500">
+                Mostra giorno, orario e serata collegati a Prenotazioni &gt; Serate. Puoi spostarlo su o giu dal canvas e personalizzare i testi visibili al socio.
+              </p>
+            </div>
+            <div>
+              <label className={labelClass}>Titolo blocco</label>
+              <input
+                className={inputClass}
+                disabled={locked}
+                value={selectedField.label}
+                onChange={(e) => handleChange("label", e.target.value)}
+                placeholder="Prenotazione"
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Testo di aiuto</label>
+              <textarea
+                className={`${inputClass} min-h-[80px] resize-none`}
+                disabled={locked}
+                value={selectedField.helpText}
+                onChange={(e) => handleChange("helpText", e.target.value)}
+                placeholder="Spiega come scegliere giorno, orario e serata."
+              />
+            </div>
+            <div className="grid gap-3">
+              <div>
+                <label className={labelClass}>Etichetta giorno</label>
+                <input
+                  className={inputClass}
+                  disabled={locked}
+                  value={selectedField.bookingLabels?.dateLabel || ""}
+                  onChange={(e) => handleBookingLabelChange("dateLabel", e.target.value)}
+                  placeholder="Giorno"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Etichetta orario</label>
+                <input
+                  className={inputClass}
+                  disabled={locked}
+                  value={selectedField.bookingLabels?.timeLabel || ""}
+                  onChange={(e) => handleBookingLabelChange("timeLabel", e.target.value)}
+                  placeholder="A che ora arrivate?"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Etichetta serata</label>
+                <input
+                  className={inputClass}
+                  disabled={locked}
+                  value={selectedField.bookingLabels?.eventLabel || ""}
+                  onChange={(e) => handleBookingLabelChange("eventLabel", e.target.value)}
+                  placeholder="Serata"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Voce senza serata</label>
+                <input
+                  className={inputClass}
+                  disabled={locked}
+                  value={selectedField.bookingLabels?.freeOptionLabel || ""}
+                  onChange={(e) => handleBookingLabelChange("freeOptionLabel", e.target.value)}
+                  placeholder="Prenotazione libera"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Placeholder orario</label>
+                <input
+                  className={inputClass}
+                  disabled={locked}
+                  value={selectedField.bookingLabels?.timePlaceholder || ""}
+                  onChange={(e) => handleBookingLabelChange("timePlaceholder", e.target.value)}
+                  placeholder="Scegli orario"
+                />
+              </div>
+            </div>
           </div>
         ) : isStructural ? (
           <div className="form-builder-properties-note rounded-[0.75rem] border border-dashed p-4 text-center">

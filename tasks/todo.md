@@ -5204,3 +5204,16 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - La select `Serata` mostra eventi solo quando lo slot scelto combacia con un evento/default attivo; fuori slot resta `Prenotazione libera`.
 - Giorni senza eventi non bloccano piu la scelta orario o l'invio della prenotazione.
 - Verifiche OK: pytest mirati (`3 passed`), `python -m compileall -q app init_db.py`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.
+
+## Plan (Etichette blocco prenotazione e ripristino WhatsApp - May 25, 2026)
+- [x] Aggiungere configurazione personalizzabile delle etichette del blocco prenotazione nel builder senza rimuovere campi o rompere light/dark mode.
+- [x] Propagare le etichette personalizzate al render preview e form pubblico, con fallback compatibili per form esistenti.
+- [x] Diagnosticare live e localmente messaggi WhatsApp booking e reminder per capire se il blocco e automazione inattiva, telefono non risolto, connessione Evolution o invio non persistito.
+- [x] Confermare che il problema WhatsApp era configurazione: automazione non collegata al form usato, quindi nessuna modifica runtime WhatsApp necessaria.
+- [ ] Verificare backend/frontend, smoke live, spazio Hetzner e push/deploy controllato.
+
+## Review (Etichette blocco prenotazione e ripristino WhatsApp - May 25, 2026)
+- Il blocco prenotazione ora ha testi personalizzabili da pannello proprieta: titolo, testo di aiuto, etichetta giorno, etichetta orario, etichetta serata, voce libera e placeholder orario.
+- Le etichette vengono salvate nel metadata del campo virtuale e lette sia dal canvas builder sia dal form pubblico, mantenendo fallback per i form gia esistenti.
+- Diagnosi WhatsApp: email OK e WhatsApp non rotto; il problema era l'automazione non collegata al form usato, quindi non sono state introdotte modifiche runtime sugli invii.
+- Verifiche locali OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.

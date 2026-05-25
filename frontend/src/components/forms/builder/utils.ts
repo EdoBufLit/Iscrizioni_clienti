@@ -2,6 +2,14 @@ import { AssociationFormField, AssociationFormFieldType } from "../../../lib/api
 
 export type FieldWidth = "100%" | "50%";
 
+export type BookingBlockLabels = {
+  dateLabel?: string;
+  timeLabel?: string;
+  eventLabel?: string;
+  freeOptionLabel?: string;
+  timePlaceholder?: string;
+};
+
 export type VirtualFieldType = 
   | AssociationFormFieldType
   | "section_title"
@@ -25,6 +33,7 @@ export interface BuilderField {
   width: FieldWidth;
   hideLabel: boolean;
   surveyKind?: "rating_1_5" | "nps_0_10";
+  bookingLabels?: BookingBlockLabels;
 }
 
 export type BuilderFieldPayload = {
@@ -99,6 +108,15 @@ export function createFieldFromPaletteItem(
     width: "100%",
     hideLabel: false,
     surveyKind: isRating || isNps ? type : undefined,
+    bookingLabels: isBookingBlock
+      ? {
+          dateLabel: "Giorno",
+          timeLabel: "Orario",
+          eventLabel: "Serata",
+          freeOptionLabel: "Prenotazione libera",
+          timePlaceholder: "Scegli orario",
+        }
+      : undefined,
   };
 }
 
@@ -118,16 +136,25 @@ export function decodeField(apiField: AssociationFormField): BuilderField {
   let helpText = apiField.help_text || "";
   let width: FieldWidth = "100%";
   let hideLabel = false;
+  let bookingLabels: BookingBlockLabels | undefined;
 
   if (helpText.includes(META_DELIMITER)) {
     const parts = helpText.split(META_DELIMITER);
     helpText = parts[0];
     try {
-      const meta = JSON.parse(parts[1]) as { w?: FieldWidth; hl?: boolean; survey?: "rating_1_5" | "nps_0_10" };
+      const meta = JSON.parse(parts[1]) as {
+        w?: FieldWidth;
+        hl?: boolean;
+        survey?: "rating_1_5" | "nps_0_10";
+        bookingLabels?: BookingBlockLabels;
+      };
       if (meta.w === "50%") width = "50%";
       if (meta.hl === true) hideLabel = true;
       if (meta.survey === "rating_1_5" || meta.survey === "nps_0_10") {
         virtualType = meta.survey;
+      }
+      if (meta.bookingLabels && typeof meta.bookingLabels === "object") {
+        bookingLabels = meta.bookingLabels;
       }
     } catch {
       // ignore parse errors
@@ -146,6 +173,7 @@ export function decodeField(apiField: AssociationFormField): BuilderField {
     width,
     hideLabel,
     surveyKind: virtualType === "rating_1_5" || virtualType === "nps_0_10" ? virtualType : undefined,
+    bookingLabels,
   };
 }
 
@@ -180,11 +208,19 @@ export function encodeField(
   }
 
   // Build metadata
-  const meta: { w?: FieldWidth; hl?: boolean; survey?: "rating_1_5" | "nps_0_10" } = {};
+  const meta: {
+    w?: FieldWidth;
+    hl?: boolean;
+    survey?: "rating_1_5" | "nps_0_10";
+    bookingLabels?: BookingBlockLabels;
+  } = {};
   if (builderField.width === "50%") meta.w = "50%";
   if (builderField.hideLabel) meta.hl = true;
   if (builderField.surveyKind || builderField.type === "rating_1_5" || builderField.type === "nps_0_10") {
     meta.survey = (builderField.surveyKind || builderField.type) as "rating_1_5" | "nps_0_10";
+  }
+  if (builderField.type === "booking_block" && builderField.bookingLabels) {
+    meta.bookingLabels = builderField.bookingLabels;
   }
   
   let finalHelpText = builderField.helpText;

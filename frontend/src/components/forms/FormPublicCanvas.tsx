@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import type { AssociationFormField, OrgAdminBookingEventSeries, PublicAssociationForm } from "../../lib/api";
-import { decodeField, isBookingBlockField } from "./builder/utils";
+import { decodeField, isBookingBlockField, type BookingBlockLabels } from "./builder/utils";
 
 type FormCanvasForm = Pick<
   PublicAssociationForm,
@@ -570,17 +570,43 @@ export function FormPublicCanvas({
     }
   `;
 
-  const renderDynamicBookingBlock = (key = "dynamic-booking-block") => (
+  const bookingBlockDefaults = {
+    title: "Prenotazione",
+    helpText: "Scegli giorno e orario. Se coincide con una serata configurata, la trovi nel menu; altrimenti resta una prenotazione libera.",
+    dateLabel: "Giorno",
+    timeLabel: "Orario",
+    eventLabel: "Serata",
+    freeOptionLabel: "Prenotazione libera",
+    timePlaceholder: "Scegli orario",
+  };
+
+  const getBookingBlockCopy = (field?: AssociationFormField) => {
+    const decoded = field ? decodeField(field) : null;
+    const labels: BookingBlockLabels = decoded?.bookingLabels || {};
+    return {
+      title: decoded?.label?.trim() || bookingBlockDefaults.title,
+      helpText: decoded?.helpText?.trim() || bookingBlockDefaults.helpText,
+      dateLabel: labels.dateLabel?.trim() || bookingBlockDefaults.dateLabel,
+      timeLabel: labels.timeLabel?.trim() || bookingBlockDefaults.timeLabel,
+      eventLabel: labels.eventLabel?.trim() || bookingBlockDefaults.eventLabel,
+      freeOptionLabel: labels.freeOptionLabel?.trim() || bookingBlockDefaults.freeOptionLabel,
+      timePlaceholder: labels.timePlaceholder?.trim() || bookingBlockDefaults.timePlaceholder,
+    };
+  };
+
+  const renderDynamicBookingBlock = (key = "dynamic-booking-block", field?: AssociationFormField) => {
+    const copy = getBookingBlockCopy(field);
+    return (
     <div key={key} className="form-public-canvas__dynamic-booking w-full rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
       <div className="mb-4">
-        <p className="text-sm font-bold text-neutral-900">Prenotazione</p>
+        <p className="text-sm font-bold text-neutral-900">{copy.title}</p>
         <p className="form-public-canvas__dynamic-booking-help mt-1 text-xs font-medium leading-5 text-neutral-500">
-          Scegli giorno e orario. Se coincide con una serata configurata, la trovi nel menu; altrimenti resta una prenotazione libera.
+          {copy.helpText}
         </p>
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         <label className="form-public-canvas__field block">
-          <span className="form-public-canvas__label mb-1 block text-sm font-semibold text-neutral-800">Giorno *</span>
+          <span className="form-public-canvas__label mb-1 block text-sm font-semibold text-neutral-800">{copy.dateLabel} *</span>
           <input
             className={baseInputClass}
             type="date"
@@ -594,7 +620,7 @@ export function FormPublicCanvas({
           />
         </label>
         <label className="form-public-canvas__field block">
-          <span className="form-public-canvas__label mb-1 block text-sm font-semibold text-neutral-800">Orario *</span>
+          <span className="form-public-canvas__label mb-1 block text-sm font-semibold text-neutral-800">{copy.timeLabel} *</span>
           <select
             className={baseInputClass}
             required
@@ -605,14 +631,14 @@ export function FormPublicCanvas({
               onValueChange?.("__booking_event_series_id", "");
             }}
           >
-            <option value="">Scegli orario</option>
+            <option value="">{copy.timePlaceholder}</option>
             {timeSlots.map((slot) => (
               <option key={slot} value={slot}>{slot}</option>
             ))}
           </select>
         </label>
         <label className="form-public-canvas__field block">
-          <span className="form-public-canvas__label mb-1 block text-sm font-semibold text-neutral-800">Serata</span>
+          <span className="form-public-canvas__label mb-1 block text-sm font-semibold text-neutral-800">{copy.eventLabel}</span>
           <select
             className={baseInputClass}
             disabled={!interactive || bookingEventsLoading || !values.__booking_date || !values.__booking_event_time}
@@ -620,7 +646,7 @@ export function FormPublicCanvas({
             onChange={(event) => onValueChange?.("__booking_event_series_id", event.target.value)}
           >
             <option value="">
-              {bookingEventsLoading ? "Controllo serate..." : "Prenotazione libera"}
+              {bookingEventsLoading ? "Controllo serate..." : copy.freeOptionLabel}
             </option>
             {matchingSeriesForTime.map((eventItem) => (
               <option key={eventItem.id} value={eventItem.id}>
@@ -632,6 +658,7 @@ export function FormPublicCanvas({
       </div>
     </div>
   );
+  };
 
   return (
     <div
@@ -685,7 +712,7 @@ export function FormPublicCanvas({
           ) : (
             sortedFields.map((field) =>
               showDynamicBookingFields && isBookingBlockField(field)
-                ? renderDynamicBookingBlock(field.field_key)
+                ? renderDynamicBookingBlock(field.field_key, field)
                 : renderField({
                     field,
                     value: values[field.field_key],
