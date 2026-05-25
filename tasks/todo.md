@@ -5237,4 +5237,11 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - [x] Migliorare il testo WhatsApp default con CTA grandi cliccabili su righe separate.
 - [x] Verificare che ogni azione cliente aggiorni eventi, notifica campanella/email admin e stato/colore agenda.
 - [x] Permettere in agenda admin di chiudere tutte le prenotazioni senza auto-riaprirne una, con animazione di chiusura.
-- [ ] Eseguire test backend/frontend, build, deploy, smoke live e controllo spazio Hetzner.
+- [x] Eseguire test backend/frontend, build, deploy, smoke live e controllo spazio Hetzner.
+
+## Review (Fix link reminder e chiusura prenotazioni - May 25, 2026)
+- Reminder WhatsApp: i nuovi link usano `/b/{token}` con token piu corto, scadono dopo 24 ore e restano riutilizzabili fino a scadenza.
+- Conferma/annulla: il GET non consuma il token; la pagina fa submit dal browser e mostra esito, cosi le preview WhatsApp non cambiano stato.
+- Note: resta disponibile anche dopo una conferma/annullamento, salva nota cliente e produce prenotazione gialla con notifica/email admin.
+- Agenda admin: chiudere una prenotazione ora e uno stato valido; non viene piu auto-riaperta la prima card e la chiusura ha transizione.
+- Verifiche OK: pytest reminder/link (`3 passed`), `python -m compileall -q app init_db.py`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, deploy GitHub `26420628349`, smoke live su commit `9371d28`, endpoint principali 200, route `/b/...` rende HTML pubblico e disco Hetzner al 70%.
