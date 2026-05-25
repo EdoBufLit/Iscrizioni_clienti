@@ -5192,3 +5192,15 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Admin mobile: la richiesta da confermare mostra anche la serata/evento scelto nel riepilogo compatto.
 - Dark mode: aggiunti override scoped per contenitore, titolo, testo help e controlli del blocco prenotazione nella preview/form pubblico.
 - Verifiche OK: pytest mirati (`4 passed`), `python -m compileall -q app init_db.py`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.
+
+## Plan (Fix orari liberi ogni mezzora con serata opzionale - May 25, 2026)
+- [x] Generare nel form pubblico orari indipendenti ogni 30 minuti anche quando non ci sono serate per quel giorno.
+- [x] Filtrare la select serata solo in base a giorno+orario scelti, lasciando `Prenotazione libera` quando non c'e match.
+- [x] Mantenere backend permissivo per prenotazioni libere senza id serata e rigido solo se viene scelto un id serata non coerente.
+- [x] Aggiornare test e verifiche, poi controllare spazio Hetzner prima del push/deploy.
+
+## Review (Fix orari liberi ogni mezzora con serata opzionale - May 25, 2026)
+- Il form pubblico ora genera sempre 48 slot `HH:MM` ogni 30 minuti, indipendenti dalle serate configurate.
+- La select `Serata` mostra eventi solo quando lo slot scelto combacia con un evento/default attivo; fuori slot resta `Prenotazione libera`.
+- Giorni senza eventi non bloccano piu la scelta orario o l'invio della prenotazione.
+- Verifiche OK: pytest mirati (`3 passed`), `python -m compileall -q app init_db.py`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.

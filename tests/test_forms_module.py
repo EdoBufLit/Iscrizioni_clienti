@@ -1099,6 +1099,61 @@ def test_dynamic_booking_events_keep_block_position_and_resolve_series_from_time
     assert booking["request_payload_summary"][0]["label"] == "Serata"
     assert booking["request_payload_summary"][0]["value"] == "Cartomante\nSerata carte"
 
+    free_submit_res = client.post(
+        f"/api/forms/{org.slug}/{public_slug}/submit",
+        json={
+            "__booking_date": "2026-06-20",
+            "__booking_event_time": "21:30",
+            "__booking_event_series_id": "",
+        },
+    )
+    assert free_submit_res.status_code == 200, free_submit_res.text
+    free_booking = free_submit_res.json()["booking"]
+    assert free_booking["booking_time"] == "21:30"
+    assert free_booking["event_summary"] is None
+
+
+def test_dynamic_booking_allows_half_hour_time_when_day_has_no_events(client, db):
+    org, admin = _create_org_admin(db)
+    _login_org_admin(client, db, admin.id)
+
+    public_slug = f"prenotazione-mezzora-{uuid.uuid4().hex[:6]}"
+    form_res = client.post(
+        "/api/org-admin/forms",
+        json={
+            "title": "Prenotazione ogni mezzora",
+            "public_slug": public_slug,
+            "is_active": True,
+            "visibility": "public",
+            "form_type": "booking",
+            "booking_enabled": True,
+            "booking_dynamic_events_enabled": True,
+            "booking_requires_manual_confirmation": True,
+            "booking_notification_enabled": False,
+        },
+    )
+    assert form_res.status_code == 201, form_res.text
+
+    events_res = client.get(
+        f"/api/forms/{org.slug}/{public_slug}/booking-events?date=2026-06-21"
+    )
+    assert events_res.status_code == 200, events_res.text
+    assert events_res.json()["items"] == []
+
+    submit_res = client.post(
+        f"/api/forms/{org.slug}/{public_slug}/submit",
+        json={
+            "__booking_date": "2026-06-21",
+            "__booking_event_time": "21:30",
+            "__booking_event_series_id": "",
+        },
+    )
+    assert submit_res.status_code == 200, submit_res.text
+    booking = submit_res.json()["booking"]
+    assert booking["booking_date"] == "2026-06-21"
+    assert booking["booking_time"] == "21:30"
+    assert booking["event_summary"] is None
+
 
 def test_org_admin_can_create_manual_booking_from_agenda(client, db):
     org, admin = _create_org_admin(db)

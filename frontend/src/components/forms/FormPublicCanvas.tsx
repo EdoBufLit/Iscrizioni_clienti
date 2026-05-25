@@ -395,14 +395,12 @@ export function FormPublicCanvas({
   );
   const hasBookingBlockField = sortedFields.some((field) => isBookingBlockField(field));
   const selectedTime = String(values.__booking_event_time || "");
-  const timeSlots = Array.from(new Set(
-    bookingEvents.flatMap((eventItem) =>
-      (eventItem.time_slots || [])
-        .filter((slot) => slot.is_active !== false)
-        .map((slot) => String(slot.time || slot.start_time || "").slice(0, 5))
-        .filter(Boolean),
-    ),
-  )).sort();
+  const timeSlots = Array.from({ length: 48 }, (_, index) => {
+    const totalMinutes = index * 30;
+    const hours = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
+    const minutes = String(totalMinutes % 60).padStart(2, "0");
+    return `${hours}:${minutes}`;
+  });
   const matchingSeriesForTime = selectedTime
     ? bookingEvents.filter((eventItem) =>
         (eventItem.time_slots || []).some((slot) =>
@@ -577,7 +575,7 @@ export function FormPublicCanvas({
       <div className="mb-4">
         <p className="text-sm font-bold text-neutral-900">Prenotazione</p>
         <p className="form-public-canvas__dynamic-booking-help mt-1 text-xs font-medium leading-5 text-neutral-500">
-          Scegli giorno e uno degli orari disponibili. La serata viene compilata in base alla configurazione dell'organizzazione.
+          Scegli giorno e orario. Se coincide con una serata configurata, la trovi nel menu; altrimenti resta una prenotazione libera.
         </p>
       </div>
       <div className="grid gap-4 md:grid-cols-3">
@@ -600,14 +598,14 @@ export function FormPublicCanvas({
           <select
             className={baseInputClass}
             required
-            disabled={!interactive || bookingEventsLoading || !values.__booking_date || timeSlots.length === 0}
+            disabled={!interactive || !values.__booking_date}
             value={String(values.__booking_event_time || "")}
             onChange={(event) => {
               onValueChange?.("__booking_event_time", event.target.value);
               onValueChange?.("__booking_event_series_id", "");
             }}
           >
-            <option value="">{bookingEventsLoading ? "Caricamento orari..." : timeSlots.length === 0 ? "Nessun orario configurato" : "Scegli orario"}</option>
+            <option value="">Scegli orario</option>
             {timeSlots.map((slot) => (
               <option key={slot} value={slot}>{slot}</option>
             ))}

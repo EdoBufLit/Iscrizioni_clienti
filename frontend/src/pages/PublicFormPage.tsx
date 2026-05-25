@@ -17,9 +17,16 @@ function getSeriesSlotTimes(item: OrgAdminBookingEventSeries): string[] {
     .filter(Boolean);
 }
 
-function getBookingTimeOptions(items: OrgAdminBookingEventSeries[]): string[] {
-  return Array.from(new Set(items.flatMap(getSeriesSlotTimes))).sort();
+function buildHalfHourOptions(): string[] {
+  return Array.from({ length: 48 }, (_, index) => {
+    const totalMinutes = index * 30;
+    const hours = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
+    const minutes = String(totalMinutes % 60).padStart(2, "0");
+    return `${hours}:${minutes}`;
+  });
 }
+
+const BOOKING_TIME_OPTIONS = buildHalfHourOptions();
 
 function pickBookingSeriesForTime(items: OrgAdminBookingEventSeries[], timeValue: string): OrgAdminBookingEventSeries | null {
   if (!timeValue) return null;
@@ -94,9 +101,8 @@ const PublicFormPage = () => {
         if (!cancelled) {
           setBookingEvents(response.items);
           setValues((current) => {
-            const timeOptions = getBookingTimeOptions(response.items);
             const currentTime = String(current.__booking_event_time || "");
-            const nextTime = currentTime && timeOptions.includes(currentTime) ? currentTime : timeOptions[0] || "";
+            const nextTime = currentTime && BOOKING_TIME_OPTIONS.includes(currentTime) ? currentTime : "";
             const preferred = pickBookingSeriesForTime(response.items, nextTime);
             const nextSeriesId = preferred ? String(preferred.id) : "";
             if (currentTime === nextTime && String(current.__booking_event_series_id || "") === nextSeriesId) return current;
