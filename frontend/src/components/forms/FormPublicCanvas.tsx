@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { AssociationFormField, PublicAssociationForm } from "../../lib/api";
+import type { AssociationFormField, OrgAdminBookingEventSeries, PublicAssociationForm } from "../../lib/api";
 import { decodeField } from "./builder/utils";
 
 type FormCanvasForm = Pick<
@@ -13,6 +13,10 @@ type FormCanvasForm = Pick<
   | "page_style"
   | "visibility"
   | "fields"
+  | "booking_dynamic_events_enabled"
+  | "booking_enabled"
+  | "create_booking"
+  | "form_type"
 > & {
   association?: {
     name: string | null;
@@ -27,6 +31,8 @@ type FormPublicCanvasProps = {
   onSubmit?: () => void;
   submitting?: boolean;
   interactive?: boolean;
+  bookingEvents?: OrgAdminBookingEventSeries[];
+  bookingEventsLoading?: boolean;
 };
 
 type PageTheme = ReturnType<typeof getPageTheme>;
@@ -377,11 +383,18 @@ export function FormPublicCanvas({
   onSubmit,
   submitting = false,
   interactive = false,
+  bookingEvents = [],
+  bookingEventsLoading = false,
 }: FormPublicCanvasProps) {
   const accentColor = getAccentColor(form);
   const theme = getPageTheme(form.page_style);
   const pageStyle = (form.page_style || "editorial").toLowerCase();
   const sortedFields = [...form.fields].sort((left, right) => left.sort_order - right.sort_order);
+  const showDynamicBookingFields = Boolean(
+    form.booking_dynamic_events_enabled && (form.booking_enabled || form.create_booking || form.form_type === "booking"),
+  );
+  const selectedSeriesId = Number(values.__booking_event_series_id || 0) || null;
+  const selectedSeries = bookingEvents.find((item) => item.id === selectedSeriesId) || null;
   const canvasStyle = { "--form-accent": accentColor } as CSSProperties;
 
   // Dynamic styles
@@ -391,6 +404,69 @@ export function FormPublicCanvas({
     boxShadow: "0 18px 38px -24px var(--form-accent)",
   };
   const customFocusStyle = `
+    .form-public-canvas-container {
+      color-scheme: light;
+    }
+
+    .form-public-canvas-container[data-page-style="spotlight"] {
+      color-scheme: dark;
+    }
+
+    .form-public-canvas-container:not([data-page-style="spotlight"]) input:not([type="checkbox"]):not([type="radio"]),
+    .form-public-canvas-container:not([data-page-style="spotlight"]) select,
+    .form-public-canvas-container:not([data-page-style="spotlight"]) textarea,
+    .org-admin-v2 .form-public-canvas-container:not([data-page-style="spotlight"]) input:not([type="checkbox"]):not([type="radio"]),
+    .org-admin-v2 .form-public-canvas-container:not([data-page-style="spotlight"]) select,
+    .org-admin-v2 .form-public-canvas-container:not([data-page-style="spotlight"]) textarea {
+      border-color: rgba(17, 24, 39, 0.12) !important;
+      background: #ffffff !important;
+      background-color: #ffffff !important;
+      color: #111827 !important;
+      -webkit-text-fill-color: #111827 !important;
+      caret-color: #111827 !important;
+      color-scheme: light !important;
+    }
+
+    .form-public-canvas-container:not([data-page-style="spotlight"]) .form-public-canvas__option,
+    .org-admin-v2 .form-public-canvas-container:not([data-page-style="spotlight"]) .form-public-canvas__option {
+      background: #ffffff !important;
+      background-color: #ffffff !important;
+      color: #374151 !important;
+      -webkit-text-fill-color: #374151 !important;
+      color-scheme: light !important;
+    }
+
+    :root[data-theme="dark"] .form-public-canvas-container:not([data-page-style="spotlight"]) input:not([type="checkbox"]):not([type="radio"]),
+    :root[data-theme="dark"] .form-public-canvas-container:not([data-page-style="spotlight"]) select,
+    :root[data-theme="dark"] .form-public-canvas-container:not([data-page-style="spotlight"]) textarea,
+    :root[data-theme="dark"] .form-public-canvas-container:not([data-page-style="spotlight"]) .form-public-canvas__option {
+      background: #ffffff !important;
+      background-color: #ffffff !important;
+      color: #111827 !important;
+      -webkit-text-fill-color: #111827 !important;
+      caret-color: #111827 !important;
+      color-scheme: light !important;
+    }
+
+    .form-public-canvas-container:not([data-page-style="spotlight"]) input::placeholder,
+    .form-public-canvas-container:not([data-page-style="spotlight"]) textarea::placeholder,
+    .org-admin-v2 .form-public-canvas-container:not([data-page-style="spotlight"]) input::placeholder,
+    .org-admin-v2 .form-public-canvas-container:not([data-page-style="spotlight"]) textarea::placeholder {
+      color: #9ca3af !important;
+      -webkit-text-fill-color: #9ca3af !important;
+    }
+
+    .form-public-canvas-container:not([data-page-style="spotlight"]) select option {
+      background: #ffffff;
+      color: #111827;
+    }
+
+    .form-public-canvas-container:not([data-page-style="spotlight"]) .form-public-canvas__label,
+    .org-admin-v2 .form-public-canvas-container:not([data-page-style="spotlight"]) .form-public-canvas__label {
+      color: #1f2937 !important;
+      -webkit-text-fill-color: #1f2937 !important;
+    }
+
     .form-public-canvas-container input:focus,
     .form-public-canvas-container select:focus,
     .form-public-canvas-container textarea:focus {
@@ -524,6 +600,76 @@ export function FormPublicCanvas({
             onSubmit?.();
           }}
         >
+          {showDynamicBookingFields ? (
+            <div className="form-public-canvas__dynamic-booking w-full rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+              <div className="mb-4">
+                <p className="text-sm font-bold text-neutral-900">Prenotazione</p>
+                <p className="mt-1 text-xs font-medium leading-5 text-neutral-500">
+                  Scegli giorno, serata e orario disponibili.
+                </p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-3">
+                <label className="form-public-canvas__field block">
+                  <span className="form-public-canvas__label mb-1 block text-sm font-semibold text-neutral-800">Giorno *</span>
+                  <input
+                    className={baseInputClass}
+                    type="date"
+                    required
+                    disabled={!interactive}
+                    value={String(values.__booking_date || "")}
+                    onChange={(event) => {
+                      onValueChange?.("__booking_date", event.target.value);
+                      onValueChange?.("__booking_event_series_id", "");
+                      onValueChange?.("__booking_event_time", "");
+                    }}
+                  />
+                </label>
+                <label className="form-public-canvas__field block">
+                  <span className="form-public-canvas__label mb-1 block text-sm font-semibold text-neutral-800">Serata *</span>
+                  <select
+                    className={baseInputClass}
+                    required
+                    disabled={!interactive || bookingEventsLoading || !values.__booking_date}
+                    value={String(values.__booking_event_series_id || "")}
+                    onChange={(event) => {
+                      onValueChange?.("__booking_event_series_id", event.target.value);
+                      onValueChange?.("__booking_event_time", "");
+                    }}
+                  >
+                    <option value="">{bookingEventsLoading ? "Caricamento..." : "Seleziona serata"}</option>
+                    {bookingEvents.map((eventItem) => (
+                      <option key={eventItem.id} value={eventItem.id}>
+                        {eventItem.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="form-public-canvas__field block">
+                  <span className="form-public-canvas__label mb-1 block text-sm font-semibold text-neutral-800">Orario *</span>
+                  <select
+                    className={baseInputClass}
+                    required
+                    disabled={!interactive || !selectedSeries}
+                    value={String(values.__booking_event_time || "")}
+                    onChange={(event) => onValueChange?.("__booking_event_time", event.target.value)}
+                  >
+                    <option value="">Seleziona orario</option>
+                    {(selectedSeries?.time_slots || []).map((slot) => (
+                      <option key={slot.id || slot.time} value={slot.time}>
+                        {slot.time.slice(0, 5)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              {values.__booking_date && !bookingEventsLoading && bookingEvents.length === 0 ? (
+                <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                  Nessuna serata prenotabile per il giorno scelto.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
           {sortedFields.length === 0 ? (
             <div className="w-full text-center py-12 text-sm opacity-60">
               Il form non contiene ancora nessun campo.

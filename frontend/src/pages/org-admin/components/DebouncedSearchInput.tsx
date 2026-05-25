@@ -2,14 +2,16 @@ import { ChangeEvent, memo, useEffect, useRef, useState } from "react";
 
 type DebouncedSearchInputProps = {
   resetKey: number;
+  initialValue?: string;
   onDebouncedChange: (value: string) => void;
 };
 
 const DebouncedSearchInput = memo(function DebouncedSearchInput({
   resetKey,
+  initialValue = "",
   onDebouncedChange,
 }: DebouncedSearchInputProps) {
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState(initialValue);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -17,8 +19,8 @@ const DebouncedSearchInput = memo(function DebouncedSearchInput({
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
-    setValue("");
-  }, [resetKey]);
+    setValue(initialValue);
+  }, [initialValue, resetKey]);
 
   useEffect(
     () => () => {
@@ -54,7 +56,7 @@ const DebouncedSearchInput = memo(function DebouncedSearchInput({
       <input
         className="theme-input w-full rounded-md py-2 pl-9 pr-3 text-sm sm:max-w-xs"
         type="search"
-        placeholder="Cerca per nome, cognome, email o CF..."
+        placeholder="Cerca nome, cognome, email, CF o tessera..."
         value={value}
         onChange={handleChange}
       />

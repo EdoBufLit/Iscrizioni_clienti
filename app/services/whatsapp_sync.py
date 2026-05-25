@@ -12,11 +12,15 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from app.models import (
+    Booking,
+    BookingEvent,
+    BookingStatus,
     Organization,
     WhatsAppChat,
     WhatsAppConnection,
     WhatsAppMessage,
 )
+from app.services.booking_customer_actions import apply_booking_text_reply
 from app.services.whatsapp_evolution import (
     EvolutionChat,
     EvolutionContact,
@@ -575,6 +579,42 @@ def _ingest_message_batch(
             message_at=message.sent_at or event_time,
             increment_unread=is_new and message.direction == "inbound",
         )
+        if is_new and message.direction == "inbound":
+            _maybe_apply_booking_reply(
+                db,
+                connection=connection,
+                sender_phone=message.sender_phone,
+                text_body=message.text_body,
+            )
+
+
+def _maybe_apply_booking_reply(
+    db: Session,
+    *,
+    connection: WhatsAppConnection,
+    sender_phone: str | None,
+    text_body: str | None,
+) -> None:
+    normalized_phone = normalize_phone(sender_phone)
+    if not normalized_phone or not (text_body or "").strip():
+        return
+    candidates = (
+        db.query(Booking)
+        .join(BookingEvent, BookingEvent.booking_id == Booking.id)
+        .filter(
+            Booking.association_id == connection.org_id,
+            Booking.customer_phone.isnot(None),
+            Booking.status == BookingStatus.CONFIRMED.value,
+            BookingEvent.event_type == "whatsapp_booking_reminder_sent",
+        )
+        .order_by(BookingEvent.created_at.desc(), Booking.id.desc())
+        .limit(20)
+        .all()
+    )
+    for booking in candidates:
+        if normalize_phone(booking.customer_phone) == normalized_phone:
+            apply_booking_text_reply(db, booking=booking, message_text=text_body)
+            return
 
 
 def _apply_message_updates(

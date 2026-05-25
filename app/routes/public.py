@@ -5,15 +5,16 @@ import logging
 import os
 import re
 from pathlib import Path
-from datetime import datetime
+from datetime import date, datetime
 from time import monotonic
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse, FileResponse, Response, HTMLResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 from app.db import get_db
 from app.models import (
     AccountingShareLink,
+    BookingEventSeries,
     Member,
     Organization,
     Form as AssociationForm,
@@ -43,6 +44,13 @@ from app.services.whatsapp_automation import (
     maybe_send_form_submission_whatsapp_automations,
     maybe_send_form_submission_whatsapp_message,
     prepare_form_submission_whatsapp_candidate,
+)
+from app.services.survey_email import maybe_enqueue_high_score_survey_thank_you
+from app.services.booking_customer_actions import (
+    consume_booking_action_token,
+    get_booking_action_token,
+    render_booking_action_page,
+    render_booking_action_result,
 )
 from app.services.member_activity import (
     MEMBER_INACTIVE_REASON_DELETED,
@@ -498,6 +506,42 @@ def _load_public_form(
     return get_form_by_slug_for_public(db, slug=slug)
 
 
+@router.get("/api/public/bookings/response/{token}", response_class=HTMLResponse)
+@router.get("/prenotazioni/risposta/{token}", response_class=HTMLResponse)
+def get_public_booking_response_page(token: str, db: Session = Depends(get_db)):
+    action_token = get_booking_action_token(db, raw_token=token)
+    return HTMLResponse(render_booking_action_page(token=action_token))
+
+
+@router.post("/api/public/bookings/response/{token}", response_class=HTMLResponse)
+@router.post("/prenotazioni/risposta/{token}", response_class=HTMLResponse)
+def post_public_booking_response_page(
+    token: str,
+    note: str | None = Form(default=None),
+    db: Session = Depends(get_db),
+):
+    action_token = get_booking_action_token(db, raw_token=token)
+    try:
+        result = consume_booking_action_token(db, raw_token=token, note=note)
+    except HTTPException as exc:
+        return HTMLResponse(
+            render_booking_action_page(token=action_token, error=str(exc.detail)),
+            status_code=exc.status_code,
+        )
+    db.commit()
+    action = result.get("action") or action_token.action
+    if not result.get("ok"):
+        reason = result.get("reason")
+        message = "Questo link e' gia stato usato." if reason == "used" else "Questo link e' scaduto."
+        return HTMLResponse(render_booking_action_result(title="Link non disponibile", message=message))
+    message = {
+        "confirm": "Prenotazione confermata. Grazie.",
+        "cancel": "Prenotazione annullata. La segreteria e' stata avvisata.",
+        "note": "Nota inviata. La segreteria la vedra' sulla prenotazione.",
+    }.get(str(action), "Risposta registrata.")
+    return HTMLResponse(render_booking_action_result(title="Risposta registrata", message=message))
+
+
 @router.get("/api/forms/{org_slug}/{slug}")
 def get_public_form_scoped(
     org_slug: str,
@@ -511,12 +555,80 @@ def get_public_form_scoped(
     return {"form": serialize_public_form(form)}
 
 
+@router.get("/api/forms/{org_slug}/{slug}/booking-events")
+def get_public_form_booking_events_scoped(
+    org_slug: str,
+    slug: str,
+    request: Request,
+    date_value: date = Query(alias="date"),
+    db: Session = Depends(get_db),
+):
+    member = get_current_member(request, db)
+    form = _load_public_form(db, org_slug=org_slug, slug=slug)
+    _ensure_form_is_visible(form, member)
+    return _public_booking_events_payload(db, form=form, date_value=date_value)
+
+
 @router.get("/api/forms/{slug}")
 def get_public_form(slug: str, request: Request, db: Session = Depends(get_db)):
     member = get_current_member(request, db)
     form = _load_public_form(db, slug=slug)
     _ensure_form_is_visible(form, member)
     return {"form": serialize_public_form(form)}
+
+
+@router.get("/api/forms/{slug}/booking-events")
+def get_public_form_booking_events(
+    slug: str,
+    request: Request,
+    date_value: date = Query(alias="date"),
+    db: Session = Depends(get_db),
+):
+    member = get_current_member(request, db)
+    form = _load_public_form(db, slug=slug)
+    _ensure_form_is_visible(form, member)
+    return _public_booking_events_payload(db, form=form, date_value=date_value)
+
+
+def _public_booking_events_payload(
+    db: Session,
+    *,
+    form: AssociationForm,
+    date_value: date,
+) -> dict[str, object]:
+    if not bool(getattr(form, "booking_dynamic_events_enabled", False)):
+        return {"items": []}
+    items = (
+        db.query(BookingEventSeries)
+        .options(joinedload(BookingEventSeries.time_slots))
+        .filter(
+            BookingEventSeries.association_id == form.association_id,
+            BookingEventSeries.is_active.is_(True),
+            or_(
+                BookingEventSeries.event_date == date_value,
+                BookingEventSeries.weekday == date_value.weekday(),
+            ),
+        )
+        .order_by(BookingEventSeries.title.asc(), BookingEventSeries.id.asc())
+        .all()
+    )
+    return {
+        "items": [
+            {
+                "id": item.id,
+                "title": item.title,
+                "description": item.description,
+                "recurrence_type": item.recurrence_type,
+                "time_slots": [
+                    str(slot.start_time)[:5]
+                    for slot in list(item.time_slots or [])
+                    if bool(getattr(slot, "is_active", True))
+                ],
+            }
+            for item in items
+            if (item.event_date == date_value or item.weekday == date_value.weekday())
+        ]
+    }
 
 
 def _submit_public_form(
@@ -532,6 +644,10 @@ def _submit_public_form(
     form = _load_public_form(db, org_slug=org_slug, slug=form_slug)
     _ensure_form_is_visible(form, member)
     validated_submission = validate_form_submission_payload(form=form, raw_payload=payload)
+    if bool(getattr(form, "booking_dynamic_events_enabled", False)):
+        for dynamic_key in ("__booking_date", "__booking_event_series_id", "__booking_event_time"):
+            if dynamic_key in payload:
+                validated_submission.payload[dynamic_key] = payload.get(dynamic_key)
     ensure_submission_allowed(
         db,
         form=form,
@@ -583,6 +699,13 @@ def _submit_public_form(
         submission=submission,
         validated_submission=validated_submission,
         booking=booking,
+    )
+    maybe_enqueue_high_score_survey_thank_you(
+        db,
+        form=form,
+        submission=submission,
+        submitter_email=validated_submission.submitter_email,
+        payload=validated_submission.payload,
     )
     db.commit()
     db.refresh(submission)

@@ -1,6 +1,12 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { fetchPublicForm, submitPublicForm, type PublicAssociationForm } from "../lib/api";
+import {
+  fetchPublicForm,
+  fetchPublicFormBookingEvents,
+  submitPublicForm,
+  type OrgAdminBookingEventSeries,
+  type PublicAssociationForm,
+} from "../lib/api";
 import { applySeo } from "../lib/seo";
 import { FormPublicCanvas } from "../components/forms/FormPublicCanvas";
 
@@ -10,6 +16,11 @@ function buildInitialValues(form: PublicAssociationForm): Record<string, unknown
     if (field.field_type === "checkbox") values[field.field_key] = [];
     else if (field.field_type === "consent") values[field.field_key] = false;
     else values[field.field_key] = "";
+  }
+  if (form.booking_dynamic_events_enabled && (form.booking_enabled || form.create_booking || form.form_type === "booking")) {
+    values.__booking_date = new Date().toISOString().slice(0, 10);
+    values.__booking_event_series_id = "";
+    values.__booking_event_time = "";
   }
   return values;
 }
@@ -22,6 +33,8 @@ const PublicFormPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState<PublicAssociationForm | null>(null);
   const [values, setValues] = useState<Record<string, unknown>>({});
+  const [bookingEvents, setBookingEvents] = useState<OrgAdminBookingEventSeries[]>([]);
+  const [bookingEventsLoading, setBookingEventsLoading] = useState(false);
 
   useEffect(() => {
     if (!slug) return;
@@ -42,6 +55,36 @@ const PublicFormPage = () => {
       })
       .finally(() => setLoading(false));
   }, [orgSlug, slug]);
+
+  useEffect(() => {
+    if (!slug || !form?.booking_dynamic_events_enabled) {
+      setBookingEvents([]);
+      return;
+    }
+    const dateValue = String(values.__booking_date || "");
+    if (!dateValue) {
+      setBookingEvents([]);
+      return;
+    }
+    let cancelled = false;
+    setBookingEventsLoading(true);
+    const request = orgSlug
+      ? fetchPublicFormBookingEvents(orgSlug, slug, dateValue)
+      : fetchPublicFormBookingEvents(slug, dateValue);
+    request
+      .then((response) => {
+        if (!cancelled) setBookingEvents(response.items);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Serate prenotabili non disponibili.");
+      })
+      .finally(() => {
+        if (!cancelled) setBookingEventsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [form?.booking_dynamic_events_enabled, orgSlug, slug, values.__booking_date]);
 
   function updateValue(fieldKey: string, nextValue: unknown) {
     setValues((current) => ({ ...current, [fieldKey]: nextValue }));
@@ -136,6 +179,8 @@ const PublicFormPage = () => {
           onSubmit={() => void handleSubmit()}
           submitting={submitting}
           interactive
+          bookingEvents={bookingEvents}
+          bookingEventsLoading={bookingEventsLoading}
         />
       </div>
     );

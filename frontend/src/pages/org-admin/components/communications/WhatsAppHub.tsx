@@ -9,6 +9,7 @@ import {
   fetchOrgAdminWhatsAppMessages,
   fetchOrgAdminWhatsAppQr,
   openOrgAdminWhatsAppDraftChat,
+  resetOrgAdminWhatsApp,
   sendOrgAdminWhatsAppMessage,
   startOrgAdminWhatsAppChat,
   type OrgAdminWhatsAppChat,
@@ -482,6 +483,30 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
     );
   }
 
+  async function handleResetConnection() {
+    setBusy("reset");
+    setError(null);
+    try {
+      const response = await resetOrgAdminWhatsApp();
+      setConnection(response.connection);
+      setContacts([]);
+      setMessages([]);
+      showToast({
+        title: "WhatsApp",
+        message: response.errors?.length
+          ? "Connessione resettata. Alcuni passaggi hanno restituito avvisi tecnici."
+          : "Connessione resettata. Genera o scansiona il nuovo QR.",
+        tone: response.errors?.length ? "info" : "success",
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Errore reset connessione WhatsApp.";
+      setError(message);
+      showToast({ title: "WhatsApp", message, tone: "error" });
+    } finally {
+      setBusy("");
+    }
+  }
+
   const statusUi = statusCopy[connection.status];
 
   return (
@@ -504,7 +529,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
               type="button"
               className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-60"
               onClick={() => void handleConnect()}
-              disabled={communicationsLocked || busy === "connect" || busy === "disconnect"}
+              disabled={communicationsLocked || busy === "connect" || busy === "disconnect" || busy === "reset"}
             >
               {connection.status === "connected" ? "Riconnetti" : "Connetti"}
             </button>
@@ -512,9 +537,17 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
               type="button"
               className="rounded-lg border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-neutral-300 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60"
               onClick={() => void handleDisconnect()}
-              disabled={communicationsLocked || busy === "connect" || busy === "disconnect"}
+              disabled={communicationsLocked || busy === "connect" || busy === "disconnect" || busy === "reset"}
             >
               Disconnetti
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 transition hover:border-amber-300 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => void handleResetConnection()}
+              disabled={communicationsLocked || busy === "connect" || busy === "disconnect" || busy === "reset"}
+            >
+              {busy === "reset" ? "Reset..." : "Reset connessione"}
             </button>
           </div>
         </div>

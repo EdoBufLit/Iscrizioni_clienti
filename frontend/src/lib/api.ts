@@ -1096,6 +1096,7 @@ export type AssociationForm = {
   booking_event_date: string | null;
   booking_event_time: string | null;
   booking_event_details: string | null;
+  booking_dynamic_events_enabled: boolean;
   survey_post_event_enabled: boolean;
   survey_post_event_delay_hours: number;
   survey_post_event_message_template: string | null;
@@ -1152,6 +1153,7 @@ export type AssociationForm = {
     booking_event_date: string | null;
     booking_event_time: string | null;
     booking_event_details: string | null;
+    booking_dynamic_events_enabled: boolean;
     survey_post_event_enabled: boolean;
     survey_post_event_delay_hours: number;
     survey_post_event_message_template: string | null;
@@ -1249,6 +1251,10 @@ export type AssociationBooking = {
   party_size: number | null;
   notes: string | null;
   notes_preview: string | null;
+  customer_note: string | null;
+  customer_note_submitted_at: string | null;
+  customer_note_reviewed_at: string | null;
+  has_unreviewed_customer_note: boolean;
   room_id: number | null;
   table_id: number | null;
   room: {
@@ -1295,6 +1301,28 @@ export type AssociationBooking = {
     value: string;
   }>;
   events: AssociationBookingEvent[];
+};
+
+export type BookingEventTimeSlot = {
+  id: number;
+  event_series_id: number;
+  time: string;
+  is_active: boolean;
+  sort_order: number;
+};
+
+export type OrgAdminBookingEventSeries = {
+  id: number;
+  association_id: number;
+  name: string;
+  description: string | null;
+  recurrence_type: "weekly" | "date" | string;
+  weekday: number | null;
+  specific_date: string | null;
+  is_active: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+  time_slots: BookingEventTimeSlot[];
 };
 
 export type AssociationRoom = {
@@ -2069,6 +2097,7 @@ export async function createOrgAdminForm(data: {
   booking_event_date?: string | null;
   booking_event_time?: string | null;
   booking_event_details?: string | null;
+  booking_dynamic_events_enabled?: boolean;
   survey_post_event_enabled?: boolean;
   survey_post_event_delay_hours?: number;
   survey_post_event_message_template?: string | null;
@@ -2126,6 +2155,7 @@ export async function updateOrgAdminForm(
   booking_event_date?: string | null;
   booking_event_time?: string | null;
   booking_event_details?: string | null;
+  booking_dynamic_events_enabled?: boolean;
   survey_post_event_enabled?: boolean;
   survey_post_event_delay_hours?: number;
   survey_post_event_message_template?: string | null;
@@ -2311,6 +2341,22 @@ export async function fetchPublicForm(
   return res.json();
 }
 
+export async function fetchPublicFormBookingEvents(
+  orgSlugOrSlug: string,
+  slugOrDate: string,
+  maybeDate?: string,
+): Promise<{ items: OrgAdminBookingEventSeries[]; total: number }> {
+  const scoped = Boolean(maybeDate);
+  const dateValue = maybeDate || slugOrDate;
+  const path = scoped
+    ? `/api/forms/${encodeURIComponent(orgSlugOrSlug)}/${encodeURIComponent(slugOrDate)}/booking-events`
+    : `/api/forms/${encodeURIComponent(orgSlugOrSlug)}/booking-events`;
+  const params = new URLSearchParams({ date: dateValue });
+  const res = await fetch(`${path}?${params.toString()}`);
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento serate prenotabili"));
+  return res.json();
+}
+
 export async function submitPublicForm(
   orgSlugOrSlug: string,
   slugOrPayload: string | Record<string, unknown>,
@@ -2388,6 +2434,7 @@ export async function updateOrgAdminBooking(
     room_id?: number | null;
     table_id?: number | null;
     notes?: string | null;
+    notify_customer?: boolean;
   },
 ): Promise<{ booking: AssociationBooking }> {
   const res = await fetch(`/api/org-admin/bookings/${bookingId}`, {
@@ -2397,6 +2444,84 @@ export async function updateOrgAdminBooking(
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento prenotazione"));
+  return res.json();
+}
+
+export async function rejectOrgAdminBookingWithoutMessage(
+  bookingId: number,
+): Promise<{ booking: AssociationBooking }> {
+  const res = await fetch(`/api/org-admin/bookings/${bookingId}/reject-silent`, { method: "POST" });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore rigetto senza messaggio"));
+  return res.json();
+}
+
+export async function markOrgAdminBookingCustomerNoteRead(
+  bookingId: number,
+): Promise<{ booking: AssociationBooking }> {
+  const res = await fetch(`/api/org-admin/bookings/${bookingId}/customer-note/read`, { method: "POST" });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore lettura nota cliente"));
+  return res.json();
+}
+
+export async function fetchOrgAdminBookingEventSeries(): Promise<{
+  items: OrgAdminBookingEventSeries[];
+  total: number;
+}> {
+  const res = await fetch("/api/org-admin/booking-event-series");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento serate prenotabili"));
+  return res.json();
+}
+
+export async function createOrgAdminBookingEventSeries(data: {
+  name: string;
+  description?: string | null;
+  recurrence_type?: "weekly" | "date" | string;
+  weekday?: number | null;
+  specific_date?: string | null;
+  is_active?: boolean;
+  time_slots?: string[];
+}): Promise<{ item: OrgAdminBookingEventSeries }> {
+  const res = await fetch("/api/org-admin/booking-event-series", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione serata prenotabile"));
+  return res.json();
+}
+
+export async function updateOrgAdminBookingEventSeries(
+  seriesId: number,
+  data: {
+    name?: string;
+    description?: string | null;
+    recurrence_type?: "weekly" | "date" | string;
+    weekday?: number | null;
+    specific_date?: string | null;
+    is_active?: boolean;
+    time_slots?: string[];
+  },
+): Promise<{ item: OrgAdminBookingEventSeries }> {
+  const res = await fetch(`/api/org-admin/booking-event-series/${seriesId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento serata prenotabile"));
+  return res.json();
+}
+
+export async function deleteOrgAdminBookingEventSeries(
+  seriesId: number,
+): Promise<{ ok: boolean; deleted_id: number }> {
+  const res = await fetch(`/api/org-admin/booking-event-series/${seriesId}`, { method: "DELETE" });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore eliminazione serata prenotabile"));
   return res.json();
 }
 
@@ -4442,6 +4567,19 @@ export async function markAllOrgAdminNotificationsRead(): Promise<{ ok: boolean;
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento notifiche"));
+  return res.json();
+}
+
+export async function resetOrgAdminWhatsApp(): Promise<{
+  ok: boolean;
+  connection: OrgAdminWhatsAppConnection;
+  errors?: string[];
+}> {
+  const res = await fetch("/api/org-admin/communications/whatsapp/reset", {
+    method: "POST",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore reset connessione WhatsApp"));
   return res.json();
 }
 

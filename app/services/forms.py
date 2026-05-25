@@ -526,6 +526,7 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
         ),
         "booking_event_time": getattr(form, "booking_event_time", None),
         "booking_event_details": getattr(form, "booking_event_details", None),
+        "booking_dynamic_events_enabled": bool(getattr(form, "booking_dynamic_events_enabled", False)),
         "survey_post_event_enabled": bool(getattr(form, "survey_post_event_enabled", False)),
         "survey_post_event_delay_hours": int(getattr(form, "survey_post_event_delay_hours", 2) or 2),
         "survey_post_event_message_template": getattr(form, "survey_post_event_message_template", None),
@@ -596,6 +597,7 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
             ),
             "booking_event_time": getattr(form, "booking_event_time", None),
             "booking_event_details": getattr(form, "booking_event_details", None),
+            "booking_dynamic_events_enabled": bool(getattr(form, "booking_dynamic_events_enabled", False)),
             "survey_post_event_enabled": bool(getattr(form, "survey_post_event_enabled", False)),
             "survey_post_event_delay_hours": int(getattr(form, "survey_post_event_delay_hours", 2) or 2),
             "survey_post_event_message_template": getattr(form, "survey_post_event_message_template", None),
@@ -705,6 +707,7 @@ def apply_form_updates(
     booking_event_date: Any,
     booking_event_time: Any,
     booking_event_details: Any,
+    booking_dynamic_events_enabled: bool,
     survey_post_event_enabled: bool,
     survey_post_event_delay_hours: int | None,
     survey_post_event_message_template: Any,
@@ -751,6 +754,7 @@ def apply_form_updates(
     form.booking_event_date = normalize_booking_event_date(booking_event_date)
     form.booking_event_time = normalize_booking_event_time(booking_event_time)
     form.booking_event_details = _normalize_multiline_text(booking_event_details)
+    form.booking_dynamic_events_enabled = bool(booking_dynamic_events_enabled)
     form.survey_post_event_enabled = bool(survey_post_event_enabled)
     try:
         normalized_delay = int(survey_post_event_delay_hours or 2)
@@ -1070,7 +1074,7 @@ def _enqueue_rendered_template_email(
         payload=build_email_payload(
             text_body=rendered.body_text or "",
             html_body=rendered.body_html,
-            sender=build_sender_payload(mode="system"),
+            sender=build_sender_payload(mode="association", association=form.organization),
             meta={
                 "form_id": form.id,
                 "submission_id": submission.id,
@@ -1192,7 +1196,7 @@ def enqueue_submission_notifications(
                 payload=build_email_payload(
                     text_body=text_summary,
                     html_body=html_summary,
-                    sender=build_sender_payload(mode="system"),
+                    sender=build_sender_payload(mode="association", association=form.organization),
                     meta={
                         "form_id": form.id,
                         "submission_id": submission.id,
@@ -1231,7 +1235,7 @@ def enqueue_submission_notifications(
                 payload=build_email_payload(
                     text_body=confirmation_text,
                     html_body=confirmation_html,
-                    sender=build_sender_payload(mode="system"),
+                    sender=build_sender_payload(mode="association", association=form.organization),
                     meta={
                         "form_id": form.id,
                         "submission_id": submission.id,

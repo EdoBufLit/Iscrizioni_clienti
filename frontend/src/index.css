@@ -5504,6 +5504,24 @@ body.dashboard-perf-mode .btn-ghost:hover {
   background: #ffffff;
 }
 
+.org-admin-v2 .booking-day-row.is-confirmed,
+.org-admin-v2 .booking-mobile-managed-card.is-confirmed {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.org-admin-v2 .booking-day-row.is-cancelled,
+.org-admin-v2 .booking-mobile-managed-card.is-cancelled {
+  border-color: #fecaca;
+  background: #fff1f2;
+}
+
+.org-admin-v2 .booking-day-row.has-customer-note,
+.org-admin-v2 .booking-mobile-managed-card.has-customer-note {
+  border-color: #facc15;
+  background: #fefce8;
+}
+
 .org-admin-v2 .booking-day-row + .booking-day-row {
   margin-top: 0.65rem;
 }
@@ -5871,6 +5889,10 @@ body.dashboard-perf-mode .btn-ghost:hover {
     background: var(--oa-panel);
   }
 
+  .org-admin-v2 .booking-mobile-managed-section {
+    order: 3;
+  }
+
   .org-admin-v2 .booking-top-kpis,
   .org-admin-v2 .booking-request-workbench,
   .org-admin-v2 .booking-month-overview,
@@ -5983,10 +6005,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   }
 
   .org-admin-v2 .booking-day-panel__filters {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    overflow: visible;
-    padding-bottom: 0.75rem;
+    display: none;
   }
 
   .org-admin-v2 .booking-day-panel__filters button {
@@ -6039,6 +6058,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
 
   .org-admin-v2 .booking-request-mobile-card {
     display: grid;
+    scroll-margin-top: 7.25rem;
     gap: 0.8rem;
     border-radius: 8px;
     background: var(--oa-panel);
@@ -6137,6 +6157,27 @@ body.dashboard-perf-mode .btn-ghost:hover {
     line-height: 1.45;
   }
 
+  .org-admin-v2 .booking-request-mobile-card__reason.is-unread-note {
+    display: grid;
+    gap: 0.4rem;
+    background: #fef9c3;
+    color: #713f12;
+  }
+
+  .org-admin-v2 .booking-request-mobile-card__reason.is-unread-note span {
+    color: inherit;
+    font-weight: 750;
+  }
+
+  .org-admin-v2 .booking-request-mobile-card__reason.is-unread-note button {
+    min-height: 2.3rem;
+    border-radius: 8px;
+    background: #854d0e;
+    color: #ffffff;
+    font-size: 0.8rem;
+    font-weight: 900;
+  }
+
   .org-admin-v2 .booking-request-mobile-card__actions {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -6172,6 +6213,210 @@ body.dashboard-perf-mode .btn-ghost:hover {
     color: var(--oa-text);
   }
 
+  .org-admin-v2 .booking-request-mobile-card__assignment {
+    display: grid;
+    gap: 0.65rem;
+    border: 1px solid color-mix(in srgb, var(--oa-brand) 28%, var(--oa-border));
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--oa-success) 7%, var(--oa-panel));
+    padding: 0.75rem;
+  }
+
+  .org-admin-v2 .booking-request-mobile-card__assignment-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.65rem;
+  }
+
+  .org-admin-v2 .booking-request-mobile-card__assignment-head button,
+  .org-admin-v2 .booking-request-mobile-card__assignment-save,
+  .org-admin-v2 .booking-request-mobile-card__assignment-empty {
+    display: inline-flex;
+    min-height: 2.55rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 900;
+  }
+
+  .org-admin-v2 .booking-request-mobile-card__assignment-head button {
+    border: 1px solid color-mix(in srgb, var(--oa-border) 80%, transparent);
+    padding-inline: 0.8rem;
+    color: var(--oa-muted);
+  }
+
+  .org-admin-v2 .booking-request-mobile-card__assignment-grid {
+    display: grid;
+    gap: 0.55rem;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .org-admin-v2 .booking-request-mobile-card__assignment-grid label {
+    display: grid;
+    gap: 0.28rem;
+  }
+
+  .org-admin-v2 .booking-request-mobile-card__assignment-grid label > span {
+    color: var(--oa-muted);
+    font-size: 0.62rem;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .org-admin-v2 .booking-request-mobile-card__assignment-grid select {
+    min-height: 2.75rem;
+    width: 100%;
+    border-radius: 8px !important;
+    padding-inline: 0.75rem;
+    font-size: 0.9rem;
+    font-weight: 800;
+  }
+
+  .org-admin-v2 .booking-request-mobile-card__assignment-save {
+    width: 100%;
+    background: #13785b;
+    color: #ffffff;
+  }
+
+  .org-admin-v2 .booking-request-mobile-card__assignment-save:disabled,
+  .org-admin-v2 .booking-request-mobile-card__assignment-head button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .org-admin-v2 .booking-request-mobile-card__assignment-empty {
+    border: 1px dashed color-mix(in srgb, var(--oa-border) 85%, transparent);
+    color: var(--oa-text);
+  }
+
+  .org-admin-v2 .booking-mobile-managed-section {
+    display: grid;
+    scroll-margin-top: 7.25rem;
+    gap: 0.7rem;
+    padding-inline: 0.75rem;
+    padding-bottom: 1.25rem;
+  }
+
+  .org-admin-v2 .booking-mobile-managed-section__header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding-top: 0.25rem;
+  }
+
+  .org-admin-v2 .booking-mobile-managed-section__header p {
+    color: var(--oa-muted);
+    font-size: 0.68rem;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .org-admin-v2 .booking-mobile-managed-section__header h2 {
+    color: var(--oa-text);
+    font-size: 1.08rem;
+    font-weight: 900;
+    line-height: 1.1;
+  }
+
+  .org-admin-v2 .booking-mobile-managed-section__header > span {
+    flex: none;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--oa-success) 12%, var(--oa-panel));
+    padding: 0.35rem 0.65rem;
+    color: var(--oa-text);
+    font-size: 0.72rem;
+    font-weight: 900;
+  }
+
+  .org-admin-v2 .booking-mobile-managed-section__empty,
+  .org-admin-v2 .booking-mobile-managed-card {
+    border: 1px solid color-mix(in srgb, var(--oa-border) 78%, transparent);
+    border-radius: 8px;
+    background: var(--oa-panel);
+  }
+
+  .org-admin-v2 .booking-mobile-managed-section__empty {
+    padding: 0.9rem;
+    color: var(--oa-muted);
+    font-size: 0.88rem;
+    font-weight: 750;
+  }
+
+  .org-admin-v2 .booking-mobile-managed-section__list {
+    display: grid;
+    gap: 0.55rem;
+  }
+
+  .org-admin-v2 .booking-mobile-managed-card {
+    overflow: hidden;
+  }
+
+  .org-admin-v2 .booking-mobile-managed-card__summary {
+    display: grid;
+    width: 100%;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.75rem;
+    text-align: left;
+  }
+
+  .org-admin-v2 .booking-mobile-managed-card__main {
+    display: grid;
+    min-width: 0;
+    gap: 0.14rem;
+  }
+
+  .org-admin-v2 .booking-mobile-managed-card__main strong {
+    overflow: hidden;
+    color: var(--oa-text);
+    font-size: 0.98rem;
+    font-weight: 900;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .org-admin-v2 .booking-mobile-managed-card__main small {
+    overflow: hidden;
+    color: var(--oa-muted);
+    font-size: 0.76rem;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .org-admin-v2 .booking-mobile-managed-card__side {
+    display: grid;
+    justify-items: end;
+    gap: 0.3rem;
+  }
+
+  .org-admin-v2 .booking-mobile-managed-card__side > span:last-child {
+    color: var(--oa-muted);
+    font-size: 0.76rem;
+    font-weight: 900;
+    white-space: nowrap;
+  }
+
+  .org-admin-v2 .booking-mobile-managed-card__side .needs-assignment {
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--oa-warning) 18%, var(--oa-panel));
+    padding: 0.2rem 0.5rem;
+    color: #8a4b00;
+  }
+
+  .org-admin-v2 .booking-mobile-managed-card__expanded {
+    border-top: 1px solid color-mix(in srgb, var(--oa-border) 72%, transparent);
+    padding: 0.75rem;
+    background: color-mix(in srgb, var(--oa-panel-muted) 78%, transparent);
+  }
+
   .org-admin-v2 .submission-decision-modal {
     max-height: calc(100dvh - 1rem);
     overflow-y: auto;
@@ -6203,6 +6448,24 @@ body.dashboard-perf-mode .btn-ghost:hover {
   background: #2b2d29;
 }
 
+:root[data-theme="dark"] .org-admin-v2 .booking-day-row.is-confirmed,
+:root[data-theme="dark"] .org-admin-v2 .booking-mobile-managed-card.is-confirmed {
+  border-color: #1f7a5a;
+  background: #162820;
+}
+
+:root[data-theme="dark"] .org-admin-v2 .booking-day-row.is-cancelled,
+:root[data-theme="dark"] .org-admin-v2 .booking-mobile-managed-card.is-cancelled {
+  border-color: #7f1d1d;
+  background: #2f1e20;
+}
+
+:root[data-theme="dark"] .org-admin-v2 .booking-day-row.has-customer-note,
+:root[data-theme="dark"] .org-admin-v2 .booking-mobile-managed-card.has-customer-note {
+  border-color: #854d0e;
+  background: #2d2617;
+}
+
 :root[data-theme="dark"] .org-admin-v2 .booking-day-row__summary:hover,
 :root[data-theme="dark"] .org-admin-v2 .booking-day-row__expanded {
   background: #22231f;
@@ -6223,10 +6486,25 @@ body.dashboard-perf-mode .btn-ghost:hover {
   color: #fecdd3;
 }
 
+:root[data-theme="dark"] .org-admin-v2 .booking-request-mobile-card__reason.is-unread-note {
+  background: #3a2d16;
+  color: #fde68a;
+}
+
 :root[data-theme="dark"] .org-admin-v2 .booking-request-mobile-card__reject {
   border-color: #7f1d1d;
   background: #3a2023;
   color: #fecdd3;
+}
+
+:root[data-theme="dark"] .org-admin-v2 .booking-mobile-managed-card__side .needs-assignment {
+  background: #3a2d16;
+  color: #f7d08a;
+}
+
+:root[data-theme="dark"] .org-admin-v2 .booking-request-mobile-card__assignment {
+  border-color: #2d5d4f;
+  background: #172923;
 }
 
 :root[data-theme="dark"] .org-admin-v2 .booking-day-row__expanded .bg-amber-50\/50 {
@@ -6384,6 +6662,133 @@ body.dashboard-perf-mode .btn-ghost:hover {
 :root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-500,
 :root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-400 {
   color: var(--fb-muted) !important;
+}
+
+.org-admin-v2 .whatsapp-variable-library {
+  display: grid;
+  gap: 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--oa-border) 82%, transparent);
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, var(--oa-panel-muted) 86%, transparent);
+  padding: 1rem;
+}
+
+.org-admin-v2 .whatsapp-variable-library__header,
+.org-admin-v2 .whatsapp-variable-library__group-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.9rem;
+}
+
+.org-admin-v2 .whatsapp-variable-library__header p {
+  color: var(--oa-muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.org-admin-v2 .whatsapp-variable-library__header h4 {
+  margin-top: 0.18rem;
+  color: var(--oa-text);
+  font-size: 1rem;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.org-admin-v2 .whatsapp-variable-library__header > span {
+  flex: none;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--oa-brand) 10%, var(--oa-panel));
+  padding: 0.35rem 0.62rem;
+  color: var(--oa-text);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.org-admin-v2 .whatsapp-variable-library__groups {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.org-admin-v2 .whatsapp-variable-library__group {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.org-admin-v2 .whatsapp-variable-library__group-head {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.org-admin-v2 .whatsapp-variable-library__group-head strong {
+  color: var(--oa-text);
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.org-admin-v2 .whatsapp-variable-library__group-head small {
+  color: var(--oa-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.org-admin-v2 .whatsapp-variable-library__chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.5rem;
+}
+
+.org-admin-v2 .whatsapp-variable-chip {
+  display: grid;
+  min-height: 3.1rem;
+  min-width: 0;
+  align-content: center;
+  gap: 0.16rem;
+  border: 1px solid color-mix(in srgb, var(--oa-border) 86%, transparent);
+  border-radius: 0.55rem;
+  background: var(--oa-panel);
+  padding: 0.55rem 0.7rem;
+  text-align: left;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.org-admin-v2 .whatsapp-variable-chip:hover {
+  border-color: color-mix(in srgb, var(--oa-brand) 48%, var(--oa-border));
+  background: color-mix(in srgb, var(--oa-brand) 7%, var(--oa-panel));
+}
+
+.org-admin-v2 .whatsapp-variable-chip span {
+  overflow: hidden;
+  color: var(--oa-text);
+  font-size: 0.78rem;
+  font-weight: 900;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.org-admin-v2 .whatsapp-variable-chip code {
+  overflow: hidden;
+  color: color-mix(in srgb, var(--oa-brand) 82%, var(--oa-text));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .org-admin-v2 .whatsapp-variable-library {
+    margin-inline: -0.25rem;
+    padding: 0.85rem;
+  }
+
+  .org-admin-v2 .whatsapp-variable-library__chips {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 :root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel {

@@ -414,6 +414,7 @@ def init_db():
             _add_column_if_missing(conn, "forms", "booking_event_date", "DATE")
             _add_column_if_missing(conn, "forms", "booking_event_time", "TEXT")
             _add_column_if_missing(conn, "forms", "booking_event_details", "TEXT")
+            _add_column_if_missing(conn, "forms", "booking_dynamic_events_enabled", "INTEGER DEFAULT 0")
             _add_column_if_missing(conn, "forms", "survey_post_event_enabled", "INTEGER DEFAULT 0")
             _add_column_if_missing(conn, "forms", "survey_post_event_delay_hours", "INTEGER DEFAULT 2")
             _add_column_if_missing(conn, "forms", "survey_post_event_message_template", "TEXT")
@@ -583,6 +584,9 @@ def init_db():
         if "bookings" in table_names:
             _add_column_if_missing(conn, "bookings", "room_id", "INTEGER")
             _add_column_if_missing(conn, "bookings", "table_id", "INTEGER")
+            _add_column_if_missing(conn, "bookings", "customer_note", "TEXT")
+            _add_column_if_missing(conn, "bookings", "customer_note_submitted_at", "DATETIME")
+            _add_column_if_missing(conn, "bookings", "customer_note_reviewed_at", "DATETIME")
         if "rooms" in table_names:
             _add_column_if_missing(conn, "rooms", "is_active", "INTEGER DEFAULT 1")
         if "room_tables" in table_names:

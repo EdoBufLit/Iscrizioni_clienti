@@ -25,8 +25,9 @@ from app.models import (
 )
 from app.services.booking_whatsapp_reminders import (
     BOOKING_REMINDER_EVENT,
-    SURVEY_DISPATCH_EVENT,
+    SURVEY_EMAIL_DISPATCH_EVENT,
     process_booking_whatsapp_reminders,
+    process_post_event_survey_email,
     process_post_event_survey_whatsapp,
 )
 from app.services import communications_email_usage as email_usage_service
@@ -869,6 +870,7 @@ def test_post_event_survey_targets_only_present_bookings(db, monkeypatch):
             association_id=org.id,
             status="seated",
             customer_name="Presente",
+            customer_email="presente@example.test",
             customer_phone="+393331111111",
             booking_date=(datetime.utcnow() - timedelta(hours=3)).date(),
             booking_time=(datetime.utcnow() - timedelta(hours=3)).strftime("%H:%M"),
@@ -877,6 +879,7 @@ def test_post_event_survey_targets_only_present_bookings(db, monkeypatch):
             association_id=org.id,
             status="confirmed",
             customer_name="Solo confermato",
+            customer_email="confermato@example.test",
             customer_phone="+393332222222",
             booking_date=(datetime.utcnow() - timedelta(hours=3)).date(),
             booking_time=(datetime.utcnow() - timedelta(hours=3)).strftime("%H:%M"),
@@ -884,12 +887,24 @@ def test_post_event_survey_targets_only_present_bookings(db, monkeypatch):
         db.add_all([connection, survey, present_booking, confirmed_booking])
         db.commit()
 
-        stats = process_post_event_survey_whatsapp(db, now=datetime.utcnow())
+        whatsapp_stats = process_post_event_survey_whatsapp(db, now=datetime.utcnow())
+        assert whatsapp_stats["sent"] == 0
+        assert sent_numbers == []
+
+        stats = process_post_event_survey_email(db, now=datetime.utcnow())
         assert stats["sent"] == 1
-        assert sent_numbers == ["+393331111111"]
+        outbox = (
+            db.query(EmailOutbox)
+            .filter(EmailOutbox.to_email == "presente@example.test")
+            .order_by(EmailOutbox.id.desc())
+            .first()
+        )
+        assert outbox is not None
+        assert outbox.payload_json["sender"]["mode"] == "association"
+        assert outbox.payload_json["sender"]["association"]["sender_email_local_part"] == org.sender_email_local_part
         assert (
             db.query(BookingEvent)
-            .filter(BookingEvent.booking_id == present_booking.id, BookingEvent.event_type == SURVEY_DISPATCH_EVENT)
+            .filter(BookingEvent.booking_id == present_booking.id, BookingEvent.event_type == SURVEY_EMAIL_DISPATCH_EVENT)
             .count()
             == 1
         )

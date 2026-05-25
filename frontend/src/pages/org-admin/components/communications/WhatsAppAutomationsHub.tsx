@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   createOrgAdminWhatsAppAutomation,
@@ -29,6 +29,45 @@ const wizardSteps: Array<{ key: AutomationWizardStep; label: string }> = [
   { key: "origin", label: "Origine" },
   { key: "delivery", label: "Invio" },
   { key: "template", label: "Messaggio" },
+];
+
+const whatsappVariableGroups: Array<{
+  title: string;
+  description: string;
+  items: Array<{ label: string; placeholder: string; hint: string }>;
+}> = [
+  {
+    title: "Contatto",
+    description: "Dati del socio o della persona che ha compilato.",
+    items: [
+      { label: "Nome socio", placeholder: "{{nome_socio}}", hint: "Alias del contatto quando disponibile" },
+      { label: "Nome contatto", placeholder: "{{nome_contatto}}", hint: "Nome letto da socio, booking o form" },
+      { label: "Email", placeholder: "{{email_destinatario}}", hint: "Email della richiesta" },
+      { label: "WhatsApp", placeholder: "{{numero_whatsapp}}", hint: "Numero usato per l'invio" },
+    ],
+  },
+  {
+    title: "Prenotazione",
+    description: "Valori calcolati da booking, configurazione form e campi compilati.",
+    items: [
+      { label: "Data", placeholder: "{{data_prenotazione}}", hint: "Giorno prenotato" },
+      { label: "Orario", placeholder: "{{orario_prenotazione}}", hint: "Ora o fascia oraria" },
+      { label: "Persone", placeholder: "{{numero_persone}}", hint: "Coperti/partecipanti" },
+      { label: "Slot", placeholder: "{{slot_prenotazione}}", hint: "Data e ora insieme" },
+      { label: "Riepilogo", placeholder: "{{riepilogo_prenotazione}}", hint: "Data, ora, persone e dettagli" },
+      { label: "Dettagli evento", placeholder: "{{dettagli_evento}}", hint: "Dettagli configurati o compilati" },
+    ],
+  },
+  {
+    title: "Modulo",
+    description: "Contesto generale della regola.",
+    items: [
+      { label: "Associazione", placeholder: "{{nome_associazione}}", hint: "Nome organizzazione" },
+      { label: "Titolo form", placeholder: "{{titolo_form}}", hint: "Modulo collegato" },
+      { label: "ID richiesta", placeholder: "{{id_richiesta}}", hint: "Submission interna" },
+      { label: "Motivo rigetto", placeholder: "{{motivo_rigetto}}", hint: "Solo su rigetto admin" },
+    ],
+  },
 ];
 
 function emptyAutomationDraft() {
@@ -223,6 +262,7 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
   const [draft, setDraft] = useState(emptyAutomationDraft());
   const [activeStep, setActiveStep] = useState<AutomationWizardStep>("origin");
   const [deleteAutomationTarget, setDeleteAutomationTarget] = useState<OrgAdminWhatsAppAutomation | null>(null);
+  const templateTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const selectedForm = useMemo(
     () => forms.find((form) => form.id === draft.form_id) ?? null,
@@ -234,6 +274,36 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
   );
   const activeIndex = wizardSteps.findIndex((step) => step.key === activeStep);
   const selectedAutomationCount = automations.filter((item) => item.is_active).length;
+  const visibleVariableGroups = useMemo(() => {
+    const groups = [...whatsappVariableGroups];
+    const formFields = (selectedForm?.fields || [])
+      .filter((field) => field.field_key && !["section_title", "free_text", "divider", "spacer"].includes(field.field_type))
+      .map((field) => ({
+        label: field.label || field.field_key,
+        placeholder: `{{${field.field_key}}}`,
+        hint: "Campo compilato nel form",
+      }));
+    if (formFields.length > 0) {
+      groups.push({
+        title: "Campi form",
+        description: "Variabili generate dai campi reali del modulo selezionato.",
+        items: formFields,
+      });
+    }
+    return groups;
+  }, [selectedForm]);
+
+  function insertTemplateVariable(placeholder: string) {
+    setDraft((prev) => {
+      const current = prev.template_body || "";
+      const needsSpace = current.length > 0 && !/\s$/.test(current);
+      return {
+        ...prev,
+        template_body: `${current}${needsSpace ? " " : ""}${placeholder}`,
+      };
+    });
+    window.requestAnimationFrame(() => templateTextareaRef.current?.focus());
+  }
 
   async function loadData(preselectedFormId?: number | null) {
     setLoading(true);
@@ -739,6 +809,7 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
                 <label className={labelClass}>
                   Messaggio
                   <textarea
+                    ref={templateTextareaRef}
                     className={textareaClass}
                     disabled={communicationsLocked}
                     value={draft.template_body}
@@ -746,6 +817,40 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
                     placeholder="Ciao {{nome_socio}}, abbiamo ricevuto la tua richiesta..."
                   />
                 </label>
+
+                <section className="whatsapp-variable-library" aria-label="Variabili disponibili per il messaggio WhatsApp">
+                  <div className="whatsapp-variable-library__header">
+                    <div>
+                      <p>Variabili disponibili</p>
+                      <h4>Tocca per inserirle nel messaggio</h4>
+                    </div>
+                    <span>{visibleVariableGroups.reduce((total, group) => total + group.items.length, 0)}</span>
+                  </div>
+                  <div className="whatsapp-variable-library__groups">
+                    {visibleVariableGroups.map((group) => (
+                      <div key={group.title} className="whatsapp-variable-library__group">
+                        <div className="whatsapp-variable-library__group-head">
+                          <strong>{group.title}</strong>
+                          <small>{group.description}</small>
+                        </div>
+                        <div className="whatsapp-variable-library__chips">
+                          {group.items.map((item) => (
+                            <button
+                              key={`${group.title}-${item.placeholder}`}
+                              type="button"
+                              className="whatsapp-variable-chip"
+                              onClick={() => insertTemplateVariable(item.placeholder)}
+                              title={item.hint}
+                            >
+                              <span>{item.label}</span>
+                              <code>{item.placeholder}</code>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
 
                 <label className="inline-flex items-center gap-3 text-sm font-medium text-slate-700">
                   <input

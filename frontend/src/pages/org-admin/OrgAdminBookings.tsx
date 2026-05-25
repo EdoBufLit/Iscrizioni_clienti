@@ -3,10 +3,13 @@ import { useSearchParams } from "react-router-dom";
 import {
   assignOrgAdminBookingTable,
   createOrgAdminBooking,
+  createOrgAdminBookingEventSeries,
   createOrgAdminRoom,
   createOrgAdminRoomTable,
+  deleteOrgAdminBookingEventSeries,
   deleteOrgAdminRoom,
   deleteOrgAdminRoomTable,
+  fetchOrgAdminBookingEventSeries,
   fetchOrgAdminBooking,
   fetchOrgAdminBookings,
   fetchOrgAdminForms,
@@ -14,13 +17,17 @@ import {
   fetchOrgAdminRooms,
   fetchOrgAdminRoomTables,
   saveOrgAdminRoomMap,
+  markOrgAdminBookingCustomerNoteRead,
+  rejectOrgAdminBookingWithoutMessage,
   unassignOrgAdminBookingTable,
+  updateOrgAdminBookingEventSeries,
   updateOrgAdminFormSubmissionStatus,
   updateOrgAdminBooking,
   updateOrgAdminRoom,
   updateOrgAdminRoomTable,
   type AssociationBooking,
   type AssociationForm,
+  type OrgAdminBookingEventSeries,
   type AssociationRoom,
   type AssociationRoomMap,
   type AssociationRoomTable,
@@ -35,7 +42,7 @@ import { useToast } from "../../components/ui/ToastProvider";
 import { RoomFloorMap } from "../../components/bookings/RoomFloorMap";
 import { KpiCard, PageHeader, SectionPanel } from "./components/OrgAdminPrimitives";
 
-type SectionTab = "agenda" | "rooms" | "tables" | "map";
+type SectionTab = "agenda" | "events" | "rooms" | "tables" | "map";
 type DayStatusFilter = "all" | "pending" | "confirmed" | "seated" | "completed";
 
 const bookingStatuses = ["new", "pending", "confirmed", "seated", "completed", "cancelled", "no_show"];
@@ -94,13 +101,14 @@ const bookingStatusMeta: Record<string, { label: string; chipClass: string; dotC
 
 const sectionTabs: Array<{ key: SectionTab; label: string; hint: string }> = [
   { key: "agenda", label: "Agenda", hint: "Prenotazioni e assegnazioni" },
+  { key: "events", label: "Serate", hint: "Eventi prenotabili" },
   { key: "rooms", label: "Sale", hint: "Spazi disponibili" },
   { key: "tables", label: "Tavoli", hint: "Capienza e stato" },
   { key: "map", label: "Mappa sala", hint: "Piantina 2D" },
 ];
 
 function normalizeSection(value: string | null | undefined): SectionTab {
-  if (value === "rooms" || value === "tables" || value === "map" || value === "agenda") return value;
+  if (value === "rooms" || value === "tables" || value === "map" || value === "events" || value === "agenda") return value;
   return "agenda";
 }
 
@@ -130,12 +138,13 @@ function formatDate(value: string | null | undefined) {
 }
 
 function formatDateTime(dateValue: string | null | undefined, timeValue?: string | null) {
-  if (!dateValue) return timeValue || "Da definire";
+  const timeLabel = timeValue && /^\d{2}:\d{2}/.test(timeValue) ? timeValue.slice(0, 5) : timeValue;
+  if (!dateValue) return timeLabel || "Da definire";
   const date = new Date(dateValue);
   const label = Number.isNaN(date.getTime())
     ? dateValue
     : date.toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "numeric" });
-  return timeValue ? `${label} - ${timeValue}` : label;
+  return timeLabel ? `${label} - ${timeLabel}` : label;
 }
 
 function formatMobileDayTitle(value: string | null | undefined) {
@@ -201,6 +210,21 @@ function matchesDayStatusFilter(booking: AssociationBooking, filter: DayStatusFi
   return booking.status === filter;
 }
 
+function isPendingBookingRequest(booking: AssociationBooking) {
+  const requestStatus = booking.request_status || "";
+  return (
+    booking.status === "pending"
+    || booking.status === "new"
+    || requestStatus === "pending"
+    || requestStatus === "new"
+  );
+}
+
+function isManagedMobileBooking(booking: AssociationBooking) {
+  if (isPendingBookingRequest(booking)) return false;
+  return true;
+}
+
 function initialsFromName(value: string | null | undefined) {
   const parts = (value || "?").trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
@@ -216,6 +240,13 @@ function formatBookingTable(booking: Pick<AssociationBooking, "room" | "table">)
 
 function isFormLinkedBooking(booking: Pick<AssociationBooking, "submission_id" | "source_form">) {
   return Boolean(booking.submission_id && booking.source_form?.id);
+}
+
+function bookingCardToneClass(booking: AssociationBooking) {
+  if (booking.has_unreviewed_customer_note) return "has-customer-note";
+  if (booking.status === "cancelled" || booking.status === "no_show" || booking.request_status === "rejected") return "is-cancelled";
+  if (booking.status === "confirmed" || booking.status === "seated" || booking.status === "completed") return "is-confirmed";
+  return "";
 }
 
 function shiftMonth(value: string, delta: number) {
@@ -330,6 +361,19 @@ function emptyTableDraft(roomId: number | null = null) {
   };
 }
 
+function emptyEventSeriesDraft() {
+  return {
+    id: null as number | null,
+    name: "",
+    description: "",
+    recurrence_type: "weekly",
+    weekday: 0 as number | null,
+    specific_date: "",
+    is_active: true,
+    time_slots_text: "19:30, 20:00, 20:30",
+  };
+}
+
 function MetricBox({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-[1.25rem] bg-slate-50 p-5 ring-1 ring-inset ring-slate-200/60 transition-all hover:bg-slate-100/50">
@@ -386,6 +430,8 @@ export default function OrgAdminBookings() {
   const [roomMap, setRoomMap] = useState<AssociationRoomMap | null>(null);
   const [mapTables, setMapTables] = useState<AssociationRoomTable[]>([]);
   const [selectedMapTableId, setSelectedMapTableId] = useState<number | null>(null);
+  const [eventSeries, setEventSeries] = useState<OrgAdminBookingEventSeries[]>([]);
+  const [eventSeriesDraft, setEventSeriesDraft] = useState(emptyEventSeriesDraft());
   const [listItems, setListItems] = useState<AssociationBooking[]>([]);
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(searchParams.get("date") || todayIso());
   const [selectedBookingId, setSelectedBookingId] = useState<number | null>(queryBookingId);
@@ -566,6 +612,10 @@ export default function OrgAdminBookings() {
     () => (selectedCalendarDate ? bookingsByDay.get(selectedCalendarDate) ?? [] : []),
     [bookingsByDay, selectedCalendarDate],
   );
+  const mobileManagedDayItems = useMemo(
+    () => activeDayItems.filter(isManagedMobileBooking),
+    [activeDayItems],
+  );
   const agendaMonthDate = useMemo(() => new Date(`${agendaMonth}T00:00:00`), [agendaMonth]);
   const agendaYearOptions = useMemo(() => {
     const centerYear = Number.isNaN(agendaMonthDate.getTime()) ? new Date().getFullYear() : agendaMonthDate.getFullYear();
@@ -600,14 +650,16 @@ export default function OrgAdminBookings() {
   async function loadInitial() {
     setLoading(true);
     try {
-      const [formsResponse, roomsResponse] = await Promise.all([
+      const [formsResponse, roomsResponse, eventSeriesResponse] = await Promise.all([
         fetchOrgAdminForms(),
         fetchOrgAdminRooms({ includeInactive: true }),
+        fetchOrgAdminBookingEventSeries(),
       ]);
       const nextForms = Array.isArray(formsResponse.items) ? formsResponse.items : [];
       const nextRooms = Array.isArray(roomsResponse.items) ? roomsResponse.items : [];
       setForms(nextForms.filter((item) => item.booking_enabled));
       setRooms(nextRooms);
+      setEventSeries(Array.isArray(eventSeriesResponse.items) ? eventSeriesResponse.items : []);
       const firstRoom = nextRooms[0] ?? null;
       setSelectedRoomId(firstRoom?.id ?? null);
       setRoomDraft(firstRoom ? { id: firstRoom.id, name: firstRoom.name, is_active: firstRoom.is_active } : emptyRoomDraft());
@@ -710,6 +762,123 @@ export default function OrgAdminBookings() {
         tone: "error",
         title: "Aggiornamento non riuscito",
         message: err instanceof Error ? err.message : "Errore aggiornamento stato prenotazione.",
+      });
+    } finally {
+      setSaving("");
+    }
+  }
+
+  async function handleRejectWithoutMessage() {
+    if (!selectedBookingId) return;
+    setSaving("reject-silent");
+    try {
+      const { booking } = await rejectOrgAdminBookingWithoutMessage(selectedBookingId);
+      setSelectedBooking(booking);
+      await loadBookings();
+      showToast({
+        tone: "success",
+        title: "Rigetto salvato",
+        message: "Prenotazione annullata senza inviare messaggi al socio.",
+      });
+    } catch (err) {
+      showToast({
+        tone: "error",
+        title: "Rigetto non riuscito",
+        message: err instanceof Error ? err.message : "Errore rigetto senza messaggio.",
+      });
+    } finally {
+      setSaving("");
+    }
+  }
+
+  async function handleMarkCustomerNoteRead() {
+    if (!selectedBookingId) return;
+    setSaving("customer-note-read");
+    try {
+      const { booking } = await markOrgAdminBookingCustomerNoteRead(selectedBookingId);
+      setSelectedBooking(booking);
+      await loadBookings();
+      showToast({ tone: "success", title: "Nota gestita", message: "La nota cliente è stata segnata come letta." });
+    } catch (err) {
+      showToast({
+        tone: "error",
+        title: "Nota non aggiornata",
+        message: err instanceof Error ? err.message : "Errore aggiornamento nota cliente.",
+      });
+    } finally {
+      setSaving("");
+    }
+  }
+
+  async function refreshEventSeries(nextId?: number | null) {
+    const response = await fetchOrgAdminBookingEventSeries();
+    const items = Array.isArray(response.items) ? response.items : [];
+    setEventSeries(items);
+    const selected = nextId ? items.find((item) => item.id === nextId) : null;
+    if (selected) {
+      setEventSeriesDraft({
+        id: selected.id,
+        name: selected.name,
+        description: selected.description || "",
+        recurrence_type: selected.recurrence_type || "weekly",
+        weekday: selected.weekday,
+        specific_date: selected.specific_date || "",
+        is_active: selected.is_active,
+        time_slots_text: selected.time_slots.map((slot) => slot.time.slice(0, 5)).join(", "),
+      });
+    }
+  }
+
+  async function handleEventSeriesSave() {
+    const name = eventSeriesDraft.name.trim();
+    if (!name) {
+      showToast({ tone: "error", title: "Nome richiesto", message: "Inserisci il nome della serata prenotabile." });
+      return;
+    }
+    const timeSlots = eventSeriesDraft.time_slots_text
+      .split(/[,\n;]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+    setSaving("event-series");
+    try {
+      const payload = {
+        name,
+        description: eventSeriesDraft.description.trim() || null,
+        recurrence_type: eventSeriesDraft.recurrence_type,
+        weekday: eventSeriesDraft.recurrence_type === "weekly" ? eventSeriesDraft.weekday : null,
+        specific_date: eventSeriesDraft.recurrence_type === "date" ? eventSeriesDraft.specific_date || null : null,
+        is_active: eventSeriesDraft.is_active,
+        time_slots: timeSlots,
+      };
+      const response = eventSeriesDraft.id
+        ? await updateOrgAdminBookingEventSeries(eventSeriesDraft.id, payload)
+        : await createOrgAdminBookingEventSeries(payload);
+      await refreshEventSeries(response.item.id);
+      showToast({ tone: "success", title: "Serata salvata", message: "La configurazione è disponibile nei form prenotazione." });
+    } catch (err) {
+      showToast({
+        tone: "error",
+        title: "Serata non salvata",
+        message: err instanceof Error ? err.message : "Errore salvataggio serata.",
+      });
+    } finally {
+      setSaving("");
+    }
+  }
+
+  async function handleEventSeriesDelete() {
+    if (!eventSeriesDraft.id) return;
+    setSaving("event-series-delete");
+    try {
+      await deleteOrgAdminBookingEventSeries(eventSeriesDraft.id);
+      setEventSeriesDraft(emptyEventSeriesDraft());
+      await refreshEventSeries();
+      showToast({ tone: "success", title: "Serata eliminata", message: "La regola non comparirà più nei form." });
+    } catch (err) {
+      showToast({
+        tone: "error",
+        title: "Eliminazione non riuscita",
+        message: err instanceof Error ? err.message : "Errore eliminazione serata.",
       });
     } finally {
       setSaving("");
@@ -893,6 +1062,11 @@ export default function OrgAdminBookings() {
       }
       setRequestConfirmOpen(false);
       setRequestRejectOpen(false);
+      if (nextStatus === "confirmed" && window.matchMedia("(max-width: 720px)").matches) {
+        window.requestAnimationFrame(() => {
+          document.querySelector(".booking-mobile-managed-section")?.scrollIntoView({ block: "start", behavior: "smooth" });
+        });
+      }
       setRequestActionState("success");
       let message = "Dettaglio prenotazione e stato della richiesta aggiornati.";
       if (response.whatsapp_result?.sent) {
@@ -1102,6 +1276,8 @@ export default function OrgAdminBookings() {
             setAssignmentTableId={setAssignmentTableId}
             assignmentTables={assignmentTables}
             onStatusChange={handleBookingStatus}
+            onRejectWithoutMessage={handleRejectWithoutMessage}
+            onMarkCustomerNoteRead={handleMarkCustomerNoteRead}
             onSaveAssignment={handleAssignmentSave}
             onClearAssignment={handleAssignmentClear}
             requestActionState={requestActionState}
@@ -1110,6 +1286,42 @@ export default function OrgAdminBookings() {
             saving={saving}
             />
           </div>
+        )}
+
+        {section === "agenda" && isMobileAgendaViewport && (
+          <MobileManagedBookingsSection
+            selectedCalendarDate={selectedCalendarDate}
+            items={mobileManagedDayItems}
+            selectedBookingId={selectedBookingId}
+            setSelectedBookingId={setSelectedBookingId}
+            selectedBooking={selectedBooking}
+            rooms={rooms}
+            assignmentRoomId={assignmentRoomId}
+            setAssignmentRoomId={setAssignmentRoomId}
+            assignmentTableId={assignmentTableId}
+            setAssignmentTableId={setAssignmentTableId}
+            assignmentTables={assignmentTables}
+            onStatusChange={handleBookingStatus}
+            onRejectWithoutMessage={handleRejectWithoutMessage}
+            onMarkCustomerNoteRead={handleMarkCustomerNoteRead}
+            onSaveAssignment={handleAssignmentSave}
+            onClearAssignment={handleAssignmentClear}
+            requestActionState={requestActionState}
+            onOpenRequestConfirm={setRequestConfirmOpen}
+            onOpenRequestReject={setRequestRejectOpen}
+            saving={saving}
+          />
+        )}
+
+        {section === "events" && (
+          <BookingEventSeriesPanel
+            items={eventSeries}
+            draft={eventSeriesDraft}
+            setDraft={setEventSeriesDraft}
+            onSave={handleEventSeriesSave}
+            onDelete={handleEventSeriesDelete}
+            saving={saving}
+          />
         )}
 
         {section === "rooms" && (
@@ -1568,6 +1780,8 @@ function AgendaSection(props: {
   setAssignmentTableId: (value: number | "") => void;
   assignmentTables: AssociationRoomTable[];
   onStatusChange: (status: string) => void;
+  onRejectWithoutMessage: () => void;
+  onMarkCustomerNoteRead: () => void;
   onSaveAssignment: () => void;
   onClearAssignment: () => void;
   requestActionState: "idle" | "loading" | "success" | "error";
@@ -1583,13 +1797,16 @@ function AgendaSection(props: {
     new Date(2026, index, 1).toLocaleDateString("it-IT", { month: "long" }),
   );
   const activeDayIsToday = props.selectedCalendarDate === todayIso();
-  const dayPending = props.activeDayItems.filter((item) => item.status === "pending" || item.status === "new").length;
+  const mobileActionDayItems = props.isMobileAgendaViewport
+    ? props.activeDayItems.filter(isPendingBookingRequest)
+    : props.activeDayItems;
+  const dayPending = props.activeDayItems.filter(isPendingBookingRequest).length;
   const dayCovers = props.activeDayItems.reduce((total, item) => total + (item.party_size || 0), 0);
-  const filteredDayItems = props.activeDayItems.filter((booking) => matchesDayStatusFilter(booking, dayFilter));
+  const filteredDayItems = mobileActionDayItems.filter((booking) => matchesDayStatusFilter(booking, dayFilter));
   const selectedDateKey = props.selectedCalendarDate || todayIso();
   const dayRail = useMemo(() => buildDayRail(selectedDateKey), [selectedDateKey]);
   const selectedDayItems = props.bookingsByDay.get(selectedDateKey) ?? [];
-  const selectedDayPending = selectedDayItems.filter((item) => item.status === "pending" || item.status === "new").length;
+  const selectedDayPending = selectedDayItems.filter(isPendingBookingRequest).length;
   const selectedDayConfirmed = selectedDayItems.filter((item) => item.status === "confirmed").length;
   const selectDay = (dateKey: string, expandFirstBooking = false) => {
     const items = props.bookingsByDay.get(dateKey) ?? [];
@@ -1762,31 +1979,39 @@ function AgendaSection(props: {
               <span>{dayCovers} coperti</span>
             </div>
 
-            <div className="booking-day-panel__filters" role="tablist" aria-label="Filtra prenotazioni del giorno">
-              {dayStatusFilters.map((filter) => (
-                <button
-                  key={filter.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={dayFilter === filter.key}
-                  aria-controls="booking-day-list-panel"
-                  id={`booking-day-filter-${filter.key}`}
-                  className={dayFilter === filter.key ? "is-active" : ""}
-                  onClick={() => setDayFilter(filter.key)}
-                >
-                  {filter.label}
-                </button>
-              ))}
-            </div>
+            {!props.isMobileAgendaViewport ? (
+              <div className="booking-day-panel__filters" role="tablist" aria-label="Filtra prenotazioni del giorno">
+                {dayStatusFilters.map((filter) => (
+                  <button
+                    key={filter.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={dayFilter === filter.key}
+                    aria-controls="booking-day-list-panel"
+                    id={`booking-day-filter-${filter.key}`}
+                    className={dayFilter === filter.key ? "is-active" : ""}
+                    onClick={() => setDayFilter(filter.key)}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
 
             <div
               className="booking-day-list"
               id="booking-day-list-panel"
               role="tabpanel"
-              aria-labelledby={`booking-day-filter-${dayFilter}`}
+              aria-labelledby={props.isMobileAgendaViewport ? undefined : `booking-day-filter-${dayFilter}`}
             >
               {filteredDayItems.length === 0 ? (
-                <EmptyState message="Nessuna prenotazione in questo filtro." />
+                <EmptyState
+                  message={
+                    props.isMobileAgendaViewport
+                      ? "Nessuna richiesta da confermare. Le prenotazioni confermate sono in basso."
+                      : "Nessuna prenotazione in questo filtro."
+                  }
+                />
               ) : (
                 filteredDayItems.map((booking) => {
                   const isExpanded = props.selectedBookingId === booking.id;
@@ -1809,6 +2034,8 @@ function AgendaSection(props: {
                             setAssignmentTableId={props.setAssignmentTableId}
                             assignmentTables={props.assignmentTables}
                             onStatusChange={props.onStatusChange}
+                            onRejectWithoutMessage={props.onRejectWithoutMessage}
+                            onMarkCustomerNoteRead={props.onMarkCustomerNoteRead}
                             onSaveAssignment={props.onSaveAssignment}
                             onClearAssignment={props.onClearAssignment}
                             requestActionState={props.requestActionState}
@@ -1919,6 +2146,267 @@ function AgendaSection(props: {
   );
 }
 
+function BookingEventSeriesPanel(props: {
+  items: OrgAdminBookingEventSeries[];
+  draft: ReturnType<typeof emptyEventSeriesDraft>;
+  setDraft: (value: ReturnType<typeof emptyEventSeriesDraft> | ((current: ReturnType<typeof emptyEventSeriesDraft>) => ReturnType<typeof emptyEventSeriesDraft>)) => void;
+  onSave: () => void;
+  onDelete: () => void;
+  saving: string;
+}) {
+  const weekdayOptions = [
+    { value: 0, label: "Lunedì" },
+    { value: 1, label: "Martedì" },
+    { value: 2, label: "Mercoledì" },
+    { value: 3, label: "Giovedì" },
+    { value: 4, label: "Venerdì" },
+    { value: 5, label: "Sabato" },
+    { value: 6, label: "Domenica" },
+  ];
+  const selectSeries = (item: OrgAdminBookingEventSeries) => {
+    props.setDraft({
+      id: item.id,
+      name: item.name,
+      description: item.description || "",
+      recurrence_type: item.recurrence_type || "weekly",
+      weekday: item.weekday,
+      specific_date: item.specific_date || "",
+      is_active: item.is_active,
+      time_slots_text: item.time_slots.map((slot) => slot.time.slice(0, 5)).join(", "),
+    });
+  };
+
+  return (
+    <ManagementShell
+      title="Serate prenotabili"
+      subtitle="Regole fuori dai form: i moduli prenotazione leggono qui date, serate e orari."
+      main={
+        <div className="space-y-3">
+          <button
+            type="button"
+            className={`w-full rounded-[1.25rem] p-5 text-left transition-all ${
+              props.draft.id ? "bg-slate-50 ring-1 ring-inset ring-slate-200/60 hover:bg-slate-100/70" : "bg-slate-900 text-white shadow-md"
+            }`}
+            onClick={() => props.setDraft(emptyEventSeriesDraft())}
+          >
+            <p className="text-lg font-semibold">+ Nuova serata</p>
+            <p className={`mt-1 text-sm ${props.draft.id ? "text-slate-500" : "text-slate-300"}`}>Es. lunedì Cartomante, martedì Serata X</p>
+          </button>
+          {props.items.length === 0 ? (
+            <EmptyState message="Nessuna serata configurata." />
+          ) : (
+            props.items.map((item) => {
+              const selected = props.draft.id === item.id;
+              const when = item.recurrence_type === "date"
+                ? item.specific_date || "Data specifica"
+                : weekdayOptions.find((option) => option.value === item.weekday)?.label || "Settimanale";
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`w-full rounded-[1.25rem] p-5 text-left transition-all ${
+                    selected ? "bg-slate-900 text-white shadow-md" : "bg-slate-50 ring-1 ring-inset ring-slate-200/60 hover:bg-slate-100"
+                  }`}
+                  onClick={() => selectSeries(item)}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-lg font-semibold">{item.name}</p>
+                      <p className={`mt-1 text-sm ${selected ? "text-slate-300" : "text-slate-500"}`}>
+                        {when} · {item.time_slots.map((slot) => slot.time.slice(0, 5)).join(", ") || "Nessuno slot"}
+                      </p>
+                    </div>
+                    <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${
+                      item.is_active ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"
+                    }`}>
+                      {item.is_active ? "Attiva" : "Pausa"}
+                    </span>
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+      }
+      side={
+        <div className="space-y-4">
+          <Field label="Nome serata">
+            <input
+              className={inputClass}
+              value={props.draft.name}
+              onChange={(event) => props.setDraft((current) => ({ ...current, name: event.target.value }))}
+              placeholder="Cartomante"
+            />
+          </Field>
+          <Field label="Tipo regola">
+            <select
+              className={inputClass}
+              value={props.draft.recurrence_type}
+              onChange={(event) => props.setDraft((current) => ({ ...current, recurrence_type: event.target.value, weekday: 0, specific_date: "" }))}
+            >
+              <option value="weekly">Settimanale</option>
+              <option value="date">Data specifica</option>
+            </select>
+          </Field>
+          {props.draft.recurrence_type === "weekly" ? (
+            <Field label="Giorno">
+              <select
+                className={inputClass}
+                value={props.draft.weekday ?? 0}
+                onChange={(event) => props.setDraft((current) => ({ ...current, weekday: Number(event.target.value) }))}
+              >
+                {weekdayOptions.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </Field>
+          ) : (
+            <Field label="Data">
+              <input
+                className={inputClass}
+                type="date"
+                value={props.draft.specific_date}
+                onChange={(event) => props.setDraft((current) => ({ ...current, specific_date: event.target.value }))}
+              />
+            </Field>
+          )}
+          <Field label="Orari disponibili">
+            <textarea
+              className={`${inputClass} min-h-[90px]`}
+              value={props.draft.time_slots_text}
+              onChange={(event) => props.setDraft((current) => ({ ...current, time_slots_text: event.target.value }))}
+              placeholder="19:30, 20:00, 20:30"
+            />
+          </Field>
+          <Field label="Descrizione">
+            <textarea
+              className={`${inputClass} min-h-[82px]`}
+              value={props.draft.description}
+              onChange={(event) => props.setDraft((current) => ({ ...current, description: event.target.value }))}
+              placeholder="Note visibili all'organizzazione"
+            />
+          </Field>
+          <Toggle
+            label="Serata attiva nei form pubblici"
+            checked={props.draft.is_active}
+            onChange={(checked) => props.setDraft((current) => ({ ...current, is_active: checked }))}
+          />
+          <ActionRow
+            primaryLabel={props.draft.id ? "Salva serata" : "Crea serata"}
+            secondaryLabel="Elimina"
+            onPrimary={props.onSave}
+            onSecondary={props.onDelete}
+            busy={props.saving.startsWith("event-series")}
+          />
+        </div>
+      }
+    />
+  );
+}
+
+function MobileManagedBookingsSection(props: {
+  selectedCalendarDate: string | null;
+  items: AssociationBooking[];
+  selectedBookingId: number | null;
+  setSelectedBookingId: (id: number | null) => void;
+  selectedBooking: AssociationBooking | null;
+  rooms: AssociationRoom[];
+  assignmentRoomId: number | "";
+  setAssignmentRoomId: (value: number | "") => void;
+  assignmentTableId: number | "";
+  setAssignmentTableId: (value: number | "") => void;
+  assignmentTables: AssociationRoomTable[];
+  onStatusChange: (status: string) => void;
+  onRejectWithoutMessage: () => void;
+  onMarkCustomerNoteRead: () => void;
+  onSaveAssignment: () => void;
+  onClearAssignment: () => void;
+  requestActionState: "idle" | "loading" | "success" | "error";
+  onOpenRequestConfirm: (value: false | "confirmed" | "pending") => void;
+  onOpenRequestReject: (value: boolean) => void;
+  saving: string;
+}) {
+  if (!props.selectedCalendarDate) return null;
+
+  const totalCovers = props.items.reduce((total, item) => total + (item.party_size || 0), 0);
+
+  return (
+    <section className="booking-mobile-managed-section" aria-live="polite">
+      <header className="booking-mobile-managed-section__header">
+        <div>
+          <p>{formatDate(props.selectedCalendarDate)}</p>
+          <h2>Prenotazioni confermate</h2>
+        </div>
+        <span>{props.items.length} / {totalCovers} pax</span>
+      </header>
+
+      {props.items.length === 0 ? (
+        <div className="booking-mobile-managed-section__empty">
+          Le richieste confermate compariranno qui, separate dalla coda da confermare.
+        </div>
+      ) : (
+        <div className="booking-mobile-managed-section__list">
+          {props.items.map((booking) => {
+            const isExpanded = props.selectedBookingId === booking.id;
+            const isDetailLoaded = props.selectedBooking?.id === booking.id;
+            const tableLabel = formatBookingTable(booking);
+            const needsTable = !booking.table?.name;
+            return (
+              <article key={booking.id} className={`booking-mobile-managed-card ${bookingCardToneClass(booking)} ${isExpanded ? "is-expanded" : ""}`}>
+                <button
+                  type="button"
+                  className="booking-mobile-managed-card__summary"
+                  onClick={() => props.setSelectedBookingId(isExpanded ? null : booking.id)}
+                  aria-expanded={isExpanded}
+                >
+                  <span className="booking-day-row__avatar">{initialsFromName(booking.customer_name)}</span>
+                  <span className="booking-mobile-managed-card__main">
+                    <strong>{booking.customer_name}</strong>
+                    <small>{(booking.booking_time || "--:--").slice(0, 5)} - {tableLabel}</small>
+                  </span>
+                  <span className="booking-mobile-managed-card__side">
+                    <span className={bookingStatusChipClass(booking.status)}>{formatStatusLabel(booking.status)}</span>
+                    <span className={needsTable ? "needs-assignment" : ""}>
+                      {needsTable ? "Assegna tavolo" : `${booking.party_size || "-"} pax`}
+                    </span>
+                  </span>
+                </button>
+                {isExpanded ? (
+                  <div className="booking-mobile-managed-card__expanded">
+                    {isDetailLoaded ? (
+                      <BookingDetailPanel
+                        selectedBooking={props.selectedBooking}
+                        rooms={props.rooms}
+                        assignmentRoomId={props.assignmentRoomId}
+                        setAssignmentRoomId={props.setAssignmentRoomId}
+                        assignmentTableId={props.assignmentTableId}
+                        setAssignmentTableId={props.setAssignmentTableId}
+                        assignmentTables={props.assignmentTables}
+                        onStatusChange={props.onStatusChange}
+                        onRejectWithoutMessage={props.onRejectWithoutMessage}
+                        onMarkCustomerNoteRead={props.onMarkCustomerNoteRead}
+                        onSaveAssignment={props.onSaveAssignment}
+                        onClearAssignment={props.onClearAssignment}
+                        requestActionState={props.requestActionState}
+                        onOpenRequestConfirm={props.onOpenRequestConfirm}
+                        onOpenRequestReject={props.onOpenRequestReject}
+                        saving={props.saving}
+                        mobileOnly
+                      />
+                    ) : (
+                      <div className="booking-row-loading">Caricamento dettaglio...</div>
+                    )}
+                  </div>
+                ) : null}
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function DayBookingRow({
   booking,
   expanded,
@@ -1934,7 +2422,7 @@ function DayBookingRow({
 }) {
   const isFormRequest = isFormLinkedBooking(booking);
   return (
-    <article className={`booking-day-row ${expanded ? "is-expanded" : ""}`}>
+    <article className={`booking-day-row ${bookingCardToneClass(booking)} ${expanded ? "is-expanded" : ""}`}>
       <button type="button" className="booking-day-row__summary" onClick={onSelect} aria-expanded={expanded}>
         <span className="booking-day-row__avatar">{initialsFromName(booking.customer_name)}</span>
         <span className="booking-day-row__main">
@@ -1970,6 +2458,8 @@ function BookingDetailPanel(props: {
   setAssignmentTableId: (value: number | "") => void;
   assignmentTables: AssociationRoomTable[];
   onStatusChange: (status: string) => void;
+  onRejectWithoutMessage: () => void;
+  onMarkCustomerNoteRead: () => void;
   onSaveAssignment: () => void;
   onClearAssignment: () => void;
   requestActionState: "idle" | "loading" | "success" | "error";
@@ -1989,14 +2479,21 @@ function BookingDetailPanel(props: {
     .filter((field) => !requestFactKeys.has(field.key))
     .slice(0, 4);
   const showMobileLinkedRequestOnly = Boolean(props.mobileOnly && props.selectedBooking.submission_id);
+  const showMobileAssignment = Boolean(
+    showMobileLinkedRequestOnly
+      && (props.selectedBooking.request_status === "confirmed"
+        || props.selectedBooking.status === "confirmed"
+        || props.selectedBooking.status === "seated"
+        || props.selectedBooking.status === "completed"),
+  );
   const mobileCardRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!showMobileLinkedRequestOnly || !mobileCardRef.current) return;
+    if (!showMobileLinkedRequestOnly || showMobileAssignment || !mobileCardRef.current) return;
     window.requestAnimationFrame(() => {
-      mobileCardRef.current?.scrollIntoView({ block: "center", behavior: "auto" });
+      mobileCardRef.current?.scrollIntoView({ block: "start", behavior: "auto" });
     });
-  }, [props.selectedBooking.id, showMobileLinkedRequestOnly]);
+  }, [props.selectedBooking.id, showMobileAssignment, showMobileLinkedRequestOnly]);
 
   return (
     <div className="space-y-6">
@@ -2026,6 +2523,85 @@ function BookingDetailPanel(props: {
             </span>
           </div>
 
+          {showMobileAssignment ? (
+            <div className="booking-request-mobile-card__assignment">
+              <div className="booking-request-mobile-card__assignment-head">
+                <div>
+                  <small>Assegnazione</small>
+                  <strong>{formatBookingTable(props.selectedBooking)}</strong>
+                </div>
+                {props.selectedBooking.table?.name ? (
+                  <button
+                    type="button"
+                    disabled={props.saving === "assignment-clear"}
+                    onClick={props.onClearAssignment}
+                  >
+                    Rimuovi
+                  </button>
+                ) : null}
+              </div>
+              {props.rooms.length === 0 ? (
+                <a className="booking-request-mobile-card__assignment-empty" href="/org-admin/prenotazioni?section=rooms">
+                  Crea prima una sala e i tavoli
+                </a>
+              ) : (
+                <>
+                  <div className="booking-request-mobile-card__assignment-grid">
+                    <label>
+                      <span>Sala</span>
+                      <select
+                        value={props.assignmentRoomId}
+                        onChange={(event) => props.setAssignmentRoomId(event.target.value ? Number(event.target.value) : "")}
+                      >
+                        <option value="">Scegli sala</option>
+                        {props.rooms.map((room) => (
+                          <option key={room.id} value={room.id}>{room.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Tavolo</span>
+                      <select
+                        value={props.assignmentTableId}
+                        onChange={(event) => props.setAssignmentTableId(event.target.value ? Number(event.target.value) : "")}
+                        disabled={!props.assignmentRoomId}
+                      >
+                        <option value="">Solo sala</option>
+                        {props.assignmentTables.map((table) => (
+                          <option key={table.id} value={table.id}>{table.name} - {table.capacity} posti</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <button
+                    type="button"
+                    className="booking-request-mobile-card__assignment-save"
+                    disabled={!props.assignmentRoomId || props.saving.startsWith("assignment")}
+                    onClick={props.onSaveAssignment}
+                  >
+                    {props.saving === "assignment" ? "Salvataggio..." : "Salva tavolo"}
+                  </button>
+                </>
+              )}
+            </div>
+          ) : null}
+
+          {props.selectedBooking.customer_note ? (
+            <div className={`booking-request-mobile-card__reason ${props.selectedBooking.has_unreviewed_customer_note ? "is-unread-note" : ""}`}>
+              <strong>Nota cliente</strong>
+              <span>{props.selectedBooking.customer_note}</span>
+              {props.selectedBooking.has_unreviewed_customer_note ? (
+                <button
+                  type="button"
+                  disabled={props.saving === "customer-note-read"}
+                  onClick={props.onMarkCustomerNoteRead}
+                >
+                  Segna gestita
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="booking-request-mobile-card__actions">
             {props.selectedBooking.request_status !== "confirmed" ? (
               <button
@@ -2045,6 +2621,16 @@ function BookingDetailPanel(props: {
                 onClick={() => props.onOpenRequestReject(true)}
               >
                 Rigetta
+              </button>
+            ) : null}
+            {props.selectedBooking.request_status !== "rejected" && props.selectedBooking.status !== "cancelled" ? (
+              <button
+                type="button"
+                className="booking-request-mobile-card__reject"
+                disabled={props.saving === "reject-silent"}
+                onClick={props.onRejectWithoutMessage}
+              >
+                Rifiuta senza messaggio
               </button>
             ) : null}
             <a
@@ -2105,8 +2691,32 @@ function BookingDetailPanel(props: {
         </div>
         {props.selectedBooking.notes ? (
           <div className="mt-4 rounded-xl bg-amber-50/50 p-4 ring-1 ring-inset ring-amber-500/20 text-sm text-amber-900">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-700">Note cliente</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-700">Note interne</p>
             <p className="mt-2 leading-relaxed font-medium">{props.selectedBooking.notes}</p>
+          </div>
+        ) : null}
+        {props.selectedBooking.customer_note ? (
+          <div className={`mt-4 rounded-xl p-4 text-sm ring-1 ring-inset ${
+            props.selectedBooking.has_unreviewed_customer_note
+              ? "bg-yellow-50 text-yellow-950 ring-yellow-500/30"
+              : "bg-slate-50 text-slate-700 ring-slate-200/80"
+          }`}>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Nota cliente</p>
+                <p className="mt-2 leading-relaxed font-medium">{props.selectedBooking.customer_note}</p>
+              </div>
+              {props.selectedBooking.has_unreviewed_customer_note ? (
+                <button
+                  type="button"
+                  className="btn-secondary !px-4 !py-2 !text-sm"
+                  disabled={props.saving === "customer-note-read"}
+                  onClick={props.onMarkCustomerNoteRead}
+                >
+                  Segna gestita
+                </button>
+              ) : null}
+            </div>
           </div>
         ) : null}
       </div>
@@ -2157,6 +2767,16 @@ function BookingDetailPanel(props: {
                 onClick={() => props.onOpenRequestReject(true)}
               >
                 Rigetta richiesta
+              </button>
+            ) : null}
+            {props.selectedBooking.request_status !== "rejected" && props.selectedBooking.status !== "cancelled" ? (
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={props.saving === "reject-silent"}
+                onClick={props.onRejectWithoutMessage}
+              >
+                Rifiuta senza messaggio
               </button>
             ) : null}
             {props.selectedBooking.request_status !== "pending" && props.selectedBooking.request_status !== "new" ? (

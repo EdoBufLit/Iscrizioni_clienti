@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import Booking, BookingEvent, BookingStatus, Form, FormSubmission
+from app.models import Booking, BookingEvent, BookingEventSeries, BookingStatus, Form, FormSubmission
 from app.services.booking_rooms import (
     auto_assign_booking_table,
     maybe_record_assignment_event,
@@ -102,6 +102,22 @@ def serialize_booking(booking: Booking, *, include_events: bool = False) -> dict
         "party_size": booking.party_size,
         "notes": booking.notes,
         "notes_preview": (booking.notes or "")[:120] or None,
+        "customer_note": booking.customer_note,
+        "customer_note_submitted_at": (
+            booking.customer_note_submitted_at.isoformat()
+            if getattr(booking, "customer_note_submitted_at", None)
+            else None
+        ),
+        "customer_note_reviewed_at": (
+            booking.customer_note_reviewed_at.isoformat()
+            if getattr(booking, "customer_note_reviewed_at", None)
+            else None
+        ),
+        "has_unreviewed_customer_note": bool(
+            getattr(booking, "customer_note", None)
+            and getattr(booking, "customer_note_submitted_at", None)
+            and not getattr(booking, "customer_note_reviewed_at", None)
+        ),
         "room_id": booking.room_id,
         "table_id": booking.table_id,
         "room": {
@@ -285,6 +301,74 @@ def _normalize_booking_time(value: Any) -> str | None:
     return normalized[:16]
 
 
+def _resolve_dynamic_booking_event(
+    db: Session,
+    *,
+    form: Form,
+    validated_payload: dict[str, Any],
+    mapped_booking_date: date | None,
+) -> dict[str, Any]:
+    booking_date = (
+        mapped_booking_date
+        or _normalize_booking_date(validated_payload.get("__booking_date"))
+        or _normalize_booking_date(validated_payload.get("booking_date"))
+    )
+    if booking_date is None:
+        raise HTTPException(status_code=422, detail="Seleziona una data valida per la prenotazione.")
+
+    try:
+        series_id = int(
+            validated_payload.get("__booking_event_series_id")
+            or validated_payload.get("booking_event_series_id")
+        )
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="Seleziona una serata valida.") from None
+
+    booking_time = _normalize_booking_time(
+        validated_payload.get("__booking_event_time") or validated_payload.get("booking_time")
+    )
+    if not booking_time or not _TIME_PATTERN.fullmatch(booking_time[:5]):
+        raise HTTPException(status_code=422, detail="Seleziona un orario valido.")
+    booking_time = booking_time[:5]
+
+    series = (
+        db.query(BookingEventSeries)
+        .options(joinedload(BookingEventSeries.time_slots))
+        .filter(
+            BookingEventSeries.id == series_id,
+            BookingEventSeries.association_id == form.association_id,
+            BookingEventSeries.is_active.is_(True),
+        )
+        .first()
+    )
+    if series is None or not _series_matches_date(series, booking_date):
+        raise HTTPException(status_code=422, detail="La serata selezionata non e disponibile per questa data.")
+
+    valid_slots = {
+        str(slot.start_time or "")[:5]
+        for slot in list(series.time_slots or [])
+        if bool(getattr(slot, "is_active", True))
+    }
+    if booking_time not in valid_slots:
+        raise HTTPException(status_code=422, detail="L'orario selezionato non e disponibile per questa serata.")
+
+    detail_parts = [series.title]
+    if series.description:
+        detail_parts.append(series.description)
+    return {
+        "booking_date": booking_date,
+        "booking_time": booking_time,
+        "event_details": "\n".join(detail_parts),
+    }
+
+
+def _series_matches_date(series: BookingEventSeries, booking_date: date) -> bool:
+    recurrence_type = (_normalize_text(getattr(series, "recurrence_type", None)) or "weekly").lower()
+    if recurrence_type == "date":
+        return getattr(series, "event_date", None) == booking_date
+    return getattr(series, "weekday", None) == booking_date.weekday()
+
+
 def _normalize_party_size(value: Any) -> int | None:
     if value in (None, ""):
         return None
@@ -353,7 +437,10 @@ def _enqueue_booking_email(
         payload=build_email_payload(
             text_body=text_body,
             html_body=html_body,
-            sender=build_sender_payload(mode="system"),
+            sender=build_sender_payload(
+                mode="association",
+                association=getattr(booking, "organization", None) or getattr(getattr(booking, "form", None), "organization", None),
+            ),
             meta={
                 "booking_id": booking.id,
                 "form_id": booking.form_id,
@@ -385,8 +472,19 @@ def create_booking_from_submission(
     booking_time = _normalize_booking_time(getattr(form, "booking_event_time", None)) or _normalize_booking_time(
         _mapped_payload_value(mapping, "booking_time", validated_payload)
     )
+    if bool(getattr(form, "booking_dynamic_events_enabled", False)):
+        dynamic_event = _resolve_dynamic_booking_event(
+            db,
+            form=form,
+            validated_payload=validated_payload,
+            mapped_booking_date=booking_date,
+        )
+        booking_date = dynamic_event["booking_date"]
+        booking_time = dynamic_event["booking_time"]
+        event_details = dynamic_event["event_details"]
+    else:
+        event_details = _normalize_text(getattr(form, "booking_event_details", None))
     party_size = _normalize_party_size(_mapped_payload_value(mapping, "party_size", validated_payload))
-    event_details = _normalize_text(getattr(form, "booking_event_details", None))
     notes = _normalize_text(_mapped_payload_value(mapping, "notes", validated_payload))
     if event_details and notes:
         notes = f"{event_details}\n\nNote richiesta: {notes}"
@@ -475,6 +573,7 @@ def update_booking_status(
     room_id: int | None = None,
     table_id: int | None = None,
     notes: str | None = None,
+    notify_customer: bool = True,
 ) -> Booking:
     normalized_status = (_normalize_text(next_status) or "").lower()
     if normalized_status not in BOOKING_STATUSES:
@@ -524,7 +623,7 @@ def update_booking_status(
         previous_room_id=previous_room_id,
         previous_table_id=previous_table_id,
     )
-    if normalized_status != previous_status and bool(getattr(booking.form, "booking_notification_enabled", True)):
+    if notify_customer and normalized_status != previous_status and bool(getattr(booking.form, "booking_notification_enabled", True)):
         if normalized_status == BookingStatus.CONFIRMED.value:
             _enqueue_booking_email(
                 db,

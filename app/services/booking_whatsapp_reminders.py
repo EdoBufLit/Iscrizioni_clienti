@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import html
 from datetime import date, datetime, time, timedelta
 from typing import Any
 
@@ -8,6 +9,9 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
 from app.models import Booking, BookingEvent, BookingStatus, Form, Organization, WhatsAppConnection
+from app.services.booking_customer_actions import create_booking_action_links
+from app.services.email_outbox import build_email_payload, enqueue_email
+from app.services.email_sender import build_sender_payload
 from app.services.email_templates import build_template_context, render_template_string
 from app.services.whatsapp_automation import _send_whatsapp_text
 from app.services.whatsapp_evolution import normalize_phone
@@ -16,10 +20,15 @@ logger = logging.getLogger(__name__)
 
 BOOKING_REMINDER_EVENT = "whatsapp_booking_reminder_sent"
 SURVEY_DISPATCH_EVENT = "whatsapp_post_event_survey_sent"
+SURVEY_EMAIL_DISPATCH_EVENT = "email_post_event_survey_sent"
 
 DEFAULT_BOOKING_REMINDER_TEMPLATE = (
     "Ciao {{nome_contatto}}, ti ricordiamo la prenotazione per {{nome_associazione}} "
-    "{{data_prenotazione}} alle {{orario_prenotazione}}. Dettagli: {{riepilogo_prenotazione}}."
+    "{{data_prenotazione}} alle {{orario_prenotazione}}. Dettagli: {{riepilogo_prenotazione}}.\n\n"
+    "Conferma: {{link_conferma_prenotazione}}\n"
+    "Annulla: {{link_annulla_prenotazione}}\n"
+    "Modifica/note: {{link_note_prenotazione}}\n\n"
+    "Puoi anche rispondere SI o NO a questo messaggio."
 )
 DEFAULT_SURVEY_TEMPLATE = (
     "Ciao {{nome_contatto}}, grazie per aver partecipato all'evento di {{nome_associazione}}. "
@@ -35,8 +44,6 @@ def process_booking_whatsapp_reminders(
 ) -> dict[str, int]:
     current = now or datetime.utcnow()
     stats = {"checked": 0, "sent": 0, "skipped": 0, "failed": 0}
-    if not settings.ENABLE_WHATSAPP_EVOLUTION:
-        return stats
 
     bookings = (
         db.query(Booking)
@@ -84,7 +91,16 @@ def process_booking_whatsapp_reminders(
             getattr(booking.organization, "booking_whatsapp_reminder_template", None)
             or DEFAULT_BOOKING_REMINDER_TEMPLATE
         )
-        text = _render_booking_template(template, booking=booking, extra_context={}).strip()
+        action_links = create_booking_action_links(db, booking=booking)
+        text = _render_booking_template(
+            template,
+            booking=booking,
+            extra_context={
+                "link_conferma_prenotazione": action_links.get("confirm", ""),
+                "link_annulla_prenotazione": action_links.get("cancel", ""),
+                "link_note_prenotazione": action_links.get("note", ""),
+            },
+        ).strip()
         result = _send_whatsapp_text(
             db,
             connection=connection,
@@ -123,6 +139,18 @@ def process_post_event_survey_whatsapp(
     now: datetime | None = None,
     limit: int = 100,
 ) -> dict[str, int]:
+    stats = {"checked": 0, "sent": 0, "skipped": 0, "failed": 0}
+    # Post-event surveys are intentionally email-only. Keep this function as a
+    # no-op for compatibility with older imports/tests.
+    return stats
+
+
+def process_post_event_survey_email(
+    db: Session,
+    *,
+    now: datetime | None = None,
+    limit: int = 100,
+) -> dict[str, int]:
     current = now or datetime.utcnow()
     stats = {"checked": 0, "sent": 0, "skipped": 0, "failed": 0}
     if not settings.ENABLE_WHATSAPP_EVOLUTION:
@@ -144,7 +172,6 @@ def process_post_event_survey_whatsapp(
     if not survey_forms:
         return stats
 
-    connection_cache: dict[int, WhatsAppConnection | None] = {}
     for survey_form in survey_forms:
         delay = int(getattr(survey_form, "survey_post_event_delay_hours", 2) or 2)
         bookings = (
@@ -161,19 +188,14 @@ def process_post_event_survey_whatsapp(
         )
         for booking in bookings:
             stats["checked"] += 1
-            if _has_booking_event(booking, SURVEY_DISPATCH_EVENT, survey_form_id=survey_form.id):
+            if _has_booking_event(booking, SURVEY_EMAIL_DISPATCH_EVENT, survey_form_id=survey_form.id):
                 stats["skipped"] += 1
                 continue
             event_at = _booking_datetime(booking)
             if event_at is None or current < event_at + timedelta(hours=max(0, delay)):
                 stats["skipped"] += 1
                 continue
-            phone_number = normalize_phone(getattr(booking, "customer_phone", None))
-            if not phone_number:
-                stats["skipped"] += 1
-                continue
-            connection = _connection_for_org(db, connection_cache, org_id=booking.association_id)
-            if connection is None:
+            if not booking.customer_email:
                 stats["skipped"] += 1
                 continue
             survey_link = _survey_public_url(survey_form)
@@ -186,30 +208,47 @@ def process_post_event_survey_whatsapp(
                     "link_sondaggio": survey_link,
                 },
             ).strip()
-            result = _send_whatsapp_text(
-                db,
-                connection=connection,
-                phone_number=phone_number,
-                text=text,
-                display_name=booking.customer_name,
-            )
-            if result.get("sent"):
-                _record_booking_event(
+            html_body = f"<p>{html.escape(text).replace(chr(10), '<br>')}</p><p><a href='{html.escape(survey_link)}'>Apri sondaggio</a></p>"
+            try:
+                enqueue_email(
                     db,
-                    booking=booking,
-                    event_type=SURVEY_DISPATCH_EVENT,
-                    payload={
-                        "survey_form_id": survey_form.id,
-                        "survey_link": survey_link,
-                        "delay_hours": delay,
-                        "message_id": result.get("message_id"),
-                    },
+                    email_type="post_event_survey",
+                    to_email=booking.customer_email,
+                    subject=f"Sondaggio: {survey_form.title}",
+                    payload=build_email_payload(
+                        text_body=text,
+                        html_body=html_body,
+                        sender=build_sender_payload(mode="association", association=booking.organization),
+                        meta={
+                            "booking_id": booking.id,
+                            "survey_form_id": survey_form.id,
+                            "association_id": booking.association_id,
+                        },
+                    ),
+                    priority=5,
+                    dedupe_key=f"post_event_survey:{survey_form.id}:{booking.id}",
                 )
-                stats["sent"] += 1
-                db.commit()
-            else:
+            except Exception:
                 stats["failed"] += 1
                 db.rollback()
+                logger.exception(
+                    "post_event_survey_email_failed booking_id=%s survey_form_id=%s",
+                    booking.id,
+                    survey_form.id,
+                )
+                continue
+            _record_booking_event(
+                db,
+                booking=booking,
+                event_type=SURVEY_EMAIL_DISPATCH_EVENT,
+                payload={
+                    "survey_form_id": survey_form.id,
+                    "survey_link": survey_link,
+                    "delay_hours": delay,
+                },
+            )
+            stats["sent"] += 1
+            db.commit()
     return stats
 
 
@@ -219,7 +258,7 @@ def process_booking_communications_once(*, now: datetime | None = None) -> dict[
     with SessionLocal() as db:
         return {
             "booking_whatsapp_reminders": process_booking_whatsapp_reminders(db, now=now),
-            "post_event_surveys": process_post_event_survey_whatsapp(db, now=now),
+            "post_event_surveys": process_post_event_survey_email(db, now=now),
         }
 
 

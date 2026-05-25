@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   fetchOrgAdminMembers,
   fetchOrgAdminMetrics,
@@ -85,6 +85,7 @@ type CreatedMember = {
 const OrgAdminMembers = () => {
   const { admin, loading: adminLoading } = useOrgAdmin();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [members, setMembers] = useState<OrgAdminMember[]>([]);
   const [total, setTotal] = useState(0);
@@ -93,13 +94,13 @@ const OrgAdminMembers = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [status, setStatus] = useState("active");
-  const [access, setAccess] = useState("");
-  const [source, setSource] = useState("");
-  const [docs, setDocs] = useState("");
-  const [order, setOrder] = useState("joined_at_desc");
-  const [page, setPage] = useState(1);
+  const [debouncedSearch, setDebouncedSearch] = useState(searchParams.get("q") || "");
+  const [status, setStatus] = useState(searchParams.get("status") || "active");
+  const [access, setAccess] = useState(searchParams.get("access") || "");
+  const [source, setSource] = useState(searchParams.get("source") || "");
+  const [docs, setDocs] = useState(searchParams.get("docs") || "");
+  const [order, setOrder] = useState(searchParams.get("order") || "joined_at_desc");
+  const [page, setPage] = useState(Math.max(1, Number(searchParams.get("page") || 1) || 1));
 
   const [showModal, setShowModal] = useState(false);
   const [searchResetKey, setSearchResetKey] = useState(0);
@@ -177,6 +178,18 @@ const OrgAdminMembers = () => {
   useEffect(() => {
     void loadMetrics();
   }, [loadMetrics]);
+
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (debouncedSearch) next.set("q", debouncedSearch);
+    if (status !== "active") next.set("status", status);
+    if (access) next.set("access", access);
+    if (source) next.set("source", source);
+    if (docs) next.set("docs", docs);
+    if (order !== "joined_at_desc") next.set("order", order);
+    if (page > 1) next.set("page", String(page));
+    setSearchParams(next, { replace: true });
+  }, [access, debouncedSearch, docs, order, page, setSearchParams, source, status]);
 
   const isLoading = adminLoading || loading;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -327,6 +340,7 @@ const OrgAdminMembers = () => {
           <div className="flex-1 min-w-0">
             <DebouncedSearchInput
               resetKey={searchResetKey}
+              initialValue={debouncedSearch}
               onDebouncedChange={(value) => {
                 setDebouncedSearch(value);
                 setPage(1);

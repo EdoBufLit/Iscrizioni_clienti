@@ -1,3 +1,18 @@
+## Plan (Fix booking mobile post-conferma, form dark, variabili WhatsApp - May 25, 2026)
+- [x] Separare su mobile le richieste ancora da confermare dalle prenotazioni gia confermate/gestite, spostando queste ultime nella zona bassa ora vuota.
+- [x] Rendere evidente e rapida l'assegnazione sala/tavolo per una prenotazione confermata da form, senza riaprire pannelli desktop lunghi.
+- [x] Correggere il canvas form in dark mode: campi sempre leggibili e non scuriti dal tema globale quando il form non e in stile spotlight.
+- [x] Aggiungere in WhatsApp > Automazioni un elenco variabili ordinato, mobile-first, con chip copiabili/inseribili e campi del form selezionato.
+- [x] Verificare typecheck/build e smoke light/dark mobile delle pagine toccate.
+
+## Review (Fix booking mobile post-conferma, form dark, variabili WhatsApp - May 25, 2026)
+- Agenda mobile: la lista in alto mostra solo richieste ancora pending/new; le prenotazioni confermate o gestite da form si spostano sotto i tab in `Prenotazioni confermate`, nella zona prima vuota.
+- Assegnazione tavolo: al tap sulla card confermata si apre un dettaglio compatto con data, ora normalizzata `HH:MM`, persone, contatto, campi form e controlli Sala/Tavolo + `Salva tavolo`, senza auto-scroll sotto la topbar.
+- Form pubblico: i form non-spotlight isolano `input`, `select`, `textarea` e option card dalla dark mode globale con `color-scheme: light` e override specifici anche per `:root[data-theme="dark"]`.
+- WhatsApp > Automazioni: nel passo Messaggio c'e una libreria variabili mobile-first con gruppi Contatto, Prenotazione, Modulo e Campi form; toccando un chip inserisce il placeholder nel textarea.
+- Screenshot e smoke salvati in `tasks/screenshots/booking-post-confirm-form-whatsapp-20260525/` con `visual-checks.json`.
+- Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, smoke Playwright mobile dark/light su agenda confermate, assegnazione tavolo, form pubblico e variabili WhatsApp. Resta solo il warning Vite preesistente sui chunk grandi.
+
 ## Plan (Agenda booking mobile-first conferma/rigetto - May 25, 2026)
 - [x] Correggere il clipping mobile dei filtri stato e aggiungere un cambio giorno chiaro senza reintrodurre il calendario desktop.
 - [x] Rendere ogni richiesta arrivata da form riconoscibile nella lista e mostrare subito data, ora, persone e contatto al tap.
@@ -5095,3 +5110,21 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Rollout manuale completato: pull immagine runtime branch, migration Alembic a `t5u6v7w8x9y0`, recreate di `web`, `email-worker`, `low-cards-worker` e `whatsapp-webhook-worker` sulla stessa immagine.
 - Workflow aggiornato: controllo disco/inode e permessi `.git` prima del fetch, migration Docker Compose con stdin chiuso, pull/rollout/wait includono `whatsapp-webhook-worker`.
 - Verifiche live OK: working tree server pulito, `/` al 32%, container runtime healthy/running, `https://assonam.it/`, `/api/capabilities` e `/api/organizations` rispondono 200.
+## Plan (Org admin prenotazioni, serate, WhatsApp safe, survey email - May 25, 2026)
+- [x] Correggere il sender delle email operative per usare sempre il mittente associazione configurato dall'org admin su `notifiche.assonam.it`.
+- [x] Implementare reminder WhatsApp con link sicuri `Confermo`, `Annulla`, `Modifica/note` e parser fallback SI/NO.
+- [x] Creare pagina pubblica risposta prenotazione con token monouso/scadenza, aggiornamento booking, note cliente, email admin e notifica campanella.
+- [x] Aggiungere rigetto admin senza messaggio socio e stato visuale agenda verde/rosso/giallo per note non gestite.
+- [x] Aggiungere serate prenotabili org-level con slot orari e collegamento dinamico al form prenotazione fisso.
+- [x] Rendere il sondaggio post-evento solo email, solo per presenti, con ringraziamento solo a voto alto.
+- [x] Migliorare ricerca soci mobile e backend includendo numero tessera/card.
+- [x] Rendere Evolution piu conservativo, con reset connessione e senza messaggi visibili di sincronizzazione.
+- [x] Correggere cookie persistent org-admin per iPhone (`SameSite=Lax`).
+- [x] Verificare con pytest, typecheck/build frontend, smoke e screenshot light/dark.
+
+## Review (Org admin prenotazioni, serate, WhatsApp safe, survey email - May 25, 2026)
+- Backend: aggiunte action token prenotazione, pagina pubblica risposta, parser SI/NO, note cliente, notifiche campanella/admin email, rigetto senza messaggio e serate prenotabili org-level con slot.
+- Comunicazioni: email operative e survey usano il sender associazione; reminder booking resta WhatsApp con link sicuri; sondaggio post-evento e ringraziamento voto alto sono solo email.
+- Frontend: agenda mobile separa richieste operative e prenotazioni gestite, aggiunge sezione Serate, card verde/rossa/gialla, note gestibili, rifiuto senza messaggio, reset WhatsApp e ricerca soci persistente in URL.
+- Evolution/iPhone: runtime conservativo (`syncFullHistory/readMessages/readStatus/alwaysOnline` disattivati, `rejectCall` attivo), reset connessione e cookie org-admin `SameSite=Lax`.
+- Verifiche OK: `python -m compileall app init_db.py`, `npm run build` in `frontend`, `python -m pytest tests/test_org_admin_communications.py::test_booking_whatsapp_reminder_is_automatic_and_deduped tests/test_org_admin_communications.py::test_post_event_survey_targets_only_present_bookings tests/test_org_admin_member_filters.py::test_org_admin_member_filters -q`.

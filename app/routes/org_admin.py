@@ -4,6 +4,7 @@ import json
 
 import os
 import random
+import re
 import secrets
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, Body, Query
 from fastapi.responses import StreamingResponse, FileResponse, Response
@@ -20,6 +21,8 @@ from app.models import (
     AdminUser,
     AdminRole,
     Booking,
+    BookingEventSeries,
+    BookingEventTimeSlot,
     OrgAdminToken,
     Member,
     MemberStatus,
@@ -149,6 +152,7 @@ from app.services.bookings import (
     serialize_booking,
     update_booking_status,
 )
+from app.services.booking_customer_actions import mark_booking_customer_note_reviewed
 from app.services.booking_rooms import (
     apply_room_table_updates,
     apply_room_updates,
@@ -2198,6 +2202,7 @@ class CreateAssociationFormBody(BaseModel):
     booking_event_date: Optional[date] = None
     booking_event_time: Optional[str] = Field(default=None, max_length=16)
     booking_event_details: Optional[str] = None
+    booking_dynamic_events_enabled: bool = False
     survey_post_event_enabled: bool = False
     survey_post_event_delay_hours: int = Field(default=2, ge=0, le=336)
     survey_post_event_message_template: Optional[str] = None
@@ -2237,6 +2242,7 @@ class UpdateAssociationFormBody(BaseModel):
     booking_event_date: Optional[date] = None
     booking_event_time: Optional[str] = Field(default=None, max_length=16)
     booking_event_details: Optional[str] = None
+    booking_dynamic_events_enabled: bool = False
     survey_post_event_enabled: bool = False
     survey_post_event_delay_hours: int = Field(default=2, ge=0, le=336)
     survey_post_event_message_template: Optional[str] = None
@@ -2279,6 +2285,17 @@ class UpdateBookingStatusBody(BaseModel):
     room_id: Optional[int] = None
     table_id: Optional[int] = None
     notes: Optional[str] = None
+    notify_customer: bool = True
+
+
+class UpsertBookingEventSeriesBody(BaseModel):
+    title: str = Field(min_length=1, max_length=160)
+    description: Optional[str] = None
+    recurrence_type: str = Field(default="weekly", max_length=20)
+    weekday: Optional[int] = Field(default=None, ge=0, le=6)
+    event_date: Optional[date] = None
+    is_active: bool = True
+    time_slots: list[str] = Field(default_factory=list)
 
 
 class CreateRoomBody(BaseModel):
@@ -2323,6 +2340,37 @@ class SaveRoomMapBody(BaseModel):
 class AssignBookingTableBody(BaseModel):
     room_id: Optional[int] = None
     table_id: Optional[int] = None
+
+
+def _normalize_event_slot_time(value: str) -> str:
+    normalized = str(value or "").strip()[:5]
+    if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", normalized):
+        raise HTTPException(status_code=422, detail="Orario serata non valido.")
+    return normalized
+
+
+def _serialize_booking_event_series(series: BookingEventSeries) -> dict[str, object]:
+    return {
+        "id": series.id,
+        "association_id": series.association_id,
+        "title": series.title,
+        "description": series.description,
+        "recurrence_type": series.recurrence_type,
+        "weekday": series.weekday,
+        "event_date": series.event_date.isoformat() if series.event_date else None,
+        "is_active": bool(series.is_active),
+        "time_slots": [
+            {
+                "id": slot.id,
+                "start_time": slot.start_time,
+                "is_active": bool(slot.is_active),
+                "sort_order": slot.sort_order,
+            }
+            for slot in list(series.time_slots or [])
+        ],
+        "created_at": series.created_at.isoformat() if series.created_at else None,
+        "updated_at": series.updated_at.isoformat() if series.updated_at else None,
+    }
 
 
 @router.get("/organization")
@@ -4750,6 +4798,8 @@ def list_org_members(
                 Member.last_name.ilike(pattern),
                 Member.email.ilike(pattern),
                 Member.fiscal_code.ilike(pattern),
+                cast(Member.card_no, String).ilike(pattern),
+                cast(Member.card_year, String).ilike(pattern),
             )
         )
 
@@ -6210,6 +6260,7 @@ def create_association_form(
         booking_event_date=body.booking_event_date,
         booking_event_time=body.booking_event_time,
         booking_event_details=body.booking_event_details,
+        booking_dynamic_events_enabled=body.booking_dynamic_events_enabled,
         survey_post_event_enabled=body.survey_post_event_enabled,
         survey_post_event_delay_hours=body.survey_post_event_delay_hours,
         survey_post_event_message_template=body.survey_post_event_message_template,
@@ -6282,6 +6333,7 @@ def update_association_form(
         booking_event_date=body.booking_event_date,
         booking_event_time=body.booking_event_time,
         booking_event_details=body.booking_event_details,
+        booking_dynamic_events_enabled=body.booking_dynamic_events_enabled,
         survey_post_event_enabled=body.survey_post_event_enabled,
         survey_post_event_delay_hours=body.survey_post_event_delay_hours,
         survey_post_event_message_template=body.survey_post_event_message_template,
@@ -6360,6 +6412,7 @@ def duplicate_association_form(
         booking_event_date=getattr(source_form, "booking_event_date", None),
         booking_event_time=getattr(source_form, "booking_event_time", None),
         booking_event_details=getattr(source_form, "booking_event_details", None),
+        booking_dynamic_events_enabled=bool(getattr(source_form, "booking_dynamic_events_enabled", False)),
         notify_admin_on_submit=bool(source_form.notify_admin_on_submit),
         send_user_confirmation=bool(source_form.send_user_confirmation),
         whatsapp_auto_reply_enabled=bool(getattr(source_form, "whatsapp_auto_reply_enabled", False)),
@@ -7029,6 +7082,144 @@ def save_org_admin_room_map(
     return {"ok": True, "items": [serialize_room_table(table) for table in tables]}
 
 
+@router.get("/booking-event-series")
+def list_org_admin_booking_event_series(
+    request: Request,
+    include_inactive: bool = Query(default=True),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    query = (
+        db.query(BookingEventSeries)
+        .options(joinedload(BookingEventSeries.time_slots))
+        .filter(BookingEventSeries.association_id == admin.org_id)
+    )
+    if not include_inactive:
+        query = query.filter(BookingEventSeries.is_active.is_(True))
+    items = query.order_by(
+        BookingEventSeries.recurrence_type.asc(),
+        BookingEventSeries.weekday.asc().nulls_last(),
+        BookingEventSeries.event_date.asc().nulls_last(),
+        BookingEventSeries.title.asc(),
+    ).all()
+    return {"items": [_serialize_booking_event_series(item) for item in items]}
+
+
+@router.post("/booking-event-series", status_code=201)
+def create_org_admin_booking_event_series(
+    body: UpsertBookingEventSeriesBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    series = BookingEventSeries(association_id=admin.org_id)
+    _apply_booking_event_series_updates(series, body)
+    db.add(series)
+    db.flush()
+    _replace_booking_event_series_slots(db, series=series, slots=body.time_slots)
+    db.commit()
+    db.refresh(series)
+    return {"series": _serialize_booking_event_series(series)}
+
+
+@router.patch("/booking-event-series/{series_id}")
+def update_org_admin_booking_event_series(
+    series_id: int,
+    body: UpsertBookingEventSeriesBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    series = (
+        db.query(BookingEventSeries)
+        .options(joinedload(BookingEventSeries.time_slots))
+        .filter(BookingEventSeries.id == series_id, BookingEventSeries.association_id == admin.org_id)
+        .first()
+    )
+    if series is None:
+        raise HTTPException(status_code=404, detail="Serata non trovata.")
+    _apply_booking_event_series_updates(series, body)
+    _replace_booking_event_series_slots(db, series=series, slots=body.time_slots)
+    db.commit()
+    db.refresh(series)
+    return {"series": _serialize_booking_event_series(series)}
+
+
+@router.delete("/booking-event-series/{series_id}")
+def delete_org_admin_booking_event_series(
+    series_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    series = (
+        db.query(BookingEventSeries)
+        .filter(BookingEventSeries.id == series_id, BookingEventSeries.association_id == admin.org_id)
+        .first()
+    )
+    if series is None:
+        raise HTTPException(status_code=404, detail="Serata non trovata.")
+    db.delete(series)
+    db.commit()
+    return {"ok": True, "deleted_series_id": series_id}
+
+
+def _apply_booking_event_series_updates(series: BookingEventSeries, body: UpsertBookingEventSeriesBody) -> None:
+    recurrence_type = (body.recurrence_type or "weekly").strip().lower()
+    if recurrence_type not in {"weekly", "date"}:
+        raise HTTPException(status_code=422, detail="Tipo ricorrenza serata non valido.")
+    if recurrence_type == "weekly" and body.weekday is None:
+        raise HTTPException(status_code=422, detail="Seleziona il giorno della settimana.")
+    if recurrence_type == "date" and body.event_date is None:
+        raise HTTPException(status_code=422, detail="Seleziona la data della serata.")
+    series.title = body.title.strip()
+    series.description = (body.description or "").strip() or None
+    series.recurrence_type = recurrence_type
+    series.weekday = body.weekday if recurrence_type == "weekly" else None
+    series.event_date = body.event_date if recurrence_type == "date" else None
+    series.is_active = bool(body.is_active)
+    series.updated_at = datetime.utcnow()
+
+
+def _replace_booking_event_series_slots(
+    db: Session,
+    *,
+    series: BookingEventSeries,
+    slots: list[str],
+) -> None:
+    normalized_slots: list[str] = []
+    for raw_slot in slots:
+        slot = _normalize_event_slot_time(raw_slot)
+        if slot not in normalized_slots:
+            normalized_slots.append(slot)
+    if not normalized_slots:
+        raise HTTPException(status_code=422, detail="Inserisci almeno un orario disponibile.")
+    for existing in list(series.time_slots or []):
+        db.delete(existing)
+    db.flush()
+    for index, slot in enumerate(normalized_slots):
+        db.add(
+            BookingEventTimeSlot(
+                series_id=series.id,
+                start_time=slot,
+                is_active=True,
+                sort_order=index,
+            )
+        )
+
+
 @router.get("/bookings")
 def list_org_admin_bookings(
     request: Request,
@@ -7171,6 +7362,7 @@ def patch_org_admin_booking(
         room_id=body.room_id,
         table_id=body.table_id,
         notes=body.notes,
+        notify_customer=body.notify_customer,
     )
     request_decision: dict[str, object] | None = None
     if (
@@ -7229,6 +7421,88 @@ def patch_org_admin_booking(
         "booking": serialize_booking(booking, include_events=True),
         "request_decision": request_decision,
     }
+
+
+@router.post("/bookings/{booking_id}/reject-silent")
+def reject_org_admin_booking_without_message(
+    booking_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    booking = (
+        db.query(Booking)
+        .options(
+            joinedload(Booking.form),
+            joinedload(Booking.submission),
+            joinedload(Booking.events),
+            joinedload(Booking.room),
+            joinedload(Booking.table),
+        )
+        .filter(Booking.id == booking_id, Booking.association_id == admin.org_id)
+        .first()
+    )
+    if booking is None:
+        raise HTTPException(status_code=404, detail="Prenotazione non trovata.")
+    update_booking_status(
+        db,
+        booking=booking,
+        next_status="cancelled",
+        created_by_user_id=admin.id,
+        room_id=booking.room_id,
+        table_id=booking.table_id,
+        notes=booking.notes,
+        notify_customer=False,
+    )
+    if booking.submission is not None:
+        booking.submission.status = FORM_SUBMISSION_STATUS_REJECTED
+        booking.submission.reviewed_at = datetime.utcnow()
+        booking.submission.reviewed_by_admin_id = admin.id
+        booking.submission.review_reason = "Rifiutata senza invio messaggio."
+    db.add(
+        OperationLog(
+            actor_admin_id=admin.id,
+            actor_role="org_admin",
+            action="booking.rejected_without_message",
+            entity_type="booking",
+            entity_id=booking.id,
+            metadata_json={
+                "booking_id": booking.id,
+                "submission_id": booking.submission_id,
+                "message_sent": False,
+            },
+        )
+    )
+    db.commit()
+    db.refresh(booking)
+    return {"booking": serialize_booking(booking, include_events=True), "message_sent": False}
+
+
+@router.post("/bookings/{booking_id}/customer-note/read")
+def mark_org_admin_booking_customer_note_read(
+    booking_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    booking = (
+        db.query(Booking)
+        .options(joinedload(Booking.events), joinedload(Booking.room), joinedload(Booking.table))
+        .filter(Booking.id == booking_id, Booking.association_id == admin.org_id)
+        .first()
+    )
+    if booking is None:
+        raise HTTPException(status_code=404, detail="Prenotazione non trovata.")
+    mark_booking_customer_note_reviewed(db, booking=booking, admin_id=admin.id)
+    db.commit()
+    db.refresh(booking)
+    return {"booking": serialize_booking(booking, include_events=True)}
 
 
 @router.post("/bookings/{booking_id}/assignment")

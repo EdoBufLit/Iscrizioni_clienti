@@ -457,6 +457,12 @@ class Organization(Base):
         foreign_keys="Booking.association_id",
         cascade="all, delete-orphan",
     )
+    booking_event_series = relationship(
+        "BookingEventSeries",
+        back_populates="organization",
+        foreign_keys="BookingEventSeries.association_id",
+        cascade="all, delete-orphan",
+    )
     rooms = relationship(
         "Room",
         back_populates="organization",
@@ -1441,6 +1447,9 @@ class Form(Base):
     booking_event_date = Column(Date, nullable=True)
     booking_event_time = Column(String, nullable=True)
     booking_event_details = Column(Text, nullable=True)
+    booking_dynamic_events_enabled = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     survey_post_event_enabled = Column(
         Boolean, nullable=False, default=False, server_default="false", index=True
     )
@@ -1581,6 +1590,9 @@ class Booking(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     confirmed_at = Column(DateTime, nullable=True)
     cancelled_at = Column(DateTime, nullable=True)
+    customer_note = Column(Text, nullable=True)
+    customer_note_submitted_at = Column(DateTime, nullable=True)
+    customer_note_reviewed_at = Column(DateTime, nullable=True)
 
     organization = relationship(
         "Organization",
@@ -1613,6 +1625,11 @@ class Booking(Base):
         cascade="all, delete-orphan",
         order_by="BookingEvent.created_at.desc(), BookingEvent.id.desc()",
     )
+    action_tokens = relationship(
+        "BookingActionToken",
+        back_populates="booking",
+        cascade="all, delete-orphan",
+    )
 
 
 class BookingEvent(Base):
@@ -1634,6 +1651,73 @@ class BookingEvent(Base):
         "AdminUser",
         back_populates="booking_events",
         foreign_keys=[created_by_user_id],
+    )
+
+
+class BookingActionToken(Base):
+    __tablename__ = "booking_action_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    booking_id = Column(Integer, ForeignKey("bookings.id"), nullable=False, index=True)
+    action = Column(String, nullable=False, index=True)
+    token_hash = Column(String, nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    used_at = Column(DateTime, nullable=True, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    booking = relationship(
+        "Booking",
+        back_populates="action_tokens",
+        foreign_keys=[booking_id],
+    )
+
+
+class BookingEventSeries(Base):
+    __tablename__ = "booking_event_series"
+
+    id = Column(Integer, primary_key=True, index=True)
+    association_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    recurrence_type = Column(String, nullable=False, default="weekly", server_default="weekly", index=True)
+    weekday = Column(Integer, nullable=True, index=True)
+    event_date = Column(Date, nullable=True, index=True)
+    is_active = Column(Boolean, nullable=False, default=True, server_default="true", index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    organization = relationship(
+        "Organization",
+        back_populates="booking_event_series",
+        foreign_keys=[association_id],
+    )
+    time_slots = relationship(
+        "BookingEventTimeSlot",
+        back_populates="series",
+        cascade="all, delete-orphan",
+        order_by="BookingEventTimeSlot.sort_order.asc(), BookingEventTimeSlot.id.asc()",
+    )
+
+    __table_args__ = (
+        Index("ix_booking_event_series_org_active_weekday", "association_id", "is_active", "weekday"),
+        Index("ix_booking_event_series_org_active_date", "association_id", "is_active", "event_date"),
+    )
+
+
+class BookingEventTimeSlot(Base):
+    __tablename__ = "booking_event_time_slots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    series_id = Column(Integer, ForeignKey("booking_event_series.id"), nullable=False, index=True)
+    start_time = Column(String, nullable=False, index=True)
+    is_active = Column(Boolean, nullable=False, default=True, server_default="true", index=True)
+    sort_order = Column(Integer, nullable=False, default=0, server_default="0", index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    series = relationship(
+        "BookingEventSeries",
+        back_populates="time_slots",
+        foreign_keys=[series_id],
     )
 
 

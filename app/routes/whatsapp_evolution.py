@@ -173,6 +173,34 @@ def disconnect_whatsapp(
     return {"ok": True, "connection": serialize_connection(connection)}
 
 
+@router.post("/reset")
+def reset_whatsapp_connection(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _require_org_admin(request, db)
+    connection = _get_existing_connection(db, org_id=admin.organization.id)
+    if connection is None:
+        return {"ok": True, "connection": serialize_connection(None)}
+    client = EvolutionLiteClient()
+    errors: list[str] = []
+    try:
+        client.logout(connection.instance_name)
+    except EvolutionApiError as exc:
+        errors.append(str(exc))
+    try:
+        client.delete_instance(connection.instance_name)
+    except EvolutionApiError as exc:
+        errors.append(str(exc))
+    connection.status = "not_connected"
+    connection.qr_code = None
+    connection.last_error = "; ".join(errors)[:1000] if errors else None
+    connection.connected_at = None
+    db.commit()
+    db.refresh(connection)
+    return {"ok": True, "connection": serialize_connection(connection), "errors": errors}
+
+
 @router.get("/chats")
 def list_whatsapp_chats(
     request: Request,

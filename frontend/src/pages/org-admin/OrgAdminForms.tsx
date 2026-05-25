@@ -232,6 +232,7 @@ function emptyFormDraft() {
     booking_event_date: "",
     booking_event_time: "",
     booking_event_details: "",
+    booking_dynamic_events_enabled: false,
     survey_post_event_enabled: false,
     survey_post_event_delay_hours: 2,
     survey_post_event_message_template: "",
@@ -286,6 +287,7 @@ function draftFromAssociationForm(form: AssociationForm) {
     booking_event_date: form.booking_event_date || "",
     booking_event_time: form.booking_event_time || "",
     booking_event_details: form.booking_event_details || "",
+    booking_dynamic_events_enabled: Boolean(form.booking_dynamic_events_enabled),
     survey_post_event_enabled: Boolean(form.survey_post_event_enabled),
     survey_post_event_delay_hours: form.survey_post_event_delay_hours || 2,
     survey_post_event_message_template: form.survey_post_event_message_template || "",
@@ -1085,6 +1087,7 @@ export function OrgAdminFormsWorkspace({
         booking_event_date: formDraft.booking_event_date || null,
         booking_event_time: formDraft.booking_event_time || null,
         booking_event_details: formDraft.booking_event_details || null,
+        booking_dynamic_events_enabled: formDraft.booking_dynamic_events_enabled,
         form_type: mode === "surveys" ? "survey" : formDraft.form_type,
         survey_post_event_enabled: formDraft.survey_post_event_enabled,
         survey_post_event_delay_hours: formDraft.survey_post_event_delay_hours,
@@ -1580,6 +1583,10 @@ export function OrgAdminFormsWorkspace({
       page_style: formDraft.page_style,
       visibility: formDraft.visibility,
       is_active: formDraft.is_active,
+      booking_dynamic_events_enabled: formDraft.booking_dynamic_events_enabled,
+      booking_enabled: formDraft.booking_enabled,
+      create_booking: formDraft.create_booking,
+      form_type: formDraft.form_type,
       fields: previewFields,
       association: {
         name: admin?.organization?.name || "Associazione",
@@ -1888,9 +1895,24 @@ export function OrgAdminFormsWorkspace({
                 <div>
                   <p className="text-sm font-semibold text-neutral-900">Evento fissato dall'organizzazione</p>
                   <p className="mt-1 text-xs leading-5 text-neutral-600">
-                    Questi dati vengono usati per agenda, conferme WhatsApp e promemoria. I campi data/orario compilati dall'utente restano solo fallback per i moduli legacy.
+                    Usa un evento fisso per i moduli legacy, oppure collega il form alla sezione Serate prenotabili dell'agenda.
                   </p>
                 </div>
+                <label className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-white/70 p-3 text-sm font-semibold text-neutral-800">
+                  <input
+                    type="checkbox"
+                    disabled={locked}
+                    checked={formDraft.booking_dynamic_events_enabled}
+                    onChange={(event) => syncFormDraft("booking_dynamic_events_enabled", event.target.checked)}
+                    className="mt-1 rounded border-neutral-300 text-brand"
+                  />
+                  <span>
+                    Usa serate prenotabili
+                    <small className="mt-1 block text-xs font-medium leading-5 text-neutral-500">
+                      Nel form pubblico il socio sceglie data, serata e orario configurati fuori dal singolo form.
+                    </small>
+                  </span>
+                </label>
                 <div className="grid gap-3 md:grid-cols-2">
                   <label className={labelClass}>
                     Data evento
@@ -1954,7 +1976,7 @@ export function OrgAdminFormsWorkspace({
               <div>
                 <h3 className="text-sm font-semibold text-neutral-900">Invio post evento</h3>
                 <p className="mt-1 text-xs leading-5 text-neutral-600">
-                  Invia automaticamente questo sondaggio via WhatsApp alle prenotazioni segnate come presenti in agenda.
+                  Invia automaticamente questo sondaggio via email alle prenotazioni segnate come presenti in agenda.
                 </p>
               </div>
               <label className="relative inline-flex cursor-pointer items-center">
@@ -1983,7 +2005,7 @@ export function OrgAdminFormsWorkspace({
                 />
               </label>
               <label className={labelClass}>
-                Messaggio WhatsApp
+                Messaggio email
                 <textarea
                   className={`${inputClass} min-h-[96px] resize-none`}
                   disabled={locked}

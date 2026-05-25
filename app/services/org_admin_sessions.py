@@ -39,7 +39,7 @@ def set_org_admin_session_cookie(response: Response, raw_token: str) -> None:
         max_age=_session_max_age_seconds(),
         httponly=True,
         secure=_cookie_secure(),
-        samesite="strict",
+        samesite="lax",
         path="/",
     )
 
@@ -50,7 +50,7 @@ def clear_org_admin_session_cookie(response: Response) -> None:
         path="/",
         secure=_cookie_secure(),
         httponly=True,
-        samesite="strict",
+        samesite="lax",
     )
 
 

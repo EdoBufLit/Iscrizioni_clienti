@@ -595,13 +595,13 @@ class EvolutionLiteClient:
     def ensure_runtime_settings(self, instance_name: str) -> dict[str, Any]:
         current = self.get_settings(instance_name)
         desired = {
-            "rejectCall": bool(current.get("rejectCall", False)),
-            "msgCall": current.get("msgCall") if isinstance(current.get("msgCall"), str) else "",
+            "rejectCall": True,
+            "msgCall": "",
             "groupsIgnore": bool(current.get("groupsIgnore", False)),
-            "alwaysOnline": bool(current.get("alwaysOnline", False)),
-            "readMessages": bool(current.get("readMessages", False)),
-            "readStatus": bool(current.get("readStatus", False)),
-            "syncFullHistory": True,
+            "alwaysOnline": False,
+            "readMessages": False,
+            "readStatus": False,
+            "syncFullHistory": False,
             "wavoipToken": current.get("wavoipToken") if isinstance(current.get("wavoipToken"), str) else "",
         }
         if all(current.get(key) == value for key, value in desired.items()):
