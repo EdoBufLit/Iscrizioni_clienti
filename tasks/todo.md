@@ -1,3 +1,63 @@
+## Plan (Agenda booking mobile-first conferma/rigetto - May 25, 2026)
+- [x] Correggere il clipping mobile dei filtri stato e aggiungere un cambio giorno chiaro senza reintrodurre il calendario desktop.
+- [x] Rendere ogni richiesta arrivata da form riconoscibile nella lista e mostrare subito data, ora, persone e contatto al tap.
+- [x] Portare conferma/rigetto in una UX mobile-first: azioni immediate sopra i dettagli lunghi, con riepilogo compilazione e modal compatte.
+- [x] Verificare in smoke mobile light/dark: lista, cambio domani, dettaglio richiesta, conferma, rigetto e assenza overflow/tagli.
+
+## Review (Agenda booking mobile-first conferma/rigetto - May 25, 2026)
+- Mobile agenda: i filtri stato sono in griglia con target touch da 44px, il pulsante giorno successivo non viene piu tagliato e il cambio giorno e disponibile in alto con frecce, input data e pulsante `Oggi` quando serve.
+- Richieste form: le righe collegate a una submission mostrano il badge `Richiesta form`; al tap la card mobile mostra subito stato richiesta, data/ora, persone, contatto, `Conferma`, `Rigetta`, link Moduli e campi compilati non duplicati come `Seduta` e `Note`.
+- Backend/API: `serialize_booking` espone `request_payload_summary`, costruito da `FormSubmission.payload_json` ordinato secondo i `FormField`, cosi il dettaglio admin usa i dati realmente compilati dal socio.
+- Mobile linked-form: su telefono non viene renderizzato il pannello lungo di assegnazione/stato servizio per le richieste da form; resta solo la card operativa. Il dettaglio completo resta disponibile su desktop e per prenotazioni manuali senza submission.
+- Modal conferma/rigetto: niente overlay per messaggio WhatsApp custom in Prenotazioni e Risposte Moduli; il frontend passa `whatsapp_message: null` e i testi rimandano alle regole configurate in `Comunicazioni > WhatsApp > Automazioni`. Conferma non ha textarea, rigetto ha solo il motivo audit obbligatorio.
+- Screenshot e smoke salvati in `tasks/screenshots/booking-mobile-first-flow-20260525/` con `visual-checks.json`.
+- Verifiche OK: `npm --prefix frontend run typecheck`, `python -m pytest -q tests\test_forms_module.py -q`, `npm --prefix frontend run build`, smoke Edge CDP mobile/desktop light/dark con zero overflow, zero filtri tagliati, modal nel viewport e azioni conferma/rigetto visibili nel primo viewport dopo il tap. Resta solo il warning Vite preesistente sui chunk grandi.
+
+## Plan (Agenda mobile giornaliera e riepilogo WhatsApp booking - May 24, 2026)
+- [x] Tracciare dal backend da quali campi viene valorizzato `{{riepilogo_prenotazione}}` nelle automazioni WhatsApp conferma/rigetto.
+- [x] Riorganizzare la vista mobile di `Prenotazioni > Agenda`: niente KPI/card in alto, focus immediato sul giorno corrente/selezionato e prenotazioni impilate.
+- [x] Mantenere invariata la vista desktop e verificare light/dark mode sulle superfici responsive toccate.
+- [x] Eseguire build/typecheck e smoke visivo mobile, poi documentare risultato.
+
+## Review (Agenda mobile giornaliera e riepilogo WhatsApp booking - May 24, 2026)
+- `{{riepilogo_prenotazione}}` viene costruito in `app/services/whatsapp_automation.py` da data, ora, numero persone e dettagli evento/booking: prima legge la configurazione form (`booking_event_*`), poi la `Booking`, poi il payload reale della submission tramite `booking_field_mapping`, alias e hint sui campi del form.
+- Mobile agenda: per `Prenotazioni > Agenda` il breakpoint sotto 720px nasconde header pagina, KPI, workbench richieste, riepilogo mese e calendario mensile; il primo contenuto operativo diventa il pannello del giorno corrente/selezionato con le prenotazioni collassate una sotto l'altra. Il tap su una riga apre ancora il dettaglio e le azioni.
+- Desktop: layout completo preservato con header, KPI, rail giorni, riepilogo richieste e calendario mese visibili.
+- Screenshot e smoke salvati in `tasks/screenshots/booking-mobile-agenda-simple-20260524/`: mobile light/dark e desktop light/dark, piu `visual-checks.json`.
+- Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, smoke CDP Edge su `390x844` e `1366x768` in light/dark. Mobile: 3 righe booking, nessun overflow orizzontale, KPI/header/calendar/workbench nascosti; click riga testato con dettaglio e 2 azioni inline caricate. Resta solo il warning Vite preesistente sui chunk grandi.
+
+## Plan (Screenshot flusso prenotazioni dark/light - May 24, 2026)
+- [x] Preparare un ambiente smoke isolato con DB temporaneo, org-admin, richiesta booking pending, notifica campanella e automazioni WhatsApp conferma/rigetto.
+- [x] Catturare screenshot dark mode e light mode per Agenda prenotazioni, campanella/notifica, modal conferma/rigetto e WhatsApp > Automazioni.
+- [x] Verificare che le superfici non abbiano overlap, controlli duplicati o testo tagliato in dark/light.
+- [x] Salvare evidenze in `tasks/screenshots/booking-flow-dark-light-20260524/` e riportare esito.
+
+## Review (Screenshot flusso prenotazioni dark/light - May 24, 2026)
+- Ambiente smoke FastAPI + SPA buildata avviato su DB SQLite temporaneo con richiesta booking pending, notifica campanella eliminabile e automazioni WhatsApp conferma/rigetto.
+- Salvati 12 screenshot finali in `tasks/screenshots/booking-flow-dark-light-20260524/`: agenda, campanella, modal conferma, modal rigetto, WhatsApp > Automazioni e mobile agenda in dark/light.
+- Durante il controllo visuale sono stati corretti due problemi tema: testo body notifiche in light mode e testo `text-emerald-900` nei box informativi dei modal in dark mode.
+- Verifiche OK: `npm --prefix frontend run build`; smoke Edge headless con zero overflow orizzontale, zero errori/warning console rilevanti e nessun corpo notifica invisibile. Resta solo il warning Vite preesistente sui chunk grandi.
+
+## Plan (Prenotazioni Pienissimo-like, notifiche e WhatsApp decisioni - May 23, 2026)
+- [x] Analizzare video reference Pienissimo/ASSONAM e superfici correnti: Agenda prenotazioni, Moduli/Risposte, campanella notifiche, automazioni WhatsApp.
+- [x] Spostare il flusso operativo delle nuove richieste booking verso `Prenotazioni`: deep-link da notifica a giorno + booking, selezione giorno corrente di default, lista richieste arrivate leggibile senza passare da Comunicazioni > Form.
+- [x] Creare notifiche campanella per nuove richieste di prenotazione/form booking, con testo utile e link diretto alla giornata agenda/richiesta collegata.
+- [x] Rendere le notifiche eliminabili davvero: endpoint backend scoped all'org-admin, API frontend e azione UI che rimuove la card dalla campanella aggiornando il badge.
+- [x] Rendere l'agenda piu simile al riferimento Pienissimo: strip dei giorni vicini, barra richieste in evidenza, lista compatta delle richieste del giorno e dettaglio conferma/rigetto inline.
+- [x] Togliere dal gesto conferma/rigetto il textarea WhatsApp personalizzato ricorrente: il modal deve chiedere solo conferma e, per rigetto, motivo audit; i messaggi WhatsApp devono passare da regole in `WhatsApp -> Automazioni`.
+- [x] Estendere le automazioni WhatsApp con trigger decisione booking/richiesta confermata e rigettata, eseguendole realmente lato backend quando l'admin conferma o rigetta.
+- [x] Valutare push notifiche telefono per app wrapper/PWA senza fingere una feature pronta: documentare fattibilita Web Push/FCM/APNs e lasciare la campanella come rilascio immediato.
+- [x] Verificare con test backend mirati, typecheck/build frontend e smoke browser mobile/desktop sulle superfici toccate.
+
+## Review (Prenotazioni Pienissimo-like, notifiche e WhatsApp decisioni - May 23, 2026)
+- Implementato il nuovo percorso operativo: le richieste booking creano notifica campanella `booking_request` con deep-link a `/org-admin/prenotazioni?date=...&bookingId=...`; l'agenda apre sul giorno corrente/query param, seleziona la richiesta e mostra strip giorni + riepilogo richieste del giorno.
+- Campanella: aggiunto endpoint `DELETE /api/org-admin/notifications/{id}`, API frontend e singolo controllo iconico di eliminazione; il badge unread si aggiorna quando si elimina una notifica non letta.
+- Conferma/rigetto: il modal non chiede piu messaggi WhatsApp custom; mostra solo conferma/motivo rigetto e rimanda a `Comunicazioni > WhatsApp > Automazioni`.
+- Automazioni WhatsApp: aggiunti trigger `booking_confirmed` e `booking_rejected`, eseguiti lato backend sulla decisione admin con template configurabili e contesto form/booking/motivo rigetto; anche la patch diretta dello stato booking allinea la richiesta pending per evitare bypass.
+- Push telefono: non implementato in questo rilascio. Per app wrapper serve integrazione nativa FCM/APNs o, se la build e PWA installabile, Web Push con service worker, permessi utente e salvataggio subscription/device token backend; la campanella in-app e il rilascio immediato affidabile.
+- Verifiche OK: `python -m pytest -q tests\test_forms_module.py tests\test_org_admin_notifications.py tests\test_org_admin_communications.py` (45 passed), `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`. Smoke browser locale OK su agenda deep-link, notifica eliminabile, modal rigetto senza textarea WhatsApp e vista Automazioni con i nuovi trigger; cattura screenshot browser non salvata per timeout `Page.captureScreenshot`.
+- Rischi residui: resta il warning Vite preesistente sui chunk grandi; non sono state aggiunte push notification native/PWA.
+
 ## Plan (Fix accento visuale builder form/sondaggi - May 18, 2026)
 - [x] Verificare dove `accent_color` viene applicato nella preview pubblica del builder.
 - [x] Propagare il colore accento a hero, card, sezioni, divider, focus e stati selezionati oltre al solo bottone.

@@ -471,6 +471,8 @@ def test_org_admin_whatsapp_automations_create_list_and_update(client, db):
     assert list_payload["items"][0]["id"] == automation["id"]
     assert "form_field" in list_payload["phone_source_options"]
     assert "submitter" in list_payload["recipient_options"]
+    assert "booking_confirmed" in list_payload["trigger_options"]
+    assert "booking_rejected" in list_payload["trigger_options"]
 
     update_res = client.put(
         f"/api/org-admin/communications/whatsapp/automations/{automation['id']}",

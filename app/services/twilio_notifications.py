@@ -63,6 +63,12 @@ def _resolve_low_cards_to(org: "Organization") -> str | None:
     return to_whatsapp_address(getattr(org, "whatsapp_e164", None))
 
 
+def _resolve_low_cards_from() -> str | None:
+    return to_whatsapp_address(
+        os.getenv("TWILIO_WHATSAPP_FROM") or settings.TWILIO_WHATSAPP_FROM
+    )
+
+
 def _resolve_low_cards_flow_sid() -> str | None:
     return (
         os.getenv("TWILIO_LOW_CARDS_FLOW_SID")
@@ -101,7 +107,7 @@ def execute_low_cards_alert_flow(
         )
         return None
 
-    from_whatsapp = os.getenv("TWILIO_WHATSAPP_FROM") or settings.TWILIO_WHATSAPP_FROM
+    from_whatsapp = _resolve_low_cards_from()
     if not from_whatsapp:
         logger.warning(
             "low_cards_alert_send_skipped_missing_env env=%s org_id=%s slug=%s",

@@ -1,0 +1,484 @@
+{
+  "seed": {
+    "today": "2026-05-25",
+    "tomorrow": "2026-05-26",
+    "booking_id": "1",
+    "admin_email": "booking-smoke-admin@example.test"
+  },
+  "screenshots": {},
+  "mobile_light_list": {
+    "viewportWidth": 390,
+    "viewportHeight": 844,
+    "maxScrollWidth": 390,
+    "horizontalOverflow": 0,
+    "daySwitcherVisible": true,
+    "mobileTitle": "Oggi",
+    "filterButtons": [
+      {
+        "text": "Tutte",
+        "rect": {
+          "left": 32,
+          "right": 191,
+          "top": 278.921875,
+          "bottom": 322.921875,
+          "width": 159,
+          "height": 44
+        }
+      },
+      {
+        "text": "Confermata",
+        "rect": {
+          "left": 199,
+          "right": 358,
+          "top": 278.921875,
+          "bottom": 322.921875,
+          "width": 159,
+          "height": 44
+        }
+      },
+      {
+        "text": "In attesa",
+        "rect": {
+          "left": 32,
+          "right": 191,
+          "top": 330.921875,
+          "bottom": 374.921875,
+          "width": 159,
+          "height": 44
+        }
+      },
+      {
+        "text": "Seduta",
+        "rect": {
+          "left": 199,
+          "right": 358,
+          "top": 330.921875,
+          "bottom": 374.921875,
+          "width": 159,
+          "height": 44
+        }
+      },
+      {
+        "text": "Completata",
+        "rect": {
+          "left": 32,
+          "right": 191,
+          "top": 382.921875,
+          "bottom": 426.921875,
+          "width": 159,
+          "height": 44
+        }
+      }
+    ],
+    "clippedFilters": [],
+    "switcherControls": [
+      {
+        "text": "‹",
+        "rect": {
+          "left": 32,
+          "right": 76,
+          "top": 185.6875,
+          "bottom": 229.6875,
+          "width": 44,
+          "height": 44
+        }
+      },
+      {
+        "text": "Scegli giorno agenda",
+        "rect": {
+          "left": 83.1875,
+          "right": 299.625,
+          "top": 185.6875,
+          "bottom": 229.6875,
+          "width": 216.4375,
+          "height": 44
+        }
+      },
+      {
+        "text": "›",
+        "rect": {
+          "left": 314,
+          "right": 358,
+          "top": 185.6875,
+          "bottom": 229.6875,
+          "width": 44,
+          "height": 44
+        }
+      }
+    ],
+    "smallSwitcherControls": [],
+    "rowCount": 3,
+    "formRequestBadgeCount": 3,
+    "kpiCardsVisible": false
+  },
+  "mobile_light_detail": {
+    "cardVisible": true,
+    "cardRect": {
+      "left": 45,
+      "right": 345,
+      "top": 138.359375,
+      "bottom": 705.953125,
+      "width": 300,
+      "height": 567.59375
+    },
+    "confirmRect": {
+      "left": 61,
+      "right": 190.59375,
+      "top": 440.53125,
+      "bottom": 485.328125,
+      "width": 129.59375,
+      "height": 44.796875
+    },
+    "rejectRect": {
+      "left": 199.390625,
+      "right": 329,
+      "top": 440.53125,
+      "bottom": 485.328125,
+      "width": 129.609375,
+      "height": 44.796875
+    },
+    "actionButtonsInFirstViewport": true,
+    "fieldLabels": [
+      "Seduta",
+      "Note"
+    ],
+    "facts": [
+      "25 mag 2026 - 19:30",
+      "4",
+      "+39 333 123 4567"
+    ],
+    "text": "Richiesta formGiulia RossiRichiesta prenotazione sociRichiesta pendingQuando25 mag 2026 - 19:30Persone4Contatto+39 333 123 4567ConfermaRigettaModuliSedutaMassaggio decontratturanteNotePreferisce ricevere aggiornamenti via WhatsApp."
+  },
+  "mobile_light_confirm_modal": {
+    "modalVisible": true,
+    "modalRect": {
+      "top": 197.203125,
+      "bottom": 646.796875,
+      "left": 16,
+      "right": 374,
+      "width": 358,
+      "height": 449.59375
+    },
+    "modalFitsViewport": true,
+    "textareaCount": 0,
+    "mentionsAutomations": true,
+    "mentionsCustomMessage": false,
+    "buttonTexts": [
+      "Annulla",
+      "Conferma richiesta"
+    ]
+  },
+  "mobile_light_reject_modal": {
+    "modalVisible": true,
+    "modalRect": {
+      "top": 113.703125,
+      "bottom": 730.296875,
+      "left": 16,
+      "right": 374,
+      "width": 358,
+      "height": 616.59375
+    },
+    "modalFitsViewport": true,
+    "textareaCount": 1,
+    "mentionsAutomations": true,
+    "mentionsCustomMessage": false,
+    "buttonTexts": [
+      "Annulla",
+      "Rigetta richiesta"
+    ]
+  },
+  "mobile_light_tomorrow": {
+    "viewportWidth": 390,
+    "viewportHeight": 844,
+    "maxScrollWidth": 390,
+    "horizontalOverflow": 0,
+    "daySwitcherVisible": true,
+    "mobileTitle": "Domani",
+    "filterButtons": [
+      {
+        "text": "Tutte",
+        "rect": {
+          "left": 32,
+          "right": 191,
+          "top": 170.921875,
+          "bottom": 214.921875,
+          "width": 159,
+          "height": 44
+        }
+      },
+      {
+        "text": "Confermata",
+        "rect": {
+          "left": 199,
+          "right": 358,
+          "top": 170.921875,
+          "bottom": 214.921875,
+          "width": 159,
+          "height": 44
+        }
+      },
+      {
+        "text": "In attesa",
+        "rect": {
+          "left": 32,
+          "right": 191,
+          "top": 222.921875,
+          "bottom": 266.921875,
+          "width": 159,
+          "height": 44
+        }
+      },
+      {
+        "text": "Seduta",
+        "rect": {
+          "left": 199,
+          "right": 358,
+          "top": 222.921875,
+          "bottom": 266.921875,
+          "width": 159,
+          "height": 44
+        }
+      },
+      {
+        "text": "Completata",
+        "rect": {
+          "left": 32,
+          "right": 191,
+          "top": 274.921875,
+          "bottom": 318.921875,
+          "width": 159,
+          "height": 44
+        }
+      }
+    ],
+    "clippedFilters": [],
+    "switcherControls": [
+      {
+        "text": "‹",
+        "rect": {
+          "left": 32,
+          "right": 76,
+          "top": 77.6875,
+          "bottom": 121.6875,
+          "width": 44,
+          "height": 44
+        }
+      },
+      {
+        "text": "Scegli giorno agenda",
+        "rect": {
+          "left": 83.1875,
+          "right": 244.71875,
+          "top": 77.6875,
+          "bottom": 121.6875,
+          "width": 161.53125,
+          "height": 44
+        }
+      },
+      {
+        "text": "Oggi",
+        "rect": {
+          "left": 251.90625,
+          "right": 306.8125,
+          "top": 77.6875,
+          "bottom": 121.6875,
+          "width": 54.90625,
+          "height": 44
+        }
+      },
+      {
+        "text": "›",
+        "rect": {
+          "left": 314,
+          "right": 358,
+          "top": 77.6875,
+          "bottom": 121.6875,
+          "width": 44,
+          "height": 44
+        }
+      }
+    ],
+    "smallSwitcherControls": [],
+    "rowCount": 1,
+    "formRequestBadgeCount": 1,
+    "kpiCardsVisible": false
+  },
+  "mobile_dark_list": {
+    "viewportWidth": 390,
+    "viewportHeight": 844,
+    "maxScrollWidth": 390,
+    "horizontalOverflow": 0,
+    "daySwitcherVisible": true,
+    "mobileTitle": "Oggi",
+    "filterButtons": [
+      {
+        "text": "Tutte",
+        "rect": {
+          "left": 32,
+          "right": 191,
+          "top": 278.921875,
+          "bottom": 322.921875,
+          "width": 159,
+          "height": 44
+        }
+      },
+      {
+        "text": "Confermata",
+        "rect": {
+          "left": 199,
+          "right": 358,
+          "top": 278.921875,
+          "bottom": 322.921875,
+          "width": 159,
+          "height": 44
+        }
+      },
+      {
+        "text": "In attesa",
+        "rect": {
+          "left": 32,
+          "right": 191,
+          "top": 330.921875,
+          "bottom": 374.921875,
+          "width": 159,
+          "height": 44
+        }
+      },
+      {
+        "text": "Seduta",
+        "rect": {
+          "left": 199,
+          "right": 358,
+          "top": 330.921875,
+          "bottom": 374.921875,
+          "width": 159,
+          "height": 44
+        }
+      },
+      {
+        "text": "Completata",
+        "rect": {
+          "left": 32,
+          "right": 191,
+          "top": 382.921875,
+          "bottom": 426.921875,
+          "width": 159,
+          "height": 44
+        }
+      }
+    ],
+    "clippedFilters": [],
+    "switcherControls": [
+      {
+        "text": "‹",
+        "rect": {
+          "left": 32,
+          "right": 76,
+          "top": 185.6875,
+          "bottom": 229.6875,
+          "width": 44,
+          "height": 44
+        }
+      },
+      {
+        "text": "Scegli giorno agenda",
+        "rect": {
+          "left": 83.1875,
+          "right": 299.625,
+          "top": 185.6875,
+          "bottom": 229.6875,
+          "width": 216.4375,
+          "height": 44
+        }
+      },
+      {
+        "text": "›",
+        "rect": {
+          "left": 314,
+          "right": 358,
+          "top": 185.6875,
+          "bottom": 229.6875,
+          "width": 44,
+          "height": 44
+        }
+      }
+    ],
+    "smallSwitcherControls": [],
+    "rowCount": 3,
+    "formRequestBadgeCount": 3,
+    "kpiCardsVisible": false
+  },
+  "mobile_dark_detail": {
+    "cardVisible": true,
+    "cardRect": {
+      "left": 45,
+      "right": 345,
+      "top": 138.359375,
+      "bottom": 705.953125,
+      "width": 300,
+      "height": 567.59375
+    },
+    "confirmRect": {
+      "left": 61,
+      "right": 190.59375,
+      "top": 440.53125,
+      "bottom": 485.328125,
+      "width": 129.59375,
+      "height": 44.796875
+    },
+    "rejectRect": {
+      "left": 199.390625,
+      "right": 329,
+      "top": 440.53125,
+      "bottom": 485.328125,
+      "width": 129.609375,
+      "height": 44.796875
+    },
+    "actionButtonsInFirstViewport": true,
+    "fieldLabels": [
+      "Seduta",
+      "Note"
+    ],
+    "facts": [
+      "25 mag 2026 - 19:30",
+      "4",
+      "+39 333 123 4567"
+    ],
+    "text": "Richiesta formGiulia RossiRichiesta prenotazione sociRichiesta pendingQuando25 mag 2026 - 19:30Persone4Contatto+39 333 123 4567ConfermaRigettaModuliSedutaMassaggio decontratturanteNotePreferisce ricevere aggiornamenti via WhatsApp."
+  },
+  "mobile_dark_reject_modal": {
+    "modalVisible": true,
+    "modalRect": {
+      "top": 113.703125,
+      "bottom": 730.296875,
+      "left": 16,
+      "right": 374,
+      "width": 358,
+      "height": 616.59375
+    },
+    "modalFitsViewport": true,
+    "textareaCount": 1,
+    "mentionsAutomations": true,
+    "mentionsCustomMessage": false,
+    "buttonTexts": [
+      "Annulla",
+      "Rigetta richiesta"
+    ]
+  },
+  "desktop_light": {
+    "horizontalOverflow": -15,
+    "pageHeaderVisible": true,
+    "monthOverviewVisible": true,
+    "monthCalendarVisible": true,
+    "dayPanelVisible": true
+  },
+  "desktop_dark": {
+    "horizontalOverflow": -15,
+    "pageHeaderVisible": true,
+    "monthOverviewVisible": true,
+    "monthCalendarVisible": true,
+    "dayPanelVisible": true
+  },
+  "failures": [],
+  "base_url": "http://127.0.0.1:58357"
+}

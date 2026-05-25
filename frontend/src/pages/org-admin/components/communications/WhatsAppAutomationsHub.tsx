@@ -49,6 +49,8 @@ function emptyAutomationDraft() {
 }
 
 function triggerLabel(value: string): string {
+  if (value === "booking_confirmed") return "Prenotazione confermata";
+  if (value === "booking_rejected") return "Prenotazione rigettata";
   if (value === "booking_created") return "Prenotazione creata";
   if (value === "request_received") return "Richiesta ricevuta";
   return "Invio del modulo";
@@ -74,12 +76,13 @@ function buildAutomationSummary(
   >,
 ): string {
   const formLabel = automation.form?.title || "questo flusso";
-  const triggerCopy =
-    automation.trigger_event === "booking_created"
-      ? "viene creata una prenotazione"
-      : automation.trigger_event === "request_received"
-        ? "arriva una richiesta"
-        : "un utente invia il modulo";
+  const triggerCopy = (() => {
+    if (automation.trigger_event === "booking_confirmed") return "l'admin conferma la prenotazione";
+    if (automation.trigger_event === "booking_rejected") return "l'admin rigetta la prenotazione";
+    if (automation.trigger_event === "booking_created") return "viene creata una prenotazione";
+    if (automation.trigger_event === "request_received") return "arriva una richiesta";
+    return "un utente invia il modulo";
+  })();
   const recipientCopy =
     automation.recipient_type === "member"
       ? "al socio collegato"
@@ -626,6 +629,8 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
                     >
                       <option value="form_submitted">Invio del modulo</option>
                       <option value="booking_created">Prenotazione creata</option>
+                      <option value="booking_confirmed">Prenotazione confermata da admin</option>
+                      <option value="booking_rejected">Prenotazione rigettata da admin</option>
                       <option value="request_received">Richiesta ricevuta</option>
                     </select>
                   </label>

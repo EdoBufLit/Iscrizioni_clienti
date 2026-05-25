@@ -1289,6 +1289,11 @@ export type AssociationBooking = {
       email: string | null;
     } | null;
   } | null;
+  request_payload_summary: Array<{
+    key: string;
+    label: string;
+    value: string;
+  }>;
   events: AssociationBookingEvent[];
 };
 
@@ -2272,6 +2277,9 @@ export async function updateOrgAdminFormSubmissionStatus(
   booking: AssociationBooking | null;
   whatsapp_result: {
     sent?: boolean;
+    sent_count?: number;
+    processed?: number;
+    trigger_event?: string | null;
     reason?: string | null;
     error?: string | null;
     status?: string | null;
@@ -4227,7 +4235,7 @@ export type OrgSharedDocumentKind = "general" | "accounting";
 
 export type OrgAdminNotification = {
   id: number;
-  type: "document_general" | "document_accounting" | "low_cards" | string;
+  type: "document_general" | "document_accounting" | "low_cards" | "form_submission" | "booking_request" | string;
   title: string;
   body: string;
   href: string;
@@ -4434,6 +4442,18 @@ export async function markAllOrgAdminNotificationsRead(): Promise<{ ok: boolean;
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento notifiche"));
+  return res.json();
+}
+
+export async function deleteOrgAdminNotification(
+  notificationId: number,
+): Promise<{ ok: boolean; deleted_notification_id: number; was_unread: boolean }> {
+  const res = await fetch(`/api/org-admin/notifications/${notificationId}`, {
+    method: "DELETE",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Notifica non trovata");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore eliminazione notifica"));
   return res.json();
 }
 

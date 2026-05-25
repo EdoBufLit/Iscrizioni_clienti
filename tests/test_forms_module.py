@@ -1004,6 +1004,17 @@ def test_booking_enabled_form_creates_booking_and_exposes_agenda(client, db):
         assert booking.customer_email == "giulia@example.com"
         assert booking.party_size == 4
         assert booking.status == "pending"
+        notification = (
+            verification_db.query(OrgAdminNotification)
+            .filter(
+                OrgAdminNotification.admin_user_id == admin.id,
+                OrgAdminNotification.org_id == org.id,
+                OrgAdminNotification.type == "booking_request",
+            )
+            .one()
+        )
+        assert "Giulia Bianchi" in notification.title
+        assert notification.href == f"/org-admin/prenotazioni?date=2026-03-25&bookingId={booking.id}"
     finally:
         verification_db.close()
 
@@ -1026,11 +1037,13 @@ def test_booking_enabled_form_creates_booking_and_exposes_agenda(client, db):
     )
     assert patch_res.status_code == 200, patch_res.text
     assert patch_res.json()["booking"]["status"] == "confirmed"
+    assert patch_res.json()["booking"]["request_status"] == "confirmed"
+    assert patch_res.json()["request_decision"]["status"] == "confirmed"
 
     submissions_res = client.get(f"/api/org-admin/forms/{form_id}/submissions")
     assert submissions_res.status_code == 200, submissions_res.text
     assert submissions_res.json()["items"][0]["booking"]["status"] == "confirmed"
-    assert submissions_res.json()["items"][0]["status"] == "pending"
+    assert submissions_res.json()["items"][0]["status"] == "confirmed"
 
 
 def test_org_admin_can_review_form_submission_and_dispatch_whatsapp(client, db, monkeypatch):
@@ -1076,6 +1089,35 @@ def test_org_admin_can_review_form_submission_and_dispatch_whatsapp(client, db, 
                 json={**field, "is_required": True, "sort_order": index * 10},
             )
             assert field_res.status_code == 201, field_res.text
+
+        for trigger_event, template_name, template_body in [
+            (
+                "booking_confirmed",
+                "Conferma booking",
+                "Conferma per {{titolo_form}} il {{data_prenotazione}} alle {{orario_prenotazione}}.",
+            ),
+            (
+                "booking_rejected",
+                "Rigetto booking",
+                "Rigetto per {{titolo_form}}. {{motivo_rigetto}}",
+            ),
+        ]:
+            automation_res = client.post(
+                "/api/org-admin/communications/whatsapp/automations",
+                json={
+                    "name": template_name,
+                    "form_id": form_id,
+                    "source_type": "public_form",
+                    "trigger_event": trigger_event,
+                    "recipient_type": "submitter",
+                    "phone_source": "form_field",
+                    "phone_field_key": "telefono",
+                    "template_name": template_name,
+                    "template_body": template_body,
+                    "is_active": True,
+                },
+            )
+            assert automation_res.status_code == 201, automation_res.text
 
         connection = get_or_create_connection(db, org)
         connection.status = "connected"
@@ -1163,7 +1205,7 @@ def test_org_admin_can_review_form_submission_and_dispatch_whatsapp(client, db, 
         settings.ENABLE_WHATSAPP_EVOLUTION = original_enabled
 
 
-def test_org_admin_review_whatsapp_uses_payload_fallbacks_and_custom_override(client, db, monkeypatch):
+def test_org_admin_review_whatsapp_uses_automation_templates_and_payload_fallbacks(client, db, monkeypatch):
     original_enabled = settings.ENABLE_WHATSAPP_EVOLUTION
     settings.ENABLE_WHATSAPP_EVOLUTION = True
     try:
@@ -1205,6 +1247,35 @@ def test_org_admin_review_whatsapp_uses_payload_fallbacks_and_custom_override(cl
                 json={**field, "is_required": True, "sort_order": index * 10},
             )
             assert field_res.status_code == 201, field_res.text
+
+        for trigger_event, template_name, template_body in [
+            (
+                "booking_confirmed",
+                "Conferma fallback",
+                "Prenotazione confermata: {{riepilogo_prenotazione}}.",
+            ),
+            (
+                "booking_rejected",
+                "Rigetto fallback",
+                "Prenotazione rigettata: {{motivo_rigetto}} {{riepilogo_prenotazione}}.",
+            ),
+        ]:
+            automation_res = client.post(
+                "/api/org-admin/communications/whatsapp/automations",
+                json={
+                    "name": template_name,
+                    "form_id": form_id,
+                    "source_type": "public_form",
+                    "trigger_event": trigger_event,
+                    "recipient_type": "submitter",
+                    "phone_source": "form_field",
+                    "phone_field_key": "telefono_cliente",
+                    "template_name": template_name,
+                    "template_body": template_body,
+                    "is_active": True,
+                },
+            )
+            assert automation_res.status_code == 201, automation_res.text
 
         connection = get_or_create_connection(db, org)
         connection.status = "connected"
@@ -1253,11 +1324,13 @@ def test_org_admin_review_whatsapp_uses_payload_fallbacks_and_custom_override(cl
         )
         assert confirm_res.status_code == 200, confirm_res.text
         assert confirm_res.json()["whatsapp_result"]["sent"] is True
-        assert confirm_res.json()["whatsapp_result"]["template_source"] == "override"
+        assert confirm_res.json()["whatsapp_result"]["trigger_event"] == "booking_confirmed"
+        assert confirm_res.json()["whatsapp_result"]["sent_count"] == 1
         assert len(sent_payloads) == 1
         assert sent_payloads[0]["number"] == "+393392223344"
         assert "il 2026-04-11 alle 21:00" in sent_payloads[0]["text"]
         assert "per 5 persone" in sent_payloads[0]["text"]
+        assert "Prenotazione confermata" in sent_payloads[0]["text"]
 
         pending_res = client.patch(
             f"/api/org-admin/forms/{form_id}/submissions/{submission_id}/status",

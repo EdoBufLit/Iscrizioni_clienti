@@ -357,6 +357,150 @@ def maybe_send_form_submission_whatsapp_automations(
     }
 
 
+def maybe_send_form_submission_decision_whatsapp_automations(
+    db: Session,
+    *,
+    form: Form,
+    submission: FormSubmission,
+    member: Member | None,
+    booking: Booking | None,
+    decision_status: str,
+    review_reason: str | None = None,
+) -> dict[str, Any]:
+    normalized_decision = str(decision_status or "").strip().lower()
+    if normalized_decision not in {"confirmed", "rejected"}:
+        return {"sent": 0, "processed": 0, "reason": "unsupported_status", "results": []}
+    if booking is None:
+        return {"sent": 0, "processed": 0, "reason": "not_booking", "results": []}
+    if not settings.ENABLE_WHATSAPP_EVOLUTION:
+        return {"sent": 0, "processed": 0, "reason": "feature_disabled", "results": []}
+
+    organization = getattr(form, "organization", None)
+    if organization is None or not bool(getattr(organization, "communications_enabled", False)):
+        return {"sent": 0, "processed": 0, "reason": "communications_disabled", "results": []}
+
+    trigger_event = "booking_confirmed" if normalized_decision == "confirmed" else "booking_rejected"
+    automations = (
+        db.query(WhatsAppAutomation)
+        .filter(
+            WhatsAppAutomation.association_id == int(form.association_id),
+            WhatsAppAutomation.form_id == int(form.id),
+            WhatsAppAutomation.is_active.is_(True),
+            WhatsAppAutomation.trigger_event == trigger_event,
+        )
+        .order_by(WhatsAppAutomation.id.asc())
+        .all()
+    )
+    if not automations:
+        return {"sent": 0, "processed": 0, "reason": "no_automations", "results": []}
+
+    connection = (
+        db.query(WhatsAppConnection)
+        .filter(WhatsAppConnection.org_id == int(form.association_id))
+        .first()
+    )
+    if connection is None or connection.status != "connected":
+        return {
+            "sent": 0,
+            "processed": len(automations),
+            "reason": "connection_unavailable",
+            "trigger_event": trigger_event,
+            "results": [],
+        }
+
+    results: list[dict[str, Any]] = []
+    sent_count = 0
+    for automation in automations:
+        candidate = _prepare_whatsapp_automation_candidate(
+            automation=automation,
+            form=form,
+            submission=submission,
+            member=member,
+            booking=booking,
+            organization=organization,
+        )
+        if not candidate["available"]:
+            results.append(
+                {
+                    "automation_id": automation.id,
+                    "sent": False,
+                    "reason": candidate["reason"],
+                    "phone_number": None,
+                }
+            )
+            continue
+
+        text = _render_whatsapp_automation_template(
+            automation=automation,
+            form=form,
+            submission=submission,
+            member=member,
+            booking=booking,
+            organization=organization,
+            phone_number=candidate["phone_number"],
+            extra_context={
+                "motivo_rigetto": review_reason or "Se hai bisogno di supporto contatta la segreteria.",
+            },
+        ).strip()
+        if not text:
+            results.append(
+                {
+                    "automation_id": automation.id,
+                    "sent": False,
+                    "reason": "empty_template",
+                    "phone_number": candidate["phone_number"],
+                }
+            )
+            continue
+
+        send_result = _send_whatsapp_text(
+            db,
+            connection=connection,
+            phone_number=candidate["phone_number"],
+            text=text,
+            display_name=_resolve_contact_name(
+                submission=submission,
+                member=member,
+                booking=booking,
+            ),
+        )
+        result_payload = {
+            "automation_id": automation.id,
+            "sent": bool(send_result["sent"]),
+            "reason": send_result.get("reason"),
+            "phone_number": candidate["phone_number"],
+        }
+        if send_result["sent"]:
+            sent_count += 1
+            logger.info(
+                "form_submission_decision_whatsapp_automation_sent org_id=%s form_id=%s submission_id=%s automation_id=%s status=%s message_id=%s",
+                form.association_id,
+                form.id,
+                submission.id,
+                automation.id,
+                normalized_decision,
+                send_result["message_id"],
+            )
+        else:
+            logger.warning(
+                "form_submission_decision_whatsapp_automation_failed org_id=%s form_id=%s submission_id=%s automation_id=%s status=%s reason=%s",
+                form.association_id,
+                form.id,
+                submission.id,
+                automation.id,
+                normalized_decision,
+                send_result["reason"],
+            )
+        results.append(result_payload)
+
+    return {
+        "sent": sent_count,
+        "processed": len(results),
+        "trigger_event": trigger_event,
+        "results": results,
+    }
+
+
 def render_form_submission_whatsapp_template(
     *,
     form: Any,
@@ -667,6 +811,7 @@ def _render_whatsapp_automation_template(
     booking: Booking | None,
     organization: Organization | None,
     phone_number: str | None,
+    extra_context: dict[str, str] | None = None,
 ) -> str:
     template = str(getattr(automation, "template_body", "") or "").strip()
     if not template:
@@ -678,6 +823,7 @@ def _render_whatsapp_automation_template(
         booking=booking,
         organization=organization,
         phone_number=phone_number,
+        extra_context=extra_context,
     )
     return render_template_string(template, context=context) or ""
 

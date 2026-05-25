@@ -87,6 +87,7 @@ def serialize_booking_event(event: BookingEvent) -> dict[str, Any]:
 def serialize_booking(booking: Booking, *, include_events: bool = False) -> dict[str, Any]:
     request_status = _normalize_request_status(getattr(getattr(booking, "submission", None), "status", None))
     request_review_summary = _serialize_request_review_summary(getattr(booking, "submission", None))
+    request_payload_summary = _serialize_request_payload_summary(booking)
     return {
         "id": booking.id,
         "association_id": booking.association_id,
@@ -141,6 +142,7 @@ def serialize_booking(booking: Booking, *, include_events: bool = False) -> dict
         else None,
         "request_status": request_status,
         "request_review_summary": request_review_summary,
+        "request_payload_summary": request_payload_summary,
         "events": [serialize_booking_event(item) for item in list(booking.events or [])] if include_events else [],
     }
 
@@ -171,6 +173,74 @@ def _serialize_request_review_summary(submission: FormSubmission | None) -> dict
         if getattr(submission, "reviewed_by_admin", None) is not None
         else None,
     }
+
+
+def _serialize_request_payload_summary(booking: Booking) -> list[dict[str, str]]:
+    submission = getattr(booking, "submission", None)
+    payload = getattr(submission, "payload_json", None)
+    if not isinstance(payload, dict) or not payload:
+        return []
+
+    rows: list[dict[str, str]] = []
+    seen_keys: set[str] = set()
+    fields = list(getattr(getattr(booking, "form", None), "fields", []) or [])
+    for field in sorted(
+        fields,
+        key=lambda item: (
+            int(getattr(item, "sort_order", 0) or 0),
+            int(getattr(item, "id", 0) or 0),
+        ),
+    ):
+        field_key = str(getattr(field, "field_key", "") or "").strip()
+        if not field_key:
+            continue
+        value = _summarize_payload_value(payload.get(field_key))
+        if value is None:
+            continue
+        rows.append(
+            {
+                "key": field_key[:80],
+                "label": (str(getattr(field, "label", "") or "").strip() or _humanize_payload_key(field_key))[:120],
+                "value": value,
+            }
+        )
+        seen_keys.add(field_key)
+
+    for raw_key, raw_value in payload.items():
+        key = str(raw_key or "").strip()
+        if not key or key in seen_keys:
+            continue
+        value = _summarize_payload_value(raw_value)
+        if value is None:
+            continue
+        rows.append({"key": key[:80], "label": _humanize_payload_key(key)[:120], "value": value})
+        seen_keys.add(key)
+
+    return rows[:24]
+
+
+def _summarize_payload_value(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return "Si" if value else "No"
+    if isinstance(value, list):
+        text = ", ".join(str(item).strip() for item in value if str(item).strip())
+    elif isinstance(value, dict):
+        text = ", ".join(
+            f"{_humanize_payload_key(str(key))}: {str(item).strip()}"
+            for key, item in value.items()
+            if str(item).strip()
+        )
+    else:
+        text = str(value).strip()
+    return text[:500] if text else None
+
+
+def _humanize_payload_key(value: str) -> str:
+    cleaned = re.sub(r"[_\-]+", " ", str(value or "").strip())
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned[:1].upper() + cleaned[1:] if cleaned else "Campo"
 
 
 def _guess_customer_name(payload: dict[str, Any]) -> str:

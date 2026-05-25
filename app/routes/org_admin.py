@@ -120,6 +120,7 @@ from app.services.forms import (
     build_unique_form_slug,
     ensure_forms_module_enabled,
     export_submissions_csv,
+    FORM_SUBMISSION_STATUS_CONFIRMED,
     FORM_SUBMISSION_STATUS_PENDING,
     FORM_SUBMISSION_STATUS_REJECTED,
     get_form_for_org_admin,
@@ -131,7 +132,7 @@ from app.services.forms import (
     serialize_submission,
 )
 from app.services.whatsapp_automation import (
-    maybe_send_form_submission_decision_whatsapp_message,
+    maybe_send_form_submission_decision_whatsapp_automations,
 )
 from app.services.whatsapp_automations import (
     ALLOWED_WHATSAPP_PHONE_SOURCES,
@@ -1972,6 +1973,33 @@ def mark_org_admin_notification_read(
         db.commit()
 
     return {"ok": True, "notification": _serialize_org_admin_notification(notification)}
+
+
+@router.delete("/notifications/{notification_id}")
+def delete_org_admin_notification(
+    request: Request,
+    notification_id: int,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    notification = (
+        db.query(OrgAdminNotification)
+        .filter(
+            OrgAdminNotification.id == notification_id,
+            OrgAdminNotification.admin_user_id == admin.id,
+        )
+        .first()
+    )
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notifica non trovata.")
+
+    was_unread = not bool(notification.is_read)
+    db.delete(notification)
+    db.commit()
+    return {"ok": True, "deleted_notification_id": notification_id, "was_unread": was_unread}
 
 
 @router.post("/notifications/read-all")
@@ -6682,7 +6710,7 @@ def update_association_form_submission_status(
     whatsapp_result: dict[str, object] = {"sent": False, "reason": "unchanged"}
     if status_changed and next_status in {"confirmed", FORM_SUBMISSION_STATUS_REJECTED}:
         try:
-            whatsapp_result = maybe_send_form_submission_decision_whatsapp_message(
+            whatsapp_result = maybe_send_form_submission_decision_whatsapp_automations(
                 db,
                 form=form,
                 submission=submission,
@@ -6690,7 +6718,6 @@ def update_association_form_submission_status(
                 booking=booking,
                 decision_status=next_status,
                 review_reason=submission.review_reason,
-                custom_message=normalized_whatsapp_message,
             )
         except Exception as exc:
             logger.exception(
@@ -6700,6 +6727,13 @@ def update_association_form_submission_status(
                 next_status,
             )
             whatsapp_result = {"sent": False, "reason": "exception", "error": str(exc)}
+        else:
+            sent_count = int(whatsapp_result.get("sent", 0) or 0)
+            whatsapp_result = {
+                **whatsapp_result,
+                "sent_count": sent_count,
+                "sent": sent_count > 0,
+            }
 
     audit.log_operation(
         db,
@@ -7108,9 +7142,9 @@ def patch_org_admin_booking(
     booking = (
         db.query(Booking)
         .options(
-            joinedload(Booking.form),
+            joinedload(Booking.form).joinedload(AssociationForm.organization),
             joinedload(Booking.events),
-            joinedload(Booking.submission),
+            joinedload(Booking.submission).joinedload(FormSubmission.member),
             joinedload(Booking.room),
             joinedload(Booking.table),
         )
@@ -7122,6 +7156,13 @@ def patch_org_admin_booking(
     )
     if booking is None:
         raise HTTPException(status_code=404, detail="Prenotazione non trovata.")
+    linked_submission = booking.submission
+    previous_request_status = (
+        normalize_submission_status(linked_submission.status)
+        if linked_submission is not None
+        else None
+    )
+    next_booking_status = str(body.status or "").strip().lower()
     update_booking_status(
         db,
         booking=booking,
@@ -7131,9 +7172,63 @@ def patch_org_admin_booking(
         table_id=body.table_id,
         notes=body.notes,
     )
+    request_decision: dict[str, object] | None = None
+    if (
+        linked_submission is not None
+        and booking.form is not None
+        and previous_request_status == FORM_SUBMISSION_STATUS_PENDING
+        and next_booking_status in {"confirmed", "cancelled"}
+    ):
+        next_request_status = (
+            FORM_SUBMISSION_STATUS_CONFIRMED
+            if next_booking_status == "confirmed"
+            else FORM_SUBMISSION_STATUS_REJECTED
+        )
+        linked_submission.status = next_request_status
+        linked_submission.reviewed_at = datetime.utcnow()
+        linked_submission.reviewed_by_admin_id = admin.id
+        linked_submission.review_reason = (
+            None
+            if next_request_status == FORM_SUBMISSION_STATUS_CONFIRMED
+            else "Aggiornata da agenda prenotazioni."
+        )
+        whatsapp_result: dict[str, object] = {"sent": False, "reason": "unchanged"}
+        try:
+            whatsapp_result = maybe_send_form_submission_decision_whatsapp_automations(
+                db,
+                form=booking.form,
+                submission=linked_submission,
+                member=linked_submission.member,
+                booking=booking,
+                decision_status=next_request_status,
+                review_reason=linked_submission.review_reason,
+            )
+        except Exception as exc:
+            logger.exception(
+                "booking_status_request_whatsapp_failed booking_id=%s submission_id=%s status=%s",
+                booking.id,
+                linked_submission.id,
+                next_request_status,
+            )
+            whatsapp_result = {"sent": False, "reason": "exception", "error": str(exc)}
+        else:
+            sent_count = int(whatsapp_result.get("sent", 0) or 0)
+            whatsapp_result = {
+                **whatsapp_result,
+                "sent_count": sent_count,
+                "sent": sent_count > 0,
+            }
+        request_decision = {
+            "submission_id": linked_submission.id,
+            "status": next_request_status,
+            "whatsapp_result": whatsapp_result,
+        }
     db.commit()
     db.refresh(booking)
-    return {"booking": serialize_booking(booking, include_events=True)}
+    return {
+        "booking": serialize_booking(booking, include_events=True),
+        "request_decision": request_decision,
+    }
 
 
 @router.post("/bookings/{booking_id}/assignment")

@@ -235,6 +235,12 @@ def test_org_admin_notification_endpoints_mark_read_and_count(client, db):
     db.refresh(notification)
     assert notification.is_read is True
 
+    delete_response = client.delete(f"/api/org-admin/notifications/{notification.id}")
+    assert delete_response.status_code == 200, delete_response.text
+    assert delete_response.json()["deleted_notification_id"] == notification.id
+    assert delete_response.json()["was_unread"] is False
+    assert db.query(OrgAdminNotification).filter(OrgAdminNotification.id == notification.id).first() is None
+
 
 def test_low_cards_alert_creates_single_notification_and_resets_above_threshold(db, monkeypatch):
     org, admin = _create_org_with_admin(db)

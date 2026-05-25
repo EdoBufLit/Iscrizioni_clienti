@@ -582,6 +582,7 @@ def _submit_public_form(
         form=form,
         submission=submission,
         validated_submission=validated_submission,
+        booking=booking,
     )
     db.commit()
     db.refresh(submission)

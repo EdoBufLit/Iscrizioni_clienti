@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   assignOrgAdminBookingTable,
@@ -111,6 +111,11 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function parsePositiveInt(value: string | null | undefined) {
+  const parsed = Number(value || 0);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 function firstDayOfMonthIso(value?: string) {
   const base = value ? new Date(value) : new Date();
   const safe = Number.isNaN(base.getTime()) ? new Date() : base;
@@ -131,6 +136,14 @@ function formatDateTime(dateValue: string | null | undefined, timeValue?: string
     ? dateValue
     : date.toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "numeric" });
   return timeValue ? `${label} - ${timeValue}` : label;
+}
+
+function formatMobileDayTitle(value: string | null | undefined) {
+  if (!value) return "Agenda";
+  if (value === todayIso()) return "Oggi";
+  if (value === addDaysIso(todayIso(), 1)) return "Domani";
+  if (value === addDaysIso(todayIso(), -1)) return "Ieri";
+  return formatDate(value);
 }
 
 function formatMonthLabel(value: string) {
@@ -201,6 +214,10 @@ function formatBookingTable(booking: Pick<AssociationBooking, "room" | "table">)
   return "Non assegnato";
 }
 
+function isFormLinkedBooking(booking: Pick<AssociationBooking, "submission_id" | "source_form">) {
+  return Boolean(booking.submission_id && booking.source_form?.id);
+}
+
 function shiftMonth(value: string, delta: number) {
   const date = new Date(`${value}T00:00:00`);
   if (Number.isNaN(date.getTime())) return firstDayOfMonthIso();
@@ -234,15 +251,23 @@ function toDateKey(value: Date) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
 }
 
-function isSameMonth(date: Date, monthValue: string) {
-  return toDateKey(date).startsWith(monthValue.slice(0, 7));
+function addDaysIso(value: string, delta: number) {
+  const date = new Date(`${value}T00:00:00`);
+  const safe = Number.isNaN(date.getTime()) ? new Date() : date;
+  safe.setDate(safe.getDate() + delta);
+  return toDateKey(safe);
 }
 
-function defaultBookingDecisionMessage(status: "confirmed" | "rejected") {
-  if (status === "confirmed") {
-    return "Ciao {{nome_contatto}}, la tua prenotazione per {{nome_associazione}} e confermata. Dettagli: {{riepilogo_prenotazione}}.";
-  }
-  return "Ciao {{nome_contatto}}, la tua prenotazione per {{nome_associazione}} non può essere confermata. {{motivo_rigetto}}";
+function buildDayRail(anchorDate: string) {
+  return Array.from({ length: 7 }, (_, index) => {
+    const dateKey = addDaysIso(anchorDate, index - 2);
+    const date = new Date(`${dateKey}T00:00:00`);
+    return { dateKey, date };
+  });
+}
+
+function isSameMonth(date: Date, monthValue: string) {
+  return toDateKey(date).startsWith(monthValue.slice(0, 7));
 }
 
 function requestStatusMeta(status: string | null | undefined) {
@@ -343,6 +368,7 @@ function Toggle({
 export default function OrgAdminBookings() {
   const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
+  const queryBookingId = parsePositiveInt(searchParams.get("bookingId"));
   const [loading, setLoading] = useState(true);
   const [locked, setLocked] = useState(false);
   const [section, setSectionState] = useState<SectionTab>(normalizeSection(searchParams.get("section")));
@@ -361,9 +387,12 @@ export default function OrgAdminBookings() {
   const [mapTables, setMapTables] = useState<AssociationRoomTable[]>([]);
   const [selectedMapTableId, setSelectedMapTableId] = useState<number | null>(null);
   const [listItems, setListItems] = useState<AssociationBooking[]>([]);
-  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
-  const [selectedBookingId, setSelectedBookingId] = useState<number | null>(null);
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(searchParams.get("date") || todayIso());
+  const [selectedBookingId, setSelectedBookingId] = useState<number | null>(queryBookingId);
   const [selectedBooking, setSelectedBooking] = useState<AssociationBooking | null>(null);
+  const [isMobileAgendaViewport, setIsMobileAgendaViewport] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(max-width: 720px)").matches : false,
+  );
   const [requestActionState, setRequestActionState] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [requestActionError, setRequestActionError] = useState<string | null>(null);
   const [requestConfirmOpen, setRequestConfirmOpen] = useState<false | "confirmed" | "pending">(false);
@@ -401,9 +430,26 @@ export default function OrgAdminBookings() {
   );
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mediaQuery = window.matchMedia("(max-width: 720px)");
+    const handleChange = () => setIsMobileAgendaViewport(mediaQuery.matches);
+    handleChange();
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, []);
+
+  useEffect(() => {
     const nextSection = normalizeSection(searchParams.get("section"));
     setSectionState((current) => (current === nextSection ? current : nextSection));
-  }, [searchParams]);
+    const queryDate = searchParams.get("date");
+    if (queryDate) {
+      setSelectedCalendarDate((current) => (current === queryDate ? current : queryDate));
+      setAgendaMonth(firstDayOfMonthIso(queryDate));
+    }
+    if (queryBookingId) {
+      setSelectedBookingId((current) => (current === queryBookingId ? current : queryBookingId));
+    }
+  }, [queryBookingId, searchParams]);
 
   const syncMapWithBooking = useCallback(
     (booking: Pick<AssociationBooking, "room_id" | "table_id" | "booking_date" | "booking_time">) => {
@@ -543,10 +589,13 @@ export default function OrgAdminBookings() {
       setSelectedBookingId(null);
       return;
     }
-    if (selectedBookingId && !items.some((item) => item.id === selectedBookingId)) {
-      setSelectedBookingId(null);
+    if (isMobileAgendaViewport && !queryBookingId && selectedBookingId === null) {
+      return;
     }
-  }, [bookingsByDay, selectedBookingId, selectedCalendarDate]);
+    if (!selectedBookingId || !items.some((item) => item.id === selectedBookingId)) {
+      setSelectedBookingId(items[0].id);
+    }
+  }, [bookingsByDay, isMobileAgendaViewport, queryBookingId, selectedBookingId, selectedCalendarDate]);
 
   async function loadInitial() {
     setLoading(true);
@@ -629,6 +678,21 @@ export default function OrgAdminBookings() {
 
   async function handleBookingStatus(status: string) {
     if (!selectedBookingId || !selectedBooking) return;
+    const isPendingLinkedRequest = Boolean(
+      selectedBooking.submission_id
+        && selectedBooking.source_form?.id
+        && selectedBooking.request_status === "pending",
+    );
+    if (isPendingLinkedRequest && status === "confirmed") {
+      setRequestActionError("");
+      setRequestConfirmOpen("confirmed");
+      return;
+    }
+    if (isPendingLinkedRequest && status === "cancelled") {
+      setRequestActionError("");
+      setRequestRejectOpen(true);
+      return;
+    }
     setSaving("booking-status");
     try {
       const { booking } = await updateOrgAdminBooking(selectedBookingId, {
@@ -811,7 +875,6 @@ export default function OrgAdminBookings() {
   async function handleLinkedRequestDecision(
     nextStatus: "pending" | "confirmed" | "rejected",
     reason?: string,
-    whatsappMessage?: string,
   ) {
     if (!selectedBooking?.form_id || !selectedBooking?.submission_id) return;
     setRequestActionState("loading");
@@ -820,7 +883,7 @@ export default function OrgAdminBookings() {
       const response = await updateOrgAdminFormSubmissionStatus(selectedBooking.form_id, selectedBooking.submission_id, {
         status: nextStatus,
         reason: reason?.trim() || null,
-        whatsapp_message: whatsappMessage?.trim() || null,
+        whatsapp_message: null,
       });
       const detail = await fetchOrgAdminBooking(selectedBooking.id);
       setSelectedBooking(detail.booking);
@@ -972,21 +1035,23 @@ export default function OrgAdminBookings() {
 
   return (
     <div className="container-shell py-8 md:py-10">
-      <div className="mx-auto max-w-[92rem] space-y-6">
-        <PageHeader
-          eyebrow="Prenotazioni"
-          title="Agenda prenotazioni"
-          subtitle="Visualizza, gestisci e organizza prenotazioni, sale e tavoli."
-          actions={
-            <button type="button" onClick={() => setIsCreatingManual(true)} className="btn-primary">
-              + Nuova prenotazione
-            </button>
-          }
-        />
+      <div className="booking-admin-page mx-auto max-w-[92rem] space-y-6" data-section={section}>
+        <div className="booking-admin-page-header">
+          <PageHeader
+            eyebrow="Prenotazioni"
+            title="Agenda prenotazioni"
+            subtitle="Visualizza, gestisci e organizza prenotazioni, sale e tavoli."
+            actions={
+              <button type="button" onClick={() => setIsCreatingManual(true)} className="btn-primary">
+                + Nuova prenotazione
+              </button>
+            }
+          />
+        </div>
 
-        <section className="rounded-[0.85rem] border border-slate-200 bg-white p-3 shadow-sm">
+        <section className="booking-admin-tabs-shell rounded-[0.85rem] border border-slate-200 bg-white p-3 shadow-sm">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] xl:items-center">
-            <nav className="flex gap-1 overflow-x-auto rounded-[0.7rem] bg-slate-50 p-1 scrollbar-hide">
+            <nav className="booking-admin-tabs flex gap-1 overflow-x-auto rounded-[0.7rem] bg-slate-50 p-1 scrollbar-hide">
               {sectionTabs.map((tab) => (
                 <button
                   key={tab.key}
@@ -1000,7 +1065,7 @@ export default function OrgAdminBookings() {
                 </button>
               ))}
             </nav>
-            <div className="grid gap-3 sm:grid-cols-4">
+            <div className="booking-top-kpis grid gap-3 sm:grid-cols-4">
               <KpiCard label="Form booking" value={forms.length} tone="success" />
               <KpiCard label="Prenotazioni mese" value={monthOccupancy.total} tone="info" />
               <KpiCard label="Da confermare" value={monthOccupancy.pending} tone="warning" />
@@ -1010,10 +1075,11 @@ export default function OrgAdminBookings() {
         </section>
 
         {section === "agenda" && (
-          <div className="space-y-6">
+          <div className="booking-admin-section booking-admin-section--agenda space-y-6">
             <AgendaSection
               agendaMonth={agendaMonth}
               setAgendaMonth={setAgendaMonth}
+            isMobileAgendaViewport={isMobileAgendaViewport}
             agendaYearOptions={agendaYearOptions}
             statusFilter={statusFilter}
             setStatusFilter={setStatusFilter}
@@ -1365,17 +1431,16 @@ export default function OrgAdminBookings() {
         open={requestConfirmOpen === "confirmed"}
         mode="confirmed"
         title="Confermare la richiesta collegata?"
-        description="La richiesta passerà a confermata e la prenotazione verrà riallineata. Puoi lasciare il messaggio vuoto per usare il template configurato del form oppure personalizzarlo per questa singola risposta."
+        description="La richiesta passa a confermata. Gli eventuali WhatsApp al socio partono solo dalle regole configurate in WhatsApp > Automazioni."
         confirmLabel="Conferma richiesta"
         confirmState={requestActionState}
-        defaultMessage={defaultBookingDecisionMessage("confirmed")}
         error={requestActionError}
         onClose={() => {
           if (requestActionState === "loading") return;
           setRequestConfirmOpen(false);
           setRequestActionError(null);
         }}
-        onConfirm={(values) => void handleLinkedRequestDecision("confirmed", undefined, values.whatsappMessage)}
+        onConfirm={() => void handleLinkedRequestDecision("confirmed")}
       />
       <ConfirmModal
         open={requestConfirmOpen === "pending"}
@@ -1394,17 +1459,16 @@ export default function OrgAdminBookings() {
         open={requestRejectOpen}
         mode="rejected"
         title="Rigettare la richiesta collegata?"
-        description="Il motivo viene salvato nell'audit e mostrato nel riepilogo prenotazione. Se vuoi, puoi anche personalizzare il messaggio WhatsApp di rigetto per questa singola risposta."
+        description="Il motivo viene salvato nell'audit. Gli eventuali WhatsApp di rigetto partono solo dalle regole configurate in WhatsApp > Automazioni."
         confirmLabel="Rigetta richiesta"
         confirmState={requestActionState}
-        defaultMessage={defaultBookingDecisionMessage("rejected")}
         error={requestActionError}
         onClose={() => {
           if (requestActionState === "loading") return;
           setRequestRejectOpen(false);
           setRequestActionError(null);
         }}
-        onConfirm={(values) => void handleLinkedRequestDecision("rejected", values.reason, values.whatsappMessage)}
+        onConfirm={(values) => void handleLinkedRequestDecision("rejected", values.reason)}
       />
       <ConfirmModal
         open={deleteTarget?.type === "room"}
@@ -1481,6 +1545,7 @@ function ManagementShell({ title, subtitle, main, side }: { title: string; subti
 function AgendaSection(props: {
   agendaMonth: string;
   setAgendaMonth: (value: string) => void;
+  isMobileAgendaViewport: boolean;
   agendaYearOptions: number[];
   statusFilter: string;
   setStatusFilter: (value: string) => void;
@@ -1517,13 +1582,67 @@ function AgendaSection(props: {
   const monthOptions = Array.from({ length: 12 }, (_, index) =>
     new Date(2026, index, 1).toLocaleDateString("it-IT", { month: "long" }),
   );
+  const activeDayIsToday = props.selectedCalendarDate === todayIso();
   const dayPending = props.activeDayItems.filter((item) => item.status === "pending" || item.status === "new").length;
   const dayCovers = props.activeDayItems.reduce((total, item) => total + (item.party_size || 0), 0);
   const filteredDayItems = props.activeDayItems.filter((booking) => matchesDayStatusFilter(booking, dayFilter));
+  const selectedDateKey = props.selectedCalendarDate || todayIso();
+  const dayRail = useMemo(() => buildDayRail(selectedDateKey), [selectedDateKey]);
+  const selectedDayItems = props.bookingsByDay.get(selectedDateKey) ?? [];
+  const selectedDayPending = selectedDayItems.filter((item) => item.status === "pending" || item.status === "new").length;
+  const selectedDayConfirmed = selectedDayItems.filter((item) => item.status === "confirmed").length;
+  const selectDay = (dateKey: string, expandFirstBooking = false) => {
+    const items = props.bookingsByDay.get(dateKey) ?? [];
+    props.setSelectedCalendarDate(dateKey);
+    props.setSelectedBookingId(expandFirstBooking ? items[0]?.id ?? null : null);
+    props.setAgendaMonth(firstDayOfMonthIso(dateKey));
+    if (window.matchMedia("(max-width: 720px)").matches) {
+      window.requestAnimationFrame(() => {
+        document.querySelector(".booking-day-panel")?.scrollIntoView({ block: "start", behavior: "auto" });
+      });
+    }
+  };
 
   return (
-    <section className="space-y-8">
-        <div className="rounded-[1.25rem] bg-slate-50 p-8 ring-1 ring-inset ring-slate-200/60 shadow-sm">
+    <section className="booking-agenda-stack space-y-8">
+        <div className="booking-request-workbench">
+          <div className="booking-day-rail" aria-label="Giorni agenda">
+            {dayRail.map(({ dateKey, date }) => {
+              const items = props.bookingsByDay.get(dateKey) ?? [];
+              const isSelected = dateKey === selectedDateKey;
+              const isToday = dateKey === todayIso();
+              return (
+                <button
+                  key={dateKey}
+                  type="button"
+                  className={`booking-day-rail__item ${isSelected ? "is-selected" : ""}`}
+                  onClick={() => selectDay(dateKey, true)}
+                >
+                  <span>{date.toLocaleDateString("it-IT", { weekday: "short" }).replace(".", "")}</span>
+                  <strong>{date.getDate()}</strong>
+                  <small>{date.toLocaleDateString("it-IT", { month: "short" }).replace(".", "")}</small>
+                  {isToday ? <em>Oggi</em> : null}
+                  {items.length > 0 ? <b>{items.length}</b> : null}
+                </button>
+              );
+            })}
+          </div>
+          <div className="booking-request-strip">
+            <div>
+              <p>Richieste prenotazione</p>
+              <strong>
+                {selectedDayPending}/{selectedDayItems.length || 0}
+              </strong>
+            </div>
+            <div className="booking-request-strip__rooms">
+              <span>{selectedDayConfirmed} confermate</span>
+              <span>{selectedDayPending} in attesa</span>
+              <span>{selectedDayItems.reduce((total, item) => total + (item.party_size || 0), 0)} persone</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="booking-month-overview rounded-[1.25rem] bg-slate-50 p-8 ring-1 ring-inset ring-slate-200/60 shadow-sm">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between border-b border-slate-100 pb-8">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Calendario</p>
@@ -1581,7 +1700,48 @@ function AgendaSection(props: {
             <header className="booking-day-panel__header">
               <div>
                 <p className="booking-day-panel__eyebrow">{formatDate(props.selectedCalendarDate)}</p>
-                <h2 className="booking-day-panel__title">Prenotazioni</h2>
+                <h2 className="booking-day-panel__title">
+                  <span className="booking-day-panel__title-desktop">Prenotazioni</span>
+                  <span className="booking-day-panel__title-mobile">
+                    {formatMobileDayTitle(props.selectedCalendarDate)}
+                  </span>
+                </h2>
+              </div>
+              <div className="booking-mobile-day-switcher" aria-label="Cambia giorno agenda">
+                <button
+                  type="button"
+                  className="booking-mobile-day-switcher__button"
+                  aria-label="Giorno precedente"
+                  onClick={() => selectDay(addDaysIso(selectedDateKey, -1))}
+                >
+                  &lsaquo;
+                </button>
+                <input
+                  className="booking-mobile-day-switcher__date"
+                  type="date"
+                  aria-label="Scegli giorno agenda"
+                  value={selectedDateKey}
+                  onChange={(event) => {
+                    if (event.target.value) selectDay(event.target.value);
+                  }}
+                />
+                {!activeDayIsToday ? (
+                  <button
+                    type="button"
+                    className="booking-mobile-day-switcher__today"
+                    onClick={() => selectDay(todayIso())}
+                  >
+                    Oggi
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="booking-mobile-day-switcher__button"
+                  aria-label="Giorno successivo"
+                  onClick={() => selectDay(addDaysIso(selectedDateKey, 1))}
+                >
+                  &rsaquo;
+                </button>
               </div>
               <button
                 type="button"
@@ -1655,6 +1815,7 @@ function AgendaSection(props: {
                             onOpenRequestConfirm={props.onOpenRequestConfirm}
                             onOpenRequestReject={props.onOpenRequestReject}
                             saving={props.saving}
+                            mobileOnly={props.isMobileAgendaViewport}
                           />
                         ) : (
                           <div className="booking-row-loading">Caricamento dettaglio...</div>
@@ -1668,7 +1829,7 @@ function AgendaSection(props: {
           </section>
         ) : null}
 
-        <SectionPanel className="p-5">
+        <SectionPanel className="booking-month-calendar p-5">
           <div className="grid grid-cols-7 gap-2 border-b ring-slate-200/60 px-2 pb-4">
             {["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"].map((label) => (
               <div key={label} className="px-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">{label}</div>
@@ -1690,12 +1851,14 @@ function AgendaSection(props: {
                   onClick={() => {
                     props.setSelectedCalendarDate(dateKey);
                     props.setSelectedBookingId(items[0]?.id ?? null);
+                    props.setAgendaMonth(firstDayOfMonthIso(dateKey));
                   }}
                   onKeyDown={(event) => {
                     if (event.key !== "Enter" && event.key !== " ") return;
                     event.preventDefault();
                     props.setSelectedCalendarDate(dateKey);
                     props.setSelectedBookingId(items[0]?.id ?? null);
+                    props.setAgendaMonth(firstDayOfMonthIso(dateKey));
                   }}
                   className={`booking-calendar-day ${isSelected ? "is-selected" : ""} ${isCurrentMonth ? "" : "is-outside"} ${items.length > 0 ? "has-bookings" : ""}`}
                 >
@@ -1769,12 +1932,16 @@ function DayBookingRow({
   onSelect: () => void;
   detail: React.ReactNode;
 }) {
+  const isFormRequest = isFormLinkedBooking(booking);
   return (
     <article className={`booking-day-row ${expanded ? "is-expanded" : ""}`}>
       <button type="button" className="booking-day-row__summary" onClick={onSelect} aria-expanded={expanded}>
         <span className="booking-day-row__avatar">{initialsFromName(booking.customer_name)}</span>
         <span className="booking-day-row__main">
-          <span className="booking-day-row__name">{booking.customer_name}</span>
+          <span className="booking-day-row__name-line">
+            <span className="booking-day-row__name">{booking.customer_name}</span>
+            {isFormRequest ? <span className="booking-day-row__request-badge">Richiesta form</span> : null}
+          </span>
           <span className="booking-day-row__meta">
             {(booking.booking_time || "--:--").slice(0, 5)} · {formatBookingTable(booking)}
           </span>
@@ -1809,16 +1976,107 @@ function BookingDetailPanel(props: {
   onOpenRequestConfirm: (value: false | "confirmed" | "pending") => void;
   onOpenRequestReject: (value: boolean) => void;
   saving: string;
+  mobileOnly?: boolean;
 }) {
   if (!props.selectedBooking) {
     return <div className="rounded-[0.85rem] border border-dashed border-slate-200 bg-slate-50/50 p-6 text-center text-sm text-slate-500">Seleziona una prenotazione dal calendario per vedere dettaglio, stato e assegnazione tavolo.</div>;
   }
 
   const requestMeta = requestStatusMeta(props.selectedBooking.request_status);
+  const requestPayloadSummary = props.selectedBooking.request_payload_summary ?? [];
+  const requestFactKeys = new Set(["nome_socio", "customer_name", "name", "full_name", "email", "telefono", "phone", "customer_phone", "booking_date", "booking_time", "party_size"]);
+  const compactRequestFields = requestPayloadSummary
+    .filter((field) => !requestFactKeys.has(field.key))
+    .slice(0, 4);
+  const showMobileLinkedRequestOnly = Boolean(props.mobileOnly && props.selectedBooking.submission_id);
+  const mobileCardRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!showMobileLinkedRequestOnly || !mobileCardRef.current) return;
+    window.requestAnimationFrame(() => {
+      mobileCardRef.current?.scrollIntoView({ block: "center", behavior: "auto" });
+    });
+  }, [props.selectedBooking.id, showMobileLinkedRequestOnly]);
 
   return (
     <div className="space-y-6">
-      <div className="rounded-[1.25rem] bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60 shadow-sm">
+      {props.selectedBooking.submission_id ? (
+        <div ref={mobileCardRef} className="booking-request-mobile-card">
+          <div className="booking-request-mobile-card__header">
+            <div>
+              <p className="booking-request-mobile-card__eyebrow">Richiesta form</p>
+              <h3>{props.selectedBooking.customer_name}</h3>
+              <p>{props.selectedBooking.source_form?.title || "Form prenotazione"}</p>
+            </div>
+            <span className={requestMeta.className}>{requestMeta.label}</span>
+          </div>
+
+          <div className="booking-request-mobile-card__facts">
+            <span>
+              <small>Quando</small>
+              <strong>{formatDateTime(props.selectedBooking.booking_date, props.selectedBooking.booking_time)}</strong>
+            </span>
+            <span>
+              <small>Persone</small>
+              <strong>{props.selectedBooking.party_size || "-"}</strong>
+            </span>
+            <span>
+              <small>Contatto</small>
+              <strong>{props.selectedBooking.customer_phone || props.selectedBooking.customer_email || "N/D"}</strong>
+            </span>
+          </div>
+
+          <div className="booking-request-mobile-card__actions">
+            {props.selectedBooking.request_status !== "confirmed" ? (
+              <button
+                type="button"
+                className="booking-request-mobile-card__confirm"
+                disabled={props.requestActionState === "loading"}
+                onClick={() => props.onOpenRequestConfirm("confirmed")}
+              >
+                Conferma
+              </button>
+            ) : null}
+            {props.selectedBooking.request_status !== "rejected" ? (
+              <button
+                type="button"
+                className="booking-request-mobile-card__reject"
+                disabled={props.requestActionState === "loading"}
+                onClick={() => props.onOpenRequestReject(true)}
+              >
+                Rigetta
+              </button>
+            ) : null}
+            <a
+              className="booking-request-mobile-card__link"
+              href={`/org-admin/comunicazioni?tab=moduli&formId=${props.selectedBooking.form_id}&formTab=responses`}
+            >
+              Moduli
+            </a>
+          </div>
+
+          {compactRequestFields.length > 0 ? (
+            <div className="booking-request-mobile-card__fields">
+              {compactRequestFields.map((field) => (
+                <span key={`${field.key}-${field.label}`}>
+                  <small>{field.label}</small>
+                  <strong>{field.value}</strong>
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          {props.selectedBooking.request_review_summary?.review_reason ? (
+            <div className="booking-request-mobile-card__reason">
+              {props.selectedBooking.request_review_summary.review_reason}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {!showMobileLinkedRequestOnly ? (
+      <>
+      <div className="booking-detail-full-card rounded-[1.25rem] bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-5">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Prenotazione</p>
@@ -1854,7 +2112,7 @@ function BookingDetailPanel(props: {
       </div>
 
       {props.selectedBooking.submission_id ? (
-        <div className="rounded-[1.25rem] bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60 shadow-sm">
+        <div className="booking-request-linked-card rounded-[1.25rem] bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Richiesta collegata</p>
@@ -1970,6 +2228,8 @@ function BookingDetailPanel(props: {
           <ActionRow primaryLabel="Salva assegnazione" secondaryLabel="Rimuovi" onPrimary={props.onSaveAssignment} onSecondary={props.onClearAssignment} busy={props.saving.startsWith("assignment")} />
         </div>
       </div>
+      </>
+      ) : null}
     </div>
   );
 }

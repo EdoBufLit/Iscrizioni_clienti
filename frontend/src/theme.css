@@ -1381,6 +1381,7 @@ select:focus {
   border-color: color-mix(in srgb, var(--theme-brand) 34%, var(--theme-border)) !important;
 }
 
+:root[data-theme="dark"] .text-emerald-900,
 :root[data-theme="dark"] .text-emerald-800,
 :root[data-theme="dark"] .text-emerald-700 {
   color: color-mix(in srgb, var(--theme-success) 78%, white) !important;

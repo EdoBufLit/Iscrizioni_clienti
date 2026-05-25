@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models import (
     AdminRole,
     AdminUser,
+    Booking,
     EmailTemplate,
     Form,
     FormField,
@@ -1017,7 +1018,7 @@ def _format_submission_for_email(form: Form, payload: dict[str, Any]) -> tuple[s
 
 
 def _guess_submitter_name(payload: dict[str, Any]) -> str:
-    for key in ("nome_socio", "nome", "full_name", "name"):
+    for key in ("nome_socio", "nome_cliente", "customer_name", "nome", "full_name", "name"):
         value = payload.get(key)
         if isinstance(value, str) and value.strip():
             return value.strip()
@@ -1087,6 +1088,7 @@ def _create_internal_request_notifications(
     form: Form,
     submission: FormSubmission,
     validated_submission: ValidatedSubmission,
+    booking: Booking | None = None,
 ) -> int:
     admins = (
         db.query(AdminUser)
@@ -1100,15 +1102,43 @@ def _create_internal_request_notifications(
     )
     created = 0
     submitter_name = _guess_submitter_name(validated_submission.payload) or validated_submission.submitter_email or "Nuovo contatto"
-    href = f"/org-admin/comunicazioni?tab=forms&formId={form.id}&submissionId={submission.id}"
+    is_booking_request = booking is not None or bool(
+        getattr(form, "booking_enabled", False)
+        or getattr(form, "create_booking", False)
+        or normalize_form_type(getattr(form, "form_type", None), booking_enabled=False) == "booking"
+    )
+    if is_booking_request:
+        date_key = booking.booking_date.isoformat() if booking is not None and booking.booking_date else None
+        href = (
+            f"/org-admin/prenotazioni?date={date_key}&bookingId={booking.id}"
+            if booking is not None and date_key
+            else f"/org-admin/prenotazioni?formId={form.id}&submissionId={submission.id}"
+        )
+        when_parts = []
+        if booking is not None and booking.booking_date:
+            when_parts.append(booking.booking_date.isoformat())
+        if booking is not None and booking.booking_time:
+            when_parts.append(str(booking.booking_time)[:5])
+        people = f" per {booking.party_size} persone" if booking is not None and booking.party_size else ""
+        title = f"Nuova prenotazione da {submitter_name}"
+        body = (
+            f"Richiesta da confermare per '{form.title}'"
+            f"{' - ' + ' alle '.join(when_parts) if when_parts else ''}{people}."
+        )
+        notification_type = "booking_request"
+    else:
+        href = f"/org-admin/comunicazioni?tab=forms&formId={form.id}&submissionId={submission.id}"
+        title = f"Nuova richiesta da {submitter_name}"
+        body = f"Il form '{form.title}' ha ricevuto una nuova risposta."
+        notification_type = "form_submission"
     for admin in admins:
         db.add(
             OrgAdminNotification(
                 admin_user_id=admin.id,
                 org_id=form.association_id,
-                type="form_submission",
-                title=f"Nuova richiesta da {submitter_name}",
-                body=f"Il form '{form.title}' ha ricevuto una nuova risposta.",
+                type=notification_type,
+                title=title,
+                body=body,
                 href=href,
                 is_read=False,
             )
@@ -1123,15 +1153,22 @@ def enqueue_submission_notifications(
     form: Form,
     submission: FormSubmission,
     validated_submission: ValidatedSubmission,
+    booking: Booking | None = None,
 ) -> None:
     notification_email = resolve_form_notification_email(db, form=form)
     text_summary, html_summary = _format_submission_for_email(form, validated_submission.payload)
-    if bool(getattr(form, "create_internal_request", False)):
+    is_booking_request = booking is not None or bool(
+        getattr(form, "booking_enabled", False)
+        or getattr(form, "create_booking", False)
+        or normalize_form_type(getattr(form, "form_type", None), booking_enabled=False) == "booking"
+    )
+    if bool(getattr(form, "create_internal_request", False)) or is_booking_request:
         _create_internal_request_notifications(
             db,
             form=form,
             submission=submission,
             validated_submission=validated_submission,
+            booking=booking,
         )
 
     if bool(getattr(form, "notify_admin_on_submit", True)) and notification_email:

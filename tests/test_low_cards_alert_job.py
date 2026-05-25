@@ -272,6 +272,54 @@ def test_execute_low_cards_alert_flow_passes_flow_parameters_with_phone_fallback
     )
 
 
+def test_execute_low_cards_alert_flow_normalizes_plain_e164_sender(monkeypatch):
+    create_calls: list[dict[str, object]] = []
+
+    class _FakeExecutions:
+        def create(self, **kwargs):
+            create_calls.append(kwargs)
+            return SimpleNamespace(sid="FN_exec_123")
+
+    fake_client = SimpleNamespace(
+        studio=SimpleNamespace(
+            v2=SimpleNamespace(
+                flows=lambda _flow_sid: SimpleNamespace(executions=_FakeExecutions())
+            )
+        )
+    )
+
+    monkeypatch.setattr(
+        twilio_notifications,
+        "_get_twilio_client",
+        lambda: fake_client,
+    )
+    monkeypatch.setattr(
+        twilio_notifications.settings,
+        "TWILIO_LOW_CARDS_FLOW_SID",
+        "",
+    )
+    monkeypatch.setenv("TWILIO_LOW_CARDS_FLOW_SID", "FW_alert_123")
+    monkeypatch.delenv("TWILIO_STUDIO_FLOW_SID", raising=False)
+    monkeypatch.setenv("TWILIO_WHATSAPP_FROM", "+390299914307")
+
+    org = SimpleNamespace(
+        id=1,
+        slug="org-alert",
+        whatsapp_e164="+39333111222",
+        phone=None,
+        name="Org Alert",
+        club_display_name=None,
+    )
+
+    sid = twilio_notifications.execute_low_cards_alert_flow(
+        org=org,
+        remaining=42,
+    )
+
+    assert sid == "FN_exec_123"
+    assert create_calls[0]["from_"] == "whatsapp:+390299914307"
+
+
 def test_execute_low_cards_alert_flow_returns_none_when_missing_phone(monkeypatch, caplog):
     create_calls: list[dict[str, object]] = []
 

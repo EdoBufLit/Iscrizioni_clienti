@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AuthError,
+  deleteOrgAdminNotification,
   fetchOrgAdminNotifications,
   fetchOrgAdminUnreadNotificationCount,
   markAllOrgAdminNotificationsRead,
@@ -22,6 +23,12 @@ const formatDateTime = (value: string | null | undefined) => {
 };
 
 const notificationTone = (type: string) => {
+  if (type === "booking_request") {
+    return "bg-emerald-50 text-emerald-700 ring-emerald-200/60";
+  }
+  if (type === "form_submission") {
+    return "bg-cyan-50 text-cyan-700 ring-cyan-200/60";
+  }
   if (type === "document_accounting") {
     return "bg-amber-50 text-amber-700 ring-amber-200/60";
   }
@@ -32,6 +39,8 @@ const notificationTone = (type: string) => {
 };
 
 const notificationLabel = (type: string) => {
+  if (type === "booking_request") return "Prenotazione";
+  if (type === "form_submission") return "Richiesta";
   if (type === "document_accounting") return "Accounting";
   if (type === "low_cards") return "Tessere";
   return "Documenti";
@@ -166,23 +175,19 @@ const OrgAdminNotificationBell = () => {
   };
 
   const handleDismissNotification = async (notification: OrgAdminNotification) => {
-    if (notification.is_read) return;
-
     try {
       setError("");
-      await markOrgAdminNotificationRead(notification.id);
-      setItems((current) =>
-        current.map((item) =>
-          item.id === notification.id ? { ...item, is_read: true, read_at: new Date().toISOString() } : item,
-        ),
-      );
-      setUnreadCount((current) => Math.max(0, current - 1));
+      const result = await deleteOrgAdminNotification(notification.id);
+      setItems((current) => current.filter((item) => item.id !== notification.id));
+      if (result.was_unread) {
+        setUnreadCount((current) => Math.max(0, current - 1));
+      }
     } catch (err) {
       if (err instanceof AuthError) {
         navigate("/org-admin/login", { replace: true });
         return;
       }
-      setError(err instanceof Error ? err.message : "Errore chiusura notifica.");
+      setError(err instanceof Error ? err.message : "Errore eliminazione notifica.");
     }
   };
 
@@ -281,36 +286,23 @@ const OrgAdminNotificationBell = () => {
                       </div>
                       <div className="flex shrink-0 items-start gap-2">
                         {!notification.is_read && <span className="mt-1 h-2.5 w-2.5 rounded-full bg-brand shadow-[0_0_0_6px_rgba(15,118,110,0.12)]" />}
-                        {!notification.is_read && (
-                          <button
-                            type="button"
-                            onClick={() => void handleDismissNotification(notification)}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-400 transition hover:border-neutral-300 hover:text-neutral-700"
-                            aria-label="Chiudi notifica"
-                            title="Chiudi"
-                          >
-                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" d="M5 5L15 15" />
-                              <path strokeLinecap="round" d="M15 5L5 15" />
-                            </svg>
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => void handleDismissNotification(notification)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-400 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                          aria-label="Elimina notifica"
+                          title="Elimina"
+                        >
+                          <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" d="M5 5L15 15" />
+                            <path strokeLinecap="round" d="M15 5L5 15" />
+                          </svg>
+                        </button>
                       </div>
                     </div>
                     <div className="org-admin-notification-card__meta mt-4 flex items-center justify-between gap-3 text-[11px] font-semibold">
                       <span>{formatDateTime(notification.created_at)}</span>
-                      <div className="flex items-center gap-3">
-                        {!notification.is_read && (
-                          <button
-                            type="button"
-                            onClick={() => void handleDismissNotification(notification)}
-                            className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 transition hover:text-neutral-700"
-                          >
-                            Chiudi
-                          </button>
-                        )}
-                        <span>{notification.is_read ? "Letta" : "Nuova"}</span>
-                      </div>
+                      <span>{notification.is_read ? "Letta" : "Nuova"}</span>
                     </div>
                   </div>
                 ))}
