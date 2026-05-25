@@ -5149,3 +5149,16 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Nessun campo del builder e stato rimosso: palette form ancora a 16 tipi, palette sondaggi ancora a 11 tipi.
 - Dark mode verificata con screenshot mobile light/dark del blocco serate e hardening CSS dedicato per label, bottoni e campi automatici.
 - Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.
+
+## Plan (Fix 422 salvataggio serate - May 25, 2026)
+- [x] Riprodurre il disallineamento payload UI/API che causava 422 su creazione serata.
+- [x] Allineare frontend e backend su `title/event_date` mantenendo alias compatibili `name/specific_date` per client gia aperti.
+- [x] Normalizzare le risposte admin/pubbliche delle serate in modo che il form builder e il form pubblico leggano sempre `name` e `time`.
+- [x] Aggiungere test backend per payload legacy frontend e payload canonico.
+- [x] Eseguire compile/test backend, typecheck/build frontend, controllo dark mode/superfici builder, poi commit e push.
+
+## Review (Fix 422 salvataggio serate - May 25, 2026)
+- Causa: la UI inviava `name/specific_date`, mentre FastAPI richiedeva `title/event_date`; il 422 partiva prima del salvataggio.
+- Backend: `booking-event-series` accetta sia payload canonico sia alias frontend, e serializza anche `name/specific_date/time` oltre ai campi canonici.
+- Frontend: le API normalizzano risposte admin/pubbliche e inviano `title/event_date`, quindi la lista serate, il form pubblico e il builder leggono sempre dati coerenti.
+- Verifiche OK: `python -m compileall -q app init_db.py`, pytest mirati serate (`2 passed`), `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, palette builder invariata (`16` form, `11` sondaggi), `git diff --check`.

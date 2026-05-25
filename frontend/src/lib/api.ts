@@ -1307,6 +1307,7 @@ export type BookingEventTimeSlot = {
   id: number;
   event_series_id: number;
   time: string;
+  start_time?: string;
   is_active: boolean;
   sort_order: number;
 };
@@ -1315,10 +1316,12 @@ export type OrgAdminBookingEventSeries = {
   id: number;
   association_id: number;
   name: string;
+  title?: string;
   description: string | null;
   recurrence_type: "weekly" | "date" | string;
   weekday: number | null;
   specific_date: string | null;
+  event_date?: string | null;
   is_active: boolean;
   created_at: string | null;
   updated_at: string | null;
@@ -2354,7 +2357,7 @@ export async function fetchPublicFormBookingEvents(
   const params = new URLSearchParams({ date: dateValue });
   const res = await fetch(`${path}?${params.toString()}`);
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento serate prenotabili"));
-  return res.json();
+  return normalizeBookingEventSeriesList(await res.json());
 }
 
 export async function submitPublicForm(
@@ -2465,17 +2468,7 @@ export async function markOrgAdminBookingCustomerNoteRead(
   return res.json();
 }
 
-export async function fetchOrgAdminBookingEventSeries(): Promise<{
-  items: OrgAdminBookingEventSeries[];
-  total: number;
-}> {
-  const res = await fetch("/api/org-admin/booking-event-series");
-  if (res.status === 401) throw new AuthError("Not authenticated");
-  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento serate prenotabili"));
-  return res.json();
-}
-
-export async function createOrgAdminBookingEventSeries(data: {
+type BookingEventSeriesInput = {
   name: string;
   description?: string | null;
   recurrence_type?: "weekly" | "date" | string;
@@ -2483,37 +2476,94 @@ export async function createOrgAdminBookingEventSeries(data: {
   specific_date?: string | null;
   is_active?: boolean;
   time_slots?: string[];
-}): Promise<{ item: OrgAdminBookingEventSeries }> {
+};
+
+function normalizeBookingEventSeries(raw: any): OrgAdminBookingEventSeries {
+  const rawSlots = Array.isArray(raw?.time_slots) ? raw.time_slots : [];
+  return {
+    id: Number(raw?.id || 0),
+    association_id: Number(raw?.association_id || 0),
+    name: String(raw?.name ?? raw?.title ?? ""),
+    title: raw?.title ?? raw?.name ?? "",
+    description: raw?.description ?? null,
+    recurrence_type: raw?.recurrence_type ?? "weekly",
+    weekday: typeof raw?.weekday === "number" ? raw.weekday : null,
+    specific_date: raw?.specific_date ?? raw?.event_date ?? null,
+    event_date: raw?.event_date ?? raw?.specific_date ?? null,
+    is_active: Boolean(raw?.is_active),
+    created_at: raw?.created_at ?? null,
+    updated_at: raw?.updated_at ?? null,
+    time_slots: rawSlots
+      .map((slot: any, index: number) => {
+        const timeValue = typeof slot === "string" ? slot : slot?.time ?? slot?.start_time ?? "";
+        return {
+          id: typeof slot === "object" && slot?.id ? Number(slot.id) : index,
+          event_series_id:
+            typeof slot === "object" && slot?.event_series_id
+              ? Number(slot.event_series_id)
+              : Number(raw?.id || 0),
+          time: String(timeValue || "").slice(0, 5),
+          start_time: typeof slot === "object" ? slot?.start_time ?? timeValue : timeValue,
+          is_active: typeof slot === "object" && slot?.is_active !== undefined ? Boolean(slot.is_active) : true,
+          sort_order: typeof slot === "object" && typeof slot?.sort_order === "number" ? slot.sort_order : index,
+        };
+      })
+      .filter((slot: BookingEventTimeSlot) => slot.time),
+  };
+}
+
+function normalizeBookingEventSeriesList(payload: any): { items: OrgAdminBookingEventSeries[]; total: number } {
+  const items = Array.isArray(payload?.items) ? payload.items.map(normalizeBookingEventSeries) : [];
+  return { items, total: Number(payload?.total ?? items.length) };
+}
+
+function bookingEventSeriesRequestBody(data: BookingEventSeriesInput) {
+  return {
+    title: data.name,
+    description: data.description ?? null,
+    recurrence_type: data.recurrence_type ?? "weekly",
+    weekday: data.recurrence_type === "weekly" ? data.weekday ?? null : null,
+    event_date: data.recurrence_type === "date" ? data.specific_date ?? null : null,
+    is_active: data.is_active ?? true,
+    time_slots: data.time_slots ?? [],
+  };
+}
+
+export async function fetchOrgAdminBookingEventSeries(): Promise<{
+  items: OrgAdminBookingEventSeries[];
+  total: number;
+}> {
+  const res = await fetch("/api/org-admin/booking-event-series");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento serate prenotabili"));
+  return normalizeBookingEventSeriesList(await res.json());
+}
+
+export async function createOrgAdminBookingEventSeries(data: BookingEventSeriesInput): Promise<{ item: OrgAdminBookingEventSeries }> {
   const res = await fetch("/api/org-admin/booking-event-series", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
+    body: JSON.stringify(bookingEventSeriesRequestBody(data)),
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore creazione serata prenotabile"));
-  return res.json();
+  const payload = await res.json();
+  return { item: normalizeBookingEventSeries(payload.item ?? payload.series) };
 }
 
 export async function updateOrgAdminBookingEventSeries(
   seriesId: number,
-  data: {
-    name?: string;
-    description?: string | null;
-    recurrence_type?: "weekly" | "date" | string;
-    weekday?: number | null;
-    specific_date?: string | null;
-    is_active?: boolean;
-    time_slots?: string[];
-  },
+  data: BookingEventSeriesInput,
 ): Promise<{ item: OrgAdminBookingEventSeries }> {
   const res = await fetch(`/api/org-admin/booking-event-series/${seriesId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
+    body: JSON.stringify(bookingEventSeriesRequestBody(data)),
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento serata prenotabile"));
-  return res.json();
+  const payload = await res.json();
+  return { item: normalizeBookingEventSeries(payload.item ?? payload.series) };
 }
 
 export async function deleteOrgAdminBookingEventSeries(
@@ -2522,7 +2572,8 @@ export async function deleteOrgAdminBookingEventSeries(
   const res = await fetch(`/api/org-admin/booking-event-series/${seriesId}`, { method: "DELETE" });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore eliminazione serata prenotabile"));
-  return res.json();
+  const payload = await res.json();
+  return { ok: Boolean(payload?.ok), deleted_id: Number(payload?.deleted_id ?? payload?.deleted_series_id ?? seriesId) };
 }
 
 export async function fetchOrgAdminBookingsAgendaDay(input?: {

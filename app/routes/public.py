@@ -617,10 +617,21 @@ def _public_booking_events_payload(
             {
                 "id": item.id,
                 "title": item.title,
+                "name": item.title,
                 "description": item.description,
                 "recurrence_type": item.recurrence_type,
+                "weekday": item.weekday,
+                "event_date": item.event_date.isoformat() if item.event_date else None,
+                "specific_date": item.event_date.isoformat() if item.event_date else None,
                 "time_slots": [
-                    str(slot.start_time)[:5]
+                    {
+                        "id": slot.id,
+                        "event_series_id": item.id,
+                        "start_time": slot.start_time,
+                        "time": str(slot.start_time)[:5],
+                        "is_active": bool(getattr(slot, "is_active", True)),
+                        "sort_order": slot.sort_order,
+                    }
                     for slot in list(item.time_slots or [])
                     if bool(getattr(slot, "is_active", True))
                 ],

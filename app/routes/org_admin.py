@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 from typing import Literal, Optional
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, TypeAdapter, model_validator
 
 from fastapi import UploadFile, File
 from app.db import get_db
@@ -2289,13 +2289,23 @@ class UpdateBookingStatusBody(BaseModel):
 
 
 class UpsertBookingEventSeriesBody(BaseModel):
-    title: str = Field(min_length=1, max_length=160)
+    title: Optional[str] = Field(default=None, max_length=160)
+    name: Optional[str] = Field(default=None, max_length=160)
     description: Optional[str] = None
     recurrence_type: str = Field(default="weekly", max_length=20)
     weekday: Optional[int] = Field(default=None, ge=0, le=6)
     event_date: Optional[date] = None
+    specific_date: Optional[date] = None
     is_active: bool = True
     time_slots: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def require_title_or_legacy_name(self) -> "UpsertBookingEventSeriesBody":
+        title = (self.title or self.name or "").strip()
+        if not title:
+            raise ValueError("Inserisci il nome della serata prenotabile.")
+        self.title = title
+        return self
 
 
 class CreateRoomBody(BaseModel):
@@ -2354,15 +2364,19 @@ def _serialize_booking_event_series(series: BookingEventSeries) -> dict[str, obj
         "id": series.id,
         "association_id": series.association_id,
         "title": series.title,
+        "name": series.title,
         "description": series.description,
         "recurrence_type": series.recurrence_type,
         "weekday": series.weekday,
         "event_date": series.event_date.isoformat() if series.event_date else None,
+        "specific_date": series.event_date.isoformat() if series.event_date else None,
         "is_active": bool(series.is_active),
         "time_slots": [
             {
                 "id": slot.id,
+                "event_series_id": series.id,
                 "start_time": slot.start_time,
+                "time": str(slot.start_time)[:5],
                 "is_active": bool(slot.is_active),
                 "sort_order": slot.sort_order,
             }
@@ -7178,17 +7192,18 @@ def delete_org_admin_booking_event_series(
 
 def _apply_booking_event_series_updates(series: BookingEventSeries, body: UpsertBookingEventSeriesBody) -> None:
     recurrence_type = (body.recurrence_type or "weekly").strip().lower()
+    event_date = body.event_date or body.specific_date
     if recurrence_type not in {"weekly", "date"}:
         raise HTTPException(status_code=422, detail="Tipo ricorrenza serata non valido.")
     if recurrence_type == "weekly" and body.weekday is None:
         raise HTTPException(status_code=422, detail="Seleziona il giorno della settimana.")
-    if recurrence_type == "date" and body.event_date is None:
+    if recurrence_type == "date" and event_date is None:
         raise HTTPException(status_code=422, detail="Seleziona la data della serata.")
-    series.title = body.title.strip()
+    series.title = (body.title or body.name or "").strip()
     series.description = (body.description or "").strip() or None
     series.recurrence_type = recurrence_type
     series.weekday = body.weekday if recurrence_type == "weekly" else None
-    series.event_date = body.event_date if recurrence_type == "date" else None
+    series.event_date = event_date if recurrence_type == "date" else None
     series.is_active = bool(body.is_active)
     series.updated_at = datetime.utcnow()
 
