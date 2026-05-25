@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 import base64
+import re
 import uuid
 from zoneinfo import ZoneInfo
 
@@ -14,6 +15,7 @@ from app.models import (
     AdminRole,
     AdminUser,
     Booking,
+    BookingActionToken,
     BookingEvent,
     EmailCampaign,
     EmailCampaignRecipient,
@@ -21,6 +23,7 @@ from app.models import (
     Form,
     Member,
     OrgAdminToken,
+    OrgAdminNotification,
     Organization,
     WhatsAppConnection,
 )
@@ -887,6 +890,115 @@ def test_booking_whatsapp_reminder_uses_rome_time_for_midnight_booking(db, monke
         assert "2026-05-26 00:00" in sent_messages[0]["text"]
     finally:
         settings.ENABLE_WHATSAPP_EVOLUTION = original_whatsapp
+        settings.APP_TIMEZONE = original_timezone
+
+
+def test_booking_reminder_links_are_short_and_update_booking_from_public_page(client, db, monkeypatch):
+    original_whatsapp = settings.ENABLE_WHATSAPP_EVOLUTION
+    original_frontend = settings.FRONTEND_URL
+    original_timezone = settings.APP_TIMEZONE
+    settings.ENABLE_WHATSAPP_EVOLUTION = True
+    settings.FRONTEND_URL = "https://example.test"
+    settings.APP_TIMEZONE = "Europe/Rome"
+    sent_messages: list[str] = []
+
+    def fake_send_text(self, instance_name: str, *, number: str, text: str):
+        sent_messages.append(text)
+        return EvolutionSendTextResult(
+            external_message_id=f"reminder-link-{uuid.uuid4().hex}",
+            status="sent",
+            raw={},
+        )
+
+    monkeypatch.setattr("app.services.whatsapp_automation.EvolutionLiteClient.send_text", fake_send_text)
+    try:
+        db.query(Organization).update({Organization.booking_whatsapp_reminder_enabled: False})
+        db.commit()
+        org, admin = _create_org_admin(db, communications_enabled=True)
+        org.booking_whatsapp_reminder_enabled = True
+        org.booking_whatsapp_reminder_hours_before = 1
+        org.booking_whatsapp_reminder_template = None
+        connection = WhatsAppConnection(
+            org_id=org.id,
+            instance_name=f"reminder-link-{org.id}",
+            status="connected",
+            phone_number="+390200000000",
+        )
+        booking = Booking(
+            association_id=org.id,
+            status="confirmed",
+            customer_name="Link Cliente",
+            customer_phone="+393331234567",
+            booking_date=date(2026, 5, 26),
+            booking_time="00:00",
+            party_size=4,
+            confirmed_at=datetime(2026, 5, 25, 20, 0),
+        )
+        db.add_all([connection, booking])
+        db.commit()
+
+        stats = process_booking_whatsapp_reminders(
+            db,
+            now=datetime(2026, 5, 25, 21, 0, tzinfo=timezone.utc),
+        )
+
+        assert stats["sent"] == 1
+        text = sent_messages[0]
+        assert "✅ CONFERMA" in text
+        assert "❌ ANNULLA" in text
+        assert "✍️ MODIFICA / NOTE" in text
+        links = re.findall(r"https://example\.test/b/[A-Za-z0-9_-]+", text)
+        assert len(links) == 3
+        assert all(len(link) < 55 for link in links)
+
+        confirm_path = links[0].replace("https://example.test", "")
+        get_response = client.get(confirm_path)
+        assert get_response.status_code == 200, get_response.text
+        assert "Sto registrando la tua risposta" in get_response.text
+        assert db.query(BookingActionToken).filter(
+            BookingActionToken.booking_id == booking.id,
+            BookingActionToken.used_at.isnot(None),
+        ).count() == 0
+
+        post_response = client.post(confirm_path)
+        assert post_response.status_code == 200, post_response.text
+        assert "Perfetto, prenotazione confermata" in post_response.text
+        db.refresh(booking)
+        assert booking.status == "confirmed"
+        token = db.query(BookingActionToken).filter(
+            BookingActionToken.booking_id == booking.id,
+            BookingActionToken.action == "confirm",
+        ).one()
+        assert token.used_at is not None
+        assert timedelta(hours=23, minutes=50) <= token.expires_at - token.created_at <= timedelta(hours=24, minutes=10)
+        assert db.query(BookingEvent).filter(
+            BookingEvent.booking_id == booking.id,
+            BookingEvent.event_type == "customer_reconfirmed_from_reminder",
+        ).count() == 1
+        assert db.query(OrgAdminNotification).filter(
+            OrgAdminNotification.admin_user_id == admin.id,
+            OrgAdminNotification.type == "booking_customer_confirmed",
+        ).count() == 1
+
+        repeat_response = client.post(confirm_path)
+        assert repeat_response.status_code == 200, repeat_response.text
+        assert "Perfetto, prenotazione confermata" in repeat_response.text
+        assert db.query(BookingEvent).filter(
+            BookingEvent.booking_id == booking.id,
+            BookingEvent.event_type == "customer_reconfirmed_from_reminder",
+        ).count() == 2
+
+        note_path = links[2].replace("https://example.test", "")
+        note_response = client.post(note_path, data={"note": "Avevo cliccato conferma, ma arrivo in ritardo."})
+        assert note_response.status_code == 200, note_response.text
+        assert "Nota inviata" in note_response.text
+        db.refresh(booking)
+        assert "arrivo in ritardo" in (booking.customer_note or "")
+        assert booking.customer_note_submitted_at is not None
+        assert booking.customer_note_reviewed_at is None
+    finally:
+        settings.ENABLE_WHATSAPP_EVOLUTION = original_whatsapp
+        settings.FRONTEND_URL = original_frontend
         settings.APP_TIMEZONE = original_timezone
 
 

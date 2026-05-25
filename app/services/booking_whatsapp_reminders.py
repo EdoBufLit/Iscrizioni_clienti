@@ -26,9 +26,9 @@ SURVEY_EMAIL_DISPATCH_EVENT = "email_post_event_survey_sent"
 DEFAULT_BOOKING_REMINDER_TEMPLATE = (
     "Ciao {{nome_contatto}}, ti ricordiamo la prenotazione per {{nome_associazione}} "
     "{{data_prenotazione}} alle {{orario_prenotazione}}. Dettagli: {{riepilogo_prenotazione}}.\n\n"
-    "Conferma: {{link_conferma_prenotazione}}\n"
-    "Annulla: {{link_annulla_prenotazione}}\n"
-    "Modifica/note: {{link_note_prenotazione}}\n\n"
+    "✅ CONFERMA\n{{link_conferma_prenotazione}}\n\n"
+    "❌ ANNULLA\n{{link_annulla_prenotazione}}\n\n"
+    "✍️ MODIFICA / NOTE\n{{link_note_prenotazione}}\n\n"
     "Puoi anche rispondere SI o NO a questo messaggio."
 )
 DEFAULT_SURVEY_TEMPLATE = (

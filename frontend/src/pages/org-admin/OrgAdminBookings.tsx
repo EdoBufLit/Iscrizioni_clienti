@@ -476,6 +476,20 @@ export default function OrgAdminBookings() {
     [searchParams, setSearchParams],
   );
 
+  const selectBooking = useCallback(
+    (bookingId: number | null) => {
+      setSelectedBookingId(bookingId);
+      const nextParams = new URLSearchParams(searchParams);
+      if (bookingId) {
+        nextParams.set("bookingId", String(bookingId));
+      } else {
+        nextParams.delete("bookingId");
+      }
+      setSearchParams(nextParams, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const mediaQuery = window.matchMedia("(max-width: 720px)");
@@ -640,11 +654,8 @@ export default function OrgAdminBookings() {
       setSelectedBookingId(null);
       return;
     }
-    if (isMobileAgendaViewport && !queryBookingId && selectedBookingId === null) {
-      return;
-    }
-    if (!selectedBookingId || !items.some((item) => item.id === selectedBookingId)) {
-      setSelectedBookingId(items[0].id);
+    if (selectedBookingId && !items.some((item) => item.id === selectedBookingId)) {
+      setSelectedBookingId(null);
     }
   }, [bookingsByDay, isMobileAgendaViewport, queryBookingId, selectedBookingId, selectedCalendarDate]);
 
@@ -1270,7 +1281,7 @@ export default function OrgAdminBookings() {
             setSelectedCalendarDate={setSelectedCalendarDate}
             activeDayItems={activeDayItems}
             selectedBookingId={selectedBookingId}
-            setSelectedBookingId={setSelectedBookingId}
+            setSelectedBookingId={selectBooking}
             selectedBooking={selectedBooking}
             rooms={rooms}
             assignmentRoomId={assignmentRoomId}
@@ -1296,7 +1307,7 @@ export default function OrgAdminBookings() {
             selectedCalendarDate={selectedCalendarDate}
             items={mobileManagedDayItems}
             selectedBookingId={selectedBookingId}
-            setSelectedBookingId={setSelectedBookingId}
+            setSelectedBookingId={selectBooking}
             selectedBooking={selectedBooking}
             rooms={rooms}
             assignmentRoomId={assignmentRoomId}
@@ -2387,9 +2398,9 @@ function MobileManagedBookingsSection(props: {
                     </span>
                   </span>
                 </button>
-                {isExpanded ? (
-                  <div className="booking-mobile-managed-card__expanded">
-                    {isDetailLoaded ? (
+                <div className="booking-mobile-managed-card__expanded" aria-hidden={!isExpanded}>
+                  {isExpanded ? (
+                    isDetailLoaded ? (
                       <BookingDetailPanel
                         selectedBooking={props.selectedBooking}
                         rooms={props.rooms}
@@ -2411,9 +2422,9 @@ function MobileManagedBookingsSection(props: {
                       />
                     ) : (
                       <div className="booking-row-loading">Caricamento dettaglio...</div>
-                    )}
-                  </div>
-                ) : null}
+                    )
+                  ) : null}
+                </div>
               </article>
             );
           })}
@@ -2460,7 +2471,7 @@ function DayBookingRow({
         </span>
         <span className="booking-day-row__chevron" aria-hidden="true">⌄</span>
       </button>
-      {expanded ? <div className="booking-day-row__expanded">{detail}</div> : null}
+      <div className="booking-day-row__expanded" aria-hidden={!expanded}>{expanded ? detail : null}</div>
     </article>
   );
 }

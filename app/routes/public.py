@@ -48,8 +48,11 @@ from app.services.whatsapp_automation import (
 )
 from app.services.survey_email import maybe_enqueue_high_score_survey_thank_you
 from app.services.booking_customer_actions import (
+    BOOKING_ACTION_NOTE,
     consume_booking_action_token,
     get_booking_action_token,
+    render_booking_action_auto_submit_page,
+    render_booking_action_missing,
     render_booking_action_page,
     render_booking_action_result,
 )
@@ -507,13 +510,20 @@ def _load_public_form(
     return get_form_by_slug_for_public(db, slug=slug)
 
 
+@router.get("/b/{token}", response_class=HTMLResponse)
 @router.get("/api/public/bookings/response/{token}", response_class=HTMLResponse)
 @router.get("/prenotazioni/risposta/{token}", response_class=HTMLResponse)
 def get_public_booking_response_page(token: str, db: Session = Depends(get_db)):
-    action_token = get_booking_action_token(db, raw_token=token)
-    return HTMLResponse(render_booking_action_page(token=action_token))
+    try:
+        action_token = get_booking_action_token(db, raw_token=token)
+    except HTTPException as exc:
+        return HTMLResponse(render_booking_action_missing(), status_code=exc.status_code)
+    if action_token.action == BOOKING_ACTION_NOTE:
+        return HTMLResponse(render_booking_action_page(token=action_token))
+    return HTMLResponse(render_booking_action_auto_submit_page(token=action_token))
 
 
+@router.post("/b/{token}", response_class=HTMLResponse)
 @router.post("/api/public/bookings/response/{token}", response_class=HTMLResponse)
 @router.post("/prenotazioni/risposta/{token}", response_class=HTMLResponse)
 def post_public_booking_response_page(
@@ -521,7 +531,10 @@ def post_public_booking_response_page(
     note: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
-    action_token = get_booking_action_token(db, raw_token=token)
+    try:
+        action_token = get_booking_action_token(db, raw_token=token)
+    except HTTPException as exc:
+        return HTMLResponse(render_booking_action_missing(), status_code=exc.status_code)
     try:
         result = consume_booking_action_token(db, raw_token=token, note=note)
     except HTTPException as exc:
@@ -533,10 +546,10 @@ def post_public_booking_response_page(
     action = result.get("action") or action_token.action
     if not result.get("ok"):
         reason = result.get("reason")
-        message = "Questo link e' gia stato usato." if reason == "used" else "Questo link e' scaduto."
+        message = "Questo link e' scaduto." if reason == "expired" else "Questo link non e' disponibile."
         return HTMLResponse(render_booking_action_result(title="Link non disponibile", message=message))
     message = {
-        "confirm": "Prenotazione confermata. Grazie.",
+        "confirm": "Perfetto, prenotazione confermata. La segreteria e' stata avvisata.",
         "cancel": "Prenotazione annullata. La segreteria e' stata avvisata.",
         "note": "Nota inviata. La segreteria la vedra' sulla prenotazione.",
     }.get(str(action), "Risposta registrata.")

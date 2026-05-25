@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import secrets
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -20,13 +21,13 @@ from app.models import (
 from app.services.bookings import update_booking_status
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
-from app.utils import generate_token, hash_token
+from app.utils import hash_token
 
 BOOKING_ACTION_CONFIRM = "confirm"
 BOOKING_ACTION_CANCEL = "cancel"
 BOOKING_ACTION_NOTE = "note"
 BOOKING_ACTIONS = {BOOKING_ACTION_CONFIRM, BOOKING_ACTION_CANCEL, BOOKING_ACTION_NOTE}
-BOOKING_ACTION_TOKEN_DAYS = 7
+BOOKING_ACTION_TOKEN_HOURS = 24
 
 
 def create_booking_action_links(db: Session, *, booking: Booking) -> dict[str, str]:
@@ -34,9 +35,9 @@ def create_booking_action_links(db: Session, *, booking: Booking) -> dict[str, s
     if not base:
         base = ""
     result: dict[str, str] = {}
-    expires_at = datetime.utcnow() + timedelta(days=BOOKING_ACTION_TOKEN_DAYS)
+    expires_at = datetime.utcnow() + timedelta(hours=BOOKING_ACTION_TOKEN_HOURS)
     for action in (BOOKING_ACTION_CONFIRM, BOOKING_ACTION_CANCEL, BOOKING_ACTION_NOTE):
-        raw_token = generate_token()
+        raw_token = secrets.token_urlsafe(16)
         db.add(
             BookingActionToken(
                 booking_id=booking.id,
@@ -45,7 +46,7 @@ def create_booking_action_links(db: Session, *, booking: Booking) -> dict[str, s
                 expires_at=expires_at,
             )
         )
-        result[action] = f"{base}/prenotazioni/risposta/{raw_token}"
+        result[action] = f"{base}/b/{raw_token}"
     db.flush()
     return result
 
@@ -76,8 +77,6 @@ def consume_booking_action_token(
     note: str | None = None,
 ) -> dict[str, Any]:
     token = get_booking_action_token(db, raw_token=raw_token)
-    if token.used_at is not None:
-        return {"ok": False, "reason": "used", "booking": token.booking}
     if token.expires_at <= datetime.utcnow():
         return {"ok": False, "reason": "expired", "booking": token.booking}
 
@@ -223,7 +222,7 @@ def render_booking_action_page(*, token: BookingActionToken, error: str | None =
         BOOKING_ACTION_CANCEL: "Annulla prenotazione",
         BOOKING_ACTION_NOTE: "Modifica o note",
     }.get(action, "Prenotazione")
-    disabled = token.used_at is not None or token.expires_at <= datetime.utcnow()
+    disabled = token.expires_at <= datetime.utcnow()
     summary = _booking_summary_lines(booking)
     if action == BOOKING_ACTION_NOTE and not disabled:
         form = (
@@ -235,7 +234,7 @@ def render_booking_action_page(*, token: BookingActionToken, error: str | None =
             "</form>"
         )
     elif disabled:
-        form = "<p class='muted'>Questo link e' gia stato usato o e' scaduto.</p>"
+        form = "<p class='muted'>Questo link e' scaduto.</p>"
     else:
         form = "<form method='post'><button type='submit'>Conferma azione</button></form>"
     error_html = f"<p class='error'>{html.escape(error)}</p>" if error else ""
@@ -250,10 +249,47 @@ def render_booking_action_page(*, token: BookingActionToken, error: str | None =
     )
 
 
+def render_booking_action_auto_submit_page(*, token: BookingActionToken) -> str:
+    booking = token.booking
+    action_label = {
+        BOOKING_ACTION_CONFIRM: "Conferma prenotazione",
+        BOOKING_ACTION_CANCEL: "Annulla prenotazione",
+    }.get(token.action, "Prenotazione")
+    summary = _booking_summary_lines(booking)
+    button_label = "Conferma adesso" if token.action == BOOKING_ACTION_CONFIRM else "Annulla adesso"
+    return _page_shell(
+        title=action_label,
+        body=(
+            f"<h1>{html.escape(action_label)}</h1>"
+            f"<div class='summary'>{summary}</div>"
+            "<p class='muted'>Sto registrando la tua risposta...</p>"
+            "<form method='post' id='booking-action-form'>"
+            f"<button type='submit'>{html.escape(button_label)}</button>"
+            "</form>"
+            "<script>"
+            "window.addEventListener('load',function(){"
+            "var form=document.getElementById('booking-action-form');"
+            "if(form&&window.navigator&&navigator.userAgent){setTimeout(function(){form.submit();},120);}"
+            "});"
+            "</script>"
+        ),
+    )
+
+
 def render_booking_action_result(*, title: str, message: str) -> str:
     return _page_shell(
         title=title,
         body=f"<h1>{html.escape(title)}</h1><p>{html.escape(message)}</p>",
+    )
+
+
+def render_booking_action_missing() -> str:
+    return _page_shell(
+        title="Link prenotazione non valido",
+        body=(
+            "<h1>Link prenotazione non valido</h1>"
+            "<p>Non siamo riusciti a trovare questa azione. Controlla di aver aperto il link completo ricevuto su WhatsApp.</p>"
+        ),
     )
 
 

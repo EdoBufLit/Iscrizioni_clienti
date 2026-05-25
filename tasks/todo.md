@@ -5229,3 +5229,12 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Il worker reminder ora interpreta `booking_date` + `booking_time` in `APP_TIMEZONE`, default `Europe/Rome`, e confronta tutto in UTC.
 - Coperto il caso reale `26/05 00:00` con reminder 1 ora prima: alle `21:00 UTC` parte correttamente per mezzanotte Roma.
 - Verifiche locali OK: pytest mirati reminder (`2 passed`) e `python -m compileall -q app init_db.py`.
+
+## Plan (Fix link reminder e chiusura prenotazioni - May 25, 2026)
+- [x] Rendere i link reminder piu corti e robusti, usando anche route pubblica breve `/b/{token}`.
+- [x] Fare in modo che conferma/annulla da link aprano una pagina che registra l'azione dal browser e mostra il risultato, mentre note apra textarea.
+- [x] Rendere i link riutilizzabili per 24 ore, cosi il cliente puo correggere una scelta o inviare note dopo un tap sbagliato.
+- [x] Migliorare il testo WhatsApp default con CTA grandi cliccabili su righe separate.
+- [x] Verificare che ogni azione cliente aggiorni eventi, notifica campanella/email admin e stato/colore agenda.
+- [x] Permettere in agenda admin di chiudere tutte le prenotazioni senza auto-riaprirne una, con animazione di chiusura.
+- [ ] Eseguire test backend/frontend, build, deploy, smoke live e controllo spazio Hetzner.

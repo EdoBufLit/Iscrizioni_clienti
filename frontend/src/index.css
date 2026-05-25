@@ -5618,9 +5618,20 @@ body.dashboard-perf-mode .btn-ghost:hover {
 }
 
 .org-admin-v2 .booking-day-row__expanded {
-  border-top: 1px solid color-mix(in srgb, var(--oa-border) 70%, transparent);
-  padding: 0.9rem 1rem 1rem;
+  border-top: 0 solid color-mix(in srgb, var(--oa-border) 70%, transparent);
+  max-height: 0;
+  overflow: hidden;
+  padding: 0 1rem;
+  opacity: 0;
   background: color-mix(in srgb, var(--oa-panel-muted) 86%, transparent);
+  transition: max-height 220ms ease, opacity 160ms ease, padding 220ms ease;
+}
+
+.org-admin-v2 .booking-day-row.is-expanded .booking-day-row__expanded {
+  border-top-width: 1px;
+  max-height: 1800px;
+  padding: 0.9rem 1rem 1rem;
+  opacity: 1;
 }
 
 .org-admin-v2 .booking-day-row__expanded .space-y-6 {
@@ -6412,9 +6423,20 @@ body.dashboard-perf-mode .btn-ghost:hover {
   }
 
   .org-admin-v2 .booking-mobile-managed-card__expanded {
-    border-top: 1px solid color-mix(in srgb, var(--oa-border) 72%, transparent);
-    padding: 0.75rem;
+    border-top: 0 solid color-mix(in srgb, var(--oa-border) 72%, transparent);
+    max-height: 0;
+    overflow: hidden;
+    padding: 0 0.75rem;
+    opacity: 0;
     background: color-mix(in srgb, var(--oa-panel-muted) 78%, transparent);
+    transition: max-height 220ms ease, opacity 160ms ease, padding 220ms ease;
+  }
+
+  .org-admin-v2 .booking-mobile-managed-card.is-expanded .booking-mobile-managed-card__expanded {
+    border-top-width: 1px;
+    max-height: 1800px;
+    padding: 0.75rem;
+    opacity: 1;
   }
 
   .org-admin-v2 .submission-decision-modal {
