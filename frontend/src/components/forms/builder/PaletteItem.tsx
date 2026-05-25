@@ -11,6 +11,7 @@ type PaletteDefinition = {
 
 type Props = {
   item: PaletteDefinition;
+  onAdd?: (item: PaletteDefinition) => void;
 };
 
 type PaletteItemCardProps = {
@@ -24,11 +25,12 @@ type PaletteItemCardProps = {
   listeners?: ReturnType<typeof useDraggable>["listeners"];
   nodeRef?: ReturnType<typeof useDraggable>["setNodeRef"];
   isDragging?: boolean;
+  onAdd?: (item: PaletteDefinition) => void;
 };
 
-function PaletteItemCard({ item, style, attributes, listeners, nodeRef, isDragging = false }: PaletteItemCardProps) {
+function PaletteItemCard({ item, style, attributes, listeners, nodeRef, isDragging = false, onAdd }: PaletteItemCardProps) {
   return (
-    <button
+    <div
       ref={nodeRef}
       style={style}
       {...listeners}
@@ -38,13 +40,27 @@ function PaletteItemCard({ item, style, attributes, listeners, nodeRef, isDraggi
           ? "border-brand shadow-lg ring-2 ring-brand/20 cursor-grabbing"
           : "border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 hover:shadow-sm cursor-grab"
       }`}
-      type="button"
     >
       <span className="form-builder-palette-card__icon flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.7rem] text-sm font-bold text-brand">
         {item.icon}
       </span>
-      <span className="form-builder-palette-card__label text-sm font-semibold text-slate-700">{item.label}</span>
-    </button>
+      <span className="form-builder-palette-card__label min-w-0 flex-1 text-sm font-semibold text-slate-700">{item.label}</span>
+      {onAdd ? (
+        <button
+          type="button"
+          className="form-builder-palette-card__add inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.65rem] text-base font-bold"
+          aria-label={`Aggiungi ${item.label}`}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onAdd(item);
+          }}
+        >
+          +
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -52,7 +68,7 @@ export function StaticPaletteItem({ item }: Props) {
   return <PaletteItemCard item={item} />;
 };
 
-export function PaletteItem({ item }: Props) {
+export function PaletteItem({ item, onAdd }: Props) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `palette-${item.type}`,
     data: {
@@ -79,6 +95,7 @@ export function PaletteItem({ item }: Props) {
       listeners={listeners}
       nodeRef={setNodeRef}
       isDragging={isDragging}
+      onAdd={onAdd}
     />
   );
 }

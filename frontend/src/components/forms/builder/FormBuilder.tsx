@@ -46,6 +46,9 @@ type Props = {
   locked?: boolean;
   persistEnabled?: boolean;
   mode?: "forms" | "surveys";
+  bookingEnabled?: boolean;
+  bookingDynamicEventsEnabled?: boolean;
+  onToggleBookingDynamicEvents?: (enabled: boolean) => void;
 };
 
 type BuilderCanvasProps = {
@@ -54,7 +57,12 @@ type BuilderCanvasProps = {
   setSelectedId: (id: string | null) => void;
   handleDelete: (field: BuilderField) => Promise<void>;
   handleDuplicate: (field: BuilderField) => Promise<void>;
+  handleMoveField: (field: BuilderField, direction: -1 | 1) => Promise<void>;
   lastKnownOverId: string | null;
+  bookingEnabled?: boolean;
+  bookingDynamicEventsEnabled?: boolean;
+  onToggleBookingDynamicEvents?: (enabled: boolean) => void;
+  locked?: boolean;
 };
 
 function BuilderCanvas({
@@ -63,7 +71,12 @@ function BuilderCanvas({
   setSelectedId,
   handleDelete,
   handleDuplicate,
+  handleMoveField,
   lastKnownOverId,
+  bookingEnabled = false,
+  bookingDynamicEventsEnabled = false,
+  onToggleBookingDynamicEvents,
+  locked,
 }: BuilderCanvasProps) {
   const { isOver: isCanvasOver, setNodeRef: setCanvasNodeRef } = useDroppable({
     id: FORM_BUILDER_CANVAS_ID,
@@ -93,6 +106,53 @@ function BuilderCanvas({
             : "border-slate-200 bg-[#fbfaf6]"
         }`}
       >
+        {bookingEnabled ? (
+          <div
+            className={`form-builder-booking-link mb-4 rounded-[0.85rem] border p-4 shadow-sm ${
+              bookingDynamicEventsEnabled
+                ? "form-builder-booking-link--active"
+                : "form-builder-booking-link--inactive"
+            }`}
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Blocco automatico</p>
+                <h4 className="mt-1 text-base font-semibold text-slate-950">Prenotazione: giorno, serata, orario</h4>
+                <p className="mt-1 text-sm leading-5 text-slate-500">
+                  {bookingDynamicEventsEnabled
+                    ? "Il socio vedra data, serata e slot orario letti da Prenotazioni > Serate. Non serve creare un menu a tendina manuale."
+                    : "Attivalo per usare le serate configurate in agenda invece di scrivere opzioni manuali nel form."}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="form-builder-booking-link__button rounded-[0.75rem] px-3 py-2 text-sm font-semibold"
+                  disabled={locked || !onToggleBookingDynamicEvents}
+                  onClick={() => onToggleBookingDynamicEvents?.(!bookingDynamicEventsEnabled)}
+                >
+                  {bookingDynamicEventsEnabled ? "Scollega" : "Collega serate"}
+                </button>
+                <a
+                  className="form-builder-booking-link__secondary rounded-[0.75rem] px-3 py-2 text-sm font-semibold"
+                  href="/org-admin/prenotazioni?section=events"
+                >
+                  Gestisci serate
+                </a>
+              </div>
+            </div>
+            {bookingDynamicEventsEnabled ? (
+              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                {["Giorno", "Serata", "Orario"].map((label) => (
+                  <div key={label} className="form-builder-booking-link__field rounded-[0.75rem] border px-3 py-2">
+                    <span className="text-xs font-semibold text-slate-700">{label}</span>
+                    <div className="mt-2 h-9 rounded-[0.65rem] border border-dashed" />
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <SortableContext items={items.map((item) => item.key)} strategy={verticalListSortingStrategy}>
           <div
             className="flex flex-wrap gap-4 items-start"
@@ -104,10 +164,10 @@ function BuilderCanvas({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
                 </svg>
                 <p className="text-sm font-semibold text-slate-700">Trascina qui un campo per iniziare</p>
-                <p className="mt-1 text-xs text-slate-500">Il layout resta modificabile fino alla pubblicazione.</p>
+                <p className="mt-1 text-xs text-slate-500">Da mobile puoi anche toccare un campo nella libreria.</p>
               </div>
             ) : (
-              items.map((field) => (
+              items.map((field, index) => (
                 <CanvasItem
                   key={field.key}
                   field={field}
@@ -115,6 +175,10 @@ function BuilderCanvas({
                   onSelect={() => setSelectedId(field.key)}
                   onDelete={() => void handleDelete(field)}
                   onDuplicate={() => void handleDuplicate(field)}
+                  onMoveUp={() => void handleMoveField(field, -1)}
+                  onMoveDown={() => void handleMoveField(field, 1)}
+                  canMoveUp={index > 0}
+                  canMoveDown={index < items.length - 1}
                 />
               ))
             )}
@@ -125,7 +189,19 @@ function BuilderCanvas({
   );
 }
 
-export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onReorder, locked, persistEnabled = true, mode = "forms" }: Props) {
+export function FormBuilder({
+  fields,
+  onChange,
+  onSaveField,
+  onDeleteField,
+  onReorder,
+  locked,
+  persistEnabled = true,
+  mode = "forms",
+  bookingEnabled = false,
+  bookingDynamicEventsEnabled = false,
+  onToggleBookingDynamicEvents,
+}: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [lastKnownOverId, setLastKnownOverId] = useState<string | null>(null);
@@ -325,6 +401,21 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
     }
   };
 
+  const handleAddFieldFromPalette = async (type: VirtualFieldType, label?: string) => {
+    if (locked) return;
+    const newField = createFieldFromPaletteItem(type, label);
+    const newItems = [...items, newField];
+    if (persistEnabled) {
+      creatingFieldKeysRef.current.add(newField.key);
+      setCreatingFieldKeys(Array.from(creatingFieldKeysRef.current));
+    }
+    onChange(newItems);
+    setSelectedId(newField.key);
+    if (persistEnabled) {
+      await onSaveField(newField, newItems);
+    }
+  };
+
   const handleUpdateSelected = async (updatedField: BuilderField) => {
     const newItems = items.map((f) => (f.key === updatedField.key ? updatedField : f));
     onChange(newItems);
@@ -357,6 +448,19 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
     setSelectedId(newField.key);
     if (persistEnabled) {
       await onSaveField(newField, newItems);
+    }
+  };
+
+  const handleMoveField = async (field: BuilderField, direction: -1 | 1) => {
+    if (locked) return;
+    const currentIndex = items.findIndex((item) => item.key === field.key);
+    const nextIndex = currentIndex + direction;
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= items.length) return;
+    const nextItems = arrayMove(items, currentIndex, nextIndex);
+    onChange(nextItems);
+    setSelectedId(field.key);
+    if (persistEnabled) {
+      await onReorder(nextItems);
     }
   };
 
@@ -407,11 +511,15 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
           <div className="form-builder-rail__header border-b px-1 pb-3">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Libreria campi</p>
             <h3 className="mt-2 text-base font-semibold text-slate-950">Aggiungi al modulo</h3>
-            <p className="mt-1 text-xs leading-5 text-slate-500">Trascina campi, sezioni e blocchi di consenso nel canvas centrale.</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">Tocca per aggiungere. Da desktop puoi anche trascinare nel canvas.</p>
           </div>
           <div className="flex flex-col gap-2 max-h-[70vh] overflow-y-auto custom-scrollbar pr-2">
             {paletteItems.map((item) => (
-              <PaletteItem key={item.type} item={item} />
+              <PaletteItem
+                key={item.type}
+                item={item}
+                onAdd={(paletteItem) => void handleAddFieldFromPalette(paletteItem.type, paletteItem.label)}
+              />
             ))}
           </div>
         </div>
@@ -422,7 +530,12 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
           setSelectedId={setSelectedId}
           handleDelete={handleDelete}
           handleDuplicate={handleDuplicate}
+          handleMoveField={handleMoveField}
           lastKnownOverId={lastKnownOverId}
+          bookingEnabled={mode === "forms" && bookingEnabled}
+          bookingDynamicEventsEnabled={bookingDynamicEventsEnabled}
+          onToggleBookingDynamicEvents={onToggleBookingDynamicEvents}
+          locked={locked}
         />
 
         <div className="form-builder-properties sticky top-6 max-h-[85vh] overflow-y-auto rounded-[0.85rem] border p-5 shadow-sm custom-scrollbar">
@@ -448,6 +561,10 @@ export function FormBuilder({ fields, onChange, onSaveField, onDeleteField, onRe
               onSelect={() => {}}
               onDelete={() => {}}
               onDuplicate={() => {}}
+              onMoveUp={() => {}}
+              onMoveDown={() => {}}
+              canMoveUp={false}
+              canMoveDown={false}
             />
           </div>
         ) : null}

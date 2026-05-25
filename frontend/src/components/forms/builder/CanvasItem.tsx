@@ -10,6 +10,10 @@ type Props = {
   onSelect: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
 };
 
 type CanvasItemFrameProps = Props & {
@@ -27,6 +31,10 @@ function CanvasItemFrame({
   onSelect,
   onDelete,
   onDuplicate,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp,
+  canMoveDown,
   nodeRef,
   attributes,
   listeners,
@@ -124,10 +132,32 @@ function CanvasItemFrame({
       </div>
 
       {isSelected && (
-        <div className="absolute -top-3 right-4 flex items-center gap-1 bg-neutral-900 rounded-lg p-1 shadow-lg z-30 pointer-events-auto">
+        <div className="form-builder-item-actions absolute -top-3 right-4 flex items-center gap-1 bg-neutral-900 rounded-lg p-1 shadow-lg z-30 pointer-events-auto">
           <div className="px-2 text-[10px] font-bold text-white/70 uppercase tracking-widest border-r border-white/20">
             {meta?.label}
           </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onMoveUp();
+            }}
+            className="p-1.5 text-white/80 hover:text-white hover:bg-white/20 rounded transition-colors disabled:cursor-not-allowed disabled:opacity-35"
+            title="Sposta su"
+            disabled={!canMoveUp}
+          >
+            <span className="block h-3.5 w-3.5 text-center text-xs leading-3.5">↑</span>
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onMoveDown();
+            }}
+            className="p-1.5 text-white/80 hover:text-white hover:bg-white/20 rounded transition-colors disabled:cursor-not-allowed disabled:opacity-35"
+            title="Sposta giù"
+            disabled={!canMoveDown}
+          >
+            <span className="block h-3.5 w-3.5 text-center text-xs leading-3.5">↓</span>
+          </button>
           <button
             onClick={(e) => {
               e.stopPropagation();

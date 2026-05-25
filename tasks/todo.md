@@ -5135,3 +5135,17 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - [ ] Commit e push del fix sul branch `feat/redesign-landing-wizard`, mantenendo fuori gli untracked locali non pertinenti.
 - [ ] Collegarsi a Hetzner, aggiornare checkout/immagine in modo controllato, lanciare migration Alembic e ricreare i servizi necessari.
 - [ ] Verificare container, log worker/web e smoke HTTP pubblico/API dopo il deploy.
+
+## Plan (Builder mobile e collegamento serate - May 25, 2026)
+- [x] Aggiungere al form/sondaggi builder un'alternativa touch-first: tap per aggiungere campi e pulsanti su/giu per riordinare, senza obbligare il drag da mobile.
+- [x] Rendere esplicito nella tab Struttura il blocco automatico "Prenotazione: giorno, serata, orario" quando il form usa le Serate prenotabili.
+- [x] Collegare il toggle dinamico dal builder alla stessa impostazione salvata oggi in Impostazioni > Prenotazioni, con link alla sezione Prenotazioni > Serate.
+- [x] Verificare typecheck/build frontend e spiegare il flusso corretto all'org admin.
+
+## Review (Builder mobile e collegamento serate - May 25, 2026)
+- La libreria campi ora ha un pulsante `+` per aggiungere col tap; il drag resta disponibile su desktop.
+- Le card selezionate nel canvas hanno comandi su/giu per riordinare senza gesto di trascinamento.
+- Nei form prenotazione la tab Struttura mostra un blocco automatico "Prenotazione: giorno, serata, orario" con toggle Collega/Scollega serate e link a `/org-admin/prenotazioni?section=events`.
+- Nessun campo del builder e stato rimosso: palette form ancora a 16 tipi, palette sondaggi ancora a 11 tipi.
+- Dark mode verificata con screenshot mobile light/dark del blocco serate e hardening CSS dedicato per label, bottoni e campi automatici.
+- Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.

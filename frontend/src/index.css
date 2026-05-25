@@ -6591,6 +6591,17 @@ body.dashboard-perf-mode .btn-ghost:hover {
   background: color-mix(in srgb, var(--oa-success, #14b8a6) 14%, var(--fb-surface));
 }
 
+.org-admin-v2 .form-builder-palette-card__add {
+  border: 1px solid color-mix(in srgb, var(--oa-success, #14b8a6) 24%, var(--fb-border));
+  background: color-mix(in srgb, var(--oa-success, #14b8a6) 10%, var(--fb-surface));
+  color: var(--oa-success, #0f766e);
+}
+
+.org-admin-v2 .form-builder-palette-card__add:hover {
+  background: var(--oa-success, #0f766e);
+  color: #ffffff;
+}
+
 .org-admin-v2 .form-builder-item__input-preview,
 .org-admin-v2 .form-builder-item__option,
 .org-admin-v2 .form-builder-field-input,
@@ -6612,6 +6623,140 @@ body.dashboard-perf-mode .btn-ghost:hover {
 
 .org-admin-v2 .form-builder-toggle-track {
   background: color-mix(in srgb, var(--fb-muted) 28%, var(--fb-surface));
+}
+
+.org-admin-v2 .form-builder-booking-link {
+  border-color: var(--fb-border);
+  background: var(--fb-surface);
+  color: var(--fb-text);
+}
+
+.org-admin-v2 .form-builder-booking-link--active {
+  border-color: color-mix(in srgb, var(--oa-success, #14b8a6) 44%, var(--fb-border));
+  background: color-mix(in srgb, var(--oa-success, #14b8a6) 8%, var(--fb-surface));
+}
+
+.org-admin-v2 .form-builder-booking-link--inactive {
+  border-style: dashed;
+}
+
+.org-admin-v2 .form-builder-booking-link__button {
+  background: var(--oa-success, #0f766e);
+  color: #ffffff;
+}
+
+.org-admin-v2 .form-builder-booking-link__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.org-admin-v2 .form-builder-booking-link__secondary {
+  border: 1px solid var(--fb-border);
+  background: var(--fb-surface);
+  color: var(--fb-text);
+}
+
+.org-admin-v2 .form-builder-booking-link__field {
+  border-color: color-mix(in srgb, var(--oa-success, #14b8a6) 38%, var(--fb-border));
+  background: color-mix(in srgb, var(--oa-success, #14b8a6) 6%, var(--fb-surface));
+  color: var(--fb-text);
+}
+
+.org-admin-v2 .form-builder-booking-link__field div {
+  border-color: color-mix(in srgb, var(--oa-success, #14b8a6) 45%, var(--fb-border));
+  background: var(--fb-input);
+}
+
+.org-admin-v2 .form-builder-booking-link__field span {
+  color: var(--fb-text) !important;
+}
+
+:root[data-theme="dark"] .org-admin-v2 .form-builder-booking-link__button {
+  background: color-mix(in srgb, var(--oa-success, #14b8a6) 74%, #ffffff);
+  color: #071412;
+}
+
+:root[data-theme="dark"] .org-admin-v2 .form-builder-booking-link__secondary,
+:root[data-theme="dark"] .org-admin-v2 .form-builder-palette-card__add {
+  background: var(--fb-input);
+  color: var(--fb-text);
+}
+
+:root[data-theme="dark"] .org-admin-v2 .form-builder-palette-card__add:hover {
+  background: color-mix(in srgb, var(--oa-success, #14b8a6) 74%, #ffffff);
+  color: #071412;
+}
+
+@media (max-width: 767px) {
+  .org-admin-v2 .form-builder-shell {
+    gap: 1rem;
+  }
+
+  .org-admin-v2 .form-builder-rail {
+    position: relative;
+    top: auto;
+    max-height: none;
+    padding: 0.85rem;
+  }
+
+  .org-admin-v2 .form-builder-rail > .custom-scrollbar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .org-admin-v2 .form-builder-palette-card {
+    min-height: 54px;
+    cursor: pointer;
+    padding: 0.7rem;
+  }
+
+  .org-admin-v2 .form-builder-palette-card__icon {
+    height: 2rem;
+    width: 2rem;
+  }
+
+  .org-admin-v2 .form-builder-palette-card__label {
+    font-size: 0.78rem;
+    line-height: 1.1rem;
+  }
+
+  .org-admin-v2 .form-builder-canvas {
+    min-height: 42vh;
+    padding: 0.85rem;
+  }
+
+  .org-admin-v2 .form-builder-item {
+    margin-top: 0.55rem;
+  }
+
+  .org-admin-v2 .form-builder-item-actions {
+    position: static;
+    margin: 0 0.75rem 0.75rem;
+    width: calc(100% - 1.5rem);
+    justify-content: flex-end;
+  }
+
+  .org-admin-v2 .form-builder-item-actions > div:first-child {
+    margin-right: auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .org-admin-v2 .form-builder-item-actions button {
+    min-height: 36px;
+    min-width: 36px;
+  }
+
+  .org-admin-v2 .form-builder-properties {
+    position: relative;
+    top: auto;
+    max-height: none;
+  }
 }
 
 :root[data-theme="dark"] .org-admin-v2 .form-settings-tab section,

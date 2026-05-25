@@ -1606,6 +1606,9 @@ export function OrgAdminFormsWorkspace({
         locked={locked}
         persistEnabled={Boolean(selectedFormId)}
         mode={mode}
+        bookingEnabled={formDraft.booking_enabled}
+        bookingDynamicEventsEnabled={formDraft.booking_dynamic_events_enabled}
+        onToggleBookingDynamicEvents={(enabled) => syncFormDraft("booking_dynamic_events_enabled", enabled)}
       />
     </div>
   );
