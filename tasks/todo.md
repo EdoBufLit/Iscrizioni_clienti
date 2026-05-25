@@ -5260,3 +5260,15 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Reminder WhatsApp: confermato che nei messaggi testuali non si possono usare anchor HTML nascosti; restano CTA leggibili con short link, piu sicure per Evolution.
 - Verifiche locali OK: pytest mirati login/reminder (`4 passed`), `python -m compileall -q app init_db.py`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.
 - Hetzner: prune conservativo immagini Docker eseguito prima del deploy, disco `/` da 78% a 29%, volumi non toccati.
+
+## Plan (Pulizia log deploy cleanup soci - May 26, 2026)
+- [x] Verificare il traceback live comparso dopo deploy e distinguere errore startup seed da rottura del nuovo login.
+- [x] Correggere hard-delete soci soft-deleted preservando i pagamenti associativi storici.
+- [x] Aggiungere test per socio eliminato con `membership_payments` collegato.
+- [x] Rieseguire test/compile/build, pushare patch e verificare deploy/log live puliti.
+
+## Review (Pulizia log deploy cleanup soci - May 26, 2026)
+- Root cause: `purge_deleted_members_permanently` cancellava il socio soft-deleted senza gestire `membership_payments.socio_id`, che in produzione puntava ancora a soci eliminati.
+- Fix: i pagamenti associativi non vengono cancellati; viene solo azzerato `socio_id`, preservando storico economico e `org_id`.
+- Test aggiunto: hard-delete di socio con pagamento associativo conserva il pagamento e rimuove il FK.
+- Verifiche locali OK: pytest mirati cleanup/login/reminder (`3 passed`), `python -m compileall -q app init_db.py`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.

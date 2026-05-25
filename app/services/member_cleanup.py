@@ -3,7 +3,15 @@ from __future__ import annotations
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
-from app.models import CardMovement, Member, MemberDocument, MemberPayment, OperationLog, Token
+from app.models import (
+    CardMovement,
+    Member,
+    MemberDocument,
+    MemberPayment,
+    MembershipPayment,
+    OperationLog,
+    Token,
+)
 from app.services.card_allocation import release_card_number
 
 
@@ -182,6 +190,10 @@ def purge_deleted_members_permanently(
     )
     db.query(MemberPayment).filter(MemberPayment.member_id.in_(member_ids)).delete(
         synchronize_session=False
+    )
+    db.query(MembershipPayment).filter(MembershipPayment.socio_id.in_(member_ids)).update(
+        {MembershipPayment.socio_id: None},
+        synchronize_session=False,
     )
     db.query(Member).filter(Member.id.in_(member_ids)).delete(synchronize_session=False)
     db.flush()

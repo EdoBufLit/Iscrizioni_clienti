@@ -4,8 +4,15 @@ from datetime import datetime
 import pytest
 
 from app.db import SessionLocal
-from app.models import Member, MemberStatus, Organization
-from app.services.member_cleanup import cleanup_deleted_member_traces
+from app.models import (
+    Member,
+    MemberStatus,
+    MembershipPayment,
+    MembershipPaymentSource,
+    MembershipPaymentStatus,
+    Organization,
+)
+from app.services.member_cleanup import cleanup_deleted_member_traces, purge_deleted_members_permanently
 from tests.signup_payloads import build_join_submit_data
 
 
@@ -91,6 +98,38 @@ def test_cleanup_deleted_member_traces_global_sanitizes_all_associations(db):
     assert old_b.fiscal_code is None
     assert old_b.card_no is None
     assert old_b.external_customer_id is None
+
+
+def test_purge_deleted_members_preserves_membership_payments_without_fk(db):
+    suffix = uuid.uuid4().hex[:8]
+    org = _create_org(db, f"cleanup-payment-{suffix}")
+    old_member = _create_legacy_deleted_member(
+        db,
+        org_id=org.id,
+        email=f"legacy-payment-{suffix}@example.com",
+        fiscal_code=f"PAY{suffix[:8].upper()}",
+        card_no=91003,
+    )
+    payment = MembershipPayment(
+        org_id=org.id,
+        socio_id=old_member.id,
+        amount=25,
+        status=MembershipPaymentStatus.COMPLETED.value,
+        source=MembershipPaymentSource.MANUAL.value,
+    )
+    db.add(payment)
+    db.commit()
+    old_member_id = old_member.id
+    payment_id = payment.id
+
+    purged = purge_deleted_members_permanently(db)
+    db.commit()
+
+    assert purged >= 1
+    assert db.query(Member).filter(Member.id == old_member_id).first() is None
+    preserved_payment = db.query(MembershipPayment).filter(MembershipPayment.id == payment_id).one()
+    assert preserved_payment.socio_id is None
+    assert preserved_payment.org_id == org.id
 
 
 def test_join_submit_cleans_deleted_legacy_traces_per_association(client, db):
