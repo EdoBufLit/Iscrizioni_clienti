@@ -20,6 +20,7 @@ from app.models import (
     Organization,
     WhatsAppMessage,
 )
+from app.services.forms import normalize_field_key
 from app.services.whatsapp_sync import get_or_create_connection
 from app.utils import hash_token
 
@@ -973,7 +974,7 @@ def test_dynamic_booking_events_fall_back_to_default_and_keep_free_time(client, 
             "weekday": 0,
             "is_active": True,
             "is_default": True,
-            "time_slots": ["19:00"],
+            "time_slots": ["22:30"],
         },
     )
     assert default_res.status_code == 201, default_res.text
@@ -998,7 +999,7 @@ def test_dynamic_booking_events_fall_back_to_default_and_keep_free_time(client, 
     assert form_res.status_code == 201, form_res.text
 
     events_res = client.get(
-        f"/api/forms/{org.slug}/{public_slug}/booking-events?date=2026-06-20&time=22:15"
+        f"/api/forms/{org.slug}/{public_slug}/booking-events?date=2026-06-20&time=22:30"
     )
     assert events_res.status_code == 200, events_res.text
     events_payload = events_res.json()
@@ -1010,16 +1011,93 @@ def test_dynamic_booking_events_fall_back_to_default_and_keep_free_time(client, 
         f"/api/forms/{org.slug}/{public_slug}/submit",
         json={
             "__booking_date": "2026-06-20",
-            "__booking_event_time": "22:15",
+            "__booking_event_time": "22:30",
             "__booking_event_series_id": str(default_series["id"]),
         },
     )
     assert submit_res.status_code == 200, submit_res.text
     booking = submit_res.json()["booking"]
     assert booking["booking_date"] == "2026-06-20"
-    assert booking["booking_time"] == "22:15"
+    assert booking["booking_time"] == "22:30"
+    assert booking["event_summary"] == "Ingresso libero\nPrenotazione standard"
     persisted_booking = db.query(Booking).filter(Booking.id == booking["id"]).one()
     assert "Ingresso libero" in (persisted_booking.notes or "")
+
+
+def test_dynamic_booking_events_keep_block_position_and_resolve_series_from_time(client, db):
+    org, admin = _create_org_admin(db)
+    _login_org_admin(client, db, admin.id)
+
+    default_res = client.post(
+        "/api/org-admin/booking-event-series",
+        json={
+            "name": "Ingresso libero",
+            "description": "Standard",
+            "recurrence_type": "weekly",
+            "weekday": 5,
+            "is_active": True,
+            "is_default": True,
+            "time_slots": ["22:30"],
+        },
+    )
+    assert default_res.status_code == 201, default_res.text
+
+    cartomante_res = client.post(
+        "/api/org-admin/booking-event-series",
+        json={
+            "name": "Cartomante",
+            "description": "Serata carte",
+            "recurrence_type": "date",
+            "specific_date": "2026-06-20",
+            "is_active": True,
+            "time_slots": ["20:30", "21:00"],
+        },
+    )
+    assert cartomante_res.status_code == 201, cartomante_res.text
+
+    public_slug = f"prenotazione-serata-{uuid.uuid4().hex[:6]}"
+    form_res = client.post(
+        "/api/org-admin/forms",
+        json={
+            "title": "Prenotazione serata",
+            "public_slug": public_slug,
+            "is_active": True,
+            "visibility": "public",
+            "form_type": "booking",
+            "booking_enabled": True,
+            "booking_dynamic_events_enabled": True,
+            "booking_requires_manual_confirmation": True,
+            "booking_notification_enabled": False,
+        },
+    )
+    assert form_res.status_code == 201, form_res.text
+
+    booking_key = normalize_field_key("__booking_block__abc123", fallback_label="Prenotazione")
+    assert booking_key.startswith("__booking_block__")
+
+    events_res = client.get(
+        f"/api/forms/{org.slug}/{public_slug}/booking-events?date=2026-06-20"
+    )
+    assert events_res.status_code == 200, events_res.text
+    events_payload = events_res.json()
+    event_names = [item["name"] for item in events_payload["items"]]
+    assert event_names == ["Cartomante", "Ingresso libero"]
+    assert sorted(slot["time"] for item in events_payload["items"] for slot in item["time_slots"]) == ["20:30", "21:00", "22:30"]
+
+    submit_res = client.post(
+        f"/api/forms/{org.slug}/{public_slug}/submit",
+        json={
+            "__booking_date": "2026-06-20",
+            "__booking_event_time": "21:00",
+            "__booking_event_series_id": "",
+        },
+    )
+    assert submit_res.status_code == 200, submit_res.text
+    booking = submit_res.json()["booking"]
+    assert booking["booking_time"] == "21:00"
+    assert booking["event_summary"] == "Cartomante\nSerata carte"
+    assert booking["request_payload_summary"][0]["label"] == "Serata"
+    assert booking["request_payload_summary"][0]["value"] == "Cartomante\nSerata carte"
 
 
 def test_org_admin_can_create_manual_booking_from_agenda(client, db):

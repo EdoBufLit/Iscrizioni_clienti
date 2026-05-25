@@ -6811,6 +6811,27 @@ body.dashboard-perf-mode .btn-ghost:hover {
   color: var(--fb-muted) !important;
 }
 
+:root[data-theme="dark"] .org-admin-v2 .form-public-canvas-container:not([data-page-style="spotlight"]) .form-public-canvas__dynamic-booking {
+  border-color: var(--fb-border, #2f3b46) !important;
+  background: var(--fb-surface, #17212b) !important;
+  color: var(--fb-text, #f8fafc) !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme="dark"] .org-admin-v2 .form-public-canvas-container:not([data-page-style="spotlight"]) .form-public-canvas__dynamic-booking p,
+:root[data-theme="dark"] .org-admin-v2 .form-public-canvas-container:not([data-page-style="spotlight"]) .form-public-canvas__dynamic-booking span,
+:root[data-theme="dark"] .org-admin-v2 .form-public-canvas-container:not([data-page-style="spotlight"]) .form-public-canvas__dynamic-booking .text-neutral-900,
+:root[data-theme="dark"] .org-admin-v2 .form-public-canvas-container:not([data-page-style="spotlight"]) .form-public-canvas__dynamic-booking .text-neutral-800 {
+  color: var(--fb-text, #f8fafc) !important;
+  -webkit-text-fill-color: var(--fb-text, #f8fafc) !important;
+}
+
+:root[data-theme="dark"] .org-admin-v2 .form-public-canvas-container:not([data-page-style="spotlight"]) .form-public-canvas__dynamic-booking .form-public-canvas__dynamic-booking-help,
+:root[data-theme="dark"] .org-admin-v2 .form-public-canvas-container:not([data-page-style="spotlight"]) .form-public-canvas__dynamic-booking .text-neutral-500 {
+  color: var(--fb-muted, #c3cfdb) !important;
+  -webkit-text-fill-color: var(--fb-muted, #c3cfdb) !important;
+}
+
 .org-admin-v2 .whatsapp-variable-library {
   display: grid;
   gap: 0.9rem;

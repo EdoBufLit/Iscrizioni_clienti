@@ -5176,3 +5176,19 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Mapping: con serate attive data e orario non si collegano piu a campi manuali ma arrivano dal blocco prenotazione; email e telefono si auto-mappano ai primi campi compatibili.
 - Serate: aggiunto default org-level in `Prenotazioni > Serate`; il form pubblico accetta data/orario liberi e propone la serata specifica solo se combacia con giorno+orario, altrimenti usa il default se configurato.
 - Verifiche OK: pytest mirati serate/fallback, `python -m compileall -q app init_db.py`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`. La build mantiene solo il warning Vite preesistente sui chunk grandi.
+
+## Plan (Fix posizione blocco prenotazione e slot serate - May 25, 2026)
+- [x] Correggere il riconoscimento del blocco `Prenotazione` salvato con prefisso legacy/canonico, cosi anteprima e form pubblico rispettano la posizione nel canvas.
+- [x] Rimuovere il messaggio visuale sotto serata libera/default/specifica.
+- [x] Cambiare l'orario pubblico da input libero a select di slot disponibili, includendo slot della serata specifica e della serata default.
+- [x] Assicurare che booking, riepilogo WhatsApp/reminder e dettaglio admin usino sempre titolo/descrizione della serata scelta quando le serate dinamiche sono attive.
+- [x] Correggere dark mode del blocco prenotazione in anteprima/form pubblico.
+- [x] Aggiungere test mirati, rieseguire compile/typecheck/build e controllare spazio server con prune conservativo se serve prima/dopo push.
+
+## Review (Fix posizione blocco prenotazione e slot serate - May 25, 2026)
+- Root cause posizione: il blocco booking salvato/normalizzato poteva usare prefisso legacy `booking_block_`, mentre il render pubblico riconosceva solo `__booking_block__`; ora entrambi vengono trattati come blocco prenotazione e non scatta il fallback fisso in alto.
+- Form pubblico: rimosso il messaggio sotto la select serata; l'orario e una select di slot configurati, aggregati da serata specifica e default.
+- Backend: se il frontend invia data+slot senza id serata, il backend risolve la serata da giorno/orario; booking, riepilogo admin, reminder WhatsApp e pagina risposta includono titolo/descrizione serata.
+- Admin mobile: la richiesta da confermare mostra anche la serata/evento scelto nel riepilogo compatto.
+- Dark mode: aggiunti override scoped per contenitore, titolo, testo help e controlli del blocco prenotazione nella preview/form pubblico.
+- Verifiche OK: pytest mirati (`4 passed`), `python -m compileall -q app init_db.py`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.

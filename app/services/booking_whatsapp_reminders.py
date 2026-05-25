@@ -334,7 +334,12 @@ def _render_booking_template(
     date_value = booking.booking_date.isoformat() if booking.booking_date else ""
     time_value = booking.booking_time or ""
     party_size = str(booking.party_size or "")
-    summary = " - ".join(item for item in [date_value, time_value, f"{party_size} persone" if party_size else ""] if item)
+    event_details = str(getattr(booking, "notes", "") or "").split("\n\nNote richiesta:", 1)[0].strip()
+    summary = " - ".join(
+        item
+        for item in [date_value, time_value, f"{party_size} persone" if party_size else "", event_details]
+        if item
+    )
     context = build_template_context(
         association=org,
         member=None,

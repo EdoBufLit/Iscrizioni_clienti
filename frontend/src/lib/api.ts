@@ -1251,6 +1251,7 @@ export type AssociationBooking = {
   party_size: number | null;
   notes: string | null;
   notes_preview: string | null;
+  event_summary: string | null;
   customer_note: string | null;
   customer_note_submitted_at: string | null;
   customer_note_reviewed_at: string | null;

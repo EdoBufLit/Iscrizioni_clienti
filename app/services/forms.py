@@ -316,6 +316,7 @@ VIRTUAL_FIELD_KEY_PREFIXES = (
     "__ui_file__",
     "__survey_rating__",
     "__survey_nps__",
+    "__booking_block__",
 )
 
 

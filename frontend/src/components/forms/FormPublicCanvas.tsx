@@ -393,9 +393,23 @@ export function FormPublicCanvas({
   const showDynamicBookingFields = Boolean(
     form.booking_dynamic_events_enabled && (form.booking_enabled || form.create_booking || form.form_type === "booking"),
   );
-  const selectedSeriesId = Number(values.__booking_event_series_id || 0) || null;
-  const selectedSeries = bookingEvents.find((item) => item.id === selectedSeriesId) || null;
   const hasBookingBlockField = sortedFields.some((field) => isBookingBlockField(field));
+  const selectedTime = String(values.__booking_event_time || "");
+  const timeSlots = Array.from(new Set(
+    bookingEvents.flatMap((eventItem) =>
+      (eventItem.time_slots || [])
+        .filter((slot) => slot.is_active !== false)
+        .map((slot) => String(slot.time || slot.start_time || "").slice(0, 5))
+        .filter(Boolean),
+    ),
+  )).sort();
+  const matchingSeriesForTime = selectedTime
+    ? bookingEvents.filter((eventItem) =>
+        (eventItem.time_slots || []).some((slot) =>
+          slot.is_active !== false && String(slot.time || slot.start_time || "").slice(0, 5) === selectedTime,
+        )
+      )
+    : [];
   const canvasStyle = { "--form-accent": accentColor } as CSSProperties;
 
   // Dynamic styles
@@ -562,8 +576,8 @@ export function FormPublicCanvas({
     <div key={key} className="form-public-canvas__dynamic-booking w-full rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
       <div className="mb-4">
         <p className="text-sm font-bold text-neutral-900">Prenotazione</p>
-        <p className="mt-1 text-xs font-medium leading-5 text-neutral-500">
-          Scegli giorno e orario. Se per quella scelta c'e una serata configurata, la trovi qui sotto; altrimenti resta la prenotazione libera.
+        <p className="form-public-canvas__dynamic-booking-help mt-1 text-xs font-medium leading-5 text-neutral-500">
+          Scegli giorno e uno degli orari disponibili. La serata viene compilata in base alla configurazione dell'organizzazione.
         </p>
       </div>
       <div className="grid gap-4 md:grid-cols-3">
@@ -583,17 +597,21 @@ export function FormPublicCanvas({
         </label>
         <label className="form-public-canvas__field block">
           <span className="form-public-canvas__label mb-1 block text-sm font-semibold text-neutral-800">Orario *</span>
-          <input
+          <select
             className={baseInputClass}
-            type="time"
             required
-            disabled={!interactive}
+            disabled={!interactive || bookingEventsLoading || !values.__booking_date || timeSlots.length === 0}
             value={String(values.__booking_event_time || "")}
             onChange={(event) => {
               onValueChange?.("__booking_event_time", event.target.value);
               onValueChange?.("__booking_event_series_id", "");
             }}
-          />
+          >
+            <option value="">{bookingEventsLoading ? "Caricamento orari..." : timeSlots.length === 0 ? "Nessun orario configurato" : "Scegli orario"}</option>
+            {timeSlots.map((slot) => (
+              <option key={slot} value={slot}>{slot}</option>
+            ))}
+          </select>
         </label>
         <label className="form-public-canvas__field block">
           <span className="form-public-canvas__label mb-1 block text-sm font-semibold text-neutral-800">Serata</span>
@@ -606,7 +624,7 @@ export function FormPublicCanvas({
             <option value="">
               {bookingEventsLoading ? "Controllo serate..." : "Prenotazione libera"}
             </option>
-            {bookingEvents.map((eventItem) => (
+            {matchingSeriesForTime.map((eventItem) => (
               <option key={eventItem.id} value={eventItem.id}>
                 {eventItem.name}{eventItem.is_default ? " (default)" : ""}
               </option>
@@ -614,21 +632,6 @@ export function FormPublicCanvas({
           </select>
         </label>
       </div>
-      {values.__booking_date && values.__booking_event_time && !bookingEventsLoading ? (
-        <p className={`mt-3 rounded-xl px-3 py-2 text-xs font-semibold ${
-          selectedSeries?.is_default
-            ? "bg-amber-50 text-amber-800"
-            : selectedSeries
-              ? "bg-emerald-50 text-emerald-800"
-              : "bg-neutral-100 text-neutral-700"
-        }`}>
-          {selectedSeries?.is_default
-            ? `Nessuna serata specifica per questa scelta: useremo ${selectedSeries.name}.`
-            : selectedSeries
-              ? `Serata disponibile: ${selectedSeries.name}.`
-              : "Nessuna serata specifica selezionata: la prenotazione resta libera."}
-        </p>
-      ) : null}
     </div>
   );
 

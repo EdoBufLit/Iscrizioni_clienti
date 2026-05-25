@@ -10,6 +10,24 @@ import {
 import { applySeo } from "../lib/seo";
 import { FormPublicCanvas } from "../components/forms/FormPublicCanvas";
 
+function getSeriesSlotTimes(item: OrgAdminBookingEventSeries): string[] {
+  return (item.time_slots || [])
+    .filter((slot) => slot.is_active !== false)
+    .map((slot) => String(slot.time || slot.start_time || "").slice(0, 5))
+    .filter(Boolean);
+}
+
+function getBookingTimeOptions(items: OrgAdminBookingEventSeries[]): string[] {
+  return Array.from(new Set(items.flatMap(getSeriesSlotTimes))).sort();
+}
+
+function pickBookingSeriesForTime(items: OrgAdminBookingEventSeries[], timeValue: string): OrgAdminBookingEventSeries | null {
+  if (!timeValue) return null;
+  const specific = items.find((item) => !item.is_default && getSeriesSlotTimes(item).includes(timeValue));
+  if (specific) return specific;
+  return items.find((item) => item.is_default && getSeriesSlotTimes(item).includes(timeValue)) || null;
+}
+
 function buildInitialValues(form: PublicAssociationForm): Record<string, unknown> {
   const values: Record<string, unknown> = {};
   for (const field of form.fields) {
@@ -62,7 +80,6 @@ const PublicFormPage = () => {
       return;
     }
     const dateValue = String(values.__booking_date || "");
-    const timeValue = String(values.__booking_event_time || "");
     if (!dateValue) {
       setBookingEvents([]);
       return;
@@ -70,22 +87,20 @@ const PublicFormPage = () => {
     let cancelled = false;
     setBookingEventsLoading(true);
     const request = orgSlug
-      ? fetchPublicFormBookingEvents(orgSlug, slug, dateValue, { time: timeValue || null })
-      : fetchPublicFormBookingEvents(slug, dateValue, { time: timeValue || null });
+      ? fetchPublicFormBookingEvents(orgSlug, slug, dateValue)
+      : fetchPublicFormBookingEvents(slug, dateValue);
     request
       .then((response) => {
         if (!cancelled) {
           setBookingEvents(response.items);
           setValues((current) => {
-            const currentSeriesId = Number(current.__booking_event_series_id || 0) || null;
-            if (currentSeriesId && response.items.some((item) => item.id === currentSeriesId)) {
-              return current;
-            }
-            const preferred = response.items.find((item) => item.is_default) || response.items[0] || null;
-            return {
-              ...current,
-              __booking_event_series_id: preferred ? String(preferred.id) : "",
-            };
+            const timeOptions = getBookingTimeOptions(response.items);
+            const currentTime = String(current.__booking_event_time || "");
+            const nextTime = currentTime && timeOptions.includes(currentTime) ? currentTime : timeOptions[0] || "";
+            const preferred = pickBookingSeriesForTime(response.items, nextTime);
+            const nextSeriesId = preferred ? String(preferred.id) : "";
+            if (currentTime === nextTime && String(current.__booking_event_series_id || "") === nextSeriesId) return current;
+            return { ...current, __booking_event_time: nextTime, __booking_event_series_id: nextSeriesId };
           });
         }
       })
@@ -98,7 +113,18 @@ const PublicFormPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [form?.booking_dynamic_events_enabled, orgSlug, slug, values.__booking_date, values.__booking_event_time]);
+  }, [form?.booking_dynamic_events_enabled, orgSlug, slug, values.__booking_date]);
+
+  useEffect(() => {
+    if (!form?.booking_dynamic_events_enabled || bookingEventsLoading) return;
+    setValues((current) => {
+      const timeValue = String(current.__booking_event_time || "");
+      const preferred = pickBookingSeriesForTime(bookingEvents, timeValue);
+      const nextSeriesId = preferred ? String(preferred.id) : "";
+      if (String(current.__booking_event_series_id || "") === nextSeriesId) return current;
+      return { ...current, __booking_event_series_id: nextSeriesId };
+    });
+  }, [bookingEvents, bookingEventsLoading, form?.booking_dynamic_events_enabled, values.__booking_event_time]);
 
   function updateValue(fieldKey: string, nextValue: unknown) {
     setValues((current) => ({ ...current, [fieldKey]: nextValue }));

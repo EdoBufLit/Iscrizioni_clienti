@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 from fastapi import HTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import Booking, BookingEvent, BookingEventSeries, BookingStatus, Form, FormSubmission
@@ -102,6 +103,7 @@ def serialize_booking(booking: Booking, *, include_events: bool = False) -> dict
         "party_size": booking.party_size,
         "notes": booking.notes,
         "notes_preview": (booking.notes or "")[:120] or None,
+        "event_summary": _booking_event_summary(booking),
         "customer_note": booking.customer_note,
         "customer_note_submitted_at": (
             booking.customer_note_submitted_at.isoformat()
@@ -199,6 +201,10 @@ def _serialize_request_payload_summary(booking: Booking) -> list[dict[str, str]]
 
     rows: list[dict[str, str]] = []
     seen_keys: set[str] = set()
+    event_summary = _booking_event_summary(booking)
+    if event_summary:
+        rows.append({"key": "booking_event_summary", "label": "Serata", "value": event_summary})
+        seen_keys.add("booking_event_summary")
     fields = list(getattr(getattr(booking, "form", None), "fields", []) or [])
     for field in sorted(
         fields,
@@ -224,7 +230,7 @@ def _serialize_request_payload_summary(booking: Booking) -> list[dict[str, str]]
 
     for raw_key, raw_value in payload.items():
         key = str(raw_key or "").strip()
-        if not key or key in seen_keys:
+        if not key or key in seen_keys or key.startswith("__booking_"):
             continue
         value = _summarize_payload_value(raw_value)
         if value is None:
@@ -233,6 +239,13 @@ def _serialize_request_payload_summary(booking: Booking) -> list[dict[str, str]]
         seen_keys.add(key)
 
     return rows[:24]
+
+
+def _booking_event_summary(booking: Booking) -> str | None:
+    notes = _normalize_text(getattr(booking, "notes", None))
+    if not notes:
+        return None
+    return notes.split("\n\nNote richiesta:", 1)[0].strip()[:500] or None
 
 
 def _summarize_payload_value(value: Any) -> str | None:
@@ -328,6 +341,18 @@ def _resolve_dynamic_booking_event(
         or validated_payload.get("booking_event_series_id")
     )
     if raw_series_id in (None, ""):
+        resolved_series = _find_dynamic_booking_series(
+            db,
+            form=form,
+            booking_date=booking_date,
+            booking_time=booking_time,
+        )
+        if resolved_series is not None:
+            return {
+                "booking_date": booking_date,
+                "booking_time": booking_time,
+                "event_details": _booking_event_series_details(resolved_series),
+            }
         return {
             "booking_date": booking_date,
             "booking_time": booking_time,
@@ -352,33 +377,74 @@ def _resolve_dynamic_booking_event(
     if series is None:
         raise HTTPException(status_code=422, detail="La serata selezionata non e disponibile.")
     if bool(getattr(series, "is_default", False)):
-        detail_parts = [series.title]
-        if series.description:
-            detail_parts.append(series.description)
+        valid_slots = _booking_event_series_slot_times(series)
+        if valid_slots and booking_time not in valid_slots:
+            raise HTTPException(status_code=422, detail="L'orario selezionato non e disponibile per questa serata.")
         return {
             "booking_date": booking_date,
             "booking_time": booking_time,
-            "event_details": "\n".join(detail_parts),
+            "event_details": _booking_event_series_details(series),
         }
     if not _series_matches_date(series, booking_date):
         raise HTTPException(status_code=422, detail="La serata selezionata non e disponibile per questa data.")
 
-    valid_slots = {
-        str(slot.start_time or "")[:5]
-        for slot in list(series.time_slots or [])
-        if bool(getattr(slot, "is_active", True))
-    }
+    valid_slots = _booking_event_series_slot_times(series)
     if booking_time not in valid_slots:
         raise HTTPException(status_code=422, detail="L'orario selezionato non e disponibile per questa serata.")
 
-    detail_parts = [series.title]
-    if series.description:
-        detail_parts.append(series.description)
     return {
         "booking_date": booking_date,
         "booking_time": booking_time,
-        "event_details": "\n".join(detail_parts),
+        "event_details": _booking_event_series_details(series),
     }
+
+
+def _find_dynamic_booking_series(
+    db: Session,
+    *,
+    form: Form,
+    booking_date: date,
+    booking_time: str,
+) -> BookingEventSeries | None:
+    candidates = (
+        db.query(BookingEventSeries)
+        .options(joinedload(BookingEventSeries.time_slots))
+        .filter(
+            BookingEventSeries.association_id == form.association_id,
+            BookingEventSeries.is_active.is_(True),
+            or_(
+                BookingEventSeries.event_date == booking_date,
+                BookingEventSeries.weekday == booking_date.weekday(),
+                BookingEventSeries.is_default.is_(True),
+            ),
+        )
+        .order_by(BookingEventSeries.is_default.asc(), BookingEventSeries.title.asc(), BookingEventSeries.id.asc())
+        .all()
+    )
+    default_series: BookingEventSeries | None = None
+    for series in candidates:
+        if bool(getattr(series, "is_default", False)):
+            if booking_time in _booking_event_series_slot_times(series):
+                default_series = series
+            continue
+        if _series_matches_date(series, booking_date) and booking_time in _booking_event_series_slot_times(series):
+            return series
+    return default_series
+
+
+def _booking_event_series_slot_times(series: BookingEventSeries) -> set[str]:
+    return {
+        str(slot.start_time or "")[:5]
+        for slot in list(series.time_slots or [])
+        if bool(getattr(slot, "is_active", True)) and str(slot.start_time or "")[:5]
+    }
+
+
+def _booking_event_series_details(series: BookingEventSeries) -> str:
+    detail_parts = [series.title]
+    if series.description:
+        detail_parts.append(series.description)
+    return "\n".join(part for part in detail_parts if part)
 
 
 def _series_matches_date(series: BookingEventSeries, booking_date: date) -> bool:

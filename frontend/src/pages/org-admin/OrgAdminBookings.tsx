@@ -2490,7 +2490,7 @@ function BookingDetailPanel(props: {
 
   const requestMeta = requestStatusMeta(props.selectedBooking.request_status);
   const requestPayloadSummary = props.selectedBooking.request_payload_summary ?? [];
-  const requestFactKeys = new Set(["nome_socio", "customer_name", "name", "full_name", "email", "telefono", "phone", "customer_phone", "booking_date", "booking_time", "party_size"]);
+  const requestFactKeys = new Set(["nome_socio", "customer_name", "name", "full_name", "email", "telefono", "phone", "customer_phone", "booking_date", "booking_time", "party_size", "booking_event_summary"]);
   const compactRequestFields = requestPayloadSummary
     .filter((field) => !requestFactKeys.has(field.key))
     .slice(0, 4);
@@ -2533,6 +2533,12 @@ function BookingDetailPanel(props: {
               <small>Persone</small>
               <strong>{props.selectedBooking.party_size || "-"}</strong>
             </span>
+            {props.selectedBooking.event_summary ? (
+              <span>
+                <small>Serata</small>
+                <strong>{props.selectedBooking.event_summary}</strong>
+              </span>
+            ) : null}
             <span>
               <small>Contatto</small>
               <strong>{props.selectedBooking.customer_phone || props.selectedBooking.customer_email || "N/D"}</strong>

@@ -40,6 +40,7 @@ from app.services.forms import (
     serialize_submission,
     validate_form_submission_payload,
 )
+from app.services.bookings import serialize_booking
 from app.services.whatsapp_automation import (
     maybe_send_form_submission_whatsapp_automations,
     maybe_send_form_submission_whatsapp_message,
@@ -627,7 +628,11 @@ def _public_booking_events_payload(
         )
     ]
     default_items = [item for item in items if bool(getattr(item, "is_default", False))]
-    response_items = matching_items if matching_items else default_items[:1]
+    response_items = matching_items + [
+        item
+        for item in default_items[:1]
+        if item not in matching_items and (normalized_time is None or _series_has_public_time(item, normalized_time))
+    ]
     return {
         "using_default": not bool(matching_items) and bool(response_items),
         "items": [
@@ -766,16 +771,7 @@ def _submit_public_form(
         )
         or "Richiesta inviata correttamente.",
         "submission": serialize_submission(submission),
-        "booking": {
-            "id": booking.id,
-            "status": booking.status,
-            "customer_name": booking.customer_name,
-            "booking_date": booking.booking_date.isoformat() if booking.booking_date else None,
-            "booking_time": booking.booking_time,
-            "party_size": booking.party_size,
-        }
-        if booking is not None
-        else None,
+        "booking": serialize_booking(booking) if booking is not None else None,
     }
 
 

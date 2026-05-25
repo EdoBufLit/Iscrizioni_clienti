@@ -347,6 +347,9 @@ def _booking_summary_text(booking: Booking) -> str:
         parts.append(str(booking.booking_time)[:5])
     if booking.party_size:
         parts.append(f"{booking.party_size} persone")
+    event_details = str(getattr(booking, "notes", "") or "").split("\n\nNote richiesta:", 1)[0].strip()
+    if event_details:
+        parts.append(event_details)
     location = " / ".join(
         item
         for item in [
@@ -367,6 +370,9 @@ def _booking_summary_lines(booking: Booking) -> str:
         ("Orario", str(booking.booking_time)[:5] if booking.booking_time else "da definire"),
         ("Persone", str(booking.party_size or "-")),
     ]
+    event_details = str(getattr(booking, "notes", "") or "").split("\n\nNote richiesta:", 1)[0].strip()
+    if event_details:
+        rows.append(("Serata", event_details))
     return "<dl>" + "".join(
         f"<div><dt>{html.escape(label)}</dt><dd>{html.escape(value)}</dd></div>" for label, value in rows
     ) + "</dl>"

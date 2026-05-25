@@ -265,5 +265,9 @@ export function getPaletteItems(mode: "forms" | "surveys" = "forms") {
 
 export function isBookingBlockField(field: { field_key?: string | null; type?: string | null }): boolean {
   const fieldKey = String(field.field_key || "");
-  return field.type === "booking_block" || fieldKey.startsWith(VIRTUAL_TYPE_PREFIXES.booking_block);
+  return (
+    field.type === "booking_block"
+    || fieldKey.startsWith(VIRTUAL_TYPE_PREFIXES.booking_block)
+    || fieldKey.startsWith(LEGACY_VIRTUAL_TYPE_PREFIXES.booking_block)
+  );
 }
