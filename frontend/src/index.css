@@ -7587,6 +7587,20 @@ body.dashboard-perf-mode .btn-ghost:hover {
     gap: 0.85rem;
   }
 
+  .org-admin-v2 .booking-admin-page[data-section="map"] {
+    gap: 0.75rem;
+  }
+
+  .org-admin-v2 .booking-admin-page[data-section="map"] .booking-admin-page-header,
+  .org-admin-v2 .booking-admin-page[data-section="map"] .org-section-panel__header {
+    display: none;
+  }
+
+  .org-admin-v2 .booking-admin-page[data-section="map"] .booking-admin-tabs-shell {
+    border-radius: 8px;
+    padding: 0.45rem;
+  }
+
   .org-admin-v2 .booking-map-section .org-section-panel,
   .org-admin-v2 .booking-map-section .surface,
   .org-admin-v2 .booking-map-section .surface-strong {
@@ -7594,12 +7608,25 @@ body.dashboard-perf-mode .btn-ghost:hover {
   }
 
   .org-admin-v2 .booking-map-controls {
-    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
     gap: 0.55rem;
   }
 
+  .org-admin-v2 .booking-map-controls label {
+    min-width: 0;
+    font-size: 0.68rem;
+    font-weight: 850;
+  }
+
+  .org-admin-v2 .booking-map-controls .theme-input {
+    min-height: 2.55rem;
+    border-radius: 8px !important;
+    padding-inline: 0.55rem;
+    font-size: 0.82rem;
+  }
+
   .org-admin-v2 .booking-map-mobile-stats {
-    margin-top: 0.75rem;
+    margin-top: 0.55rem;
   }
 
   .org-admin-v2 .booking-map-canvas-shell {

@@ -5344,8 +5344,15 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Test locali: typecheck, build frontend, compile Python e pytest mirati passati.
 
 ## Plan (Fix mobile org admin tessere soci prenotazioni mappa - May 26, 2026)
-- [ ] Rendere `Soci` e `Tessere` mobile-first con strip KPI compatta, filtri full-width e layout senza overflow laterale.
-- [ ] Rimuovere duplicazioni contatto/telefono dal dettaglio prenotazioni mobile mantenendo le info utili.
-- [ ] Compattare `Prenotazioni > Mappa sala` mobile: controlli prima della mappa, contatori piccoli e pannelli secondari non ingombranti.
-- [ ] Aggiungere `Serate` alla sidebar desktop del gruppo Prenotazioni.
-- [ ] Verificare typecheck/build, smoke mobile light/dark, push e deploy Hetzner con controllo disco/log.
+- [x] Rendere `Soci` e `Tessere` mobile-first con strip KPI compatta, filtri full-width e layout senza overflow laterale.
+- [x] Rimuovere duplicazioni contatto/telefono dal dettaglio prenotazioni mobile mantenendo le info utili.
+- [x] Compattare `Prenotazioni > Mappa sala` mobile: controlli prima della mappa, contatori piccoli e pannelli secondari non ingombranti.
+- [x] Aggiungere `Serate` alla sidebar desktop del gruppo Prenotazioni.
+- [x] Verificare typecheck/build, smoke mobile light/dark, push e deploy Hetzner con controllo disco/log.
+
+## Review (Fix mobile org admin tessere soci prenotazioni mappa - May 26, 2026)
+- Soci/Tessere mobile: le KPI desktop diventano strip compatte; filtri e tabelle restano nel viewport con scroll orizzontale solo dove serve.
+- Prenotazioni mobile: il dettaglio non duplica piu telefono/contatto e filtra i campi form gia rappresentati nella sintesi.
+- Mappa sala mobile: KPI grandi nascoste, contatori piccoli, controlli compatti e pannelli secondari compressi/nascosti per portare la mappa subito in vista.
+- Sidebar desktop: aggiunta voce `Serate` sotto `Prenotazioni`, puntata a `/org-admin/prenotazioni?section=events`.
+- Verifiche previste: typecheck, build, smoke Playwright live mobile light/dark e controllo deploy Hetzner con disco/log.
