@@ -5312,3 +5312,17 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Il worker email processa anche la coda WhatsApp, con batch configurabile e distanza minima default di 60 secondi tra invii sulla stessa connessione.
 - I messaggi restano persistiti in `whatsapp_messages` con stato `queued/sending/sent/failed`, quindi backlog e retry sono osservabili dal DB/log.
 - Verifiche locali OK: pytest mirati (`4 passed`), `python -m compileall -q app init_db.py`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.
+
+## Plan (Fix WhatsApp sync, date italiane, form white-label e agenda semplice - May 26, 2026)
+- [x] Diagnosticare la sorgente del messaggio visibile `Evolution API synchronization success` e impedire che sync/init query tecniche sostituiscano la notifica reale su iPhone, mantenendo solo inbound messaggi necessario.
+- [x] Applicare formato data italiano `dd/mm/yyyy` nei template WhatsApp e nei riepiloghi prenotazione.
+- [x] Rimuovere riferimenti/navbar ASSONAM dalle pagine form pubbliche dell'associazione, lasciando solo brand/nome org e il form.
+- [x] Semplificare `Prenotazioni > Agenda` mobile-first: niente calendario a celle grandi, solo selezione giorno compatta e prenotazioni in fila con info essenziali.
+- [x] Verificare light/dark mode, build/test mirati e smoke frontend.
+
+## Review (Fix WhatsApp sync, date italiane, form white-label e agenda semplice - May 26, 2026)
+- Evolution Lite: disattivati webhook contatti/chat, storage contatti/chat/storico/is-on-whatsapp, init query Baileys di default e device label `Chrome / Windows`; restano `MESSAGES_UPSERT`, `MESSAGES_UPDATE`, `SEND_MESSAGE` per parser e inbox.
+- WhatsApp prenotazioni: `{{data_prenotazione}}`, `{{slot_prenotazione}}` e `{{riepilogo_prenotazione}}` ora usano date italiane `dd/mm/yyyy` nei testi user-facing.
+- Form pubblici associazione: niente navbar/footer ASSONAM e niente footer "Modulo gestito tramite ASSONAM"; dark mode ripristinata su titolo, etichette, blocco prenotazione e card.
+- Agenda prenotazioni: rimossa la griglia calendario a celle grandi; restano selezione giorno compatta, coda richieste e lista prenotazioni confermate/gestite, con screenshot mobile light/dark.
+- Verifiche OK: `python -m compileall -q app scripts init_db.py`, pytest mirati (`5 passed`), `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`, smoke Playwright mock light/dark con 0 celle calendario e 3 righe agenda.

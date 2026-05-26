@@ -547,7 +547,7 @@ def test_public_form_submit_sends_whatsapp_auto_reply_when_connected(client, db,
                 "instance_name": f"assonam-org-{org.id}",
                 "number": "+393337654321",
                 "text": (
-                    "Ciao Giulia Bianchi, la tua richiesta per Richiesta prenotazione del 2026-03-25 "
+                    "Ciao Giulia Bianchi, la tua richiesta per Richiesta prenotazione del 25/03/2026 "
                     "alle 20:30 e stata registrata."
                 ),
             }
@@ -870,7 +870,7 @@ def test_booking_submit_sends_one_whatsapp_and_uses_org_event_details(client, db
                 "instance_name": f"assonam-org-{org.id}",
                 "number": "+393331112233",
                 "text": (
-                    "Ciao Sara Rossi, prenotazione ricevuta per il 2026-06-18 alle 21:15. "
+                    "Ciao Sara Rossi, prenotazione ricevuta per il 18/06/2026 alle 21:15. "
                     "Ingresso principale, presentarsi 15 minuti prima."
                 ),
             }
@@ -1731,7 +1731,7 @@ def test_org_admin_review_whatsapp_uses_automation_templates_and_payload_fallbac
         assert confirm_res.json()["whatsapp_result"]["sent_count"] == 1
         assert len(sent_payloads) == 1
         assert sent_payloads[0]["number"] == "+393392223344"
-        assert "il 2026-04-11 alle 21:00" in sent_payloads[0]["text"]
+        assert "il 11/04/2026 alle 21:00" in sent_payloads[0]["text"]
         assert "per 5 persone" in sent_payloads[0]["text"]
         assert "Prenotazione confermata" in sent_payloads[0]["text"]
 
@@ -1749,7 +1749,7 @@ def test_org_admin_review_whatsapp_uses_automation_templates_and_payload_fallbac
         assert reject_res.json()["whatsapp_result"]["sent"] is True
         assert len(sent_payloads) == 2
         assert "Posti terminati" in sent_payloads[1]["text"]
-        assert "il 2026-04-11 alle 21:00 per 5 persone" in sent_payloads[1]["text"]
+        assert "il 11/04/2026 alle 21:00 per 5 persone" in sent_payloads[1]["text"]
     finally:
         settings.ENABLE_WHATSAPP_EVOLUTION = original_enabled
 

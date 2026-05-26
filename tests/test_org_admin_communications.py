@@ -976,7 +976,7 @@ def test_booking_whatsapp_reminder_uses_rome_time_for_midnight_booking(db, monke
 
         assert stats["sent"] == 1
         assert sent_messages[0]["number"] == "+393331234567"
-        assert "2026-05-26 00:00" in sent_messages[0]["text"]
+        assert "26/05/2026 00:00" in sent_messages[0]["text"]
     finally:
         settings.ENABLE_WHATSAPP_EVOLUTION = original_whatsapp
         settings.APP_TIMEZONE = original_timezone

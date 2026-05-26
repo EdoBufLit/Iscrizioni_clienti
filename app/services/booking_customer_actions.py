@@ -18,6 +18,7 @@ from app.models import (
     BookingStatus,
     OrgAdminNotification,
 )
+from app.services.booking_formatting import format_booking_date_it
 from app.services.bookings import update_booking_status
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
@@ -397,7 +398,7 @@ def _booking_admin_body(booking: Booking, *, prefix: str) -> str:
 def _booking_summary_text(booking: Booking) -> str:
     parts = []
     if booking.booking_date:
-        parts.append(booking.booking_date.isoformat())
+        parts.append(format_booking_date_it(booking.booking_date))
     if booking.booking_time:
         parts.append(str(booking.booking_time)[:5])
     if booking.party_size:
@@ -421,7 +422,7 @@ def _booking_summary_text(booking: Booking) -> str:
 def _booking_summary_lines(booking: Booking) -> str:
     rows = [
         ("Nome", booking.customer_name),
-        ("Data", booking.booking_date.isoformat() if booking.booking_date else "da definire"),
+        ("Data", format_booking_date_it(booking.booking_date, fallback="da definire")),
         ("Orario", str(booking.booking_time)[:5] if booking.booking_time else "da definire"),
         ("Persone", str(booking.party_size or "-")),
     ]

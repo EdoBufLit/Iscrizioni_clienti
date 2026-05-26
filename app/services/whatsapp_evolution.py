@@ -21,13 +21,9 @@ EVOLUTION_WEBHOOK_EVENTS = [
     "MESSAGES_UPSERT",
     "MESSAGES_UPDATE",
     "SEND_MESSAGE",
-    "CONTACTS_SET",
-    "CONTACTS_UPSERT",
-    "CONTACTS_UPDATE",
-    "CHATS_SET",
-    "CHATS_UPSERT",
-    "CHATS_UPDATE",
 ]
+EVOLUTION_CLIENT_NAME = "Chrome"
+EVOLUTION_CLIENT_DEVICE = "Windows"
 EVOLUTION_INTERNAL_WEBHOOK_URL = "http://web:8000/api/internal/whatsapp/evolution"
 
 
@@ -484,6 +480,14 @@ class EvolutionLiteClient:
             "instanceName": instance_name,
             "qrcode": False,
             "integration": "WHATSAPP-BAILEYS",
+            "settings": {
+                "rejectCall": True,
+                "msgCall": "",
+                "alwaysOnline": False,
+                "readMessages": False,
+                "readStatus": False,
+                "syncFullHistory": False,
+            },
             "webhook": {
                 "enabled": True,
                 "url": EVOLUTION_INTERNAL_WEBHOOK_URL,

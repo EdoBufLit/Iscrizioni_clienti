@@ -9,6 +9,8 @@ DEFAULT_SERVER_PORT = "8080"
 DEFAULT_SERVER_URL = "http://localhost:8080"
 DEFAULT_DATABASE_PROVIDER = "postgresql"
 DEFAULT_DATABASE_NAME = "evolution"
+DEFAULT_CLIENT_NAME = "Chrome"
+DEFAULT_CLIENT_DEVICE = "Windows"
 
 
 def _build_evolution_database_uri(database_url: str, database_name: str) -> str:
@@ -55,6 +57,13 @@ def _render_env_file(
         f"DATABASE_PROVIDER={DEFAULT_DATABASE_PROVIDER}",
         f"DATABASE_CONNECTION_URI={evolution_uri}",
         f"AUTHENTICATION_API_KEY={auth_api_key.strip()}",
+        f"CONFIG_SESSION_PHONE_CLIENT={DEFAULT_CLIENT_NAME}",
+        f"CONFIG_SESSION_PHONE_NAME={DEFAULT_CLIENT_DEVICE}",
+        "EVOLUTION_FIRE_INIT_QUERIES=false",
+        "DATABASE_SAVE_DATA_CONTACTS=false",
+        "DATABASE_SAVE_DATA_CHATS=false",
+        "DATABASE_SAVE_DATA_HISTORIC=false",
+        "DATABASE_SAVE_IS_ON_WHATSAPP=false",
     ]
     return "\n".join(lines) + "\n"
 

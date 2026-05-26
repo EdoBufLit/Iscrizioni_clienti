@@ -26,6 +26,7 @@ from app.services.whatsapp_sync import (
     mark_outbound_message_failed,
     queue_outbound_message,
 )
+from app.services.booking_formatting import format_booking_date_it
 
 logger = logging.getLogger(__name__)
 
@@ -990,15 +991,12 @@ def _resolve_booking_details_from_submission(
     form_event_date = getattr(form, "booking_event_date", None)
     form_event_time = str(getattr(form, "booking_event_time", "") or "").strip()
     form_event_details = str(getattr(form, "booking_event_details", "") or "").strip()
-    booking_date = (
-        form_event_date.isoformat()
-        if hasattr(form_event_date, "isoformat")
-        else str(form_event_date or "").strip()
-    ) or (
-        booking.booking_date.isoformat()
+    booking_date = format_booking_date_it(form_event_date) or (
+        format_booking_date_it(booking.booking_date)
         if booking is not None and getattr(booking, "booking_date", None)
         else ""
     ) or _resolve_booking_payload_value(form=form, payload=payload, target="booking_date")
+    booking_date = format_booking_date_it(booking_date) if booking_date else booking_date
     booking_time = form_event_time or (
         str(getattr(booking, "booking_time", "") or "").strip()
         if booking is not None

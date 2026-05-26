@@ -738,10 +738,6 @@ export function FormPublicCanvas({
           )}
         </form>
         
-        {/* Footer info */}
-        <div className="mt-12 text-center text-xs opacity-50 pb-8">
-           Modulo gestito tramite <strong>ASSONAM</strong>
-        </div>
       </div>
     </div>
   );

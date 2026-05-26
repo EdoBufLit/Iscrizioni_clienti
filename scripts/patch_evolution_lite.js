@@ -93,6 +93,15 @@ function patchBaileysService(repoRoot, patchRoot) {
     source = source.replace(groupHandlerAnchor, `${helper}${groupHandlerAnchor}`);
   }
 
+  if (!source.includes("fireInitQueries: process.env.EVOLUTION_FIRE_INIT_QUERIES === 'true',")) {
+    source = replaceRegexOrThrow(
+      source,
+      /fireInitQueries:\s*true,/,
+      "fireInitQueries: process.env.EVOLUTION_FIRE_INIT_QUERIES === 'true',",
+      "baileys fireInitQueries",
+    );
+  }
+
   write(filePath, source);
 }
 

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
 from app.models import Booking, BookingEvent, BookingStatus, Form, Organization, WhatsAppConnection
+from app.services.booking_formatting import format_booking_date_it
 from app.services.booking_customer_actions import create_booking_action_links
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
@@ -347,7 +348,7 @@ def _render_booking_template(
     extra_context: dict[str, str],
 ) -> str:
     org = booking.organization
-    date_value = booking.booking_date.isoformat() if booking.booking_date else ""
+    date_value = format_booking_date_it(booking.booking_date)
     time_value = booking.booking_time or ""
     party_size = str(booking.party_size or "")
     event_details = str(getattr(booking, "notes", "") or "").split("\n\nNote richiesta:", 1)[0].strip()

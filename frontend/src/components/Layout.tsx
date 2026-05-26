@@ -57,7 +57,8 @@ const Layout = () => {
   const isStandaloneAuthRoute =
     location.pathname === "/org-admin/login" ||
     location.pathname === "/super-admin/login";
-  const showPublicChrome = !isDashboardRoute && !isStandaloneAuthRoute;
+  const isPublicFormRoute = location.pathname.startsWith("/forms/");
+  const showPublicChrome = !isDashboardRoute && !isStandaloneAuthRoute && !isPublicFormRoute;
 
   usePublicMotion({ enabled: !isDashboardRoute, key: location.pathname });
 
@@ -209,7 +210,7 @@ const Layout = () => {
     <MotionProvider>
       <div
         className={`relative min-h-screen text-neutral-800${
-          isDashboardRoute ? "" : " public-shell"
+            isDashboardRoute || isPublicFormRoute ? "" : " public-shell"
         } ${isDashboardRoute ? "app-shell" : ""}`}
       >
         {isDashboardRoute ? (

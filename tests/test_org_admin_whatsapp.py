@@ -665,6 +665,14 @@ def test_evolution_client_uses_lite_namespaced_paths(monkeypatch):
                 "instanceName": "assonam-org-7",
                 "qrcode": False,
                 "integration": "WHATSAPP-BAILEYS",
+                "settings": {
+                    "rejectCall": True,
+                    "msgCall": "",
+                    "alwaysOnline": False,
+                    "readMessages": False,
+                    "readStatus": False,
+                    "syncFullHistory": False,
+                },
                 "webhook": {
                     "enabled": True,
                     "url": "http://web:8000/api/internal/whatsapp/evolution",
@@ -694,13 +702,13 @@ def test_evolution_client_uses_lite_namespaced_paths(monkeypatch):
             "POST",
             "http://evolution-api:8080/settings/set/assonam-org-7",
             {
-                "rejectCall": False,
+                "rejectCall": True,
                 "msgCall": "",
                 "groupsIgnore": False,
                 "alwaysOnline": False,
                 "readMessages": False,
                 "readStatus": False,
-                "syncFullHistory": True,
+                "syncFullHistory": False,
                 "wavoipToken": "",
             },
         ),
@@ -729,6 +737,31 @@ def test_evolution_client_uses_lite_namespaced_paths(monkeypatch):
             {"number": "+393331234567", "text": "ciao"},
         ),
     ]
+
+
+def test_evolution_safe_mode_disables_history_contact_chat_sync():
+    from scripts.render_evolution_lite_env import _render_env_file
+
+    assert "CONTACTS_SET" not in EVOLUTION_WEBHOOK_EVENTS
+    assert "CHATS_SET" not in EVOLUTION_WEBHOOK_EVENTS
+    assert "MESSAGES_UPSERT" in EVOLUTION_WEBHOOK_EVENTS
+
+    rendered = _render_env_file(
+        database_url="postgresql://user:pass@db:5432/app",
+        auth_api_key="secret",
+        database_name="evolution",
+        server_port="8080",
+        server_url="http://localhost:8080",
+    )
+
+    assert "CONFIG_SESSION_PHONE_CLIENT=Chrome" in rendered
+    assert "CONFIG_SESSION_PHONE_NAME=Windows" in rendered
+    assert "EVOLUTION_FIRE_INIT_QUERIES=false" in rendered
+    assert "DATABASE_SAVE_DATA_CONTACTS=false" in rendered
+    assert "DATABASE_SAVE_DATA_CHATS=false" in rendered
+    assert "DATABASE_SAVE_DATA_HISTORIC=false" in rendered
+    assert "DATABASE_SAVE_IS_ON_WHATSAPP=false" in rendered
+    assert "DATABASE_SAVE_DATA_NEW_MESSAGE=false" not in rendered
 
 
 def test_apply_connection_snapshot_preserves_existing_qr():

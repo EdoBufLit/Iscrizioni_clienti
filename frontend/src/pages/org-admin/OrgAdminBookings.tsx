@@ -155,16 +155,6 @@ function formatMobileDayTitle(value: string | null | undefined) {
   return formatDate(value);
 }
 
-function formatMonthLabel(value: string) {
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
-}
-
-function formatWeekdayCell(value: Date) {
-  return value.toLocaleDateString("it-IT", { weekday: "short" }).replace(".", "");
-}
-
 function formatStatusLabel(status: string) {
   return bookingStatusMeta[status]?.label ?? status
     .replace(/_/g, " ")
@@ -270,35 +260,6 @@ function ReminderResponseIndicator({ booking }: { booking: AssociationBooking })
   );
 }
 
-function shiftMonth(value: string, delta: number) {
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return firstDayOfMonthIso();
-  date.setMonth(date.getMonth() + delta);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`;
-}
-
-function setMonthYear(value: string, year: number, monthIndex: number) {
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return firstDayOfMonthIso();
-  date.setFullYear(year);
-  date.setMonth(monthIndex);
-  date.setDate(1);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`;
-}
-
-function buildMonthGrid(monthValue: string) {
-  const monthStart = new Date(`${monthValue}T00:00:00`);
-  if (Number.isNaN(monthStart.getTime())) return [] as Date[];
-  const gridStart = new Date(monthStart);
-  const weekday = (monthStart.getDay() + 6) % 7;
-  gridStart.setDate(monthStart.getDate() - weekday);
-  return Array.from({ length: 42 }, (_, index) => {
-    const current = new Date(gridStart);
-    current.setDate(gridStart.getDate() + index);
-    return current;
-  });
-}
-
 function toDateKey(value: Date) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
 }
@@ -316,10 +277,6 @@ function buildDayRail(anchorDate: string) {
     const date = new Date(`${dateKey}T00:00:00`);
     return { dateKey, date };
   });
-}
-
-function isSameMonth(date: Date, monthValue: string) {
-  return toDateKey(date).startsWith(monthValue.slice(0, 7));
 }
 
 function requestStatusMeta(status: string | null | undefined) {
@@ -394,15 +351,6 @@ function emptyEventSeriesDraft() {
     is_default: false,
     time_slots_text: "19:30, 20:00, 20:30",
   };
-}
-
-function MetricBox({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-[1.25rem] bg-slate-50 p-5 ring-1 ring-inset ring-slate-200/60 transition-all hover:bg-slate-100/50">
-      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">{label}</p>
-      <p className="mt-2 text-3xl font-light tracking-tight text-slate-900">{value}</p>
-    </div>
-  );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -611,7 +559,6 @@ export default function OrgAdminBookings() {
       .catch(() => setManualDraftTables([]));
   }, [manualDraft.room_id]);
 
-  const monthGrid = useMemo(() => buildMonthGrid(agendaMonth), [agendaMonth]);
   const bookingsByDay = useMemo(() => {
     const map = new Map<string, AssociationBooking[]>();
     for (const booking of listItems) {
@@ -652,12 +599,6 @@ export default function OrgAdminBookings() {
     () => activeDayItems.filter(isManagedMobileBooking),
     [activeDayItems],
   );
-  const agendaMonthDate = useMemo(() => new Date(`${agendaMonth}T00:00:00`), [agendaMonth]);
-  const agendaYearOptions = useMemo(() => {
-    const centerYear = Number.isNaN(agendaMonthDate.getTime()) ? new Date().getFullYear() : agendaMonthDate.getFullYear();
-    return Array.from({ length: 9 }, (_, index) => centerYear - 4 + index);
-  }, [agendaMonthDate]);
-
   const selectedRoom = useMemo(
     () => rooms.find((room) => room.id === selectedRoomId) ?? null,
     [rooms, selectedRoomId],
@@ -1289,15 +1230,12 @@ export default function OrgAdminBookings() {
               agendaMonth={agendaMonth}
               setAgendaMonth={setAgendaMonth}
             isMobileAgendaViewport={isMobileAgendaViewport}
-            agendaYearOptions={agendaYearOptions}
             statusFilter={statusFilter}
             setStatusFilter={setStatusFilter}
             formFilter={formFilter}
             setFormFilter={setFormFilter}
             forms={forms}
-            monthGrid={monthGrid}
             bookingsByDay={bookingsByDay}
-            monthOccupancy={monthOccupancy}
             selectedCalendarDate={selectedCalendarDate}
             setSelectedCalendarDate={setSelectedCalendarDate}
             activeDayItems={activeDayItems}
@@ -1793,15 +1731,12 @@ function AgendaSection(props: {
   agendaMonth: string;
   setAgendaMonth: (value: string) => void;
   isMobileAgendaViewport: boolean;
-  agendaYearOptions: number[];
   statusFilter: string;
   setStatusFilter: (value: string) => void;
   formFilter: number | "";
   setFormFilter: (value: number | "") => void;
   forms: AssociationForm[];
-  monthGrid: Date[];
   bookingsByDay: Map<string, AssociationBooking[]>;
-  monthOccupancy: { total: number; confirmed: number; pending: number; completed: number };
   selectedCalendarDate: string | null;
   setSelectedCalendarDate: (value: string | null) => void;
   activeDayItems: AssociationBooking[];
@@ -1825,12 +1760,6 @@ function AgendaSection(props: {
   saving: string;
 }) {
   const [dayFilter, setDayFilter] = useState<DayStatusFilter>("all");
-  const monthDate = new Date(`${props.agendaMonth}T00:00:00`);
-  const monthIndex = Number.isNaN(monthDate.getTime()) ? new Date().getMonth() : monthDate.getMonth();
-  const monthYear = Number.isNaN(monthDate.getTime()) ? new Date().getFullYear() : monthDate.getFullYear();
-  const monthOptions = Array.from({ length: 12 }, (_, index) =>
-    new Date(2026, index, 1).toLocaleDateString("it-IT", { month: "long" }),
-  );
   const activeDayIsToday = props.selectedCalendarDate === todayIso();
   const mobileActionDayItems = props.isMobileAgendaViewport
     ? props.activeDayItems.filter(isPendingBookingRequest)
@@ -1894,56 +1823,37 @@ function AgendaSection(props: {
           </div>
         </div>
 
-        <div className="booking-month-overview rounded-[1.25rem] bg-slate-50 p-8 ring-1 ring-inset ring-slate-200/60 shadow-sm">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between border-b border-slate-100 pb-8">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Calendario</p>
-              <div className="mt-3 flex flex-wrap items-center gap-4">
-                <button type="button" onClick={() => props.setAgendaMonth(shiftMonth(props.agendaMonth, -1))} className="btn-secondary !rounded-full !px-5 !py-2.5 text-sm font-medium transition-all hover:-translate-x-0.5">
-                  &larr;
-                </button>
-                <div>
-                  <h2 className="text-3xl font-light tracking-tight text-slate-900 capitalize">{formatMonthLabel(props.agendaMonth)}</h2>
-                </div>
-                <button type="button" onClick={() => props.setAgendaMonth(shiftMonth(props.agendaMonth, 1))} className="btn-secondary !rounded-full !px-5 !py-2.5 text-sm font-medium transition-all hover:translate-x-0.5">
-                  &rarr;
-                </button>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-4 items-center">
-              <div className="w-40">
-                <select className="w-full rounded-full border-0 bg-slate-50 py-2.5 pl-4 pr-10 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-200/60 hover:bg-slate-100 focus:ring-2 focus:ring-slate-900 transition-all" value={monthIndex} onChange={(event) => props.setAgendaMonth(setMonthYear(props.agendaMonth, monthYear, Number(event.target.value)))}>
-                  {monthOptions.map((label, index) => (
-                    <option key={label} value={index}>{label}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="w-28">
-                <select className="w-full rounded-full border-0 bg-slate-50 py-2.5 pl-4 pr-10 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-200/60 hover:bg-slate-100 focus:ring-2 focus:ring-slate-900 transition-all" value={monthYear} onChange={(event) => props.setAgendaMonth(setMonthYear(props.agendaMonth, Number(event.target.value), monthIndex))}>
-                  {props.agendaYearOptions.map((year) => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="w-36">
-                <select className="w-full rounded-full border-0 bg-slate-50 py-2.5 pl-4 pr-10 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-200/60 hover:bg-slate-100 focus:ring-2 focus:ring-slate-900 transition-all" value={props.statusFilter} onChange={(event) => props.setStatusFilter(event.target.value)}>
-                  <option value="">Tutti gli stati</option>
-                  {bookingStatuses.map((status) => <option key={status} value={status}>{formatStatusLabel(status)}</option>)}
-                </select>
-              </div>
-              <div className="w-48">
-                <select className="w-full rounded-full border-0 bg-slate-50 py-2.5 pl-4 pr-10 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-200/60 hover:bg-slate-100 focus:ring-2 focus:ring-slate-900 transition-all" value={props.formFilter} onChange={(event) => props.setFormFilter(event.target.value ? Number(event.target.value) : "")}>
-                  <option value="">Tutti i form</option>
-                  {props.forms.map((form) => <option key={form.id} value={form.id}>{form.title}</option>)}
-                </select>
-              </div>
-            </div>
+        <div className="booking-agenda-toolbar">
+          <div className="booking-agenda-toolbar__day">
+            <button type="button" aria-label="Giorno precedente" onClick={() => selectDay(addDaysIso(selectedDateKey, -1))}>
+              &lsaquo;
+            </button>
+            <input
+              type="date"
+              aria-label="Scegli giorno agenda"
+              value={selectedDateKey}
+              onChange={(event) => {
+                if (event.target.value) selectDay(event.target.value);
+              }}
+            />
+            {!activeDayIsToday ? (
+              <button type="button" onClick={() => selectDay(todayIso())}>
+                Oggi
+              </button>
+            ) : null}
+            <button type="button" aria-label="Giorno successivo" onClick={() => selectDay(addDaysIso(selectedDateKey, 1))}>
+              &rsaquo;
+            </button>
           </div>
-          <div className="mt-8 grid gap-4 md:grid-cols-4">
-            <MetricBox label="Prenotazioni mese" value={props.monthOccupancy.total} />
-            <MetricBox label="Da confermare" value={props.monthOccupancy.pending} />
-            <MetricBox label="Confermate" value={props.monthOccupancy.confirmed} />
-            <MetricBox label="Servite" value={props.monthOccupancy.completed} />
+          <div className="booking-agenda-toolbar__filters">
+            <select value={props.statusFilter} onChange={(event) => props.setStatusFilter(event.target.value)}>
+              <option value="">Tutti gli stati</option>
+              {bookingStatuses.map((status) => <option key={status} value={status}>{formatStatusLabel(status)}</option>)}
+            </select>
+            <select value={props.formFilter} onChange={(event) => props.setFormFilter(event.target.value ? Number(event.target.value) : "")}>
+              <option value="">Tutti i form</option>
+              {props.forms.map((form) => <option key={form.id} value={form.id}>{form.title}</option>)}
+            </select>
           </div>
         </div>
 
@@ -2091,92 +2001,6 @@ function AgendaSection(props: {
           </section>
         ) : null}
 
-        <SectionPanel className="booking-month-calendar p-5">
-          <div className="grid grid-cols-7 gap-2 border-b ring-slate-200/60 px-2 pb-4">
-            {["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"].map((label) => (
-              <div key={label} className="px-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">{label}</div>
-            ))}
-          </div>
-          <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-7">
-            {props.monthGrid.map((day) => {
-              const dateKey = toDateKey(day);
-              const items = props.bookingsByDay.get(dateKey) ?? [];
-              const isCurrentMonth = isSameMonth(day, props.agendaMonth);
-              const isToday = dateKey === todayIso();
-              const isSelected = dateKey === props.selectedCalendarDate;
-
-              return (
-                <div
-                  key={dateKey}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => {
-                    props.setSelectedCalendarDate(dateKey);
-                    props.setSelectedBookingId(items[0]?.id ?? null);
-                    props.setAgendaMonth(firstDayOfMonthIso(dateKey));
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key !== "Enter" && event.key !== " ") return;
-                    event.preventDefault();
-                    props.setSelectedCalendarDate(dateKey);
-                    props.setSelectedBookingId(items[0]?.id ?? null);
-                    props.setAgendaMonth(firstDayOfMonthIso(dateKey));
-                  }}
-                  className={`booking-calendar-day ${isSelected ? "is-selected" : ""} ${isCurrentMonth ? "" : "is-outside"} ${items.length > 0 ? "has-bookings" : ""}`}
-                >
-                  <div className="flex w-full items-start justify-between">
-                    <div>
-                      <p className="booking-calendar-day__weekday">{formatWeekdayCell(day)}</p>
-                      <p className="booking-calendar-day__number">{day.getDate()}</p>
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      {isToday ? (
-                        <span className="booking-calendar-day__badge">Oggi</span>
-                      ) : null}
-                      {items.length > 0 && (
-                        <span className="booking-calendar-day__count">
-                          {items.length} pren.
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="mt-4 w-full space-y-1.5 flex-1 flex flex-col justify-end">
-                    {items.length === 0 ? (
-                      <div className="flex items-center justify-center flex-1">
-                        <span className="booking-calendar-day__empty">
-                          Vuoto
-                        </span>
-                      </div>
-                    ) : (
-                      <>
-                        {items.slice(0, 3).map((booking) => (
-                          <button
-                            key={booking.id}
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              props.setSelectedCalendarDate(dateKey);
-                              props.setSelectedBookingId(booking.id);
-                            }}
-                            className={`booking-calendar-mini-row ${booking.id === props.selectedBookingId ? "is-active" : ""}`}
-                          >
-                            <span className="truncate pr-2 text-left">{booking.customer_name}</span>
-                            <span>{(booking.booking_time || "00:00").slice(0, 5)}</span>
-                          </button>
-                        ))}
-                        {items.length > 3 && (
-                          <p className="booking-calendar-day__more">
-                            +{items.length - 3} altre
-                          </p>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </SectionPanel>
       </section>
   );
 }

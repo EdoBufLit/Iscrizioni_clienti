@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
 from app.models import Booking, BookingEvent, BookingEventSeries, BookingStatus, Form, FormSubmission, Member
+from app.services.booking_formatting import format_booking_date_it
 from app.services.booking_rooms import (
     auto_assign_booking_table,
     maybe_record_assignment_event,
@@ -567,7 +568,7 @@ def _enqueue_booking_email(
 ) -> None:
     if not booking.customer_email:
         return
-    date_line = booking.booking_date.isoformat() if booking.booking_date else "da definire"
+    date_line = format_booking_date_it(booking.booking_date, fallback="da definire")
     time_line = booking.booking_time or "da definire"
     if _booking_email_should_mention_member_area(booking=booking, email_type=email_type):
         member_area_message = _booking_member_area_message()
