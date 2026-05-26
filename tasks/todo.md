@@ -5355,4 +5355,5 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Prenotazioni mobile: il dettaglio non duplica piu telefono/contatto e filtra i campi form gia rappresentati nella sintesi.
 - Mappa sala mobile: KPI grandi nascoste, contatori piccoli, controlli compatti e pannelli secondari compressi/nascosti per portare la mappa subito in vista.
 - Sidebar desktop: aggiunta voce `Serate` sotto `Prenotazioni`, puntata a `/org-admin/prenotazioni?section=events`.
-- Verifiche previste: typecheck, build, smoke Playwright live mobile light/dark e controllo deploy Hetzner con disco/log.
+- Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`, smoke Playwright live 390x844 light/dark su Tessere/Soci/Agenda/Mappa e desktop sidebar `Serate`.
+- Deploy live: Hetzner aggiornato a `73f6ea9`, Alembic a head `w8x9y0z1a2b3`, container `web`, `email-worker`, `low-cards-worker`, `whatsapp-webhook-worker` ricreati e healthy; log recenti senza traceback/exception; disco al 37%, prune non necessario.
