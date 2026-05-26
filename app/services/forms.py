@@ -516,6 +516,15 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
         ),
         "booking_success_message_override": getattr(form, "booking_success_message_override", None),
         "booking_notification_enabled": bool(getattr(form, "booking_notification_enabled", True)),
+        "booking_admin_confirmation_email_enabled": bool(
+            getattr(form, "booking_admin_confirmation_email_enabled", True)
+        ),
+        "booking_admin_confirmation_email_subject": getattr(
+            form, "booking_admin_confirmation_email_subject", None
+        ),
+        "booking_admin_confirmation_email_body": getattr(
+            form, "booking_admin_confirmation_email_body", None
+        ),
         "booking_auto_assign_enabled": bool(getattr(form, "booking_auto_assign_enabled", False)),
         "booking_field_mapping": normalize_booking_field_mapping(
             getattr(form, "booking_field_mapping", None) or {}
@@ -587,6 +596,15 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
                 getattr(form, "booking_requires_manual_confirmation", True)
             ),
             "booking_notification_enabled": bool(getattr(form, "booking_notification_enabled", True)),
+            "booking_admin_confirmation_email_enabled": bool(
+                getattr(form, "booking_admin_confirmation_email_enabled", True)
+            ),
+            "booking_admin_confirmation_email_subject": getattr(
+                form, "booking_admin_confirmation_email_subject", None
+            ),
+            "booking_admin_confirmation_email_body": getattr(
+                form, "booking_admin_confirmation_email_body", None
+            ),
             "booking_auto_assign_enabled": bool(getattr(form, "booking_auto_assign_enabled", False)),
             "booking_field_mapping": normalize_booking_field_mapping(
                 getattr(form, "booking_field_mapping", None) or {}
@@ -703,6 +721,9 @@ def apply_form_updates(
     booking_requires_manual_confirmation: bool,
     booking_success_message_override: Any,
     booking_notification_enabled: bool,
+    booking_admin_confirmation_email_enabled: bool,
+    booking_admin_confirmation_email_subject: Any,
+    booking_admin_confirmation_email_body: Any,
     booking_auto_assign_enabled: bool,
     booking_field_mapping: Any,
     booking_event_date: Any,
@@ -750,6 +771,11 @@ def apply_form_updates(
     form.booking_requires_manual_confirmation = bool(booking_requires_manual_confirmation)
     form.booking_success_message_override = _normalize_multiline_text(booking_success_message_override)
     form.booking_notification_enabled = bool(booking_notification_enabled)
+    form.booking_admin_confirmation_email_enabled = bool(booking_admin_confirmation_email_enabled)
+    form.booking_admin_confirmation_email_subject = _normalize_text(booking_admin_confirmation_email_subject)
+    form.booking_admin_confirmation_email_body = _normalize_multiline_text(
+        booking_admin_confirmation_email_body
+    )
     form.booking_auto_assign_enabled = bool(booking_auto_assign_enabled)
     form.booking_field_mapping = normalize_booking_field_mapping(booking_field_mapping)
     form.booking_event_date = normalize_booking_event_date(booking_event_date)

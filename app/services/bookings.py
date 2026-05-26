@@ -20,6 +20,7 @@ from app.services.booking_rooms import (
 )
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
+from app.services.email_templates import build_template_context, render_template_string
 from app.services.member_activity import is_member_active
 
 
@@ -603,6 +604,7 @@ def _enqueue_booking_email(
     intro: str,
     action_message: str,
     email_type: str,
+    body_text_override: str | None = None,
 ) -> None:
     if not booking.customer_email:
         return
@@ -611,7 +613,7 @@ def _enqueue_booking_email(
     if _booking_email_should_mention_member_area(booking=booking, email_type=email_type):
         member_area_message = _booking_member_area_message()
         action_message = f"{action_message}\n\n{member_area_message}"
-    text_body = (
+    text_body = body_text_override or (
         f"{intro}\n\n"
         f"Nome: {booking.customer_name}\n"
         f"Data: {date_line}\n"
@@ -629,6 +631,8 @@ def _enqueue_booking_email(
         f"</ul>"
         f"<p>{html.escape(action_message)}</p>"
     )
+    if body_text_override:
+        html_body = f"<p>{html.escape(body_text_override).replace(chr(10), '<br>')}</p>"
     enqueue_email(
         db,
         email_type=email_type,
@@ -648,6 +652,77 @@ def _enqueue_booking_email(
             },
         ),
         priority=4,
+    )
+
+
+def _booking_admin_confirmation_email_enabled(booking: Booking) -> bool:
+    form = getattr(booking, "form", None)
+    if form is None:
+        return True
+    return bool(getattr(form, "booking_admin_confirmation_email_enabled", True))
+
+
+def _booking_admin_confirmation_email_payload(booking: Booking) -> tuple[str, str]:
+    form = getattr(booking, "form", None)
+    form_title = getattr(form, "title", None) or "ASSONAM"
+    default_subject = f"Prenotazione confermata: {form_title}"
+    default_body = (
+        "La tua prenotazione e stata confermata.\n\n"
+        "Nome: {{nome_contatto}}\n"
+        "Data: {{data_prenotazione}}\n"
+        "Orario: {{orario_prenotazione}}\n"
+        "Persone: {{numero_persone}}\n\n"
+        "Ti aspettiamo all'orario indicato."
+    )
+    subject_template = _normalize_text(
+        getattr(form, "booking_admin_confirmation_email_subject", None)
+    ) or default_subject
+    body_template = _normalize_text(
+        getattr(form, "booking_admin_confirmation_email_body", None)
+    ) or default_body
+    context = _booking_template_context(booking)
+    subject = render_template_string(subject_template, context=context) or default_subject
+    body = render_template_string(body_template, context=context) or default_body
+    if _booking_email_should_mention_member_area(
+        booking=booking,
+        email_type="booking_confirmed_status_update",
+    ):
+        body = f"{body.strip()}\n\n{_booking_member_area_message()}"
+    return subject.strip()[:240] or default_subject, body.strip() or default_body
+
+
+def _booking_template_context(booking: Booking) -> dict[str, str]:
+    form = getattr(booking, "form", None)
+    org = getattr(booking, "organization", None) or getattr(form, "organization", None)
+    date_value = format_booking_date_it(booking.booking_date, fallback="da definire")
+    time_value = booking.booking_time or "da definire"
+    party_size = str(booking.party_size or "")
+    event_details = _booking_event_summary(booking) or ""
+    summary = " - ".join(
+        item
+        for item in [
+            date_value,
+            time_value,
+            f"{party_size} persone" if party_size else "",
+            event_details,
+        ]
+        if item
+    )
+    return build_template_context(
+        association=org,
+        member=getattr(booking, "member", None),
+        extra_context={
+            "nome_contatto": booking.customer_name or "",
+            "nome_socio": booking.customer_name or "",
+            "email_destinatario": booking.customer_email or "",
+            "numero_whatsapp": booking.customer_phone or "",
+            "titolo_form": getattr(form, "title", "") or "",
+            "data_prenotazione": date_value,
+            "orario_prenotazione": time_value,
+            "numero_persone": party_size,
+            "dettagli_evento": event_details,
+            "riepilogo_prenotazione": summary,
+        },
     )
 
 
@@ -905,14 +980,19 @@ def update_booking_status(
         previous_table_id=previous_table_id,
     )
     if notify_customer and normalized_status != previous_status and bool(getattr(booking.form, "booking_notification_enabled", True)):
-        if normalized_status == BookingStatus.CONFIRMED.value:
+        if (
+            normalized_status == BookingStatus.CONFIRMED.value
+            and _booking_admin_confirmation_email_enabled(booking)
+        ):
+            subject, body_text = _booking_admin_confirmation_email_payload(booking)
             _enqueue_booking_email(
                 db,
                 booking=booking,
-                subject=f"Prenotazione confermata: {booking.form.title if booking.form else 'ASSONAM'}",
+                subject=subject,
                 intro="La tua prenotazione è stata confermata.",
                 action_message="Ti aspettiamo all'orario indicato.",
                 email_type="booking_confirmed_status_update",
+                body_text_override=body_text,
             )
         elif normalized_status == BookingStatus.CANCELLED.value:
             _enqueue_booking_email(

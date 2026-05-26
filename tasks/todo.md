@@ -5357,3 +5357,22 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Sidebar desktop: aggiunta voce `Serate` sotto `Prenotazioni`, puntata a `/org-admin/prenotazioni?section=events`.
 - Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`, smoke Playwright live 390x844 light/dark su Tessere/Soci/Agenda/Mappa e desktop sidebar `Serate`.
 - Deploy live: Hetzner aggiornato a `73f6ea9`, Alembic a head `w8x9y0z1a2b3`, container `web`, `email-worker`, `low-cards-worker`, `whatsapp-webhook-worker` ricreati e healthy; log recenti senza traceback/exception; disco al 37%, prune non necessario.
+
+## Plan (Prenotazioni email conferma e modifica telefono - May 26, 2026)
+- [x] Identificare dove viene generata la mail cliente dopo conferma admin e portarla nelle impostazioni del form.
+- [x] Aggiungere toggle per attivare/disattivare la mail post-conferma admin, utile quando l'org vuole usare solo WhatsApp.
+- [x] Verificare che sondaggi e reminder non riusino la mail di conferma prenotazione ne l'automazione WhatsApp `booking_confirmed`.
+- [x] Aggiungere endpoint org admin per modificare il telefono della singola prenotazione, con normalizzazione/audit e senza alterare il payload originale del form.
+- [x] Aggiungere UI mobile-first nel dettaglio prenotazione per correggere il numero prima di conferma/reminder/azioni WhatsApp.
+- [x] Verificare che i flussi WhatsApp usino `booking.customer_phone` aggiornato come fallback e mostrare all'admin quando manca la regola automazione collegata.
+- [x] Eseguire test mirati backend/frontend, typecheck/build e smoke se necessario.
+
+## Review (Prenotazioni email conferma e modifica telefono - May 26, 2026)
+- La mail cliente inviata dopo conferma admin era generata in `app.services.bookings.update_booking_status`, separata dalla mail "conferma invio form"; ora ha impostazioni dedicate sul form.
+- Aggiunti su `forms`: toggle `booking_admin_confirmation_email_enabled`, oggetto e corpo email con variabili booking; il toggle vive in `Form > Impostazioni > Notifiche email`, accanto alla conferma invio form.
+- La mail post-conferma admin non riguarda sondaggi: i sondaggi restano email-only tramite `post_event_survey`, e il no-op WhatsApp survey resta coperto.
+- Aggiunto endpoint `PATCH /api/org-admin/bookings/{id}/phone`, con normalizzazione WhatsApp, evento booking e audit; il payload originale del form resta invariato.
+- Nel dettaglio prenotazione org admin c'e un editor "Numero WhatsApp"; conferme e reminder usano `booking.customer_phone` aggiornato come fallback operativo.
+- UX WhatsApp: se una conferma admin non invia messaggio per assenza regola, l'admin vede esplicitamente che manca una regola attiva in `WhatsApp > Automazioni`.
+- Verifiche OK: `python -m compileall -q app init_db.py`, pytest mirati booking/survey (`2 passed`), `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.
+- Nota migration: `alembic heads` punta a `x9y0z1a2b3c4`; `alembic upgrade head --sql` in locale si ferma su una vecchia migration SQLite batch preesistente, prima di questa migration.

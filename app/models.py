@@ -1440,6 +1440,11 @@ class Form(Base):
     booking_notification_enabled = Column(
         Boolean, nullable=False, default=True, server_default="true"
     )
+    booking_admin_confirmation_email_enabled = Column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    booking_admin_confirmation_email_subject = Column(String, nullable=True)
+    booking_admin_confirmation_email_body = Column(Text, nullable=True)
     booking_auto_assign_enabled = Column(
         Boolean, nullable=False, default=False, server_default="false"
     )

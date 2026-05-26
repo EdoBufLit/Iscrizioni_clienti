@@ -7459,6 +7459,77 @@ body.dashboard-perf-mode .btn-ghost:hover {
   margin: 0;
 }
 
+.booking-phone-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: end;
+  border: 1px solid color-mix(in srgb, var(--oa-border, #d7dfdc) 82%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--oa-panel, #ffffff) 92%, var(--oa-brand, #0f766e) 4%);
+  padding: 0.85rem;
+}
+
+.booking-phone-editor label {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  color: var(--oa-text, #17211f);
+  font-size: 0.74rem;
+  font-weight: 850;
+}
+
+.booking-phone-editor input {
+  min-height: 2.65rem;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--oa-border, #d7dfdc) 86%, transparent);
+  border-radius: 10px;
+  background: var(--oa-panel, #ffffff);
+  color: var(--oa-text, #17211f);
+  padding: 0 0.75rem;
+  font-size: 0.92rem;
+  font-weight: 750;
+  outline: none;
+}
+
+.booking-phone-editor input:focus {
+  border-color: color-mix(in srgb, var(--oa-brand, #0f766e) 72%, white);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--oa-brand, #0f766e) 14%, transparent);
+}
+
+.booking-phone-editor button {
+  min-height: 2.65rem;
+  white-space: nowrap;
+  border-radius: 10px;
+  background: var(--oa-brand, #0f766e);
+  color: #fff;
+  padding: 0 0.9rem;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.booking-phone-editor button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.booking-phone-editor p {
+  grid-column: 1 / -1;
+  margin: -0.25rem 0 0;
+  color: var(--oa-muted, #64748b);
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.booking-phone-editor--compact {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.55rem;
+}
+
+.booking-phone-editor--compact button {
+  width: 100%;
+}
+
 @keyframes booking-response-spin {
   to {
     transform: rotate(360deg);

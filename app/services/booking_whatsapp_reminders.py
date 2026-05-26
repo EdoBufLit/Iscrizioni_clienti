@@ -153,7 +153,7 @@ def process_post_event_survey_email(
     now: datetime | None = None,
     limit: int = 100,
 ) -> dict[str, int]:
-    current = now or datetime.utcnow()
+    current = _as_utc_datetime(now or datetime.now(timezone.utc))
     stats = {"checked": 0, "sent": 0, "skipped": 0, "failed": 0}
     if not settings.ENABLE_WHATSAPP_EVOLUTION:
         return stats

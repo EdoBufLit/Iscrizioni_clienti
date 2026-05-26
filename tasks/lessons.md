@@ -246,3 +246,10 @@ ext_no, storico eleased_at), poi implemento solo regole esplicite e dimostrabil
 - May 26, 2026: quando una pagina pubblica viene resa white-label e deve essere condivisa con clienti esterni, non deve dipendere dal service worker della PWA admin. Escludere le route pubbliche dalla navigation cache, unregisterare la PWA su quelle route e verificare un deep link live dopo deploy.
 - May 26, 2026: nelle card prenotazione create da form, non usare mai il titolo generico "Prenotazione" se nel payload esiste un campo nome/cognome. Il backend deve inferirlo da mapping o label campo, e la UI deve avere fallback sul payload per le prenotazioni storiche.
 - May 26, 2026: nelle viste org admin mobile non riusare automaticamente le KPI card desktop come primo contenuto. Su telefono i KPI devono diventare strip compatte o sparire se bloccano il workflow principale, e ogni pagina va verificata a 390px per overflow laterale.
+## May 26, 2026 - Booking phone must be editable after form submission
+
+When a booking is created from a public form, the form payload is not enough as the operational source of truth: org admins need a per-booking corrected `customer_phone` because WhatsApp confirmations and reminders depend on it. Keep the original submission payload intact for audit, but expose a clear admin edit path for `Booking.customer_phone` and make WhatsApp flows prefer that corrected value.
+
+## May 26, 2026 - Admin booking confirmation email is form configuration, not generic form receipt
+
+The customer email sent after an org admin confirms a booking is a separate operational message from the generic "form received" email and from post-event surveys. It must be visible in the booking form settings, independently toggleable, and documented as separate from WhatsApp automations so org admins can choose email-only, WhatsApp-only, both, or neither.

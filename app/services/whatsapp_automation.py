@@ -394,7 +394,13 @@ def maybe_send_form_submission_decision_whatsapp_automations(
         .all()
     )
     if not automations:
-        return {"sent": 0, "processed": 0, "reason": "no_automations", "results": []}
+        return {
+            "sent": 0,
+            "processed": 0,
+            "reason": "no_automations",
+            "trigger_event": trigger_event,
+            "results": [],
+        }
 
     connection = (
         db.query(WhatsAppConnection)

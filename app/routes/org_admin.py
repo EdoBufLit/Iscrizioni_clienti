@@ -22,6 +22,7 @@ from app.models import (
     AdminUser,
     AdminRole,
     Booking,
+    BookingEvent,
     BookingEventSeries,
     BookingEventTimeSlot,
     OrgAdminToken,
@@ -146,6 +147,7 @@ from app.services.whatsapp_automations import (
     apply_whatsapp_automation_updates,
     serialize_whatsapp_automation,
 )
+from app.services.whatsapp_evolution import normalize_phone
 from app.services.bookings import (
     agenda_day_payload,
     agenda_week_payload,
@@ -2313,6 +2315,9 @@ class CreateAssociationFormBody(BaseModel):
     booking_requires_manual_confirmation: bool = True
     booking_success_message_override: Optional[str] = None
     booking_notification_enabled: bool = True
+    booking_admin_confirmation_email_enabled: bool = True
+    booking_admin_confirmation_email_subject: Optional[str] = Field(default=None, max_length=240)
+    booking_admin_confirmation_email_body: Optional[str] = None
     booking_auto_assign_enabled: bool = False
     booking_field_mapping: dict[str, str] = Field(default_factory=dict)
     booking_event_date: Optional[date] = None
@@ -2353,6 +2358,9 @@ class UpdateAssociationFormBody(BaseModel):
     booking_requires_manual_confirmation: bool = True
     booking_success_message_override: Optional[str] = None
     booking_notification_enabled: bool = True
+    booking_admin_confirmation_email_enabled: bool = True
+    booking_admin_confirmation_email_subject: Optional[str] = Field(default=None, max_length=240)
+    booking_admin_confirmation_email_body: Optional[str] = None
     booking_auto_assign_enabled: bool = False
     booking_field_mapping: dict[str, str] = Field(default_factory=dict)
     booking_event_date: Optional[date] = None
@@ -2402,6 +2410,10 @@ class UpdateBookingStatusBody(BaseModel):
     table_id: Optional[int] = None
     notes: Optional[str] = None
     notify_customer: bool = True
+
+
+class UpdateBookingPhoneBody(BaseModel):
+    customer_phone: Optional[str] = Field(default=None, max_length=40)
 
 
 class UpsertBookingEventSeriesBody(BaseModel):
@@ -6387,6 +6399,9 @@ def create_association_form(
         booking_requires_manual_confirmation=body.booking_requires_manual_confirmation,
         booking_success_message_override=body.booking_success_message_override,
         booking_notification_enabled=body.booking_notification_enabled,
+        booking_admin_confirmation_email_enabled=body.booking_admin_confirmation_email_enabled,
+        booking_admin_confirmation_email_subject=body.booking_admin_confirmation_email_subject,
+        booking_admin_confirmation_email_body=body.booking_admin_confirmation_email_body,
         booking_auto_assign_enabled=body.booking_auto_assign_enabled,
         booking_field_mapping=body.booking_field_mapping,
         booking_event_date=body.booking_event_date,
@@ -6460,6 +6475,9 @@ def update_association_form(
         booking_requires_manual_confirmation=body.booking_requires_manual_confirmation,
         booking_success_message_override=body.booking_success_message_override,
         booking_notification_enabled=body.booking_notification_enabled,
+        booking_admin_confirmation_email_enabled=body.booking_admin_confirmation_email_enabled,
+        booking_admin_confirmation_email_subject=body.booking_admin_confirmation_email_subject,
+        booking_admin_confirmation_email_body=body.booking_admin_confirmation_email_body,
         booking_auto_assign_enabled=body.booking_auto_assign_enabled,
         booking_field_mapping=body.booking_field_mapping,
         booking_event_date=body.booking_event_date,
@@ -6540,6 +6558,15 @@ def duplicate_association_form(
         ),
         booking_success_message_override=getattr(source_form, "booking_success_message_override", None),
         booking_notification_enabled=bool(getattr(source_form, "booking_notification_enabled", True)),
+        booking_admin_confirmation_email_enabled=bool(
+            getattr(source_form, "booking_admin_confirmation_email_enabled", True)
+        ),
+        booking_admin_confirmation_email_subject=getattr(
+            source_form, "booking_admin_confirmation_email_subject", None
+        ),
+        booking_admin_confirmation_email_body=getattr(
+            source_form, "booking_admin_confirmation_email_body", None
+        ),
         booking_field_mapping=getattr(source_form, "booking_field_mapping", None) or {},
         booking_event_date=getattr(source_form, "booking_event_date", None),
         booking_event_time=getattr(source_form, "booking_event_time", None),
@@ -7568,6 +7595,66 @@ def patch_org_admin_booking(
         "booking": serialize_booking(booking, include_events=True),
         "request_decision": request_decision,
     }
+
+
+@router.patch("/bookings/{booking_id}/phone")
+def patch_org_admin_booking_phone(
+    booking_id: int,
+    body: UpdateBookingPhoneBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    booking = (
+        db.query(Booking)
+        .options(
+            joinedload(Booking.form),
+            joinedload(Booking.submission),
+            joinedload(Booking.events),
+            joinedload(Booking.room),
+            joinedload(Booking.table),
+        )
+        .filter(Booking.id == booking_id, Booking.association_id == admin.org_id)
+        .first()
+    )
+    if booking is None:
+        raise HTTPException(status_code=404, detail="Prenotazione non trovata.")
+
+    raw_phone = _normalize_optional_text(body.customer_phone)
+    normalized_phone = normalize_phone(raw_phone) if raw_phone else None
+    if raw_phone and not normalized_phone:
+        raise HTTPException(status_code=422, detail="Numero WhatsApp non valido.")
+    previous_phone = booking.customer_phone
+    booking.customer_phone = normalized_phone
+    db.add(
+        BookingEvent(
+            booking_id=booking.id,
+            event_type="customer_phone_updated",
+            payload_json={
+                "from": previous_phone,
+                "to": normalized_phone,
+                "source": "org_admin",
+            },
+            created_by_user_id=admin.id,
+        )
+    )
+    audit.log_operation(
+        db,
+        action="booking.customer_phone_updated",
+        entity_type="booking",
+        entity_id=booking.id,
+        actor_admin_id=admin.id,
+        actor_role=admin.role.value if isinstance(admin.role, AdminRole) else str(admin.role),
+        metadata={"from": previous_phone, "to": normalized_phone},
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    db.refresh(booking)
+    return {"booking": serialize_booking(booking, include_events=True)}
 
 
 @router.post("/bookings/{booking_id}/reject-silent")

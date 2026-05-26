@@ -23,6 +23,7 @@ import {
   updateOrgAdminBookingEventSeries,
   updateOrgAdminFormSubmissionStatus,
   updateOrgAdminBooking,
+  updateOrgAdminBookingPhone,
   updateOrgAdminRoom,
   updateOrgAdminRoomTable,
   type AssociationBooking,
@@ -442,6 +443,7 @@ export default function OrgAdminBookings() {
   const [assignmentRoomId, setAssignmentRoomId] = useState<number | "">("");
   const [assignmentTableId, setAssignmentTableId] = useState<number | "">("");
   const [assignmentTables, setAssignmentTables] = useState<AssociationRoomTable[]>([]);
+  const [phoneDraft, setPhoneDraft] = useState("");
   const [saving, setSaving] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<null | { type: "room" | "table"; id: number; name: string }>(null);
   
@@ -550,6 +552,7 @@ export default function OrgAdminBookings() {
     fetchOrgAdminBooking(selectedBookingId)
       .then(({ booking }) => {
         setSelectedBooking(booking);
+        setPhoneDraft(booking.customer_phone || "");
         setAssignmentRoomId(booking.room_id ?? "");
         setAssignmentTableId(booking.table_id ?? "");
         syncMapWithBooking(booking);
@@ -804,6 +807,37 @@ export default function OrgAdminBookings() {
         tone: "error",
         title: "Nota non aggiornata",
         message: err instanceof Error ? err.message : "Errore aggiornamento nota cliente.",
+      });
+    } finally {
+      setSaving("");
+    }
+  }
+
+  async function handleBookingPhoneSave() {
+    if (!selectedBookingId || !selectedBooking) return;
+    const normalizedDraft = phoneDraft.trim();
+    if ((selectedBooking.customer_phone || "") === normalizedDraft) {
+      showToast({ tone: "info", title: "Telefono invariato", message: "Il numero della prenotazione e gia aggiornato." });
+      return;
+    }
+    setSaving("booking-phone");
+    try {
+      const { booking } = await updateOrgAdminBookingPhone(selectedBookingId, {
+        customer_phone: normalizedDraft || null,
+      });
+      setSelectedBooking(booking);
+      setPhoneDraft(booking.customer_phone || "");
+      await loadBookings();
+      showToast({
+        tone: "success",
+        title: "Telefono aggiornato",
+        message: "I prossimi messaggi WhatsApp useranno questo numero.",
+      });
+    } catch (err) {
+      showToast({
+        tone: "error",
+        title: "Telefono non aggiornato",
+        message: err instanceof Error ? err.message : "Errore aggiornamento telefono prenotazione.",
       });
     } finally {
       setSaving("");
@@ -1074,7 +1108,11 @@ export default function OrgAdminBookings() {
       if (response.whatsapp_result?.sent) {
         message = "Dettaglio prenotazione aggiornato e messaggio WhatsApp inviato al socio.";
       } else if (response.whatsapp_result?.error) {
-        message = "Dettaglio prenotazione aggiornato, ma il messaggio WhatsApp non ? partito.";
+        message = "Dettaglio prenotazione aggiornato, ma il messaggio WhatsApp non e partito.";
+      } else if (response.whatsapp_result?.reason === "no_automations") {
+        message = "Dettaglio prenotazione aggiornato. Nessun WhatsApp inviato: manca una regola attiva in WhatsApp > Automazioni per questo form.";
+      } else if (response.whatsapp_result?.reason === "connection_unavailable") {
+        message = "Dettaglio prenotazione aggiornato. Nessun WhatsApp inviato: connessione WhatsApp non disponibile.";
       } else if (response.whatsapp_result?.reason === "missing_phone") {
         message = "Dettaglio prenotazione aggiornato. Nessun WhatsApp inviato: numero non disponibile.";
       }
@@ -1277,6 +1315,9 @@ export default function OrgAdminBookings() {
             onStatusChange={handleBookingStatus}
             onRejectWithoutMessage={handleRejectWithoutMessage}
             onMarkCustomerNoteRead={handleMarkCustomerNoteRead}
+            phoneDraft={phoneDraft}
+            setPhoneDraft={setPhoneDraft}
+            onSavePhone={handleBookingPhoneSave}
             onSaveAssignment={handleAssignmentSave}
             onClearAssignment={handleAssignmentClear}
             requestActionState={requestActionState}
@@ -1303,6 +1344,9 @@ export default function OrgAdminBookings() {
             onStatusChange={handleBookingStatus}
             onRejectWithoutMessage={handleRejectWithoutMessage}
             onMarkCustomerNoteRead={handleMarkCustomerNoteRead}
+            phoneDraft={phoneDraft}
+            setPhoneDraft={setPhoneDraft}
+            onSavePhone={handleBookingPhoneSave}
             onSaveAssignment={handleAssignmentSave}
             onClearAssignment={handleAssignmentClear}
             requestActionState={requestActionState}
@@ -1784,6 +1828,9 @@ function AgendaSection(props: {
   onStatusChange: (status: string) => void;
   onRejectWithoutMessage: () => void;
   onMarkCustomerNoteRead: () => void;
+  phoneDraft: string;
+  setPhoneDraft: (value: string) => void;
+  onSavePhone: () => void;
   onSaveAssignment: () => void;
   onClearAssignment: () => void;
   requestActionState: "idle" | "loading" | "success" | "error";
@@ -2013,6 +2060,9 @@ function AgendaSection(props: {
                             onStatusChange={props.onStatusChange}
                             onRejectWithoutMessage={props.onRejectWithoutMessage}
                             onMarkCustomerNoteRead={props.onMarkCustomerNoteRead}
+                            phoneDraft={props.phoneDraft}
+                            setPhoneDraft={props.setPhoneDraft}
+                            onSavePhone={props.onSavePhone}
                             onSaveAssignment={props.onSaveAssignment}
                             onClearAssignment={props.onClearAssignment}
                             requestActionState={props.requestActionState}
@@ -2223,6 +2273,9 @@ function MobileManagedBookingsSection(props: {
   onStatusChange: (status: string) => void;
   onRejectWithoutMessage: () => void;
   onMarkCustomerNoteRead: () => void;
+  phoneDraft: string;
+  setPhoneDraft: (value: string) => void;
+  onSavePhone: () => void;
   onSaveAssignment: () => void;
   onClearAssignment: () => void;
   requestActionState: "idle" | "loading" | "success" | "error";
@@ -2295,6 +2348,9 @@ function MobileManagedBookingsSection(props: {
                         onStatusChange={props.onStatusChange}
                         onRejectWithoutMessage={props.onRejectWithoutMessage}
                         onMarkCustomerNoteRead={props.onMarkCustomerNoteRead}
+                        phoneDraft={props.phoneDraft}
+                        setPhoneDraft={props.setPhoneDraft}
+                        onSavePhone={props.onSavePhone}
                         onSaveAssignment={props.onSaveAssignment}
                         onClearAssignment={props.onClearAssignment}
                         requestActionState={props.requestActionState}
@@ -2366,6 +2422,41 @@ function DayBookingRow({
   );
 }
 
+function BookingPhoneEditor({
+  value,
+  savedValue,
+  onChange,
+  onSave,
+  saving,
+  compact = false,
+}: {
+  value: string;
+  savedValue: string | null;
+  onChange: (value: string) => void;
+  onSave: () => void;
+  saving: boolean;
+  compact?: boolean;
+}) {
+  const changed = value.trim() !== (savedValue || "");
+  return (
+    <div className={compact ? "booking-phone-editor booking-phone-editor--compact" : "booking-phone-editor"}>
+      <label>
+        <span>Numero WhatsApp</span>
+        <input
+          type="tel"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="+39 333 0000000"
+        />
+      </label>
+      <button type="button" onClick={onSave} disabled={saving || !changed}>
+        {saving ? "Salvo..." : "Salva numero"}
+      </button>
+      <p>I messaggi WhatsApp e i reminder useranno questo numero corretto.</p>
+    </div>
+  );
+}
+
 function BookingDetailPanel(props: {
   selectedBooking: AssociationBooking | null;
   rooms: AssociationRoom[];
@@ -2377,6 +2468,9 @@ function BookingDetailPanel(props: {
   onStatusChange: (status: string) => void;
   onRejectWithoutMessage: () => void;
   onMarkCustomerNoteRead: () => void;
+  phoneDraft: string;
+  setPhoneDraft: (value: string) => void;
+  onSavePhone: () => void;
   onSaveAssignment: () => void;
   onClearAssignment: () => void;
   requestActionState: "idle" | "loading" | "success" | "error";
@@ -2448,6 +2542,15 @@ function BookingDetailPanel(props: {
               </span>
             ) : null}
           </div>
+
+          <BookingPhoneEditor
+            value={props.phoneDraft}
+            savedValue={props.selectedBooking.customer_phone}
+            onChange={props.setPhoneDraft}
+            onSave={props.onSavePhone}
+            saving={props.saving === "booking-phone"}
+            compact
+          />
 
           {showMobileAssignment ? (
             <div className="booking-request-mobile-card__assignment">
@@ -2596,6 +2699,15 @@ function BookingDetailPanel(props: {
             <p className="mt-1 text-sm text-slate-500">{props.selectedBooking.customer_email || props.selectedBooking.customer_phone || "Contatto non disponibile"}</p>
           </div>
           <span className={bookingStatusChipClass(props.selectedBooking.status)}>{formatStatusLabel(props.selectedBooking.status)}</span>
+        </div>
+        <div className="mt-4">
+          <BookingPhoneEditor
+            value={props.phoneDraft}
+            savedValue={props.selectedBooking.customer_phone}
+            onChange={props.setPhoneDraft}
+            onSave={props.onSavePhone}
+            saving={props.saving === "booking-phone"}
+          />
         </div>
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-inset ring-slate-200/60 text-sm text-slate-700">

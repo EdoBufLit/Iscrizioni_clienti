@@ -233,6 +233,9 @@ function emptyFormDraft() {
     booking_requires_manual_confirmation: true,
     booking_success_message_override: "",
     booking_notification_enabled: true,
+    booking_admin_confirmation_email_enabled: true,
+    booking_admin_confirmation_email_subject: "",
+    booking_admin_confirmation_email_body: "",
     booking_auto_assign_enabled: false,
     booking_field_mapping: {} as Record<string, string>,
     booking_event_date: "",
@@ -288,6 +291,9 @@ function draftFromAssociationForm(form: AssociationForm) {
     booking_requires_manual_confirmation: Boolean(form.booking_requires_manual_confirmation),
     booking_success_message_override: form.booking_success_message_override || "",
     booking_notification_enabled: Boolean(form.booking_notification_enabled),
+    booking_admin_confirmation_email_enabled: form.booking_admin_confirmation_email_enabled !== false,
+    booking_admin_confirmation_email_subject: form.booking_admin_confirmation_email_subject || "",
+    booking_admin_confirmation_email_body: form.booking_admin_confirmation_email_body || "",
     booking_auto_assign_enabled: Boolean(form.booking_auto_assign_enabled),
     booking_field_mapping: form.booking_field_mapping || {},
     booking_event_date: form.booking_event_date || "",
@@ -1152,6 +1158,9 @@ export function OrgAdminFormsWorkspace({
         notification_email: formDraft.notification_email || null,
         booking_enabled: bookingEnabled,
         booking_success_message_override: formDraft.booking_success_message_override || null,
+        booking_admin_confirmation_email_enabled: formDraft.booking_admin_confirmation_email_enabled,
+        booking_admin_confirmation_email_subject: formDraft.booking_admin_confirmation_email_subject || null,
+        booking_admin_confirmation_email_body: formDraft.booking_admin_confirmation_email_body || null,
         booking_auto_assign_enabled: formDraft.booking_auto_assign_enabled,
         booking_field_mapping: bookingFieldMapping,
         booking_event_date: null,
@@ -2098,6 +2107,66 @@ export function OrgAdminFormsWorkspace({
                 {activeTemplates.map((template) => (<option key={`user-${template.id}`} value={template.id}>{template.name}</option>))}
               </select>
             </label>
+            {formDraft.booking_enabled ? (
+              <div className="rounded-[1.1rem] border border-emerald-200 bg-emerald-50/60 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-800">Email dopo conferma admin</p>
+                    <p className="mt-1 text-xs leading-5 text-emerald-900/75">
+                      Questa e separata dalla conferma di invio form e dai sondaggi. Disattivala se vuoi usare solo WhatsApp.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex cursor-pointer items-center">
+                    <input
+                      type="checkbox"
+                      disabled={locked}
+                      checked={formDraft.booking_admin_confirmation_email_enabled}
+                      onChange={(event) => syncFormDraft("booking_admin_confirmation_email_enabled", event.target.checked)}
+                      className="peer sr-only"
+                    />
+                    <span className="h-6 w-11 rounded-full bg-emerald-100 transition peer-checked:bg-brand" />
+                    <span className="absolute left-1 h-4 w-4 rounded-full bg-white transition peer-checked:translate-x-5" />
+                  </label>
+                </div>
+                {formDraft.booking_admin_confirmation_email_enabled ? (
+                  <div className="mt-4 grid gap-3">
+                    <label className={labelClass}>
+                      Oggetto
+                      <input
+                        className={inputClass}
+                        disabled={locked}
+                        value={formDraft.booking_admin_confirmation_email_subject}
+                        onChange={(event) => syncFormDraft("booking_admin_confirmation_email_subject", event.target.value)}
+                        placeholder="Prenotazione confermata: {{titolo_form}}"
+                      />
+                    </label>
+                    <label className={labelClass}>
+                      Testo email
+                      <textarea
+                        className={`${inputClass} min-h-[132px] resize-y leading-6`}
+                        disabled={locked}
+                        value={formDraft.booking_admin_confirmation_email_body}
+                        onChange={(event) => syncFormDraft("booking_admin_confirmation_email_body", event.target.value)}
+                        placeholder={"La tua prenotazione e stata confermata.\n\nNome: {{nome_contatto}}\nData: {{data_prenotazione}}\nOrario: {{orario_prenotazione}}\nPersone: {{numero_persone}}\n\nTi aspettiamo all'orario indicato."}
+                      />
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {["{{nome_contatto}}", "{{data_prenotazione}}", "{{orario_prenotazione}}", "{{numero_persone}}", "{{riepilogo_prenotazione}}"].map((placeholder) => (
+                        <button
+                          key={`booking-confirm-${placeholder}`}
+                          type="button"
+                          className="rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-800 transition hover:border-emerald-300"
+                          disabled={locked}
+                          onClick={() => syncFormDraft("booking_admin_confirmation_email_body", `${formDraft.booking_admin_confirmation_email_body}${formDraft.booking_admin_confirmation_email_body.endsWith(" ") || formDraft.booking_admin_confirmation_email_body.endsWith("\n") ? "" : " "}${placeholder}`)}
+                        >
+                          {placeholder}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             <div className="grid gap-4 rounded-[1.1rem] border border-neutral-200 bg-neutral-50/70 p-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(360px,1.1fr)]">
               <div className="space-y-3">
                 <div>

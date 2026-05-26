@@ -1156,6 +1156,9 @@ export type AssociationForm = {
   booking_requires_manual_confirmation: boolean;
   booking_success_message_override: string | null;
   booking_notification_enabled: boolean;
+  booking_admin_confirmation_email_enabled: boolean;
+  booking_admin_confirmation_email_subject: string | null;
+  booking_admin_confirmation_email_body: string | null;
   booking_auto_assign_enabled: boolean;
   booking_field_mapping: Record<string, string>;
   booking_event_date: string | null;
@@ -1214,6 +1217,9 @@ export type AssociationForm = {
     booking_enabled: boolean;
     booking_requires_manual_confirmation: boolean;
     booking_notification_enabled: boolean;
+    booking_admin_confirmation_email_enabled: boolean;
+    booking_admin_confirmation_email_subject: string | null;
+    booking_admin_confirmation_email_body: string | null;
     booking_field_mapping: Record<string, string>;
     booking_event_date: string | null;
     booking_event_time: string | null;
@@ -2183,6 +2189,9 @@ export async function createOrgAdminForm(data: {
   booking_requires_manual_confirmation?: boolean;
   booking_success_message_override?: string | null;
   booking_notification_enabled?: boolean;
+  booking_admin_confirmation_email_enabled?: boolean;
+  booking_admin_confirmation_email_subject?: string | null;
+  booking_admin_confirmation_email_body?: string | null;
   booking_auto_assign_enabled?: boolean;
   booking_field_mapping?: Record<string, string>;
   booking_event_date?: string | null;
@@ -2241,6 +2250,9 @@ export async function updateOrgAdminForm(
   booking_requires_manual_confirmation?: boolean;
   booking_success_message_override?: string | null;
   booking_notification_enabled?: boolean;
+  booking_admin_confirmation_email_enabled?: boolean;
+  booking_admin_confirmation_email_subject?: string | null;
+  booking_admin_confirmation_email_body?: string | null;
   booking_auto_assign_enabled?: boolean;
   booking_field_mapping?: Record<string, string>;
   booking_event_date?: string | null;
@@ -2538,6 +2550,20 @@ export async function updateOrgAdminBooking(
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento prenotazione"));
+  return res.json();
+}
+
+export async function updateOrgAdminBookingPhone(
+  bookingId: number,
+  data: { customer_phone: string | null },
+): Promise<{ booking: AssociationBooking }> {
+  const res = await fetch(`/api/org-admin/bookings/${bookingId}/phone`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore aggiornamento telefono prenotazione"));
   return res.json();
 }
 

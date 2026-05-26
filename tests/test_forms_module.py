@@ -25,6 +25,7 @@ from app.models import (
     WhatsAppMessage,
 )
 from app.services.forms import normalize_field_key
+from app.services.whatsapp_automation import prepare_form_submission_whatsapp_candidate
 from app.services.whatsapp_sync import get_or_create_connection
 from app.utils import hash_token
 
@@ -1324,6 +1325,102 @@ def test_booking_enabled_form_creates_booking_and_exposes_agenda(client, db):
     assert submissions_res.status_code == 200, submissions_res.text
     assert submissions_res.json()["items"][0]["booking"]["status"] == "confirmed"
     assert submissions_res.json()["items"][0]["status"] == "confirmed"
+
+
+def test_booking_admin_confirmation_email_can_be_disabled_and_phone_corrected(client, db):
+    org, admin = _create_org_admin(db)
+    _login_org_admin(client, db, admin.id)
+    public_slug = f"prenota-whatsapp-{uuid.uuid4().hex[:6]}"
+
+    create_res = client.post(
+        "/api/org-admin/forms",
+        json={
+            "title": "Prenotazione WhatsApp",
+            "public_slug": public_slug,
+            "is_active": True,
+            "visibility": "public",
+            "form_type": "booking",
+            "booking_enabled": True,
+            "booking_requires_manual_confirmation": True,
+            "booking_notification_enabled": True,
+            "booking_admin_confirmation_email_enabled": False,
+            "booking_field_mapping": {
+                "customer_name": "nome_cliente",
+                "customer_email": "email",
+                "booking_date": "data_prenotazione",
+                "booking_time": "orario_prenotazione",
+                "party_size": "numero_persone",
+            },
+        },
+    )
+    assert create_res.status_code == 201, create_res.text
+    form_id = create_res.json()["form"]["id"]
+    assert create_res.json()["form"]["booking_admin_confirmation_email_enabled"] is False
+
+    for index, field in enumerate(
+        [
+            {"field_type": "short_text", "label": "Nome cliente", "field_key": "nome_cliente"},
+            {"field_type": "email", "label": "Email", "field_key": "email"},
+            {"field_type": "date", "label": "Data", "field_key": "data_prenotazione"},
+            {"field_type": "short_text", "label": "Orario", "field_key": "orario_prenotazione"},
+            {"field_type": "number", "label": "Persone", "field_key": "numero_persone"},
+        ]
+    ):
+        field_res = client.post(
+            f"/api/org-admin/forms/{form_id}/fields",
+            json={**field, "is_required": True, "sort_order": index * 10},
+        )
+        assert field_res.status_code == 201, field_res.text
+
+    submit_res = client.post(
+        f"/api/forms/{org.slug}/{public_slug}/submit",
+        json={
+            "nome_cliente": "Mario Cliente",
+            "email": "mario@example.com",
+            "data_prenotazione": "2026-06-25",
+            "orario_prenotazione": "20:30",
+            "numero_persone": 2,
+        },
+    )
+    assert submit_res.status_code == 200, submit_res.text
+    booking_id = submit_res.json()["booking"]["id"]
+
+    phone_res = client.patch(
+        f"/api/org-admin/bookings/{booking_id}/phone",
+        json={"customer_phone": "333 1112233"},
+    )
+    assert phone_res.status_code == 200, phone_res.text
+    assert phone_res.json()["booking"]["customer_phone"] == "+393331112233"
+
+    confirm_res = client.patch(
+        f"/api/org-admin/bookings/{booking_id}",
+        json={"status": "confirmed"},
+    )
+    assert confirm_res.status_code == 200, confirm_res.text
+
+    verification_db = SessionLocal()
+    try:
+        assert (
+            verification_db.query(EmailOutbox)
+            .filter(
+                EmailOutbox.email_type == "booking_confirmed_status_update",
+                EmailOutbox.to_email == "mario@example.com",
+            )
+            .count()
+            == 0
+        )
+        booking = verification_db.query(Booking).filter(Booking.id == booking_id).one()
+        candidate = prepare_form_submission_whatsapp_candidate(
+            form=booking.form,
+            submission=booking.submission,
+            member=None,
+            booking=booking,
+        )
+        assert candidate["available"] is True
+        assert candidate["phone_number"] == "+393331112233"
+        assert candidate["source"] == "booking"
+    finally:
+        verification_db.close()
 
 
 def test_booking_form_uses_name_label_when_mapping_missing(client, db):
