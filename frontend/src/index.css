@@ -2246,6 +2246,16 @@ body::before {
     @apply translate-y-0 bg-neutral-50;
   }
 
+  .member-booking-note-textarea {
+    background: #ffffff;
+    border-color: rgba(229, 231, 235, 0.95);
+    color: #111827;
+  }
+
+  .member-booking-note-textarea::placeholder {
+    color: #9ca3af;
+  }
+
   .btn-secondary,
   .btn-success,
   .btn-danger {
@@ -7308,4 +7318,14 @@ body.dashboard-perf-mode .btn-ghost:hover {
   border-color: #33443f;
   background: #101816;
   color: #f8fafc;
+}
+
+:root[data-theme="dark"] .member-booking-note-textarea {
+  border-color: #33443f;
+  background: #101816;
+  color: #f8fafc;
+}
+
+:root[data-theme="dark"] .member-booking-note-textarea::placeholder {
+  color: #94a3b8;
 }

@@ -15,9 +15,13 @@ from app.models import (
     EmailOutbox,
     EmailTemplate,
     FormSubmission,
+    Member,
+    MemberStatus,
     OrgAdminNotification,
     OrgAdminToken,
     Organization,
+    Token,
+    TokenType,
     WhatsAppMessage,
 )
 from app.services.forms import normalize_field_key
@@ -1320,6 +1324,129 @@ def test_booking_enabled_form_creates_booking_and_exposes_agenda(client, db):
     assert submissions_res.status_code == 200, submissions_res.text
     assert submissions_res.json()["items"][0]["booking"]["status"] == "confirmed"
     assert submissions_res.json()["items"][0]["status"] == "confirmed"
+
+
+def test_booking_form_links_existing_member_and_member_area_can_send_note(client, db):
+    org, admin = _create_org_admin(db)
+    _login_org_admin(client, db, admin.id)
+    member = Member(
+        org_id=org.id,
+        first_name="Giulia",
+        last_name="Socio",
+        email="giulia.socio@example.com",
+        status=MemberStatus.ACTIVE,
+        card_no=501,
+        card_year=datetime.utcnow().year,
+        joined_at=datetime.utcnow(),
+    )
+    db.add(member)
+    db.commit()
+    db.refresh(member)
+
+    public_slug = f"prenotazione-socio-{uuid.uuid4().hex[:6]}"
+    create_res = client.post(
+        "/api/org-admin/forms",
+        json={
+            "title": "Prenotazione socio",
+            "public_slug": public_slug,
+            "is_active": True,
+            "visibility": "public",
+            "form_type": "booking",
+            "booking_enabled": True,
+            "booking_requires_manual_confirmation": True,
+            "booking_notification_enabled": True,
+            "booking_field_mapping": {
+                "customer_name": "nome_cliente",
+                "customer_email": "email",
+                "booking_date": "data_prenotazione",
+                "booking_time": "orario_prenotazione",
+                "party_size": "numero_persone",
+            },
+        },
+    )
+    assert create_res.status_code == 201, create_res.text
+    form_id = create_res.json()["form"]["id"]
+    for index, field in enumerate(
+        [
+            {"field_type": "short_text", "label": "Nome", "field_key": "nome_cliente"},
+            {"field_type": "email", "label": "Email", "field_key": "email"},
+            {"field_type": "date", "label": "Data", "field_key": "data_prenotazione"},
+            {"field_type": "short_text", "label": "Orario", "field_key": "orario_prenotazione"},
+            {"field_type": "number", "label": "Persone", "field_key": "numero_persone"},
+        ]
+    ):
+        field_res = client.post(
+            f"/api/org-admin/forms/{form_id}/fields",
+            json={**field, "is_required": True, "sort_order": index * 10},
+        )
+        assert field_res.status_code == 201, field_res.text
+
+    submit_res = client.post(
+        f"/api/forms/{org.slug}/{public_slug}/submit",
+        json={
+            "nome_cliente": "Giulia Socio",
+            "email": "GIULIA.SOCIO@example.com",
+            "data_prenotazione": "2026-06-01",
+            "orario_prenotazione": "20:30",
+            "numero_persone": 2,
+        },
+    )
+    assert submit_res.status_code == 200, submit_res.text
+    booking_id = submit_res.json()["booking"]["id"]
+    booking = db.query(Booking).filter(Booking.id == booking_id).one()
+    assert booking.member_id == member.id
+
+    confirm_res = client.patch(
+        f"/api/org-admin/bookings/{booking_id}",
+        json={"status": "confirmed"},
+    )
+    assert confirm_res.status_code == 200, confirm_res.text
+    confirmation_email = (
+        db.query(EmailOutbox)
+        .filter(
+            EmailOutbox.to_email.ilike("giulia.socio@example.com"),
+            EmailOutbox.email_type == "booking_confirmed_status_update",
+        )
+        .order_by(EmailOutbox.created_at.desc())
+        .first()
+    )
+    assert confirmation_email is not None
+    assert "/dashboard/prenotazioni" in confirmation_email.payload_json["text_body"]
+
+    token_str = f"member-bookings-{member.id}"
+    db.add(
+        Token(
+            member_id=member.id,
+            purpose=TokenType.LOGIN_MAGIC_LINK,
+            token_hash=hash_token(token_str),
+            expires_at=datetime.utcnow() + timedelta(minutes=15),
+        )
+    )
+    db.commit()
+    client.get(f"/member/auth?token={token_str}", follow_redirects=False)
+
+    list_res = client.get("/api/member/bookings")
+    assert list_res.status_code == 200, list_res.text
+    assert list_res.json()["items"][0]["id"] == booking_id
+    assert list_res.json()["items"][0]["status"] == "confirmed"
+
+    note_res = client.post(
+        f"/api/member/bookings/{booking_id}/note",
+        json={"note": "Arriviamo 10 minuti dopo."},
+    )
+    assert note_res.status_code == 200, note_res.text
+    assert note_res.json()["booking"]["has_unreviewed_customer_note"] is True
+    refreshed = db.query(Booking).filter(Booking.id == booking_id).one()
+    assert refreshed.customer_note == "Arriviamo 10 minuti dopo."
+    assert (
+        db.query(OrgAdminNotification)
+        .filter(
+            OrgAdminNotification.admin_user_id == admin.id,
+            OrgAdminNotification.type == "booking_customer_note",
+        )
+        .count()
+        >= 1
+    )
 
 
 def test_org_admin_can_review_form_submission_and_dispatch_whatsapp(client, db, monkeypatch):

@@ -13,6 +13,7 @@ from app.middleware import get_client_ip
 from app.models import (
     AdminRole,
     AdminUser,
+    Booking,
     CardBatch,
     CardMovement,
     IngestRateLimit,
@@ -112,6 +113,10 @@ def _purge_association_dependencies(db: Session, *, org: Organization) -> None:
         )
 
     if member_ids:
+        db.query(Booking).filter(Booking.member_id.in_(member_ids)).update(
+            {Booking.member_id: None},
+            synchronize_session=False,
+        )
         db.query(Token).filter(Token.member_id.in_(member_ids)).delete(synchronize_session=False)
         db.query(MemberDocument).filter(MemberDocument.member_id.in_(member_ids)).update(
             {MemberDocument.replaces_document_id: None},

@@ -9,8 +9,9 @@ from typing import Any
 
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
+from app.config import settings
 from app.models import (
     Booking,
     BookingEvent,
@@ -22,10 +23,12 @@ from app.models import (
 )
 from app.services.booking_customer_actions import apply_booking_text_reply
 from app.services.whatsapp_evolution import (
+    EvolutionApiError,
     EvolutionChat,
     EvolutionContact,
     EvolutionConnectionSnapshot,
     EvolutionHistoryMessage,
+    EvolutionLiteClient,
     EvolutionSendTextResult,
     build_evolution_instance_name,
     canonicalize_whatsapp_chat_id,
@@ -35,6 +38,10 @@ from app.services.whatsapp_evolution import (
 )
 
 logger = logging.getLogger(__name__)
+
+OUTBOUND_STATUS_QUEUED = "queued"
+OUTBOUND_STATUS_SENDING = "sending"
+OUTBOUND_SENT_STATUSES = ("sent", "delivered", "read")
 
 
 def utcnow() -> datetime:
@@ -395,6 +402,151 @@ def create_pending_outbound_message(
         increment_unread=False,
     )
     return message
+
+
+def queue_outbound_message(
+    db: Session,
+    *,
+    connection: WhatsAppConnection,
+    chat: WhatsAppChat,
+    text_body: str,
+) -> WhatsAppMessage:
+    message = create_pending_outbound_message(
+        db,
+        connection=connection,
+        chat=chat,
+        text_body=text_body,
+    )
+    message.status = OUTBOUND_STATUS_QUEUED
+    message.sent_at = None
+    db.flush()
+    return message
+
+
+def process_queued_outbound_messages(
+    db: Session,
+    *,
+    now: datetime | None = None,
+    limit: int | None = None,
+) -> dict[str, int]:
+    current = _as_naive_utc(now or utcnow())
+    batch_size = max(1, int(limit or settings.WHATSAPP_OUTBOUND_BATCH_SIZE or 20))
+    min_interval = max(0, int(settings.WHATSAPP_OUTBOUND_MIN_INTERVAL_SECONDS or 0))
+    stats = {"checked": 0, "sent": 0, "skipped": 0, "failed": 0}
+
+    queued_messages = (
+        db.query(WhatsAppMessage)
+        .options(
+            joinedload(WhatsAppMessage.connection),
+            joinedload(WhatsAppMessage.chat),
+        )
+        .filter(
+            WhatsAppMessage.direction == "outbound",
+            WhatsAppMessage.status == OUTBOUND_STATUS_QUEUED,
+        )
+        .order_by(WhatsAppMessage.created_at.asc(), WhatsAppMessage.id.asc())
+        .limit(batch_size)
+        .all()
+    )
+    client: EvolutionLiteClient | None = None
+    sent_connection_ids: set[int] = set()
+    for message in queued_messages:
+        stats["checked"] += 1
+        connection = message.connection
+        if connection is None or connection.status != "connected":
+            stats["skipped"] += 1
+            continue
+        if min_interval > 0:
+            if connection.id in sent_connection_ids:
+                stats["skipped"] += 1
+                continue
+            last_sent_at = _last_successful_outbound_at(
+                db,
+                connection_id=connection.id,
+                exclude_message_id=message.id,
+            )
+            if last_sent_at is not None and (current - last_sent_at).total_seconds() < min_interval:
+                stats["skipped"] += 1
+                continue
+        recipient_phone = normalize_phone(message.recipient_phone or getattr(message.chat, "external_chat_id", None))
+        text_body = str(message.text_body or "")
+        if not recipient_phone or not text_body.strip():
+            mark_outbound_message_failed(message, error_message="missing_recipient_or_text")
+            db.commit()
+            stats["failed"] += 1
+            continue
+
+        message.status = OUTBOUND_STATUS_SENDING
+        db.flush()
+        client = client or EvolutionLiteClient()
+        try:
+            send_result = client.send_text(
+                connection.instance_name,
+                number=recipient_phone,
+                text=text_body,
+            )
+            message.sent_at = current
+            finalize_outbound_send(message, send_result)
+            db.commit()
+            sent_connection_ids.add(connection.id)
+            stats["sent"] += 1
+        except EvolutionApiError as exc:
+            mark_outbound_message_failed(message, error_message=str(exc))
+            db.commit()
+            stats["failed"] += 1
+            logger.warning(
+                "whatsapp_outbound_queue_send_failed message_id=%s connection_id=%s error=%s",
+                message.id,
+                connection.id,
+                exc,
+            )
+        except Exception:
+            db.rollback()
+            logger.exception(
+                "whatsapp_outbound_queue_unexpected_error message_id=%s connection_id=%s",
+                getattr(message, "id", None),
+                getattr(connection, "id", None),
+            )
+            stats["failed"] += 1
+    return stats
+
+
+def process_queued_outbound_messages_once(
+    *,
+    now: datetime | None = None,
+    limit: int | None = None,
+) -> dict[str, int]:
+    from app.db import SessionLocal
+
+    with SessionLocal() as db:
+        return process_queued_outbound_messages(db, now=now, limit=limit)
+
+
+def _last_successful_outbound_at(
+    db: Session,
+    *,
+    connection_id: int,
+    exclude_message_id: int,
+) -> datetime | None:
+    message = (
+        db.query(WhatsAppMessage)
+        .filter(
+            WhatsAppMessage.connection_id == connection_id,
+            WhatsAppMessage.id != exclude_message_id,
+            WhatsAppMessage.direction == "outbound",
+            WhatsAppMessage.sent_at.isnot(None),
+            WhatsAppMessage.status.in_(OUTBOUND_SENT_STATUSES),
+        )
+        .order_by(WhatsAppMessage.sent_at.desc(), WhatsAppMessage.id.desc())
+        .first()
+    )
+    return message.sent_at if message is not None else None
+
+
+def _as_naive_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 def finalize_outbound_send(

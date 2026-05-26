@@ -24,6 +24,7 @@ from app.services.whatsapp_sync import (
     finalize_outbound_send,
     get_or_create_chat_for_number,
     mark_outbound_message_failed,
+    queue_outbound_message,
 )
 
 logger = logging.getLogger(__name__)
@@ -845,6 +846,20 @@ def _send_whatsapp_text(
         )
     except ValueError:
         return {"sent": False, "reason": "invalid_phone"}
+
+    if settings.WHATSAPP_OUTBOUND_QUEUE_ENABLED:
+        queued_message = queue_outbound_message(
+            db,
+            connection=connection,
+            chat=chat,
+            text_body=text,
+        )
+        return {
+            "sent": True,
+            "queued": True,
+            "chat_id": chat.id,
+            "message_id": queued_message.id,
+        }
 
     pending_message = create_pending_outbound_message(
         db,

@@ -584,11 +584,29 @@ def init_db():
                 conn, "organizations", "booking_whatsapp_reminder_template", "TEXT"
             )
         if "bookings" in table_names:
+            _add_column_if_missing(conn, "bookings", "member_id", "INTEGER")
             _add_column_if_missing(conn, "bookings", "room_id", "INTEGER")
             _add_column_if_missing(conn, "bookings", "table_id", "INTEGER")
             _add_column_if_missing(conn, "bookings", "customer_note", "TEXT")
             _add_column_if_missing(conn, "bookings", "customer_note_submitted_at", "DATETIME")
             _add_column_if_missing(conn, "bookings", "customer_note_reviewed_at", "DATETIME")
+            conn.execute(
+                text(
+                    """
+                    UPDATE bookings
+                       SET member_id = (
+                            SELECT max(members.id)
+                              FROM members
+                             WHERE members.org_id = bookings.association_id
+                               AND members.deleted_at IS NULL
+                               AND bookings.customer_email IS NOT NULL
+                               AND lower(trim(members.email)) = lower(trim(bookings.customer_email))
+                       )
+                     WHERE member_id IS NULL
+                       AND customer_email IS NOT NULL
+                    """
+                )
+            )
         if "rooms" in table_names:
             _add_column_if_missing(conn, "rooms", "is_active", "INTEGER DEFAULT 1")
         if "room_tables" in table_names:

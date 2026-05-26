@@ -451,6 +451,32 @@ export type MemberDocumentsResponse = {
   items: MemberDocumentItem[];
 };
 
+export type MemberBookingItem = {
+  id: number;
+  status: string;
+  customer_name: string;
+  booking_date: string | null;
+  booking_time: string | null;
+  party_size: number | null;
+  notes_preview: string | null;
+  event_summary: string | null;
+  customer_note: string | null;
+  customer_note_submitted_at: string | null;
+  customer_note_reviewed_at: string | null;
+  has_unreviewed_customer_note: boolean;
+  created_at: string | null;
+  confirmed_at: string | null;
+  cancelled_at: string | null;
+  source_form: {
+    id: number;
+    title: string;
+  } | null;
+};
+
+export type MemberBookingsResponse = {
+  items: MemberBookingItem[];
+};
+
 export type MemberOrganizationStatuteResponse = {
   available: boolean;
   filename?: string | null;
@@ -613,6 +639,30 @@ export async function verifyOrgAdminToken(
   // If successful, the backend redirects to the dashboard (200 OK HTML)
   // If failed, it returns 400 or similar
   if (!res.ok) throw new Error("Invalid or expired token");
+}
+
+export async function fetchMemberBookings(): Promise<MemberBookingsResponse> {
+  const res = await fetch("/api/member/bookings");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error("Failed to fetch bookings");
+  return res.json();
+}
+
+export async function submitMemberBookingNote(
+  bookingId: number,
+  note: string,
+): Promise<{ booking: MemberBookingItem }> {
+  const res = await fetch(`/api/member/bookings/${bookingId}/note`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ note }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  const payload = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(payload?.detail ?? "Impossibile inviare la richiesta.");
+  }
+  return payload;
 }
 
 export async function verifyOrgAdminCode(

@@ -1574,6 +1574,7 @@ class Booking(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     association_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    member_id = Column(Integer, ForeignKey("members.id"), nullable=True, index=True)
     form_id = Column(Integer, ForeignKey("forms.id"), nullable=True, index=True)
     submission_id = Column(Integer, ForeignKey("form_submissions.id"), nullable=True, index=True)
     status = Column(String, nullable=False, default=BookingStatus.NEW.value, server_default=BookingStatus.NEW.value, index=True)
@@ -1598,6 +1599,11 @@ class Booking(Base):
         "Organization",
         back_populates="bookings",
         foreign_keys=[association_id],
+    )
+    member = relationship(
+        "Member",
+        back_populates="bookings",
+        foreign_keys=[member_id],
     )
     form = relationship(
         "Form",
@@ -1928,6 +1934,11 @@ class Member(Base):
         "FormSubmission",
         back_populates="member",
         foreign_keys="FormSubmission.submitted_by_user_id",
+    )
+    bookings = relationship(
+        "Booking",
+        back_populates="member",
+        foreign_keys="Booking.member_id",
     )
 
     __table_args__ = (

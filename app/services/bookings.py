@@ -6,10 +6,11 @@ import re
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import Booking, BookingEvent, BookingEventSeries, BookingStatus, Form, FormSubmission
+from app.config import settings
+from app.models import Booking, BookingEvent, BookingEventSeries, BookingStatus, Form, FormSubmission, Member
 from app.services.booking_rooms import (
     auto_assign_booking_table,
     maybe_record_assignment_event,
@@ -18,6 +19,7 @@ from app.services.booking_rooms import (
 )
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
+from app.services.member_activity import is_member_active
 
 
 BOOKING_FORM_TYPES = {"generic", "booking", "request", "survey"}
@@ -123,6 +125,7 @@ def serialize_booking(booking: Booking, *, include_events: bool = False) -> dict
     return {
         "id": booking.id,
         "association_id": booking.association_id,
+        "member_id": booking.member_id,
         "form_id": booking.form_id,
         "submission_id": booking.submission_id,
         "status": booking.status,
@@ -194,6 +197,44 @@ def serialize_booking(booking: Booking, *, include_events: bool = False) -> dict
         "request_review_summary": request_review_summary,
         "request_payload_summary": request_payload_summary,
         "events": [serialize_booking_event(item) for item in list(booking.events or [])] if include_events else [],
+    }
+
+
+def serialize_member_booking(booking: Booking) -> dict[str, Any]:
+    return {
+        "id": booking.id,
+        "status": booking.status,
+        "customer_name": booking.customer_name,
+        "booking_date": booking.booking_date.isoformat() if booking.booking_date else None,
+        "booking_time": booking.booking_time,
+        "party_size": booking.party_size,
+        "notes_preview": (booking.notes or "")[:160] or None,
+        "event_summary": _booking_event_summary(booking),
+        "customer_note": booking.customer_note,
+        "customer_note_submitted_at": (
+            booking.customer_note_submitted_at.isoformat()
+            if getattr(booking, "customer_note_submitted_at", None)
+            else None
+        ),
+        "customer_note_reviewed_at": (
+            booking.customer_note_reviewed_at.isoformat()
+            if getattr(booking, "customer_note_reviewed_at", None)
+            else None
+        ),
+        "has_unreviewed_customer_note": bool(
+            getattr(booking, "customer_note", None)
+            and getattr(booking, "customer_note_submitted_at", None)
+            and not getattr(booking, "customer_note_reviewed_at", None)
+        ),
+        "created_at": booking.created_at.isoformat() if booking.created_at else None,
+        "confirmed_at": booking.confirmed_at.isoformat() if booking.confirmed_at else None,
+        "cancelled_at": booking.cancelled_at.isoformat() if booking.cancelled_at else None,
+        "source_form": {
+            "id": booking.form.id,
+            "title": booking.form.title,
+        }
+        if booking.form is not None
+        else None,
     }
 
 
@@ -528,6 +569,9 @@ def _enqueue_booking_email(
         return
     date_line = booking.booking_date.isoformat() if booking.booking_date else "da definire"
     time_line = booking.booking_time or "da definire"
+    if _booking_email_should_mention_member_area(booking=booking, email_type=email_type):
+        member_area_message = _booking_member_area_message()
+        action_message = f"{action_message}\n\n{member_area_message}"
     text_body = (
         f"{intro}\n\n"
         f"Nome: {booking.customer_name}\n"
@@ -566,6 +610,78 @@ def _enqueue_booking_email(
         ),
         priority=4,
     )
+
+
+def _booking_email_should_mention_member_area(*, booking: Booking, email_type: str) -> bool:
+    if not getattr(booking, "member_id", None):
+        return False
+    if not is_member_active(getattr(booking, "member", None), now=datetime.utcnow()):
+        return False
+    return email_type in {"booking_confirmed", "booking_confirmed_status_update"}
+
+
+def _booking_member_area_message() -> str:
+    base = (settings.FRONTEND_URL or settings.BASE_URL or "").strip().rstrip("/")
+    dashboard_url = f"{base}/dashboard/prenotazioni" if base else "/dashboard/prenotazioni"
+    return (
+        "Trovi questa prenotazione anche nella tua area riservata socio, "
+        f"dove puoi consultarla e inviare eventuali richieste di modifica: {dashboard_url}"
+    )
+
+
+def resolve_booking_member(db: Session, *, booking: Booking) -> Member | None:
+    if booking.member_id:
+        member = db.query(Member).filter(Member.id == booking.member_id, Member.deleted_at.is_(None)).first()
+        return member if is_member_active(member, now=datetime.utcnow()) else None
+    email = _normalize_text(booking.customer_email)
+    if not email:
+        return None
+    member = (
+        db.query(Member)
+        .filter(
+            Member.org_id == booking.association_id,
+            Member.deleted_at.is_(None),
+            func.lower(func.trim(Member.email)) == email.lower(),
+        )
+        .order_by(Member.id.desc())
+        .first()
+    )
+    return member if is_member_active(member, now=datetime.utcnow()) else None
+
+
+def resolve_member_for_booking_identity(
+    db: Session,
+    *,
+    association_id: int,
+    email: str | None,
+    submitted_by_user_id: int | None = None,
+) -> Member | None:
+    if submitted_by_user_id is not None:
+        member = (
+            db.query(Member)
+            .filter(
+                Member.id == submitted_by_user_id,
+                Member.org_id == association_id,
+                Member.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if is_member_active(member, now=datetime.utcnow()):
+            return member
+    normalized_email = _normalize_text(email)
+    if not normalized_email:
+        return None
+    member = (
+        db.query(Member)
+        .filter(
+            Member.org_id == association_id,
+            Member.deleted_at.is_(None),
+            func.lower(func.trim(Member.email)) == normalized_email.lower(),
+        )
+        .order_by(Member.id.desc())
+        .first()
+    )
+    return member if is_member_active(member, now=datetime.utcnow()) else None
 
 
 def create_booking_from_submission(
@@ -614,8 +730,17 @@ def create_booking_from_submission(
         else BookingStatus.CONFIRMED.value
     )
     now = datetime.utcnow()
+    linked_member = resolve_member_for_booking_identity(
+        db,
+        association_id=form.association_id,
+        email=customer_email,
+        submitted_by_user_id=submission.submitted_by_user_id,
+    )
+    if linked_member is not None and submission.submitted_by_user_id is None:
+        submission.submitted_by_user_id = linked_member.id
     booking = Booking(
         association_id=form.association_id,
+        member_id=linked_member.id if linked_member is not None else None,
         form_id=form.id,
         submission_id=submission.id,
         status=status,

@@ -11,6 +11,7 @@ from app.services.communications_email_usage import (
 )
 from app.services.email_campaigns import process_scheduled_campaigns_once
 from app.services.email_outbox import process_outbox_once
+from app.services.whatsapp_sync import process_queued_outbound_messages_once
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,9 @@ def main() -> int:
             "booking_communications": process_booking_communications_once(),
             "scheduled_campaigns": process_scheduled_campaigns_once(),
             "monthly_communications_overage": process_monthly_communications_overage_report_once(),
+            "whatsapp_outbound": process_queued_outbound_messages_once(
+                limit=settings.WHATSAPP_OUTBOUND_BATCH_SIZE
+            ),
             "email": process_outbox_once(limit=args.limit),
         }
         logger.info("email_worker_cycle %s", stats)
@@ -55,11 +59,14 @@ def main() -> int:
             "booking_communications": process_booking_communications_once(),
             "scheduled_campaigns": process_scheduled_campaigns_once(),
             "monthly_communications_overage": process_monthly_communications_overage_report_once(),
+            "whatsapp_outbound": process_queued_outbound_messages_once(
+                limit=settings.WHATSAPP_OUTBOUND_BATCH_SIZE
+            ),
             "email": process_outbox_once(limit=args.limit),
         }
         logger.info("email_worker_cycle %s", stats)
         sleep_seconds = max(1, int(settings.EMAIL_OUTBOX_POLL_SECONDS))
-        if stats["email"]["claimed"] > 0:
+        if stats["email"]["claimed"] > 0 or stats["whatsapp_outbound"]["sent"] > 0:
             sleep_seconds = 1
         time.sleep(sleep_seconds)
 

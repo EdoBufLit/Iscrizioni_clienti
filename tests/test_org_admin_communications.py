@@ -26,6 +26,7 @@ from app.models import (
     OrgAdminNotification,
     Organization,
     WhatsAppConnection,
+    WhatsAppMessage,
 )
 from app.services.booking_whatsapp_reminders import (
     BOOKING_REMINDER_EVENT,
@@ -42,6 +43,11 @@ from app.services.communications_email_usage import (
     enqueue_monthly_overage_report,
 )
 from app.services.whatsapp_evolution import EvolutionSendTextResult
+from app.services.whatsapp_sync import (
+    get_or_create_chat_for_number,
+    process_queued_outbound_messages,
+    queue_outbound_message,
+)
 from app.utils import clear_captured_emails, get_captured_emails, hash_token
 
 
@@ -98,6 +104,88 @@ def _create_org_admin(db, *, communications_enabled: bool) -> tuple[Organization
     db.commit()
     db.refresh(admin)
     return org, admin
+
+
+def test_whatsapp_outbound_queue_rate_limits_one_message_per_minute(db, monkeypatch):
+    original_queue_enabled = settings.WHATSAPP_OUTBOUND_QUEUE_ENABLED
+    original_interval = settings.WHATSAPP_OUTBOUND_MIN_INTERVAL_SECONDS
+    settings.WHATSAPP_OUTBOUND_QUEUE_ENABLED = True
+    settings.WHATSAPP_OUTBOUND_MIN_INTERVAL_SECONDS = 60
+    sent_messages: list[dict[str, str]] = []
+
+    def fake_send_text(self, instance_name: str, *, number: str, text: str):
+        sent_messages.append({"instance": instance_name, "number": number, "text": text})
+        return EvolutionSendTextResult(
+            external_message_id=f"queued-{len(sent_messages)}",
+            status="sent",
+            raw={},
+        )
+
+    monkeypatch.setattr("app.services.whatsapp_sync.EvolutionLiteClient.send_text", fake_send_text)
+    try:
+        org, _admin = _create_org_admin(db, communications_enabled=True)
+        connection = WhatsAppConnection(
+            org_id=org.id,
+            instance_name=f"queue-{org.id}",
+            status="connected",
+            phone_number="+390200000000",
+        )
+        db.add(connection)
+        db.flush()
+        chat_a = get_or_create_chat_for_number(
+            db,
+            connection=connection,
+            number="+393331111111",
+            display_name="Cliente A",
+        )
+        chat_b = get_or_create_chat_for_number(
+            db,
+            connection=connection,
+            number="+393332222222",
+            display_name="Cliente B",
+        )
+        msg_a = queue_outbound_message(db, connection=connection, chat=chat_a, text_body="Primo reminder")
+        msg_b = queue_outbound_message(db, connection=connection, chat=chat_b, text_body="Secondo reminder")
+        db.commit()
+
+        first_stats = process_queued_outbound_messages(
+            db,
+            now=datetime(2026, 5, 26, 10, 0),
+            limit=10,
+        )
+        assert first_stats["sent"] == 1
+        assert first_stats["skipped"] == 1
+        assert len(sent_messages) == 1
+        db.refresh(msg_a)
+        db.refresh(msg_b)
+        assert msg_a.status == "sent"
+        assert msg_b.status == "queued"
+
+        blocked_stats = process_queued_outbound_messages(
+            db,
+            now=datetime(2026, 5, 26, 10, 0, 30),
+            limit=10,
+        )
+        assert blocked_stats["sent"] == 0
+        assert blocked_stats["skipped"] == 1
+        assert len(sent_messages) == 1
+
+        second_stats = process_queued_outbound_messages(
+            db,
+            now=datetime(2026, 5, 26, 10, 1, 1),
+            limit=10,
+        )
+        assert second_stats["sent"] == 1
+        assert len(sent_messages) == 2
+        db.refresh(msg_b)
+        assert msg_b.status == "sent"
+        assert db.query(WhatsAppMessage).filter(
+            WhatsAppMessage.connection_id == connection.id,
+            WhatsAppMessage.status == "queued",
+        ).count() == 0
+    finally:
+        settings.WHATSAPP_OUTBOUND_QUEUE_ENABLED = original_queue_enabled
+        settings.WHATSAPP_OUTBOUND_MIN_INTERVAL_SECONDS = original_interval
 
 
 def _create_member(

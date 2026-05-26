@@ -33,6 +33,7 @@ const DashboardLayout = lazy(() => import("./pages/dashboard/DashboardLayout"));
 const DashboardHome = lazy(() => import("./pages/dashboard/DashboardHome"));
 const DashboardProfile = lazy(() => import("./pages/dashboard/DashboardProfile"));
 const DashboardDocuments = lazy(() => import("./pages/dashboard/DashboardDocuments"));
+const DashboardBookings = lazy(() => import("./pages/dashboard/DashboardBookings"));
 
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout"));
 const AdminHome = lazy(() => import("./pages/admin/AdminHome"));
@@ -129,6 +130,7 @@ const App = () => {
               <Route path="wallet/google/add" element={<WalletGoogleAdd />} />
               <Route path="dashboard" element={<DashboardLayout />}>
                 <Route index element={<DashboardHome />} />
+                <Route path="prenotazioni" element={<DashboardBookings />} />
                 <Route path="profilo" element={<DashboardProfile />} />
                 <Route path="documenti" element={<DashboardDocuments />} />
               </Route>

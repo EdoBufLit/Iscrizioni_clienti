@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, status, UploadFile, File
 from fastapi.responses import RedirectResponse, FileResponse
-from sqlalchemy.orm import Session
+from pydantic import BaseModel, Field
+from sqlalchemy import func
+from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timedelta
 from app.db import get_db
-from app.models import Member, Token, TokenType, MemberDocument, MemberStatus, PaymentMethod, Organization, AdminUser, AdminRole, DocStatus, SignupSource
+from app.models import Booking, Member, Token, TokenType, MemberDocument, MemberStatus, PaymentMethod, Organization, AdminUser, AdminRole, DocStatus, SignupSource
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 from app.utils import generate_token, hash_token, save_upload_file
@@ -25,6 +27,8 @@ from app.services.member_membership import (
 )
 from app.services.org_branding import resolve_card_logo_url, resolve_club_display_name
 from app.services.org_admin_sessions import get_current_org_admin_from_request
+from app.services.booking_customer_actions import submit_booking_customer_note
+from app.services.bookings import serialize_member_booking
 from app import audit
 import os
 import logging
@@ -40,6 +44,10 @@ _PASSWORD_RESET_GENERIC_MESSAGE = (
 
 _ALLOWED_PAYMENT_METHODS = {PaymentMethod.CASH.value, PaymentMethod.BONIFICO.value}
 _ACCOUNT_NOT_ACTIVE_DETAIL = "account non attivo"
+
+
+class MemberBookingNoteBody(BaseModel):
+    note: str = Field(..., min_length=1, max_length=4000)
 
 
 def _hash_email_for_log(email: str | None) -> str:
@@ -382,7 +390,80 @@ def list_member_documents(
 
 # ── JSON API ──────────────────────────────────────────────────────
 
-from sqlalchemy import func
+@router.get("/api/member/bookings")
+def list_member_bookings(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    member = get_current_member(request, db)
+    if not member:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    bookings = (
+        db.query(Booking)
+        .options(
+            joinedload(Booking.form),
+            joinedload(Booking.events),
+            joinedload(Booking.room),
+            joinedload(Booking.table),
+        )
+        .filter(
+            Booking.member_id == member.id,
+            Booking.association_id == member.org_id,
+        )
+        .order_by(
+            Booking.booking_date.desc().nulls_last(),
+            Booking.booking_time.desc().nulls_last(),
+            Booking.created_at.desc(),
+            Booking.id.desc(),
+        )
+        .limit(50)
+        .all()
+    )
+    return {"items": [serialize_member_booking(booking) for booking in bookings]}
+
+
+@router.post("/api/member/bookings/{booking_id}/note")
+def submit_member_booking_note(
+    booking_id: int,
+    body: MemberBookingNoteBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    member = get_current_member(request, db)
+    if not member:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    booking = (
+        db.query(Booking)
+        .options(
+            joinedload(Booking.form),
+            joinedload(Booking.organization),
+            joinedload(Booking.events),
+            joinedload(Booking.room),
+            joinedload(Booking.table),
+        )
+        .filter(
+            Booking.id == booking_id,
+            Booking.member_id == member.id,
+            Booking.association_id == member.org_id,
+        )
+        .first()
+    )
+    if booking is None:
+        raise HTTPException(status_code=404, detail="Prenotazione non trovata.")
+
+    submit_booking_customer_note(
+        db,
+        booking=booking,
+        note=body.note,
+        source="member_area",
+        event_type="customer_note_from_member_area",
+    )
+    db.commit()
+    db.refresh(booking)
+    return {"booking": serialize_member_booking(booking)}
+
 
 @router.post("/api/auth/login")
 def api_auth_login(request: Request, email: str = Form(...), password: str = Form(default=""), db: Session = Depends(get_db)):

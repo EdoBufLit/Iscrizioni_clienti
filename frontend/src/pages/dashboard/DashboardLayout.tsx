@@ -41,6 +41,12 @@ const NAV_ITEMS = [
     icon: "M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25",
   },
   {
+    label: "Prenotazioni",
+    to: "/dashboard/prenotazioni",
+    end: false,
+    icon: "M12 6.75v10.5m0-10.5c-1.932-1.45-4.526-2.25-7.125-2.25A1.875 1.875 0 0 0 3 6.375v11.25c0 .621.504 1.125 1.125 1.125 2.6 0 5.193.8 7.125 2.25m0-14.25c1.932-1.45 4.525-2.25 7.125-2.25A1.875 1.875 0 0 1 21 6.375v11.25c0 .621-.504 1.125-1.125 1.125-2.6 0-5.193.8-7.125 2.25",
+  },
+  {
     label: "Profilo",
     to: "/dashboard/profilo",
     end: false,
@@ -112,6 +118,7 @@ const DashboardLayout = () => {
   const mobileNavItems = useMemo(
     (): MobileDashboardNavItem[] => [
       { key: "home", label: "Riepilogo", to: "/dashboard", exact: true, icon: "home" as const },
+      { key: "bookings", label: "Prenotazioni", to: "/dashboard/prenotazioni", activeMatch: ["/dashboard/prenotazioni"], icon: "book" as const },
       { key: "profile", label: "Profilo", to: "/dashboard/profilo", activeMatch: ["/dashboard/profilo"], icon: "user" as const },
       { key: "documents", label: "Documenti", to: "/dashboard/documenti", activeMatch: ["/dashboard/documenti"], icon: "docs" as const },
       {

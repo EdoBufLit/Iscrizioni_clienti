@@ -5285,3 +5285,30 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Link reminder: aggiunta route frontend `/b/:token` che usa API JSON pubbliche, cosi anche se service worker/SPA intercetta la navigazione non si finisce piu sulla pagina 404 pubblica.
 - API pubbliche: `/api/public/bookings/response/{token}/json` e `/b/{token}/json` espongono riepilogo e registrano conferma/annullo/note con messaggio di esito.
 - Verifiche OK: pytest reminder/link (`1 passed`), `python -m compileall -q app init_db.py`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
+
+## Plan (Collegamento socio-prenotazione e area riservata - May 26, 2026)
+- [x] Aggiungere `bookings.member_id` con migration/backfill per stessa associazione + email normalizzata, senza creare soci nuovi.
+- [x] Collegare automaticamente le nuove prenotazioni da form al socio esistente e serializzare un riepilogo sicuro per l'area riservata socio.
+- [x] Esporre API socio per elenco prenotazioni e invio note/richieste modifica, riusando evento/notifica/email admin e stato giallo gia esistente.
+- [x] Dopo conferma admin, inviare al socio email aggiornata che spiega che la prenotazione e visibile anche in area riservata quando esiste collegamento socio.
+- [x] Aggiungere UI mobile-first in dashboard socio, test backend/frontend, build e smoke.
+
+## Review (Collegamento socio-prenotazione e area riservata - May 26, 2026)
+- Schema: aggiunto `bookings.member_id` con FK a `members`, indice, backfill per org+email normalizzata e repair path in `init_db.py`.
+- Booking: quando un form prenotazione viene inviato con email di un socio attivo della stessa associazione, la booking viene collegata al socio e la submission riceve `submitted_by_user_id`.
+- Area socio: nuova sezione `Dashboard > Prenotazioni`, con lista mobile-first e azione `Modifica / note`; le note creano evento, email e notifica campanella admin e fanno risultare la prenotazione gialla lato agenda.
+- Email: dopo conferma admin della prenotazione, se collegata a socio attivo, la mail al cliente include il riferimento a `/dashboard/prenotazioni`.
+- Verifiche OK: pytest mirati (`3 passed`), `python -m compileall -q app init_db.py`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`. La migration nuova e validata a livello di head; il test completo su sqlite pulito resta bloccato da una vecchia migration con FK ALTER non supportato da SQLite, non da questa modifica.
+
+## Plan (Coda WhatsApp automatica anti-ban - May 26, 2026)
+- [x] Centralizzare gli invii automatici WhatsApp in una coda persistita, invece di chiamare Evolution inline da form/reminder.
+- [x] Aggiungere rate limit configurabile con distanza minima di 60 secondi tra messaggi per connessione WhatsApp.
+- [x] Far processare la coda dal worker esistente, insieme a email/reminder, con batch configurabile e gestione errori.
+- [x] Aggiornare test per reminder/conferme automatiche: enqueue immediato, invio rate-limited, dedupe reminder conservato.
+- [x] Eseguire verifica locale prima del push/deploy controllato.
+
+## Review (Coda WhatsApp automatica anti-ban - May 26, 2026)
+- In produzione Docker `WHATSAPP_OUTBOUND_QUEUE_ENABLED` e attivo di default; form, automazioni e reminder accodano messaggi WhatsApp invece di chiamare Evolution inline.
+- Il worker email processa anche la coda WhatsApp, con batch configurabile e distanza minima default di 60 secondi tra invii sulla stessa connessione.
+- I messaggi restano persistiti in `whatsapp_messages` con stato `queued/sending/sent/failed`, quindi backlog e retry sono osservabili dal DB/log.
+- Verifiche locali OK: pytest mirati (`4 passed`), `python -m compileall -q app init_db.py`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.

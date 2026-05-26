@@ -124,28 +124,47 @@ def consume_booking_action_token(
             email_subject=f"Prenotazione annullata da {booking.customer_name}",
         )
     else:
-        normalized_note = (note or "").strip()
-        if not normalized_note:
-            raise HTTPException(status_code=422, detail="Inserisci una nota per la prenotazione.")
-        booking.customer_note = normalized_note[:4000]
-        booking.customer_note_submitted_at = datetime.utcnow()
-        booking.customer_note_reviewed_at = None
-        _record_booking_event(
+        submit_booking_customer_note(
             db,
             booking=booking,
+            note=note,
+            source="secure_link",
             event_type="customer_note_from_reminder",
-            payload={"source": "secure_link", "note": booking.customer_note},
-        )
-        _notify_admins(
-            db,
-            booking=booking,
-            notification_type="booking_customer_note",
-            title=f"Nota su prenotazione da {booking.customer_name}",
-            body=_booking_admin_body(booking, prefix=f"Il cliente ha inviato una nota: {booking.customer_note}"),
-            email_subject=f"Nota su prenotazione da {booking.customer_name}",
         )
     db.flush()
     return {"ok": True, "action": action, "booking": booking}
+
+
+def submit_booking_customer_note(
+    db: Session,
+    *,
+    booking: Booking,
+    note: str | None,
+    source: str,
+    event_type: str = "customer_note_from_reminder",
+) -> Booking:
+    normalized_note = (note or "").strip()
+    if not normalized_note:
+        raise HTTPException(status_code=422, detail="Inserisci una nota per la prenotazione.")
+    booking.customer_note = normalized_note[:4000]
+    booking.customer_note_submitted_at = datetime.utcnow()
+    booking.customer_note_reviewed_at = None
+    _record_booking_event(
+        db,
+        booking=booking,
+        event_type=event_type,
+        payload={"source": source, "note": booking.customer_note},
+    )
+    _notify_admins(
+        db,
+        booking=booking,
+        notification_type="booking_customer_note",
+        title=f"Nota su prenotazione da {booking.customer_name}",
+        body=_booking_admin_body(booking, prefix=f"Il cliente ha inviato una nota: {booking.customer_note}"),
+        email_subject=f"Nota su prenotazione da {booking.customer_name}",
+    )
+    db.flush()
+    return booking
 
 
 def apply_booking_text_reply(
