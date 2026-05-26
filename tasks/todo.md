@@ -5326,3 +5326,5 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Form pubblici associazione: niente navbar/footer ASSONAM e niente footer "Modulo gestito tramite ASSONAM"; dark mode ripristinata su titolo, etichette, blocco prenotazione e card.
 - Agenda prenotazioni: rimossa la griglia calendario a celle grandi; restano selezione giorno compatta, coda richieste e lista prenotazioni confermate/gestite, con screenshot mobile light/dark.
 - Verifiche OK: `python -m compileall -q app scripts init_db.py`, pytest mirati (`5 passed`), `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`, smoke Playwright mock light/dark con 0 celle calendario e 3 righe agenda.
+- Deploy live: GitHub dispatch manuale ha risposto 500, quindi deploy eseguito via SSH su Hetzner; server aggiornato a `38a9225`, env Evolution rigenerato con safe mode, build locale `web` + `evolution-api`, Alembic a head `w8x9y0z1a2b3`, container ricreati e healthy, smoke `https://assonam.it/` e `/org-admin/prenotazioni` HTTP 200.
+- Disco Hetzner dopo build al 37% su `/`; prune non necessario.
