@@ -34,6 +34,7 @@ from app.services.booking_whatsapp_reminders import (
     process_post_event_survey_email,
     process_post_event_survey_whatsapp,
 )
+from app.services.bookings import serialize_booking
 from app.services import communications_email_usage as email_usage_service
 from app.services.email_campaigns import process_scheduled_campaigns
 from app.services.communications_email_usage import (
@@ -979,6 +980,8 @@ def test_booking_reminder_links_are_short_and_update_booking_from_public_page(cl
             OrgAdminNotification.admin_user_id == admin.id,
             OrgAdminNotification.type == "booking_customer_confirmed",
         ).count() == 1
+        serialized_after_confirm = serialize_booking(booking)
+        assert serialized_after_confirm["customer_reminder_response"]["status"] == "confirmed"
 
         repeat_response = client.post(confirm_path)
         assert repeat_response.status_code == 200, repeat_response.text
@@ -989,6 +992,9 @@ def test_booking_reminder_links_are_short_and_update_booking_from_public_page(cl
         ).count() == 2
 
         note_path = links[2].replace("https://example.test", "")
+        note_payload = client.get(f"{note_path}/json")
+        assert note_payload.status_code == 200, note_payload.text
+        assert note_payload.json()["action"] == "note"
         note_response = client.post(note_path, data={"note": "Avevo cliccato conferma, ma arrivo in ritardo."})
         assert note_response.status_code == 200, note_response.text
         assert "Nota inviata" in note_response.text
@@ -996,6 +1002,19 @@ def test_booking_reminder_links_are_short_and_update_booking_from_public_page(cl
         assert "arrivo in ritardo" in (booking.customer_note or "")
         assert booking.customer_note_submitted_at is not None
         assert booking.customer_note_reviewed_at is None
+        serialized_after_note = serialize_booking(booking)
+        assert serialized_after_note["customer_reminder_response"]["status"] == "note"
+
+        cancel_path = links[1].replace("https://example.test", "")
+        cancel_json = client.post(f"{cancel_path}/json")
+        assert cancel_json.status_code == 200, cancel_json.text
+        assert cancel_json.json()["title"] == "Prenotazione annullata"
+        db.refresh(booking)
+        assert booking.status == "cancelled"
+        booking.customer_note_reviewed_at = datetime.utcnow()
+        db.commit()
+        serialized_after_cancel = serialize_booking(booking)
+        assert serialized_after_cancel["customer_reminder_response"]["status"] == "cancelled"
     finally:
         settings.ENABLE_WHATSAPP_EVOLUTION = original_whatsapp
         settings.FRONTEND_URL = original_frontend

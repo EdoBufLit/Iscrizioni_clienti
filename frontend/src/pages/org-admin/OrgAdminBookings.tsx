@@ -243,10 +243,31 @@ function isFormLinkedBooking(booking: Pick<AssociationBooking, "submission_id" |
 }
 
 function bookingCardToneClass(booking: AssociationBooking) {
-  if (booking.has_unreviewed_customer_note) return "has-customer-note";
+  const reminderStatus = booking.customer_reminder_response?.status;
+  if (booking.has_unreviewed_customer_note || reminderStatus === "note") return "has-customer-note";
+  if (reminderStatus === "cancelled") return "is-cancelled";
   if (booking.status === "cancelled" || booking.status === "no_show" || booking.request_status === "rejected") return "is-cancelled";
   if (booking.status === "confirmed" || booking.status === "seated" || booking.status === "completed") return "is-confirmed";
   return "";
+}
+
+function ReminderResponseIndicator({ booking }: { booking: AssociationBooking }) {
+  const response = booking.customer_reminder_response;
+  if (!response) return null;
+  const status = response.status === "note" && booking.has_unreviewed_customer_note ? "note" : response.status;
+  if (status !== "confirmed" && status !== "cancelled" && status !== "note") return null;
+  const label =
+    status === "confirmed"
+      ? "Confermata dal cliente"
+      : status === "cancelled"
+        ? "Annullata dal cliente"
+        : "Note cliente da leggere";
+  return (
+    <span className={`booking-reminder-indicator is-${status}`} title={label} aria-label={label}>
+      <span aria-hidden="true" />
+      <em>{label}</em>
+    </span>
+  );
 }
 
 function shiftMonth(value: string, delta: number) {
@@ -2388,7 +2409,10 @@ function MobileManagedBookingsSection(props: {
                 >
                   <span className="booking-day-row__avatar">{initialsFromName(booking.customer_name)}</span>
                   <span className="booking-mobile-managed-card__main">
-                    <strong>{booking.customer_name}</strong>
+                    <span className="booking-mobile-managed-card__name-line">
+                      <strong>{booking.customer_name}</strong>
+                      <ReminderResponseIndicator booking={booking} />
+                    </span>
                     <small>{(booking.booking_time || "--:--").slice(0, 5)} - {tableLabel}</small>
                   </span>
                   <span className="booking-mobile-managed-card__side">
@@ -2455,6 +2479,7 @@ function DayBookingRow({
         <span className="booking-day-row__main">
           <span className="booking-day-row__name-line">
             <span className="booking-day-row__name">{booking.customer_name}</span>
+            <ReminderResponseIndicator booking={booking} />
             {isFormRequest ? <span className="booking-day-row__request-badge">Richiesta form</span> : null}
           </span>
           <span className="booking-day-row__meta">

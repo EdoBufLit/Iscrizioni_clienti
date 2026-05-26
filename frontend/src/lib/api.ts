@@ -1271,6 +1271,12 @@ export type AssociationBooking = {
   customer_note_submitted_at: string | null;
   customer_note_reviewed_at: string | null;
   has_unreviewed_customer_note: boolean;
+  customer_reminder_response: {
+    status: "confirmed" | "cancelled" | "note" | string;
+    label: string;
+    event_type: string;
+    created_at: string | null;
+  } | null;
   room_id: number | null;
   table_id: number | null;
   room: {
@@ -1317,6 +1323,21 @@ export type AssociationBooking = {
     value: string;
   }>;
   events: AssociationBookingEvent[];
+};
+
+export type PublicBookingReminderResponse = {
+  ok: boolean;
+  action: "confirm" | "cancel" | "note" | string;
+  expired?: boolean;
+  title?: string;
+  message?: string;
+  booking?: {
+    customer_name: string;
+    booking_date: string | null;
+    booking_time: string | null;
+    party_size: number | null;
+    event_summary: string | null;
+  };
 };
 
 export type BookingEventTimeSlot = {
@@ -2485,6 +2506,31 @@ export async function markOrgAdminBookingCustomerNoteRead(
   const res = await fetch(`/api/org-admin/bookings/${bookingId}/customer-note/read`, { method: "POST" });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore lettura nota cliente"));
+  return res.json();
+}
+
+export async function fetchPublicBookingReminderResponse(
+  token: string,
+): Promise<PublicBookingReminderResponse> {
+  const res = await fetch(`/api/public/bookings/response/${encodeURIComponent(token)}/json`, {
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Link prenotazione non valido"));
+  return res.json();
+}
+
+export async function submitPublicBookingReminderResponse(
+  token: string,
+  note?: string,
+): Promise<PublicBookingReminderResponse> {
+  const body = new FormData();
+  if (note !== undefined) body.append("note", note);
+  const res = await fetch(`/api/public/bookings/response/${encodeURIComponent(token)}/json`, {
+    method: "POST",
+    body,
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore registrazione risposta"));
   return res.json();
 }
 

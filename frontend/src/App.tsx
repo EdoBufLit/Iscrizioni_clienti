@@ -19,6 +19,7 @@ const Privacy = lazy(() => import("./pages/Privacy"));
 const Login = lazy(() => import("./pages/Login"));
 const PasswordReset = lazy(() => import("./pages/PasswordReset"));
 const MagicLinkVerify = lazy(() => import("./pages/MagicLinkVerify"));
+const BookingReminderResponsePage = lazy(() => import("./pages/BookingReminderResponsePage"));
 const WalletGoogleAdd = lazy(() => import("./pages/WalletGoogleAdd"));
 const ReservedAreaRedirect = lazy(() => import("./pages/ReservedAreaRedirect"));
 const InvitoAffiliazioneRedirect = lazy(() => import("./pages/InvitoAffiliazioneRedirect"));
@@ -124,6 +125,7 @@ const App = () => {
               <Route path="stripe-demo/storefront/cancel" element={<StripeDemoStorefrontResultPage />} />
               <Route path="stripe-demo/storefront/:accountId" element={<StripeDemoStorefrontPage />} />
               <Route path="auth/verify" element={<MagicLinkVerify />} />
+              <Route path="b/:token" element={<BookingReminderResponsePage />} />
               <Route path="wallet/google/add" element={<WalletGoogleAdd />} />
               <Route path="dashboard" element={<DashboardLayout />}>
                 <Route index element={<DashboardHome />} />

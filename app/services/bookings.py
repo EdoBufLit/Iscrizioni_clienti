@@ -85,6 +85,37 @@ def serialize_booking_event(event: BookingEvent) -> dict[str, Any]:
     }
 
 
+def _booking_customer_reminder_response(booking: Booking) -> dict[str, Any] | None:
+    events = list(getattr(booking, "events", None) or [])
+    if (
+        getattr(booking, "customer_note", None)
+        and getattr(booking, "customer_note_submitted_at", None)
+        and not getattr(booking, "customer_note_reviewed_at", None)
+    ):
+        return {
+            "status": "note",
+            "label": "Note cliente",
+            "event_type": "customer_note_from_reminder",
+            "created_at": booking.customer_note_submitted_at.isoformat(),
+        }
+    tracked = {
+        "customer_cancelled_from_reminder": ("cancelled", "Annullata dal cliente"),
+        "customer_cancelled_from_reply": ("cancelled", "Annullata dal cliente"),
+        "customer_reconfirmed_from_reminder": ("confirmed", "Confermata dal cliente"),
+        "customer_reconfirmed_from_reply": ("confirmed", "Confermata dal cliente"),
+    }
+    for event in sorted(events, key=lambda item: item.created_at or datetime.min, reverse=True):
+        if event.event_type in tracked:
+            status, label = tracked[event.event_type]
+            return {
+                "status": status,
+                "label": label,
+                "event_type": event.event_type,
+                "created_at": event.created_at.isoformat() if event.created_at else None,
+            }
+    return None
+
+
 def serialize_booking(booking: Booking, *, include_events: bool = False) -> dict[str, Any]:
     request_status = _normalize_request_status(getattr(getattr(booking, "submission", None), "status", None))
     request_review_summary = _serialize_request_review_summary(getattr(booking, "submission", None))
@@ -120,6 +151,7 @@ def serialize_booking(booking: Booking, *, include_events: bool = False) -> dict
             and getattr(booking, "customer_note_submitted_at", None)
             and not getattr(booking, "customer_note_reviewed_at", None)
         ),
+        "customer_reminder_response": _booking_customer_reminder_response(booking),
         "room_id": booking.room_id,
         "table_id": booking.table_id,
         "room": {

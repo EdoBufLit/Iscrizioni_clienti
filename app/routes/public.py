@@ -523,6 +523,28 @@ def get_public_booking_response_page(token: str, db: Session = Depends(get_db)):
     return HTMLResponse(render_booking_action_auto_submit_page(token=action_token))
 
 
+@router.get("/b/{token}/json")
+@router.get("/api/public/bookings/response/{token}/json")
+def get_public_booking_response_json(token: str, db: Session = Depends(get_db)):
+    try:
+        action_token = get_booking_action_token(db, raw_token=token)
+    except HTTPException as exc:
+        raise HTTPException(status_code=exc.status_code, detail="Link prenotazione non valido.")
+    booking = action_token.booking
+    return {
+        "ok": True,
+        "action": action_token.action,
+        "expired": action_token.expires_at <= datetime.utcnow(),
+        "booking": {
+            "customer_name": booking.customer_name,
+            "booking_date": booking.booking_date.isoformat() if booking.booking_date else None,
+            "booking_time": str(booking.booking_time)[:5] if booking.booking_time else None,
+            "party_size": booking.party_size,
+            "event_summary": serialize_booking(booking).get("event_summary"),
+        },
+    }
+
+
 @router.post("/b/{token}", response_class=HTMLResponse)
 @router.post("/api/public/bookings/response/{token}", response_class=HTMLResponse)
 @router.post("/prenotazioni/risposta/{token}", response_class=HTMLResponse)
@@ -554,6 +576,33 @@ def post_public_booking_response_page(
         "note": "Nota inviata. La segreteria la vedra' sulla prenotazione.",
     }.get(str(action), "Risposta registrata.")
     return HTMLResponse(render_booking_action_result(title="Risposta registrata", message=message))
+
+
+@router.post("/b/{token}/json")
+@router.post("/api/public/bookings/response/{token}/json")
+def post_public_booking_response_json(
+    token: str,
+    note: str | None = Form(default=None),
+    db: Session = Depends(get_db),
+):
+    try:
+        action_token = get_booking_action_token(db, raw_token=token)
+        result = consume_booking_action_token(db, raw_token=token, note=note)
+    except HTTPException as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
+    db.commit()
+    action = result.get("action") or action_token.action
+    if not result.get("ok"):
+        reason = result.get("reason")
+        message = "Questo link e' scaduto." if reason == "expired" else "Questo link non e' disponibile."
+        return {"ok": False, "action": action, "title": "Link non disponibile", "message": message}
+    messages = {
+        "confirm": ("Prenotazione confermata", "Hai confermato la tua prenotazione con successo. La segreteria e' stata avvisata."),
+        "cancel": ("Prenotazione annullata", "Hai annullato la tua prenotazione. La segreteria e' stata avvisata."),
+        "note": ("Nota inviata", "La tua nota e' stata inviata. La segreteria la vedra' sulla prenotazione."),
+    }
+    title, message = messages.get(str(action), ("Risposta registrata", "La tua risposta e' stata registrata."))
+    return {"ok": True, "action": action, "title": title, "message": message}
 
 
 @router.get("/api/forms/{org_slug}/{slug}")

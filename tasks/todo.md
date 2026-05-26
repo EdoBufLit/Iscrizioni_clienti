@@ -5272,3 +5272,16 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Fix: i pagamenti associativi non vengono cancellati; viene solo azzerato `socio_id`, preservando storico economico e `org_id`.
 - Test aggiunto: hard-delete di socio con pagamento associativo conserva il pagamento e rimuove il FK.
 - Verifiche locali OK: pytest mirati cleanup/login/reminder (`3 passed`), `python -m compileall -q app init_db.py`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
+
+## Plan (Stato reminder visibile e pagina risposta booking - May 26, 2026)
+- [x] Esaminare sorgente stato booking/eventi reminder e serializzazione API agenda.
+- [x] Aggiungere segnale `customer_reminder_response` alle prenotazioni: confermato, annullato, note, con priorita note > annullato > confermato.
+- [x] Rendere agenda admin distinta: spunta elegante accanto al nome se confermata da reminder, X rossa se annullata, giallo se note non gestite.
+- [x] Rendere la pagina pubblica risposta reminder sempre user-facing, con messaggio successo conferma/annulla e textarea note, evitando cadute su SPA `Pagina non trovata`.
+- [x] Aggiungere test backend mirati e verifica frontend build/typecheck.
+
+## Review (Stato reminder visibile e pagina risposta booking - May 26, 2026)
+- Agenda admin: aggiunto `customer_reminder_response` serializzato da `BookingEvent`; la card mostra badge discreto con spunta verde per conferma cliente, X rossa per annullamento e stato giallo per note cliente non gestite.
+- Link reminder: aggiunta route frontend `/b/:token` che usa API JSON pubbliche, cosi anche se service worker/SPA intercetta la navigazione non si finisce piu sulla pagina 404 pubblica.
+- API pubbliche: `/api/public/bookings/response/{token}/json` e `/b/{token}/json` espongono riepilogo e registrano conferma/annullo/note con messaggio di esito.
+- Verifiche OK: pytest reminder/link (`1 passed`), `python -m compileall -q app init_db.py`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
