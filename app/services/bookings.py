@@ -123,6 +123,7 @@ def serialize_booking(booking: Booking, *, include_events: bool = False) -> dict
     request_status = _normalize_request_status(getattr(getattr(booking, "submission", None), "status", None))
     request_review_summary = _serialize_request_review_summary(getattr(booking, "submission", None))
     request_payload_summary = _serialize_request_payload_summary(booking)
+    customer_name = _booking_display_customer_name(booking)
     return {
         "id": booking.id,
         "association_id": booking.association_id,
@@ -130,7 +131,7 @@ def serialize_booking(booking: Booking, *, include_events: bool = False) -> dict
         "form_id": booking.form_id,
         "submission_id": booking.submission_id,
         "status": booking.status,
-        "customer_name": booking.customer_name,
+        "customer_name": customer_name,
         "customer_email": booking.customer_email,
         "customer_phone": booking.customer_phone,
         "booking_date": booking.booking_date.isoformat() if booking.booking_date else None,
@@ -202,10 +203,11 @@ def serialize_booking(booking: Booking, *, include_events: bool = False) -> dict
 
 
 def serialize_member_booking(booking: Booking) -> dict[str, Any]:
+    customer_name = _booking_display_customer_name(booking)
     return {
         "id": booking.id,
         "status": booking.status,
-        "customer_name": booking.customer_name,
+        "customer_name": customer_name,
         "booking_date": booking.booking_date.isoformat() if booking.booking_date else None,
         "booking_time": booking.booking_time,
         "party_size": booking.party_size,
@@ -315,6 +317,19 @@ def _serialize_request_payload_summary(booking: Booking) -> list[dict[str, str]]
     return rows[:24]
 
 
+def _booking_display_customer_name(booking: Booking) -> str:
+    stored = _normalize_text(getattr(booking, "customer_name", None))
+    if stored and stored.lower() not in {"prenotazione", "richiesta prenotazione"}:
+        return stored
+    submission = getattr(booking, "submission", None)
+    payload = getattr(submission, "payload_json", None)
+    if isinstance(payload, dict):
+        guessed = _guess_customer_name(payload, form=getattr(booking, "form", None))
+        if guessed and guessed.lower() not in {"prenotazione", "richiesta prenotazione"}:
+            return guessed
+    return stored or "Prenotazione"
+
+
 def _booking_event_summary(booking: Booking) -> str | None:
     notes = _normalize_text(getattr(booking, "notes", None))
     if not notes:
@@ -346,11 +361,27 @@ def _humanize_payload_key(value: str) -> str:
     return cleaned[:1].upper() + cleaned[1:] if cleaned else "Campo"
 
 
-def _guess_customer_name(payload: dict[str, Any]) -> str:
+def _guess_customer_name(payload: dict[str, Any], *, form: Form | None = None) -> str:
     for key in ("customer_name", "nome_socio", "nome", "full_name", "name"):
         value = payload.get(key)
         if isinstance(value, str) and value.strip():
             return value.strip()
+    if form is not None:
+        fields = list(getattr(form, "fields", []) or [])
+        for field in sorted(
+            fields,
+            key=lambda item: (
+                int(getattr(item, "sort_order", 0) or 0),
+                int(getattr(item, "id", 0) or 0),
+            ),
+        ):
+            field_key = str(getattr(field, "field_key", "") or "").strip()
+            label = str(getattr(field, "label", "") or "")
+            if not field_key or not _looks_like_customer_name_field(field_key, label):
+                continue
+            value = payload.get(field_key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
     first_name = str(payload.get("first_name") or "").strip()
     last_name = str(payload.get("last_name") or "").strip()
     combined = f"{first_name} {last_name}".strip()
@@ -358,6 +389,13 @@ def _guess_customer_name(payload: dict[str, Any]) -> str:
         return combined
     email = str(payload.get("email") or "").strip()
     return email or "Prenotazione"
+
+
+def _looks_like_customer_name_field(field_key: str, label: str) -> bool:
+    haystack = f"{field_key} {label}".lower()
+    if any(blocked in haystack for blocked in ("email", "mail", "telefono", "phone", "numero", "persone", "pax", "privacy", "consenso", "data", "orario", "ora")):
+        return False
+    return any(token in haystack for token in ("nome", "cognome", "nominativo", "cliente", "socio"))
 
 
 def _mapped_payload_value(mapping: dict[str, str], target: str, payload: dict[str, Any]) -> Any:
@@ -697,7 +735,7 @@ def create_booking_from_submission(
         return None
 
     mapping = normalize_booking_field_mapping(getattr(form, "booking_field_mapping", None) or {})
-    customer_name = _normalize_text(_mapped_payload_value(mapping, "customer_name", validated_payload)) or _guess_customer_name(validated_payload)
+    customer_name = _normalize_text(_mapped_payload_value(mapping, "customer_name", validated_payload)) or _guess_customer_name(validated_payload, form=form)
     customer_email = _normalize_text(_mapped_payload_value(mapping, "customer_email", validated_payload))
     customer_phone = _normalize_text(_mapped_payload_value(mapping, "customer_phone", validated_payload))
     booking_date = _normalize_booking_date(getattr(form, "booking_event_date", None)) or _normalize_booking_date(

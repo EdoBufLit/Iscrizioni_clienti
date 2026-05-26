@@ -222,6 +222,27 @@ function initialsFromName(value: string | null | undefined) {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
+function bookingDisplayName(booking: AssociationBooking) {
+  const stored = String(booking.customer_name || "").trim();
+  if (stored && !["prenotazione", "richiesta prenotazione"].includes(stored.toLowerCase())) {
+    return stored;
+  }
+  const fromPayload = (booking.request_payload_summary || []).find((field) => {
+    const haystack = `${field.key} ${field.label}`.toLowerCase();
+    if (/(email|mail|telefono|phone|numero|persone|pax|privacy|consenso|data|orario|ora)/.test(haystack)) {
+      return false;
+    }
+    return /(nome|cognome|nominativo|cliente|socio)/.test(haystack) && field.value.trim();
+  });
+  return fromPayload?.value.trim() || stored || "Prenotazione";
+}
+
+function bookingPrimaryMeta(booking: AssociationBooking) {
+  const parts = [`${booking.party_size || "-"} pax`, (booking.booking_time || "--:--").slice(0, 5)];
+  if (booking.event_summary) parts.push(booking.event_summary.split("\n")[0]);
+  return parts.filter(Boolean).join(" · ");
+}
+
 function formatBookingTable(booking: Pick<AssociationBooking, "room" | "table">) {
   if (booking.table?.name) return `Tavolo ${booking.table.name}`;
   if (booking.room?.name) return booking.room.name;
@@ -2223,6 +2244,7 @@ function MobileManagedBookingsSection(props: {
             const isDetailLoaded = props.selectedBooking?.id === booking.id;
             const tableLabel = formatBookingTable(booking);
             const needsTable = !booking.table?.name;
+            const displayName = bookingDisplayName(booking);
             return (
               <article key={booking.id} className={`booking-mobile-managed-card ${bookingCardToneClass(booking)} ${isExpanded ? "is-expanded" : ""}`}>
                 <button
@@ -2231,15 +2253,17 @@ function MobileManagedBookingsSection(props: {
                   onClick={() => props.setSelectedBookingId(isExpanded ? null : booking.id)}
                   aria-expanded={isExpanded}
                 >
-                  <span className="booking-day-row__avatar">{initialsFromName(booking.customer_name)}</span>
+                  <span className="booking-day-row__avatar">{initialsFromName(displayName)}</span>
                   <span className="booking-mobile-managed-card__main">
+                    <span className="booking-mobile-managed-card__meta-strip">{bookingPrimaryMeta(booking)}</span>
                     <span className="booking-mobile-managed-card__name-line">
-                      <strong>{booking.customer_name}</strong>
+                      <strong>{displayName}</strong>
                       <ReminderResponseIndicator booking={booking} />
                     </span>
-                    <small>{(booking.booking_time || "--:--").slice(0, 5)} - {tableLabel}</small>
+                    <small>{tableLabel}{booking.customer_phone ? ` · ${booking.customer_phone}` : ""}</small>
                   </span>
                   <span className="booking-mobile-managed-card__side">
+                    {isFormLinkedBooking(booking) ? <span className="booking-day-row__form-icon" title="Richiesta da form" aria-label="Richiesta da form" /> : null}
                     <span className={bookingStatusChipClass(booking.status)}>{formatStatusLabel(booking.status)}</span>
                     <span className={needsTable ? "needs-assignment" : ""}>
                       {needsTable ? "Assegna tavolo" : `${booking.party_size || "-"} pax`}
@@ -2296,18 +2320,24 @@ function DayBookingRow({
   detail: React.ReactNode;
 }) {
   const isFormRequest = isFormLinkedBooking(booking);
+  const displayName = bookingDisplayName(booking);
   return (
     <article className={`booking-day-row ${bookingCardToneClass(booking)} ${expanded ? "is-expanded" : ""}`}>
       <button type="button" className="booking-day-row__summary" onClick={onSelect} aria-expanded={expanded}>
-        <span className="booking-day-row__avatar">{initialsFromName(booking.customer_name)}</span>
+        <span className="booking-day-row__avatar">{initialsFromName(displayName)}</span>
         <span className="booking-day-row__main">
+          <span className="booking-day-row__topline">
+            <span>{booking.party_size || "-"} pax</span>
+            <span>{(booking.booking_time || "--:--").slice(0, 5)}</span>
+            {isFormRequest ? <span className="booking-day-row__form-icon" title="Richiesta da form" aria-label="Richiesta da form" /> : null}
+          </span>
           <span className="booking-day-row__name-line">
-            <span className="booking-day-row__name">{booking.customer_name}</span>
+            <span className="booking-day-row__name">{displayName}</span>
             <ReminderResponseIndicator booking={booking} />
             {isFormRequest ? <span className="booking-day-row__request-badge">Richiesta form</span> : null}
           </span>
           <span className="booking-day-row__meta">
-            {(booking.booking_time || "--:--").slice(0, 5)} · {formatBookingTable(booking)}
+            {formatBookingTable(booking)}
           </span>
           {expanded && selectedBooking ? (
             <span className="booking-day-row__contact">{selectedBooking.customer_email || selectedBooking.customer_phone || "Contatto non disponibile"}</span>

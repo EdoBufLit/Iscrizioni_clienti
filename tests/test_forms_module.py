@@ -1326,6 +1326,51 @@ def test_booking_enabled_form_creates_booking_and_exposes_agenda(client, db):
     assert submissions_res.json()["items"][0]["status"] == "confirmed"
 
 
+def test_booking_form_uses_name_label_when_mapping_missing(client, db):
+    org, admin = _create_org_admin(db)
+    _login_org_admin(client, db, admin.id)
+    public_slug = f"prenotazione-label-{uuid.uuid4().hex[:6]}"
+
+    create_res = client.post(
+        "/api/org-admin/forms",
+        json={
+            "title": "Prenotazione",
+            "public_slug": public_slug,
+            "is_active": True,
+            "visibility": "public",
+            "form_type": "booking",
+            "booking_enabled": True,
+            "booking_requires_manual_confirmation": True,
+        },
+    )
+    assert create_res.status_code == 201, create_res.text
+    form_id = create_res.json()["form"]["id"]
+
+    field_res = client.post(
+        f"/api/org-admin/forms/{form_id}/fields",
+        json={
+            "field_type": "short_text",
+            "label": "Nome e Cognome",
+            "field_key": "testo_breve_cliente",
+            "is_required": True,
+            "sort_order": 10,
+        },
+    )
+    assert field_res.status_code == 201, field_res.text
+
+    submit_res = client.post(
+        f"/api/forms/{org.slug}/{public_slug}/submit",
+        json={"testo_breve_cliente": "Cosimi Ilaria"},
+    )
+    assert submit_res.status_code == 200, submit_res.text
+    payload = submit_res.json()
+    assert payload["booking"]["customer_name"] == "Cosimi Ilaria"
+
+    detail_res = client.get(f"/api/org-admin/bookings/{payload['booking']['id']}")
+    assert detail_res.status_code == 200, detail_res.text
+    assert detail_res.json()["booking"]["customer_name"] == "Cosimi Ilaria"
+
+
 def test_booking_form_links_existing_member_and_member_area_can_send_note(client, db):
     org, admin = _create_org_admin(db)
     _login_org_admin(client, db, admin.id)

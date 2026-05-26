@@ -52,7 +52,14 @@ export default defineConfig(({ mode }) => ({
         clientsClaim: true,
         skipWaiting: true,
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-        navigateFallbackDenylist: [/^\/api(?:\/|$)/, /^\/member(?:\/|$)/, /^\/health$/, /^\/version$/],
+        navigateFallbackDenylist: [
+          /^\/api(?:\/|$)/,
+          /^\/member(?:\/|$)/,
+          /^\/forms(?:\/|$)/,
+          /^\/b(?:\/|$)/,
+          /^\/health$/,
+          /^\/version$/,
+        ],
         runtimeCaching: [
           {
             urlPattern: /\/assets\/.*\.(?:css|js)$/i,

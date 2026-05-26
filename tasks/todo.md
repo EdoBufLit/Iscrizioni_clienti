@@ -5328,3 +5328,17 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Verifiche OK: `python -m compileall -q app scripts init_db.py`, pytest mirati (`5 passed`), `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`, smoke Playwright mock light/dark con 0 celle calendario e 3 righe agenda.
 - Deploy live: GitHub dispatch manuale ha risposto 500, quindi deploy eseguito via SSH su Hetzner; server aggiornato a `38a9225`, env Evolution rigenerato con safe mode, build locale `web` + `evolution-api`, Alembic a head `w8x9y0z1a2b3`, container ricreati e healthy, smoke `https://assonam.it/` e `/org-admin/prenotazioni` HTTP 200.
 - Disco Hetzner dopo build al 37% su `/`; prune non necessario.
+
+## Plan (Fix crash link form pubblico white-label - May 26, 2026)
+- [x] Riprodurre il crash live del form pubblico indicato e raccogliere errore console/log/API senza assumere la causa.
+- [x] Identificare la regressione introdotta dalla rimozione della shell pubblica e correggere la route/render del form.
+- [x] Aggiungere copertura mirata o smoke browser sul link pubblico in light/dark mode.
+- [x] Rifinire card prenotazioni agenda: nome compilatore come titolo, meta pax/orario compatta e segnali form piu simili al riferimento.
+- [x] Aggiornare lessons, eseguire build/test, pushare e deployare su Hetzner verificando disco e container.
+
+### Review
+- Live check: il link pubblico del form risponde 200 lato API e shell; il crash visto e' compatibile con cache/PWA stale sul device.
+- Fix: le route `/forms/*` e `/b/*` non passano piu dal fallback PWA, su `/forms/*` vengono rimossi service worker/cache vecchi e il retry dell'ErrorBoundary fa reload reale.
+- White-label: title/metadata del form pubblico usano il nome associazione e non aggiungono ASSO.N.A.M.
+- Agenda: le card usano nome/cognome ricavato da mapping o label del payload form, con meta compatta pax/orario e icona form.
+- Test locali: typecheck, build frontend, compile Python e pytest mirati passati.

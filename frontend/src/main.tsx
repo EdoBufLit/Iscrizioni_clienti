@@ -9,6 +9,35 @@ import { ThemeProvider } from "./components/theme/ThemeProvider";
 import { isPerfEnabled } from "./lib/perfConfig";
 
 const router = createBrowserRouter([{ path: "*", element: <App /> }]);
+const isPublicFormRoute = window.location.pathname.startsWith("/forms/");
+
+async function releasePublicFormFromPwaCache(): Promise<boolean> {
+  if (!isPublicFormRoute || !("serviceWorker" in navigator)) return false;
+  const reloadMarker = "assonam-public-form-sw-cleared";
+  try {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    const hasController = Boolean(navigator.serviceWorker.controller);
+    if (!registrations.length && !hasController) return false;
+
+    await Promise.all(registrations.map((registration) => registration.unregister()));
+    if ("caches" in window) {
+      const cacheNames = await window.caches.keys();
+      await Promise.all(
+        cacheNames
+          .filter((name) => name.startsWith("assonam-") || name.includes("workbox"))
+          .map((name) => window.caches.delete(name)),
+      );
+    }
+    if (sessionStorage.getItem(reloadMarker) !== "1") {
+      sessionStorage.setItem(reloadMarker, "1");
+      window.location.reload();
+      return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
 
 if (isPerfEnabled() && !(window as Window & { __perfInit?: boolean }).__perfInit) {
   (window as Window & { __perfInit?: boolean }).__perfInit = true;
@@ -17,7 +46,7 @@ if (isPerfEnabled() && !(window as Window & { __perfInit?: boolean }).__perfInit
     .catch(() => {});
 }
 
-if (import.meta.env.PROD && "serviceWorker" in navigator) {
+if (import.meta.env.PROD && !isPublicFormRoute && "serviceWorker" in navigator) {
   registerSW({
     immediate: true,
     onRegisteredSW(
@@ -29,10 +58,13 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
   });
 }
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <ThemeProvider>
-      <RouterProvider router={router} />
-    </ThemeProvider>
-  </React.StrictMode>
-);
+releasePublicFormFromPwaCache().then((willReload) => {
+  if (willReload) return;
+  ReactDOM.createRoot(document.getElementById("root")!).render(
+    <React.StrictMode>
+      <ThemeProvider>
+        <RouterProvider router={router} />
+      </ThemeProvider>
+    </React.StrictMode>
+  );
+});

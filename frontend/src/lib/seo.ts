@@ -8,6 +8,7 @@ export type SeoPayload = {
   ogType?: "website" | "article";
   imagePath?: string;
   appendSiteName?: boolean;
+  siteName?: string;
   structuredData?: JsonLdObject | JsonLdObject[];
 };
 
@@ -84,6 +85,7 @@ export const applySeo = ({
   ogType = "website",
   imagePath = DEFAULT_IMAGE_PATH,
   appendSiteName = true,
+  siteName = SITE_NAME,
   structuredData,
 }: SeoPayload): void => {
   const canonical = toAbsoluteUrl(normalizeCanonicalPath(canonicalPath ?? window.location.pathname));
@@ -103,7 +105,7 @@ export const applySeo = ({
   setMeta("property", "og:title", fullTitle);
   setMeta("property", "og:description", description);
   setMeta("property", "og:url", canonical);
-  setMeta("property", "og:site_name", SITE_NAME);
+  setMeta("property", "og:site_name", siteName);
   setMeta("property", "og:locale", DEFAULT_OG_LOCALE);
   setMeta("property", "og:image", imageUrl);
 

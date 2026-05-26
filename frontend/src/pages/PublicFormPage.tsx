@@ -74,6 +74,9 @@ const PublicFormPage = () => {
         applySeo({
           title: `${response.form.title} | ${associationName}`,
           description: response.form.description || `Modulo pubblico per ${associationName}.`,
+          appendSiteName: false,
+          siteName: associationName,
+          noindex: true,
         });
       })
       .catch((err) => {

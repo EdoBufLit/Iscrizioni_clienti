@@ -20,6 +20,32 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   private handleRetry = () => {
+    if (window.location.pathname.startsWith("/forms/")) {
+      void this.clearPublicFormCaches().finally(() => window.location.reload());
+      return;
+    }
+    window.location.reload();
+  };
+
+  private clearPublicFormCaches = async () => {
+    if (!("serviceWorker" in navigator)) return;
+    try {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+      if ("caches" in window) {
+        const cacheNames = await window.caches.keys();
+        await Promise.all(
+          cacheNames
+            .filter((name) => name.startsWith("assonam-") || name.includes("workbox"))
+            .map((name) => window.caches.delete(name)),
+        );
+      }
+    } catch {
+      // The retry still reloads the page even if cache cleanup is unavailable.
+    }
+  };
+
+  private handleSoftReset = () => {
     this.setState((prev) => ({
       hasError: false,
       error: null,
@@ -30,13 +56,15 @@ class ErrorBoundary extends Component<Props, State> {
   private handleGoHome = () => {
     window.history.pushState({}, "", "/");
     window.dispatchEvent(new PopStateEvent("popstate"));
-    this.handleRetry();
+    this.handleSoftReset();
   };
 
   render() {
     if (!this.state.hasError) {
       return <div key={this.state.resetKey}>{this.props.children}</div>;
     }
+
+    const isPublicFormRoute = window.location.pathname.startsWith("/forms/");
 
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-6">
@@ -61,13 +89,15 @@ class ErrorBoundary extends Component<Props, State> {
             >
               Ricarica
             </button>
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={this.handleGoHome}
-            >
-              Torna alla home
-            </button>
+            {!isPublicFormRoute && (
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={this.handleGoHome}
+              >
+                Torna alla home
+              </button>
+            )}
           </div>
         </div>
       </div>
