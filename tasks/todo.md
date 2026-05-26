@@ -5376,3 +5376,4 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - UX WhatsApp: se una conferma admin non invia messaggio per assenza regola, l'admin vede esplicitamente che manca una regola attiva in `WhatsApp > Automazioni`.
 - Verifiche OK: `python -m compileall -q app init_db.py`, pytest mirati booking/survey (`2 passed`), `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.
 - Nota migration: `alembic heads` punta a `x9y0z1a2b3c4`; `alembic upgrade head --sql` in locale si ferma su una vecchia migration SQLite batch preesistente, prima di questa migration.
+- Deploy live: Hetzner aggiornato a `24056ab`, migration PostgreSQL applicata a `x9y0z1a2b3c4`, container `web`, `email-worker`, `low-cards-worker`, `whatsapp-webhook-worker` ricreati e healthy; smoke HTTP 200 su home, prenotazioni e comunicazioni; log recenti senza traceback/exception; disco al 37%, prune non necessario.
