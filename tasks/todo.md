@@ -5390,3 +5390,32 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Verifica Actions: rilanciato workflow `Deploy to Hetzner` run `26462244906`, completato con `build-images` e `deploy` entrambi `success`.
 - Verifica live: server su commit `5d5cff2`, container applicativi/evolution healthy, log recenti senza traceback/exception, disco `/` al 45%; prune non necessario.
 - Nota residua: resta solo warning GitHub non bloccante su deprecazione Node.js 20 per alcune actions entro giugno/settembre 2026.
+
+## Plan (Builder tessera standard ASSONAM - May 26, 2026)
+- [x] Mappare generazione tessera PNG/PDF e impostazioni org admin esistenti, mantenendo invariata la tessera Golden Age Club/Oasi 2.
+- [x] Ridisegnare il template standard fronte e retro in stile bordeaux/oro come riferimento allegato, con testi clampati e senza overflow nel PDF.
+- [x] Aggiungere impostazioni persistite per builder tessera: colori, font/stile, logo org, posizione/logo watermark/visibilita, retro modificabile con QR fisso.
+- [x] Migliorare `Org Admin > Tessere` con builder visuale e preview fronte/retro senza togliere funzioni lotti/regole.
+- [x] Verificare localmente PNG/PDF, typecheck/build e generare screenshot/anteprime da mostrare prima di qualunque push.
+
+## Review (Builder tessera standard ASSONAM - May 26, 2026)
+- Il template standard ora usa fronte/retro bordeaux/oro con logo ASSONAM fisso, bordo premium, chip e curve decorative; le tessere `golden-age-club` e `oasi-2` restano sul render legacy.
+- Il PDF usa le immagini raster fronte/retro generate dallo stesso renderer, quindi testi lunghi vengono ridotti/clampati prima di entrare nel PDF ed evitano overflow fuori tessera.
+- Aggiunto `organizations.card_style_json` con migration e init DB, piu endpoint org admin per salvare stile tessera e caricare logo tessera con rimozione sfondo chiaro opzionale.
+- In `Org Admin > Tessere` aggiunto builder con preview fronte/retro, colori, logo, posizione, opacita, modalita watermark/visibile, rimozione sfondo, testi retro e toggle dati socio sul retro.
+- Anteprime generate in `tasks/screenshots/card-builder-standard-20260526/`: `standard-front.png`, `standard-back.png`, `standard-card.pdf`.
+- Verifiche OK: `python -m compileall -q app init_db.py`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.
+- Non pushato: l'utente ha chiesto prima anteprima visuale.
+
+## Plan (Refinement tessera standard ASSONAM - May 26, 2026)
+- [x] Togliere testo descrittivo fisso dal retro mantenendo QR e dati verificabili.
+- [x] Far respirare il fronte spostando header/anno/status piu in alto e separando meglio associazione e numero tessera.
+- [x] Aggiungere resa piu realistica/premium al testo oro, con highlight/ombra leggera senza compromettere leggibilita.
+- [x] Rigenerare anteprime fronte/retro/PDF e rieseguire verifiche minime.
+
+## Review (Refinement tessera standard ASSONAM - May 26, 2026)
+- Retro: rimosso il testo descrittivo default sotto "Verifica tessera"; resta modificabile dal builder se l'org vuole aggiungere una frase.
+- Fronte: header, anno e badge sono stati alzati; nome/associazione/numero tessera sono piu separati e meno compressi.
+- Resa premium: aggiunta ombra/highlight al testo oro grande (`2026` e numero tessera) anche nella preview builder.
+- Anteprime aggiornate: `standard-front-v2.png`, `standard-back-v2.png`, `standard-card-v2.pdf`.
+- Verifiche OK: `python -m compileall -q app init_db.py`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.

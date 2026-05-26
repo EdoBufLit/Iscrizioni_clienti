@@ -444,6 +444,12 @@ def _normalize_member_identity_document_fields(
 def _resolve_org_logo_disk_path(org: Organization | None) -> str | None:
     if org is None:
         return None
+    card_logo_url = (getattr(org, "card_logo_url", None) or "").strip()
+    if card_logo_url.startswith("/uploads/"):
+        rel = card_logo_url.removeprefix("/uploads/").replace("/", os.sep)
+        candidate = os.path.join(settings.UPLOAD_DIR, rel)
+        if os.path.exists(candidate):
+            return candidate
     if org.logo_path:
         candidate = os.path.join(settings.UPLOAD_DIR, org.logo_path)
         return candidate if os.path.exists(candidate) else None
@@ -478,6 +484,60 @@ def _resolve_assonam_disk_path() -> str | None:
         )
     )
     return candidate if os.path.exists(candidate) else None
+
+
+def _organization_card_style(org: Organization | None) -> dict[str, object]:
+    if org is None:
+        return {}
+    raw = (getattr(org, "card_style_json", None) or "").strip()
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _serialize_card_style(org: Organization) -> dict[str, object]:
+    style = {
+        "primary_color": "#5A001F",
+        "secondary_color": "#2A0010",
+        "accent_color": "#D4B45C",
+        "text_color": "#FFFFFF",
+        "muted_text_color": "#F5D66D",
+        "font_family": "classic",
+        "surface_pattern": "geometric",
+        "logo_mode": "watermark",
+        "logo_position": "top-right",
+        "logo_opacity": 0.18,
+        "logo_blend": "normal",
+        "remove_logo_background": False,
+        "back_title": "Verifica tessera",
+        "back_body": "",
+        "back_show_member": True,
+    }
+    style.update(_organization_card_style(org))
+    return style
+
+
+def _remove_light_logo_background_from_disk(path: str) -> None:
+    try:
+        from PIL import Image
+
+        with Image.open(path) as image:
+            image = image.convert("RGBA")
+            pixels = []
+            for r, g, b, a in image.getdata():
+                if a and r > 232 and g > 232 and b > 232:
+                    pixels.append((r, g, b, 0))
+                else:
+                    pixels.append((r, g, b, a))
+            cleaned = Image.new("RGBA", image.size)
+            cleaned.putdata(pixels)
+            cleaned.save(path, format="PNG")
+    except Exception:
+        logger.exception("Unable to remove light background from card logo path=%s", path)
 
 
 def _member_card_pdf_bytes(member: Member, request: Request) -> bytes:
@@ -519,6 +579,7 @@ def _member_card_pdf_bytes(member: Member, request: Request) -> bytes:
                 if resolve_member_valid_until(member)
                 else None
             ),
+            card_style=_organization_card_style(organization),
         )
     except HTTPException:
         raise
@@ -688,6 +749,9 @@ def _serialize_org_membership_settings(org: Organization) -> dict[str, object]:
         "membership_fee_currency": getattr(org, "membership_fee_currency", "EUR"),
         "temporary_membership_duration_value": duration_value,
         "temporary_membership_duration_unit": duration_unit,
+        "card_logo_url": getattr(org, "card_logo_url", None),
+        "card_style": _serialize_card_style(org),
+        "card_style_locked": (getattr(org, "slug", "") or "").strip().lower() in {"oasi-2", "golden-age-club"},
     }
 
 
@@ -2177,6 +2241,27 @@ class PatchOrgMembershipSettings(BaseModel):
     membership_fee_currency: Optional[str] = Field(default=None, min_length=1, max_length=8)
     temporary_membership_duration_value: Optional[int] = Field(default=None, ge=1, le=8760)
     temporary_membership_duration_unit: Optional[Literal["hours", "days"]] = None
+    card_style: Optional[dict[str, object]] = None
+
+
+class PatchOrgCardStyle(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    primary_color: str = Field(default="#5A001F", pattern=r"^#[0-9A-Fa-f]{6}$")
+    secondary_color: str = Field(default="#2A0010", pattern=r"^#[0-9A-Fa-f]{6}$")
+    accent_color: str = Field(default="#D4B45C", pattern=r"^#[0-9A-Fa-f]{6}$")
+    text_color: str = Field(default="#FFFFFF", pattern=r"^#[0-9A-Fa-f]{6}$")
+    muted_text_color: str = Field(default="#F5D66D", pattern=r"^#[0-9A-Fa-f]{6}$")
+    font_family: Literal["classic", "modern", "serif"] = "classic"
+    surface_pattern: Literal["geometric", "soft", "none"] = "geometric"
+    logo_mode: Literal["none", "visible", "watermark", "both"] = "watermark"
+    logo_position: Literal["top-left", "top-right", "bottom-left", "bottom-right", "center"] = "top-right"
+    logo_opacity: float = Field(default=0.18, ge=0, le=1)
+    logo_blend: Literal["normal", "soft", "multiply"] = "normal"
+    remove_logo_background: bool = False
+    back_title: str = Field(default="Verifica tessera", max_length=80)
+    back_body: str = Field(default="", max_length=220)
+    back_show_member: bool = True
 
 
 class PutOrgCommunicationSettings(BaseModel):
@@ -2582,6 +2667,14 @@ def patch_org_membership_settings(
                 updates["temporary_membership_duration_unit"]
             )
             changed_fields["temporary_membership_duration_unit"] = org.temporary_membership_duration_unit
+
+    if "card_style" in updates:
+        locked = (getattr(org, "slug", "") or "").strip().lower() in {"oasi-2", "golden-age-club"}
+        if locked:
+            raise HTTPException(status_code=403, detail="Design tessera bloccato per questa associazione.")
+        style = PatchOrgCardStyle.model_validate(updates["card_style"]).model_dump()
+        org.card_style_json = json.dumps(style, ensure_ascii=False, separators=(",", ":"))
+        changed_fields["card_style"] = style
 
     db.add(org)
     db.commit()
@@ -4373,6 +4466,68 @@ async def upload_wallet_assets(
         "wallet_hero_image_url": org.wallet_hero_image_url,
         "wallet_effective_logo_url": wallet_defaults["wallet_logo_url"],
         "wallet_effective_hero_image_url": wallet_defaults["wallet_hero_image_url"],
+    }
+
+
+@router.post("/organization/card-assets")
+async def upload_card_assets(
+    request: Request,
+    logo: UploadFile = File(...),
+    remove_background: bool = Form(False),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    org = admin.organization
+    if (getattr(org, "slug", "") or "").strip().lower() in {"oasi-2", "golden-age-club"}:
+        raise HTTPException(status_code=403, detail="Design tessera bloccato per questa associazione.")
+
+    try:
+        enforce_wallet_asset_request_size_from_headers(request.headers)
+        logo_rel_path, logo_size, logo_sha = await save_wallet_logo_file(logo, org_id=org.id)
+        if remove_background:
+            disk_path = os.path.join(settings.UPLOAD_DIR, logo_rel_path)
+            _remove_light_logo_background_from_disk(disk_path)
+        org.card_logo_url = f"/uploads/{logo_rel_path.replace(os.sep, '/')}"
+    except HTTPException as exc:
+        if exc.status_code in {400, 413, 415, 422}:
+            logger.warning(
+                "Rejected card asset upload status=%s request_id=%s org_id=%s content_length=%s logo=%s",
+                exc.status_code,
+                getattr(request.state, "request_id", None),
+                admin.org_id,
+                request.headers.get("content-length"),
+                redact_for_log(getattr(logo, "filename", None)),
+            )
+        raise
+
+    db.add(org)
+    db.commit()
+    db.refresh(org)
+    audit.log_operation(
+        db,
+        action="org.card_assets.upload",
+        entity_type="organization",
+        entity_id=org.id,
+        actor_admin_id=admin.id,
+        actor_role="org_admin",
+        metadata={
+            "filename": logo.filename,
+            "size": logo_size,
+            "sha256": logo_sha,
+            "url": org.card_logo_url,
+            "remove_background": remove_background,
+        },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    return {
+        "ok": True,
+        "card_logo_url": org.card_logo_url,
+        "settings": _serialize_org_membership_settings(org),
     }
 
 

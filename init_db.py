@@ -715,6 +715,7 @@ def init_db():
         _add_column_if_missing(conn, "organizations", "club_display_name", "VARCHAR")
         _add_column_if_missing(conn, "organizations", "card_email_subject", "VARCHAR")
         _add_column_if_missing(conn, "organizations", "card_logo_url", "VARCHAR")
+        _add_column_if_missing(conn, "organizations", "card_style_json", "TEXT")
         _add_column_if_missing(conn, "organizations", "wallet_bg_color", "VARCHAR")
         _add_column_if_missing(conn, "organizations", "wallet_logo_url", "TEXT")
         _add_column_if_missing(conn, "organizations", "wallet_hero_image_url", "TEXT")

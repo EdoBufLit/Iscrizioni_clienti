@@ -10,6 +10,8 @@ from reportlab.lib.colors import Color, HexColor
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
+from app.services.card_image import generate_card_back_image_bytes, generate_card_image_bytes
+
 # ─── Bordeaux palette ──────────────────────────────────────────────────────────
 _BDX_DARK = HexColor("#3a0015")
 _BDX_MID = Color(0.353, 0.031, 0.157, 0.7)
@@ -368,6 +370,7 @@ def generate_card_pdf_bytes(
     assonam_logo_path: str | None,
     membership_type_label: str | None = None,
     valid_until_text: str | None = None,
+    card_style: dict[str, object] | None = None,
 ) -> bytes:
     """Generate a 2-page PDF (front + back) in bordeaux theme."""
     buf = io.BytesIO()
@@ -404,5 +407,92 @@ def generate_card_pdf_bytes(
     c.showPage()
     c.save()
 
+    buf.seek(0)
+    return buf.read()
+
+
+_generate_legacy_card_pdf_bytes = generate_card_pdf_bytes
+
+
+def generate_card_pdf_bytes(
+    *,
+    member_full_name: str,
+    organization_name: str,
+    club_display_name: str,
+    organization_slug: str | None,
+    card_number: int,
+    card_year: int,
+    card_status: str,
+    verification_url: str,
+    org_logo_path: str | None,
+    assonam_logo_path: str | None,
+    membership_type_label: str | None = None,
+    valid_until_text: str | None = None,
+    card_style: dict[str, object] | None = None,
+) -> bytes:
+    """Generate a 2-page PDF.
+
+    Legacy card designs keep the historical reportlab drawing. The standard
+    card renders from the same PNG front/back used in emails and previews so
+    text fitting is identical and cannot overflow outside the card.
+    """
+    norm_slug = (organization_slug or "").strip().lower()
+    if norm_slug in {"oasi-2", "golden-age-club"}:
+        return _generate_legacy_card_pdf_bytes(
+            member_full_name=member_full_name,
+            organization_name=organization_name,
+            club_display_name=club_display_name,
+            organization_slug=organization_slug,
+            card_number=card_number,
+            card_year=card_year,
+            card_status=card_status,
+            verification_url=verification_url,
+            org_logo_path=org_logo_path,
+            assonam_logo_path=assonam_logo_path,
+            membership_type_label=membership_type_label,
+            valid_until_text=valid_until_text,
+        )
+
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    front_png = generate_card_image_bytes(
+        member_full_name=member_full_name,
+        organization_name=organization_name,
+        club_display_name=club_display_name,
+        organization_slug=organization_slug,
+        card_number=card_number,
+        card_year=card_year,
+        card_status=card_status,
+        membership_type_label=membership_type_label,
+        org_logo_path=org_logo_path,
+        assonam_logo_path=assonam_logo_path,
+        card_style=card_style,
+    )
+    back_png = generate_card_back_image_bytes(
+        member_full_name=member_full_name,
+        organization_name=organization_name,
+        organization_slug=organization_slug,
+        card_number=card_number,
+        card_year=card_year,
+        card_status=card_status,
+        verification_url=verification_url,
+        membership_type_label=membership_type_label,
+        valid_until_text=valid_until_text,
+        org_logo_path=org_logo_path,
+        assonam_logo_path=assonam_logo_path,
+        card_style=card_style,
+    )
+    for png_bytes in (front_png, back_png):
+        c.drawImage(
+            ImageReader(io.BytesIO(png_bytes)),
+            _CARD_X,
+            _CARD_Y,
+            _CARD_W,
+            _CARD_H,
+            mask="auto",
+            preserveAspectRatio=True,
+        )
+        c.showPage()
+    c.save()
     buf.seek(0)
     return buf.read()

@@ -8,8 +8,10 @@ import {
   fetchOrgAdminMembershipSettings,
   fetchOrgAdminMetrics,
   patchOrgAdminMembershipSettings,
+  uploadOrgAdminCardAssets,
   type CardMovement,
   type CardStock,
+  type OrgAdminCardStyle,
   type OrgAdminMembershipSettings,
   type OrgAdminMetrics,
 } from "../../lib/api";
@@ -19,6 +21,105 @@ import { useOrgAdmin } from "./OrgAdminLayout";
 
 const thClass = "px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.15em] text-slate-400";
 const tdClass = "px-5 py-3.5 text-sm text-slate-700";
+
+const defaultCardStyle: OrgAdminCardStyle = {
+  primary_color: "#5A001F",
+  secondary_color: "#2A0010",
+  accent_color: "#D4B45C",
+  text_color: "#FFFFFF",
+  muted_text_color: "#F5D66D",
+  font_family: "classic",
+  surface_pattern: "geometric",
+  logo_mode: "watermark",
+  logo_position: "top-right",
+  logo_opacity: 0.18,
+  logo_blend: "normal",
+  remove_logo_background: false,
+  back_title: "Verifica tessera",
+  back_body: "",
+  back_show_member: true,
+};
+
+function normalizeCardStyle(style?: Partial<OrgAdminCardStyle> | null): OrgAdminCardStyle {
+  return { ...defaultCardStyle, ...(style || {}) };
+}
+
+function CardDesignPreview({
+  style,
+  logoUrl,
+  orgName,
+  side,
+}: {
+  style: OrgAdminCardStyle;
+  logoUrl?: string | null;
+  orgName?: string | null;
+  side: "front" | "back";
+}) {
+  const pattern =
+    style.surface_pattern === "none"
+      ? "none"
+      : style.surface_pattern === "soft"
+        ? "radial-gradient(circle at 70% 18%, rgba(212,180,92,.15), transparent 26rem)"
+        : "linear-gradient(135deg, rgba(212,180,92,.12) 1px, transparent 1px), linear-gradient(45deg, rgba(212,180,92,.08) 1px, transparent 1px)";
+  const logo = logoUrl ? (
+    <img
+      src={logoUrl}
+      alt=""
+      className={`card-builder-preview__org-logo card-builder-preview__org-logo--${style.logo_position}`}
+      style={{
+        opacity: style.logo_mode === "watermark" ? style.logo_opacity : 0.96,
+        mixBlendMode: style.logo_blend === "multiply" ? "multiply" : style.logo_blend === "soft" ? "soft-light" : "normal",
+      }}
+    />
+  ) : null;
+  return (
+    <div
+      className="card-builder-preview"
+      style={{
+        color: style.text_color,
+        background:
+          `radial-gradient(circle at 82% 82%, ${style.accent_color}24, transparent 18rem), linear-gradient(135deg, ${style.primary_color}, ${style.secondary_color})`,
+      }}
+    >
+      <span className="card-builder-preview__pattern" style={{ backgroundImage: pattern }} />
+      {style.logo_mode !== "none" ? logo : null}
+      <span className="card-builder-preview__assonam">ASSONAM</span>
+      {side === "front" ? (
+        <>
+          <div className="card-builder-preview__year">
+            <span style={{ color: style.muted_text_color }}>TESSERA SOCIO</span>
+            <strong style={{ color: style.accent_color }}>2026</strong>
+            <em>ATTIVA</em>
+          </div>
+          <div className="card-builder-preview__identity">
+            <span style={{ color: style.muted_text_color }}>NOME E COGNOME</span>
+            <strong>Ed Aa</strong>
+            <span style={{ color: style.muted_text_color }}>ASSOCIAZIONE</span>
+            <p>{orgName || "Golden Filippini Qualificati SRLS"}</p>
+          </div>
+          <div className="card-builder-preview__footer">
+            <span style={{ color: style.muted_text_color }}>N. TESSERA</span>
+            <strong style={{ color: style.accent_color }}>2</strong>
+          </div>
+          <span className="card-builder-preview__chip" />
+        </>
+      ) : (
+        <>
+          <div className="card-builder-preview__back-copy">
+            <span style={{ color: style.muted_text_color }}>{style.back_title}</span>
+            {style.back_body.trim() ? <p>{style.back_body}</p> : null}
+          </div>
+          <div className="card-builder-preview__qr">QR</div>
+          <div className="card-builder-preview__back-data">
+            <span>N. Tessera <strong>2</strong></span>
+            <span>Anno <strong>2026</strong></span>
+            <span>Stato <strong>Attiva</strong></span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function movementTone(statusLabel: string): "success" | "warning" | "danger" | "info" | "muted" {
   if (statusLabel === "Attivo") return "success";
@@ -51,7 +152,11 @@ const OrgAdminCards = () => {
   const [issuedMembersCount, setIssuedMembersCount] = useState(0);
   const [metrics, setMetrics] = useState<OrgAdminMetrics | null>(null);
   const [membershipSettings, setMembershipSettings] = useState<OrgAdminMembershipSettings | null>(null);
+  const [cardStyleDraft, setCardStyleDraft] = useState<OrgAdminCardStyle>(defaultCardStyle);
+  const [cardLogoPreviewUrl, setCardLogoPreviewUrl] = useState<string | null>(null);
+  const [cardLogoFile, setCardLogoFile] = useState<File | null>(null);
   const [savingMembershipSettings, setSavingMembershipSettings] = useState(false);
+  const [savingCardDesign, setSavingCardDesign] = useState(false);
   const [membershipSettingsError, setMembershipSettingsError] = useState("");
   const [movementStatusFilter, setMovementStatusFilter] = useState("");
   const [movementIdFilter, setMovementIdFilter] = useState("");
@@ -77,6 +182,8 @@ const OrgAdminCards = () => {
         setMovementsTotal(movData.total);
         setMovementsYear(movData.current_year ?? null);
         setMembershipSettings(settingsData);
+        setCardStyleDraft(normalizeCardStyle(settingsData.card_style));
+        setCardLogoPreviewUrl(settingsData.card_logo_url || null);
         setSummaryTotal(membersData.summary?.total_theoretical_membership_fees ?? 0);
         setIssuedMembersCount(membersData.summary?.issued_members_count ?? 0);
         setMetrics(metricsData);
@@ -122,6 +229,37 @@ const OrgAdminCards = () => {
     } finally {
       setSavingMembershipSettings(false);
     }
+  }
+
+  async function handleCardDesignSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (membershipSettings?.card_style_locked) return;
+    setMembershipSettingsError("");
+    setSavingCardDesign(true);
+    try {
+      let nextSettings = membershipSettings;
+      if (cardLogoFile) {
+        const uploadResponse = await uploadOrgAdminCardAssets({
+          logo: cardLogoFile,
+          removeBackground: cardStyleDraft.remove_logo_background,
+        });
+        nextSettings = uploadResponse.settings;
+        setCardLogoPreviewUrl(uploadResponse.card_logo_url);
+        setCardLogoFile(null);
+      }
+      const response = await patchOrgAdminMembershipSettings({ card_style: cardStyleDraft });
+      setMembershipSettings(response.settings);
+      setCardStyleDraft(normalizeCardStyle(response.settings.card_style));
+      setCardLogoPreviewUrl(response.settings.card_logo_url || nextSettings?.card_logo_url || null);
+    } catch (err) {
+      setMembershipSettingsError(err instanceof Error ? err.message : "Errore salvataggio design tessera.");
+    } finally {
+      setSavingCardDesign(false);
+    }
+  }
+
+  function updateCardStyle<K extends keyof OrgAdminCardStyle>(key: K, value: OrgAdminCardStyle[K]) {
+    setCardStyleDraft((current) => ({ ...current, [key]: value }));
   }
 
   const isLoading = adminLoading || loading;
@@ -251,6 +389,92 @@ const OrgAdminCards = () => {
             </SectionPanel>
 
             <aside className="org-admin-mobile-secondary-panels space-y-5">
+              <SectionPanel title="Builder tessera" eyebrow="Design standard">
+                <form className="card-builder space-y-5" onSubmit={handleCardDesignSubmit}>
+                  {membershipSettings?.card_style_locked ? (
+                    <div className="rounded-[0.85rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+                      Design bloccato per questa associazione: la tessera Golden Age Club resta invariata.
+                    </div>
+                  ) : null}
+                  <div className="grid gap-3">
+                    <CardDesignPreview style={cardStyleDraft} logoUrl={cardLogoPreviewUrl} orgName={admin?.organization?.name} side="front" />
+                    <CardDesignPreview style={cardStyleDraft} logoUrl={cardLogoPreviewUrl} orgName={admin?.organization?.name} side="back" />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                    {([
+                      ["primary_color", "Bordeaux"],
+                      ["secondary_color", "Profondita"],
+                      ["accent_color", "Oro"],
+                      ["muted_text_color", "Etichette"],
+                    ] as const).map(([key, label]) => (
+                      <label key={key} className="card-builder-field">
+                        <span>{label}</span>
+                        <input type="color" value={cardStyleDraft[key]} disabled={membershipSettings?.card_style_locked} onChange={(event) => updateCardStyle(key, event.target.value)} />
+                      </label>
+                    ))}
+                  </div>
+                  <label className="card-builder-upload">
+                    <span>Logo associazione</span>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/svg+xml"
+                      disabled={membershipSettings?.card_style_locked}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] || null;
+                        setCardLogoFile(file);
+                        if (file) setCardLogoPreviewUrl(URL.createObjectURL(file));
+                      }}
+                    />
+                  </label>
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                    <label className="block">
+                      <span className="text-sm font-semibold text-slate-700">Uso logo</span>
+                      <select className="premium-select mt-2" value={cardStyleDraft.logo_mode} disabled={membershipSettings?.card_style_locked} onChange={(event) => updateCardStyle("logo_mode", event.target.value as OrgAdminCardStyle["logo_mode"])}>
+                        <option value="watermark">Soffuso sullo sfondo</option>
+                        <option value="visible">Ben visibile</option>
+                        <option value="both">Visibile + soffuso</option>
+                        <option value="none">Non mostrare</option>
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="text-sm font-semibold text-slate-700">Posizione</span>
+                      <select className="premium-select mt-2" value={cardStyleDraft.logo_position} disabled={membershipSettings?.card_style_locked} onChange={(event) => updateCardStyle("logo_position", event.target.value as OrgAdminCardStyle["logo_position"])}>
+                        <option value="top-right">Alto destra</option>
+                        <option value="top-left">Alto sinistra</option>
+                        <option value="center">Centro</option>
+                        <option value="bottom-left">Basso sinistra</option>
+                        <option value="bottom-right">Basso destra</option>
+                      </select>
+                    </label>
+                  </div>
+                  <label className="block">
+                    <span className="text-sm font-semibold text-slate-700">Intensita logo soffuso</span>
+                    <input className="mt-2 w-full" type="range" min="0" max="0.6" step="0.01" value={cardStyleDraft.logo_opacity} disabled={membershipSettings?.card_style_locked} onChange={(event) => updateCardStyle("logo_opacity", Number(event.target.value))} />
+                  </label>
+                  <div className="grid gap-2 text-sm text-slate-700">
+                    <label className="inline-flex items-center gap-2">
+                      <input type="checkbox" checked={cardStyleDraft.remove_logo_background} disabled={membershipSettings?.card_style_locked} onChange={(event) => updateCardStyle("remove_logo_background", event.target.checked)} />
+                      Rimuovi sfondo chiaro dal logo al caricamento
+                    </label>
+                    <label className="inline-flex items-center gap-2">
+                      <input type="checkbox" checked={cardStyleDraft.back_show_member} disabled={membershipSettings?.card_style_locked} onChange={(event) => updateCardStyle("back_show_member", event.target.checked)} />
+                      Mostra dati socio sul retro
+                    </label>
+                  </div>
+                  <label className="block">
+                    <span className="text-sm font-semibold text-slate-700">Titolo retro</span>
+                    <input className="mt-2 h-11 w-full rounded-[0.75rem] border border-slate-200 bg-white px-4 text-sm" value={cardStyleDraft.back_title} disabled={membershipSettings?.card_style_locked} onChange={(event) => updateCardStyle("back_title", event.target.value)} />
+                  </label>
+                  <label className="block">
+                    <span className="text-sm font-semibold text-slate-700">Testo retro</span>
+                    <textarea className="mt-2 min-h-[88px] w-full rounded-[0.75rem] border border-slate-200 bg-white px-4 py-3 text-sm" value={cardStyleDraft.back_body} disabled={membershipSettings?.card_style_locked} onChange={(event) => updateCardStyle("back_body", event.target.value)} />
+                  </label>
+                  <button type="submit" className="btn-primary w-full justify-center" disabled={savingCardDesign || membershipSettings?.card_style_locked}>
+                    {savingCardDesign ? "Salvataggio..." : "Salva design tessera"}
+                  </button>
+                </form>
+              </SectionPanel>
+
               <SectionPanel title="Registro lotti" eyebrow="Disponibilità">
                 <div className="space-y-4">
                   <div>

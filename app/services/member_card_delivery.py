@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 import logging
 import os
+import json
 from urllib.parse import quote_plus
 
 from fastapi import Request
@@ -37,6 +38,12 @@ _PUBLIC_MEMBER_CARD_VIEW_TEMPLATE = (
 def _resolve_org_logo_disk_path(org: Organization | None) -> str | None:
     if org is None:
         return None
+    card_logo_url = (getattr(org, "card_logo_url", None) or "").strip()
+    if card_logo_url.startswith("/uploads/"):
+        rel = card_logo_url.removeprefix("/uploads/").replace("/", os.sep)
+        candidate = os.path.join(settings.UPLOAD_DIR, rel)
+        if os.path.exists(candidate):
+            return candidate
     if org.logo_path:
         candidate = os.path.join(settings.UPLOAD_DIR, org.logo_path)
         return candidate if os.path.exists(candidate) else None
@@ -47,6 +54,17 @@ def _resolve_org_logo_disk_path(org: Organization | None) -> str | None:
         )
         return static_candidate if os.path.exists(static_candidate) else None
     return None
+
+
+def _organization_card_style(org: Organization | None) -> dict[str, object]:
+    raw = (getattr(org, "card_style_json", None) or "").strip() if org else ""
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def _resolve_assonam_disk_path() -> str | None:
@@ -220,6 +238,7 @@ def _enqueue_member_card_ready_email(
             membership_type_label=membership_label,
             org_logo_path=_resolve_org_logo_disk_path(org),
             assonam_logo_path=_resolve_assonam_disk_path(),
+            card_style=_organization_card_style(org),
         )
     except Exception:
         logger.exception(

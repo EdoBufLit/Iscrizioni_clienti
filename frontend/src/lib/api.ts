@@ -776,6 +776,27 @@ export type OrgAdminMembershipSettings = {
   membership_fee_currency: string | null;
   temporary_membership_duration_value: number;
   temporary_membership_duration_unit: "hours" | "days";
+  card_logo_url?: string | null;
+  card_style_locked?: boolean;
+  card_style: OrgAdminCardStyle;
+};
+
+export type OrgAdminCardStyle = {
+  primary_color: string;
+  secondary_color: string;
+  accent_color: string;
+  text_color: string;
+  muted_text_color: string;
+  font_family: "classic" | "modern" | "serif";
+  surface_pattern: "geometric" | "soft" | "none";
+  logo_mode: "none" | "visible" | "watermark" | "both";
+  logo_position: "top-left" | "top-right" | "bottom-left" | "bottom-right" | "center";
+  logo_opacity: number;
+  logo_blend: "normal" | "soft" | "multiply";
+  remove_logo_background: boolean;
+  back_title: string;
+  back_body: string;
+  back_show_member: boolean;
 };
 
 export type OrgAdminCommunicationSettings = {
@@ -1494,6 +1515,7 @@ export async function patchOrgAdminMembershipSettings(data: {
   membership_fee_currency?: string | null;
   temporary_membership_duration_value?: number | null;
   temporary_membership_duration_unit?: "hours" | "days" | null;
+  card_style?: OrgAdminCardStyle;
 }): Promise<{ ok: boolean; settings: OrgAdminMembershipSettings }> {
   const res = await fetch("/api/org-admin/organization/membership-settings", {
     method: "PATCH",
@@ -1652,6 +1674,22 @@ export async function fetchOrgAdminCommunicationSettings(): Promise<OrgAdminComm
   const res = await fetch("/api/org-admin/communications/settings");
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento impostazioni comunicazioni"));
+  return res.json();
+}
+
+export async function uploadOrgAdminCardAssets(
+  input: { logo: File; removeBackground?: boolean },
+): Promise<{ ok: boolean; card_logo_url: string | null; settings: OrgAdminMembershipSettings }> {
+  const body = new FormData();
+  body.append("logo", input.logo);
+  body.append("remove_background", input.removeBackground ? "true" : "false");
+  const res = await fetch("/api/org-admin/organization/card-assets", {
+    method: "POST",
+    body,
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 413) throw new Error(await parseApiErrorDetail(res, "File troppo grande (max 2 MB)."));
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento logo tessera"));
   return res.json();
 }
 

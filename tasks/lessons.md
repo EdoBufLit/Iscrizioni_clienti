@@ -257,3 +257,11 @@ The customer email sent after an org admin confirms a booking is a separate oper
 ## May 26, 2026 - Manual root deploys can break GitHub Actions checkout
 
 When GitHub Actions deploys through a non-root `deploy` user, any manual SSH deploy performed as `root` can leave root-owned `.git/objects` in the persistent server checkout. After any root-side emergency deploy, verify and restore `/opt/assonam/app/.git` ownership to `deploy:deploy` before trusting the next Actions run.
+
+## May 26, 2026 - Membership card PDFs must render from bounded card artwork
+
+When redesigning membership cards, the PDF should place a verified bounded front/back artwork image instead of re-laying out every field independently. Clamp text inside the card renderer first, keep protected tenant designs such as Golden Age Club/Oasi 2 on their legacy template, and verify both PNG and PDF output before showing the result.
+
+## May 26, 2026 - Premium card layouts need breathing room, not just decoration
+
+When matching a reference membership card, do not only copy palette, logo placement, and ornamental curves. Check vertical rhythm between status, identity, association, and card number; use shadow/highlight sparingly for premium depth; and remove instructional copy from the back unless the tenant explicitly asks for it.

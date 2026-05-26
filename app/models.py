@@ -294,6 +294,7 @@ class Organization(Base):
     club_display_name = Column(String, nullable=True)
     card_email_subject = Column(String, nullable=True)
     card_logo_url = Column(String, nullable=True)
+    card_style_json = Column(Text, nullable=True)
     wallet_bg_color = Column(String, nullable=True)
     wallet_logo_url = Column(String, nullable=True)
     wallet_hero_image_url = Column(String, nullable=True)
