@@ -5377,3 +5377,16 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Verifiche OK: `python -m compileall -q app init_db.py`, pytest mirati booking/survey (`2 passed`), `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.
 - Nota migration: `alembic heads` punta a `x9y0z1a2b3c4`; `alembic upgrade head --sql` in locale si ferma su una vecchia migration SQLite batch preesistente, prima di questa migration.
 - Deploy live: Hetzner aggiornato a `24056ab`, migration PostgreSQL applicata a `x9y0z1a2b3c4`, container `web`, `email-worker`, `low-cards-worker`, `whatsapp-webhook-worker` ricreati e healthy; smoke HTTP 200 su home, prenotazioni e comunicazioni; log recenti senza traceback/exception; disco al 37%, prune non necessario.
+
+## Plan (Debug GitHub Actions deploy fallito - May 26, 2026)
+- [x] Verificare autenticazione `gh`, branch/PR e identificare il workflow deploy fallito.
+- [x] Leggere log GitHub Actions del run fallito e distinguere problema pipeline da deploy live gia riuscito via SSH.
+- [x] Se la causa e correggibile nel repo, applicare fix minimo e verificare localmente; se e un falso negativo/secret/env remoto, documentare il remediation esatto.
+- [x] Pushare eventuale fix e ricontrollare stato workflow/log.
+
+## Review (Debug GitHub Actions deploy fallito - May 26, 2026)
+- Root cause: il deploy manuale via SSH root aveva creato oggetti `.git` `root:root` dentro la checkout persistente `/opt/assonam/app`; GitHub Actions entra come `deploy` e falliva prima del fetch con `.git/objects/... Operation not permitted`.
+- Fix operativo: ripristinato ownership e permessi della checkout con `chown -R deploy:deploy .git` e chmod su directory/file git.
+- Verifica Actions: rilanciato workflow `Deploy to Hetzner` run `26462244906`, completato con `build-images` e `deploy` entrambi `success`.
+- Verifica live: server su commit `5d5cff2`, container applicativi/evolution healthy, log recenti senza traceback/exception, disco `/` al 45%; prune non necessario.
+- Nota residua: resta solo warning GitHub non bloccante su deprecazione Node.js 20 per alcune actions entro giugno/settembre 2026.

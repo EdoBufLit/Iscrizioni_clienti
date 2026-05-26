@@ -253,3 +253,7 @@ When a booking is created from a public form, the form payload is not enough as 
 ## May 26, 2026 - Admin booking confirmation email is form configuration, not generic form receipt
 
 The customer email sent after an org admin confirms a booking is a separate operational message from the generic "form received" email and from post-event surveys. It must be visible in the booking form settings, independently toggleable, and documented as separate from WhatsApp automations so org admins can choose email-only, WhatsApp-only, both, or neither.
+
+## May 26, 2026 - Manual root deploys can break GitHub Actions checkout
+
+When GitHub Actions deploys through a non-root `deploy` user, any manual SSH deploy performed as `root` can leave root-owned `.git/objects` in the persistent server checkout. After any root-side emergency deploy, verify and restore `/opt/assonam/app/.git` ownership to `deploy:deploy` before trusting the next Actions run.
