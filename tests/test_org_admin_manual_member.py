@@ -181,6 +181,34 @@ def test_org_admin_can_manage_membership_settings_and_create_temporary_member(cl
     assert patched["temporary_membership_duration_value"] == 8
     assert patched["temporary_membership_duration_unit"] == "hours"
 
+    style_res = client.patch(
+        "/api/org-admin/organization/membership-settings",
+        json={
+            "card_style": {
+                "primary_color": "#660020",
+                "secondary_color": "#24000E",
+                "accent_color": "#E1B957",
+                "text_color": "#FFFFFF",
+                "muted_text_color": "#F9D86B",
+                "font_family": "classic",
+                "surface_pattern": "geometric",
+                "logo_mode": "watermark",
+                "logo_position": "top-right",
+                "logo_opacity": 0.22,
+                "logo_blend": "normal",
+                "remove_logo_background": False,
+                "back_title": "Verifica tessera",
+                "back_body": "",
+                "back_show_member": True,
+            }
+        },
+    )
+    assert style_res.status_code == 200, style_res.text
+    styled = style_res.json()["settings"]["card_style"]
+    assert styled["primary_color"] == "#660020"
+    assert styled["logo_opacity"] == 0.22
+    assert styled["back_body"] == ""
+
     payload = {
         "first_name": "Marta",
         "last_name": "Temporanea",

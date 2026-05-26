@@ -265,3 +265,7 @@ When redesigning membership cards, the PDF should place a verified bounded front
 ## May 26, 2026 - Premium card layouts need breathing room, not just decoration
 
 When matching a reference membership card, do not only copy palette, logo placement, and ornamental curves. Check vertical rhythm between status, identity, association, and card number; use shadow/highlight sparingly for premium depth; and remove instructional copy from the back unless the tenant explicitly asks for it.
+
+## May 26, 2026 - Builders need workspace, not sidebar treatment
+
+If a feature is called a builder and includes previews plus many controls, do not place it in a narrow secondary column next to operational tables. Put it in a full-width section near the relevant workflow, with wide previews and controls arranged in rows, then move secondary status panels below or after it.

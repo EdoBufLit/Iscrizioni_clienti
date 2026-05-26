@@ -5419,3 +5419,16 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Resa premium: aggiunta ombra/highlight al testo oro grande (`2026` e numero tessera) anche nella preview builder.
 - Anteprime aggiornate: `standard-front-v2.png`, `standard-back-v2.png`, `standard-card-v2.pdf`.
 - Verifiche OK: `python -m compileall -q app init_db.py`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
+
+## Plan (Builder tessera full-width e verifica live - May 26, 2026)
+- [x] Controllare live server per commit, Alembic head, colonna `card_style_json`, disco e necessita prune.
+- [x] Spostare il builder tessera da colonna laterale a sezione full-width sotto il registro movimenti.
+- [x] Aggiungere test backend sul salvataggio `card_style` dalle impostazioni tessera.
+- [x] Eseguire typecheck/build/test mirati, pushare e verificare se serve deploy/migration ulteriore.
+
+## Review (Builder tessera full-width e verifica live - May 26, 2026)
+- Live prima della correzione layout: server su commit `688b4b2`, Alembic `y0z1a2b3c4d5 (head)`, colonna `organizations.card_style_json` presente.
+- Disco Hetzner al 62%, Docker con cache recuperabile ma non necessario prune urgente.
+- Builder spostato sotto il registro movimenti in sezione full-width; pannelli secondari `Registro lotti`, `Regole emissione`, `Totale quote` ora stanno sotto in griglia.
+- Aggiunto test backend che salva `card_style` via `PATCH /api/org-admin/organization/membership-settings` e verifica persistenza dei campi principali.
+- Verifiche OK: `python -m compileall -q app init_db.py`, `pytest tests/test_org_admin_manual_member.py::test_org_admin_can_manage_membership_settings_and_create_temporary_member -q`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.

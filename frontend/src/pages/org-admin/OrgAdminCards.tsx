@@ -327,7 +327,7 @@ const OrgAdminCards = () => {
             </div>
           ) : null}
 
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
+          <div className="space-y-5">
             <SectionPanel title="Registro movimenti tessere" eyebrow={movementsYear ? `Anno ${movementsYear}` : "Lotti"} className="org-admin-mobile-filter-panel">
               <div className="org-admin-mobile-filter-grid mb-4 grid gap-3 md:grid-cols-4">
                 <select className="premium-select" value={movementStatusFilter} onChange={(event) => setMovementStatusFilter(event.target.value)}>
@@ -388,19 +388,18 @@ const OrgAdminCards = () => {
               )}
             </SectionPanel>
 
-            <aside className="org-admin-mobile-secondary-panels space-y-5">
-              <SectionPanel title="Builder tessera" eyebrow="Design standard">
-                <form className="card-builder space-y-5" onSubmit={handleCardDesignSubmit}>
+            <SectionPanel title="Builder tessera" eyebrow="Design standard">
+              <form className="card-builder card-builder--wide space-y-6" onSubmit={handleCardDesignSubmit}>
                   {membershipSettings?.card_style_locked ? (
                     <div className="rounded-[0.85rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
                       Design bloccato per questa associazione: la tessera Golden Age Club resta invariata.
                     </div>
                   ) : null}
-                  <div className="grid gap-3">
+                  <div className="grid gap-4 lg:grid-cols-2">
                     <CardDesignPreview style={cardStyleDraft} logoUrl={cardLogoPreviewUrl} orgName={admin?.organization?.name} side="front" />
                     <CardDesignPreview style={cardStyleDraft} logoUrl={cardLogoPreviewUrl} orgName={admin?.organization?.name} side="back" />
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     {([
                       ["primary_color", "Bordeaux"],
                       ["secondary_color", "Profondita"],
@@ -426,7 +425,7 @@ const OrgAdminCards = () => {
                       }}
                     />
                   </label>
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <label className="block">
                       <span className="text-sm font-semibold text-slate-700">Uso logo</span>
                       <select className="premium-select mt-2" value={cardStyleDraft.logo_mode} disabled={membershipSettings?.card_style_locked} onChange={(event) => updateCardStyle("logo_mode", event.target.value as OrgAdminCardStyle["logo_mode"])}>
@@ -469,11 +468,13 @@ const OrgAdminCards = () => {
                     <span className="text-sm font-semibold text-slate-700">Testo retro</span>
                     <textarea className="mt-2 min-h-[88px] w-full rounded-[0.75rem] border border-slate-200 bg-white px-4 py-3 text-sm" value={cardStyleDraft.back_body} disabled={membershipSettings?.card_style_locked} onChange={(event) => updateCardStyle("back_body", event.target.value)} />
                   </label>
-                  <button type="submit" className="btn-primary w-full justify-center" disabled={savingCardDesign || membershipSettings?.card_style_locked}>
+                  <button type="submit" className="btn-primary w-full justify-center sm:w-auto sm:px-8" disabled={savingCardDesign || membershipSettings?.card_style_locked}>
                     {savingCardDesign ? "Salvataggio..." : "Salva design tessera"}
                   </button>
                 </form>
               </SectionPanel>
+
+            <div className="org-admin-mobile-secondary-panels grid gap-5 xl:grid-cols-3">
 
               <SectionPanel title="Registro lotti" eyebrow="Disponibilità">
                 <div className="space-y-4">
@@ -549,7 +550,7 @@ const OrgAdminCards = () => {
                 <p className="text-3xl font-semibold tracking-tight text-slate-950">€ {summaryTotal.toFixed(2)}</p>
                 <p className="mt-2 text-sm text-slate-500">Valore teorico calcolato sulle tessere emesse e sui prezzi quota correnti.</p>
               </SectionPanel>
-            </aside>
+            </div>
           </div>
         </>
       )}
