@@ -4920,6 +4920,11 @@ body.dashboard-perf-mode .btn-ghost:hover {
   font-weight: 760;
 }
 
+.org-admin-v2 .org-admin-mobile-stats-strip,
+.org-admin-v2 .booking-map-mobile-stats {
+  display: none;
+}
+
 .org-admin-v2 .org-kpi-card--success .org-kpi-card__icon {
   background: color-mix(in srgb, var(--oa-success) 18%, var(--oa-panel));
   color: var(--oa-success);
@@ -7495,4 +7500,141 @@ body.dashboard-perf-mode .btn-ghost:hover {
 
 :root[data-theme="dark"] .member-booking-note-textarea::placeholder {
   color: #94a3b8;
+}
+
+@media (max-width: 767px) {
+  .org-admin-v2 .org-admin-mobile-page {
+    max-width: 100%;
+    overflow-x: hidden;
+    padding: 1rem 0.75rem calc(7.5rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .org-admin-v2 .org-admin-desktop-kpi-grid,
+  .org-admin-v2 .booking-map-kpis {
+    display: none !important;
+  }
+
+  .org-admin-v2 .org-admin-mobile-stats-strip,
+  .org-admin-v2 .booking-map-mobile-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.45rem;
+    min-width: 0;
+  }
+
+  .org-admin-v2 .org-admin-mobile-stats-strip span,
+  .org-admin-v2 .booking-map-mobile-stats span {
+    min-width: 0;
+    border: 1px solid color-mix(in srgb, var(--oa-border) 76%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--oa-panel) 88%, var(--oa-brand) 6%);
+    color: var(--oa-muted);
+    padding: 0.55rem 0.68rem;
+    font-size: 0.72rem;
+    font-weight: 850;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+  }
+
+  .org-admin-v2 .org-admin-mobile-stats-strip strong,
+  .org-admin-v2 .booking-map-mobile-stats strong {
+    display: block;
+    color: var(--oa-text);
+    font-size: 1rem;
+    font-weight: 950;
+    line-height: 1;
+  }
+
+  .org-admin-v2 .org-admin-mobile-filter-panel {
+    padding: 0.85rem !important;
+  }
+
+  .org-admin-v2 .org-admin-mobile-filter-grid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0.55rem !important;
+    min-width: 0;
+  }
+
+  .org-admin-v2 .org-admin-mobile-filter-grid > *,
+  .org-admin-v2 .org-admin-mobile-filter-grid .premium-select,
+  .org-admin-v2 .org-admin-mobile-filter-grid button {
+    width: 100%;
+    min-width: 0 !important;
+  }
+
+  .org-admin-v2 .org-admin-mobile-table-shell {
+    max-width: calc(100vw - 1.5rem);
+  }
+
+  .org-admin-v2 .org-admin-mobile-table-shell table {
+    min-width: 42rem;
+  }
+
+  .org-admin-v2 .org-admin-mobile-master-detail {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .org-admin-v2 .org-admin-mobile-master-detail > :nth-child(2) {
+    display: none;
+  }
+
+  .org-admin-v2 .org-admin-mobile-secondary-panels {
+    gap: 0.75rem;
+  }
+
+  .org-admin-v2 .booking-map-section {
+    gap: 0.85rem;
+  }
+
+  .org-admin-v2 .booking-map-section .org-section-panel,
+  .org-admin-v2 .booking-map-section .surface,
+  .org-admin-v2 .booking-map-section .surface-strong {
+    border-radius: 8px;
+  }
+
+  .org-admin-v2 .booking-map-controls {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0.55rem;
+  }
+
+  .org-admin-v2 .booking-map-mobile-stats {
+    margin-top: 0.75rem;
+  }
+
+  .org-admin-v2 .booking-map-canvas-shell {
+    margin-top: 0.75rem !important;
+  }
+
+  .org-admin-v2 .booking-map-side-panels {
+    display: none;
+  }
+
+  .org-admin-v2 .room-floor-map {
+    gap: 0.65rem;
+  }
+
+  .org-admin-v2 .room-floor-map__header {
+    align-items: center;
+  }
+
+  .org-admin-v2 .room-floor-map__header p,
+  .org-admin-v2 .room-floor-map__badges,
+  .org-admin-v2 .room-floor-map__legend {
+    display: none;
+  }
+
+  .org-admin-v2 .room-floor-map__header h3 {
+    margin: 0;
+    color: var(--oa-text);
+    font-size: 1.05rem;
+    line-height: 1.15;
+  }
+
+  .org-admin-v2 .room-floor-map__canvas {
+    min-height: min(24rem, 58vh) !important;
+    border-radius: 8px !important;
+    padding: 1rem !important;
+    box-shadow: inset 0 0 0 4px rgba(81, 80, 75, 0.62), 0 14px 28px -24px rgba(15, 23, 42, 0.7) !important;
+  }
 }

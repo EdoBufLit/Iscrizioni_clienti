@@ -261,7 +261,7 @@ const OrgAdminMembers = () => {
   );
 
   return (
-    <div className="container-shell py-10 space-y-6">
+    <div className="container-shell org-admin-mobile-page org-admin-members-page py-10 space-y-6">
       <PageHeader
         eyebrow="Soci e tessere"
         title="Soci"
@@ -328,14 +328,21 @@ const OrgAdminMembers = () => {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="org-admin-mobile-stats-strip" aria-label="Riepilogo soci">
+        <span><strong>{activeMembersCount}</strong> Soci attivi</span>
+        <span><strong>{metrics?.pending_requests_count ?? 0}</strong> Da approvare</span>
+        <span><strong>{missingDocumentsCount}</strong> Documenti</span>
+        <span><strong>{expiringSoonCount}</strong> Rinnovi</span>
+      </div>
+
+      <div className="org-admin-desktop-kpi-grid grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <KpiCard label="Soci attivi" value={activeMembersCount} hint="+3% questo mese" tone="success" />
         <KpiCard label="Da approvare" value={metrics?.pending_requests_count ?? 0} hint="Richieste in verifica" tone="warning" />
         <KpiCard label="Documenti mancanti" value={missingDocumentsCount} hint="Da completare o rivedere" tone={missingDocumentsCount ? "danger" : "muted"} />
         <KpiCard label="Rinnovi in scadenza" value={expiringSoonCount} hint="Nei prossimi 30 giorni" tone="info" />
       </div>
 
-      <SectionPanel className="p-4">
+      <SectionPanel className="org-admin-mobile-filter-panel p-4">
         <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-center">
           <div className="flex-1 min-w-0">
             <DebouncedSearchInput
@@ -347,7 +354,7 @@ const OrgAdminMembers = () => {
               }}
             />
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="org-admin-mobile-filter-grid flex flex-wrap items-center gap-3">
             <select className="premium-select min-w-[140px] flex-1 sm:flex-none" value={status} onChange={(e) => onFilterChange(setStatus, e.target.value)}>
               {STATUS_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -397,7 +404,7 @@ const OrgAdminMembers = () => {
         </div>
       </SectionPanel>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
+      <div className="org-admin-mobile-master-detail grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
         <MembersTable
           error={error}
           isLoading={isLoading}

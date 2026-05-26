@@ -5342,3 +5342,10 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - White-label: title/metadata del form pubblico usano il nome associazione e non aggiungono ASSO.N.A.M.
 - Agenda: le card usano nome/cognome ricavato da mapping o label del payload form, con meta compatta pax/orario e icona form.
 - Test locali: typecheck, build frontend, compile Python e pytest mirati passati.
+
+## Plan (Fix mobile org admin tessere soci prenotazioni mappa - May 26, 2026)
+- [ ] Rendere `Soci` e `Tessere` mobile-first con strip KPI compatta, filtri full-width e layout senza overflow laterale.
+- [ ] Rimuovere duplicazioni contatto/telefono dal dettaglio prenotazioni mobile mantenendo le info utili.
+- [ ] Compattare `Prenotazioni > Mappa sala` mobile: controlli prima della mappa, contatori piccoli e pannelli secondari non ingombranti.
+- [ ] Aggiungere `Serate` alla sidebar desktop del gruppo Prenotazioni.
+- [ ] Verificare typecheck/build, smoke mobile light/dark, push e deploy Hetzner con controllo disco/log.

@@ -243,6 +243,11 @@ function bookingPrimaryMeta(booking: AssociationBooking) {
   return parts.filter(Boolean).join(" · ");
 }
 
+function isBookingRequestFactField(field: { key: string; label: string }) {
+  const haystack = `${field.key || ""} ${field.label || ""}`.toLowerCase();
+  return /(nome|cognome|nominativo|cliente|socio|email|mail|telefono|phone|cellulare|contatto|booking_date|booking_time|party_size|data|orario|ora|persone|pax|serata|evento)/.test(haystack);
+}
+
 function formatBookingTable(booking: Pick<AssociationBooking, "room" | "table">) {
   if (booking.table?.name) return `Tavolo ${booking.table.name}`;
   if (booking.room?.name) return booking.room.name;
@@ -1444,9 +1449,9 @@ export default function OrgAdminBookings() {
         )}
 
         {section === "map" && (
-          <section className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_380px]">
+          <section className="booking-map-section grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_380px]">
             <SectionPanel title="Mappa sala" eyebrow="Workspace operativo">
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="booking-map-controls grid gap-3 md:grid-cols-3">
                 <Field label="Sala">
                   <select className={inputClass} value={selectedRoomId ?? ""} onChange={(event) => setSelectedRoomId(event.target.value ? Number(event.target.value) : null)}>
                     <option value="">Seleziona una sala</option>
@@ -1460,13 +1465,19 @@ export default function OrgAdminBookings() {
                   <input className={inputClass} type="time" value={mapTime} onChange={(event) => setMapTime(event.target.value)} />
                 </Field>
               </div>
-              <div className="mt-6 grid gap-4 md:grid-cols-4">
+              <div className="booking-map-mobile-stats" aria-label="Riepilogo mappa sala">
+                <span><strong>{rooms.length}</strong> Sale</span>
+                <span><strong>{roomMap?.totals.tables ?? roomTables.length}</strong> Tavoli</span>
+                <span><strong>{roomMap?.totals.free ?? 0}</strong> Liberi</span>
+                <span><strong>{roomMap?.totals.occupied ?? 0}</strong> Occupati</span>
+              </div>
+              <div className="booking-map-kpis mt-6 grid gap-4 md:grid-cols-4">
                 <KpiCard label="Sale" value={rooms.length} tone="success" />
                 <KpiCard label="Tavoli" value={roomMap?.totals.tables ?? roomTables.length} tone="info" />
                 <KpiCard label="Liberi" value={roomMap?.totals.free ?? 0} tone="success" />
                 <KpiCard label="Occupati" value={roomMap?.totals.occupied ?? 0} tone="danger" />
               </div>
-              <div className="mt-6">
+              <div className="booking-map-canvas-shell mt-6">
                 <RoomFloorMap
                   roomName={selectedRoom?.name}
                   tables={mapTables}
@@ -1477,7 +1488,7 @@ export default function OrgAdminBookings() {
                 />
               </div>
             </SectionPanel>
-            <aside className="space-y-4">
+            <aside className="booking-map-side-panels space-y-4">
               <div className="surface-strong rounded-[1.25rem] p-5">
                 <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">Legenda</p>
                 <div className="mt-4 space-y-3">
@@ -2260,7 +2271,7 @@ function MobileManagedBookingsSection(props: {
                       <strong>{displayName}</strong>
                       <ReminderResponseIndicator booking={booking} />
                     </span>
-                    <small>{tableLabel}{booking.customer_phone ? ` · ${booking.customer_phone}` : ""}</small>
+                    <small>{tableLabel}</small>
                   </span>
                   <span className="booking-mobile-managed-card__side">
                     {isFormLinkedBooking(booking) ? <span className="booking-day-row__form-icon" title="Richiesta da form" aria-label="Richiesta da form" /> : null}
@@ -2380,10 +2391,11 @@ function BookingDetailPanel(props: {
 
   const requestMeta = requestStatusMeta(props.selectedBooking.request_status);
   const requestPayloadSummary = props.selectedBooking.request_payload_summary ?? [];
-  const requestFactKeys = new Set(["nome_socio", "customer_name", "name", "full_name", "email", "telefono", "phone", "customer_phone", "booking_date", "booking_time", "party_size", "booking_event_summary"]);
   const compactRequestFields = requestPayloadSummary
-    .filter((field) => !requestFactKeys.has(field.key))
+    .filter((field) => !isBookingRequestFactField(field))
     .slice(0, 4);
+  const contactLabel = props.selectedBooking.customer_phone ? "Telefono" : props.selectedBooking.customer_email ? "Email" : "";
+  const contactValue = props.selectedBooking.customer_phone || props.selectedBooking.customer_email || "";
   const showMobileLinkedRequestOnly = Boolean(props.mobileOnly && props.selectedBooking.submission_id);
   const showMobileAssignment = Boolean(
     showMobileLinkedRequestOnly
@@ -2429,10 +2441,12 @@ function BookingDetailPanel(props: {
                 <strong>{props.selectedBooking.event_summary}</strong>
               </span>
             ) : null}
-            <span>
-              <small>Contatto</small>
-              <strong>{props.selectedBooking.customer_phone || props.selectedBooking.customer_email || "N/D"}</strong>
-            </span>
+            {contactValue ? (
+              <span>
+                <small>{contactLabel}</small>
+                <strong>{contactValue}</strong>
+              </span>
+            ) : null}
           </div>
 
           {showMobileAssignment ? (

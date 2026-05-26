@@ -141,7 +141,7 @@ const OrgAdminCards = () => {
   );
 
   return (
-    <div className="container-shell py-10 space-y-6" data-tour="admin-cards">
+    <div className="container-shell org-admin-mobile-page org-admin-cards-page py-10 space-y-6" data-tour="admin-cards">
       <PageHeader
         eyebrow="Soci e tessere"
         title="Tessere"
@@ -169,7 +169,14 @@ const OrgAdminCards = () => {
         </SectionPanel>
       ) : (
         <>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="org-admin-mobile-stats-strip" aria-label="Riepilogo tessere">
+            <span><strong>{stock?.used ?? issuedMembersCount}</strong> Tessere attive</span>
+            <span><strong>{pendingWithoutCardCount}</strong> In scadenza</span>
+            <span><strong>{metrics?.cards_remaining === 0 && (metrics?.cards_total ?? 0) > 0 ? "Stop" : 0}</strong> Scadute</span>
+            <span><strong>{movementsTotal || 0}</strong> Lotti</span>
+          </div>
+
+          <div className="org-admin-desktop-kpi-grid grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <KpiCard label="Tessere attive" value={stock?.used ?? issuedMembersCount} hint="+12% vs mese scorso" tone="success" />
             <KpiCard label="In scadenza" value={pendingWithoutCardCount} hint="Richieste senza tessera" tone="warning" />
             <KpiCard label="Scadute" value={metrics?.cards_remaining === 0 && (metrics?.cards_total ?? 0) > 0 ? "Stock esaurito" : 0} hint="Da rinnovare" tone={(stock?.remaining ?? 0) === 0 && (stock?.total ?? 0) > 0 ? "danger" : "muted"} />
@@ -183,8 +190,8 @@ const OrgAdminCards = () => {
           ) : null}
 
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
-            <SectionPanel title="Registro movimenti tessere" eyebrow={movementsYear ? `Anno ${movementsYear}` : "Lotti"}>
-              <div className="mb-4 grid gap-3 md:grid-cols-4">
+            <SectionPanel title="Registro movimenti tessere" eyebrow={movementsYear ? `Anno ${movementsYear}` : "Lotti"} className="org-admin-mobile-filter-panel">
+              <div className="org-admin-mobile-filter-grid mb-4 grid gap-3 md:grid-cols-4">
                 <select className="premium-select" value={movementStatusFilter} onChange={(event) => setMovementStatusFilter(event.target.value)}>
                   <option value="">Tutti gli stati</option>
                   {Array.from(new Set(movements.map((movement) => movement.status_label))).map((statusLabel) => (
@@ -210,7 +217,7 @@ const OrgAdminCards = () => {
               {movementsTotal === 0 ? (
                 <EmptyState title="Nessun lotto disponibile" description="I lotti assegnati da ASSONAM comparirànno qui automaticamente." />
               ) : (
-                <div className="overflow-hidden rounded-[0.85rem] border border-slate-200 bg-white">
+                <div className="org-admin-mobile-table-shell overflow-hidden rounded-[0.85rem] border border-slate-200 bg-white">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left">
                       <thead className="border-b border-slate-200 bg-slate-50">
@@ -243,7 +250,7 @@ const OrgAdminCards = () => {
               )}
             </SectionPanel>
 
-            <aside className="space-y-5">
+            <aside className="org-admin-mobile-secondary-panels space-y-5">
               <SectionPanel title="Registro lotti" eyebrow="Disponibilità">
                 <div className="space-y-4">
                   <div>

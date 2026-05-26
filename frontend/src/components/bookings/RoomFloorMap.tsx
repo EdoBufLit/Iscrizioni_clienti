@@ -85,13 +85,13 @@ export function RoomFloorMap({
   }, [dragState, editable, onMoveTable]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="room-floor-map space-y-4">
+      <div className="room-floor-map__header flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500">Mappa sala</p>
           <h3 className="mt-1 font-serif text-2xl tracking-tight text-slate-950">{roomName || "Seleziona una sala"}</h3>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="room-floor-map__badges flex flex-wrap gap-2">
           <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
             {editable ? "Editor posizioni attivo" : "Vista occupazione"}
           </div>
@@ -103,7 +103,7 @@ export function RoomFloorMap({
 
       <div
         ref={containerRef}
-        className="org-admin-floor-map relative min-h-[34rem] overflow-hidden rounded-[0.7rem] border border-slate-300 bg-[#ead8c3] p-6 shadow-[inset_0_0_0_8px_rgba(81,80,75,0.72),0_18px_38px_-28px_rgba(15,23,42,0.6)]"
+        className="org-admin-floor-map room-floor-map__canvas relative min-h-[34rem] overflow-hidden rounded-[0.7rem] border border-slate-300 bg-[#ead8c3] p-6 shadow-[inset_0_0_0_8px_rgba(81,80,75,0.72),0_18px_38px_-28px_rgba(15,23,42,0.6)]"
       >
         <div className="pointer-events-none absolute inset-0 opacity-75 [background-image:repeating-linear-gradient(0deg,rgba(255,255,255,0.15)_0,rgba(255,255,255,0.15)_1px,transparent_1px,transparent_38px),repeating-linear-gradient(90deg,rgba(120,91,57,0.11)_0,rgba(120,91,57,0.11)_1px,transparent_1px,transparent_76px)]" />
         <div className="pointer-events-none absolute left-7 right-[58%] top-8 h-24 rounded-br-[2rem] border border-[#b9afa1] bg-[#f4eee6] shadow-[0_12px_24px_-20px_rgba(0,0,0,0.55)]">
@@ -214,7 +214,7 @@ export function RoomFloorMap({
         </div>
       ) : null}
 
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="room-floor-map__legend grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         {(["free", "reserved", "occupied", "out_of_service"] as AssociationRoomTable["occupancy_state"][]).map((state) => (
           <div key={state} className={`rounded-[1rem] border bg-gradient-to-br px-3 py-3 text-sm font-semibold ${occupancyTone(state)}`}>
             <p>{occupancyLabel(state)}</p>

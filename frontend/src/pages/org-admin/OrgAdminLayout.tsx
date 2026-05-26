@@ -274,6 +274,7 @@ const OrgAdminLayout = () => {
         label: "Prenotazioni",
         items: [
           { to: "/org-admin/prenotazioni?section=agenda", label: "Agenda", icon: "calendar" },
+          { to: "/org-admin/prenotazioni?section=events", label: "Serate", icon: "calendar" },
           { to: "/org-admin/prenotazioni?section=rooms", label: "Sale", icon: "room" },
           { to: "/org-admin/prenotazioni?section=tables", label: "Tavoli", icon: "table" },
           { to: "/org-admin/prenotazioni?section=map", label: "Mappa sala", icon: "map" },
