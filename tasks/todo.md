@@ -5462,3 +5462,15 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - GitHub Actions: `paths-filter` ora usa `github.event.before` come base su push e `github.sha` come ref, quindi i branch `feat/**` non vengono piu' confrontati contro il branch storico e non dovrebbero rebuildare immagini non toccate.
 - Serate prenotabili: `Dalle/Alle` aggiorna subito gli slot ogni 30 minuti nel draft; il campo manuale resta disponibile in un dettaglio avanzato non evidente.
 - Verifiche OK: YAML workflow parseabile, `git diff --check`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
+
+## Plan (Fix ordine orari form prenotazione - May 27, 2026)
+- [x] Diagnosticare perche' gli slot `00:00/00:30` compaiono prima degli orari serali nei form pubblici.
+- [x] Preservare l'ordine configurato degli slot lato backend e lato normalizzazione frontend, senza sort lessicografico.
+- [x] Aggiungere test per range serale che attraversa mezzanotte e rieseguire verifiche mirate.
+- [ ] Pushare e ricontrollare deploy/live.
+
+## Review (Fix ordine orari form prenotazione - May 27, 2026)
+- Root cause: backend e normalizzatore frontend ordinavano gli slot con sort lessicografico, quindi `00:00/00:30` finivano prima di `19:30`.
+- Fix: `available_slots` ora deduplica preservando l'ordine salvato della serata; il frontend preferisce l'ordine degli item/slot quando disponibile e non fa piu' `.sort()`.
+- Copertura: aggiunto test pubblico per una serata `19:30 ... 23:30, 00:00, 00:30`.
+- Verifiche OK: `python -m compileall -q app init_db.py`, `python -m pytest tests/test_forms_module.py -q`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.

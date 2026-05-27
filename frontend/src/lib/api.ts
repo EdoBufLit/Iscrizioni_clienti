@@ -2711,19 +2711,33 @@ function normalizeBookingEventSeries(raw: any): OrgAdminBookingEventSeries {
 
 function normalizeBookingEventSeriesList(payload: any): BookingEventSeriesListResponse {
   const items: OrgAdminBookingEventSeries[] = Array.isArray(payload?.items) ? payload.items.map(normalizeBookingEventSeries) : [];
-  const derivedSlots: string[] = Array.from(
-    new Set(items.flatMap((item: OrgAdminBookingEventSeries) => item.time_slots.map((slot: BookingEventTimeSlot) => String(slot.time || slot.start_time || "").slice(0, 5)))),
-  ).filter((slot): slot is string => Boolean(slot)).sort();
-  const availableSlots: string[] = Array.isArray(payload?.available_slots)
-    ? payload.available_slots.map((slot: unknown) => String(slot || "").slice(0, 5)).filter((slot: string) => Boolean(slot))
-    : derivedSlots;
+  const uniqueSlots = (slots: string[]) => {
+    const seen = new Set<string>();
+    const ordered: string[] = [];
+    slots.forEach((slot) => {
+      const normalized = String(slot || "").slice(0, 5);
+      if (!normalized || seen.has(normalized)) return;
+      seen.add(normalized);
+      ordered.push(normalized);
+    });
+    return ordered;
+  };
+  const derivedSlots = uniqueSlots(
+    items.flatMap((item: OrgAdminBookingEventSeries) =>
+      item.time_slots.map((slot: BookingEventTimeSlot) => String(slot.time || slot.start_time || "").slice(0, 5)),
+    ),
+  );
+  const payloadSlots: string[] = Array.isArray(payload?.available_slots)
+    ? uniqueSlots(payload.available_slots.map((slot: unknown) => String(slot || "").slice(0, 5)))
+    : [];
+  const availableSlots = derivedSlots.length ? derivedSlots : payloadSlots;
   return {
     items,
     total: Number(payload?.total ?? items.length),
     using_default: Boolean(payload?.using_default),
     has_active_rules: Boolean(payload?.has_active_rules),
     date_open: payload?.date_open !== false,
-    available_slots: Array.from(new Set<string>(availableSlots)).sort(),
+    available_slots: availableSlots,
   };
 }
 

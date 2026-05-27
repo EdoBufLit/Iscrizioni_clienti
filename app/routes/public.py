@@ -712,14 +712,15 @@ def _public_booking_events_payload(
         for item in default_items[:1]
         if item not in matching_items and (normalized_time is None or _series_has_public_time(item, normalized_time))
     ]
-    available_slots = sorted(
-        {
-            str(slot.start_time or "")[:5]
-            for item in response_items
-            for slot in list(item.time_slots or [])
-            if bool(getattr(slot, "is_active", True)) and str(slot.start_time or "")[:5]
-        }
-    )
+    available_slots: list[str] = []
+    seen_available_slots: set[str] = set()
+    for item in response_items:
+        for slot in list(item.time_slots or []):
+            slot_time = str(slot.start_time or "")[:5]
+            if not bool(getattr(slot, "is_active", True)) or not slot_time or slot_time in seen_available_slots:
+                continue
+            seen_available_slots.add(slot_time)
+            available_slots.append(slot_time)
     return {
         "using_default": not bool(matching_items) and bool(response_items),
         "has_active_rules": has_active_rules,

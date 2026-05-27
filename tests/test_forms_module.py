@@ -1169,6 +1169,50 @@ def test_dynamic_booking_events_keep_block_position_and_resolve_series_from_time
     assert "orario" in free_submit_res.json()["detail"]
 
 
+def test_public_booking_events_preserve_overnight_slot_order(client, db):
+    org, admin = _create_org_admin(db)
+    _login_org_admin(client, db, admin.id)
+
+    series_res = client.post(
+        "/api/org-admin/booking-event-series",
+        json={
+            "name": "Serata lunga",
+            "description": "Fino a tardi",
+            "recurrence_type": "date",
+            "specific_date": "2026-06-21",
+            "is_active": True,
+            "time_slots": ["19:30", "20:00", "20:30", "21:00", "21:30", "22:00", "22:30", "23:00", "23:30", "00:00", "00:30"],
+        },
+    )
+    assert series_res.status_code == 201, series_res.text
+
+    public_slug = f"prenotazione-notte-{uuid.uuid4().hex[:6]}"
+    form_res = client.post(
+        "/api/org-admin/forms",
+        json={
+            "title": "Prenotazione notte",
+            "public_slug": public_slug,
+            "is_active": True,
+            "visibility": "public",
+            "form_type": "booking",
+            "booking_enabled": True,
+            "booking_dynamic_events_enabled": True,
+            "booking_requires_manual_confirmation": True,
+            "booking_notification_enabled": False,
+        },
+    )
+    assert form_res.status_code == 201, form_res.text
+
+    events_res = client.get(
+        f"/api/forms/{org.slug}/{public_slug}/booking-events?date=2026-06-21"
+    )
+    assert events_res.status_code == 200, events_res.text
+    expected_slots = ["19:30", "20:00", "20:30", "21:00", "21:30", "22:00", "22:30", "23:00", "23:30", "00:00", "00:30"]
+    events_payload = events_res.json()
+    assert events_payload["available_slots"] == expected_slots
+    assert [slot["time"] for slot in events_payload["items"][0]["time_slots"]] == expected_slots
+
+
 def test_dynamic_booking_allows_half_hour_time_when_day_has_no_events(client, db):
     org, admin = _create_org_admin(db)
     _login_org_admin(client, db, admin.id)

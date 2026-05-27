@@ -273,3 +273,7 @@ If a feature is called a builder and includes previews plus many controls, do no
 ## May 27, 2026 - Deploy path filters must compare the pushed range
 
 For GitHub Actions deploys on long-lived feature branches, do not let path filtering default to the branch merge-base against the main deployment branch. On push events, compare `github.event.before` to `github.sha`, otherwise the workflow can see hundreds of historical files as changed and rebuild unrelated Docker images.
+
+## May 27, 2026 - Overnight booking slots preserve business order
+
+Never sort booking time slots lexicographically when a configured range can cross midnight. Preserve the saved slot order and dedupe in sequence, so `19:30 ... 23:30, 00:00, 00:30` stays in the order the admin configured.
