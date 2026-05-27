@@ -5568,10 +5568,11 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - [x] Rendere il blocco prenotazione responsive/verticale nei canvas stretti e nel builder.
 - [x] Sostituire su agenda mobile il selettore a frecce con i quadrotti giorno.
 - [x] Verificare typecheck/build/diff e controlli mirati.
-- [ ] Commit, push e controllo deploy.
+- [x] Commit, push e controllo deploy.
 
 ### Review
 - Tolta la checkbox visibile `Usa serate prenotabili`; il flag resta solo derivato dal mapping Data/Ora al blocco per compatibilita backend.
 - Aggiunta opzione `Blocco prenotazione (serate)` nei mapping Data/Ora e migrazione in UI dei form legacy che avevano il vecchio flag attivo.
 - Blocco prenotazione reso verticale nei canvas stretti tramite container query; agenda mobile aggiornata con quadrotti giorno.
 - Verifiche OK: grep vecchi testi/callback/mojibake, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `npm --prefix frontend run test:run`, `git diff --check`.
+- Commit/push OK: `de0b8acc`; deploy GitHub Actions `26541590200` completato con successo.
