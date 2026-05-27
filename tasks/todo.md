@@ -5529,7 +5529,7 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - [x] Gestire il caso 20 sale / 20 tavoli senza pannello infinito e senza overflow laterale.
 - [x] Mantenere sale e tavoli selezionabili con tap target leggibili e scroll verticale locale.
 - [x] Verificare 390px con dataset sintetico grande.
-- [ ] Commit, push e controllo deploy.
+- [x] Commit, push e controllo deploy.
 
 ## Review (Picker tavoli mobile con molte sale - May 27, 2026)
 - Con 20 sale e 20 tavoli, il picker mobile usa scroll verticale locale per sale e tavoli; niente rail laterali nascosti.
@@ -5542,7 +5542,7 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - [x] Prenotazioni: click su serata/sala/tavolo esistente deve aprire lo stesso overlay per modifica rapida.
 - [x] Comunicazioni: il `+ Nuova` mobile deve essere contestuale a tab attiva e funzionare per campagne, modelli, moduli, sondaggi e WhatsApp.
 - [x] Verificare typecheck/build e smoke dei comandi principali.
-- [ ] Commit, push e controllo deploy.
+- [x] Commit, push e controllo deploy.
 
 ## Review (Azioni Nuova contestuali e overlay - May 27, 2026)
 - Prenotazioni: i comandi `+ Serata`, `+ Sala`, `+ Tavolo` aprono overlay dedicati; anche il tap su serata/sala/tavolo esistente apre lo stesso overlay in modifica.
