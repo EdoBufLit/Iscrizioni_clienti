@@ -45,6 +45,14 @@ import { KpiCard, PageHeader, SectionPanel } from "./components/OrgAdminPrimitiv
 
 type SectionTab = "agenda" | "events" | "rooms" | "tables" | "map";
 type DayStatusFilter = "all" | "pending" | "confirmed" | "seated" | "completed";
+type BookingDetailsUpdate = {
+  customer_name: string;
+  customer_email: string | null;
+  booking_date: string | null;
+  booking_time: string | null;
+  party_size: number | null;
+  notes: string | null;
+};
 
 const bookingStatuses = ["new", "pending", "confirmed", "seated", "completed", "cancelled", "no_show"];
 const dayStatusFilters: Array<{ key: DayStatusFilter; label: string }> = [
@@ -167,6 +175,8 @@ function formatServiceStatusLabel(status: string) {
 }
 
 function serviceStatusButtonLabel(status: string) {
+  if (status === "completed") return "OK";
+  if (status === "cancelled") return "X";
   switch (status) {
     case "new":
       return "N";
@@ -378,6 +388,38 @@ function emptyEventSeriesDraft() {
     is_default: false,
     time_slots_text: "19:30, 20:00, 20:30",
   };
+}
+
+function parseBookingSlotText(value: string) {
+  return value
+    .split(/[,\n;\s]+/)
+    .map((item) => item.trim().slice(0, 5))
+    .filter((item) => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(item));
+}
+
+function timeToMinutes(value: string) {
+  const [hours, minutes] = value.split(":").map((item) => Number(item));
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  return hours * 60 + minutes;
+}
+
+function minutesToTime(totalMinutes: number) {
+  const normalized = ((totalMinutes % 1440) + 1440) % 1440;
+  const hours = Math.floor(normalized / 60);
+  const minutes = normalized % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+function buildHalfHourSlots(start: string, end: string) {
+  const startMinutes = timeToMinutes(start);
+  const endMinutes = timeToMinutes(end);
+  if (startMinutes === null || endMinutes === null) return [];
+  const resolvedEnd = endMinutes < startMinutes ? endMinutes + 1440 : endMinutes;
+  const slots: string[] = [];
+  for (let minute = startMinutes; minute <= resolvedEnd && slots.length < 49; minute += 30) {
+    slots.push(minutesToTime(minute));
+  }
+  return slots;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -701,11 +743,13 @@ export default function OrgAdminBookings() {
     }
   }
 
-  async function loadRoomState(roomId: number) {
+  async function loadRoomState(roomId: number, focus?: { date?: string | null; time?: string | null }) {
+    const focusDate = focus?.date ?? mapDate;
+    const focusTime = focus?.time ?? mapTime;
     try {
       const [tablesResponse, mapResponse] = await Promise.all([
         fetchOrgAdminRoomTables(roomId, { includeInactive: true }),
-        fetchOrgAdminRoomMap(roomId, { date: mapDate, time: mapTime || null }),
+        fetchOrgAdminRoomMap(roomId, { date: focusDate, time: focusTime || null }),
       ]);
       const nextRoomTables = Array.isArray(tablesResponse.items) ? tablesResponse.items : [];
       const nextMapTables = Array.isArray(mapResponse.tables) ? mapResponse.tables : [];
@@ -838,6 +882,47 @@ export default function OrgAdminBookings() {
         tone: "error",
         title: "Telefono non aggiornato",
         message: err instanceof Error ? err.message : "Errore aggiornamento telefono prenotazione.",
+      });
+    } finally {
+      setSaving("");
+    }
+  }
+
+  async function handleBookingDetailsSave(payload: BookingDetailsUpdate) {
+    if (!selectedBookingId || !selectedBooking) return;
+    setSaving("booking-details");
+    try {
+      const { booking } = await updateOrgAdminBooking(selectedBookingId, {
+        status: selectedBooking.status,
+        room_id: selectedBooking.room_id,
+        table_id: selectedBooking.table_id,
+        customer_name: payload.customer_name,
+        customer_email: payload.customer_email,
+        booking_date: payload.booking_date,
+        booking_time: payload.booking_time,
+        party_size: payload.party_size,
+        notes: payload.notes,
+      });
+      setSelectedBooking(booking);
+      syncMapWithBooking(booking);
+      await loadBookings();
+      const nextRoomId = booking.room_id ?? selectedRoomId;
+      if (nextRoomId) {
+        await loadRoomState(nextRoomId, {
+          date: booking.booking_date,
+          time: booking.booking_time ? booking.booking_time.slice(0, 5) : null,
+        });
+      }
+      showToast({
+        tone: "success",
+        title: "Prenotazione aggiornata",
+        message: "I dati principali sono stati salvati.",
+      });
+    } catch (err) {
+      showToast({
+        tone: "error",
+        title: "Modifica non riuscita",
+        message: err instanceof Error ? err.message : "Errore aggiornamento prenotazione.",
       });
     } finally {
       setSaving("");
@@ -1041,7 +1126,10 @@ export default function OrgAdminBookings() {
       setSelectedBooking(booking);
       syncMapWithBooking(booking);
       await loadBookings();
-      await loadRoomState(assignmentRoomId);
+      await loadRoomState(assignmentRoomId, {
+        date: booking.booking_date,
+        time: booking.booking_time ? booking.booking_time.slice(0, 5) : null,
+      });
       showToast({ tone: "success", title: "Assegnazione salvata", message: "Sala e tavolo collegati alla prenotazione." });
     } catch (err) {
       showToast({
@@ -1318,6 +1406,7 @@ export default function OrgAdminBookings() {
             phoneDraft={phoneDraft}
             setPhoneDraft={setPhoneDraft}
             onSavePhone={handleBookingPhoneSave}
+            onSaveDetails={handleBookingDetailsSave}
             onSaveAssignment={handleAssignmentSave}
             onClearAssignment={handleAssignmentClear}
             requestActionState={requestActionState}
@@ -1347,6 +1436,7 @@ export default function OrgAdminBookings() {
             phoneDraft={phoneDraft}
             setPhoneDraft={setPhoneDraft}
             onSavePhone={handleBookingPhoneSave}
+            onSaveDetails={handleBookingDetailsSave}
             onSaveAssignment={handleAssignmentSave}
             onClearAssignment={handleAssignmentClear}
             requestActionState={requestActionState}
@@ -1831,6 +1921,7 @@ function AgendaSection(props: {
   phoneDraft: string;
   setPhoneDraft: (value: string) => void;
   onSavePhone: () => void;
+  onSaveDetails: (payload: BookingDetailsUpdate) => void;
   onSaveAssignment: () => void;
   onClearAssignment: () => void;
   requestActionState: "idle" | "loading" | "success" | "error";
@@ -2063,6 +2154,7 @@ function AgendaSection(props: {
                             phoneDraft={props.phoneDraft}
                             setPhoneDraft={props.setPhoneDraft}
                             onSavePhone={props.onSavePhone}
+                            onSaveDetails={props.onSaveDetails}
                             onSaveAssignment={props.onSaveAssignment}
                             onClearAssignment={props.onClearAssignment}
                             requestActionState={props.requestActionState}
@@ -2104,6 +2196,19 @@ function BookingEventSeriesPanel(props: {
     { value: 5, label: "Sabato" },
     { value: 6, label: "Domenica" },
   ];
+  const [slotRange, setSlotRange] = useState(() => {
+    const slots = parseBookingSlotText(props.draft.time_slots_text);
+    return { start: slots[0] || "19:00", end: slots[slots.length - 1] || "23:00" };
+  });
+  useEffect(() => {
+    const slots = parseBookingSlotText(props.draft.time_slots_text);
+    setSlotRange({ start: slots[0] || "19:00", end: slots[slots.length - 1] || "23:00" });
+  }, [props.draft.id, props.draft.time_slots_text]);
+  const generateHalfHourRange = () => {
+    const slots = buildHalfHourSlots(slotRange.start, slotRange.end);
+    if (!slots.length) return;
+    props.setDraft((current) => ({ ...current, time_slots_text: slots.join(", ") }));
+  };
   const selectSeries = (item: OrgAdminBookingEventSeries) => {
     props.setDraft({
       id: item.id,
@@ -2220,6 +2325,35 @@ function BookingEventSeriesPanel(props: {
             </Field>
           )}
           <Field label="Orari disponibili">
+            <div className="mb-3 grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+              <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                Dalle
+                <input
+                  className={`${inputClass} !mt-1 !py-2`}
+                  type="time"
+                  step={1800}
+                  value={slotRange.start}
+                  onChange={(event) => setSlotRange((current) => ({ ...current, start: event.target.value }))}
+                />
+              </label>
+              <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                Alle
+                <input
+                  className={`${inputClass} !mt-1 !py-2`}
+                  type="time"
+                  step={1800}
+                  value={slotRange.end}
+                  onChange={(event) => setSlotRange((current) => ({ ...current, end: event.target.value }))}
+                />
+              </label>
+              <button
+                type="button"
+                className="min-h-[2.55rem] rounded-xl bg-slate-900 px-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                onClick={generateHalfHourRange}
+              >
+                Genera ogni 30 min
+              </button>
+            </div>
             <textarea
               className={`${inputClass} min-h-[90px]`}
               value={props.draft.time_slots_text}
@@ -2276,6 +2410,7 @@ function MobileManagedBookingsSection(props: {
   phoneDraft: string;
   setPhoneDraft: (value: string) => void;
   onSavePhone: () => void;
+  onSaveDetails: (payload: BookingDetailsUpdate) => void;
   onSaveAssignment: () => void;
   onClearAssignment: () => void;
   requestActionState: "idle" | "loading" | "success" | "error";
@@ -2351,6 +2486,7 @@ function MobileManagedBookingsSection(props: {
                         phoneDraft={props.phoneDraft}
                         setPhoneDraft={props.setPhoneDraft}
                         onSavePhone={props.onSavePhone}
+                        onSaveDetails={props.onSaveDetails}
                         onSaveAssignment={props.onSaveAssignment}
                         onClearAssignment={props.onClearAssignment}
                         requestActionState={props.requestActionState}
@@ -2457,6 +2593,167 @@ function BookingPhoneEditor({
   );
 }
 
+type BookingDetailsDraft = {
+  customer_name: string;
+  customer_email: string;
+  booking_date: string;
+  booking_time: string;
+  party_size: string;
+  notes: string;
+};
+
+function bookingDetailsDraftFromBooking(booking: AssociationBooking): BookingDetailsDraft {
+  return {
+    customer_name: booking.customer_name || "",
+    customer_email: booking.customer_email || "",
+    booking_date: booking.booking_date || "",
+    booking_time: booking.booking_time ? booking.booking_time.slice(0, 5) : "",
+    party_size: booking.party_size ? String(booking.party_size) : "",
+    notes: booking.notes || "",
+  };
+}
+
+function BookingQuickEdit(props: {
+  booking: AssociationBooking;
+  onSave: (payload: BookingDetailsUpdate) => void;
+  saving: boolean;
+  defaultOpen?: boolean;
+}) {
+  const [draft, setDraft] = useState<BookingDetailsDraft>(() => bookingDetailsDraftFromBooking(props.booking));
+  const [open, setOpen] = useState(Boolean(props.defaultOpen));
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setDraft(bookingDetailsDraftFromBooking(props.booking));
+    setOpen(Boolean(props.defaultOpen));
+    setError("");
+  }, [
+    props.booking.id,
+    props.booking.customer_name,
+    props.booking.customer_email,
+    props.booking.booking_date,
+    props.booking.booking_time,
+    props.booking.party_size,
+    props.booking.notes,
+    props.defaultOpen,
+  ]);
+
+  const normalizedPartySize = draft.party_size.trim() ? Number(draft.party_size) : null;
+  const changed = (
+    draft.customer_name.trim() !== (props.booking.customer_name || "")
+    || (draft.customer_email.trim() || null) !== (props.booking.customer_email || null)
+    || (draft.booking_date || null) !== (props.booking.booking_date || null)
+    || (draft.booking_time || null) !== (props.booking.booking_time ? props.booking.booking_time.slice(0, 5) : null)
+    || normalizedPartySize !== (props.booking.party_size || null)
+    || (draft.notes.trim() || null) !== (props.booking.notes || null)
+  );
+
+  function updateDraft(field: keyof BookingDetailsDraft, value: string) {
+    setDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  function saveDetails() {
+    const customerName = draft.customer_name.trim();
+    if (!customerName) {
+      setError("Inserisci il nome della prenotazione.");
+      return;
+    }
+    if (draft.party_size.trim() && (!Number.isInteger(normalizedPartySize) || Number(normalizedPartySize) < 1)) {
+      setError("Inserisci un numero persone valido.");
+      return;
+    }
+    setError("");
+    props.onSave({
+      customer_name: customerName,
+      customer_email: draft.customer_email.trim() || null,
+      booking_date: draft.booking_date || null,
+      booking_time: draft.booking_time || null,
+      party_size: normalizedPartySize,
+      notes: draft.notes.trim() || null,
+    });
+  }
+
+  return (
+    <details className="booking-quick-edit" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary>
+        <span>Modifica prenotazione</span>
+        <small>{formatDateTime(props.booking.booking_date, props.booking.booking_time)} - {props.booking.party_size || "-"} pax</small>
+      </summary>
+      <div className="booking-quick-edit__grid">
+        <label>
+          <span>Nome</span>
+          <input className={inputClass} value={draft.customer_name} onChange={(event) => updateDraft("customer_name", event.target.value)} />
+        </label>
+        <label>
+          <span>Email</span>
+          <input className={inputClass} type="email" value={draft.customer_email} onChange={(event) => updateDraft("customer_email", event.target.value)} />
+        </label>
+        <label>
+          <span>Giorno</span>
+          <input className={inputClass} type="date" value={draft.booking_date} onChange={(event) => updateDraft("booking_date", event.target.value)} />
+        </label>
+        <label>
+          <span>Orario</span>
+          <input className={inputClass} type="time" step={300} value={draft.booking_time} onChange={(event) => updateDraft("booking_time", event.target.value)} />
+        </label>
+        <label>
+          <span>Persone</span>
+          <input className={inputClass} type="number" min={1} value={draft.party_size} onChange={(event) => updateDraft("party_size", event.target.value)} />
+        </label>
+        <label className="booking-quick-edit__notes">
+          <span>Note interne</span>
+          <textarea className={`${inputClass} min-h-[82px]`} value={draft.notes} onChange={(event) => updateDraft("notes", event.target.value)} />
+        </label>
+      </div>
+      {error ? <p className="booking-quick-edit__error">{error}</p> : null}
+      <button type="button" onClick={saveDetails} disabled={props.saving || !changed}>
+        {props.saving ? "Salvataggio..." : "Salva modifiche"}
+      </button>
+    </details>
+  );
+}
+
+function BookingServiceStatusControls(props: {
+  booking: AssociationBooking;
+  onStatusChange: (status: string) => void;
+  saving: boolean;
+  compact?: boolean;
+}) {
+  return (
+    <div className={props.compact ? "booking-service-status-panel booking-service-status-panel--compact" : "booking-service-status-panel"}>
+      <p>Stato servizio</p>
+      <div className="booking-service-status-grid">
+        {bookingStatuses.map((status) => (
+          <button
+            key={status}
+            type="button"
+            onClick={() => props.onStatusChange(status)}
+            disabled={props.saving}
+            aria-pressed={props.booking.status === status}
+            aria-label={formatServiceStatusLabel(status)}
+            title={formatServiceStatusLabel(status)}
+            className={`booking-service-status-button ${status === "no_show" ? "is-wide" : ""} ${
+              props.booking.status === status ? "is-active" : ""
+            }`}
+          >
+            {serviceStatusButtonLabel(status)}
+          </button>
+        ))}
+      </div>
+      <div className="booking-inline-actions">
+        <button
+          type="button"
+          className="booking-inline-action"
+          disabled={props.saving || props.booking.status === "completed"}
+          onClick={() => props.onStatusChange("completed")}
+        >
+          Completa
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function BookingDetailPanel(props: {
   selectedBooking: AssociationBooking | null;
   rooms: AssociationRoom[];
@@ -2471,6 +2768,7 @@ function BookingDetailPanel(props: {
   phoneDraft: string;
   setPhoneDraft: (value: string) => void;
   onSavePhone: () => void;
+  onSaveDetails: (payload: BookingDetailsUpdate) => void;
   onSaveAssignment: () => void;
   onClearAssignment: () => void;
   requestActionState: "idle" | "loading" | "success" | "error";
@@ -2542,6 +2840,20 @@ function BookingDetailPanel(props: {
               </span>
             ) : null}
           </div>
+
+          <BookingServiceStatusControls
+            booking={props.selectedBooking}
+            onStatusChange={props.onStatusChange}
+            saving={props.saving === "booking-status"}
+            compact
+          />
+
+          <BookingQuickEdit
+            booking={props.selectedBooking}
+            onSave={props.onSaveDetails}
+            saving={props.saving === "booking-details"}
+            defaultOpen={Boolean(props.mobileOnly)}
+          />
 
           <BookingPhoneEditor
             value={props.phoneDraft}
@@ -2701,6 +3013,14 @@ function BookingDetailPanel(props: {
           <span className={bookingStatusChipClass(props.selectedBooking.status)}>{formatStatusLabel(props.selectedBooking.status)}</span>
         </div>
         <div className="mt-4">
+          <BookingQuickEdit
+            booking={props.selectedBooking}
+            onSave={props.onSaveDetails}
+            saving={props.saving === "booking-details"}
+            defaultOpen={false}
+          />
+        </div>
+        <div className="mt-4">
           <BookingPhoneEditor
             value={props.phoneDraft}
             savedValue={props.selectedBooking.customer_phone}
@@ -2831,40 +3151,11 @@ function BookingDetailPanel(props: {
         </div>
       ) : null}
 
-      <div className="rounded-[1.25rem] bg-slate-50 p-6 ring-1 ring-inset ring-slate-200/60 shadow-sm">
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-4">Stato servizio</p>
-        <div className="booking-service-status-grid">
-          {bookingStatuses.map((status) => (
-            <button 
-              key={status} 
-              type="button" 
-              onClick={() => props.onStatusChange(status)} 
-              disabled={props.saving === "booking-status"} 
-              aria-pressed={props.selectedBooking?.status === status}
-              aria-label={formatServiceStatusLabel(status)}
-              title={formatServiceStatusLabel(status)}
-              className={`booking-service-status-button ${status === "no_show" ? "is-wide" : ""} ${
-                props.selectedBooking?.status === status ? "is-active" : ""
-              }`}
-            >
-              {serviceStatusButtonLabel(status)}
-            </button>
-          ))}
-        </div>
-        <div className="booking-inline-actions">
-          <button type="button" className="booking-inline-action">
-            Note
-          </button>
-          <button
-            type="button"
-            className="booking-inline-action"
-            disabled={props.saving === "booking-status" || props.selectedBooking.status === "completed"}
-            onClick={() => props.onStatusChange("completed")}
-          >
-            Completa
-          </button>
-        </div>
-      </div>
+      <BookingServiceStatusControls
+        booking={props.selectedBooking}
+        onStatusChange={props.onStatusChange}
+        saving={props.saving === "booking-status"}
+      />
 
       <div className="rounded-[1.25rem] bg-slate-50/50 p-6 ring-1 ring-inset ring-slate-200/60">
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-4">Assegna sala e tavolo</p>

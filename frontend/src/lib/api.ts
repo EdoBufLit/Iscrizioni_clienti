@@ -1443,6 +1443,15 @@ export type OrgAdminBookingEventSeries = {
   time_slots: BookingEventTimeSlot[];
 };
 
+export type BookingEventSeriesListResponse = {
+  items: OrgAdminBookingEventSeries[];
+  total: number;
+  using_default?: boolean;
+  has_active_rules?: boolean;
+  date_open?: boolean;
+  available_slots?: string[];
+};
+
 export type AssociationRoom = {
   id: number;
   association_id: number;
@@ -2487,7 +2496,7 @@ export async function fetchPublicFormBookingEvents(
   slugOrDate: string,
   maybeDateOrOptions?: string | { time?: string | null },
   maybeOptions?: { time?: string | null },
-): Promise<{ items: OrgAdminBookingEventSeries[]; total: number }> {
+): Promise<BookingEventSeriesListResponse> {
   const scoped = typeof maybeDateOrOptions === "string";
   const dateValue = scoped ? maybeDateOrOptions : slugOrDate;
   const timeValue = scoped ? maybeOptions?.time : maybeDateOrOptions?.time;
@@ -2579,6 +2588,12 @@ export async function updateOrgAdminBooking(
     table_id?: number | null;
     notes?: string | null;
     notify_customer?: boolean;
+    customer_name?: string | null;
+    customer_email?: string | null;
+    customer_phone?: string | null;
+    booking_date?: string | null;
+    booking_time?: string | null;
+    party_size?: number | null;
   },
 ): Promise<{ booking: AssociationBooking }> {
   const res = await fetch(`/api/org-admin/bookings/${bookingId}`, {
@@ -2694,9 +2709,22 @@ function normalizeBookingEventSeries(raw: any): OrgAdminBookingEventSeries {
   };
 }
 
-function normalizeBookingEventSeriesList(payload: any): { items: OrgAdminBookingEventSeries[]; total: number } {
-  const items = Array.isArray(payload?.items) ? payload.items.map(normalizeBookingEventSeries) : [];
-  return { items, total: Number(payload?.total ?? items.length) };
+function normalizeBookingEventSeriesList(payload: any): BookingEventSeriesListResponse {
+  const items: OrgAdminBookingEventSeries[] = Array.isArray(payload?.items) ? payload.items.map(normalizeBookingEventSeries) : [];
+  const derivedSlots: string[] = Array.from(
+    new Set(items.flatMap((item: OrgAdminBookingEventSeries) => item.time_slots.map((slot: BookingEventTimeSlot) => String(slot.time || slot.start_time || "").slice(0, 5)))),
+  ).filter((slot): slot is string => Boolean(slot)).sort();
+  const availableSlots: string[] = Array.isArray(payload?.available_slots)
+    ? payload.available_slots.map((slot: unknown) => String(slot || "").slice(0, 5)).filter((slot: string) => Boolean(slot))
+    : derivedSlots;
+  return {
+    items,
+    total: Number(payload?.total ?? items.length),
+    using_default: Boolean(payload?.using_default),
+    has_active_rules: Boolean(payload?.has_active_rules),
+    date_open: payload?.date_open !== false,
+    available_slots: Array.from(new Set<string>(availableSlots)).sort(),
+  };
 }
 
 function bookingEventSeriesRequestBody(data: BookingEventSeriesInput) {

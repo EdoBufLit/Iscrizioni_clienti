@@ -33,6 +33,9 @@ type FormPublicCanvasProps = {
   interactive?: boolean;
   bookingEvents?: OrgAdminBookingEventSeries[];
   bookingEventsLoading?: boolean;
+  bookingRulesActive?: boolean;
+  bookingDateOpen?: boolean;
+  availableBookingSlots?: string[];
 };
 
 type PageTheme = ReturnType<typeof getPageTheme>;
@@ -90,7 +93,7 @@ function renderField(props: {
   
   // Decode field to get virtual type and metadata (width, hideLabel)
   const decoded = decodeField(rawField);
-  const containerStyle = decoded.width === "50%" ? { width: "calc(50% - 0.5rem)", display: "inline-block" } : { width: "100%" };
+  const containerStyle = { width: "100%" };
   
   // Use spotlight classes if we are in spotlight
   const isSpotlight = theme.shell.includes("0b1120");
@@ -385,6 +388,9 @@ export function FormPublicCanvas({
   interactive = false,
   bookingEvents = [],
   bookingEventsLoading = false,
+  bookingRulesActive = false,
+  bookingDateOpen = true,
+  availableBookingSlots = [],
 }: FormPublicCanvasProps) {
   const accentColor = getAccentColor(form);
   const theme = getPageTheme(form.page_style);
@@ -401,6 +407,7 @@ export function FormPublicCanvas({
     const minutes = String(totalMinutes % 60).padStart(2, "0");
     return `${hours}:${minutes}`;
   });
+  const timeSlotOptions = bookingRulesActive ? availableBookingSlots : timeSlots;
   const matchingSeriesForTime = selectedTime
     ? bookingEvents.filter((eventItem) =>
         (eventItem.time_slots || []).some((slot) =>
@@ -624,29 +631,38 @@ export function FormPublicCanvas({
           <select
             className={baseInputClass}
             required
-            disabled={!interactive || !values.__booking_date}
+            disabled={!interactive || bookingEventsLoading || !values.__booking_date || (bookingRulesActive && !bookingDateOpen)}
             value={String(values.__booking_event_time || "")}
             onChange={(event) => {
               onValueChange?.("__booking_event_time", event.target.value);
               onValueChange?.("__booking_event_series_id", "");
             }}
           >
-            <option value="">{copy.timePlaceholder}</option>
-            {timeSlots.map((slot) => (
+            <option value="">{bookingEventsLoading ? "Controllo orari..." : copy.timePlaceholder}</option>
+            {timeSlotOptions.map((slot) => (
               <option key={slot} value={slot}>{slot}</option>
             ))}
           </select>
+          {bookingRulesActive && !bookingEventsLoading && !bookingDateOpen ? (
+            <span className="mt-2 block text-xs font-semibold text-rose-600">
+              Nessun orario disponibile per questo giorno.
+            </span>
+          ) : null}
         </label>
         <label className="form-public-canvas__field block">
           <span className="form-public-canvas__label mb-1 block text-sm font-semibold text-neutral-800">{copy.eventLabel}</span>
           <select
             className={baseInputClass}
-            disabled={!interactive || bookingEventsLoading || !values.__booking_date || !values.__booking_event_time}
+            disabled={!interactive || bookingEventsLoading || !values.__booking_date || !values.__booking_event_time || (bookingRulesActive && !bookingDateOpen)}
             value={String(values.__booking_event_series_id || "")}
             onChange={(event) => onValueChange?.("__booking_event_series_id", event.target.value)}
           >
             <option value="">
-              {bookingEventsLoading ? "Controllo serate..." : copy.freeOptionLabel}
+              {bookingEventsLoading
+                ? "Controllo serate..."
+                : bookingRulesActive
+                  ? matchingSeriesForTime.length > 0 ? "Selezione automatica" : "Nessuna serata disponibile"
+                  : copy.freeOptionLabel}
             </option>
             {matchingSeriesForTime.map((eventItem) => (
               <option key={eventItem.id} value={eventItem.id}>

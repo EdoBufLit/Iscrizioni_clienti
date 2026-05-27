@@ -663,9 +663,25 @@ def _public_booking_events_payload(
     date_value: date,
     time_value: str | None = None,
 ) -> dict[str, object]:
+    inactive_payload = {
+        "items": [],
+        "using_default": False,
+        "has_active_rules": False,
+        "date_open": True,
+        "available_slots": [],
+    }
     if not bool(getattr(form, "booking_dynamic_events_enabled", False)):
-        return {"items": [], "using_default": False}
+        return inactive_payload
     normalized_time = _normalize_public_booking_time(time_value)
+    has_active_rules = (
+        db.query(BookingEventSeries.id)
+        .filter(
+            BookingEventSeries.association_id == form.association_id,
+            BookingEventSeries.is_active.is_(True),
+        )
+        .first()
+        is not None
+    )
     items = (
         db.query(BookingEventSeries)
         .options(joinedload(BookingEventSeries.time_slots))
@@ -696,8 +712,19 @@ def _public_booking_events_payload(
         for item in default_items[:1]
         if item not in matching_items and (normalized_time is None or _series_has_public_time(item, normalized_time))
     ]
+    available_slots = sorted(
+        {
+            str(slot.start_time or "")[:5]
+            for item in response_items
+            for slot in list(item.time_slots or [])
+            if bool(getattr(slot, "is_active", True)) and str(slot.start_time or "")[:5]
+        }
+    )
     return {
         "using_default": not bool(matching_items) and bool(response_items),
+        "has_active_rules": has_active_rules,
+        "date_open": (not has_active_rules) or bool(available_slots),
+        "available_slots": available_slots,
         "items": [
             {
                 "id": item.id,

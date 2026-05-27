@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import ConfirmModal from "../../../../components/ui/ConfirmModal";
@@ -40,7 +40,7 @@ import {
   type OrgAdminEmailTemplateVariable,
   type OrgAdminMember,
 } from "../../../../lib/api";
-import { GrapesEmailBuilder } from "./GrapesEmailBuilder";
+import { GrapesEmailBuilder, type GrapesEmailBuilderHandle } from "./GrapesEmailBuilder";
 import { KpiCard, SectionPanel, StatusChip, Stepper } from "../OrgAdminPrimitives";
 import {
   DEFAULT_CAMPAIGN_AUDIENCE,
@@ -628,6 +628,8 @@ export function MessagesHub({
   const [memberSearchResults, setMemberSearchResults] = useState<OrgAdminMember[]>([]);
   const [selectedMembers, setSelectedMembers] = useState<OrgAdminMember[]>([]);
   const [audienceEstimate, setAudienceEstimate] = useState<number | null>(null);
+  const templateBuilderRef = useRef<GrapesEmailBuilderHandle | null>(null);
+  const campaignBuilderRef = useRef<GrapesEmailBuilderHandle | null>(null);
 
   const templateSteps = [
     { key: "type", label: "Tipo" },
@@ -860,6 +862,34 @@ export function MessagesHub({
     }));
   }
 
+  function flushTemplateBuilderSnapshot() {
+    const snapshot = templateBuilderRef.current?.flush();
+    if (!snapshot) return templateDraft;
+    const nextDraft = {
+      ...templateDraft,
+      compiledHtml: snapshot.compiledHtml,
+      mjmlSource: snapshot.mjmlSource,
+      bodyText: snapshot.bodyText,
+      grapesjsProjectJson: snapshot.grapesjsProjectJson,
+    };
+    setTemplateDraft(nextDraft);
+    return nextDraft;
+  }
+
+  function flushCampaignBuilderSnapshot() {
+    const snapshot = campaignBuilderRef.current?.flush();
+    if (!snapshot) return campaignDraft;
+    const nextDraft = {
+      ...campaignDraft,
+      compiledHtml: snapshot.compiledHtml,
+      mjmlSource: snapshot.mjmlSource,
+      bodyText: snapshot.bodyText,
+      grapesjsProjectJson: snapshot.grapesjsProjectJson,
+    };
+    setCampaignDraft(nextDraft);
+    return nextDraft;
+  }
+
   async function openTemplateBuilder(templateId: number | null) {
     setBusy("open-template");
     try {
@@ -993,28 +1023,29 @@ export function MessagesHub({
   }
 
   async function saveTemplate(andClose = false) {
-    if (communicationsLocked || !templateDraft.name.trim() || !templateDraft.subject.trim()) {
+    const currentDraft = flushTemplateBuilderSnapshot();
+    if (communicationsLocked || !currentDraft.name.trim() || !currentDraft.subject.trim() || !currentDraft.compiledHtml.trim()) {
       showToast({ tone: "error", message: "Compila nome, oggetto e contenuto del modello." });
       return;
     }
     setBusy("save-template");
     try {
       const payload = {
-        name: templateDraft.name.trim(),
-        category: templateDraft.templateType,
-        template_type: templateDraft.templateType,
-        subject: templateDraft.subject.trim(),
-        body_html: templateDraft.compiledHtml,
-        body_text: templateDraft.bodyText,
-        compiled_html: templateDraft.compiledHtml,
-        mjml_source: templateDraft.mjmlSource,
-        grapesjs_project_json: templateDraft.grapesjsProjectJson,
-        editor_status: templateDraft.editorStatus,
-        linked_form_id: templateDraft.linkedFormId,
+        name: currentDraft.name.trim(),
+        category: currentDraft.templateType,
+        template_type: currentDraft.templateType,
+        subject: currentDraft.subject.trim(),
+        body_html: currentDraft.compiledHtml,
+        body_text: currentDraft.bodyText,
+        compiled_html: currentDraft.compiledHtml,
+        mjml_source: currentDraft.mjmlSource,
+        grapesjs_project_json: currentDraft.grapesjsProjectJson,
+        editor_status: currentDraft.editorStatus,
+        linked_form_id: currentDraft.linkedFormId,
       } as const;
 
-      const response = templateDraft.id
-        ? await updateOrgAdminEmailTemplate(templateDraft.id, payload)
+      const response = currentDraft.id
+        ? await updateOrgAdminEmailTemplate(currentDraft.id, payload)
         : await createOrgAdminEmailTemplate(payload);
 
       const saved = response.template;
@@ -1024,7 +1055,7 @@ export function MessagesHub({
       setTemplateSavedSnapshot(serializeTemplateDraft(nextDraft));
       showToast({
         tone: "success",
-        message: templateDraft.id ? "Modello aggiornato." : "Modello creato.",
+        message: currentDraft.id ? "Modello aggiornato." : "Modello creato.",
       });
       if (andClose) {
         backToLibrary();
@@ -1040,36 +1071,37 @@ export function MessagesHub({
   }
 
   async function saveCampaign(sendAfter = false) {
-    if (communicationsLocked || !campaignDraft.subject.trim()) {
+    const currentDraft = flushCampaignBuilderSnapshot();
+    if (communicationsLocked || !currentDraft.subject.trim() || !currentDraft.compiledHtml.trim()) {
       showToast({ tone: "error", message: "Compila oggetto e contenuto della campagna." });
       return;
     }
     setBusy(sendAfter ? "send-campaign" : "save-campaign");
     try {
       const memberIds =
-        campaignDraft.recipientMode === "selected_members"
+        currentDraft.recipientMode === "selected_members"
           ? selectedMembers.map((member) => member.id)
           : [];
 
       const payload = {
-        name: campaignDraft.name.trim() || null,
-        subject: campaignDraft.subject.trim(),
-        body_html: campaignDraft.compiledHtml,
-        body_text: campaignDraft.bodyText,
-        compiled_html: campaignDraft.compiledHtml,
-        mjml_source: campaignDraft.mjmlSource,
-        grapesjs_project_json: campaignDraft.grapesjsProjectJson,
-        audience_type: campaignDraft.audienceType,
-        recipient_mode: campaignDraft.recipientMode,
+        name: currentDraft.name.trim() || null,
+        subject: currentDraft.subject.trim(),
+        body_html: currentDraft.compiledHtml,
+        body_text: currentDraft.bodyText,
+        compiled_html: currentDraft.compiledHtml,
+        mjml_source: currentDraft.mjmlSource,
+        grapesjs_project_json: currentDraft.grapesjsProjectJson,
+        audience_type: currentDraft.audienceType,
+        recipient_mode: currentDraft.recipientMode,
         member_ids: memberIds,
-        scheduled_at: campaignDraft.scheduledAt ? new Date(campaignDraft.scheduledAt).toISOString() : null,
-        linked_form_id: campaignDraft.linkedFormId,
-        source_template_id: campaignDraft.sourceTemplateId,
-        editor_status: campaignDraft.editorStatus,
+        scheduled_at: currentDraft.scheduledAt ? new Date(currentDraft.scheduledAt).toISOString() : null,
+        linked_form_id: currentDraft.linkedFormId,
+        source_template_id: currentDraft.sourceTemplateId,
+        editor_status: currentDraft.editorStatus,
       } as const;
 
-      const response = campaignDraft.id
-        ? await updateOrgAdminEmailCampaign(campaignDraft.id, payload)
+      const response = currentDraft.id
+        ? await updateOrgAdminEmailCampaign(currentDraft.id, payload)
         : await createOrgAdminEmailCampaign(payload);
 
       let savedCampaign = response.campaign;
@@ -1083,7 +1115,7 @@ export function MessagesHub({
       } else {
         showToast({
           tone: "success",
-          message: campaignDraft.id ? "Campagna aggiornata." : "Bozza campagna salvata.",
+          message: currentDraft.id ? "Campagna aggiornata." : "Bozza campagna salvata.",
         });
       }
 
@@ -1180,17 +1212,22 @@ export function MessagesHub({
   }
 
   async function handleTestSend(value: string) {
-    if (!previewState || !campaignDraft.compiledHtml.trim()) return;
+    const currentDraft = flushCampaignBuilderSnapshot();
+    if (!currentDraft.subject.trim() || !currentDraft.compiledHtml.trim()) {
+      setTestSendError("Completa oggetto e contenuto prima del test.");
+      setTestSendState("error");
+      return;
+    }
     setTestSendState("loading");
     setTestSendError(null);
     try {
       await sendOrgAdminCommunicationBuilderTestEmail({
         to_email: value,
-        subject: campaignDraft.subject,
-        compiled_html: campaignDraft.compiledHtml,
-        body_text: campaignDraft.bodyText,
-        linked_form_id: campaignDraft.linkedFormId,
-        message_name: campaignDraft.name || undefined,
+        subject: currentDraft.subject,
+        compiled_html: currentDraft.compiledHtml,
+        body_text: currentDraft.bodyText,
+        linked_form_id: currentDraft.linkedFormId,
+        message_name: currentDraft.name || undefined,
       });
       setTestSendState("success");
       showToast({ tone: "success", message: "Email di test inviata." });
@@ -1381,6 +1418,7 @@ export function MessagesHub({
 
           {templateStep === "editor" ? (
             <GrapesEmailBuilder
+              ref={templateBuilderRef}
               editorKey={templateDraft.builderKey}
               initialMjmlSource={templateDraft.mjmlSource}
               initialProjectData={templateDraft.grapesjsProjectJson}
@@ -1485,7 +1523,7 @@ export function MessagesHub({
                   Elimina
                 </button>
               ) : null}
-              <button className="btn-ghost" type="button" disabled={!campaignDraft.compiledHtml.trim()} onClick={() => setTestSendOpen(true)}>
+              <button className="btn-ghost" type="button" disabled={communicationsLocked} onClick={() => setTestSendOpen(true)}>
                 Invia test
               </button>
               <button className="btn-primary" type="button" disabled={communicationsLocked || busy === "save-campaign"} onClick={() => void saveCampaign(false)}>
@@ -1657,6 +1695,7 @@ export function MessagesHub({
           {campaignStep === "editor" ? (
             <div className="space-y-6">
               <GrapesEmailBuilder
+                ref={campaignBuilderRef}
                 editorKey={campaignDraft.builderKey}
                 initialMjmlSource={campaignDraft.mjmlSource}
                 initialProjectData={campaignDraft.grapesjsProjectJson}

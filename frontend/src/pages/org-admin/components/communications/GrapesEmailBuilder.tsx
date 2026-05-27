@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type ChangeEvent } from "react";
 import grapesjs, { type Editor } from "grapesjs";
 import grapesjsMjml from "grapesjs-mjml";
 import mjml2html from "mjml-browser";
@@ -18,11 +18,15 @@ import {
 } from "./emailBuilder";
 import { clearElement } from "./domUtils";
 
-type BuilderSnapshot = {
+export type BuilderSnapshot = {
   compiledHtml: string;
   mjmlSource: string;
   bodyText: string;
   grapesjsProjectJson: Record<string, unknown> | null;
+};
+
+export type GrapesEmailBuilderHandle = {
+  flush: () => BuilderSnapshot | null;
 };
 
 type GrapesEmailBuilderProps = {
@@ -96,6 +100,17 @@ function createAssetRecords(items: OrgAdminEmailBuilderAsset[]) {
   }));
 }
 
+function createBuilderSnapshot(currentEditor: Editor): BuilderSnapshot {
+  const mjmlSource = ensureMjmlDocument(currentEditor.getHtml());
+  const compiledHtml = compileMjml(mjmlSource);
+  return {
+    mjmlSource,
+    compiledHtml,
+    bodyText: htmlToText(compiledHtml),
+    grapesjsProjectJson: currentEditor.getProjectData() as Record<string, unknown>,
+  };
+}
+
 function mapSelectedElementAttr(current: SelectedElementState, key: string, value: string): SelectedElementState {
   if (key === "href") return { ...current, href: value };
   if (key === "src") return { ...current, src: value };
@@ -109,7 +124,7 @@ function mapSelectedElementAttr(current: SelectedElementState, key: string, valu
   return current;
 }
 
-export function GrapesEmailBuilder({
+export const GrapesEmailBuilder = forwardRef<GrapesEmailBuilderHandle, GrapesEmailBuilderProps>(function GrapesEmailBuilder({
   editorKey,
   initialMjmlSource,
   initialProjectData,
@@ -119,7 +134,7 @@ export function GrapesEmailBuilder({
   onChange,
   onUploadAsset,
   onDeleteAsset,
-}: GrapesEmailBuilderProps) {
+}: GrapesEmailBuilderProps, ref) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const blocksPanelRef = useRef<HTMLDivElement | null>(null);
   const stylePanelRef = useRef<HTMLDivElement | null>(null);
@@ -165,6 +180,20 @@ export function GrapesEmailBuilder({
       selectedSection ? sectionLabel(selectedSection, nextSections.findIndex((item: BuilderSectionSummary) => item.selected)) : null,
     );
   }, []);
+
+  const emitSnapshot = useCallback(() => {
+    const currentEditor = editorRef.current;
+    if (!currentEditor) return null;
+    if (syncTimerRef.current) {
+      window.clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = null;
+    }
+    const snapshot = createBuilderSnapshot(currentEditor);
+    onChangeRef.current(snapshot);
+    return snapshot;
+  }, []);
+
+  useImperativeHandle(ref, () => ({ flush: emitSnapshot }), [emitSnapshot]);
 
   useEffect(() => {
     if (!hostRef.current) return;
@@ -253,19 +282,6 @@ export function GrapesEmailBuilder({
     } else {
       editor.setComponents(initialDocument);
     }
-
-    const emitSnapshot = () => {
-      const currentEditor = editorRef.current;
-      if (!currentEditor) return;
-      const mjmlSource = ensureMjmlDocument(currentEditor.getHtml());
-      const compiledHtml = compileMjml(mjmlSource);
-      onChangeRef.current({
-        mjmlSource,
-        compiledHtml,
-        bodyText: htmlToText(compiledHtml),
-        grapesjsProjectJson: currentEditor.getProjectData() as Record<string, unknown>,
-      });
-    };
 
     const scheduleSync = () => {
       if (syncTimerRef.current) {
@@ -939,7 +955,7 @@ export function GrapesEmailBuilder({
       </div>
     </div>
   );
-}
+});
 
 function componentName(component: any): string {
   return String(

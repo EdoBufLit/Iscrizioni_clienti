@@ -466,6 +466,8 @@ def _resolve_dynamic_booking_event(
                 "booking_time": booking_time,
                 "event_details": _booking_event_series_details(resolved_series),
             }
+        if _has_active_booking_event_rules(db, form=form):
+            raise HTTPException(status_code=422, detail="La data o l'orario selezionato non e disponibile.")
         return {
             "booking_date": booking_date,
             "booking_time": booking_time,
@@ -543,6 +545,18 @@ def _find_dynamic_booking_series(
         if _series_matches_date(series, booking_date) and booking_time in _booking_event_series_slot_times(series):
             return series
     return default_series
+
+
+def _has_active_booking_event_rules(db: Session, *, form: Form) -> bool:
+    return (
+        db.query(BookingEventSeries.id)
+        .filter(
+            BookingEventSeries.association_id == form.association_id,
+            BookingEventSeries.is_active.is_(True),
+        )
+        .first()
+        is not None
+    )
 
 
 def _booking_event_series_slot_times(series: BookingEventSeries) -> set[str]:

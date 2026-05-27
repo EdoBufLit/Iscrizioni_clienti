@@ -27,12 +27,21 @@ function buildHalfHourOptions(): string[] {
 }
 
 const BOOKING_TIME_OPTIONS = buildHalfHourOptions();
+const DEFAULT_BOOKING_AVAILABILITY = {
+  hasActiveRules: false,
+  dateOpen: true,
+  availableSlots: [] as string[],
+};
 
 function pickBookingSeriesForTime(items: OrgAdminBookingEventSeries[], timeValue: string): OrgAdminBookingEventSeries | null {
   if (!timeValue) return null;
   const specific = items.find((item) => !item.is_default && getSeriesSlotTimes(item).includes(timeValue));
   if (specific) return specific;
   return items.find((item) => item.is_default && getSeriesSlotTimes(item).includes(timeValue)) || null;
+}
+
+function uniqueBookingSlots(items: OrgAdminBookingEventSeries[]): string[] {
+  return Array.from(new Set(items.flatMap(getSeriesSlotTimes))).sort();
 }
 
 function buildInitialValues(form: PublicAssociationForm): Record<string, unknown> {
@@ -59,6 +68,7 @@ const PublicFormPage = () => {
   const [form, setForm] = useState<PublicAssociationForm | null>(null);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [bookingEvents, setBookingEvents] = useState<OrgAdminBookingEventSeries[]>([]);
+  const [bookingAvailability, setBookingAvailability] = useState(DEFAULT_BOOKING_AVAILABILITY);
   const [bookingEventsLoading, setBookingEventsLoading] = useState(false);
 
   useEffect(() => {
@@ -88,11 +98,13 @@ const PublicFormPage = () => {
   useEffect(() => {
     if (!slug || !form?.booking_dynamic_events_enabled) {
       setBookingEvents([]);
+      setBookingAvailability(DEFAULT_BOOKING_AVAILABILITY);
       return;
     }
     const dateValue = String(values.__booking_date || "");
     if (!dateValue) {
       setBookingEvents([]);
+      setBookingAvailability({ ...DEFAULT_BOOKING_AVAILABILITY, dateOpen: false });
       return;
     }
     let cancelled = false;
@@ -103,10 +115,17 @@ const PublicFormPage = () => {
     request
       .then((response) => {
         if (!cancelled) {
+          const availableSlots = response.available_slots?.length
+            ? response.available_slots
+            : uniqueBookingSlots(response.items);
+          const hasActiveRules = Boolean(response.has_active_rules);
+          const dateOpen = !hasActiveRules || Boolean(response.date_open && availableSlots.length > 0);
           setBookingEvents(response.items);
+          setBookingAvailability({ hasActiveRules, dateOpen, availableSlots });
           setValues((current) => {
             const currentTime = String(current.__booking_event_time || "");
-            const nextTime = currentTime && BOOKING_TIME_OPTIONS.includes(currentTime) ? currentTime : "";
+            const allowedTimes = hasActiveRules ? availableSlots : BOOKING_TIME_OPTIONS;
+            const nextTime = currentTime && allowedTimes.includes(currentTime) ? currentTime : "";
             const preferred = pickBookingSeriesForTime(response.items, nextTime);
             const nextSeriesId = preferred ? String(preferred.id) : "";
             if (currentTime === nextTime && String(current.__booking_event_series_id || "") === nextSeriesId) return current;
@@ -231,6 +250,9 @@ const PublicFormPage = () => {
           interactive
           bookingEvents={bookingEvents}
           bookingEventsLoading={bookingEventsLoading}
+          bookingRulesActive={bookingAvailability.hasActiveRules}
+          bookingDateOpen={bookingAvailability.dateOpen}
+          availableBookingSlots={bookingAvailability.availableSlots}
         />
       </div>
     );

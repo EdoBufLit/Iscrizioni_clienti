@@ -14,6 +14,7 @@ from app.models import (
     Booking,
     EmailOutbox,
     EmailTemplate,
+    Form,
     FormSubmission,
     Member,
     MemberStatus,
@@ -24,7 +25,8 @@ from app.models import (
     TokenType,
     WhatsAppMessage,
 )
-from app.services.forms import normalize_field_key
+from app.services.forms import ValidatedSubmission, build_form_template_context, normalize_field_key
+from app.services.email_templates import render_template_string
 from app.services.whatsapp_automation import prepare_form_submission_whatsapp_candidate
 from app.services.whatsapp_sync import get_or_create_connection
 from app.utils import hash_token
@@ -71,6 +73,54 @@ def _create_org_admin(db, *, communications_enabled: bool = True) -> tuple[Organ
     db.commit()
     db.refresh(admin)
     return org, admin
+
+
+def test_email_template_accepts_legacy_at_placeholders():
+    rendered = render_template_string(
+        "Ciao @nome @cognome, prenotazione @data alle @orario per @pax persone.",
+        context={
+            "nome_socio": "Mario",
+            "cognome_socio": "Rossi",
+            "data_evento": "27/05/2026",
+            "orario_prenotazione": "21:30",
+            "numero_persone": "2",
+        },
+    )
+    assert rendered == "Ciao Mario Rossi, prenotazione 27/05/2026 alle 21:30 per 2 persone."
+
+
+def test_form_template_context_uses_booking_field_mapping_aliases():
+    form = Form(
+        title="Prenotazione",
+        booking_field_mapping={
+            "customer_name": "testo_breve_vsh9zx",
+            "customer_email": "email_v3cbwm",
+            "customer_phone": "telefono_e2pzbn",
+            "booking_date": "data_x7",
+            "booking_time": "orario_y8",
+            "party_size": "numero_3e9an8",
+        },
+    )
+    context = build_form_template_context(
+        form=form,
+        validated_submission=ValidatedSubmission(
+            payload={
+                "testo_breve_vsh9zx": "Mario Rossi",
+                "email_v3cbwm": "mario@example.com",
+                "telefono_e2pzbn": "+39 333 1112233",
+                "data_x7": "2026-05-27",
+                "orario_y8": "21:30",
+                "numero_3e9an8": 2,
+            },
+            submitter_email="mario@example.com",
+        ),
+    )
+    assert context["nome_socio"] == "Mario Rossi"
+    assert context["cognome_socio"] == "Rossi"
+    assert context["data_prenotazione"] == "2026-05-27"
+    assert context["orario_prenotazione"] == "21:30"
+    assert context["numero_persone"] == "2"
+    assert context["telefono_cliente"] == "+39 333 1112233"
 
 
 def test_org_admin_forms_crud_public_submit_and_export(client, db):
@@ -1085,6 +1135,9 @@ def test_dynamic_booking_events_keep_block_position_and_resolve_series_from_time
     )
     assert events_res.status_code == 200, events_res.text
     events_payload = events_res.json()
+    assert events_payload["has_active_rules"] is True
+    assert events_payload["date_open"] is True
+    assert events_payload["available_slots"] == ["20:30", "21:00", "22:30"]
     event_names = [item["name"] for item in events_payload["items"]]
     assert event_names == ["Cartomante", "Ingresso libero"]
     assert sorted(slot["time"] for item in events_payload["items"] for slot in item["time_slots"]) == ["20:30", "21:00", "22:30"]
@@ -1112,10 +1165,8 @@ def test_dynamic_booking_events_keep_block_position_and_resolve_series_from_time
             "__booking_event_series_id": "",
         },
     )
-    assert free_submit_res.status_code == 200, free_submit_res.text
-    free_booking = free_submit_res.json()["booking"]
-    assert free_booking["booking_time"] == "21:30"
-    assert free_booking["event_summary"] is None
+    assert free_submit_res.status_code == 422, free_submit_res.text
+    assert "orario" in free_submit_res.json()["detail"]
 
 
 def test_dynamic_booking_allows_half_hour_time_when_day_has_no_events(client, db):
@@ -1144,6 +1195,8 @@ def test_dynamic_booking_allows_half_hour_time_when_day_has_no_events(client, db
     )
     assert events_res.status_code == 200, events_res.text
     assert events_res.json()["items"] == []
+    assert events_res.json()["has_active_rules"] is False
+    assert events_res.json()["date_open"] is True
 
     submit_res = client.post(
         f"/api/forms/{org.slug}/{public_slug}/submit",
@@ -1321,6 +1374,27 @@ def test_booking_enabled_form_creates_booking_and_exposes_agenda(client, db):
     assert patch_res.json()["booking"]["request_status"] == "confirmed"
     assert patch_res.json()["request_decision"]["status"] == "confirmed"
 
+    edit_res = client.patch(
+        f"/api/org-admin/bookings/{booking_id}",
+        json={
+            "status": "confirmed",
+            "customer_name": "Giulia Rossi",
+            "customer_email": "giulia.rossi@example.com",
+            "booking_date": "2026-03-26",
+            "booking_time": "21:00",
+            "party_size": 4,
+            "notes": "Tavolo vicino al palco",
+        },
+    )
+    assert edit_res.status_code == 200, edit_res.text
+    edited_booking = edit_res.json()["booking"]
+    assert edited_booking["customer_name"] == "Giulia Rossi"
+    assert edited_booking["customer_email"] == "giulia.rossi@example.com"
+    assert edited_booking["booking_date"] == "2026-03-26"
+    assert edited_booking["booking_time"] == "21:00"
+    assert edited_booking["party_size"] == 4
+    assert edited_booking["notes"] == "Tavolo vicino al palco"
+
     submissions_res = client.get(f"/api/org-admin/forms/{form_id}/submissions")
     assert submissions_res.status_code == 200, submissions_res.text
     assert submissions_res.json()["items"][0]["booking"]["status"] == "confirmed"
@@ -1409,6 +1483,24 @@ def test_booking_admin_confirmation_email_can_be_disabled_and_phone_corrected(cl
             .count()
             == 0
         )
+        assert (
+            verification_db.query(EmailOutbox)
+            .filter(
+                EmailOutbox.email_type == "form_submission_confirmation",
+                EmailOutbox.to_email == "mario@example.com",
+            )
+            .count()
+            == 0
+        )
+        assert (
+            verification_db.query(EmailOutbox)
+            .filter(
+                EmailOutbox.email_type == "booking_pending_confirmation",
+                EmailOutbox.to_email == "mario@example.com",
+            )
+            .count()
+            == 1
+        )
         booking = verification_db.query(Booking).filter(Booking.id == booking_id).one()
         candidate = prepare_form_submission_whatsapp_candidate(
             form=booking.form,
@@ -1419,6 +1511,77 @@ def test_booking_admin_confirmation_email_can_be_disabled_and_phone_corrected(cl
         assert candidate["available"] is True
         assert candidate["phone_number"] == "+393331112233"
         assert candidate["source"] == "booking"
+    finally:
+        verification_db.close()
+
+
+def test_booking_request_skips_form_emails_when_admin_tests_with_customer_email(client, db):
+    org, admin = _create_org_admin(db)
+    test_email = f"booking-self-{uuid.uuid4().hex[:8]}@example.com"
+    admin.email = test_email
+    db.commit()
+    _login_org_admin(client, db, admin.id)
+    public_slug = f"prenota-self-{uuid.uuid4().hex[:6]}"
+
+    create_res = client.post(
+        "/api/org-admin/forms",
+        json={
+            "title": "Prenotazione self test",
+            "public_slug": public_slug,
+            "is_active": True,
+            "visibility": "public",
+            "form_type": "booking",
+            "booking_enabled": True,
+            "booking_requires_manual_confirmation": True,
+            "booking_notification_enabled": True,
+            "booking_field_mapping": {
+                "customer_name": "nome_cliente",
+                "customer_email": "email",
+                "booking_date": "data_prenotazione",
+                "booking_time": "orario_prenotazione",
+                "party_size": "numero_persone",
+            },
+        },
+    )
+    assert create_res.status_code == 201, create_res.text
+    form_id = create_res.json()["form"]["id"]
+
+    for index, field in enumerate(
+        [
+            {"field_type": "short_text", "label": "Nome cliente", "field_key": "nome_cliente"},
+            {"field_type": "email", "label": "Email", "field_key": "email"},
+            {"field_type": "date", "label": "Data", "field_key": "data_prenotazione"},
+            {"field_type": "short_text", "label": "Orario", "field_key": "orario_prenotazione"},
+            {"field_type": "number", "label": "Persone", "field_key": "numero_persone"},
+        ]
+    ):
+        field_res = client.post(
+            f"/api/org-admin/forms/{form_id}/fields",
+            json={**field, "is_required": True, "sort_order": index * 10},
+        )
+        assert field_res.status_code == 201, field_res.text
+
+    submit_res = client.post(
+        f"/api/forms/{org.slug}/{public_slug}/submit",
+        json={
+            "nome_cliente": "Mario Admin",
+            "email": test_email,
+            "data_prenotazione": "2026-06-25",
+            "orario_prenotazione": "20:30",
+            "numero_persone": 2,
+        },
+    )
+    assert submit_res.status_code == 200, submit_res.text
+
+    verification_db = SessionLocal()
+    try:
+        rows = (
+            verification_db.query(EmailOutbox.email_type)
+            .filter(EmailOutbox.to_email == test_email)
+            .order_by(EmailOutbox.created_at.asc())
+            .all()
+        )
+        assert [row[0] for row in rows] == ["booking_pending_confirmation"]
     finally:
         verification_db.close()
 
@@ -2038,6 +2201,31 @@ def test_booking_rooms_tables_and_assignment_flow(client, db):
     map_payload = map_res.json()
     assert map_payload["totals"]["reserved"] == 1
     assert map_payload["tables"][0]["active_booking"]["customer_name"] == "Elena Verdi"
+
+    edit_res = client.patch(
+        f"/api/org-admin/bookings/{booking_id}",
+        json={
+            "status": "pending",
+            "room_id": room_id,
+            "table_id": table_id,
+            "booking_time": "22:00",
+            "party_size": 7,
+            "notify_customer": False,
+        },
+    )
+    assert edit_res.status_code == 200, edit_res.text
+    assert edit_res.json()["booking"]["booking_time"] == "22:00"
+    assert edit_res.json()["booking"]["party_size"] == 7
+
+    old_slot_map_res = client.get(f"/api/org-admin/rooms/{room_id}/map?date=2026-03-26&time=21:00")
+    assert old_slot_map_res.status_code == 200, old_slot_map_res.text
+    assert old_slot_map_res.json()["totals"]["free"] == 1
+
+    new_slot_map_res = client.get(f"/api/org-admin/rooms/{room_id}/map?date=2026-03-26&time=22:00")
+    assert new_slot_map_res.status_code == 200, new_slot_map_res.text
+    new_slot_map_payload = new_slot_map_res.json()
+    assert new_slot_map_payload["totals"]["reserved"] == 1
+    assert new_slot_map_payload["tables"][0]["active_booking"]["party_size"] == 7
 
     move_res = client.put(
         f"/api/org-admin/rooms/{room_id}/map",

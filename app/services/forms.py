@@ -1048,6 +1048,16 @@ def _format_submission_for_email(form: Form, payload: dict[str, Any]) -> tuple[s
     return "\n".join(lines), "".join(html_rows)
 
 
+def _template_context_value(value: Any) -> str | None:
+    if isinstance(value, list):
+        return ", ".join(str(item) for item in value) if value else None
+    if isinstance(value, bool):
+        return "Si" if value else "No"
+    if value in (None, ""):
+        return None
+    return str(value)
+
+
 def _guess_submitter_name(payload: dict[str, Any]) -> str:
     for key in ("nome_socio", "nome_cliente", "customer_name", "nome", "full_name", "name"):
         value = payload.get(key)
@@ -1065,11 +1075,80 @@ def build_form_template_context(
     validated_submission: ValidatedSubmission,
 ) -> dict[str, str]:
     submitter_name = _guess_submitter_name(validated_submission.payload)
-    return {
+    context = {
         "titolo_form": form.title or "",
         "email_destinatario": validated_submission.submitter_email or "",
         "nome_socio": submitter_name,
     }
+    for key, value in validated_submission.payload.items():
+        normalized_key = _normalize_text(key)
+        if not normalized_key:
+            continue
+        summarized = _template_context_value(value)
+        if summarized is not None:
+            context[normalized_key] = summarized
+
+    booking_mapping = normalize_booking_field_mapping(getattr(form, "booking_field_mapping", None) or {})
+
+    def mapped_context_value(target: str) -> str | None:
+        field_key = booking_mapping.get(target)
+        if not field_key:
+            return None
+        if field_key in context and context[field_key]:
+            return context[field_key]
+        return _template_context_value(validated_submission.payload.get(field_key))
+
+    mapped_name = mapped_context_value("customer_name")
+    if mapped_name:
+        context["nome_socio"] = mapped_name
+        context.setdefault("nome_contatto", mapped_name)
+        context.setdefault("nome_cliente", mapped_name)
+    mapped_email = mapped_context_value("customer_email")
+    if mapped_email and not context.get("email_destinatario"):
+        context["email_destinatario"] = mapped_email
+    mapped_phone = mapped_context_value("customer_phone")
+    if mapped_phone:
+        context.setdefault("telefono", mapped_phone)
+        context.setdefault("telefono_cliente", mapped_phone)
+    mapped_date = mapped_context_value("booking_date")
+    if mapped_date:
+        context["data_prenotazione"] = mapped_date
+        context.setdefault("data_evento", mapped_date)
+        context.setdefault("data", mapped_date)
+    mapped_time = mapped_context_value("booking_time")
+    if mapped_time:
+        context["orario_prenotazione"] = mapped_time
+        context.setdefault("orario", mapped_time)
+        context.setdefault("ora", mapped_time)
+    mapped_party_size = mapped_context_value("party_size")
+    if mapped_party_size:
+        context["numero_persone"] = mapped_party_size
+        context.setdefault("persone", mapped_party_size)
+        context.setdefault("pax", mapped_party_size)
+
+    name_for_parts = context.get("nome_socio") or submitter_name
+    if "cognome_socio" not in context and name_for_parts:
+        name_parts = name_for_parts.split()
+        if len(name_parts) > 1:
+            context["cognome_socio"] = " ".join(name_parts[1:])
+    if "data_prenotazione" not in context:
+        for key in ("__booking_date", "booking_date", "data_prenotazione", "data", "giorno"):
+            if key in context and context[key]:
+                context["data_prenotazione"] = context[key]
+                break
+    if "data_evento" not in context and context.get("data_prenotazione"):
+        context["data_evento"] = context["data_prenotazione"]
+    if "orario_prenotazione" not in context:
+        for key in ("__booking_event_time", "booking_time", "orario_prenotazione", "orario", "ora"):
+            if key in context and context[key]:
+                context["orario_prenotazione"] = context[key]
+                break
+    if "numero_persone" not in context:
+        for key in ("party_size", "numero_persone", "persone", "pax"):
+            if key in context and context[key]:
+                context["numero_persone"] = context[key]
+                break
+    return context
 
 
 def _enqueue_rendered_template_email(
@@ -1202,7 +1281,24 @@ def enqueue_submission_notifications(
             booking=booking,
         )
 
-    if bool(getattr(form, "notify_admin_on_submit", True)) and notification_email:
+    booking_email_matches_submitter = bool(
+        booking is not None
+        and getattr(form, "booking_notification_enabled", True)
+        and booking.customer_email
+        and validated_submission.submitter_email
+        and booking.customer_email.strip().lower() == validated_submission.submitter_email.strip().lower()
+    )
+    admin_email_matches_booking_customer = bool(
+        booking_email_matches_submitter
+        and notification_email
+        and validated_submission.submitter_email
+        and notification_email.strip().lower() == validated_submission.submitter_email.strip().lower()
+    )
+    if (
+        bool(getattr(form, "notify_admin_on_submit", True))
+        and notification_email
+        and not admin_email_matches_booking_customer
+    ):
         if getattr(form, "admin_notification_template", None) is not None:
             _enqueue_rendered_template_email(
                 db,
@@ -1233,7 +1329,11 @@ def enqueue_submission_notifications(
                 priority=4,
             )
 
-    if bool(getattr(form, "send_user_confirmation", True)) and validated_submission.submitter_email:
+    if (
+        bool(getattr(form, "send_user_confirmation", True))
+        and validated_submission.submitter_email
+        and not booking_email_matches_submitter
+    ):
         if getattr(form, "user_confirmation_template", None) is not None:
             _enqueue_rendered_template_email(
                 db,

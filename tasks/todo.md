@@ -1,3 +1,23 @@
+## Plan (Fix booking admin, mobile status, mail builder - May 27, 2026)
+- [x] Rendere la configurazione orari/serate prenotabili chiara in backoffice e vincolante nel form pubblico: niente slot generici quando ci sono regole attive.
+- [x] Correggere mobile prenotazioni: stato servizio sempre visibile, bottoni touch-friendly per A/C/S/completa/cancella/no show, e modifica campi principali senza passare da pannelli desktop.
+- [x] Semplificare UI/UX prenotazioni: meno card annidate, più sezioni piatte, linguaggio operativo e controlli immediati.
+- [x] Sistemare mail builder: canvas più ampio, pannelli meno schiacciati, snapshot editor forzato prima di salva/test, placeholder validati e suggeriti con sintassi `{{...}}`.
+- [x] Diagnosticare e ridurre email duplicate nelle richieste booking, mantenendo separati notifica admin, ricevuta cliente e conferma dopo decisione.
+- [x] Verificare typecheck/build, test backend mirati e smoke browser mobile/desktop sulle superfici toccate.
+- [x] Aggiornare review finale in questo file con esito, comandi e rischi residui.
+
+## Review (Fix booking admin, mobile status, mail builder - May 27, 2026)
+- Prenotazioni/form pubblico: quando un form ha regole booking attive, il backend espone solo gli slot disponibili e rifiuta data/orario fuori regola; senza regole resta il fallback libero a mezz'ora.
+- Serate prenotabili: aggiunto generatore `Dalle` / `Alle` che crea automaticamente gli slot ogni 30 minuti, mantenendo comunque la lista manuale modificabile.
+- Mobile agenda: la card richiesta mostra subito `Stato servizio` con N/A/C/S/OK/X/No show/Completa e un blocco `Modifica prenotazione` per nome, email, telefono, data, ora, pax e note, senza passare dal pannello desktop.
+- Tavoli e stato conferma: il salvataggio dettagli aggiorna anche sala/tavolo/stato corrente e registra audit `details_updated`; la mappa viene ricaricata con data/orario della prenotazione appena assegnata o modificata, evitando che il tavolo risulti libero per una fascia sbagliata.
+- Email: i placeholder legacy tipo `@nome`, `@cognome`, `@data`, `@orario`, `@pax` vengono normalizzati verso `{{...}}`; i template ora leggono anche gli alias dal mapping booking quando i field key sono generati; per richieste booking viene saltata la conferma form generica e, se l'email admin coincide con il cliente in un test, anche la notifica admin duplicata.
+- Mail builder: layout a tre colonne meno schiacciato, canvas minimo più ampio e snapshot editor forzato prima di salva/test, così il test usa l'ultimo contenuto scritto.
+- UI/UX: aggiunto box-sizing scoped org-admin, variabile `--oa-border`, controlli più piatti e responsive; i campi form pubblici non forzano più larghezze desktop su mobile.
+- Evidenze visuali: `tasks/screenshots/booking-admin-mail-fixes-20260527/mobile-cdp-390.png` conferma viewport reale 390px senza overflow (`scroll=390`); `builder-layout.png` conferma canvas builder visibile e non compresso.
+- Verifiche OK: `python -m pytest tests\test_forms_module.py -q` (28 passed), `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`. Resta solo il warning Vite preesistente sui chunk grandi.
+
 ## Plan (Fix booking mobile post-conferma, form dark, variabili WhatsApp - May 25, 2026)
 - [x] Separare su mobile le richieste ancora da confermare dalle prenotazioni gia confermate/gestite, spostando queste ultime nella zona bassa ora vuota.
 - [x] Rendere evidente e rapida l'assegnazione sala/tavolo per una prenotazione confermata da form, senza riaprire pannelli desktop lunghi.

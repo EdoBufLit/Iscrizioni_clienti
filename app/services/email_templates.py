@@ -44,6 +44,33 @@ ALLOWED_TEMPLATE_SCOPES = {
 }
 ALLOWED_TEMPLATE_CHANNELS = {EMAIL_TEMPLATE_CHANNEL}
 _TEMPLATE_VARIABLE_PATTERN = re.compile(r"{{\s*([a-zA-Z0-9_]+)\s*}}")
+_LEGACY_AT_VARIABLE_ALIASES = {
+    "nome": "nome_socio",
+    "nome_socio": "nome_socio",
+    "cognome": "cognome_socio",
+    "cognome_socio": "cognome_socio",
+    "email": "email_socio",
+    "mail": "email_socio",
+    "telefono": "telefono_socio",
+    "cellulare": "telefono_socio",
+    "data": "data_evento",
+    "giorno": "data_evento",
+    "orario": "orario_prenotazione",
+    "ora": "orario_prenotazione",
+    "pax": "numero_persone",
+    "persone": "numero_persone",
+    "titolo": "titolo_form",
+    "form": "titolo_form",
+    "associazione": "nome_associazione",
+    "evento": "nome_evento",
+    "link": "link_evento",
+}
+_LEGACY_AT_VARIABLE_PATTERN = re.compile(
+    r"(?<![\w.%+-])@("
+    + "|".join(re.escape(key) for key in sorted(_LEGACY_AT_VARIABLE_ALIASES, key=len, reverse=True))
+    + r")(?![\w.-])",
+    re.IGNORECASE,
+)
 
 AVAILABLE_TEMPLATE_VARIABLES = [
     {
@@ -685,7 +712,11 @@ def render_template_string(
         replacement = str(context.get(key) or "")
         return html.escape(replacement, quote=True) if escape_html_values else replacement
 
-    return _TEMPLATE_VARIABLE_PATTERN.sub(_replace, value)
+    normalized_value = _LEGACY_AT_VARIABLE_PATTERN.sub(
+        lambda match: "{{" + _LEGACY_AT_VARIABLE_ALIASES[match.group(1).lower()] + "}}",
+        value,
+    )
+    return _TEMPLATE_VARIABLE_PATTERN.sub(_replace, normalized_value)
 
 
 def render_template_content(

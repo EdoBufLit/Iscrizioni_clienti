@@ -2495,6 +2495,12 @@ class UpdateBookingStatusBody(BaseModel):
     table_id: Optional[int] = None
     notes: Optional[str] = None
     notify_customer: bool = True
+    customer_name: Optional[str] = Field(default=None, max_length=255)
+    customer_email: Optional[str] = Field(default=None, max_length=255)
+    customer_phone: Optional[str] = Field(default=None, max_length=40)
+    booking_date: Optional[date] = None
+    booking_time: Optional[str] = Field(default=None, max_length=5)
+    party_size: Optional[int] = Field(default=None, ge=1, le=1000)
 
 
 class UpdateBookingPhoneBody(BaseModel):
@@ -7682,6 +7688,46 @@ def patch_org_admin_booking(
         if linked_submission is not None
         else None
     )
+    detail_changes: dict[str, dict[str, object | None]] = {}
+
+    def _track_detail_change(field: str, previous: object | None, next_value: object | None) -> None:
+        if previous == next_value:
+            return
+        detail_changes[field] = {"from": previous, "to": next_value}
+
+    submitted_fields = getattr(body, "model_fields_set", set())
+    if "customer_name" in submitted_fields:
+        next_customer_name = _normalize_optional_text(body.customer_name)
+        if not next_customer_name:
+            raise HTTPException(status_code=422, detail="Inserisci il nome della prenotazione.")
+        _track_detail_change("customer_name", booking.customer_name, next_customer_name)
+        booking.customer_name = next_customer_name
+    if "customer_email" in submitted_fields:
+        next_customer_email = _validate_optional_email(body.customer_email, field_name="Email cliente")
+        _track_detail_change("customer_email", booking.customer_email, next_customer_email)
+        booking.customer_email = next_customer_email
+    if "customer_phone" in submitted_fields:
+        raw_phone = _normalize_optional_text(body.customer_phone)
+        next_customer_phone = normalize_phone(raw_phone) if raw_phone else None
+        if raw_phone and not next_customer_phone:
+            raise HTTPException(status_code=422, detail="Numero WhatsApp non valido.")
+        _track_detail_change("customer_phone", booking.customer_phone, next_customer_phone)
+        booking.customer_phone = next_customer_phone
+    if "booking_date" in submitted_fields:
+        previous_date = booking.booking_date.isoformat() if booking.booking_date else None
+        next_date = body.booking_date.isoformat() if body.booking_date else None
+        _track_detail_change("booking_date", previous_date, next_date)
+        booking.booking_date = body.booking_date
+    if "booking_time" in submitted_fields:
+        next_booking_time = _normalize_optional_text(body.booking_time)
+        if next_booking_time and not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", next_booking_time):
+            raise HTTPException(status_code=422, detail="Orario prenotazione non valido.")
+        _track_detail_change("booking_time", booking.booking_time, next_booking_time)
+        booking.booking_time = next_booking_time
+    if "party_size" in submitted_fields:
+        _track_detail_change("party_size", booking.party_size, body.party_size)
+        booking.party_size = body.party_size
+
     next_booking_status = str(body.status or "").strip().lower()
     update_booking_status(
         db,
@@ -7693,6 +7739,15 @@ def patch_org_admin_booking(
         notes=body.notes,
         notify_customer=body.notify_customer,
     )
+    if detail_changes:
+        db.add(
+            BookingEvent(
+                booking_id=booking.id,
+                event_type="details_updated",
+                payload_json={"changes": detail_changes, "source": "org_admin"},
+                created_by_user_id=admin.id,
+            )
+        )
     request_decision: dict[str, object] | None = None
     if (
         linked_submission is not None
