@@ -5524,3 +5524,15 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Picker assegnazione mobile: le sale fanno wrapping e i tavoli sono in griglia a 2 colonne, senza rail orizzontale nascosto che taglia gli item.
 - I bottoni tavolo mantengono nome/capienza leggibili e non superano il bordo del pannello anche a 390px.
 - Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`, smoke Playwright 390px con overflow `false`.
+
+## Plan (Picker tavoli mobile con molte sale - May 27, 2026)
+- [x] Gestire il caso 20 sale / 20 tavoli senza pannello infinito e senza overflow laterale.
+- [x] Mantenere sale e tavoli selezionabili con tap target leggibili e scroll verticale locale.
+- [x] Verificare 390px con dataset sintetico grande.
+- [ ] Commit, push e controllo deploy.
+
+## Review (Picker tavoli mobile con molte sale - May 27, 2026)
+- Con 20 sale e 20 tavoli, il picker mobile usa scroll verticale locale per sale e tavoli; niente rail laterali nascosti.
+- Smoke 390px: `bodyScrollWidth=390`, `panelScroll=panelClient`, `railHorizontalOverflow=false`, `tablesHorizontalOverflow=false`, `overflow=false`.
+- Il bottone `Salva tavolo` resta raggiungibile nel primo viewport utile invece di finire sotto una lista lunga.
+- Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`, smoke Playwright sintetico 20/20.

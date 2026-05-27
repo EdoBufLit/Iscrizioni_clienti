@@ -8602,8 +8602,11 @@ body.dashboard-perf-mode .btn-ghost:hover {
     flex-wrap: wrap;
     width: 100%;
     min-width: 0;
-    overflow: visible;
-    padding-bottom: 0;
+    max-height: 7rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0 0.15rem 0.15rem 0;
+    scrollbar-width: thin;
   }
 
   .org-admin-v2 .booking-request-mobile-card__assignment .booking-assignment-picker__tables {
@@ -8611,8 +8614,11 @@ body.dashboard-perf-mode .btn-ghost:hover {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
     min-width: 0;
-    overflow: visible;
-    padding-bottom: 0;
+    max-height: min(18rem, 38vh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0 0.15rem 0.15rem 0;
+    scrollbar-width: thin;
   }
 
   .org-admin-v2 .booking-request-mobile-card__assignment .booking-assignment-picker button {
