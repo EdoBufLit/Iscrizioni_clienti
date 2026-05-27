@@ -1030,3 +1030,63 @@
   background: transparent !important;
   background-color: transparent !important;
 }
+
+@media (max-width: 720px) {
+  .builder-shell {
+    gap: 0.75rem;
+  }
+
+  .builder-toolbar {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+  }
+
+  .builder-toolbar__title {
+    font-size: 1.15rem;
+  }
+
+  .builder-toolbar__copy,
+  .builder-rail__copy {
+    display: none;
+  }
+
+  .builder-workbench,
+  .builder-workbench--three {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+
+  .builder-canvas {
+    order: 1;
+    min-height: 42rem;
+    border-radius: 10px;
+  }
+
+  .builder-rail {
+    min-height: 0;
+    border-radius: 10px;
+  }
+
+  .builder-rail--left {
+    order: 2;
+  }
+
+  .builder-rail--right {
+    order: 3;
+  }
+
+  .builder-rail__panel {
+    max-height: 20rem;
+  }
+
+  .builder-block-card,
+  .builder-variable-chip,
+  .builder-media-card {
+    border-radius: 10px;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+}

@@ -3,6 +3,7 @@
 - Quando il cliente chiede fedelta esatta a mockup admin, non basta un re-skin: prima della consegna servono screenshot viewport-to-viewport delle superfici critiche, inclusi drawer/modali fixed. Inoltre le integrazioni esistenti nel dettaglio (es. SumUp) vanno preservate esplicitamente nella nuova IA e verificate nello screenshot.
 # Lessons
 
+- May 27, 2026: quando un cliente chiede di seguire un prototipo mobile semplice, non importare solo la palette o un file statico. Prima estrarre la grammatica operativa (header breve, segmenti, lista unica, dettaglio immediato), poi verificare screenshot reale a 390px per evitare doppie navigazioni, card annidate e comandi critici sotto al fold.
 - Dopo la conferma di una richiesta booking mobile, non lasciare l'elemento nella stessa coda operativa "da confermare": deve cambiare posizione/stato visivo e offrire subito l'azione successiva, come l'assegnazione del tavolo.
 - Quando si valida la dark mode di un form, controllare almeno un `input`, un `select` e un `textarea`: le utility globali con `!important` possono avere specificita diversa e rompere solo alcuni controlli.
 - Quando il cliente corregge un flusso mobile operativo, validare sempre lo scenario end-to-end nel viewport telefono: lista giorno corrente, cambio giorno, apertura richiesta form, dati compilati visibili nel primo viewport e azioni conferma/rigetto senza pannelli lunghi o testo tagliato.

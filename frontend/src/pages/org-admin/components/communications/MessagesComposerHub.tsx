@@ -120,10 +120,10 @@ type PreviewState = {
 };
 
 const inputClass =
-  "mt-2 w-full rounded-2xl border border-[#ddd5c6] bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#17494a] focus:ring-4 focus:ring-[#17494a]/10";
+  "mt-2 w-full rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#17494a] focus:ring-4 focus:ring-[#17494a]/10";
 const labelClass = "block text-sm font-semibold text-slate-900";
-const panelClass = "rounded-[1.6rem] border border-[#ddd5c6] bg-white p-5 shadow-[0_16px_40px_rgba(15,23,42,0.05)] md:p-6";
-const subtlePanelClass = "rounded-[1.2rem] border border-[#e6ddcf] bg-[#fbfaf6] p-4";
+const panelClass = "rounded-lg border border-neutral-200 bg-white p-4 shadow-none md:p-5";
+const subtlePanelClass = "rounded-lg border border-neutral-200 bg-neutral-50 p-4";
 
 function createEditorKey() {
   return `${Date.now()}-${Math.round(Math.random() * 100000)}`;

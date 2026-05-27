@@ -44,7 +44,7 @@ import { RoomFloorMap } from "../../components/bookings/RoomFloorMap";
 import { KpiCard, PageHeader, SectionPanel } from "./components/OrgAdminPrimitives";
 
 type SectionTab = "agenda" | "events" | "rooms" | "tables" | "map";
-type DayStatusFilter = "all" | "pending" | "confirmed" | "seated" | "completed";
+type DayStatusFilter = "pending" | "managed" | "all" | "confirmed" | "seated" | "completed";
 type BookingDetailsUpdate = {
   customer_name: string;
   customer_email: string | null;
@@ -56,9 +56,9 @@ type BookingDetailsUpdate = {
 
 const bookingStatuses = ["new", "pending", "confirmed", "seated", "completed", "cancelled", "no_show"];
 const dayStatusFilters: Array<{ key: DayStatusFilter; label: string }> = [
+  { key: "pending", label: "Richieste" },
+  { key: "managed", label: "Gestite" },
   { key: "all", label: "Tutte" },
-  { key: "confirmed", label: "Confermata" },
-  { key: "pending", label: "In attesa" },
   { key: "seated", label: "Seduta" },
   { key: "completed", label: "Completata" },
 ];
@@ -208,6 +208,7 @@ function bookingStatusDotClass(status: string) {
 function matchesDayStatusFilter(booking: AssociationBooking, filter: DayStatusFilter) {
   if (filter === "all") return true;
   if (filter === "pending") return booking.status === "pending" || booking.status === "new";
+  if (filter === "managed") return !isPendingBookingRequest(booking);
   return booking.status === filter;
 }
 
@@ -219,11 +220,6 @@ function isPendingBookingRequest(booking: AssociationBooking) {
     || requestStatus === "pending"
     || requestStatus === "new"
   );
-}
-
-function isManagedMobileBooking(booking: AssociationBooking) {
-  if (isPendingBookingRequest(booking)) return false;
-  return true;
 }
 
 function initialsFromName(value: string | null | undefined) {
@@ -246,12 +242,6 @@ function bookingDisplayName(booking: AssociationBooking) {
     return /(nome|cognome|nominativo|cliente|socio)/.test(haystack) && field.value.trim();
   });
   return fromPayload?.value.trim() || stored || "Prenotazione";
-}
-
-function bookingPrimaryMeta(booking: AssociationBooking) {
-  const parts = [`${booking.party_size || "-"} pax`, (booking.booking_time || "--:--").slice(0, 5)];
-  if (booking.event_summary) parts.push(booking.event_summary.split("\n")[0]);
-  return parts.filter(Boolean).join(" · ");
 }
 
 function isBookingRequestFactField(field: { key: string; label: string }) {
@@ -459,6 +449,7 @@ export default function OrgAdminBookings() {
   const [mapDate, setMapDate] = useState(todayIso());
   const [mapTime, setMapTime] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [dayFilter, setDayFilter] = useState<DayStatusFilter>("pending");
   const [formFilter, setFormFilter] = useState<number | "">("");
   const [forms, setForms] = useState<AssociationForm[]>([]);
   const [rooms, setRooms] = useState<AssociationRoom[]>([]);
@@ -666,10 +657,6 @@ export default function OrgAdminBookings() {
     () => (selectedCalendarDate ? bookingsByDay.get(selectedCalendarDate) ?? [] : []),
     [bookingsByDay, selectedCalendarDate],
   );
-  const mobileManagedDayItems = useMemo(
-    () => activeDayItems.filter(isManagedMobileBooking),
-    [activeDayItems],
-  );
   const selectedRoom = useMemo(
     () => rooms.find((room) => room.id === selectedRoomId) ?? null,
     [rooms, selectedRoomId],
@@ -803,6 +790,9 @@ export default function OrgAdminBookings() {
       setSelectedBooking(booking);
       await loadBookings();
       if (selectedRoomId) await loadRoomState(selectedRoomId);
+      if (window.matchMedia("(max-width: 720px)").matches && status !== "pending" && status !== "new") {
+        setDayFilter("managed");
+      }
       showToast({ tone: "success", title: "Stato aggiornato", message: `Prenotazione impostata su ${status}.` });
     } catch (err) {
       showToast({
@@ -822,6 +812,9 @@ export default function OrgAdminBookings() {
       const { booking } = await rejectOrgAdminBookingWithoutMessage(selectedBookingId);
       setSelectedBooking(booking);
       await loadBookings();
+      if (window.matchMedia("(max-width: 720px)").matches) {
+        setDayFilter("managed");
+      }
       showToast({
         tone: "success",
         title: "Rigetto salvato",
@@ -1187,9 +1180,14 @@ export default function OrgAdminBookings() {
       setRequestConfirmOpen(false);
       setRequestRejectOpen(false);
       if (nextStatus === "confirmed" && window.matchMedia("(max-width: 720px)").matches) {
+        setDayFilter("managed");
         window.requestAnimationFrame(() => {
-          document.querySelector(".booking-mobile-managed-section")?.scrollIntoView({ block: "start", behavior: "smooth" });
+          document.querySelector(`[data-booking-id="${selectedBooking.id}"]`)?.scrollIntoView({ block: "start", behavior: "smooth" });
         });
+      } else if (nextStatus === "rejected" && window.matchMedia("(max-width: 720px)").matches) {
+        setDayFilter("managed");
+      } else if (nextStatus === "pending" && window.matchMedia("(max-width: 720px)").matches) {
+        setDayFilter("pending");
       }
       setRequestActionState("success");
       let message = "Dettaglio prenotazione e stato della richiesta aggiornati.";
@@ -1338,6 +1336,15 @@ export default function OrgAdminBookings() {
   return (
     <div className="container-shell py-8 md:py-10">
       <div className="booking-admin-page mx-auto max-w-[92rem] space-y-6" data-section={section}>
+        <div className="booking-admin-mobile-head">
+          <div>
+            <p>Prenotazioni</p>
+            <h1>{sectionTabs.find((tab) => tab.key === section)?.label || "Agenda"}</h1>
+          </div>
+          <button type="button" onClick={() => setIsCreatingManual(true)}>
+            + Nuova
+          </button>
+        </div>
         <div className="booking-admin-page-header">
           <PageHeader
             eyebrow="Prenotazioni"
@@ -1384,6 +1391,8 @@ export default function OrgAdminBookings() {
             isMobileAgendaViewport={isMobileAgendaViewport}
             statusFilter={statusFilter}
             setStatusFilter={setStatusFilter}
+            dayFilter={dayFilter}
+            setDayFilter={setDayFilter}
             formFilter={formFilter}
             setFormFilter={setFormFilter}
             forms={forms}
@@ -1415,35 +1424,6 @@ export default function OrgAdminBookings() {
             saving={saving}
             />
           </div>
-        )}
-
-        {section === "agenda" && isMobileAgendaViewport && (
-          <MobileManagedBookingsSection
-            selectedCalendarDate={selectedCalendarDate}
-            items={mobileManagedDayItems}
-            selectedBookingId={selectedBookingId}
-            setSelectedBookingId={selectBooking}
-            selectedBooking={selectedBooking}
-            rooms={rooms}
-            assignmentRoomId={assignmentRoomId}
-            setAssignmentRoomId={setAssignmentRoomId}
-            assignmentTableId={assignmentTableId}
-            setAssignmentTableId={setAssignmentTableId}
-            assignmentTables={assignmentTables}
-            onStatusChange={handleBookingStatus}
-            onRejectWithoutMessage={handleRejectWithoutMessage}
-            onMarkCustomerNoteRead={handleMarkCustomerNoteRead}
-            phoneDraft={phoneDraft}
-            setPhoneDraft={setPhoneDraft}
-            onSavePhone={handleBookingPhoneSave}
-            onSaveDetails={handleBookingDetailsSave}
-            onSaveAssignment={handleAssignmentSave}
-            onClearAssignment={handleAssignmentClear}
-            requestActionState={requestActionState}
-            onOpenRequestConfirm={setRequestConfirmOpen}
-            onOpenRequestReject={setRequestRejectOpen}
-            saving={saving}
-          />
         )}
 
         {section === "events" && (
@@ -1899,6 +1879,8 @@ function AgendaSection(props: {
   isMobileAgendaViewport: boolean;
   statusFilter: string;
   setStatusFilter: (value: string) => void;
+  dayFilter: DayStatusFilter;
+  setDayFilter: (value: DayStatusFilter) => void;
   formFilter: number | "";
   setFormFilter: (value: number | "") => void;
   forms: AssociationForm[];
@@ -1929,14 +1911,11 @@ function AgendaSection(props: {
   onOpenRequestReject: (value: boolean) => void;
   saving: string;
 }) {
-  const [dayFilter, setDayFilter] = useState<DayStatusFilter>("all");
   const activeDayIsToday = props.selectedCalendarDate === todayIso();
-  const mobileActionDayItems = props.isMobileAgendaViewport
-    ? props.activeDayItems.filter(isPendingBookingRequest)
-    : props.activeDayItems;
+  const mobileActionDayItems = props.activeDayItems;
   const dayPending = props.activeDayItems.filter(isPendingBookingRequest).length;
   const dayCovers = props.activeDayItems.reduce((total, item) => total + (item.party_size || 0), 0);
-  const filteredDayItems = mobileActionDayItems.filter((booking) => matchesDayStatusFilter(booking, dayFilter));
+  const filteredDayItems = mobileActionDayItems.filter((booking) => matchesDayStatusFilter(booking, props.dayFilter));
   const selectedDateKey = props.selectedCalendarDate || todayIso();
   const dayRail = useMemo(() => buildDayRail(selectedDateKey), [selectedDateKey]);
   const selectedDayItems = props.bookingsByDay.get(selectedDateKey) ?? [];
@@ -2094,36 +2073,47 @@ function AgendaSection(props: {
               <span>{dayCovers} coperti</span>
             </div>
 
-            {!props.isMobileAgendaViewport ? (
               <div className="booking-day-panel__filters" role="tablist" aria-label="Filtra prenotazioni del giorno">
                 {dayStatusFilters.map((filter) => (
                   <button
                     key={filter.key}
                     type="button"
                     role="tab"
-                    aria-selected={dayFilter === filter.key}
+                    aria-selected={props.dayFilter === filter.key}
                     aria-controls="booking-day-list-panel"
                     id={`booking-day-filter-${filter.key}`}
-                    className={dayFilter === filter.key ? "is-active" : ""}
-                    onClick={() => setDayFilter(filter.key)}
+                    className={props.dayFilter === filter.key ? "is-active" : ""}
+                    onClick={() => props.setDayFilter(filter.key)}
                   >
                     {filter.label}
+                    {props.isMobileAgendaViewport ? (
+                      <span>
+                        {filter.key === "pending"
+                          ? props.activeDayItems.filter(isPendingBookingRequest).length
+                          : filter.key === "managed"
+                            ? props.activeDayItems.filter((item) => !isPendingBookingRequest(item)).length
+                            : filter.key === "all"
+                              ? props.activeDayItems.length
+                              : props.activeDayItems.filter((item) => matchesDayStatusFilter(item, filter.key)).length}
+                      </span>
+                    ) : null}
                   </button>
                 ))}
               </div>
-            ) : null}
 
             <div
               className="booking-day-list"
               id="booking-day-list-panel"
               role="tabpanel"
-              aria-labelledby={props.isMobileAgendaViewport ? undefined : `booking-day-filter-${dayFilter}`}
+              aria-labelledby={props.isMobileAgendaViewport ? undefined : `booking-day-filter-${props.dayFilter}`}
             >
               {filteredDayItems.length === 0 ? (
                 <EmptyState
                   message={
                     props.isMobileAgendaViewport
-                      ? "Nessuna richiesta da confermare. Le prenotazioni confermate sono in basso."
+                      ? props.dayFilter === "pending"
+                        ? "Nessuna richiesta da confermare."
+                        : "Nessuna prenotazione in questo filtro."
                       : "Nessuna prenotazione in questo filtro."
                   }
                 />
@@ -2389,123 +2379,6 @@ function BookingEventSeriesPanel(props: {
   );
 }
 
-function MobileManagedBookingsSection(props: {
-  selectedCalendarDate: string | null;
-  items: AssociationBooking[];
-  selectedBookingId: number | null;
-  setSelectedBookingId: (id: number | null) => void;
-  selectedBooking: AssociationBooking | null;
-  rooms: AssociationRoom[];
-  assignmentRoomId: number | "";
-  setAssignmentRoomId: (value: number | "") => void;
-  assignmentTableId: number | "";
-  setAssignmentTableId: (value: number | "") => void;
-  assignmentTables: AssociationRoomTable[];
-  onStatusChange: (status: string) => void;
-  onRejectWithoutMessage: () => void;
-  onMarkCustomerNoteRead: () => void;
-  phoneDraft: string;
-  setPhoneDraft: (value: string) => void;
-  onSavePhone: () => void;
-  onSaveDetails: (payload: BookingDetailsUpdate) => void;
-  onSaveAssignment: () => void;
-  onClearAssignment: () => void;
-  requestActionState: "idle" | "loading" | "success" | "error";
-  onOpenRequestConfirm: (value: false | "confirmed" | "pending") => void;
-  onOpenRequestReject: (value: boolean) => void;
-  saving: string;
-}) {
-  if (!props.selectedCalendarDate) return null;
-
-  const totalCovers = props.items.reduce((total, item) => total + (item.party_size || 0), 0);
-
-  return (
-    <section className="booking-mobile-managed-section" aria-live="polite">
-      <header className="booking-mobile-managed-section__header">
-        <div>
-          <p>{formatDate(props.selectedCalendarDate)}</p>
-          <h2>Prenotazioni confermate</h2>
-        </div>
-        <span>{props.items.length} / {totalCovers} pax</span>
-      </header>
-
-      {props.items.length === 0 ? (
-        <div className="booking-mobile-managed-section__empty">
-          Le richieste confermate compariranno qui, separate dalla coda da confermare.
-        </div>
-      ) : (
-        <div className="booking-mobile-managed-section__list">
-          {props.items.map((booking) => {
-            const isExpanded = props.selectedBookingId === booking.id;
-            const isDetailLoaded = props.selectedBooking?.id === booking.id;
-            const tableLabel = formatBookingTable(booking);
-            const needsTable = !booking.table?.name;
-            const displayName = bookingDisplayName(booking);
-            return (
-              <article key={booking.id} className={`booking-mobile-managed-card ${bookingCardToneClass(booking)} ${isExpanded ? "is-expanded" : ""}`}>
-                <button
-                  type="button"
-                  className="booking-mobile-managed-card__summary"
-                  onClick={() => props.setSelectedBookingId(isExpanded ? null : booking.id)}
-                  aria-expanded={isExpanded}
-                >
-                  <span className="booking-day-row__avatar">{initialsFromName(displayName)}</span>
-                  <span className="booking-mobile-managed-card__main">
-                    <span className="booking-mobile-managed-card__meta-strip">{bookingPrimaryMeta(booking)}</span>
-                    <span className="booking-mobile-managed-card__name-line">
-                      <strong>{displayName}</strong>
-                      <ReminderResponseIndicator booking={booking} />
-                    </span>
-                    <small>{tableLabel}</small>
-                  </span>
-                  <span className="booking-mobile-managed-card__side">
-                    {isFormLinkedBooking(booking) ? <span className="booking-day-row__form-icon" title="Richiesta da form" aria-label="Richiesta da form" /> : null}
-                    <span className={bookingStatusChipClass(booking.status)}>{formatStatusLabel(booking.status)}</span>
-                    <span className={needsTable ? "needs-assignment" : ""}>
-                      {needsTable ? "Assegna tavolo" : `${booking.party_size || "-"} pax`}
-                    </span>
-                  </span>
-                </button>
-                <div className="booking-mobile-managed-card__expanded" aria-hidden={!isExpanded}>
-                  {isExpanded ? (
-                    isDetailLoaded ? (
-                      <BookingDetailPanel
-                        selectedBooking={props.selectedBooking}
-                        rooms={props.rooms}
-                        assignmentRoomId={props.assignmentRoomId}
-                        setAssignmentRoomId={props.setAssignmentRoomId}
-                        assignmentTableId={props.assignmentTableId}
-                        setAssignmentTableId={props.setAssignmentTableId}
-                        assignmentTables={props.assignmentTables}
-                        onStatusChange={props.onStatusChange}
-                        onRejectWithoutMessage={props.onRejectWithoutMessage}
-                        onMarkCustomerNoteRead={props.onMarkCustomerNoteRead}
-                        phoneDraft={props.phoneDraft}
-                        setPhoneDraft={props.setPhoneDraft}
-                        onSavePhone={props.onSavePhone}
-                        onSaveDetails={props.onSaveDetails}
-                        onSaveAssignment={props.onSaveAssignment}
-                        onClearAssignment={props.onClearAssignment}
-                        requestActionState={props.requestActionState}
-                        onOpenRequestConfirm={props.onOpenRequestConfirm}
-                        onOpenRequestReject={props.onOpenRequestReject}
-                        saving={props.saving}
-                        mobileOnly
-                      />
-                    ) : (
-                      <div className="booking-row-loading">Caricamento dettaglio...</div>
-                    )
-                  ) : null}
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      )}
-    </section>
-  );
-}
-
 function DayBookingRow({
   booking,
   expanded,
@@ -2522,7 +2395,7 @@ function DayBookingRow({
   const isFormRequest = isFormLinkedBooking(booking);
   const displayName = bookingDisplayName(booking);
   return (
-    <article className={`booking-day-row ${bookingCardToneClass(booking)} ${expanded ? "is-expanded" : ""}`}>
+    <article className={`booking-day-row ${bookingCardToneClass(booking)} ${expanded ? "is-expanded" : ""}`} data-booking-id={booking.id}>
       <button type="button" className="booking-day-row__summary" onClick={onSelect} aria-expanded={expanded}>
         <span className="booking-day-row__avatar">{initialsFromName(displayName)}</span>
         <span className="booking-day-row__main">
@@ -2670,12 +2543,8 @@ function BookingQuickEdit(props: {
     });
   }
 
-  return (
-    <details className="booking-quick-edit" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
-      <summary>
-        <span>Modifica prenotazione</span>
-        <small>{formatDateTime(props.booking.booking_date, props.booking.booking_time)} - {props.booking.party_size || "-"} pax</small>
-      </summary>
+  const editBody = (
+    <>
       <div className="booking-quick-edit__grid">
         <label>
           <span>Nome</span>
@@ -2706,6 +2575,28 @@ function BookingQuickEdit(props: {
       <button type="button" onClick={saveDetails} disabled={props.saving || !changed}>
         {props.saving ? "Salvataggio..." : "Salva modifiche"}
       </button>
+    </>
+  );
+
+  if (props.defaultOpen) {
+    return (
+      <section className="booking-quick-edit booking-quick-edit--inline">
+        <div className="booking-quick-edit__inline-head">
+          <span>Dettagli prenotazione</span>
+          <small>{formatDateTime(props.booking.booking_date, props.booking.booking_time)} - {props.booking.party_size || "-"} pax</small>
+        </div>
+        {editBody}
+      </section>
+    );
+  }
+
+  return (
+    <details className="booking-quick-edit" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary>
+        <span>Modifica prenotazione</span>
+        <small>{formatDateTime(props.booking.booking_date, props.booking.booking_time)} - {props.booking.party_size || "-"} pax</small>
+      </summary>
+      {editBody}
     </details>
   );
 }
@@ -2815,6 +2706,13 @@ function BookingDetailPanel(props: {
             <span className={requestMeta.className}>{requestMeta.label}</span>
           </div>
 
+          <BookingServiceStatusControls
+            booking={props.selectedBooking}
+            onStatusChange={props.onStatusChange}
+            saving={props.saving === "booking-status"}
+            compact
+          />
+
           <div className="booking-request-mobile-card__facts">
             <span>
               <small>Quando</small>
@@ -2837,13 +2735,6 @@ function BookingDetailPanel(props: {
               </span>
             ) : null}
           </div>
-
-          <BookingServiceStatusControls
-            booking={props.selectedBooking}
-            onStatusChange={props.onStatusChange}
-            saving={props.saving === "booking-status"}
-            compact
-          />
 
           <BookingQuickEdit
             booking={props.selectedBooking}
@@ -3014,7 +2905,7 @@ function BookingDetailPanel(props: {
             booking={props.selectedBooking}
             onSave={props.onSaveDetails}
             saving={props.saving === "booking-details"}
-            defaultOpen={false}
+            defaultOpen={Boolean(props.mobileOnly)}
           />
         </div>
         <div className="mt-4">

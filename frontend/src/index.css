@@ -8110,3 +8110,548 @@ body.dashboard-perf-mode .btn-ghost:hover {
     box-shadow: inset 0 0 0 4px rgba(81, 80, 75, 0.62), 0 14px 28px -24px rgba(15, 23, 42, 0.7) !important;
   }
 }
+
+.org-admin-v2 .booking-admin-mobile-head,
+.org-admin-v2 .communications-mobile-head {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .org-admin-v2 .booking-admin-page,
+  .org-admin-v2 .org-admin-communications-page {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-width: 100%;
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  }
+
+  .org-admin-v2 .booking-admin-mobile-head,
+  .org-admin-v2 .communications-mobile-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.15rem 0.1rem 0.25rem;
+  }
+
+  .org-admin-v2 .booking-admin-mobile-head p,
+  .org-admin-v2 .communications-mobile-head p {
+    margin: 0;
+    color: var(--oa-muted);
+    font-size: 0.68rem;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .org-admin-v2 .booking-admin-mobile-head h1,
+  .org-admin-v2 .communications-mobile-head h1 {
+    margin: 0.1rem 0 0;
+    color: var(--oa-text);
+    font-size: 1.35rem;
+    font-weight: 850;
+    line-height: 1.05;
+  }
+
+  .org-admin-v2 .booking-admin-mobile-head button,
+  .org-admin-v2 .communications-mobile-head button {
+    min-height: 2.45rem;
+    flex: 0 0 auto;
+    border-radius: 9px;
+    background: var(--oa-brand);
+    color: #ffffff;
+    padding: 0 0.95rem;
+    font-size: 0.88rem;
+    font-weight: 850;
+  }
+
+  .org-admin-v2 .communications-mobile-head button:disabled {
+    cursor: not-allowed;
+    opacity: 0.52;
+  }
+
+  .org-admin-v2 .booking-admin-page-header,
+  .org-admin-v2 .org-admin-communications-page > .org-page-header {
+    display: none;
+  }
+
+  .org-admin-v2 .booking-admin-tabs-shell,
+  .org-admin-v2 .booking-admin-page[data-section="agenda"] .booking-admin-tabs-shell {
+    order: 1;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  .org-admin-v2 .booking-admin-tabs-shell > div {
+    display: block;
+  }
+
+  .org-admin-v2 .booking-admin-tabs,
+  .org-admin-v2 .booking-admin-page[data-section="agenda"] .booking-admin-tabs {
+    display: flex;
+    gap: 0.3rem;
+    border: 0;
+    border-radius: 12px;
+    background: var(--oa-panel-muted);
+    padding: 0.25rem;
+    overflow-x: auto;
+  }
+
+  .org-admin-v2 .booking-admin-tabs button,
+  .org-admin-v2 .communications-workspace [role="button"],
+  .org-admin-v2 .communications-workspace button {
+    min-width: 0;
+  }
+
+  .org-admin-v2 .booking-admin-tabs button {
+    min-height: 2.45rem;
+    flex: 0 0 auto;
+    border-radius: 9px;
+    padding: 0.5rem 0.78rem;
+    font-size: 0.85rem;
+    font-weight: 800;
+  }
+
+  .org-admin-v2 .booking-top-kpis {
+    display: none !important;
+  }
+
+  .org-admin-v2 .booking-admin-section,
+  .org-admin-v2 .booking-admin-page[data-section="agenda"] .booking-admin-section--agenda {
+    order: 2;
+  }
+
+  .org-admin-v2 .booking-agenda-stack {
+    gap: 0.75rem;
+  }
+
+  .org-admin-v2 .booking-day-panel {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .org-admin-v2 .booking-day-panel__header {
+    gap: 0.65rem;
+    border-radius: 12px 12px 0 0;
+    background: var(--oa-panel);
+    padding: 0.85rem 0.8rem 0.7rem;
+  }
+
+  .org-admin-v2 .booking-day-panel__eyebrow {
+    color: var(--oa-muted);
+  }
+
+  .org-admin-v2 .booking-day-panel__title {
+    color: var(--oa-text);
+    font-size: 1.25rem;
+    font-weight: 850;
+  }
+
+  .org-admin-v2 .booking-mobile-day-switcher {
+    grid-template-columns: 2.5rem minmax(0, 1fr) auto 2.5rem;
+  }
+
+  .org-admin-v2 .booking-mobile-day-switcher__button,
+  .org-admin-v2 .booking-mobile-day-switcher__today,
+  .org-admin-v2 .booking-mobile-day-switcher__date {
+    min-height: 2.5rem;
+    border: 1px solid var(--oa-border);
+    border-radius: 9px;
+    background: var(--oa-panel-muted);
+    color: var(--oa-text);
+    font-size: 0.86rem;
+  }
+
+  .org-admin-v2 .booking-mobile-day-switcher__date::-webkit-calendar-picker-indicator {
+    filter: none;
+  }
+
+  .org-admin-v2 .booking-day-panel__stats {
+    display: none;
+  }
+
+  .org-admin-v2 .booking-day-panel__filters {
+    display: flex !important;
+    gap: 0.3rem;
+    margin: 0 0 0.65rem;
+    padding: 0.25rem;
+    border-radius: 0 0 12px 12px;
+    background: var(--oa-panel-muted);
+    overflow-x: auto;
+  }
+
+  .org-admin-v2 .booking-day-panel__filters button {
+    display: inline-flex;
+    min-height: 2.35rem;
+    flex: 1 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--oa-muted);
+    padding: 0.45rem 0.72rem;
+    font-size: 0.8rem;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+
+  .org-admin-v2 .booking-day-panel__filters button.is-active,
+  .org-admin-v2 .booking-day-panel__filters button:hover {
+    background: var(--oa-panel);
+    color: var(--oa-brand);
+    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+  }
+
+  .org-admin-v2 .booking-day-panel__filters button span {
+    display: inline-flex;
+    min-width: 1.35rem;
+    height: 1.35rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--oa-brand) 10%, transparent);
+    color: inherit;
+    font-size: 0.7rem;
+  }
+
+  .org-admin-v2 .booking-day-list {
+    padding: 0;
+    background: transparent;
+  }
+
+  .org-admin-v2 .booking-day-row {
+    border: 1px solid var(--oa-border);
+    border-radius: 12px;
+    background: var(--oa-panel);
+  }
+
+  .org-admin-v2 .booking-day-row + .booking-day-row {
+    margin-top: 0.5rem;
+  }
+
+  .org-admin-v2 .booking-day-row__summary {
+    padding: 0.72rem;
+  }
+
+  .org-admin-v2 .booking-day-row__avatar {
+    width: 2.35rem;
+    height: 2.35rem;
+    border-radius: 10px;
+  }
+
+  .org-admin-v2 .booking-day-row__topline,
+  .org-admin-v2 .booking-day-row__meta,
+  .org-admin-v2 .booking-day-row__contact {
+    overflow-wrap: anywhere;
+  }
+
+  .org-admin-v2 .booking-day-row__expanded {
+    padding: 0 0.72rem 0.72rem;
+  }
+
+  .org-admin-v2 .booking-request-mobile-card {
+    gap: 0.75rem;
+    border: 1px solid var(--oa-border);
+    border-radius: 12px;
+    padding: 0.78rem;
+  }
+
+  .org-admin-v2 .booking-request-mobile-card__facts span,
+  .org-admin-v2 .booking-request-mobile-card__fields span,
+  .org-admin-v2 .booking-request-mobile-card__assignment,
+  .org-admin-v2 .booking-request-mobile-card__reason {
+    border-radius: 9px;
+  }
+
+  .org-admin-v2 .booking-detail-full-card {
+    display: grid;
+    gap: 0.85rem;
+    border: 1px solid var(--oa-border);
+    border-radius: 12px !important;
+    background: var(--oa-panel) !important;
+    padding: 0.85rem !important;
+    box-shadow: none !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+  }
+
+  .org-admin-v2 .booking-detail-full-card > .mt-6,
+  .org-admin-v2 .booking-detail-full-card > .mt-4:not(:has(.booking-quick-edit)):not(:has(.booking-phone-editor)) {
+    display: none;
+  }
+
+  .org-admin-v2 .booking-quick-edit,
+  .org-admin-v2 .booking-quick-edit--inline,
+  .org-admin-v2 .booking-phone-editor,
+  .org-admin-v2 .booking-service-status-panel {
+    border-radius: 10px;
+    box-shadow: none;
+  }
+
+  .org-admin-v2 .booking-quick-edit--inline {
+    border: 0;
+    background: transparent;
+    padding: 0;
+  }
+
+  .booking-quick-edit__inline-head {
+    display: grid;
+    gap: 0.15rem;
+    color: var(--oa-text);
+    font-size: 0.88rem;
+    font-weight: 900;
+  }
+
+  .booking-quick-edit__inline-head small {
+    color: var(--oa-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
+  .org-admin-v2 .booking-quick-edit__grid {
+    gap: 0.55rem;
+  }
+
+  .org-admin-v2 .booking-quick-edit__grid label,
+  .org-admin-v2 .booking-phone-editor label {
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .org-admin-v2 .booking-service-status-grid,
+  .org-admin-v2 .booking-service-status-panel--compact .booking-service-status-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.4rem;
+  }
+
+  .org-admin-v2 .booking-service-status-button,
+  .org-admin-v2 .booking-service-status-panel--compact .booking-service-status-button {
+    width: 100%;
+    min-width: 0 !important;
+    height: 2.25rem;
+    border-radius: 9px;
+  }
+
+  .org-admin-v2 .booking-service-status-button.is-wide {
+    grid-column: span 2;
+  }
+
+  .org-admin-v2 .booking-inline-actions {
+    justify-content: stretch;
+  }
+
+  .org-admin-v2 .booking-inline-action {
+    width: 100%;
+  }
+
+  .org-admin-v2 .booking-admin-section:not(.booking-admin-section--agenda) > section,
+  .org-admin-v2 .booking-admin-section:not(.booking-admin-section--agenda) > section > div,
+  .org-admin-v2 .booking-admin-section:not(.booking-admin-section--agenda) aside {
+    gap: 0.75rem;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+  }
+
+  .org-admin-v2 .booking-admin-section:not(.booking-admin-section--agenda) button {
+    border-radius: 10px !important;
+  }
+
+  .org-admin-v2 .booking-admin-page > section:not(.booking-admin-tabs-shell),
+  .org-admin-v2 .booking-admin-page > section:not(.booking-admin-tabs-shell) > div,
+  .org-admin-v2 .booking-admin-page > section:not(.booking-admin-tabs-shell) aside {
+    gap: 0.75rem;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+  }
+
+  .org-admin-v2 .communications-mobile-head {
+    order: 0;
+  }
+
+  .org-admin-v2 .communications-workspace {
+    order: 1;
+    overflow: visible;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .org-admin-v2 .communications-workspace > .px-5 {
+    padding-inline: 0 !important;
+  }
+
+  .org-admin-v2 .communications-workspace > .px-5.pt-5 {
+    padding-top: 0 !important;
+  }
+
+  .org-admin-v2 .communications-workspace > .px-5.py-6 {
+    padding-top: 0.75rem !important;
+    padding-bottom: 0 !important;
+  }
+
+  .org-admin-v2 .communications-workspace > .px-5 > .flex {
+    gap: 0.55rem;
+    border-bottom: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  .org-admin-v2 .communications-workspace > .px-5 > .flex > .min-w-0 {
+    display: none;
+  }
+
+  .org-admin-v2 .communications-workspace .inline-flex.min-w-max {
+    display: flex;
+    min-width: 0;
+    width: max-content;
+    max-width: 100%;
+    gap: 0.3rem;
+    border: 0 !important;
+    border-radius: 12px !important;
+    background: var(--oa-panel-muted) !important;
+    padding: 0.25rem !important;
+    overflow-x: auto;
+  }
+
+  .org-admin-v2 .communications-workspace .inline-flex.min-w-max button {
+    min-height: 2.42rem;
+    flex: 0 0 auto;
+    border-radius: 9px !important;
+    padding: 0.48rem 0.75rem !important;
+    font-size: 0.84rem !important;
+  }
+
+  .org-admin-v2 .comm-kpi-grid {
+    display: none;
+  }
+
+  .org-admin-v2 .org-admin-communications-page .org-section-panel {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  .org-admin-v2 .org-admin-communications-page .org-section-panel__header {
+    padding: 0;
+  }
+
+  .org-admin-v2 .org-admin-communications-page .org-section-panel,
+  .org-admin-v2 .org-admin-communications-page .whatsapp-reminder-panel,
+  .org-admin-v2 .org-admin-communications-page form,
+  .org-admin-v2 .org-admin-communications-page section.rounded-lg,
+  .org-admin-v2 .org-admin-communications-page div.rounded-lg {
+    box-shadow: none !important;
+  }
+
+  .org-admin-v2 .org-admin-communications-page .org-stepper {
+    display: flex;
+    gap: 0.3rem;
+    border: 0;
+    border-radius: 12px;
+    background: var(--oa-panel-muted);
+    padding: 0.25rem;
+    overflow-x: auto;
+  }
+
+  .org-admin-v2 .org-admin-communications-page .org-stepper__item {
+    min-height: 2.6rem;
+    min-width: 7.4rem;
+    flex: 0 0 auto;
+    border-radius: 9px;
+    padding: 0.42rem 0.55rem;
+  }
+
+  .org-admin-v2 .org-admin-communications-page .org-stepper__dot {
+    width: 1.8rem;
+    height: 1.8rem;
+  }
+
+  .org-admin-v2 .org-admin-communications-page .org-stepper__hint {
+    display: none;
+  }
+
+  .org-admin-v2 .org-admin-communications-page .form-builder-shell {
+    gap: 0.75rem;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+  }
+
+  .org-admin-v2 .org-admin-communications-page .form-builder-rail,
+  .org-admin-v2 .org-admin-communications-page .form-builder-properties {
+    border-radius: 10px;
+  }
+
+  .org-admin-v2 .org-admin-communications-page .builder-shell {
+    gap: 0.75rem;
+  }
+
+  .org-admin-v2 .org-admin-communications-page .builder-toolbar {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+  }
+
+  .org-admin-v2 .org-admin-communications-page .builder-toolbar__copy,
+  .org-admin-v2 .org-admin-communications-page .builder-rail__copy {
+    display: none;
+  }
+
+  .org-admin-v2 .org-admin-communications-page .builder-workbench,
+  .org-admin-v2 .org-admin-communications-page .builder-workbench--three {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+
+  .org-admin-v2 .org-admin-communications-page .builder-canvas {
+    order: 1;
+    min-height: 42rem;
+    border-radius: 10px;
+  }
+
+  .org-admin-v2 .org-admin-communications-page .builder-rail {
+    min-height: 0;
+    border-radius: 10px;
+  }
+
+  .org-admin-v2 .org-admin-communications-page .builder-rail--left {
+    order: 2;
+  }
+
+  .org-admin-v2 .org-admin-communications-page .builder-rail--right {
+    order: 3;
+  }
+
+  .org-admin-v2 .org-admin-communications-page .builder-rail__panel {
+    max-height: 20rem;
+  }
+
+  .org-admin-v2 .org-admin-communications-page .builder-block-card,
+  .org-admin-v2 .org-admin-communications-page .builder-variable-chip,
+  .org-admin-v2 .org-admin-communications-page .builder-media-card {
+    border-radius: 10px;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+}

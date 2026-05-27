@@ -136,7 +136,26 @@ export default function OrgAdminCommunications() {
   }
 
   return (
-    <div className="container-shell py-8 space-y-5">
+    <div className="org-admin-communications-page container-shell py-8 space-y-5">
+      <div className="communications-mobile-head">
+        <div>
+          <p>Comunicazioni</p>
+          <h1>{communicationsTabs.find((tab) => tab.key === activeTab)?.label || "Centro messaggi"}</h1>
+        </div>
+        <button
+          type="button"
+          disabled={communicationsLocked}
+          onClick={() => {
+            const nextParams = new URLSearchParams(searchParams);
+            nextParams.set("tab", activeTab === "moduli" ? "moduli" : "campagne");
+            nextParams.set("mode", activeTab === "moduli" ? "create" : "create");
+            setSearchParams(nextParams, { replace: true });
+            setActiveTab(activeTab === "moduli" ? "moduli" : "campagne");
+          }}
+        >
+          + Nuova
+        </button>
+      </div>
       <PageHeader
         eyebrow="Comunicazioni"
         title="Centro messaggi"
@@ -169,7 +188,7 @@ export default function OrgAdminCommunications() {
         }
       />
 
-      <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
+      <section className="communications-workspace overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
         {communicationsLocked && (
           <div className="mx-6 mt-6 rounded-lg border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900 md:mx-8">
             <div className="flex flex-wrap items-center justify-between gap-3">

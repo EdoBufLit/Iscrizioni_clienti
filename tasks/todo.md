@@ -5474,3 +5474,25 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Fix: `available_slots` ora deduplica preservando l'ordine salvato della serata; il frontend preferisce l'ordine degli item/slot quando disponibile e non fa piu' `.sort()`.
 - Copertura: aggiunto test pubblico per una serata `19:30 ... 23:30, 00:00, 00:30`.
 - Verifiche OK: `python -m compileall -q app init_db.py`, `python -m pytest tests/test_forms_module.py -q`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.
+
+## Plan (Documento flussi comunicazioni e prenotazioni - May 27, 2026)
+- [x] Raccogliere i punti principali su form booking, serate, email, builder, WhatsApp, agenda e tavoli.
+- [x] Scrivere documento breve e operativo in `docs/comunicazioni_prenotazioni_flussi.md`.
+- [x] Verificare file creato e stato git.
+
+## Review (Documento flussi comunicazioni e prenotazioni - May 27, 2026)
+- Creato documento sintetico con mappa rapida, flusso prenotazione pubblica, serate/orari, agenda/tavoli, email automatiche, builder email, WhatsApp, conferme admin e punti di configurazione org admin.
+
+## Plan (Mobile prenotazioni/comunicazioni da prototipo semplice - May 27, 2026)
+- [x] Estrarre grammatica UI dal prototipo allegato e confrontarla con le pagine reali.
+- [x] Applicare su mobile una navigazione unica e semplice per Prenotazioni, senza doppio menu sovrapposto.
+- [x] Rendere modifica prenotazione inline/bottom-sheet senza passaggio "Modifica prenotazione" separato.
+- [x] Semplificare Serate, Form, Builder email e WhatsApp nelle sezioni mobile mantenendo funzioni esistenti.
+- [x] Verificare typecheck/build e smoke visuale mobile.
+
+## Review (Mobile prenotazioni/comunicazioni da prototipo semplice - May 27, 2026)
+- Prenotazioni mobile: header breve, tab semplici, lista giorno unica con filtri `Richieste/Gestite/Tutte` e nessuna sezione gestite separata.
+- Dettaglio prenotazione: campi principali editabili subito nel dettaglio mobile; i pulsanti stato servizio sono subito sotto l'header della richiesta, visibili nel primo viewport utile.
+- Serate: rimossi contenitori esterni da card annidata; lista e form impostazioni vivono nello stesso flusso verticale semplice.
+- Comunicazioni: header mobile dedicato, tab compatte, workspace senza cornice esterna; stepper campagne orizzontale compatto e builder email con canvas visibile prima delle rail.
+- Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`, smoke Playwright mockato 390x844 su agenda, dettaglio, serate, comunicazioni, campagna e builder email.
