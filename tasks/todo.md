@@ -5555,7 +5555,7 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - [x] Ripulire mojibake visibile in Prenotazioni mobile/serate.
 - [x] Verificare che in `OrgAdminBookings.tsx` non restino pattern corrotti nelle label utente.
 - [x] Eseguire typecheck/build e diff check.
-- [ ] Commit, push e controllo deploy.
+- [x] Commit, push e controllo deploy.
 
 ## Review (Fix testo corrotto prenotazioni - May 27, 2026)
 - Ripulite label giorni, separatori, chiusura pannello, indicatori pax/chevron e messaggi toast/modali in `OrgAdminBookings.tsx`.
