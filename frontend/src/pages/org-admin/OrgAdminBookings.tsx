@@ -2204,8 +2204,9 @@ function BookingEventSeriesPanel(props: {
     const slots = parseBookingSlotText(props.draft.time_slots_text);
     setSlotRange({ start: slots[0] || "19:00", end: slots[slots.length - 1] || "23:00" });
   }, [props.draft.id, props.draft.time_slots_text]);
-  const generateHalfHourRange = () => {
-    const slots = buildHalfHourSlots(slotRange.start, slotRange.end);
+  const applySlotRange = (nextRange: { start: string; end: string }) => {
+    setSlotRange(nextRange);
+    const slots = buildHalfHourSlots(nextRange.start, nextRange.end);
     if (!slots.length) return;
     props.setDraft((current) => ({ ...current, time_slots_text: slots.join(", ") }));
   };
@@ -2325,7 +2326,7 @@ function BookingEventSeriesPanel(props: {
             </Field>
           )}
           <Field label="Orari disponibili">
-            <div className="mb-3 grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+            <div className="mb-3 grid gap-2 sm:grid-cols-2">
               <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
                 Dalle
                 <input
@@ -2333,7 +2334,7 @@ function BookingEventSeriesPanel(props: {
                   type="time"
                   step={1800}
                   value={slotRange.start}
-                  onChange={(event) => setSlotRange((current) => ({ ...current, start: event.target.value }))}
+                  onChange={(event) => applySlotRange({ ...slotRange, start: event.target.value })}
                 />
               </label>
               <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
@@ -2343,23 +2344,19 @@ function BookingEventSeriesPanel(props: {
                   type="time"
                   step={1800}
                   value={slotRange.end}
-                  onChange={(event) => setSlotRange((current) => ({ ...current, end: event.target.value }))}
+                  onChange={(event) => applySlotRange({ ...slotRange, end: event.target.value })}
                 />
               </label>
-              <button
-                type="button"
-                className="min-h-[2.55rem] rounded-xl bg-slate-900 px-3 text-sm font-semibold text-white transition hover:bg-slate-800"
-                onClick={generateHalfHourRange}
-              >
-                Genera ogni 30 min
-              </button>
             </div>
-            <textarea
-              className={`${inputClass} min-h-[90px]`}
-              value={props.draft.time_slots_text}
-              onChange={(event) => props.setDraft((current) => ({ ...current, time_slots_text: event.target.value }))}
-              placeholder="19:30, 20:00, 20:30"
-            />
+            <details className="mt-1">
+              <summary className="cursor-pointer text-sm font-semibold text-slate-700">Modifica manuale slot</summary>
+              <textarea
+                className={`${inputClass} mt-3 min-h-[90px]`}
+                value={props.draft.time_slots_text}
+                onChange={(event) => props.setDraft((current) => ({ ...current, time_slots_text: event.target.value }))}
+                placeholder="19:30, 20:00, 20:30"
+              />
+            </details>
           </Field>
           <Field label="Descrizione">
             <textarea

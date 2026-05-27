@@ -50,10 +50,24 @@ jobs:
             exit 1
           fi
 
+      - name: Resolve changed-files base
+        id: change_base
+        run: |
+          set -euo pipefail
+          BEFORE="${{ github.event.before }}"
+          ZERO_SHA="0000000000000000000000000000000000000000"
+          if [ "${{ github.event_name }}" = "push" ] && [ -n "$BEFORE" ] && [ "$BEFORE" != "$ZERO_SHA" ]; then
+            echo "base=$BEFORE" >> "$GITHUB_OUTPUT"
+          else
+            echo "base=${{ github.event.repository.default_branch }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Detect changed deploy targets
         id: changes
         uses: dorny/paths-filter@v3
         with:
+          base: ${{ steps.change_base.outputs.base }}
+          ref: ${{ github.sha }}
           filters: |
             app_runtime:
               - 'Dockerfile'

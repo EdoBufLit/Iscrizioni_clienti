@@ -269,3 +269,7 @@ When matching a reference membership card, do not only copy palette, logo placem
 ## May 26, 2026 - Builders need workspace, not sidebar treatment
 
 If a feature is called a builder and includes previews plus many controls, do not place it in a narrow secondary column next to operational tables. Put it in a full-width section near the relevant workflow, with wide previews and controls arranged in rows, then move secondary status panels below or after it.
+
+## May 27, 2026 - Deploy path filters must compare the pushed range
+
+For GitHub Actions deploys on long-lived feature branches, do not let path filtering default to the branch merge-base against the main deployment branch. On push events, compare `github.event.before` to `github.sha`, otherwise the workflow can see hundreds of historical files as changed and rebuild unrelated Docker images.

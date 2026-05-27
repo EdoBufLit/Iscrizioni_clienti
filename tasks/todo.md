@@ -5452,3 +5452,13 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Builder spostato sotto il registro movimenti in sezione full-width; pannelli secondari `Registro lotti`, `Regole emissione`, `Totale quote` ora stanno sotto in griglia.
 - Aggiunto test backend che salva `card_style` via `PATCH /api/org-admin/organization/membership-settings` e verifica persistenza dei campi principali.
 - Verifiche OK: `python -m compileall -q app init_db.py`, `pytest tests/test_org_admin_manual_member.py::test_org_admin_can_manage_membership_settings_and_create_temporary_member -q`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
+## Plan (Ottimizza deploy diff e range orari prenotazioni - May 27, 2026)
+- [x] Correggere GitHub Actions affinche' su push `feat/**` rilevi solo i file del push corrente invece del diff contro il branch base storico.
+- [x] Rendere il range `Dalle/Alle` delle serate prenotabili persistente e non ambiguo: modifica range => slot ogni 30 minuti aggiornati subito.
+- [x] Verificare workflow syntax/diff, typecheck/build frontend e test mirati se impattati.
+- [x] Aggiornare review e preparare push/deploy se richiesto.
+
+## Review (Ottimizza deploy diff e range orari prenotazioni - May 27, 2026)
+- GitHub Actions: `paths-filter` ora usa `github.event.before` come base su push e `github.sha` come ref, quindi i branch `feat/**` non vengono piu' confrontati contro il branch storico e non dovrebbero rebuildare immagini non toccate.
+- Serate prenotabili: `Dalle/Alle` aggiorna subito gli slot ogni 30 minuti nel draft; il campo manuale resta disponibile in un dettaglio avanzato non evidente.
+- Verifiche OK: YAML workflow parseabile, `git diff --check`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`.
