@@ -2236,41 +2236,26 @@ function AgendaSection(props: {
                   </span>
                 </h2>
               </div>
-              <div className="booking-mobile-day-switcher" aria-label="Cambia giorno agenda">
-                <button
-                  type="button"
-                  className="booking-mobile-day-switcher__button"
-                  aria-label="Giorno precedente"
-                  onClick={() => selectDay(addDaysIso(selectedDateKey, -1))}
-                >
-                  &lsaquo;
-                </button>
-                <input
-                  className="booking-mobile-day-switcher__date"
-                  type="date"
-                  aria-label="Scegli giorno agenda"
-                  value={selectedDateKey}
-                  onChange={(event) => {
-                    if (event.target.value) selectDay(event.target.value);
-                  }}
-                />
-                {!activeDayIsToday ? (
-                  <button
-                    type="button"
-                    className="booking-mobile-day-switcher__today"
-                    onClick={() => selectDay(todayIso())}
-                  >
-                    Oggi
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  className="booking-mobile-day-switcher__button"
-                  aria-label="Giorno successivo"
-                  onClick={() => selectDay(addDaysIso(selectedDateKey, 1))}
-                >
-                  &rsaquo;
-                </button>
+              <div className="booking-mobile-day-rail" aria-label="Giorni agenda">
+                {dayRail.map(({ dateKey, date }) => {
+                  const items = props.bookingsByDay.get(dateKey) ?? [];
+                  const isSelected = dateKey === selectedDateKey;
+                  const isToday = dateKey === todayIso();
+                  return (
+                    <button
+                      key={dateKey}
+                      type="button"
+                      className={`booking-mobile-day-rail__item ${isSelected ? "is-selected" : ""}`}
+                      onClick={() => selectDay(dateKey, true)}
+                    >
+                      <span>{date.toLocaleDateString("it-IT", { weekday: "short" }).replace(".", "")}</span>
+                      <strong>{date.getDate()}</strong>
+                      <small>{date.toLocaleDateString("it-IT", { month: "short" }).replace(".", "")}</small>
+                      {isToday ? <em>Oggi</em> : null}
+                      {items.length > 0 ? <b>{items.length}</b> : null}
+                    </button>
+                  );
+                })}
               </div>
               <button
                 type="button"

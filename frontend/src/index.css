@@ -5734,6 +5734,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
 }
 
 .org-admin-v2 .booking-mobile-day-switcher,
+.org-admin-v2 .booking-mobile-day-rail,
 .org-admin-v2 .booking-request-mobile-card {
   display: none;
 }
@@ -6647,6 +6648,76 @@ body.dashboard-perf-mode .btn-ghost:hover {
     display: inline;
   }
 
+  .org-admin-v2 .booking-mobile-day-rail {
+    display: grid;
+    width: 100%;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(4.35rem, 1fr);
+    gap: 0.45rem;
+    overflow-x: auto;
+    padding: 0.1rem 0 0.25rem;
+    scrollbar-width: thin;
+  }
+
+  .org-admin-v2 .booking-mobile-day-rail__item {
+    position: relative;
+    display: grid;
+    min-height: 4.55rem;
+    align-content: center;
+    justify-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    line-height: 1;
+  }
+
+  .org-admin-v2 .booking-mobile-day-rail__item span,
+  .org-admin-v2 .booking-mobile-day-rail__item small {
+    font-size: 0.62rem;
+    font-weight: 850;
+    text-transform: uppercase;
+  }
+
+  .org-admin-v2 .booking-mobile-day-rail__item strong {
+    margin-block: 0.12rem;
+    font-size: 1.25rem;
+    font-weight: 900;
+  }
+
+  .org-admin-v2 .booking-mobile-day-rail__item em,
+  .org-admin-v2 .booking-mobile-day-rail__item b {
+    position: absolute;
+    border-radius: 999px;
+    font-style: normal;
+    font-weight: 900;
+    line-height: 1;
+  }
+
+  .org-admin-v2 .booking-mobile-day-rail__item em {
+    left: 0.25rem;
+    top: 0.25rem;
+    padding: 0.16rem 0.3rem;
+    background: rgba(255, 255, 255, 0.18);
+    font-size: 0.5rem;
+  }
+
+  .org-admin-v2 .booking-mobile-day-rail__item b {
+    right: 0.25rem;
+    top: 0.25rem;
+    min-width: 1.05rem;
+    padding: 0.16rem 0.3rem;
+    background: #b91c1c;
+    color: #ffffff;
+    font-size: 0.54rem;
+  }
+
+  .org-admin-v2 .booking-mobile-day-rail__item.is-selected {
+    border-color: #2563eb;
+    background: #2563eb;
+    color: #ffffff;
+  }
+
   .org-admin-v2 .booking-mobile-day-switcher {
     display: grid;
     width: 100%;
@@ -7443,6 +7514,11 @@ body.dashboard-perf-mode .btn-ghost:hover {
   border-color: color-mix(in srgb, var(--oa-success, #14b8a6) 38%, var(--fb-border));
   background: color-mix(in srgb, var(--oa-success, #14b8a6) 6%, var(--fb-surface));
   color: var(--fb-text);
+  container-type: inline-size;
+}
+
+.org-admin-v2 .form-builder-booking-link__fields {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .org-admin-v2 .form-builder-booking-link__field div {
@@ -7472,6 +7548,12 @@ body.dashboard-perf-mode .btn-ghost:hover {
 
 .org-admin-v2 .form-builder-canvas .form-builder-booking-link__field .rounded-\[0\.65rem\] {
   border-radius: 8px;
+}
+
+@container (max-width: 520px) {
+  .org-admin-v2 .form-builder-booking-link__fields {
+    grid-template-columns: 1fr;
+  }
 }
 
 .org-admin-v2 .form-settings-mail-editor {
@@ -8506,6 +8588,44 @@ body.dashboard-perf-mode .btn-ghost:hover {
     color: var(--oa-text);
     font-size: 1.25rem;
     font-weight: 850;
+  }
+
+  .org-admin-v2 .booking-mobile-day-rail {
+    grid-auto-columns: minmax(4.15rem, 1fr);
+    gap: 0.38rem;
+    padding-bottom: 0.35rem;
+  }
+
+  .org-admin-v2 .booking-mobile-day-rail__item {
+    min-height: 4.35rem;
+    border: 1px solid var(--oa-border);
+    border-radius: 9px;
+    background: var(--oa-panel-muted);
+    color: var(--oa-muted);
+  }
+
+  .org-admin-v2 .booking-mobile-day-rail__item strong {
+    color: var(--oa-text);
+  }
+
+  .org-admin-v2 .booking-mobile-day-rail__item em {
+    background: #eff6ff;
+    color: #2563eb;
+  }
+
+  .org-admin-v2 .booking-mobile-day-rail__item.is-selected {
+    border-color: #2563eb;
+    background: #2563eb;
+    color: #eaf1ff;
+  }
+
+  .org-admin-v2 .booking-mobile-day-rail__item.is-selected strong {
+    color: #ffffff;
+  }
+
+  .org-admin-v2 .booking-mobile-day-rail__item.is-selected em {
+    background: rgba(255, 255, 255, 0.18);
+    color: #ffffff;
   }
 
   .org-admin-v2 .booking-mobile-day-switcher {

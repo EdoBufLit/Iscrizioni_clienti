@@ -48,8 +48,6 @@ type Props = {
   persistEnabled?: boolean;
   mode?: "forms" | "surveys";
   bookingEnabled?: boolean;
-  bookingDynamicEventsEnabled?: boolean;
-  onToggleBookingDynamicEvents?: (enabled: boolean) => void;
 };
 
 type BuilderCanvasProps = {
@@ -180,7 +178,6 @@ export function FormBuilder({
   locked,
   persistEnabled = true,
   mode = "forms",
-  onToggleBookingDynamicEvents,
 }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -433,7 +430,6 @@ export function FormBuilder({
 
   const handleEnsureBookingBlock = async () => {
     if (locked || items.some((field) => isBookingBlockField(field))) return;
-    onToggleBookingDynamicEvents?.(true);
     const newField = createFieldFromPaletteItem("booking_block", "Prenotazione");
     const newItems = [...items, newField];
     if (persistEnabled) {

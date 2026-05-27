@@ -5561,3 +5561,17 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Ripulite label giorni, separatori, chiusura pannello, indicatori pax/chevron e messaggi toast/modali in `OrgAdminBookings.tsx`.
 - Scelta deliberata: simboli e giorni in ASCII dove possibile per evitare nuove rotture di encoding sui salvataggi.
 - Verifiche OK: grep mojibake su Prenotazioni/Comunicazioni/Form/WhatsApp senza risultati, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.
+
+## Plan (Builder booking block senza flag - May 27, 2026)
+- [x] Rimuovere il flag visibile `Usa serate prenotabili` dalle impostazioni form.
+- [x] Aggiungere `Blocco prenotazione (serate)` nei menu Data/Ora prenotazione e salvare la logica interna senza richiedere flag.
+- [x] Rendere il blocco prenotazione responsive/verticale nei canvas stretti e nel builder.
+- [x] Sostituire su agenda mobile il selettore a frecce con i quadrotti giorno.
+- [x] Verificare typecheck/build/diff e controlli mirati.
+- [ ] Commit, push e controllo deploy.
+
+### Review
+- Tolta la checkbox visibile `Usa serate prenotabili`; il flag resta solo derivato dal mapping Data/Ora al blocco per compatibilita backend.
+- Aggiunta opzione `Blocco prenotazione (serate)` nei mapping Data/Ora e migrazione in UI dei form legacy che avevano il vecchio flag attivo.
+- Blocco prenotazione reso verticale nei canvas stretti tramite container query; agenda mobile aggiornata con quadrotti giorno.
+- Verifiche OK: grep vecchi testi/callback/mojibake, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `npm --prefix frontend run test:run`, `git diff --check`.

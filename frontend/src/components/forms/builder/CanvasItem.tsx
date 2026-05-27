@@ -78,7 +78,7 @@ function CanvasItemFrame({
                 <span className="text-sm font-semibold text-slate-900">{blockTitle}</span>
                 <p className="mt-1 text-xs leading-5 text-slate-500">{blockHelp}</p>
               </div>
-              <div className="grid gap-2 sm:grid-cols-3">
+              <div className="form-builder-booking-link__fields grid gap-2">
                 {[dateLabel, timeLabel, eventLabel].map((label) => (
                   <div key={label} className="rounded-[0.65rem] border border-dashed px-3 py-2">
                     <span className="text-xs font-semibold text-slate-600">{label}</span>

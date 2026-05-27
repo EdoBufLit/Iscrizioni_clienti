@@ -48,6 +48,7 @@ import { EmptyState, KpiCard, SectionPanel, StatusChip } from "./components/OrgA
 const inputClass =
   "mt-1 w-full rounded-[1.1rem] border border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-neutral-900/40 focus:ring-2 focus:ring-neutral-900/10";
 const labelClass = "block text-sm font-medium text-neutral-700";
+const BOOKING_BLOCK_MAPPING_VALUE = "__booking_block";
 
 type EditorTab = "builder" | "design" | "settings" | "responses";
 type PageStyleOption = "editorial" | "minimal" | "spotlight";
@@ -683,15 +684,39 @@ export function OrgAdminFormsWorkspace({
         })),
     [sortedFields],
   );
+  const hasBookingBlockField = useMemo(
+    () => sortedFields.some((field) => isBookingBlockField(field)),
+    [sortedFields],
+  );
+  const bookingBlockMappingActive = useMemo(
+    () =>
+      formDraft.booking_field_mapping?.booking_date === BOOKING_BLOCK_MAPPING_VALUE
+      || formDraft.booking_field_mapping?.booking_time === BOOKING_BLOCK_MAPPING_VALUE,
+    [formDraft.booking_field_mapping],
+  );
   useEffect(() => {
-    if (!formDraft.booking_enabled || bookingMappingFieldOptions.length === 0) return;
+    if (!formDraft.booking_enabled || (bookingMappingFieldOptions.length === 0 && !hasBookingBlockField)) return;
     const byType = (fieldType: AssociationFormFieldType) =>
       bookingMappingFieldOptions.find((option) => option.fieldType === fieldType)?.value || "";
     const validKeys = new Set(bookingMappingFieldOptions.map((option) => option.value));
+    if (hasBookingBlockField) validKeys.add(BOOKING_BLOCK_MAPPING_VALUE);
     setFormDraft((current) => {
       const currentMapping = current.booking_field_mapping || {};
       const nextMapping = { ...currentMapping };
+      let nextDynamicEventsEnabled = current.booking_dynamic_events_enabled;
       let changed = false;
+      if (current.booking_dynamic_events_enabled && hasBookingBlockField) {
+        if (nextMapping.booking_date !== BOOKING_BLOCK_MAPPING_VALUE) {
+          nextMapping.booking_date = BOOKING_BLOCK_MAPPING_VALUE;
+          changed = true;
+        }
+        if (nextMapping.booking_time !== BOOKING_BLOCK_MAPPING_VALUE) {
+          nextMapping.booking_time = BOOKING_BLOCK_MAPPING_VALUE;
+          changed = true;
+        }
+        nextDynamicEventsEnabled = false;
+        changed = true;
+      }
       const setIfMissingOrDeleted = (target: BookingMappingTarget, value: string) => {
         if (!value) return;
         const currentValue = nextMapping[target] || "";
@@ -702,21 +727,11 @@ export function OrgAdminFormsWorkspace({
       };
       setIfMissingOrDeleted("customer_email", byType("email"));
       setIfMissingOrDeleted("customer_phone", byType("phone"));
-      if (!current.booking_dynamic_events_enabled) {
-        setIfMissingOrDeleted("booking_date", byType("date"));
-        setIfMissingOrDeleted("booking_time", byType("time"));
-      }
-      if (current.booking_dynamic_events_enabled) {
-        for (const target of ["booking_date", "booking_time"] as BookingMappingTarget[]) {
-          if (nextMapping[target]) {
-            nextMapping[target] = "";
-            changed = true;
-          }
-        }
-      }
-      return changed ? { ...current, booking_field_mapping: nextMapping } : current;
+      setIfMissingOrDeleted("booking_date", byType("date"));
+      setIfMissingOrDeleted("booking_time", byType("time"));
+      return changed ? { ...current, booking_field_mapping: nextMapping, booking_dynamic_events_enabled: nextDynamicEventsEnabled } : current;
     });
-  }, [bookingMappingFieldOptions, formDraft.booking_enabled, formDraft.booking_dynamic_events_enabled]);
+  }, [bookingMappingFieldOptions, formDraft.booking_enabled, hasBookingBlockField]);
   const activeTemplates = useMemo(
     () => localTemplates.filter((item) => item.is_active),
     [localTemplates],
@@ -1040,13 +1055,26 @@ export function OrgAdminFormsWorkspace({
   }
 
   function syncBookingFieldMapping(target: BookingMappingTarget, fieldKey: string) {
-    setFormDraft((current) => ({
-      ...current,
-      booking_field_mapping: {
-        ...current.booking_field_mapping,
-        [target]: fieldKey,
-      },
-    }));
+    setFormDraft((current) => {
+      const nextMapping = { ...current.booking_field_mapping };
+      const isDateOrTime = target === "booking_date" || target === "booking_time";
+      if (isDateOrTime && fieldKey === BOOKING_BLOCK_MAPPING_VALUE) {
+        nextMapping.booking_date = BOOKING_BLOCK_MAPPING_VALUE;
+        nextMapping.booking_time = BOOKING_BLOCK_MAPPING_VALUE;
+      } else {
+        nextMapping[target] = fieldKey;
+        if (isDateOrTime) {
+          const sibling = target === "booking_date" ? "booking_time" : "booking_date";
+          if (nextMapping[sibling] === BOOKING_BLOCK_MAPPING_VALUE) {
+            nextMapping[sibling] = "";
+          }
+        }
+      }
+      return {
+        ...current,
+        booking_field_mapping: nextMapping,
+      };
+    });
   }
 
   function ensureBookingBlockInDraft() {
@@ -1054,19 +1082,6 @@ export function OrgAdminFormsWorkspace({
       if (current.some((field) => isBookingBlockField(field))) return current;
       return [...current, createFieldFromPaletteItem("booking_block", "Prenotazione")];
     });
-  }
-
-  function handleToggleBookingDynamicEvents(enabled: boolean) {
-    setFormDraft((current) => ({
-      ...current,
-      booking_enabled: true,
-      create_booking: true,
-      form_type: current.form_type === "generic" ? "booking" : current.form_type,
-      booking_dynamic_events_enabled: enabled,
-    }));
-    if (enabled) {
-      ensureBookingBlockInDraft();
-    }
   }
 
   async function handleSaveUserConfirmationTemplate() {
@@ -1148,10 +1163,10 @@ export function OrgAdminFormsWorkspace({
     try {
       const bookingEnabled = Boolean(formDraft.booking_enabled || formDraft.create_booking);
       const bookingFieldMapping = { ...(formDraft.booking_field_mapping || {}) };
-      if (formDraft.booking_dynamic_events_enabled) {
-        bookingFieldMapping.booking_date = "";
-        bookingFieldMapping.booking_time = "";
-      }
+      const usesBookingBlockMapping =
+        bookingFieldMapping.booking_date === BOOKING_BLOCK_MAPPING_VALUE
+        || bookingFieldMapping.booking_time === BOOKING_BLOCK_MAPPING_VALUE;
+      const bookingBlockEventsEnabled = Boolean(hasBookingBlockField && usesBookingBlockMapping);
       const payload = {
         ...formDraft,
         title: normalizedTitle,
@@ -1172,7 +1187,7 @@ export function OrgAdminFormsWorkspace({
         booking_event_date: null,
         booking_event_time: null,
         booking_event_details: null,
-        booking_dynamic_events_enabled: formDraft.booking_dynamic_events_enabled,
+        booking_dynamic_events_enabled: bookingBlockEventsEnabled,
         form_type: mode === "surveys" ? "survey" : formDraft.form_type,
         survey_post_event_enabled: formDraft.survey_post_event_enabled,
         survey_post_event_delay_hours: formDraft.survey_post_event_delay_hours,
@@ -1677,7 +1692,7 @@ export function OrgAdminFormsWorkspace({
       page_style: formDraft.page_style,
       visibility: formDraft.visibility,
       is_active: formDraft.is_active,
-      booking_dynamic_events_enabled: formDraft.booking_dynamic_events_enabled,
+      booking_dynamic_events_enabled: Boolean(hasBookingBlockField && bookingBlockMappingActive),
       booking_enabled: formDraft.booking_enabled,
       create_booking: formDraft.create_booking,
       form_type: formDraft.form_type,
@@ -1686,7 +1701,7 @@ export function OrgAdminFormsWorkspace({
         name: admin?.organization?.name || "Associazione",
       },
     }),
-    [admin?.organization?.name, formDraft, previewFields],
+    [admin?.organization?.name, bookingBlockMappingActive, formDraft, hasBookingBlockField, previewFields],
   );
 
   const builderTab = (
@@ -1701,8 +1716,6 @@ export function OrgAdminFormsWorkspace({
         persistEnabled={Boolean(selectedFormId)}
         mode={mode}
         bookingEnabled={formDraft.booking_enabled}
-        bookingDynamicEventsEnabled={formDraft.booking_dynamic_events_enabled}
-        onToggleBookingDynamicEvents={handleToggleBookingDynamicEvents}
       />
     </div>
   );
@@ -1989,21 +2002,20 @@ export function OrgAdminFormsWorkspace({
                 </label>
               </div>
               <div className="space-y-3 rounded-[1rem] border border-emerald-200 bg-emerald-50/60 p-4">
-                <label className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-white/70 p-3 text-sm font-semibold text-neutral-800">
-                  <input
-                    type="checkbox"
-                    disabled={locked}
-                    checked={formDraft.booking_dynamic_events_enabled}
-                    onChange={(event) => handleToggleBookingDynamicEvents(event.target.checked)}
-                    className="mt-1 rounded border-neutral-300 text-brand"
-                  />
-                  <span>
-                    Usa serate prenotabili
-                    <small className="mt-1 block text-xs font-medium leading-5 text-neutral-500">
-                      Il form mostra un blocco spostabile con giorno e orario liberi. Se per quella scelta esiste una serata configurata, viene proposta; altrimenti usa la serata default impostata in Prenotazioni.
-                    </small>
-                  </span>
-                </label>
+                <div className="rounded-xl border border-emerald-200 bg-white/70 p-3 text-sm text-neutral-700">
+                  <p className="font-semibold text-neutral-900">Serate e orari dal blocco prenotazione</p>
+                  <p className="mt-1 text-xs font-medium leading-5 text-neutral-500">
+                    Inserisci il blocco Prenotazione nel builder e seleziona "Blocco prenotazione (serate)" nei menu Data/Ora. Il form utilizza le serate configurate quando disponibili, altrimenti la prenotazione libera.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="inline-flex rounded-xl bg-white px-3 py-2 text-sm font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-200 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-55"
+                  disabled={locked || hasBookingBlockField}
+                  onClick={ensureBookingBlockInDraft}
+                >
+                  {hasBookingBlockField ? "Blocco inserito" : "Inserisci blocco"}
+                </button>
                 <a
                   className="inline-flex rounded-xl bg-white px-3 py-2 text-sm font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-200 transition hover:bg-emerald-50"
                   href="/org-admin/prenotazioni?section=events"
@@ -2012,30 +2024,30 @@ export function OrgAdminFormsWorkspace({
                 </a>
               </div>
               <div className="space-y-3 rounded-[1rem] border border-neutral-200 bg-neutral-50 p-4">
-                {bookingMappingTargets.map((target) => (
-                  <div key={target.key} className="grid gap-2 md:grid-cols-[170px_minmax(0,1fr)] md:items-center">
-                    <span className="text-xs font-medium text-neutral-700">{target.label}</span>
-                    {formDraft.booking_dynamic_events_enabled && (target.key === "booking_date" || target.key === "booking_time") ? (
-                      <div className={`${inputClass} !mt-0 !py-2 bg-emerald-50 text-emerald-800`}>
-                        Dal blocco prenotazione
-                      </div>
-                    ) : (
-                    <select
-                      className={`${inputClass} !mt-0 !py-2`}
-                      disabled={locked || bookingMappingFieldOptions.length === 0}
-                      value={formDraft.booking_field_mapping[target.key] || ""}
-                      onChange={(event) => syncBookingFieldMapping(target.key, event.target.value)}
-                    >
-                      <option value="">-- Non collegato --</option>
-                      {bookingMappingFieldOptions.map((option) => (
-                        <option key={`${target.key}-${option.value}`} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    )}
-                  </div>
-                ))}
+                {bookingMappingTargets.map((target) => {
+                  const canUseBookingBlock = hasBookingBlockField && (target.key === "booking_date" || target.key === "booking_time");
+                  return (
+                    <div key={target.key} className="grid gap-2 md:grid-cols-[170px_minmax(0,1fr)] md:items-center">
+                      <span className="text-xs font-medium text-neutral-700">{target.label}</span>
+                      <select
+                        className={`${inputClass} !mt-0 !py-2`}
+                        disabled={locked || (bookingMappingFieldOptions.length === 0 && !canUseBookingBlock)}
+                        value={formDraft.booking_field_mapping[target.key] || ""}
+                        onChange={(event) => syncBookingFieldMapping(target.key, event.target.value)}
+                      >
+                        <option value="">-- Non collegato --</option>
+                        {canUseBookingBlock ? (
+                          <option value={BOOKING_BLOCK_MAPPING_VALUE}>Blocco prenotazione (serate)</option>
+                        ) : null}
+                        {bookingMappingFieldOptions.map((option) => (
+                          <option key={`${target.key}-${option.value}`} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ) : null}

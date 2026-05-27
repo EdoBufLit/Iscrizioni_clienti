@@ -397,9 +397,7 @@ export function FormPublicCanvas({
   const pageStyle = (form.page_style || "editorial").toLowerCase();
   const sortedFields = [...form.fields].sort((left, right) => left.sort_order - right.sort_order);
   const hasBookingBlockField = sortedFields.some((field) => isBookingBlockField(field));
-  const showDynamicBookingFields = Boolean(
-    hasBookingBlockField || form.booking_dynamic_events_enabled || form.booking_enabled || form.create_booking || form.form_type === "booking",
-  );
+  const showDynamicBookingFields = Boolean(hasBookingBlockField || form.booking_dynamic_events_enabled);
   const selectedTime = String(values.__booking_event_time || "");
   const timeSlots = Array.from({ length: 48 }, (_, index) => {
     const totalMinutes = index * 30;
@@ -579,6 +577,20 @@ export function FormPublicCanvas({
       background: color-mix(in srgb, var(--form-accent) 18%, rgba(255,255,255,0.08)) !important;
       color: #ffffff !important;
     }
+
+    .form-public-canvas-container .form-public-canvas__dynamic-booking {
+      container-type: inline-size;
+    }
+
+    .form-public-canvas-container .form-public-canvas__dynamic-booking-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    @container (max-width: 560px) {
+      .form-public-canvas-container .form-public-canvas__dynamic-booking-grid {
+        grid-template-columns: 1fr !important;
+      }
+    }
   `;
 
   const bookingBlockDefaults = {
@@ -615,7 +627,7 @@ export function FormPublicCanvas({
           {copy.helpText}
         </p>
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="form-public-canvas__dynamic-booking-grid grid gap-4">
         <label className="form-public-canvas__field block">
           <span className="form-public-canvas__label mb-1 block text-sm font-semibold text-neutral-800">{copy.dateLabel} *</span>
           <input

@@ -291,3 +291,7 @@ On mobile admin pages, a visible `+ Nuova` action must always create the thing r
 ## May 27, 2026 - Check mojibake after editing UI copy
 
 After touching mobile/admin UI strings, grep the changed files for mojibake markers such as `Ã`, `Â`, and `â` before committing. Prefer existing HTML entities or plain ASCII symbols for decorative glyphs if the component has already shown encoding fragility.
+
+## May 27, 2026 - Do not leave dead feature flags visible
+
+If a block or workflow remains active because it is represented by an explicit builder field, do not expose a separate settings flag that appears to disable it. Use explicit mapping choices or field presence as the source of truth, and keep hidden compatibility flags derived from those choices only for backend behavior.
