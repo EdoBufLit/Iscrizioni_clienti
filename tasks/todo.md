@@ -5550,3 +5550,14 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Comunicazioni: il pulsante mobile cambia in base alla tab (`+ Campagna`, `+ Modello`, `+ Form`, `+ Sondaggio`, `+ Regola`) e apre il builder/overlay corretto.
 - I builder aperti da URL `mode=create` puliscono il parametro dopo l'avvio, evitando reset accidentali mentre l'admin modifica.
 - Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`, controlli `rg` sui comandi contestuali e sull'assenza dei vecchi `Crea ...` in pagina.
+
+## Plan (Fix testo corrotto prenotazioni - May 27, 2026)
+- [x] Ripulire mojibake visibile in Prenotazioni mobile/serate.
+- [x] Verificare che in `OrgAdminBookings.tsx` non restino pattern corrotti nelle label utente.
+- [x] Eseguire typecheck/build e diff check.
+- [ ] Commit, push e controllo deploy.
+
+## Review (Fix testo corrotto prenotazioni - May 27, 2026)
+- Ripulite label giorni, separatori, chiusura pannello, indicatori pax/chevron e messaggi toast/modali in `OrgAdminBookings.tsx`.
+- Scelta deliberata: simboli e giorni in ASCII dove possibile per evitare nuove rotture di encoding sui salvataggi.
+- Verifiche OK: grep mojibake su Prenotazioni/Comunicazioni/Form/WhatsApp senza risultati, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`.

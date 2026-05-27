@@ -115,11 +115,11 @@ const sectionTabs: Array<{ key: SectionTab; label: string; hint: string }> = [
 ];
 
 const weekdayOptions = [
-  { value: 0, label: "LunedÃƒÂ¬" },
-  { value: 1, label: "MartedÃƒÂ¬" },
-  { value: 2, label: "MercoledÃƒÂ¬" },
-  { value: 3, label: "GiovedÃƒÂ¬" },
-  { value: 4, label: "VenerdÃƒÂ¬" },
+  { value: 0, label: "Lunedi" },
+  { value: 1, label: "Martedi" },
+  { value: 2, label: "Mercoledi" },
+  { value: 3, label: "Giovedi" },
+  { value: 4, label: "Venerdi" },
   { value: 5, label: "Sabato" },
   { value: 6, label: "Domenica" },
 ];
@@ -196,9 +196,9 @@ function serviceStatusButtonLabel(status: string) {
     case "seated":
       return "S";
     case "completed":
-      return "âœ“";
+      return "OK";
     case "cancelled":
-      return "Ã—";
+      return "X";
     case "no_show":
       return "No show";
     default:
@@ -903,7 +903,7 @@ export default function OrgAdminBookings() {
       const { booking } = await markOrgAdminBookingCustomerNoteRead(selectedBookingId);
       setSelectedBooking(booking);
       await loadBookings();
-      showToast({ tone: "success", title: "Nota gestita", message: "La nota cliente Ã¨ stata segnata come letta." });
+      showToast({ tone: "success", title: "Nota gestita", message: "La nota cliente e stata segnata come letta." });
     } catch (err) {
       showToast({
         tone: "error",
@@ -1004,7 +1004,7 @@ export default function OrgAdminBookings() {
         : await createOrgAdminBookingEventSeries(payload);
       await refreshEventSeries(response.item.id);
       setManagementOverlay(null);
-      showToast({ tone: "success", title: "Serata salvata", message: "La configurazione Ã¨ disponibile nei form prenotazione." });
+      showToast({ tone: "success", title: "Serata salvata", message: "La configurazione e disponibile nei form prenotazione." });
     } catch (err) {
       showToast({
         tone: "error",
@@ -1024,7 +1024,7 @@ export default function OrgAdminBookings() {
       setEventSeriesDraft(emptyEventSeriesDraft());
       setManagementOverlay(null);
       await refreshEventSeries();
-      showToast({ tone: "success", title: "Serata eliminata", message: "La regola non comparirÃ  piÃ¹ nei form." });
+      showToast({ tone: "success", title: "Serata eliminata", message: "La regola non comparira piu nei form." });
     } catch (err) {
       showToast({
         tone: "error",
@@ -1137,7 +1137,7 @@ export default function OrgAdminBookings() {
         await loadRoomState(selectedRoomId);
         await refreshRooms(selectedRoomId);
       }
-      showToast({ tone: "success", title: "Tavolo eliminato", message: "Il tavolo Ã¨ stato rimosso dalla sala." });
+      showToast({ tone: "success", title: "Tavolo eliminato", message: "Il tavolo e stato rimosso dalla sala." });
     } catch (err) {
       showToast({
         tone: "error",
@@ -1187,7 +1187,7 @@ export default function OrgAdminBookings() {
       setSelectedMapTableId(null);
       await loadBookings();
       if (selectedRoomId) await loadRoomState(selectedRoomId);
-      showToast({ tone: "success", title: "Assegnazione rimossa", message: "La prenotazione non ha piÃ¹ sala o tavolo." });
+      showToast({ tone: "success", title: "Assegnazione rimossa", message: "La prenotazione non ha piu sala o tavolo." });
     } catch (err) {
       showToast({
         tone: "error",
@@ -1307,7 +1307,7 @@ export default function OrgAdminBookings() {
 
   async function handleManualBookingSave() {
     if (!manualDraft.customer_name.trim()) {
-      showToast({ tone: "error", title: "Dati mancanti", message: "Il nome cliente Ã¨ obbligatorio." });
+      showToast({ tone: "error", title: "Dati mancanti", message: "Il nome cliente e obbligatorio." });
       return;
     }
     setSaving("manual-booking");
@@ -1325,7 +1325,7 @@ export default function OrgAdminBookings() {
         notes: manualDraft.notes || null,
       });
       syncMapWithBooking(booking);
-      showToast({ tone: "success", title: "Prenotazione creata", message: "La prenotazione manuale Ã¨ stata inserita in agenda." });
+      showToast({ tone: "success", title: "Prenotazione creata", message: "La prenotazione manuale e stata inserita in agenda." });
       setIsCreatingManual(false);
       setManualDraft({
         customer_name: "",
@@ -1971,7 +1971,7 @@ export default function OrgAdminBookings() {
       <ConfirmModal
         open={requestConfirmOpen === "pending"}
         title="Riportare la richiesta collegata in attesa?"
-        description="La review verrÃ  rimossa e la richiesta tornerÃ  nello stato pending."
+        description="La review verra rimossa e la richiesta tornera nello stato pending."
         confirmLabel="Riporta a pending"
         confirmState={requestActionState}
         onClose={() => {
@@ -1999,7 +1999,7 @@ export default function OrgAdminBookings() {
       <ConfirmModal
         open={deleteTarget?.type === "room"}
         title={DESTRUCTIVE_ACTION_COPY.deleteRoom.title}
-        description="La sala verrÃ  rimossa dall'area prenotazioni insieme ai tavoli collegati."
+        description="La sala verra rimossa dall'area prenotazioni insieme ai tavoli collegati."
         objectName={formatActionObject(deleteTarget?.name, "Sala selezionata")}
         impact="Controlla di non avere prenotazioni operative collegate prima di procedere."
         confirmLabel={DESTRUCTIVE_ACTION_COPY.deleteRoom.confirmLabel}
@@ -2016,9 +2016,9 @@ export default function OrgAdminBookings() {
       <ConfirmModal
         open={deleteTarget?.type === "table"}
         title={DESTRUCTIVE_ACTION_COPY.deleteTable.title}
-        description="Il tavolo verrÃ  rimosso dalla sala e non sarÃ  piÃ¹ selezionabile sulla mappa."
+        description="Il tavolo verra rimosso dalla sala e non sara piu selezionabile sulla mappa."
         objectName={formatActionObject(deleteTarget?.name, "Tavolo selezionato")}
-        impact="Le prenotazioni giÃ  salvate manterranno lo storico, ma il tavolo non sarÃ  piÃ¹ assegnabile."
+        impact="Le prenotazioni gia salvate manterranno lo storico, ma il tavolo non sara piu assegnabile."
         confirmLabel={DESTRUCTIVE_ACTION_COPY.deleteTable.confirmLabel}
         tone="danger"
         confirmState={saving === "table-delete" ? "loading" : "idle"}
@@ -2281,7 +2281,7 @@ function AgendaSection(props: {
                   props.setSelectedBookingId(null);
                 }}
               >
-                Ã—
+                X
               </button>
             </header>
 
@@ -2395,11 +2395,11 @@ function BookingEventSeriesPanel(props: {
   saving: string;
 }) {
   const weekdayOptions = [
-    { value: 0, label: "LunedÃ¬" },
-    { value: 1, label: "MartedÃ¬" },
-    { value: 2, label: "MercoledÃ¬" },
-    { value: 3, label: "GiovedÃ¬" },
-    { value: 4, label: "VenerdÃ¬" },
+    { value: 0, label: "Lunedi" },
+    { value: 1, label: "Martedi" },
+    { value: 2, label: "Mercoledi" },
+    { value: 3, label: "Giovedi" },
+    { value: 4, label: "Venerdi" },
     { value: 5, label: "Sabato" },
     { value: 6, label: "Domenica" },
   ];
@@ -2433,7 +2433,7 @@ function BookingEventSeriesPanel(props: {
                     <div>
                       <p className="text-lg font-semibold">{item.name}</p>
                       <p className={`mt-1 text-sm ${selected ? "text-slate-300" : "text-slate-500"}`}>
-                        {when} Â· {item.time_slots.map((slot) => slot.time.slice(0, 5)).join(", ") || "Nessuno slot"}
+                        {when} - {item.time_slots.map((slot) => slot.time.slice(0, 5)).join(", ") || "Nessuno slot"}
                       </p>
                     </div>
                     <div className="flex flex-col items-end gap-1">
@@ -2502,9 +2502,9 @@ function DayBookingRow({
         <span className="booking-day-row__side">
           <span className={bookingStatusDotClass(booking.status)} aria-hidden="true" />
           <span className={bookingStatusChipClass(booking.status)}>{formatStatusLabel(booking.status)}</span>
-          <span className="booking-day-row__pax">â—Ž {booking.party_size || "-"} pax</span>
+          <span className="booking-day-row__pax">- {booking.party_size || "-"} pax</span>
         </span>
-        <span className="booking-day-row__chevron" aria-hidden="true">âŒ„</span>
+        <span className="booking-day-row__chevron" aria-hidden="true">v</span>
       </button>
       <div className="booking-day-row__expanded" aria-hidden={!expanded}>{expanded ? detail : null}</div>
     </article>
@@ -3061,7 +3061,7 @@ function BookingDetailPanel(props: {
               <p className="mt-1 text-sm text-slate-500">
                 Submission #{props.selectedBooking.submission_id}
                 {props.selectedBooking.request_review_summary?.reviewed_at
-                  ? ` Â· ${formatDateTime(props.selectedBooking.request_review_summary.reviewed_at)}`
+                  ? ` - ${formatDateTime(props.selectedBooking.request_review_summary.reviewed_at)}`
                   : ""}
               </p>
             </div>

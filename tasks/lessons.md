@@ -287,3 +287,7 @@ Never sort booking time slots lexicographically when a configured range can cros
 ## May 27, 2026 - Mobile create actions must be contextual
 
 On mobile admin pages, a visible `+ Nuova` action must always create the thing represented by the current tab or section. Do not show a generic create button outside Agenda if it only creates bookings; route each tab to its own overlay or builder flow for serate, sale, tavoli, campagne, modelli, form, sondaggi and WhatsApp rules.
+
+## May 27, 2026 - Check mojibake after editing UI copy
+
+After touching mobile/admin UI strings, grep the changed files for mojibake markers such as `Ã`, `Â`, and `â` before committing. Prefer existing HTML entities or plain ASCII symbols for decorative glyphs if the component has already shown encoding fragility.
