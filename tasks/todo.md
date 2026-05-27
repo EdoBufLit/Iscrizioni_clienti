@@ -5518,7 +5518,7 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - [x] Rendere il picker sala/tavolo realmente mobile-first: niente elementi tagliati orizzontalmente dentro il dettaglio prenotazione.
 - [x] Mantenere selezione rapida, leggibile e touch-safe senza dropdown e senza card annidate.
 - [x] Verificare typecheck/build e smoke mobile sulla sezione assegnazione.
-- [ ] Commit, push e controllo deploy.
+- [x] Commit, push e controllo deploy.
 
 ## Review (Fix overflow tavoli mobile - May 27, 2026)
 - Picker assegnazione mobile: le sale fanno wrapping e i tavoli sono in griglia a 2 colonne, senza rail orizzontale nascosto che taglia gli item.
