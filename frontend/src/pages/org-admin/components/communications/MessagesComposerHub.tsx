@@ -591,7 +591,7 @@ export function MessagesHub({
   forcedSubtab = null,
   hideSubtabNav = false,
 }: MessagesHubProps) {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { showToast } = useToast();
   const [subtab, setSubtab] = useState<Subtab>(() => {
     if (forcedSubtab) return forcedSubtab;
@@ -694,7 +694,23 @@ export function MessagesHub({
 
   useEffect(() => {
     if (loading) return;
-    if (searchParams.get("mode") !== "create") return;
+    const mode = searchParams.get("mode");
+    const shouldCreateTemplate = mode === "create-template" || (mode === "create" && (forcedSubtab === "templates" || searchParams.get("tab") === "modelli"));
+    if (shouldCreateTemplate) {
+      const linkedFormId = searchParams.get("formId") ? Number(searchParams.get("formId")) : null;
+      const nextDraft = emptyTemplateDraft(Number.isFinite(linkedFormId) ? linkedFormId : null);
+      setSubtab("templates");
+      setTemplateStep("type");
+      setTemplateDraft(nextDraft);
+      setTemplateSavedSnapshot(serializeTemplateDraft(nextDraft));
+      setView({ kind: "template-builder", templateId: null });
+      setPreviewState(null);
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("mode");
+      setSearchParams(nextParams, { replace: true });
+      return;
+    }
+    if (mode !== "create") return;
     const linkedFormId = searchParams.get("formId") ? Number(searchParams.get("formId")) : null;
     const nextDraft = emptyCampaignDraft(Number.isFinite(linkedFormId) ? linkedFormId : null);
     setSubtab(forcedSubtab ?? "campaigns");
@@ -702,7 +718,10 @@ export function MessagesHub({
     setCampaignDraft(nextDraft);
     setCampaignSavedSnapshot(serializeCampaignDraft(nextDraft, []));
     setView({ kind: "campaign-builder", campaignId: null });
-  }, [loading, searchParams]);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("mode");
+    setSearchParams(nextParams, { replace: true });
+  }, [forcedSubtab, loading, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (view.kind !== "campaign-builder") return;

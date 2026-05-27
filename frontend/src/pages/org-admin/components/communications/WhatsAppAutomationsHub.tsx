@@ -253,7 +253,7 @@ function NewRuleCard(props: { onClick: () => void }) {
 
 export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
   const { showToast } = useToast();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [forms, setForms] = useState<AssociationForm[]>([]);
   const [automations, setAutomations] = useState<OrgAdminWhatsAppAutomation[]>([]);
@@ -330,8 +330,15 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
 
   useEffect(() => {
     const formId = Number(searchParams.get("formId") || 0) || null;
+    if (searchParams.get("mode") === "create") {
+      setDraft({ ...emptyAutomationDraft(), form_id: formId });
+      setActiveStep("origin");
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("mode");
+      setSearchParams(nextParams, { replace: true });
+    }
     void loadData(formId);
-  }, [searchParams]);
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     let cancelled = false;

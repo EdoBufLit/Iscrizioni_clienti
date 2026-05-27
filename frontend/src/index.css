@@ -6411,6 +6411,31 @@ body.dashboard-perf-mode .btn-ghost:hover {
   font-weight: 900;
 }
 
+.org-admin-v2 .booking-management-editor-hint,
+.org-admin-v2 .booking-overlay-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.org-admin-v2 .booking-management-editor-hint {
+  border: 1px dashed var(--oa-border, #d7dfdc);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--oa-brand, #0f766e) 5%, var(--oa-panel, #ffffff));
+  padding: 1rem;
+}
+
+.org-admin-v2 .booking-management-editor-hint p {
+  color: var(--oa-text, #17211f);
+  font-size: 0.92rem;
+  font-weight: 900;
+}
+
+.org-admin-v2 .booking-management-editor-hint span {
+  color: var(--oa-muted, #64748b);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
 .org-admin-v2 .booking-management-list {
   display: grid;
   gap: 0.55rem;
@@ -8380,6 +8405,18 @@ body.dashboard-perf-mode .btn-ghost:hover {
     padding: 0 0.95rem;
     font-size: 0.88rem;
     font-weight: 850;
+  }
+
+  .org-admin-v2 .booking-admin-mobile-head__actions {
+    display: inline-flex;
+    flex: 0 0 auto;
+    gap: 0.45rem;
+  }
+
+  .org-admin-v2 .booking-admin-mobile-head__actions button {
+    min-height: 2.25rem;
+    padding: 0 0.72rem;
+    font-size: 0.78rem;
   }
 
   .org-admin-v2 .communications-mobile-head button:disabled {

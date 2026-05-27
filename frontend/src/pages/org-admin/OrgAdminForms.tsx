@@ -1657,6 +1657,15 @@ export function OrgAdminFormsWorkspace({
     setFieldKeyManual(false);
   }
 
+  useEffect(() => {
+    if (!embedded || locked || loading || adminLoading) return;
+    if (searchParams.get("mode") !== "create") return;
+    handleCreateNewForm();
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("mode");
+    setSearchParams(nextParams, { replace: true });
+  }, [adminLoading, embedded, loading, locked, mode, searchParams, setSearchParams]);
+
   const previewForm = useMemo(
     () => ({
       title: formDraft.title || "Titolo del form pubblico",

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   assignOrgAdminBookingTable,
@@ -44,6 +44,7 @@ import { KpiCard, PageHeader, SectionPanel } from "./components/OrgAdminPrimitiv
 
 type SectionTab = "agenda" | "events" | "rooms" | "tables" | "map";
 type DayStatusFilter = "pending" | "managed" | "all" | "confirmed" | "seated" | "completed";
+type BookingManagementOverlay = "event" | "room" | "table" | null;
 type BookingDetailsUpdate = {
   customer_name: string;
   customer_email: string | null;
@@ -111,6 +112,16 @@ const sectionTabs: Array<{ key: SectionTab; label: string; hint: string }> = [
   { key: "events", label: "Serate", hint: "Eventi prenotabili" },
   { key: "rooms", label: "Sale/Tavoli", hint: "Spazi, capienza e stato" },
   { key: "map", label: "Mappa sala", hint: "Piantina 2D" },
+];
+
+const weekdayOptions = [
+  { value: 0, label: "LunedÃƒÂ¬" },
+  { value: 1, label: "MartedÃƒÂ¬" },
+  { value: 2, label: "MercoledÃƒÂ¬" },
+  { value: 3, label: "GiovedÃƒÂ¬" },
+  { value: 4, label: "VenerdÃƒÂ¬" },
+  { value: 5, label: "Sabato" },
+  { value: 6, label: "Domenica" },
 ];
 
 function normalizeSection(value: string | null | undefined): SectionTab {
@@ -185,9 +196,9 @@ function serviceStatusButtonLabel(status: string) {
     case "seated":
       return "S";
     case "completed":
-      return "✓";
+      return "âœ“";
     case "cancelled":
-      return "×";
+      return "Ã—";
     case "no_show":
       return "No show";
     default:
@@ -476,6 +487,7 @@ export default function OrgAdminBookings() {
   const [assignmentTables, setAssignmentTables] = useState<AssociationRoomTable[]>([]);
   const [saving, setSaving] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<null | { type: "room" | "table"; id: number; name: string }>(null);
+  const [managementOverlay, setManagementOverlay] = useState<BookingManagementOverlay>(null);
   
   // Manual booking creation
   const [isCreatingManual, setIsCreatingManual] = useState(false);
@@ -517,6 +529,52 @@ export default function OrgAdminBookings() {
     },
     [searchParams, setSearchParams],
   );
+
+  const openEventOverlay = useCallback((item?: OrgAdminBookingEventSeries) => {
+    setEventSeriesDraft(item ? {
+      id: item.id,
+      name: item.name,
+      description: item.description || "",
+      recurrence_type: item.recurrence_type || "weekly",
+      weekday: item.weekday,
+      specific_date: item.specific_date || "",
+      is_active: item.is_active,
+      is_default: Boolean(item.is_default),
+      time_slots_text: item.time_slots.map((slot) => slot.time.slice(0, 5)).join(", "),
+    } : emptyEventSeriesDraft());
+    setManagementOverlay("event");
+  }, []);
+
+  const openRoomOverlay = useCallback((room?: AssociationRoom) => {
+    setRoomDraft(room ? { id: room.id, name: room.name, is_active: room.is_active } : emptyRoomDraft());
+    if (room) setSelectedRoomId(room.id);
+    setManagementOverlay("room");
+  }, []);
+
+  const openTableOverlay = useCallback((table?: AssociationRoomTable) => {
+    if (table) {
+      setSelectedMapTableId(table.id);
+      setSelectedRoomId(table.room_id);
+      setTableDraft({
+        id: table.id,
+        room_id: table.room_id,
+        name: table.name,
+        capacity: table.capacity,
+        shape: table.shape,
+        pos_x: table.pos_x,
+        pos_y: table.pos_y,
+        width: table.width ?? 94,
+        height: table.height ?? 94,
+        is_active: table.is_active,
+        is_out_of_service: table.is_out_of_service,
+      });
+    } else {
+      setTableDraft(emptyTableDraft(selectedRoomId));
+    }
+    setManagementOverlay("table");
+  }, [selectedRoomId]);
+
+  const closeManagementOverlay = useCallback(() => setManagementOverlay(null), []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -663,6 +721,16 @@ export default function OrgAdminBookings() {
     () => mapTables.find((table) => table.id === selectedMapTableId) ?? null,
     [mapTables, selectedMapTableId],
   );
+  const eventSlotRange = useMemo(() => {
+    const slots = parseBookingSlotText(eventSeriesDraft.time_slots_text);
+    return { start: slots[0] || "19:00", end: slots[slots.length - 1] || "23:00" };
+  }, [eventSeriesDraft.time_slots_text]);
+
+  const applyEventSlotRange = useCallback((nextRange: { start: string; end: string }) => {
+    const slots = buildHalfHourSlots(nextRange.start, nextRange.end);
+    if (!slots.length) return;
+    setEventSeriesDraft((current) => ({ ...current, time_slots_text: slots.join(", ") }));
+  }, []);
 
   useEffect(() => {
     if (!selectedCalendarDate) return;
@@ -835,7 +903,7 @@ export default function OrgAdminBookings() {
       const { booking } = await markOrgAdminBookingCustomerNoteRead(selectedBookingId);
       setSelectedBooking(booking);
       await loadBookings();
-      showToast({ tone: "success", title: "Nota gestita", message: "La nota cliente è stata segnata come letta." });
+      showToast({ tone: "success", title: "Nota gestita", message: "La nota cliente Ã¨ stata segnata come letta." });
     } catch (err) {
       showToast({
         tone: "error",
@@ -935,7 +1003,8 @@ export default function OrgAdminBookings() {
         ? await updateOrgAdminBookingEventSeries(eventSeriesDraft.id, payload)
         : await createOrgAdminBookingEventSeries(payload);
       await refreshEventSeries(response.item.id);
-      showToast({ tone: "success", title: "Serata salvata", message: "La configurazione è disponibile nei form prenotazione." });
+      setManagementOverlay(null);
+      showToast({ tone: "success", title: "Serata salvata", message: "La configurazione Ã¨ disponibile nei form prenotazione." });
     } catch (err) {
       showToast({
         tone: "error",
@@ -953,8 +1022,9 @@ export default function OrgAdminBookings() {
     try {
       await deleteOrgAdminBookingEventSeries(eventSeriesDraft.id);
       setEventSeriesDraft(emptyEventSeriesDraft());
+      setManagementOverlay(null);
       await refreshEventSeries();
-      showToast({ tone: "success", title: "Serata eliminata", message: "La regola non comparirà più nei form." });
+      showToast({ tone: "success", title: "Serata eliminata", message: "La regola non comparirÃ  piÃ¹ nei form." });
     } catch (err) {
       showToast({
         tone: "error",
@@ -976,6 +1046,7 @@ export default function OrgAdminBookings() {
         setSelectedRoomId(room.id);
       }
       await refreshRooms(roomDraft.id ?? undefined);
+      setManagementOverlay(null);
       showToast({ tone: "success", title: "Sala salvata", message: "Configurazione sala aggiornata." });
     } catch (err) {
       showToast({
@@ -1003,6 +1074,7 @@ export default function OrgAdminBookings() {
       await deleteOrgAdminRoom(deleteTarget.id);
       setRoomDraft(emptyRoomDraft());
       setDeleteTarget(null);
+      setManagementOverlay(null);
       await refreshRooms(null);
       showToast({ tone: "success", title: "Sala eliminata", message: "La sala e i suoi tavoli sono stati rimossi." });
     } catch (err) {
@@ -1032,6 +1104,7 @@ export default function OrgAdminBookings() {
       setSelectedRoomId(tableDraft.room_id);
       await loadRoomState(tableDraft.room_id);
       await refreshRooms(tableDraft.room_id);
+      setManagementOverlay(null);
       showToast({ tone: "success", title: "Tavolo salvato", message: "Dati tavolo aggiornati." });
     } catch (err) {
       showToast({
@@ -1059,11 +1132,12 @@ export default function OrgAdminBookings() {
       await deleteOrgAdminRoomTable(deleteTarget.id);
       setTableDraft(emptyTableDraft(selectedRoomId));
       setDeleteTarget(null);
+      setManagementOverlay(null);
       if (selectedRoomId) {
         await loadRoomState(selectedRoomId);
         await refreshRooms(selectedRoomId);
       }
-      showToast({ tone: "success", title: "Tavolo eliminato", message: "Il tavolo è stato rimosso dalla sala." });
+      showToast({ tone: "success", title: "Tavolo eliminato", message: "Il tavolo Ã¨ stato rimosso dalla sala." });
     } catch (err) {
       showToast({
         tone: "error",
@@ -1113,7 +1187,7 @@ export default function OrgAdminBookings() {
       setSelectedMapTableId(null);
       await loadBookings();
       if (selectedRoomId) await loadRoomState(selectedRoomId);
-      showToast({ tone: "success", title: "Assegnazione rimossa", message: "La prenotazione non ha più sala o tavolo." });
+      showToast({ tone: "success", title: "Assegnazione rimossa", message: "La prenotazione non ha piÃ¹ sala o tavolo." });
     } catch (err) {
       showToast({
         tone: "error",
@@ -1233,7 +1307,7 @@ export default function OrgAdminBookings() {
 
   async function handleManualBookingSave() {
     if (!manualDraft.customer_name.trim()) {
-      showToast({ tone: "error", title: "Dati mancanti", message: "Il nome cliente è obbligatorio." });
+      showToast({ tone: "error", title: "Dati mancanti", message: "Il nome cliente Ã¨ obbligatorio." });
       return;
     }
     setSaving("manual-booking");
@@ -1251,7 +1325,7 @@ export default function OrgAdminBookings() {
         notes: manualDraft.notes || null,
       });
       syncMapWithBooking(booking);
-      showToast({ tone: "success", title: "Prenotazione creata", message: "La prenotazione manuale è stata inserita in agenda." });
+      showToast({ tone: "success", title: "Prenotazione creata", message: "La prenotazione manuale Ã¨ stata inserita in agenda." });
       setIsCreatingManual(false);
       setManualDraft({
         customer_name: "",
@@ -1310,13 +1384,23 @@ export default function OrgAdminBookings() {
           </div>
           {section === "agenda" ? (
             <button type="button" onClick={() => setIsCreatingManual(true)}>
-              + Nuova
+              + Prenotazione
             </button>
           ) : null}
           {section === "events" ? (
-            <button type="button" onClick={() => setEventSeriesDraft(emptyEventSeriesDraft())}>
-              + Nuova
+            <button type="button" onClick={() => openEventOverlay()}>
+              + Serata
             </button>
+          ) : null}
+          {section === "rooms" ? (
+            <div className="booking-admin-mobile-head__actions">
+              <button type="button" onClick={() => openRoomOverlay()}>
+                + Sala
+              </button>
+              <button type="button" onClick={() => openTableOverlay()}>
+                + Tavolo
+              </button>
+            </div>
           ) : null}
         </div>
         <div className="booking-admin-page-header">
@@ -1404,6 +1488,8 @@ export default function OrgAdminBookings() {
             setDraft={setEventSeriesDraft}
             onSave={handleEventSeriesSave}
             onDelete={handleEventSeriesDelete}
+            onCreate={() => openEventOverlay()}
+            onEdit={openEventOverlay}
             saving={saving}
           />
         )}
@@ -1416,10 +1502,7 @@ export default function OrgAdminBookings() {
               action={
                 <button
                   type="button"
-                  onClick={() => {
-                    setSelectedRoomId(null);
-                    setRoomDraft(emptyRoomDraft());
-                  }}
+                  onClick={() => openRoomOverlay()}
                   className="booking-management-action"
                 >
                   + Nuova sala
@@ -1431,10 +1514,7 @@ export default function OrgAdminBookings() {
                   <button
                     key={room.id}
                     type="button"
-                    onClick={() => {
-                      setSelectedRoomId(room.id);
-                      setRoomDraft({ id: room.id, name: room.name, is_active: room.is_active });
-                    }}
+                    onClick={() => openRoomOverlay(room)}
                     className={`booking-management-row ${roomDraft.id === room.id ? "is-selected" : ""}`}
                   >
                     <span>
@@ -1447,13 +1527,7 @@ export default function OrgAdminBookings() {
               </div>
             }
             side={
-              <div className="space-y-3">
-                <Field label="Nome sala">
-                  <input className={inputClass} value={roomDraft.name} onChange={(event) => setRoomDraft((current) => ({ ...current, name: event.target.value }))} />
-                </Field>
-                <Toggle label="Sala attiva per agenda e assegnazioni" checked={roomDraft.is_active} onChange={(checked) => setRoomDraft((current) => ({ ...current, is_active: checked }))} />
-                <ActionRow primaryLabel={roomDraft.id ? "Salva sala" : "Crea sala"} secondaryLabel="Elimina" onPrimary={handleRoomSave} onSecondary={handleRoomDelete} busy={saving.startsWith("room")} />
-              </div>
+              <ManagementEditorHint title="Sale" message="Tocca una sala o usa + Nuova sala per aprire l'overlay di modifica." />
             }
             />
             <ManagementShell
@@ -1462,7 +1536,7 @@ export default function OrgAdminBookings() {
               action={
                 <button
                   type="button"
-                  onClick={() => setTableDraft(emptyTableDraft(selectedRoomId))}
+                  onClick={() => openTableOverlay()}
                   className="booking-management-action"
                 >
                   + Nuovo tavolo
@@ -1484,12 +1558,9 @@ export default function OrgAdminBookings() {
                   <div className="booking-management-list">
                   {roomTables.map((table) => (
                     <button
-                      key={table.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedMapTableId(table.id);
-                        setTableDraft({ id: table.id, room_id: table.room_id, name: table.name, capacity: table.capacity, shape: table.shape, pos_x: table.pos_x, pos_y: table.pos_y, width: table.width ?? 94, height: table.height ?? 94, is_active: table.is_active, is_out_of_service: table.is_out_of_service });
-                      }}
+                    key={table.id}
+                    type="button"
+                      onClick={() => openTableOverlay(table)}
                       className={`booking-management-row ${tableDraft.id === table.id ? "is-selected" : ""}`}
                     >
                       <span>
@@ -1504,32 +1575,7 @@ export default function OrgAdminBookings() {
               </div>
             }
             side={
-              <div className="space-y-3">
-                <Field label="Sala">
-                  <select className={inputClass} value={tableDraft.room_id || ""} onChange={(event) => setTableDraft((current) => ({ ...current, room_id: event.target.value ? Number(event.target.value) : 0 }))}>
-                    <option value="">Seleziona sala</option>
-                    {rooms.map((room) => (
-                      <option key={room.id} value={room.id}>{room.name}</option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Nome tavolo">
-                  <input className={inputClass} value={tableDraft.name} onChange={(event) => setTableDraft((current) => ({ ...current, name: event.target.value }))} />
-                </Field>
-                <Field label="Capienza">
-                  <input className={inputClass} type="number" min={1} value={tableDraft.capacity} onChange={(event) => setTableDraft((current) => ({ ...current, capacity: Number(event.target.value) || 1 }))} />
-                </Field>
-                <Field label="Forma">
-                  <select className={inputClass} value={tableDraft.shape} onChange={(event) => setTableDraft((current) => ({ ...current, shape: event.target.value }))}>
-                    <option value="round">Round</option>
-                    <option value="square">Square</option>
-                    <option value="rectangle">Rectangle</option>
-                  </select>
-                </Field>
-                <Toggle label="Tavolo attivo" checked={tableDraft.is_active} onChange={(checked) => setTableDraft((current) => ({ ...current, is_active: checked }))} />
-                <Toggle label="Fuori servizio" checked={tableDraft.is_out_of_service} onChange={(checked) => setTableDraft((current) => ({ ...current, is_out_of_service: checked }))} />
-                <ActionRow primaryLabel={tableDraft.id ? "Salva tavolo" : "Crea tavolo"} secondaryLabel="Elimina" onPrimary={handleTableSave} onSecondary={handleTableDelete} busy={saving.startsWith("table")} />
-              </div>
+              <ManagementEditorHint title="Tavoli" message="Tocca un tavolo o usa + Nuovo tavolo per aprire l'overlay di modifica." />
             }
             />
           </div>
@@ -1731,6 +1777,182 @@ export default function OrgAdminBookings() {
           </div>
         </form>
       </ModalShell>
+      <ModalShell
+        open={managementOverlay === "event"}
+        onClose={closeManagementOverlay}
+        title={eventSeriesDraft.id ? "Modifica serata" : "Nuova serata"}
+        description="Imposta nome, data e orari prenotabili. I form leggono subito questa configurazione."
+        sizeClassName="max-w-2xl"
+        contentClassName="p-5 max-h-[86vh] overflow-y-auto"
+      >
+        <div className="booking-overlay-form">
+          <Field label="Nome serata">
+            <input
+              className={inputClass}
+              value={eventSeriesDraft.name}
+              onChange={(event) => setEventSeriesDraft((current) => ({ ...current, name: event.target.value }))}
+              placeholder="Cartomante"
+            />
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Tipo regola">
+              <select
+                className={inputClass}
+                value={eventSeriesDraft.recurrence_type}
+                onChange={(event) => setEventSeriesDraft((current) => ({ ...current, recurrence_type: event.target.value, weekday: 0, specific_date: "" }))}
+              >
+                <option value="weekly">Settimanale</option>
+                <option value="date">Data specifica</option>
+              </select>
+            </Field>
+            {eventSeriesDraft.recurrence_type === "weekly" ? (
+              <Field label="Giorno">
+                <select
+                  className={inputClass}
+                  value={eventSeriesDraft.weekday ?? 0}
+                  onChange={(event) => setEventSeriesDraft((current) => ({ ...current, weekday: Number(event.target.value) }))}
+                >
+                  {weekdayOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </Field>
+            ) : (
+              <Field label="Data">
+                <input
+                  className={inputClass}
+                  type="date"
+                  value={eventSeriesDraft.specific_date}
+                  onChange={(event) => setEventSeriesDraft((current) => ({ ...current, specific_date: event.target.value }))}
+                />
+              </Field>
+            )}
+          </div>
+          <Field label="Orari disponibili">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                Dalle
+                <input
+                  className={`${inputClass} !mt-1 !py-2`}
+                  type="time"
+                  step={1800}
+                  value={eventSlotRange.start}
+                  onChange={(event) => applyEventSlotRange({ ...eventSlotRange, start: event.target.value })}
+                />
+              </label>
+              <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                Alle
+                <input
+                  className={`${inputClass} !mt-1 !py-2`}
+                  type="time"
+                  step={1800}
+                  value={eventSlotRange.end}
+                  onChange={(event) => applyEventSlotRange({ ...eventSlotRange, end: event.target.value })}
+                />
+              </label>
+            </div>
+            <details className="mt-3">
+              <summary className="cursor-pointer text-sm font-semibold text-slate-700">Modifica manuale slot</summary>
+              <textarea
+                className={`${inputClass} mt-3 min-h-[90px]`}
+                value={eventSeriesDraft.time_slots_text}
+                onChange={(event) => setEventSeriesDraft((current) => ({ ...current, time_slots_text: event.target.value }))}
+                placeholder="19:30, 20:00, 20:30"
+              />
+            </details>
+          </Field>
+          <Field label="Descrizione">
+            <textarea
+              className={`${inputClass} min-h-[82px]`}
+              value={eventSeriesDraft.description}
+              onChange={(event) => setEventSeriesDraft((current) => ({ ...current, description: event.target.value }))}
+              placeholder="Note visibili all'organizzazione"
+            />
+          </Field>
+          <Toggle
+            label="Serata attiva nei form pubblici"
+            checked={eventSeriesDraft.is_active}
+            onChange={(checked) => setEventSeriesDraft((current) => ({ ...current, is_active: checked }))}
+          />
+          <Toggle
+            label="Usa come default quando non ci sono eventi per data e orario scelti"
+            checked={eventSeriesDraft.is_default}
+            onChange={(checked) => setEventSeriesDraft((current) => ({ ...current, is_default: checked }))}
+          />
+          <ActionRow
+            primaryLabel="Salva serata"
+            secondaryLabel={eventSeriesDraft.id ? "Elimina" : "Annulla"}
+            onPrimary={handleEventSeriesSave}
+            onSecondary={eventSeriesDraft.id ? handleEventSeriesDelete : closeManagementOverlay}
+            busy={saving.startsWith("event-series")}
+          />
+        </div>
+      </ModalShell>
+      <ModalShell
+        open={managementOverlay === "room"}
+        onClose={closeManagementOverlay}
+        title={roomDraft.id ? "Modifica sala" : "Nuova sala"}
+        description="Nome e stato operativo della sala."
+        sizeClassName="max-w-lg"
+        contentClassName="p-5 max-h-[86vh] overflow-y-auto"
+      >
+        <div className="booking-overlay-form">
+          <Field label="Nome sala">
+            <input className={inputClass} value={roomDraft.name} onChange={(event) => setRoomDraft((current) => ({ ...current, name: event.target.value }))} />
+          </Field>
+          <Toggle label="Sala attiva per agenda e assegnazioni" checked={roomDraft.is_active} onChange={(checked) => setRoomDraft((current) => ({ ...current, is_active: checked }))} />
+          <ActionRow
+            primaryLabel="Salva sala"
+            secondaryLabel={roomDraft.id ? "Elimina" : "Annulla"}
+            onPrimary={handleRoomSave}
+            onSecondary={roomDraft.id ? handleRoomDelete : closeManagementOverlay}
+            busy={saving.startsWith("room")}
+          />
+        </div>
+      </ModalShell>
+      <ModalShell
+        open={managementOverlay === "table"}
+        onClose={closeManagementOverlay}
+        title={tableDraft.id ? "Modifica tavolo" : "Nuovo tavolo"}
+        description="Capienza, forma e stato del tavolo."
+        sizeClassName="max-w-lg"
+        contentClassName="p-5 max-h-[86vh] overflow-y-auto"
+      >
+        <div className="booking-overlay-form">
+          <Field label="Sala">
+            <select className={inputClass} value={tableDraft.room_id || ""} onChange={(event) => setTableDraft((current) => ({ ...current, room_id: event.target.value ? Number(event.target.value) : 0 }))}>
+              <option value="">Seleziona sala</option>
+              {rooms.map((room) => (
+                <option key={room.id} value={room.id}>{room.name}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Nome tavolo">
+            <input className={inputClass} value={tableDraft.name} onChange={(event) => setTableDraft((current) => ({ ...current, name: event.target.value }))} />
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Capienza">
+              <input className={inputClass} type="number" min={1} value={tableDraft.capacity} onChange={(event) => setTableDraft((current) => ({ ...current, capacity: Number(event.target.value) || 1 }))} />
+            </Field>
+            <Field label="Forma">
+              <select className={inputClass} value={tableDraft.shape} onChange={(event) => setTableDraft((current) => ({ ...current, shape: event.target.value }))}>
+                <option value="round">Round</option>
+                <option value="square">Square</option>
+                <option value="rectangle">Rectangle</option>
+              </select>
+            </Field>
+          </div>
+          <Toggle label="Tavolo attivo" checked={tableDraft.is_active} onChange={(checked) => setTableDraft((current) => ({ ...current, is_active: checked }))} />
+          <Toggle label="Fuori servizio" checked={tableDraft.is_out_of_service} onChange={(checked) => setTableDraft((current) => ({ ...current, is_out_of_service: checked }))} />
+          <ActionRow
+            primaryLabel="Salva tavolo"
+            secondaryLabel={tableDraft.id ? "Elimina" : "Annulla"}
+            onPrimary={handleTableSave}
+            onSecondary={tableDraft.id ? handleTableDelete : closeManagementOverlay}
+            busy={saving.startsWith("table")}
+          />
+        </div>
+      </ModalShell>
       <SubmissionDecisionModal
         open={requestConfirmOpen === "confirmed"}
         mode="confirmed"
@@ -1749,7 +1971,7 @@ export default function OrgAdminBookings() {
       <ConfirmModal
         open={requestConfirmOpen === "pending"}
         title="Riportare la richiesta collegata in attesa?"
-        description="La review verrà rimossa e la richiesta tornerà nello stato pending."
+        description="La review verrÃ  rimossa e la richiesta tornerÃ  nello stato pending."
         confirmLabel="Riporta a pending"
         confirmState={requestActionState}
         onClose={() => {
@@ -1777,7 +1999,7 @@ export default function OrgAdminBookings() {
       <ConfirmModal
         open={deleteTarget?.type === "room"}
         title={DESTRUCTIVE_ACTION_COPY.deleteRoom.title}
-        description="La sala verrà rimossa dall'area prenotazioni insieme ai tavoli collegati."
+        description="La sala verrÃ  rimossa dall'area prenotazioni insieme ai tavoli collegati."
         objectName={formatActionObject(deleteTarget?.name, "Sala selezionata")}
         impact="Controlla di non avere prenotazioni operative collegate prima di procedere."
         confirmLabel={DESTRUCTIVE_ACTION_COPY.deleteRoom.confirmLabel}
@@ -1794,9 +2016,9 @@ export default function OrgAdminBookings() {
       <ConfirmModal
         open={deleteTarget?.type === "table"}
         title={DESTRUCTIVE_ACTION_COPY.deleteTable.title}
-        description="Il tavolo verrà rimosso dalla sala e non sarà più selezionabile sulla mappa."
+        description="Il tavolo verrÃ  rimosso dalla sala e non sarÃ  piÃ¹ selezionabile sulla mappa."
         objectName={formatActionObject(deleteTarget?.name, "Tavolo selezionato")}
-        impact="Le prenotazioni già salvate manterranno lo storico, ma il tavolo non sarà più assegnabile."
+        impact="Le prenotazioni giÃ  salvate manterranno lo storico, ma il tavolo non sarÃ  piÃ¹ assegnabile."
         confirmLabel={DESTRUCTIVE_ACTION_COPY.deleteTable.confirmLabel}
         tone="danger"
         confirmState={saving === "table-delete" ? "loading" : "idle"}
@@ -1827,6 +2049,15 @@ function ActionRow({ primaryLabel, secondaryLabel, onPrimary, onSecondary, busy 
       <button type="button" onClick={onSecondary} disabled={busy} className="btn-secondary !rounded-full px-5 text-sm font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50">
         {secondaryLabel}
       </button>
+    </div>
+  );
+}
+
+function ManagementEditorHint({ title, message }: { title: string; message: string }) {
+  return (
+    <div className="booking-management-editor-hint">
+      <p>{title}</p>
+      <span>{message}</span>
     </div>
   );
 }
@@ -2050,7 +2281,7 @@ function AgendaSection(props: {
                   props.setSelectedBookingId(null);
                 }}
               >
-                ×
+                Ã—
               </button>
             </header>
 
@@ -2159,67 +2390,30 @@ function BookingEventSeriesPanel(props: {
   setDraft: (value: ReturnType<typeof emptyEventSeriesDraft> | ((current: ReturnType<typeof emptyEventSeriesDraft>) => ReturnType<typeof emptyEventSeriesDraft>)) => void;
   onSave: () => void;
   onDelete: () => void;
+  onCreate: () => void;
+  onEdit: (item: OrgAdminBookingEventSeries) => void;
   saving: string;
 }) {
   const weekdayOptions = [
-    { value: 0, label: "Lunedì" },
-    { value: 1, label: "Martedì" },
-    { value: 2, label: "Mercoledì" },
-    { value: 3, label: "Giovedì" },
-    { value: 4, label: "Venerdì" },
+    { value: 0, label: "LunedÃ¬" },
+    { value: 1, label: "MartedÃ¬" },
+    { value: 2, label: "MercoledÃ¬" },
+    { value: 3, label: "GiovedÃ¬" },
+    { value: 4, label: "VenerdÃ¬" },
     { value: 5, label: "Sabato" },
     { value: 6, label: "Domenica" },
   ];
-  const [slotRange, setSlotRange] = useState(() => {
-    const slots = parseBookingSlotText(props.draft.time_slots_text);
-    return { start: slots[0] || "19:00", end: slots[slots.length - 1] || "23:00" };
-  });
-  useEffect(() => {
-    const slots = parseBookingSlotText(props.draft.time_slots_text);
-    setSlotRange({ start: slots[0] || "19:00", end: slots[slots.length - 1] || "23:00" });
-  }, [props.draft.id, props.draft.time_slots_text]);
-  const applySlotRange = (nextRange: { start: string; end: string }) => {
-    setSlotRange(nextRange);
-    const slots = buildHalfHourSlots(nextRange.start, nextRange.end);
-    if (!slots.length) return;
-    props.setDraft((current) => ({ ...current, time_slots_text: slots.join(", ") }));
-  };
-  const selectSeries = (item: OrgAdminBookingEventSeries) => {
-    props.setDraft({
-      id: item.id,
-      name: item.name,
-      description: item.description || "",
-      recurrence_type: item.recurrence_type || "weekly",
-      weekday: item.weekday,
-      specific_date: item.specific_date || "",
-      is_active: item.is_active,
-      is_default: Boolean(item.is_default),
-      time_slots_text: item.time_slots.map((slot) => slot.time.slice(0, 5)).join(", "),
-    });
-  };
-
   return (
     <ManagementShell
       title="Serate"
       subtitle="Date, serate e orari"
       action={
-        <button type="button" className="booking-management-action booking-management-action--desktop-only" onClick={() => props.setDraft(emptyEventSeriesDraft())}>
+        <button type="button" className="booking-management-action booking-management-action--desktop-only" onClick={props.onCreate}>
           + Nuova serata
         </button>
       }
       main={
         <div className="booking-management-list">
-          {/* Intentionally no large "nuova serata" card here: creation stays in the compact header action. */}
-          {false ? <button
-            type="button"
-            className={`w-full rounded-[1.25rem] p-5 text-left transition-all ${
-              props.draft.id ? "bg-slate-50 ring-1 ring-inset ring-slate-200/60 hover:bg-slate-100/70" : "bg-slate-900 text-white shadow-md"
-            }`}
-            onClick={() => props.setDraft(emptyEventSeriesDraft())}
-          >
-            <p className="text-lg font-semibold">+ Nuova serata</p>
-            <p className={`mt-1 text-sm ${props.draft.id ? "text-slate-500" : "text-slate-300"}`}>Es. lunedì Cartomante, martedì Serata X</p>
-          </button> : null}
           {props.items.length === 0 ? (
             <EmptyState message="Nessuna serata configurata." />
           ) : (
@@ -2233,13 +2427,13 @@ function BookingEventSeriesPanel(props: {
                   key={item.id}
                   type="button"
                   className={`booking-management-row ${selected ? "is-selected" : ""}`}
-                  onClick={() => selectSeries(item)}
+                  onClick={() => props.onEdit(item)}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-lg font-semibold">{item.name}</p>
                       <p className={`mt-1 text-sm ${selected ? "text-slate-300" : "text-slate-500"}`}>
-                        {when} · {item.time_slots.map((slot) => slot.time.slice(0, 5)).join(", ") || "Nessuno slot"}
+                        {when} Â· {item.time_slots.map((slot) => slot.time.slice(0, 5)).join(", ") || "Nessuno slot"}
                       </p>
                     </div>
                     <div className="flex flex-col items-end gap-1">
@@ -2262,106 +2456,7 @@ function BookingEventSeriesPanel(props: {
         </div>
       }
       side={
-        <div className="space-y-4">
-          <Field label="Nome serata">
-            <input
-              className={inputClass}
-              value={props.draft.name}
-              onChange={(event) => props.setDraft((current) => ({ ...current, name: event.target.value }))}
-              placeholder="Cartomante"
-            />
-          </Field>
-          <Field label="Tipo regola">
-            <select
-              className={inputClass}
-              value={props.draft.recurrence_type}
-              onChange={(event) => props.setDraft((current) => ({ ...current, recurrence_type: event.target.value, weekday: 0, specific_date: "" }))}
-            >
-              <option value="weekly">Settimanale</option>
-              <option value="date">Data specifica</option>
-            </select>
-          </Field>
-          {props.draft.recurrence_type === "weekly" ? (
-            <Field label="Giorno">
-              <select
-                className={inputClass}
-                value={props.draft.weekday ?? 0}
-                onChange={(event) => props.setDraft((current) => ({ ...current, weekday: Number(event.target.value) }))}
-              >
-                {weekdayOptions.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </Field>
-          ) : (
-            <Field label="Data">
-              <input
-                className={inputClass}
-                type="date"
-                value={props.draft.specific_date}
-                onChange={(event) => props.setDraft((current) => ({ ...current, specific_date: event.target.value }))}
-              />
-            </Field>
-          )}
-          <Field label="Orari disponibili">
-            <div className="mb-3 grid gap-2 sm:grid-cols-2">
-              <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                Dalle
-                <input
-                  className={`${inputClass} !mt-1 !py-2`}
-                  type="time"
-                  step={1800}
-                  value={slotRange.start}
-                  onChange={(event) => applySlotRange({ ...slotRange, start: event.target.value })}
-                />
-              </label>
-              <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                Alle
-                <input
-                  className={`${inputClass} !mt-1 !py-2`}
-                  type="time"
-                  step={1800}
-                  value={slotRange.end}
-                  onChange={(event) => applySlotRange({ ...slotRange, end: event.target.value })}
-                />
-              </label>
-            </div>
-            <details className="mt-1">
-              <summary className="cursor-pointer text-sm font-semibold text-slate-700">Modifica manuale slot</summary>
-              <textarea
-                className={`${inputClass} mt-3 min-h-[90px]`}
-                value={props.draft.time_slots_text}
-                onChange={(event) => props.setDraft((current) => ({ ...current, time_slots_text: event.target.value }))}
-                placeholder="19:30, 20:00, 20:30"
-              />
-            </details>
-          </Field>
-          <Field label="Descrizione">
-            <textarea
-              className={`${inputClass} min-h-[82px]`}
-              value={props.draft.description}
-              onChange={(event) => props.setDraft((current) => ({ ...current, description: event.target.value }))}
-              placeholder="Note visibili all'organizzazione"
-            />
-          </Field>
-          <Toggle
-            label="Serata attiva nei form pubblici"
-            checked={props.draft.is_active}
-            onChange={(checked) => props.setDraft((current) => ({ ...current, is_active: checked }))}
-          />
-          <Toggle
-            label="Usa come default quando non ci sono eventi per data e orario scelti"
-            checked={props.draft.is_default}
-            onChange={(checked) => props.setDraft((current) => ({ ...current, is_default: checked }))}
-          />
-          <ActionRow
-            primaryLabel={props.draft.id ? "Salva serata" : "Crea serata"}
-            secondaryLabel="Elimina"
-            onPrimary={props.onSave}
-            onSecondary={props.onDelete}
-            busy={props.saving.startsWith("event-series")}
-          />
-        </div>
+        <ManagementEditorHint title="Serate" message="Tocca una serata o usa + Nuova serata per aprire l'overlay di modifica." />
       }
     />
   );
@@ -2407,9 +2502,9 @@ function DayBookingRow({
         <span className="booking-day-row__side">
           <span className={bookingStatusDotClass(booking.status)} aria-hidden="true" />
           <span className={bookingStatusChipClass(booking.status)}>{formatStatusLabel(booking.status)}</span>
-          <span className="booking-day-row__pax">◎ {booking.party_size || "-"} pax</span>
+          <span className="booking-day-row__pax">â—Ž {booking.party_size || "-"} pax</span>
         </span>
-        <span className="booking-day-row__chevron" aria-hidden="true">⌄</span>
+        <span className="booking-day-row__chevron" aria-hidden="true">âŒ„</span>
       </button>
       <div className="booking-day-row__expanded" aria-hidden={!expanded}>{expanded ? detail : null}</div>
     </article>
@@ -2966,7 +3061,7 @@ function BookingDetailPanel(props: {
               <p className="mt-1 text-sm text-slate-500">
                 Submission #{props.selectedBooking.submission_id}
                 {props.selectedBooking.request_review_summary?.reviewed_at
-                  ? ` · ${formatDateTime(props.selectedBooking.request_review_summary.reviewed_at)}`
+                  ? ` Â· ${formatDateTime(props.selectedBooking.request_review_summary.reviewed_at)}`
                   : ""}
               </p>
             </div>

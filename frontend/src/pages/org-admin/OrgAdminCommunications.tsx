@@ -119,6 +119,44 @@ export default function OrgAdminCommunications() {
     setActiveTab("whatsapp");
   };
 
+  const createActionLabel =
+    activeTab === "modelli" ? "+ Modello"
+    : activeTab === "moduli" ? "+ Form"
+    : activeTab === "sondaggi" ? "+ Sondaggio"
+    : activeTab === "whatsapp" ? "+ Regola"
+    : "+ Campagna";
+
+  const openContextualCreate = () => {
+    if (communicationsLocked) return;
+    const nextParams = new URLSearchParams(searchParams);
+    if (activeTab === "modelli") {
+      nextParams.set("tab", "modelli");
+      nextParams.set("mode", "create-template");
+      setSearchParams(nextParams, { replace: true });
+      setActiveTab("modelli");
+      return;
+    }
+    if (activeTab === "moduli" || activeTab === "sondaggi") {
+      nextParams.set("tab", activeTab);
+      nextParams.set("mode", "create");
+      setSearchParams(nextParams, { replace: true });
+      setActiveTab(activeTab);
+      return;
+    }
+    if (activeTab === "whatsapp") {
+      nextParams.set("tab", "whatsapp");
+      nextParams.set("whatsappView", "automazioni");
+      nextParams.set("mode", "create");
+      setSearchParams(nextParams, { replace: true });
+      setActiveTab("whatsapp");
+      return;
+    }
+    nextParams.set("tab", "campagne");
+    nextParams.set("mode", "create");
+    setSearchParams(nextParams, { replace: true });
+    setActiveTab("campagne");
+  };
+
   useEffect(() => {
     const next = normalizeTab(searchParams.get("tab"));
     if (next !== activeTab) {
@@ -145,15 +183,9 @@ export default function OrgAdminCommunications() {
         <button
           type="button"
           disabled={communicationsLocked}
-          onClick={() => {
-            const nextParams = new URLSearchParams(searchParams);
-            nextParams.set("tab", activeTab === "moduli" ? "moduli" : "campagne");
-            nextParams.set("mode", activeTab === "moduli" ? "create" : "create");
-            setSearchParams(nextParams, { replace: true });
-            setActiveTab(activeTab === "moduli" ? "moduli" : "campagne");
-          }}
+          onClick={openContextualCreate}
         >
-          + Nuova
+          {createActionLabel}
         </button>
       </div>
       <PageHeader
@@ -180,7 +212,13 @@ export default function OrgAdminCommunications() {
               type="button"
               className="btn-secondary"
               disabled={communicationsLocked}
-              onClick={() => selectTab("moduli")}
+              onClick={() => {
+                const nextParams = new URLSearchParams(searchParams);
+                nextParams.set("tab", "moduli");
+                nextParams.set("mode", "create");
+                setSearchParams(nextParams, { replace: true });
+                setActiveTab("moduli");
+              }}
             >
               + Nuovo form
             </button>

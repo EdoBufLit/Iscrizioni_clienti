@@ -5536,3 +5536,17 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Smoke 390px: `bodyScrollWidth=390`, `panelScroll=panelClient`, `railHorizontalOverflow=false`, `tablesHorizontalOverflow=false`, `overflow=false`.
 - Il bottone `Salva tavolo` resta raggiungibile nel primo viewport utile invece di finire sotto una lista lunga.
 - Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`, smoke Playwright sintetico 20/20.
+
+## Plan (Azioni Nuova contestuali e overlay - May 27, 2026)
+- [x] Prenotazioni: `+ Nuova serata`, `+ Nuova sala`, `+ Nuovo tavolo` devono aprire overlay operativo, non form statici nella pagina.
+- [x] Prenotazioni: click su serata/sala/tavolo esistente deve aprire lo stesso overlay per modifica rapida.
+- [x] Comunicazioni: il `+ Nuova` mobile deve essere contestuale a tab attiva e funzionare per campagne, modelli, moduli, sondaggi e WhatsApp.
+- [x] Verificare typecheck/build e smoke dei comandi principali.
+- [ ] Commit, push e controllo deploy.
+
+## Review (Azioni Nuova contestuali e overlay - May 27, 2026)
+- Prenotazioni: i comandi `+ Serata`, `+ Sala`, `+ Tavolo` aprono overlay dedicati; anche il tap su serata/sala/tavolo esistente apre lo stesso overlay in modifica.
+- Rimossi i form statici laterali per serate/sale/tavoli: la pagina resta lista semplice, con hint minimo e azioni compatte.
+- Comunicazioni: il pulsante mobile cambia in base alla tab (`+ Campagna`, `+ Modello`, `+ Form`, `+ Sondaggio`, `+ Regola`) e apre il builder/overlay corretto.
+- I builder aperti da URL `mode=create` puliscono il parametro dopo l'avvio, evitando reset accidentali mentre l'admin modifica.
+- Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`, controlli `rg` sui comandi contestuali e sull'assenza dei vecchi `Crea ...` in pagina.

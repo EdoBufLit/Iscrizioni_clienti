@@ -3,6 +3,7 @@
 - Quando il cliente chiede fedelta esatta a mockup admin, non basta un re-skin: prima della consegna servono screenshot viewport-to-viewport delle superfici critiche, inclusi drawer/modali fixed. Inoltre le integrazioni esistenti nel dettaglio (es. SumUp) vanno preservate esplicitamente nella nuova IA e verificate nello screenshot.
 # Lessons
 
+- May 27, 2026: un bottone `+ Nuova` mobile non puo essere generico se cambia tab o apre un flusso sbagliato. Ogni azione primaria deve derivare dalla tab attiva e aprire subito il relativo overlay/editor, altrimenti va nascosta o rinominata.
 - May 27, 2026: verificare i componenti mobile anche con cardinalita alte, non solo con 2-3 item demo. Picker per sale/tavoli devono avere limite verticale e scroll locale, altrimenti con 20 opzioni diventano ingestibili anche se non overflowano lateralmente.
 - May 27, 2026: quando si dice mobile-first, i picker dentro una card stretta non possono usare rail orizzontali con chip larghi e scrollbar nascosta. Prima di consegnare, verificare che l'ultimo item sia interamente visibile o che il wrapping sia esplicito a 390px.
 - May 27, 2026: sulle pagine operative mobile, anche un bottone corretto a livello funzionale puo risultare "gigante" se eredita CTA desktop o flex full-width. Per azioni secondarie tipo `+ Nuova sala` e `Salva sala`, verificare dimensione visuale reale e non solo min-height tecnico.
@@ -282,3 +283,7 @@ For GitHub Actions deploys on long-lived feature branches, do not let path filte
 ## May 27, 2026 - Overnight booking slots preserve business order
 
 Never sort booking time slots lexicographically when a configured range can cross midnight. Preserve the saved slot order and dedupe in sequence, so `19:30 ... 23:30, 00:00, 00:30` stays in the order the admin configured.
+
+## May 27, 2026 - Mobile create actions must be contextual
+
+On mobile admin pages, a visible `+ Nuova` action must always create the thing represented by the current tab or section. Do not show a generic create button outside Agenda if it only creates bookings; route each tab to its own overlay or builder flow for serate, sale, tavoli, campagne, modelli, form, sondaggi and WhatsApp rules.
