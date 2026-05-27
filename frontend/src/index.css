@@ -8715,12 +8715,38 @@ body.dashboard-perf-mode .btn-ghost:hover {
     align-items: center;
   }
 
+  .org-admin-v2 .booking-management-head__action {
+    display: inline-flex;
+  }
+
+  .org-admin-v2 .booking-management-head__action .booking-management-action {
+    min-height: 2.15rem;
+    border-radius: 8px !important;
+    padding: 0 0.72rem;
+    font-size: 0.76rem;
+    font-weight: 850;
+  }
+
   .org-admin-v2 .booking-management-head h2 {
     display: none;
   }
 
   .org-admin-v2 .booking-management-action--desktop-only {
     display: none;
+  }
+
+  .org-admin-v2 .booking-management-stack .btn-primary,
+  .org-admin-v2 .booking-management-stack .btn-secondary {
+    min-height: 2.45rem !important;
+    border-radius: 9px !important;
+    padding: 0.45rem 0.85rem !important;
+    font-size: 0.82rem !important;
+  }
+
+  .org-admin-v2 .booking-management-stack .btn-primary {
+    flex: 0 1 auto !important;
+    width: auto !important;
+    min-width: 7.25rem;
   }
 
   .org-admin-v2 .form-settings-mail-editor {

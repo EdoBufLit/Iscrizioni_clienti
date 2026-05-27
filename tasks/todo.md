@@ -5511,4 +5511,5 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Dettaglio prenotazione: campi principali editabili subito nel dettaglio mobile; i pulsanti stato servizio sono subito sotto l'header della richiesta, visibili nel primo viewport utile.
 - Serate: rimossi contenitori esterni da card annidata; lista e form impostazioni vivono nello stesso flusso verticale semplice.
 - Comunicazioni: header mobile dedicato, tab compatte, workspace senza cornice esterna; stepper campagne orizzontale compatto e builder email con canvas visibile prima delle rail.
+- Sale/Tavoli: ridotta la dimensione mobile dei comandi `+ Nuova sala`, `+ Nuovo tavolo` e `Salva sala`, evitando l'effetto CTA gigante.
 - Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`, smoke Playwright mockato 390x844 su agenda, dettaglio, serate, comunicazioni, campagna e builder email.
