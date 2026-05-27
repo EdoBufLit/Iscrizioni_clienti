@@ -5513,3 +5513,14 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Comunicazioni: header mobile dedicato, tab compatte, workspace senza cornice esterna; stepper campagne orizzontale compatto e builder email con canvas visibile prima delle rail.
 - Sale/Tavoli: ridotta la dimensione mobile dei comandi `+ Nuova sala`, `+ Nuovo tavolo` e `Salva sala`, evitando l'effetto CTA gigante.
 - Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`, smoke Playwright mockato 390x844 su agenda, dettaglio, serate, comunicazioni, campagna e builder email.
+
+## Plan (Fix overflow tavoli mobile - May 27, 2026)
+- [x] Rendere il picker sala/tavolo realmente mobile-first: niente elementi tagliati orizzontalmente dentro il dettaglio prenotazione.
+- [x] Mantenere selezione rapida, leggibile e touch-safe senza dropdown e senza card annidate.
+- [x] Verificare typecheck/build e smoke mobile sulla sezione assegnazione.
+- [ ] Commit, push e controllo deploy.
+
+## Review (Fix overflow tavoli mobile - May 27, 2026)
+- Picker assegnazione mobile: le sale fanno wrapping e i tavoli sono in griglia a 2 colonne, senza rail orizzontale nascosto che taglia gli item.
+- I bottoni tavolo mantengono nome/capienza leggibili e non superano il bordo del pannello anche a 390px.
+- Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`, smoke Playwright 390px con overflow `false`.

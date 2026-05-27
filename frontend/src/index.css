@@ -8589,6 +8589,58 @@ body.dashboard-perf-mode .btn-ghost:hover {
     border-radius: 9px;
   }
 
+  .org-admin-v2 .booking-request-mobile-card__assignment {
+    overflow: hidden;
+  }
+
+  .org-admin-v2 .booking-request-mobile-card__assignment .booking-assignment-picker {
+    width: 100%;
+  }
+
+  .org-admin-v2 .booking-request-mobile-card__assignment .booking-assignment-picker__rail {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    min-width: 0;
+    overflow: visible;
+    padding-bottom: 0;
+  }
+
+  .org-admin-v2 .booking-request-mobile-card__assignment .booking-assignment-picker__tables {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    min-width: 0;
+    overflow: visible;
+    padding-bottom: 0;
+  }
+
+  .org-admin-v2 .booking-request-mobile-card__assignment .booking-assignment-picker button {
+    min-width: 0;
+    width: 100%;
+    min-height: 3rem;
+    padding: 0.62rem 0.7rem;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .org-admin-v2 .booking-request-mobile-card__assignment .booking-assignment-picker__rail button {
+    flex: 0 1 auto;
+    width: auto;
+    min-height: 2.8rem;
+    text-align: center;
+  }
+
+  .org-admin-v2 .booking-request-mobile-card__assignment .booking-assignment-picker__rail button:first-child {
+    flex: 1 1 9rem;
+    text-align: left;
+  }
+
+  .org-admin-v2 .booking-request-mobile-card__assignment .booking-assignment-picker__tables button {
+    min-width: 0;
+    text-align: left;
+  }
+
   .org-admin-v2 .booking-detail-full-card {
     display: grid;
     gap: 0.85rem;

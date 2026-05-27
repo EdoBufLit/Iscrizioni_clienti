@@ -3,6 +3,7 @@
 - Quando il cliente chiede fedelta esatta a mockup admin, non basta un re-skin: prima della consegna servono screenshot viewport-to-viewport delle superfici critiche, inclusi drawer/modali fixed. Inoltre le integrazioni esistenti nel dettaglio (es. SumUp) vanno preservate esplicitamente nella nuova IA e verificate nello screenshot.
 # Lessons
 
+- May 27, 2026: quando si dice mobile-first, i picker dentro una card stretta non possono usare rail orizzontali con chip larghi e scrollbar nascosta. Prima di consegnare, verificare che l'ultimo item sia interamente visibile o che il wrapping sia esplicito a 390px.
 - May 27, 2026: sulle pagine operative mobile, anche un bottone corretto a livello funzionale puo risultare "gigante" se eredita CTA desktop o flex full-width. Per azioni secondarie tipo `+ Nuova sala` e `Salva sala`, verificare dimensione visuale reale e non solo min-height tecnico.
 - May 27, 2026: quando una sezione mobile usa CSS flex/order, verificare tutte le tab non solo Agenda. Un figlio diretto non-`section` o un `section` senza classe dedicata puo finire prima della nav e far sembrare il menu spostato in basso.
 - May 27, 2026: quando un cliente chiede di seguire un prototipo mobile semplice, non importare solo la palette o un file statico. Prima estrarre la grammatica operativa (header breve, segmenti, lista unica, dettaglio immediato), poi verificare screenshot reale a 390px per evitare doppie navigazioni, card annidate e comandi critici sotto al fold.
