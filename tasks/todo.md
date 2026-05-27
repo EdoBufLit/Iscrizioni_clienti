@@ -1,3 +1,19 @@
+## Plan (Semplificazione mobile prenotazioni e builder - May 27, 2026)
+- [x] Allineare la navigazione mobile al prototipo: tre filtri agenda, `+ Nuova` contestuale solo dove serve, tab sale/tavoli unificata e menu sempre in alto.
+- [x] Rendere il dettaglio prenotazione piu diretto: telefono/WhatsApp dentro i campi modificabili, assegnazione sala/tavolo a scelta rapida senza dropdown e stato servizio sempre accessibile.
+- [x] Ripulire Serate, Sale/Tavoli e blocco prenotazione form builder da card annidate, hero inutili e copy pesante.
+- [x] Rendere il blocco prenotazione sempre disponibile nei form senza flag separato per le serate, mantenendo fallback default quando non ci sono eventi.
+- [x] Allargare anteprima mail mobile/form e verificare typecheck/build/smoke visivo prima di push/deploy.
+
+## Review (Semplificazione mobile prenotazioni e builder - May 27, 2026)
+- Agenda mobile: i filtri giorno sono solo `Richieste`, `Gestite`, `Tutte`; la nav Prenotazioni resta sopra il contenuto anche in Serate e Sale/Tavoli.
+- Serate: rimosso il blocco grande centrale `+ Nuova serata`; su mobile resta solo il bottone alto contestuale, su desktop un'azione compatta.
+- Sale/Tavoli: unite in un'unica tab con righe operative e pulsanti `+ Nuova sala` / `+ Nuovo tavolo`, senza card giganti separate.
+- Dettaglio prenotazione: il numero WhatsApp non ha piu un box dedicato, ora e nel form rapido `Numero`; assegnazione sala/tavolo usa selettori touch a chip/lista invece dei dropdown.
+- Builder/form pubblico: il blocco prenotazione puo essere inserito senza passare dalle impostazioni; quando inserito attiva booking/serate e usa slot disponibili ordinati prima del fallback libero.
+- Anteprime mail: preview form e composer email hanno frame piu larghi e meno contenitori annidati.
+- Verifiche OK: `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`; smoke Playwright mock mobile su agenda/serate/sale-tavoli senza overflow orizzontale (`scrollWidth=390`).
+
 ## Plan (Fix booking admin, mobile status, mail builder - May 27, 2026)
 - [x] Rendere la configurazione orari/serate prenotabili chiara in backoffice e vincolante nel form pubblico: niente slot generici quando ci sono regole attive.
 - [x] Correggere mobile prenotazioni: stato servizio sempre visibile, bottoni touch-friendly per A/C/S/completa/cancella/no show, e modifica campi principali senza passare da pannelli desktop.

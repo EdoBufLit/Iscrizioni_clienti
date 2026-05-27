@@ -494,10 +494,8 @@ function PreviewFrame({
   }
 
   return (
-    <div className="rounded-[1.4rem] border border-[#ddd5c6] bg-[#f8f4ec] p-4">
-      <div className={`mx-auto overflow-hidden rounded-[1rem] border border-[#d8cebf] bg-white shadow-[0_22px_44px_rgba(15,23,42,0.08)] ${device === "mobile" ? "max-w-[390px]" : "max-w-full"}`}>
-        <iframe title="Anteprima email" srcDoc={html} className="h-[680px] w-full bg-white" sandbox="allow-same-origin" />
-      </div>
+    <div className={`email-preview-frame email-preview-frame--${device}`}>
+      <iframe title="Anteprima email" srcDoc={html} className="h-[680px] w-full bg-white" sandbox="allow-same-origin" />
     </div>
   );
 }

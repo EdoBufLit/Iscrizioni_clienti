@@ -396,10 +396,10 @@ export function FormPublicCanvas({
   const theme = getPageTheme(form.page_style);
   const pageStyle = (form.page_style || "editorial").toLowerCase();
   const sortedFields = [...form.fields].sort((left, right) => left.sort_order - right.sort_order);
-  const showDynamicBookingFields = Boolean(
-    form.booking_dynamic_events_enabled && (form.booking_enabled || form.create_booking || form.form_type === "booking"),
-  );
   const hasBookingBlockField = sortedFields.some((field) => isBookingBlockField(field));
+  const showDynamicBookingFields = Boolean(
+    hasBookingBlockField || form.booking_dynamic_events_enabled || form.booking_enabled || form.create_booking || form.form_type === "booking",
+  );
   const selectedTime = String(values.__booking_event_time || "");
   const timeSlots = Array.from({ length: 48 }, (_, index) => {
     const totalMinutes = index * 30;
@@ -407,7 +407,11 @@ export function FormPublicCanvas({
     const minutes = String(totalMinutes % 60).padStart(2, "0");
     return `${hours}:${minutes}`;
   });
-  const timeSlotOptions = bookingRulesActive ? availableBookingSlots : timeSlots;
+  const sortedAvailableBookingSlots = [...availableBookingSlots]
+    .filter(Boolean)
+    .map((slot) => String(slot).slice(0, 5))
+    .sort((left, right) => left.localeCompare(right));
+  const timeSlotOptions = sortedAvailableBookingSlots.length > 0 ? sortedAvailableBookingSlots : timeSlots;
   const matchingSeriesForTime = selectedTime
     ? bookingEvents.filter((eventItem) =>
         (eventItem.time_slots || []).some((slot) =>
@@ -604,7 +608,7 @@ export function FormPublicCanvas({
   const renderDynamicBookingBlock = (key = "dynamic-booking-block", field?: AssociationFormField) => {
     const copy = getBookingBlockCopy(field);
     return (
-    <div key={key} className="form-public-canvas__dynamic-booking w-full rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+    <div key={key} className="form-public-canvas__dynamic-booking w-full">
       <div className="mb-4">
         <p className="text-sm font-bold text-neutral-900">{copy.title}</p>
         <p className="form-public-canvas__dynamic-booking-help mt-1 text-xs font-medium leading-5 text-neutral-500">

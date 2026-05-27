@@ -23,7 +23,6 @@ import {
   updateOrgAdminBookingEventSeries,
   updateOrgAdminFormSubmissionStatus,
   updateOrgAdminBooking,
-  updateOrgAdminBookingPhone,
   updateOrgAdminRoom,
   updateOrgAdminRoomTable,
   type AssociationBooking,
@@ -48,6 +47,7 @@ type DayStatusFilter = "pending" | "managed" | "all" | "confirmed" | "seated" | 
 type BookingDetailsUpdate = {
   customer_name: string;
   customer_email: string | null;
+  customer_phone: string | null;
   booking_date: string | null;
   booking_time: string | null;
   party_size: number | null;
@@ -59,8 +59,6 @@ const dayStatusFilters: Array<{ key: DayStatusFilter; label: string }> = [
   { key: "pending", label: "Richieste" },
   { key: "managed", label: "Gestite" },
   { key: "all", label: "Tutte" },
-  { key: "seated", label: "Seduta" },
-  { key: "completed", label: "Completata" },
 ];
 
 const bookingStatusMeta: Record<string, { label: string; chipClass: string; dotClass: string; serviceLabel: string }> = {
@@ -111,13 +109,13 @@ const bookingStatusMeta: Record<string, { label: string; chipClass: string; dotC
 const sectionTabs: Array<{ key: SectionTab; label: string; hint: string }> = [
   { key: "agenda", label: "Agenda", hint: "Prenotazioni e assegnazioni" },
   { key: "events", label: "Serate", hint: "Eventi prenotabili" },
-  { key: "rooms", label: "Sale", hint: "Spazi disponibili" },
-  { key: "tables", label: "Tavoli", hint: "Capienza e stato" },
+  { key: "rooms", label: "Sale/Tavoli", hint: "Spazi, capienza e stato" },
   { key: "map", label: "Mappa sala", hint: "Piantina 2D" },
 ];
 
 function normalizeSection(value: string | null | undefined): SectionTab {
-  if (value === "rooms" || value === "tables" || value === "map" || value === "events" || value === "agenda") return value;
+  if (value === "tables") return "rooms";
+  if (value === "rooms" || value === "map" || value === "events" || value === "agenda") return value;
   return "agenda";
 }
 
@@ -476,7 +474,6 @@ export default function OrgAdminBookings() {
   const [assignmentRoomId, setAssignmentRoomId] = useState<number | "">("");
   const [assignmentTableId, setAssignmentTableId] = useState<number | "">("");
   const [assignmentTables, setAssignmentTables] = useState<AssociationRoomTable[]>([]);
-  const [phoneDraft, setPhoneDraft] = useState("");
   const [saving, setSaving] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<null | { type: "room" | "table"; id: number; name: string }>(null);
   
@@ -498,9 +495,10 @@ export default function OrgAdminBookings() {
 
   const setSection = useCallback(
     (nextSection: SectionTab) => {
-      setSectionState(nextSection);
+      const normalizedSection = normalizeSection(nextSection);
+      setSectionState(normalizedSection);
       const nextParams = new URLSearchParams(searchParams);
-      nextParams.set("section", nextSection);
+      nextParams.set("section", normalizedSection);
       setSearchParams(nextParams, { replace: true });
     },
     [searchParams, setSearchParams],
@@ -585,7 +583,6 @@ export default function OrgAdminBookings() {
     fetchOrgAdminBooking(selectedBookingId)
       .then(({ booking }) => {
         setSelectedBooking(booking);
-        setPhoneDraft(booking.customer_phone || "");
         setAssignmentRoomId(booking.room_id ?? "");
         setAssignmentTableId(booking.table_id ?? "");
         syncMapWithBooking(booking);
@@ -850,37 +847,6 @@ export default function OrgAdminBookings() {
     }
   }
 
-  async function handleBookingPhoneSave() {
-    if (!selectedBookingId || !selectedBooking) return;
-    const normalizedDraft = phoneDraft.trim();
-    if ((selectedBooking.customer_phone || "") === normalizedDraft) {
-      showToast({ tone: "info", title: "Telefono invariato", message: "Il numero della prenotazione e gia aggiornato." });
-      return;
-    }
-    setSaving("booking-phone");
-    try {
-      const { booking } = await updateOrgAdminBookingPhone(selectedBookingId, {
-        customer_phone: normalizedDraft || null,
-      });
-      setSelectedBooking(booking);
-      setPhoneDraft(booking.customer_phone || "");
-      await loadBookings();
-      showToast({
-        tone: "success",
-        title: "Telefono aggiornato",
-        message: "I prossimi messaggi WhatsApp useranno questo numero.",
-      });
-    } catch (err) {
-      showToast({
-        tone: "error",
-        title: "Telefono non aggiornato",
-        message: err instanceof Error ? err.message : "Errore aggiornamento telefono prenotazione.",
-      });
-    } finally {
-      setSaving("");
-    }
-  }
-
   async function handleBookingDetailsSave(payload: BookingDetailsUpdate) {
     if (!selectedBookingId || !selectedBooking) return;
     setSaving("booking-details");
@@ -891,6 +857,7 @@ export default function OrgAdminBookings() {
         table_id: selectedBooking.table_id,
         customer_name: payload.customer_name,
         customer_email: payload.customer_email,
+        customer_phone: payload.customer_phone,
         booking_date: payload.booking_date,
         booking_time: payload.booking_time,
         party_size: payload.party_size,
@@ -1341,9 +1308,16 @@ export default function OrgAdminBookings() {
             <p>Prenotazioni</p>
             <h1>{sectionTabs.find((tab) => tab.key === section)?.label || "Agenda"}</h1>
           </div>
-          <button type="button" onClick={() => setIsCreatingManual(true)}>
-            + Nuova
-          </button>
+          {section === "agenda" ? (
+            <button type="button" onClick={() => setIsCreatingManual(true)}>
+              + Nuova
+            </button>
+          ) : null}
+          {section === "events" ? (
+            <button type="button" onClick={() => setEventSeriesDraft(emptyEventSeriesDraft())}>
+              + Nuova
+            </button>
+          ) : null}
         </div>
         <div className="booking-admin-page-header">
           <PageHeader
@@ -1412,9 +1386,6 @@ export default function OrgAdminBookings() {
             onStatusChange={handleBookingStatus}
             onRejectWithoutMessage={handleRejectWithoutMessage}
             onMarkCustomerNoteRead={handleMarkCustomerNoteRead}
-            phoneDraft={phoneDraft}
-            setPhoneDraft={setPhoneDraft}
-            onSavePhone={handleBookingPhoneSave}
             onSaveDetails={handleBookingDetailsSave}
             onSaveAssignment={handleAssignmentSave}
             onClearAssignment={handleAssignmentClear}
@@ -1438,25 +1409,24 @@ export default function OrgAdminBookings() {
         )}
 
         {section === "rooms" && (
-          <ManagementShell
-            title="Sale"
-            subtitle="Spazi disponibili per il servizio"
-            main={
-              <div className="grid gap-4 md:grid-cols-2">
+          <div className="booking-management-stack">
+            <ManagementShell
+              title="Sale"
+              subtitle="Spazi disponibili"
+              action={
                 <button
                   type="button"
                   onClick={() => {
                     setSelectedRoomId(null);
                     setRoomDraft(emptyRoomDraft());
                   }}
-                  className={`rounded-[1.25rem] p-6 text-center transition-all min-h-[140px] flex flex-col items-center justify-center ${
-                    !roomDraft.id && !selectedRoomId
-                      ? "bg-slate-900 text-white shadow-md scale-[1.02]"
-                      : "bg-slate-50/50 ring-1 ring-inset ring-slate-200/60 border-dashed hover:-translate-y-1 hover:shadow-sm hover:bg-slate-50"
-                  }`}
+                  className="booking-management-action"
                 >
-                  <p className="font-medium text-lg">+ Aggiungi nuova sala</p>
+                  + Nuova sala
                 </button>
+              }
+              main={
+                <div className="booking-management-list">
                 {rooms.map((room) => (
                   <button
                     key={room.id}
@@ -1465,14 +1435,12 @@ export default function OrgAdminBookings() {
                       setSelectedRoomId(room.id);
                       setRoomDraft({ id: room.id, name: room.name, is_active: room.is_active });
                     }}
-                    className={`rounded-[1.25rem] p-6 text-left transition-all ${
-                      roomDraft.id === room.id ? "bg-slate-900 text-white shadow-md scale-[1.02]" : "bg-slate-50 ring-1 ring-inset ring-slate-200/60 hover:-translate-y-1 hover:shadow-sm hover:bg-slate-50"
-                    }`}
+                    className={`booking-management-row ${roomDraft.id === room.id ? "is-selected" : ""}`}
                   >
-                    <p className="text-xl font-medium tracking-tight">{room.name}</p>
-                    <p className={`mt-2 text-sm ${roomDraft.id === room.id ? "text-slate-300" : "text-slate-500"}`}>
-                      {room.is_active ? "Sala attiva" : "Sala in pausa"}
-                    </p>
+                    <span>
+                      <strong>{room.name}</strong>
+                      <small>{room.is_active ? "Sala attiva" : "Sala in pausa"}</small>
+                    </span>
                   </button>
                   ))
                 }
@@ -1487,15 +1455,21 @@ export default function OrgAdminBookings() {
                 <ActionRow primaryLabel={roomDraft.id ? "Salva sala" : "Crea sala"} secondaryLabel="Elimina" onPrimary={handleRoomSave} onSecondary={handleRoomDelete} busy={saving.startsWith("room")} />
               </div>
             }
-          />
-        )}
-
-        {section === "tables" && (
-          <ManagementShell
-            title="Tavoli"
-                    subtitle="Capienza, forma e stato operativo"
-            main={
-              <div className="space-y-4">
+            />
+            <ManagementShell
+              title="Tavoli"
+              subtitle="Capienza e stato operativo"
+              action={
+                <button
+                  type="button"
+                  onClick={() => setTableDraft(emptyTableDraft(selectedRoomId))}
+                  className="booking-management-action"
+                >
+                  + Nuovo tavolo
+                </button>
+              }
+              main={
+                <div className="space-y-4">
                 <Field label="Sala">
                   <select className={inputClass} value={selectedRoomId ?? ""} onChange={(event) => setSelectedRoomId(event.target.value ? Number(event.target.value) : null)}>
                     <option value="">Seleziona una sala</option>
@@ -1507,7 +1481,8 @@ export default function OrgAdminBookings() {
                 {roomTables.length === 0 ? (
                   <EmptyState message="Nessun tavolo configurato per questa sala." />
                 ) : (
-                  roomTables.map((table) => (
+                  <div className="booking-management-list">
+                  {roomTables.map((table) => (
                     <button
                       key={table.id}
                       type="button"
@@ -1515,19 +1490,16 @@ export default function OrgAdminBookings() {
                         setSelectedMapTableId(table.id);
                         setTableDraft({ id: table.id, room_id: table.room_id, name: table.name, capacity: table.capacity, shape: table.shape, pos_x: table.pos_x, pos_y: table.pos_y, width: table.width ?? 94, height: table.height ?? 94, is_active: table.is_active, is_out_of_service: table.is_out_of_service });
                       }}
-                      className={`w-full rounded-[1.25rem] p-5 text-left transition-all ${
-                        tableDraft.id === table.id ? "bg-slate-900 text-white shadow-md scale-[1.02]" : "bg-slate-50 ring-1 ring-inset ring-slate-200/60 hover:-translate-y-1 hover:shadow-sm hover:bg-slate-50"
-                      }`}
+                      className={`booking-management-row ${tableDraft.id === table.id ? "is-selected" : ""}`}
                     >
-                      <div className="flex items-center justify-between gap-4">
-                        <div>
-                          <p className="text-lg font-medium tracking-tight">{table.name}</p>
-                          <p className={`mt-1 text-sm ${tableDraft.id === table.id ? "text-slate-300" : "text-slate-500"}`}>{table.shape} &bull; {table.capacity} posti</p>
-                        </div>
-                        <span className={`rounded-full px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.2em] ${tableDraft.id === table.id ? "bg-slate-50/20 text-white" : occupancyTone(table.occupancy_state)}`}>{occupancyLabel(table.occupancy_state)}</span>
-                      </div>
+                      <span>
+                        <strong>{table.name}</strong>
+                        <small>{table.shape} &bull; {table.capacity} posti</small>
+                      </span>
+                      <em className={occupancyTone(table.occupancy_state)}>{occupancyLabel(table.occupancy_state)}</em>
                     </button>
-                  ))
+                  ))}
+                  </div>
                 )}
               </div>
             }
@@ -1559,7 +1531,8 @@ export default function OrgAdminBookings() {
                 <ActionRow primaryLabel={tableDraft.id ? "Salva tavolo" : "Crea tavolo"} secondaryLabel="Elimina" onPrimary={handleTableSave} onSecondary={handleTableDelete} busy={saving.startsWith("table")} />
               </div>
             }
-          />
+            />
+          </div>
         )}
 
         {section === "map" && (
@@ -1858,12 +1831,29 @@ function ActionRow({ primaryLabel, secondaryLabel, onPrimary, onSecondary, busy 
   );
 }
 
-function ManagementShell({ title, subtitle, main, side }: { title: string; subtitle: string; main: React.ReactNode; side: React.ReactNode }) {
+function ManagementShell({
+  title,
+  subtitle,
+  main,
+  side,
+  action,
+}: {
+  title: string;
+  subtitle?: string;
+  main: React.ReactNode;
+  side: React.ReactNode;
+  action?: React.ReactNode;
+}) {
   return (
     <section className="grid gap-8 xl:grid-cols-[minmax(0,1.2fr)_360px]">
       <div className="rounded-[1.25rem] bg-slate-50 p-8 ring-1 ring-inset ring-slate-200/60 shadow-sm">
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">{title}</p>
-        <h2 className="mt-2 text-2xl font-light tracking-tight text-slate-900">{subtitle}</h2>
+        <div className="booking-management-head">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">{title}</p>
+            {subtitle ? <h2 className="mt-2 text-2xl font-light tracking-tight text-slate-900">{subtitle}</h2> : null}
+          </div>
+          {action ? <div className="booking-management-head__action">{action}</div> : null}
+        </div>
         <div className="mt-8">{main}</div>
       </div>
       <aside className="rounded-[1.25rem] bg-slate-50/50 p-6 ring-1 ring-inset ring-slate-200/60 h-fit sticky top-6">
@@ -1900,9 +1890,6 @@ function AgendaSection(props: {
   onStatusChange: (status: string) => void;
   onRejectWithoutMessage: () => void;
   onMarkCustomerNoteRead: () => void;
-  phoneDraft: string;
-  setPhoneDraft: (value: string) => void;
-  onSavePhone: () => void;
   onSaveDetails: (payload: BookingDetailsUpdate) => void;
   onSaveAssignment: () => void;
   onClearAssignment: () => void;
@@ -2141,9 +2128,6 @@ function AgendaSection(props: {
                             onStatusChange={props.onStatusChange}
                             onRejectWithoutMessage={props.onRejectWithoutMessage}
                             onMarkCustomerNoteRead={props.onMarkCustomerNoteRead}
-                            phoneDraft={props.phoneDraft}
-                            setPhoneDraft={props.setPhoneDraft}
-                            onSavePhone={props.onSavePhone}
                             onSaveDetails={props.onSaveDetails}
                             onSaveAssignment={props.onSaveAssignment}
                             onClearAssignment={props.onClearAssignment}
@@ -2216,11 +2200,17 @@ function BookingEventSeriesPanel(props: {
 
   return (
     <ManagementShell
-      title="Serate prenotabili"
-      subtitle="Regole fuori dai form: i moduli prenotazione leggono qui date, serate e orari."
+      title="Serate"
+      subtitle="Date, serate e orari"
+      action={
+        <button type="button" className="booking-management-action booking-management-action--desktop-only" onClick={() => props.setDraft(emptyEventSeriesDraft())}>
+          + Nuova serata
+        </button>
+      }
       main={
-        <div className="space-y-3">
-          <button
+        <div className="booking-management-list">
+          {/* Intentionally no large "nuova serata" card here: creation stays in the compact header action. */}
+          {false ? <button
             type="button"
             className={`w-full rounded-[1.25rem] p-5 text-left transition-all ${
               props.draft.id ? "bg-slate-50 ring-1 ring-inset ring-slate-200/60 hover:bg-slate-100/70" : "bg-slate-900 text-white shadow-md"
@@ -2229,7 +2219,7 @@ function BookingEventSeriesPanel(props: {
           >
             <p className="text-lg font-semibold">+ Nuova serata</p>
             <p className={`mt-1 text-sm ${props.draft.id ? "text-slate-500" : "text-slate-300"}`}>Es. lunedì Cartomante, martedì Serata X</p>
-          </button>
+          </button> : null}
           {props.items.length === 0 ? (
             <EmptyState message="Nessuna serata configurata." />
           ) : (
@@ -2242,9 +2232,7 @@ function BookingEventSeriesPanel(props: {
                 <button
                   key={item.id}
                   type="button"
-                  className={`w-full rounded-[1.25rem] p-5 text-left transition-all ${
-                    selected ? "bg-slate-900 text-white shadow-md" : "bg-slate-50 ring-1 ring-inset ring-slate-200/60 hover:bg-slate-100"
-                  }`}
+                  className={`booking-management-row ${selected ? "is-selected" : ""}`}
                   onClick={() => selectSeries(item)}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -2428,44 +2416,10 @@ function DayBookingRow({
   );
 }
 
-function BookingPhoneEditor({
-  value,
-  savedValue,
-  onChange,
-  onSave,
-  saving,
-  compact = false,
-}: {
-  value: string;
-  savedValue: string | null;
-  onChange: (value: string) => void;
-  onSave: () => void;
-  saving: boolean;
-  compact?: boolean;
-}) {
-  const changed = value.trim() !== (savedValue || "");
-  return (
-    <div className={compact ? "booking-phone-editor booking-phone-editor--compact" : "booking-phone-editor"}>
-      <label>
-        <span>Numero WhatsApp</span>
-        <input
-          type="tel"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="+39 333 0000000"
-        />
-      </label>
-      <button type="button" onClick={onSave} disabled={saving || !changed}>
-        {saving ? "Salvo..." : "Salva numero"}
-      </button>
-      <p>I messaggi WhatsApp e i reminder useranno questo numero corretto.</p>
-    </div>
-  );
-}
-
 type BookingDetailsDraft = {
   customer_name: string;
   customer_email: string;
+  customer_phone: string;
   booking_date: string;
   booking_time: string;
   party_size: string;
@@ -2476,6 +2430,7 @@ function bookingDetailsDraftFromBooking(booking: AssociationBooking): BookingDet
   return {
     customer_name: booking.customer_name || "",
     customer_email: booking.customer_email || "",
+    customer_phone: booking.customer_phone || "",
     booking_date: booking.booking_date || "",
     booking_time: booking.booking_time ? booking.booking_time.slice(0, 5) : "",
     party_size: booking.party_size ? String(booking.party_size) : "",
@@ -2501,6 +2456,7 @@ function BookingQuickEdit(props: {
     props.booking.id,
     props.booking.customer_name,
     props.booking.customer_email,
+    props.booking.customer_phone,
     props.booking.booking_date,
     props.booking.booking_time,
     props.booking.party_size,
@@ -2512,6 +2468,7 @@ function BookingQuickEdit(props: {
   const changed = (
     draft.customer_name.trim() !== (props.booking.customer_name || "")
     || (draft.customer_email.trim() || null) !== (props.booking.customer_email || null)
+    || (draft.customer_phone.trim() || null) !== (props.booking.customer_phone || null)
     || (draft.booking_date || null) !== (props.booking.booking_date || null)
     || (draft.booking_time || null) !== (props.booking.booking_time ? props.booking.booking_time.slice(0, 5) : null)
     || normalizedPartySize !== (props.booking.party_size || null)
@@ -2536,6 +2493,7 @@ function BookingQuickEdit(props: {
     props.onSave({
       customer_name: customerName,
       customer_email: draft.customer_email.trim() || null,
+      customer_phone: draft.customer_phone.trim() || null,
       booking_date: draft.booking_date || null,
       booking_time: draft.booking_time || null,
       party_size: normalizedPartySize,
@@ -2553,6 +2511,10 @@ function BookingQuickEdit(props: {
         <label>
           <span>Email</span>
           <input className={inputClass} type="email" value={draft.customer_email} onChange={(event) => updateDraft("customer_email", event.target.value)} />
+        </label>
+        <label>
+          <span>Numero</span>
+          <input className={inputClass} type="tel" value={draft.customer_phone} onChange={(event) => updateDraft("customer_phone", event.target.value)} placeholder="+39 333 0000000" />
         </label>
         <label>
           <span>Giorno</span>
@@ -2642,6 +2604,71 @@ function BookingServiceStatusControls(props: {
   );
 }
 
+function BookingAssignmentPicker(props: {
+  rooms: AssociationRoom[];
+  assignmentRoomId: number | "";
+  setAssignmentRoomId: (value: number | "") => void;
+  assignmentTableId: number | "";
+  setAssignmentTableId: (value: number | "") => void;
+  assignmentTables: AssociationRoomTable[];
+  compact?: boolean;
+}) {
+  const selectRoom = (roomId: number | "") => {
+    props.setAssignmentRoomId(roomId);
+    props.setAssignmentTableId("");
+  };
+  return (
+    <div className={props.compact ? "booking-assignment-picker booking-assignment-picker--compact" : "booking-assignment-picker"}>
+      <div className="booking-assignment-picker__rail" aria-label="Scegli sala">
+        <button
+          type="button"
+          className={props.assignmentRoomId === "" ? "is-selected" : ""}
+          onClick={() => selectRoom("")}
+        >
+          Non assegnato
+        </button>
+        {props.rooms.map((room) => (
+          <button
+            key={room.id}
+            type="button"
+            className={props.assignmentRoomId === room.id ? "is-selected" : ""}
+            onClick={() => selectRoom(room.id)}
+          >
+            {room.name}
+          </button>
+        ))}
+      </div>
+      {props.assignmentRoomId ? (
+        <div className="booking-assignment-picker__tables" aria-label="Scegli tavolo">
+          <button
+            type="button"
+            className={props.assignmentTableId === "" ? "is-selected" : ""}
+            onClick={() => props.setAssignmentTableId("")}
+          >
+            Solo sala
+          </button>
+          {props.assignmentTables.map((table) => {
+            const disabled = !table.is_active || table.is_out_of_service;
+            return (
+              <button
+                key={table.id}
+                type="button"
+                className={props.assignmentTableId === table.id ? "is-selected" : ""}
+                disabled={disabled}
+                onClick={() => props.setAssignmentTableId(table.id)}
+              >
+                <strong>{table.name}</strong>
+                <span>{table.capacity} posti</span>
+                {disabled ? <em>Non disponibile</em> : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function BookingDetailPanel(props: {
   selectedBooking: AssociationBooking | null;
   rooms: AssociationRoom[];
@@ -2653,9 +2680,6 @@ function BookingDetailPanel(props: {
   onStatusChange: (status: string) => void;
   onRejectWithoutMessage: () => void;
   onMarkCustomerNoteRead: () => void;
-  phoneDraft: string;
-  setPhoneDraft: (value: string) => void;
-  onSavePhone: () => void;
   onSaveDetails: (payload: BookingDetailsUpdate) => void;
   onSaveAssignment: () => void;
   onClearAssignment: () => void;
@@ -2743,15 +2767,6 @@ function BookingDetailPanel(props: {
             defaultOpen={Boolean(props.mobileOnly)}
           />
 
-          <BookingPhoneEditor
-            value={props.phoneDraft}
-            savedValue={props.selectedBooking.customer_phone}
-            onChange={props.setPhoneDraft}
-            onSave={props.onSavePhone}
-            saving={props.saving === "booking-phone"}
-            compact
-          />
-
           {showMobileAssignment ? (
             <div className="booking-request-mobile-card__assignment">
               <div className="booking-request-mobile-card__assignment-head">
@@ -2775,33 +2790,15 @@ function BookingDetailPanel(props: {
                 </a>
               ) : (
                 <>
-                  <div className="booking-request-mobile-card__assignment-grid">
-                    <label>
-                      <span>Sala</span>
-                      <select
-                        value={props.assignmentRoomId}
-                        onChange={(event) => props.setAssignmentRoomId(event.target.value ? Number(event.target.value) : "")}
-                      >
-                        <option value="">Scegli sala</option>
-                        {props.rooms.map((room) => (
-                          <option key={room.id} value={room.id}>{room.name}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      <span>Tavolo</span>
-                      <select
-                        value={props.assignmentTableId}
-                        onChange={(event) => props.setAssignmentTableId(event.target.value ? Number(event.target.value) : "")}
-                        disabled={!props.assignmentRoomId}
-                      >
-                        <option value="">Solo sala</option>
-                        {props.assignmentTables.map((table) => (
-                          <option key={table.id} value={table.id}>{table.name} - {table.capacity} posti</option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
+                  <BookingAssignmentPicker
+                    rooms={props.rooms}
+                    assignmentRoomId={props.assignmentRoomId}
+                    setAssignmentRoomId={props.setAssignmentRoomId}
+                    assignmentTableId={props.assignmentTableId}
+                    setAssignmentTableId={props.setAssignmentTableId}
+                    assignmentTables={props.assignmentTables}
+                    compact
+                  />
                   <button
                     type="button"
                     className="booking-request-mobile-card__assignment-save"
@@ -2909,13 +2906,6 @@ function BookingDetailPanel(props: {
           />
         </div>
         <div className="mt-4">
-          <BookingPhoneEditor
-            value={props.phoneDraft}
-            savedValue={props.selectedBooking.customer_phone}
-            onChange={props.setPhoneDraft}
-            onSave={props.onSavePhone}
-            saving={props.saving === "booking-phone"}
-          />
         </div>
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-inset ring-slate-200/60 text-sm text-slate-700">
@@ -3047,20 +3037,14 @@ function BookingDetailPanel(props: {
 
       <div className="rounded-[1.25rem] bg-slate-50/50 p-6 ring-1 ring-inset ring-slate-200/60">
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-4">Assegna sala e tavolo</p>
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Sala">
-            <select className={inputClass} value={props.assignmentRoomId} onChange={(event) => props.setAssignmentRoomId(event.target.value ? Number(event.target.value) : "")}>
-              <option value="">Seleziona una sala</option>
-              {props.rooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Tavolo">
-            <select className={inputClass} value={props.assignmentTableId} onChange={(event) => props.setAssignmentTableId(event.target.value ? Number(event.target.value) : "")}>
-              <option value="">Solo sala</option>
-              {props.assignmentTables.map((table) => <option key={table.id} value={table.id}>{table.name} - {table.capacity} posti</option>)}
-            </select>
-          </Field>
-        </div>
+        <BookingAssignmentPicker
+          rooms={props.rooms}
+          assignmentRoomId={props.assignmentRoomId}
+          setAssignmentRoomId={props.setAssignmentRoomId}
+          assignmentTableId={props.assignmentTableId}
+          setAssignmentTableId={props.setAssignmentTableId}
+          assignmentTables={props.assignmentTables}
+        />
         <div className="mt-6">
           <ActionRow primaryLabel="Salva assegnazione" secondaryLabel="Rimuovi" onPrimary={props.onSaveAssignment} onSecondary={props.onClearAssignment} busy={props.saving.startsWith("assignment")} />
         </div>

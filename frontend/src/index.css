@@ -6385,6 +6385,156 @@ body.dashboard-perf-mode .btn-ghost:hover {
   font-weight: 900;
 }
 
+.org-admin-v2 .booking-management-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.org-admin-v2 .booking-management-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.org-admin-v2 .booking-management-head__action {
+  flex: 0 0 auto;
+}
+
+.org-admin-v2 .booking-management-action {
+  min-height: 2.45rem;
+  border-radius: 10px;
+  background: var(--oa-brand, #0f766e);
+  color: #ffffff;
+  padding: 0 0.95rem;
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.org-admin-v2 .booking-management-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.org-admin-v2 .booking-management-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid var(--oa-border, #d7dfdc);
+  border-radius: 10px;
+  background: var(--oa-panel, #ffffff);
+  padding: 0.85rem 0.95rem;
+  text-align: left;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.org-admin-v2 .booking-management-row:hover,
+.org-admin-v2 .booking-management-row.is-selected {
+  border-color: color-mix(in srgb, var(--oa-brand, #0f766e) 45%, var(--oa-border, #d7dfdc));
+  background: color-mix(in srgb, var(--oa-brand, #0f766e) 7%, var(--oa-panel, #ffffff));
+}
+
+.org-admin-v2 .booking-management-row strong {
+  display: block;
+  color: var(--oa-text, #17211f);
+  font-size: 0.98rem;
+  font-weight: 850;
+}
+
+.org-admin-v2 .booking-management-row small {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--oa-muted, #64748b);
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.org-admin-v2 .booking-management-row > em,
+.org-admin-v2 .booking-management-badges em {
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.64rem;
+  font-style: normal;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.org-admin-v2 .booking-management-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.org-admin-v2 .booking-management-badges em {
+  background: color-mix(in srgb, var(--oa-brand, #0f766e) 9%, white);
+  color: var(--oa-brand, #0f766e);
+}
+
+.org-admin-v2 .booking-assignment-picker {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.org-admin-v2 .booking-assignment-picker__rail,
+.org-admin-v2 .booking-assignment-picker__tables {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.1rem;
+  scrollbar-width: none;
+}
+
+.org-admin-v2 .booking-assignment-picker__rail::-webkit-scrollbar,
+.org-admin-v2 .booking-assignment-picker__tables::-webkit-scrollbar {
+  display: none;
+}
+
+.org-admin-v2 .booking-assignment-picker button {
+  flex: 0 0 auto;
+  border: 1px solid var(--oa-border, #d7dfdc);
+  border-radius: 10px;
+  background: var(--oa-panel, #ffffff);
+  color: var(--oa-text, #17211f);
+  padding: 0.62rem 0.78rem;
+  font-size: 0.84rem;
+  font-weight: 850;
+}
+
+.org-admin-v2 .booking-assignment-picker__tables button {
+  min-width: 8.5rem;
+  text-align: left;
+}
+
+.org-admin-v2 .booking-assignment-picker button.is-selected {
+  border-color: var(--oa-brand, #0f766e);
+  background: color-mix(in srgb, var(--oa-brand, #0f766e) 10%, var(--oa-panel, #ffffff));
+  color: var(--oa-brand, #0f766e);
+}
+
+.org-admin-v2 .booking-assignment-picker button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.org-admin-v2 .booking-assignment-picker strong,
+.org-admin-v2 .booking-assignment-picker span,
+.org-admin-v2 .booking-assignment-picker em {
+  display: block;
+}
+
+.org-admin-v2 .booking-assignment-picker span,
+.org-admin-v2 .booking-assignment-picker em {
+  margin-top: 0.12rem;
+  color: var(--oa-muted, #64748b);
+  font-size: 0.72rem;
+  font-style: normal;
+}
+
 @media (max-width: 720px) {
   .org-admin-v2 .booking-admin-page[data-section="agenda"] {
     display: flex;
@@ -7277,6 +7427,72 @@ body.dashboard-perf-mode .btn-ghost:hover {
 
 .org-admin-v2 .form-builder-booking-link__field span {
   color: var(--fb-text) !important;
+}
+
+.org-admin-v2 .form-builder-booking-link {
+  box-shadow: none !important;
+}
+
+.org-admin-v2 .form-builder-canvas .form-builder-booking-link__field {
+  border-style: solid;
+  border-radius: 10px;
+  background: transparent;
+  padding: 0;
+}
+
+.org-admin-v2 .form-builder-canvas .form-builder-booking-link__field > div:first-child {
+  border: 0;
+  background: transparent;
+}
+
+.org-admin-v2 .form-builder-canvas .form-builder-booking-link__field .rounded-\[0\.65rem\] {
+  border-radius: 8px;
+}
+
+.org-admin-v2 .form-settings-mail-editor {
+  border-top: 1px solid var(--oa-border, #d7dfdc);
+  padding-top: 1rem;
+}
+
+.org-admin-v2 .form-settings-mail-preview {
+  min-width: 0;
+  background: transparent;
+}
+
+.org-admin-v2 .form-settings-mail-preview__frame {
+  margin-top: 0.75rem;
+  min-height: 30rem;
+  height: min(70vh, 46rem);
+  overflow: hidden;
+  border: 1px solid var(--oa-border, #d7dfdc);
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.org-admin-v2 .email-preview-frame {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid #ddd5c6;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.org-admin-v2 .email-preview-frame--mobile {
+  max-width: min(100%, 430px);
+  margin-inline: auto;
+}
+
+.org-admin-v2 .email-preview-frame--desktop {
+  max-width: 100%;
+}
+
+.form-public-canvas__dynamic-booking {
+  border-top: 1px solid rgba(17, 24, 39, 0.12);
+  padding-top: 1rem;
+}
+
+.form-public-canvas__dynamic-booking .grid {
+  gap: 0.85rem;
 }
 
 :root[data-theme="dark"] .org-admin-v2 .form-builder-booking-link__button {
@@ -8221,7 +8437,9 @@ body.dashboard-perf-mode .btn-ghost:hover {
   }
 
   .org-admin-v2 .booking-admin-section,
-  .org-admin-v2 .booking-admin-page[data-section="agenda"] .booking-admin-section--agenda {
+  .org-admin-v2 .booking-admin-page[data-section="agenda"] .booking-admin-section--agenda,
+  .org-admin-v2 .booking-admin-page > section:not(.booking-admin-tabs-shell),
+  .org-admin-v2 .booking-admin-page > .booking-management-stack {
     order: 2;
   }
 
@@ -8478,6 +8696,46 @@ body.dashboard-perf-mode .btn-ghost:hover {
     padding: 0 !important;
     box-shadow: none !important;
     --tw-ring-shadow: 0 0 #0000 !important;
+  }
+
+  .org-admin-v2 .booking-management-stack,
+  .org-admin-v2 .booking-management-stack > section,
+  .org-admin-v2 .booking-management-stack > section > div,
+  .org-admin-v2 .booking-management-stack aside {
+    gap: 0.75rem;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+  }
+
+  .org-admin-v2 .booking-management-head {
+    align-items: center;
+  }
+
+  .org-admin-v2 .booking-management-head h2 {
+    display: none;
+  }
+
+  .org-admin-v2 .booking-management-action--desktop-only {
+    display: none;
+  }
+
+  .org-admin-v2 .form-settings-mail-editor {
+    display: grid;
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  .org-admin-v2 .form-settings-mail-preview__frame {
+    height: 34rem;
+    min-height: 34rem;
+  }
+
+  .org-admin-v2 .email-preview-frame--mobile {
+    max-width: 100%;
   }
 
   .org-admin-v2 .communications-mobile-head {

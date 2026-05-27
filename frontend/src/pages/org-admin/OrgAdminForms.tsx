@@ -767,14 +767,14 @@ export function OrgAdminFormsWorkspace({
   const previewValues = useMemo(
     () => {
       const values = buildPreviewValues(previewFields);
-      if (formDraft.booking_dynamic_events_enabled && formDraft.booking_enabled) {
+      if (formDraft.booking_dynamic_events_enabled || previewFields.some((field) => isBookingBlockField(field))) {
         values.__booking_date = "2026-03-20";
         values.__booking_event_time = "20:30";
         values.__booking_event_series_id = "";
       }
       return values;
     },
-    [formDraft.booking_dynamic_events_enabled, formDraft.booking_enabled, previewFields],
+    [formDraft.booking_dynamic_events_enabled, previewFields],
   );
   const selectedSubmissionEntries = useMemo(() => {
     const fieldMap = new Map((selectedForm?.fields || []).map((field) => [field.field_key, field.label]));
@@ -1057,7 +1057,13 @@ export function OrgAdminFormsWorkspace({
   }
 
   function handleToggleBookingDynamicEvents(enabled: boolean) {
-    syncFormDraft("booking_dynamic_events_enabled", enabled);
+    setFormDraft((current) => ({
+      ...current,
+      booking_enabled: true,
+      create_booking: true,
+      form_type: current.form_type === "generic" ? "booking" : current.form_type,
+      booking_dynamic_events_enabled: enabled,
+    }));
     if (enabled) {
       ensureBookingBlockInDraft();
     }
@@ -2167,7 +2173,7 @@ export function OrgAdminFormsWorkspace({
                 ) : null}
               </div>
             ) : null}
-            <div className="grid gap-4 rounded-[1.1rem] border border-neutral-200 bg-neutral-50/70 p-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(360px,1.1fr)]">
+            <div className="form-settings-mail-editor grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(420px,1.2fr)]">
               <div className="space-y-3">
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-500">Editor rapido conferma utente</p>
@@ -2224,7 +2230,7 @@ export function OrgAdminFormsWorkspace({
                   {savingUserEmailTemplate ? "Salvataggio..." : userEmailDraft.id ? "Salva modifiche mail" : "Crea mail modificabile"}
                 </button>
               </div>
-              <div className="rounded-[1rem] border border-neutral-200 bg-white p-4 shadow-sm">
+              <div className="form-settings-mail-preview">
                 <div className="flex items-start justify-between gap-3 border-b border-neutral-100 pb-3">
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-500">Anteprima reale</p>
@@ -2234,7 +2240,7 @@ export function OrgAdminFormsWorkspace({
                   </div>
                   {userEmailPreviewLoading ? <span className="text-xs font-semibold text-neutral-400">Aggiorno...</span> : null}
                 </div>
-                <div className="mt-4 h-[22rem] overflow-hidden rounded-[0.85rem] border border-neutral-100 bg-white">
+                <div className="form-settings-mail-preview__frame">
                   {userEmailPreview?.bodyHtml ? (
                     <iframe
                       title="Anteprima mail conferma utente"

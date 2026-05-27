@@ -61,8 +61,6 @@ type BuilderCanvasProps = {
   handleMoveField: (field: BuilderField, direction: -1 | 1) => Promise<void>;
   lastKnownOverId: string | null;
   bookingEnabled?: boolean;
-  bookingDynamicEventsEnabled?: boolean;
-  onToggleBookingDynamicEvents?: (enabled: boolean) => void;
   onEnsureBookingBlock?: () => void;
   locked?: boolean;
 };
@@ -76,8 +74,6 @@ function BuilderCanvas({
   handleMoveField,
   lastKnownOverId,
   bookingEnabled = false,
-  bookingDynamicEventsEnabled = false,
-  onToggleBookingDynamicEvents,
   onEnsureBookingBlock,
   locked,
 }: BuilderCanvasProps) {
@@ -110,43 +106,25 @@ function BuilderCanvas({
             : "border-slate-200 bg-[#fbfaf6]"
         }`}
       >
-        {bookingEnabled && (!bookingDynamicEventsEnabled || !hasBookingBlock) ? (
+        {bookingEnabled && !hasBookingBlock ? (
           <div
-            className={`form-builder-booking-link mb-4 rounded-[0.85rem] border p-4 shadow-sm ${
-              bookingDynamicEventsEnabled
-                ? "form-builder-booking-link--active"
-                : "form-builder-booking-link--inactive"
-            }`}
+            className="form-builder-booking-link form-builder-booking-link--active mb-4 rounded-[0.85rem] border p-4"
           >
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Blocco automatico</p>
-                <h4 className="mt-1 text-base font-semibold text-slate-950">Prenotazione: giorno, orario, serata</h4>
-                <p className="mt-1 text-sm leading-5 text-slate-500">
-                  {bookingDynamicEventsEnabled
-                    ? "Aggiungi il blocco nel canvas per decidere dove appare. Data e orario restano liberi; la serata viene proposta se esiste per quella scelta."
-                    : "Attivalo per collegare il form alle serate configurate in agenda, senza creare menu manuali."}
-                </p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Prenotazione</p>
+                <h4 className="mt-1 text-base font-semibold text-slate-950">Giorno, orario e serata</h4>
+                <p className="mt-1 text-sm leading-5 text-slate-500">Usa le serate configurate se presenti; altrimenti resta sul flusso standard.</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   className="form-builder-booking-link__button rounded-[0.75rem] px-3 py-2 text-sm font-semibold"
-                  disabled={locked || !onToggleBookingDynamicEvents}
-                  onClick={() => onToggleBookingDynamicEvents?.(!bookingDynamicEventsEnabled)}
+                  disabled={locked || !onEnsureBookingBlock}
+                  onClick={() => onEnsureBookingBlock?.()}
                 >
-                  {bookingDynamicEventsEnabled ? "Scollega" : "Collega serate"}
+                  Inserisci blocco
                 </button>
-                {bookingDynamicEventsEnabled && !hasBookingBlock ? (
-                  <button
-                    type="button"
-                    className="form-builder-booking-link__button rounded-[0.75rem] px-3 py-2 text-sm font-semibold"
-                    disabled={locked || !onEnsureBookingBlock}
-                    onClick={() => onEnsureBookingBlock?.()}
-                  >
-                    Inserisci blocco
-                  </button>
-                ) : null}
                 <a
                   className="form-builder-booking-link__secondary rounded-[0.75rem] px-3 py-2 text-sm font-semibold"
                   href="/org-admin/prenotazioni?section=events"
@@ -155,16 +133,6 @@ function BuilderCanvas({
                 </a>
               </div>
             </div>
-            {bookingDynamicEventsEnabled ? null : (
-              <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                {["Giorno", "Orario", "Serata"].map((label) => (
-                  <div key={label} className="form-builder-booking-link__field rounded-[0.75rem] border px-3 py-2">
-                    <span className="text-xs font-semibold text-slate-700">{label}</span>
-                    <div className="mt-2 h-9 rounded-[0.65rem] border border-dashed" />
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         ) : null}
         <SortableContext items={items.map((item) => item.key)} strategy={verticalListSortingStrategy}>
@@ -212,8 +180,6 @@ export function FormBuilder({
   locked,
   persistEnabled = true,
   mode = "forms",
-  bookingEnabled = false,
-  bookingDynamicEventsEnabled = false,
   onToggleBookingDynamicEvents,
 }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -467,6 +433,7 @@ export function FormBuilder({
 
   const handleEnsureBookingBlock = async () => {
     if (locked || items.some((field) => isBookingBlockField(field))) return;
+    onToggleBookingDynamicEvents?.(true);
     const newField = createFieldFromPaletteItem("booking_block", "Prenotazione");
     const newItems = [...items, newField];
     if (persistEnabled) {
@@ -477,13 +444,6 @@ export function FormBuilder({
     setSelectedId(newField.key);
     if (persistEnabled) {
       await onSaveField(newField, newItems);
-    }
-  };
-
-  const handleToggleBookingDynamicEvents = async (enabled: boolean) => {
-    onToggleBookingDynamicEvents?.(enabled);
-    if (enabled) {
-      await handleEnsureBookingBlock();
     }
   };
 
@@ -568,9 +528,7 @@ export function FormBuilder({
           handleDuplicate={handleDuplicate}
           handleMoveField={handleMoveField}
           lastKnownOverId={lastKnownOverId}
-          bookingEnabled={mode === "forms" && bookingEnabled}
-          bookingDynamicEventsEnabled={bookingDynamicEventsEnabled}
-          onToggleBookingDynamicEvents={(enabled) => void handleToggleBookingDynamicEvents(enabled)}
+          bookingEnabled={mode === "forms"}
           onEnsureBookingBlock={() => void handleEnsureBookingBlock()}
           locked={locked}
         />
