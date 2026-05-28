@@ -2114,7 +2114,7 @@ export function OrgAdminFormsWorkspace({
 
   const settingsBookingPanel = (
     <>
-      <section className="rounded-[1.35rem] border border-neutral-200 bg-white p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.16)]">
+      <section className="rounded-xl sm:rounded-[1.35rem] border border-neutral-200 bg-white p-3 sm:p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.16)]">
         <div className="flex items-center justify-between gap-4">
           <h3 className="text-sm font-semibold text-neutral-900">Prenotazioni</h3>
           <label className="relative inline-flex cursor-pointer items-center">
@@ -2139,31 +2139,29 @@ export function OrgAdminFormsWorkspace({
                 Auto assegna tavolo
               </label>
             </div>
-            <div className="space-y-3 rounded-[1rem] border border-emerald-200 bg-emerald-50/60 p-4">
-              <div className="rounded-xl border border-emerald-200 bg-white/70 p-3 text-sm text-neutral-700">
-                <p className="font-semibold text-neutral-900">Serate e orari dal blocco prenotazione</p>
-                <p className="mt-1 text-xs font-medium leading-5 text-neutral-500">
-                  Inserisci il blocco Prenotazione nel builder e seleziona "Blocco prenotazione (serate)" nei menu Data/Ora. Il form utilizza le serate configurate quando disponibili, altrimenti la prenotazione libera.
-                </p>
+            <div className="border-l-4 border-emerald-400 bg-emerald-50/20 p-3 sm:p-4">
+              <p className="text-sm font-semibold text-neutral-900">Serate e orari dal blocco prenotazione</p>
+              <p className="mt-1 text-xs font-medium leading-5 text-neutral-500">
+                Inserisci il blocco Prenotazione nel builder e seleziona "Blocco prenotazione (serate)" nei menu Data/Ora. Il form utilizza le serate configurate quando disponibili, altrimenti la prenotazione libera.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="inline-flex rounded-xl bg-white px-3 py-2 text-sm font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-200 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-55"
+                  disabled={locked || hasBookingBlockField}
+                  onClick={ensureBookingBlockInDraft}
+                >
+                  {hasBookingBlockField ? "Blocco inserito" : "Inserisci blocco"}
+                </button>
+                <a className="inline-flex rounded-xl bg-white px-3 py-2 text-sm font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-200 transition hover:bg-emerald-50" href="/org-admin/prenotazioni?section=events">
+                  Gestisci serate e default
+                </a>
               </div>
-              <button
-                type="button"
-                className="inline-flex rounded-xl bg-white px-3 py-2 text-sm font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-200 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-55"
-                disabled={locked || hasBookingBlockField}
-                onClick={ensureBookingBlockInDraft}
-              >
-                {hasBookingBlockField ? "Blocco inserito" : "Inserisci blocco"}
-              </button>
-              <a className="inline-flex rounded-xl bg-white px-3 py-2 text-sm font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-200 transition hover:bg-emerald-50" href="/org-admin/prenotazioni?section=events">
-                Gestisci serate e default
-              </a>
             </div>
-            <div className="space-y-3 rounded-[1rem] border border-neutral-200 bg-white p-4">
-              <div>
-                <p className="text-sm font-semibold text-neutral-900">Disponibilita del form</p>
-                <p className="mt-1 text-xs font-medium leading-5 text-neutral-500">Le chiusure configurate in Prenotazioni restano sempre rispettate.</p>
-              </div>
-              <div className="grid gap-2">
+            <div className="border-t border-neutral-100 pt-4">
+              <p className="text-sm font-semibold text-neutral-900">Disponibilita del form</p>
+              <p className="mt-1 text-xs font-medium leading-5 text-neutral-500">Le chiusure configurate in Prenotazioni restano sempre rispettate.</p>
+              <div className="mt-3 grid gap-2">
                 {[
                   { value: "all", label: "Usa tutte le serate/default disponibili", hint: "Il form segue il default orario e le serate aperte." },
                   { value: "selected", label: "Usa solo serate selezionate", hint: "Per offerte dedicate a un giorno o evento specifico." },
@@ -2178,7 +2176,7 @@ export function OrgAdminFormsWorkspace({
                 ))}
               </div>
               {formDraft.booking_availability_mode === "selected" ? (
-                <div className="space-y-2 rounded-xl border border-neutral-200 bg-neutral-50 p-3">
+                <div className="mt-3 space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-xs font-bold uppercase tracking-[0.14em] text-neutral-500">Serate selezionate</span>
                     <span className="text-xs font-semibold text-neutral-500">{selectedBookingSeriesCount}/{bookingSelectableSeries.length}</span>
@@ -2205,20 +2203,23 @@ export function OrgAdminFormsWorkspace({
                 </div>
               ) : null}
             </div>
-            <div className="space-y-3 rounded-[1rem] border border-neutral-200 bg-neutral-50 p-4">
-              {bookingMappingTargets.map((target) => {
-                const canUseBookingBlock = hasBookingBlockField && (target.key === "booking_date" || target.key === "booking_time");
-                return (
-                  <div key={target.key} className="grid gap-2 md:grid-cols-[170px_minmax(0,1fr)] md:items-center">
-                    <span className="text-xs font-medium text-neutral-700">{target.label}</span>
-                    <select className={`${inputClass} !mt-0 !py-2`} disabled={locked || (bookingMappingFieldOptions.length === 0 && !canUseBookingBlock)} value={formDraft.booking_field_mapping[target.key] || ""} onChange={(event) => syncBookingFieldMapping(target.key, event.target.value)}>
-                      <option value="">-- Non collegato --</option>
-                      {canUseBookingBlock ? <option value={BOOKING_BLOCK_MAPPING_VALUE}>Blocco prenotazione (serate)</option> : null}
-                      {bookingMappingFieldOptions.map((option) => <option key={`${target.key}-${option.value}`} value={option.value}>{option.label}</option>)}
-                    </select>
-                  </div>
-                );
-              })}
+            <div className="border-t border-neutral-100 pt-4">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-neutral-500">Mapping campi cliente</p>
+              <div className="mt-2 divide-y divide-neutral-100">
+                {bookingMappingTargets.map((target) => {
+                  const canUseBookingBlock = hasBookingBlockField && (target.key === "booking_date" || target.key === "booking_time");
+                  return (
+                    <div key={target.key} className="py-3 grid gap-2 md:grid-cols-[170px_minmax(0,1fr)] md:items-center">
+                      <span className="text-xs font-medium text-neutral-700">{target.label}</span>
+                      <select className={`${inputClass} !mt-0 !py-2`} disabled={locked || (bookingMappingFieldOptions.length === 0 && !canUseBookingBlock)} value={formDraft.booking_field_mapping[target.key] || ""} onChange={(event) => syncBookingFieldMapping(target.key, event.target.value)}>
+                        <option value="">-- Non collegato --</option>
+                        {canUseBookingBlock ? <option value={BOOKING_BLOCK_MAPPING_VALUE}>Blocco prenotazione (serate)</option> : null}
+                        {bookingMappingFieldOptions.map((option) => <option key={`${target.key}-${option.value}`} value={option.value}>{option.label}</option>)}
+                      </select>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         ) : null}
@@ -2252,7 +2253,7 @@ export function OrgAdminFormsWorkspace({
   );
 
   const settingsEmailPanel = (
-    <section className="rounded-[1.35rem] border border-neutral-200 bg-white p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.16)]">
+    <section className="rounded-xl sm:rounded-[1.35rem] border border-neutral-200 bg-white p-3 sm:p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.16)]">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-neutral-900">Notifiche email</h3>
@@ -2280,7 +2281,7 @@ export function OrgAdminFormsWorkspace({
           </select>
         </label>
         {formDraft.booking_enabled ? (
-          <div className="rounded-[1.1rem] border border-emerald-200 bg-emerald-50/60 p-4">
+          <div className="border-l-4 border-emerald-400 bg-emerald-50/20 p-3 sm:p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-800">Email dopo conferma admin</p>
