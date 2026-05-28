@@ -1551,6 +1551,19 @@ def test_booking_block_field_activates_dynamic_dates_without_legacy_flag(client,
     org, admin = _create_org_admin(db)
     _login_org_admin(client, db, admin.id)
 
+    closed_res = client.post(
+        "/api/org-admin/booking-event-series",
+        json={
+            "name": "Martedi chiuso",
+            "recurrence_type": "weekly",
+            "weekday": 1,
+            "is_active": True,
+            "is_closed": True,
+            "time_slots": [],
+        },
+    )
+    assert closed_res.status_code == 201, closed_res.text
+
     public_slug = f"prenota-legacy-block-{uuid.uuid4().hex[:6]}"
     form_res = client.post(
         "/api/org-admin/forms",
@@ -1593,6 +1606,20 @@ def test_booking_block_field_activates_dynamic_dates_without_legacy_flag(client,
     assert dates_res.json()["items"][0]["date"] == "2026-05-29"
     assert dates_res.json()["items"][0]["available_slots"] == []
 
+    closure_dates_res = client.get(
+        f"/api/forms/{org.slug}/{public_slug}/booking-available-dates?start=2026-06-01&days=3"
+    )
+    assert closure_dates_res.status_code == 200, closure_dates_res.text
+    closure_items = closure_dates_res.json()["items"]
+    assert [item["date"] for item in closure_items] == ["2026-06-01", "2026-06-02", "2026-06-03"]
+    assert closure_items[1]["date_closed"] is True
+    assert closure_items[1]["date_open"] is False
+
+    closed_events_res = client.get(f"/api/forms/{org.slug}/{public_slug}/booking-events?date=2026-06-02")
+    assert closed_events_res.status_code == 200, closed_events_res.text
+    assert closed_events_res.json()["date_closed"] is True
+    assert closed_events_res.json()["date_open"] is False
+
     submit_res = client.post(
         f"/api/forms/{org.slug}/{public_slug}/submit",
         json={
@@ -1606,6 +1633,17 @@ def test_booking_block_field_activates_dynamic_dates_without_legacy_flag(client,
     assert booking["booking_date"] == "2026-05-29"
     assert booking["booking_time"] == "20:30"
     assert booking["event_summary"] is None
+
+    closed_submit_res = client.post(
+        f"/api/forms/{org.slug}/{public_slug}/submit",
+        json={
+            "__booking_date": "2026-06-02",
+            "__booking_event_time": "20:30",
+            "__booking_event_series_id": "",
+        },
+    )
+    assert closed_submit_res.status_code == 422, closed_submit_res.text
+    assert "giorno" in closed_submit_res.json()["detail"]
 
 
 def test_org_admin_can_create_manual_booking_from_agenda(client, db):

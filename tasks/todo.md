@@ -1,3 +1,17 @@
+## Plan (Fix chiusure form eventi live - May 29, 2026)
+- [x] Riprodurre su live `golden-filippini-qualificati-srls/eventi` la data chiusa che resta prenotabile, confrontando payload date/orari e regole Serate.
+- [x] Verificare se la chiusura viene ignorata per modalita `selected`, per chiusura non inclusa nelle serate selezionate, o per validazione submit.
+- [x] Correggere backend/frontend mantenendo il requisito: giorno chiuso visibile ma non selezionabile e mai prenotabile.
+- [x] Aggiungere test regressione mirato su form con blocco prenotazione legacy e chiusura globale.
+- [ ] Eseguire test backend mirati, typecheck/build frontend, push/deploy e smoke live.
+
+## Review (Fix chiusure form eventi live - May 29, 2026)
+- Root cause: `/eventi` contiene il campo `__booking_block__`, ma `booking_dynamic_events_enabled=false`; `public_booking_events_payload` usava ancora solo il flag legacy e quindi ritornava `date_open=true` prima di interrogare le chiusure.
+- Verifica live pre-fix: per Golden risultano chiusure attive in Serate su martedi e mercoledi, ma `/api/forms/golden-filippini-qualificati-srls/eventi/booking-available-dates` restituiva quei giorni come aperti.
+- Fix: `public_booking_events_payload` usa ora `form_uses_dynamic_booking_controls(form)`, la stessa sorgente gia usata da frontend, submit e creazione booking.
+- Regressione coperta: form con `__booking_block__` e flag dinamico spento mostra il martedi chiuso come `date_closed=true`, `date_open=false` e respinge il submit con 422.
+- Verifiche locali OK: `pytest tests/test_forms_module.py`, `python -m compileall app`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`. Resta solo il warning Vite preesistente sui chunk grandi.
+
 ## Plan (Fix booking block legacy flag pubblico - May 28, 2026)
 - [x] Attivare il caricamento date/orari quando il form contiene un campo `__booking_block__`, anche se `booking_dynamic_events_enabled` e false.
 - [x] Preservare i campi tecnici `__booking_date`, `__booking_event_time`, `__booking_event_series_id` al submit per questi form legacy.

@@ -192,7 +192,7 @@ def public_booking_events_payload(
         "date_closed": False,
         "available_slots": [],
     }
-    if not bool(getattr(form, "booking_dynamic_events_enabled", False)):
+    if not form_uses_dynamic_booking_controls(form):
         return inactive_payload
 
     normalized_time = normalize_public_booking_time(time_value)
