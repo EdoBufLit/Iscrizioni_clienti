@@ -442,6 +442,16 @@ export function FormPublicCanvas({
       color-scheme: dark;
     }
 
+    .form-public-canvas-container[data-font-preset="classic"] {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .form-public-canvas-container[data-font-preset="classic"] .form-public-canvas__title,
+    .form-public-canvas-container[data-font-preset="classic"] .form-public-canvas__section-title {
+      font-family: Georgia, "Times New Roman", ui-serif, serif !important;
+      letter-spacing: 0;
+    }
+
     .form-public-canvas-container[data-font-preset="modern"] {
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }

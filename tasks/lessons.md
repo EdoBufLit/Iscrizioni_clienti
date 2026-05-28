@@ -3,6 +3,7 @@
 - Quando il cliente chiede fedelta esatta a mockup admin, non basta un re-skin: prima della consegna servono screenshot viewport-to-viewport delle superfici critiche, inclusi drawer/modali fixed. Inoltre le integrazioni esistenti nel dettaglio (es. SumUp) vanno preservate esplicitamente nella nuova IA e verificate nello screenshot.
 # Lessons
 
+- May 28, 2026: per disponibilita booking, non usare mai "esiste una serata attiva" come vincolo globale sulle date pubbliche. In modalita `all`, solo le chiusure chiudono un giorno; gli slot serata/default limitano gli orari del giorno in cui si applicano, non tutti gli altri giorni.
 - May 27, 2026: un bottone `+ Nuova` mobile non puo essere generico se cambia tab o apre un flusso sbagliato. Ogni azione primaria deve derivare dalla tab attiva e aprire subito il relativo overlay/editor, altrimenti va nascosta o rinominata.
 - May 27, 2026: verificare i componenti mobile anche con cardinalita alte, non solo con 2-3 item demo. Picker per sale/tavoli devono avere limite verticale e scroll locale, altrimenti con 20 opzioni diventano ingestibili anche se non overflowano lateralmente.
 - May 27, 2026: quando si dice mobile-first, i picker dentro una card stretta non possono usare rail orizzontali con chip larghi e scrollbar nascosta. Prima di consegnare, verificare che l'ultimo item sia interamente visibile o che il wrapping sia esplicito a 390px.

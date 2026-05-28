@@ -170,7 +170,7 @@ const PublicFormPage = () => {
             ? response.available_slots
             : uniqueBookingSlots(response.items);
           const hasActiveRules = Boolean(response.has_active_rules);
-          const dateOpen = !hasActiveRules || Boolean(response.date_open && availableSlots.length > 0);
+          const dateOpen = response.date_open !== false;
           setBookingEvents(response.items);
           setBookingAvailability({ hasActiveRules, dateOpen, availableSlots });
           setValues((current) => {

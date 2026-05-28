@@ -1,3 +1,17 @@
+## Plan (Fix disponibilita form booking e font - May 28, 2026)
+- [x] Correggere il resolver date pubbliche: in modalita `all` ogni giorno non chiuso deve essere selezionabile anche se non ha una serata specifica o un default configurato.
+- [x] Mantenere la modalita `selected` per offerte dedicate: solo le serate selezionate devono aprire disponibilita, sempre rispettando le chiusure.
+- [x] Fare in modo che gli orari del giorno usino slot serata/default quando esistono e fallback libero a mezz'ora quando non esistono regole applicabili.
+- [x] Verificare che la scelta font sia esposta, salvata e resa nel form pubblico/anteprima.
+- [x] Aggiungere test backend mirati e rieseguire typecheck/build frontend.
+
+## Review (Fix disponibilita form booking e font - May 28, 2026)
+- Root cause: il payload date pubbliche usava la presenza di una qualunque serata attiva come vincolo globale; quindi una serata su un altro giorno poteva far risultare vuoto il menu giorni.
+- Fix disponibilita: in modalita `all`, le date non chiuse restano disponibili; se quel giorno ha slot serata/default il form usa quegli slot, altrimenti torna al fallback ogni mezz'ora.
+- Fix selected: la modalita `selected` resta restrittiva per offerte dedicate e continua a rispettare le chiusure.
+- Font form: i preset `classic`, `modern`, `serif` sono salvati, serializzati nel pubblico e ora applicati in modo distinto dal layout pagina.
+- Verifiche OK: `pytest tests/test_forms_module.py`, `python -m compileall app`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`. Resta solo il warning Vite preesistente sui chunk grandi.
+
 ## Plan (Semplificazione mobile prenotazioni e builder - May 27, 2026)
 - [x] Allineare la navigazione mobile al prototipo: tre filtri agenda, `+ Nuova` contestuale solo dove serve, tab sale/tavoli unificata e menu sempre in alto.
 - [x] Rendere il dettaglio prenotazione piu diretto: telefono/WhatsApp dentro i campi modificabili, assegnazione sala/tavolo a scelta rapida senza dropdown e stato servizio sempre accessibile.

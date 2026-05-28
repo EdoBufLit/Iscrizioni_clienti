@@ -120,6 +120,10 @@ def form_has_active_booking_slot_rules(db: Session, *, form: Form) -> bool:
     )
 
 
+def form_requires_booking_series_match(form: Form) -> bool:
+    return _form_uses_selected_mode(form)
+
+
 def _matching_series_candidates(db: Session, *, form: Form, date_value: date) -> list[BookingEventSeries]:
     return (
         db.query(BookingEventSeries)
@@ -141,6 +145,17 @@ def _matching_series_candidates(db: Session, *, form: Form, date_value: date) ->
         )
         .all()
     )
+
+
+def form_date_has_bookable_slot_rules(db: Session, *, form: Form, date_value: date) -> bool:
+    if is_form_date_closed(db, form=form, date_value=date_value):
+        return False
+    candidates = [
+        item
+        for item in _matching_series_candidates(db, form=form, date_value=date_value)
+        if form_allows_booking_event_series(form, item)
+    ]
+    return any(booking_event_series_slot_times(item) for item in candidates)
 
 
 def series_has_public_time(series: BookingEventSeries, time_value: str | None) -> bool:
@@ -168,11 +183,11 @@ def public_booking_events_payload(
         return inactive_payload
 
     normalized_time = normalize_public_booking_time(time_value)
-    has_active_rules = form_has_active_booking_slot_rules(db, form=form)
+    uses_selected_mode = _form_uses_selected_mode(form)
     if is_form_date_closed(db, form=form, date_value=date_value):
         return {
             **inactive_payload,
-            "has_active_rules": has_active_rules,
+            "has_active_rules": uses_selected_mode,
             "date_open": False,
             "date_closed": True,
         }
@@ -205,11 +220,12 @@ def public_booking_events_payload(
                 continue
             seen_slots.add(slot_time)
             available_slots.append(slot_time)
+    has_current_day_slot_rules = bool(available_slots)
     return {
         "items": [_serialize_public_series(item) for item in response_items],
         "using_default": not bool(matching_items) and bool(response_items),
-        "has_active_rules": has_active_rules,
-        "date_open": (not has_active_rules) or bool(available_slots),
+        "has_active_rules": has_current_day_slot_rules or uses_selected_mode,
+        "date_open": has_current_day_slot_rules or not uses_selected_mode,
         "date_closed": False,
         "available_slots": available_slots,
     }

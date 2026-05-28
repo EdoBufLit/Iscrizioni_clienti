@@ -168,6 +168,7 @@ def test_org_admin_forms_crud_public_submit_and_export(client, db):
             "show_logo": True,
             "cover_image_url": "https://example.com/cover.jpg",
             "page_style": "spotlight",
+            "font_preset": "modern",
             "public_slug": public_slug,
             "is_active": True,
             "visibility": "public",
@@ -192,6 +193,7 @@ def test_org_admin_forms_crud_public_submit_and_export(client, db):
     assert form["submit_button_text"] == "Prenota ora"
     assert form["cover_image_url"] == "https://example.com/cover.jpg"
     assert form["page_style"] == "spotlight"
+    assert form["font_preset"] == "modern"
     assert form["whatsapp_auto_reply_enabled"] is True
     assert "registrato" in (form["whatsapp_auto_reply_template"] or "")
 
@@ -257,6 +259,7 @@ def test_org_admin_forms_crud_public_submit_and_export(client, db):
     assert public_res.json()["form"]["title"] == "Prenotazione tavolo"
     assert public_res.json()["form"]["accent_color"] == "#0f766e"
     assert public_res.json()["form"]["submit_button_text"] == "Prenota ora"
+    assert public_res.json()["form"]["font_preset"] == "modern"
     assert public_res.json()["form"]["association"]["slug"] == org.slug
 
     legacy_public_res = client.get(f"/api/forms/{public_slug}")
@@ -1188,6 +1191,91 @@ def test_booking_event_closures_override_default_and_available_dates(client, db)
     )
     assert submit_closed_res.status_code == 422, submit_closed_res.text
     assert "giorno" in submit_closed_res.json()["detail"]
+
+
+def test_all_booking_availability_keeps_free_days_when_rules_are_elsewhere(client, db):
+    org, admin = _create_org_admin(db)
+    _login_org_admin(client, db, admin.id)
+
+    friday_res = client.post(
+        "/api/org-admin/booking-event-series",
+        json={
+            "name": "Serata venerdi",
+            "recurrence_type": "weekly",
+            "weekday": 4,
+            "is_active": True,
+            "time_slots": ["21:00"],
+        },
+    )
+    assert friday_res.status_code == 201, friday_res.text
+
+    closed_res = client.post(
+        "/api/org-admin/booking-event-series",
+        json={
+            "name": "Martedi chiuso",
+            "recurrence_type": "weekly",
+            "weekday": 1,
+            "is_active": True,
+            "is_closed": True,
+            "time_slots": [],
+        },
+    )
+    assert closed_res.status_code == 201, closed_res.text
+
+    public_slug = f"prenotazione-giorni-liberi-{uuid.uuid4().hex[:6]}"
+    form_res = client.post(
+        "/api/org-admin/forms",
+        json={
+            "title": "Prenotazione giorni liberi",
+            "public_slug": public_slug,
+            "is_active": True,
+            "visibility": "public",
+            "form_type": "booking",
+            "booking_enabled": True,
+            "booking_dynamic_events_enabled": True,
+            "booking_notification_enabled": False,
+        },
+    )
+    assert form_res.status_code == 201, form_res.text
+
+    dates_res = client.get(
+        f"/api/forms/{org.slug}/{public_slug}/booking-available-dates?start=2026-06-16&days=4"
+    )
+    assert dates_res.status_code == 200, dates_res.text
+    date_items = dates_res.json()["items"]
+    assert [item["date"] for item in date_items] == ["2026-06-17", "2026-06-18", "2026-06-19"]
+    assert date_items[0]["available_slots"] == []
+    assert date_items[0]["has_active_rules"] is False
+    assert date_items[2]["available_slots"] == ["21:00"]
+    assert date_items[2]["has_active_rules"] is True
+
+    free_day_events_res = client.get(f"/api/forms/{org.slug}/{public_slug}/booking-events?date=2026-06-17")
+    assert free_day_events_res.status_code == 200, free_day_events_res.text
+    assert free_day_events_res.json()["date_open"] is True
+    assert free_day_events_res.json()["has_active_rules"] is False
+    assert free_day_events_res.json()["available_slots"] == []
+
+    free_day_submit_res = client.post(
+        f"/api/forms/{org.slug}/{public_slug}/submit",
+        json={
+            "__booking_date": "2026-06-17",
+            "__booking_event_time": "21:30",
+            "__booking_event_series_id": "",
+        },
+    )
+    assert free_day_submit_res.status_code == 200, free_day_submit_res.text
+    assert free_day_submit_res.json()["booking"]["event_summary"] is None
+
+    event_day_outside_slot_res = client.post(
+        f"/api/forms/{org.slug}/{public_slug}/submit",
+        json={
+            "__booking_date": "2026-06-19",
+            "__booking_event_time": "21:30",
+            "__booking_event_series_id": "",
+        },
+    )
+    assert event_day_outside_slot_res.status_code == 422, event_day_outside_slot_res.text
+    assert "orario" in event_day_outside_slot_res.json()["detail"]
 
 
 def test_selected_booking_availability_ignores_default_on_other_days(client, db):

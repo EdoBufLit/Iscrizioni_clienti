@@ -22,7 +22,8 @@ from app.services.booking_event_availability import (
     booking_event_series_slot_times,
     find_form_booking_series_for_time,
     form_allows_booking_event_series,
-    form_has_active_booking_slot_rules,
+    form_date_has_bookable_slot_rules,
+    form_requires_booking_series_match,
     is_form_date_closed,
     series_matches_date,
 )
@@ -477,7 +478,9 @@ def _resolve_dynamic_booking_event(
                 "booking_time": booking_time,
                 "event_details": _booking_event_series_details(resolved_series),
             }
-        if form_has_active_booking_slot_rules(db, form=form):
+        if form_requires_booking_series_match(form) or form_date_has_bookable_slot_rules(
+            db, form=form, date_value=booking_date
+        ):
             raise HTTPException(status_code=422, detail="La data o l'orario selezionato non e disponibile.")
         return {
             "booking_date": booking_date,
