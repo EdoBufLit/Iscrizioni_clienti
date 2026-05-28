@@ -1166,6 +1166,7 @@ export type AssociationForm = {
   show_logo: boolean;
   cover_image_url: string | null;
   page_style: string;
+  font_preset: string;
   public_slug: string;
   is_active: boolean;
   visibility: AssociationFormVisibility;
@@ -1186,6 +1187,8 @@ export type AssociationForm = {
   booking_event_time: string | null;
   booking_event_details: string | null;
   booking_dynamic_events_enabled: boolean;
+  booking_availability_mode: "all" | "selected" | string;
+  booking_event_series_ids: number[];
   survey_post_event_enabled: boolean;
   survey_post_event_delay_hours: number;
   survey_post_event_message_template: string | null;
@@ -1222,6 +1225,7 @@ export type AssociationForm = {
     show_logo: boolean;
     cover_image_url: string | null;
     page_style: string;
+    font_preset: string;
   };
   actions: {
     save_submission: boolean;
@@ -1246,6 +1250,8 @@ export type AssociationForm = {
     booking_event_time: string | null;
     booking_event_details: string | null;
     booking_dynamic_events_enabled: boolean;
+    booking_availability_mode: "all" | "selected" | string;
+    booking_event_series_ids: number[];
     survey_post_event_enabled: boolean;
     survey_post_event_delay_hours: number;
     survey_post_event_message_template: string | null;
@@ -1438,6 +1444,7 @@ export type OrgAdminBookingEventSeries = {
   event_date?: string | null;
   is_active: boolean;
   is_default?: boolean;
+  is_closed?: boolean;
   created_at: string | null;
   updated_at: string | null;
   time_slots: BookingEventTimeSlot[];
@@ -1450,6 +1457,20 @@ export type BookingEventSeriesListResponse = {
   has_active_rules?: boolean;
   date_open?: boolean;
   available_slots?: string[];
+  date_closed?: boolean;
+};
+
+export type PublicBookingAvailableDate = {
+  date: string;
+  available_slots: string[];
+  using_default: boolean;
+  has_active_rules: boolean;
+};
+
+export type PublicBookingAvailableDatesResponse = {
+  items: PublicBookingAvailableDate[];
+  start_date: string;
+  days: number;
 };
 
 export type AssociationRoom = {
@@ -1478,7 +1499,7 @@ export type AssociationRoomTable = {
   is_out_of_service: boolean;
   created_at: string | null;
   updated_at: string | null;
-  occupancy_state: "free" | "reserved" | "occupied" | "out_of_service" | string;
+  occupancy_state: "free" | "semi_free" | "reserved" | "occupied" | "out_of_service" | string;
   active_booking: {
     id: number;
     status: string;
@@ -1488,6 +1509,17 @@ export type AssociationRoomTable = {
     party_size: number | null;
     form_title: string | null;
   } | null;
+  active_bookings?: Array<{
+    id: number;
+    status: string;
+    customer_name: string;
+    booking_date: string | null;
+    booking_time: string | null;
+    party_size: number | null;
+    form_title: string | null;
+  }>;
+  occupied_seats?: number;
+  remaining_seats?: number;
 };
 
 export type AssociationRoomMap = {
@@ -1499,6 +1531,7 @@ export type AssociationRoomMap = {
     tables: number;
     free: number;
     reserved: number;
+    semi_free?: number;
     occupied: number;
     out_of_service: number;
   };
@@ -2245,6 +2278,9 @@ export async function createOrgAdminForm(data: {
   booking_event_time?: string | null;
   booking_event_details?: string | null;
   booking_dynamic_events_enabled?: boolean;
+  booking_availability_mode?: "all" | "selected" | string;
+  booking_event_series_ids?: number[];
+  font_preset?: string | null;
   survey_post_event_enabled?: boolean;
   survey_post_event_delay_hours?: number;
   survey_post_event_message_template?: string | null;
@@ -2306,6 +2342,9 @@ export async function updateOrgAdminForm(
   booking_event_time?: string | null;
   booking_event_details?: string | null;
   booking_dynamic_events_enabled?: boolean;
+  booking_availability_mode?: "all" | "selected" | string;
+  booking_event_series_ids?: number[];
+  font_preset?: string | null;
   survey_post_event_enabled?: boolean;
   survey_post_event_delay_hours?: number;
   survey_post_event_message_template?: string | null;
@@ -2510,6 +2549,41 @@ export async function fetchPublicFormBookingEvents(
   return normalizeBookingEventSeriesList(await res.json());
 }
 
+export async function fetchPublicFormBookingAvailableDates(
+  orgSlugOrSlug: string,
+  slugOrOptions?: string | { start?: string | null; days?: number | null },
+  maybeOptions?: { start?: string | null; days?: number | null },
+): Promise<PublicBookingAvailableDatesResponse> {
+  const scoped = typeof slugOrOptions === "string";
+  const options = scoped ? maybeOptions : slugOrOptions;
+  const path = scoped
+    ? `/api/forms/${encodeURIComponent(orgSlugOrSlug)}/${encodeURIComponent(slugOrOptions)}/booking-available-dates`
+    : `/api/forms/${encodeURIComponent(orgSlugOrSlug)}/booking-available-dates`;
+  const params = new URLSearchParams();
+  if (options?.start) params.set("start", options.start);
+  if (options?.days) params.set("days", String(options.days));
+  const res = await fetch(`${path}${params.toString() ? `?${params.toString()}` : ""}`);
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento giorni disponibili"));
+  const payload = await res.json();
+  const items = Array.isArray(payload?.items)
+    ? payload.items
+        .map((item: any) => ({
+          date: String(item?.date || ""),
+          available_slots: Array.isArray(item?.available_slots)
+            ? item.available_slots.map((slot: unknown) => String(slot || "").slice(0, 5)).filter(Boolean)
+            : [],
+          using_default: Boolean(item?.using_default),
+          has_active_rules: Boolean(item?.has_active_rules),
+        }))
+        .filter((item: PublicBookingAvailableDate) => item.date)
+    : [];
+  return {
+    items,
+    start_date: String(payload?.start_date || ""),
+    days: Number(payload?.days || items.length || 0),
+  };
+}
+
 export async function submitPublicForm(
   orgSlugOrSlug: string,
   slugOrPayload: string | Record<string, unknown>,
@@ -2671,6 +2745,7 @@ type BookingEventSeriesInput = {
   specific_date?: string | null;
   is_active?: boolean;
   is_default?: boolean;
+  is_closed?: boolean;
   time_slots?: string[];
 };
 
@@ -2688,6 +2763,7 @@ function normalizeBookingEventSeries(raw: any): OrgAdminBookingEventSeries {
     event_date: raw?.event_date ?? raw?.specific_date ?? null,
     is_active: Boolean(raw?.is_active),
     is_default: Boolean(raw?.is_default),
+    is_closed: Boolean(raw?.is_closed),
     created_at: raw?.created_at ?? null,
     updated_at: raw?.updated_at ?? null,
     time_slots: rawSlots
@@ -2737,6 +2813,7 @@ function normalizeBookingEventSeriesList(payload: any): BookingEventSeriesListRe
     using_default: Boolean(payload?.using_default),
     has_active_rules: Boolean(payload?.has_active_rules),
     date_open: payload?.date_open !== false,
+    date_closed: Boolean(payload?.date_closed),
     available_slots: availableSlots,
   };
 }
@@ -2750,6 +2827,7 @@ function bookingEventSeriesRequestBody(data: BookingEventSeriesInput) {
     event_date: data.recurrence_type === "date" ? data.specific_date ?? null : null,
     is_active: data.is_active ?? true,
     is_default: data.is_default ?? false,
+    is_closed: data.is_closed ?? false,
     time_slots: data.time_slots ?? [],
   };
 }

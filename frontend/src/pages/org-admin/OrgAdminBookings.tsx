@@ -331,19 +331,23 @@ function requestStatusMeta(status: string | null | undefined) {
 
 function occupancyTone(state: string) {
   switch (state) {
+    case "semi_free":
+      return "bg-amber-50 text-amber-800 border-amber-200";
     case "reserved":
       return "bg-amber-50 text-amber-800 border-amber-200";
     case "occupied":
-      return "bg-emerald-50 text-emerald-800 border-emerald-200";
+      return "bg-rose-50 text-rose-800 border-rose-200";
     case "out_of_service":
       return "bg-slate-100 text-slate-700 border-slate-300";
     default:
-      return "bg-sky-50 text-sky-700 border-sky-200";
+      return "bg-emerald-50 text-emerald-800 border-emerald-200";
   }
 }
 
 function occupancyLabel(state: string) {
   switch (state) {
+    case "semi_free":
+      return "Semi-libero";
     case "reserved":
       return "Riservato";
     case "occupied":
@@ -385,6 +389,7 @@ function emptyEventSeriesDraft() {
     specific_date: "",
     is_active: true,
     is_default: false,
+    is_closed: false,
     time_slots_text: "19:30, 20:00, 20:30",
   };
 }
@@ -434,14 +439,16 @@ function Toggle({
   label,
   checked,
   onChange,
+  disabled = false,
 }: {
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
-    <label className="theme-card-muted flex items-center gap-3 rounded-[1rem] px-4 py-3 text-sm text-slate-700">
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+    <label className={`theme-card-muted flex items-center gap-3 rounded-[1rem] px-4 py-3 text-sm text-slate-700 ${disabled ? "opacity-60" : ""}`}>
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
       {label}
     </label>
   );
@@ -540,6 +547,7 @@ export default function OrgAdminBookings() {
       specific_date: item.specific_date || "",
       is_active: item.is_active,
       is_default: Boolean(item.is_default),
+      is_closed: Boolean(item.is_closed),
       time_slots_text: item.time_slots.map((slot) => slot.time.slice(0, 5)).join(", "),
     } : emptyEventSeriesDraft());
     setManagementOverlay("event");
@@ -660,10 +668,15 @@ export default function OrgAdminBookings() {
       setAssignmentTableId("");
       return;
     }
-    fetchOrgAdminRoomTables(assignmentRoomId, { includeInactive: true })
-      .then(({ items }) => setAssignmentTables(items))
+    const focusDate = selectedBooking?.booking_date || null;
+    const focusTime = selectedBooking?.booking_time ? selectedBooking.booking_time.slice(0, 5) : null;
+    const request = selectedBooking
+      ? fetchOrgAdminRoomMap(assignmentRoomId, { date: focusDate, time: focusTime })
+      : fetchOrgAdminRoomTables(assignmentRoomId, { includeInactive: true });
+    request
+      .then((payload) => setAssignmentTables("tables" in payload ? payload.tables : payload.items))
       .catch(() => setAssignmentTables([]));
-  }, [assignmentRoomId]);
+  }, [assignmentRoomId, selectedBooking?.id, selectedBooking?.booking_date, selectedBooking?.booking_time]);
 
   useEffect(() => {
     if (!manualDraft.room_id || typeof manualDraft.room_id !== "number") {
@@ -972,6 +985,7 @@ export default function OrgAdminBookings() {
         specific_date: selected.specific_date || "",
         is_active: selected.is_active,
         is_default: Boolean(selected.is_default),
+        is_closed: Boolean(selected.is_closed),
         time_slots_text: selected.time_slots.map((slot) => slot.time.slice(0, 5)).join(", "),
       });
     }
@@ -983,10 +997,12 @@ export default function OrgAdminBookings() {
       showToast({ tone: "error", title: "Nome richiesto", message: "Inserisci il nome della serata prenotabile." });
       return;
     }
-    const timeSlots = eventSeriesDraft.time_slots_text
-      .split(/[,\n;]/)
-      .map((item) => item.trim())
-      .filter(Boolean);
+    const timeSlots = eventSeriesDraft.is_closed
+      ? []
+      : eventSeriesDraft.time_slots_text
+          .split(/[,\n;]/)
+          .map((item) => item.trim())
+          .filter(Boolean);
     setSaving("event-series");
     try {
       const payload = {
@@ -996,7 +1012,8 @@ export default function OrgAdminBookings() {
         weekday: eventSeriesDraft.recurrence_type === "weekly" ? eventSeriesDraft.weekday : null,
         specific_date: eventSeriesDraft.recurrence_type === "date" ? eventSeriesDraft.specific_date || null : null,
         is_active: eventSeriesDraft.is_active,
-        is_default: eventSeriesDraft.is_default,
+        is_default: eventSeriesDraft.is_closed ? false : eventSeriesDraft.is_default,
+        is_closed: eventSeriesDraft.is_closed,
         time_slots: timeSlots,
       };
       const response = eventSeriesDraft.id
@@ -1204,6 +1221,17 @@ export default function OrgAdminBookings() {
     reason?: string,
   ) {
     if (!selectedBooking?.form_id || !selectedBooking?.submission_id) return;
+    if (nextStatus === "confirmed" && !selectedBooking.table_id && rooms.some((room) => room.is_active)) {
+      const fallbackRoomId = selectedBooking.room_id ?? selectedRoomId ?? rooms.find((room) => room.is_active)?.id ?? "";
+      setAssignmentRoomId(fallbackRoomId);
+      setRequestConfirmOpen(false);
+      showToast({
+        tone: "info",
+        title: "Assegna prima il tavolo",
+        message: "Seleziona un tavolo libero o semi-libero, salva l'assegnazione e poi conferma la richiesta.",
+      });
+      return;
+    }
     setRequestActionState("loading");
     setRequestActionError(null);
     try {
@@ -1602,12 +1630,14 @@ export default function OrgAdminBookings() {
                 <span><strong>{rooms.length}</strong> Sale</span>
                 <span><strong>{roomMap?.totals.tables ?? roomTables.length}</strong> Tavoli</span>
                 <span><strong>{roomMap?.totals.free ?? 0}</strong> Liberi</span>
+                <span><strong>{roomMap?.totals.semi_free ?? 0}</strong> Semi</span>
                 <span><strong>{roomMap?.totals.occupied ?? 0}</strong> Occupati</span>
               </div>
-              <div className="booking-map-kpis mt-6 grid gap-4 md:grid-cols-4">
+              <div className="booking-map-kpis mt-6 grid gap-4 md:grid-cols-5">
                 <KpiCard label="Sale" value={rooms.length} tone="success" />
                 <KpiCard label="Tavoli" value={roomMap?.totals.tables ?? roomTables.length} tone="info" />
                 <KpiCard label="Liberi" value={roomMap?.totals.free ?? 0} tone="success" />
+                <KpiCard label="Semi-liberi" value={roomMap?.totals.semi_free ?? 0} tone="warning" />
                 <KpiCard label="Occupati" value={roomMap?.totals.occupied ?? 0} tone="danger" />
               </div>
               <div className="booking-map-canvas-shell mt-6">
@@ -1625,7 +1655,7 @@ export default function OrgAdminBookings() {
               <div className="surface-strong rounded-[1.25rem] p-5">
                 <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">Legenda</p>
                 <div className="mt-4 space-y-3">
-                  {["free", "reserved", "occupied", "out_of_service"].map((state) => (
+                  {["free", "semi_free", "occupied", "out_of_service"].map((state) => (
                     <div key={state} className={`rounded-[1rem] border px-3 py-3 text-sm font-semibold ${occupancyTone(state)}`}>{occupancyLabel(state)}</div>
                   ))}
                 </div>
@@ -1640,6 +1670,7 @@ export default function OrgAdminBookings() {
                     <p className="text-lg font-semibold text-slate-950">{selectedMapTable.name}</p>
                     <p>{selectedMapTable.shape} - {selectedMapTable.capacity} posti</p>
                     <p>Stato: {occupancyLabel(selectedMapTable.occupancy_state)}</p>
+                    <p>Posti: {selectedMapTable.occupied_seats ?? 0}/{selectedMapTable.capacity} occupati, {selectedMapTable.remaining_seats ?? selectedMapTable.capacity} residui</p>
                     <p>Coordinate: {selectedMapTable.pos_x} / {selectedMapTable.pos_y}</p>
                     <p>Booking live: {selectedMapTable.active_booking?.customer_name || "Nessuno"}</p>
                   </div>
@@ -1836,6 +1867,7 @@ export default function OrgAdminBookings() {
                   className={`${inputClass} !mt-1 !py-2`}
                   type="time"
                   step={1800}
+                  disabled={eventSeriesDraft.is_closed}
                   value={eventSlotRange.start}
                   onChange={(event) => applyEventSlotRange({ ...eventSlotRange, start: event.target.value })}
                 />
@@ -1846,6 +1878,7 @@ export default function OrgAdminBookings() {
                   className={`${inputClass} !mt-1 !py-2`}
                   type="time"
                   step={1800}
+                  disabled={eventSeriesDraft.is_closed}
                   value={eventSlotRange.end}
                   onChange={(event) => applyEventSlotRange({ ...eventSlotRange, end: event.target.value })}
                 />
@@ -1855,6 +1888,7 @@ export default function OrgAdminBookings() {
               <summary className="cursor-pointer text-sm font-semibold text-slate-700">Modifica manuale slot</summary>
               <textarea
                 className={`${inputClass} mt-3 min-h-[90px]`}
+                disabled={eventSeriesDraft.is_closed}
                 value={eventSeriesDraft.time_slots_text}
                 onChange={(event) => setEventSeriesDraft((current) => ({ ...current, time_slots_text: event.target.value }))}
                 placeholder="19:30, 20:00, 20:30"
@@ -1875,9 +1909,15 @@ export default function OrgAdminBookings() {
             onChange={(checked) => setEventSeriesDraft((current) => ({ ...current, is_active: checked }))}
           />
           <Toggle
+            label="Giorno di chiusura"
+            checked={eventSeriesDraft.is_closed}
+            onChange={(checked) => setEventSeriesDraft((current) => ({ ...current, is_closed: checked, is_default: checked ? false : current.is_default }))}
+          />
+          <Toggle
             label="Usa come default quando non ci sono eventi per data e orario scelti"
-            checked={eventSeriesDraft.is_default}
+            checked={eventSeriesDraft.is_default && !eventSeriesDraft.is_closed}
             onChange={(checked) => setEventSeriesDraft((current) => ({ ...current, is_default: checked }))}
+            disabled={eventSeriesDraft.is_closed}
           />
           <ActionRow
             primaryLabel="Salva serata"
@@ -2418,10 +2458,15 @@ function BookingEventSeriesPanel(props: {
                     <div>
                       <p className="text-lg font-semibold">{item.name}</p>
                       <p className={`mt-1 text-sm ${selected ? "text-slate-300" : "text-slate-500"}`}>
-                        {when} - {item.time_slots.map((slot) => slot.time.slice(0, 5)).join(", ") || "Nessuno slot"}
+                        {when} - {item.is_closed ? "Chiuso" : item.time_slots.map((slot) => slot.time.slice(0, 5)).join(", ") || "Nessuno slot"}
                       </p>
                     </div>
                     <div className="flex flex-col items-end gap-1">
+                      {item.is_closed ? (
+                        <span className="rounded-full bg-rose-100 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-rose-700">
+                          Chiusura
+                        </span>
+                      ) : null}
                       {item.is_default ? (
                         <span className="rounded-full bg-amber-100 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-amber-800">
                           Default
@@ -2728,7 +2773,10 @@ function BookingAssignmentPicker(props: {
             Solo sala
           </button>
           {props.assignmentTables.map((table) => {
-            const disabled = !table.is_active || table.is_out_of_service;
+            const disabled =
+              !table.is_active
+              || table.is_out_of_service
+              || (table.occupancy_state === "occupied" && props.assignmentTableId !== table.id);
             return (
               <button
                 key={table.id}
@@ -2738,7 +2786,8 @@ function BookingAssignmentPicker(props: {
                 onClick={() => props.setAssignmentTableId(table.id)}
               >
                 <strong>{table.name}</strong>
-                <span>{table.capacity} posti</span>
+                <span>{table.occupied_seats ?? 0}/{table.capacity} posti</span>
+                <em>{occupancyLabel(table.occupancy_state)}{table.occupancy_state === "semi_free" ? ` - ${table.remaining_seats ?? 0} residui` : ""}</em>
                 {disabled ? <em>Non disponibile</em> : null}
               </button>
             );

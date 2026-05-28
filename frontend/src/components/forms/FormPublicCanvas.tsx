@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { AssociationFormField, OrgAdminBookingEventSeries, PublicAssociationForm } from "../../lib/api";
+import type { AssociationFormField, OrgAdminBookingEventSeries, PublicAssociationForm, PublicBookingAvailableDate } from "../../lib/api";
 import { decodeField, isBookingBlockField, type BookingBlockLabels } from "./builder/utils";
 
 type FormCanvasForm = Pick<
@@ -11,6 +11,7 @@ type FormCanvasForm = Pick<
   | "show_logo"
   | "cover_image_url"
   | "page_style"
+  | "font_preset"
   | "visibility"
   | "fields"
   | "booking_dynamic_events_enabled"
@@ -33,6 +34,8 @@ type FormPublicCanvasProps = {
   interactive?: boolean;
   bookingEvents?: OrgAdminBookingEventSeries[];
   bookingEventsLoading?: boolean;
+  bookingDateOptions?: PublicBookingAvailableDate[];
+  bookingDatesLoading?: boolean;
   bookingRulesActive?: boolean;
   bookingDateOpen?: boolean;
   availableBookingSlots?: string[];
@@ -388,6 +391,8 @@ export function FormPublicCanvas({
   interactive = false,
   bookingEvents = [],
   bookingEventsLoading = false,
+  bookingDateOptions = [],
+  bookingDatesLoading = false,
   bookingRulesActive = false,
   bookingDateOpen = true,
   availableBookingSlots = [],
@@ -395,6 +400,9 @@ export function FormPublicCanvas({
   const accentColor = getAccentColor(form);
   const theme = getPageTheme(form.page_style);
   const pageStyle = (form.page_style || "editorial").toLowerCase();
+  const fontPreset = ["modern", "serif"].includes(String(form.font_preset || "").toLowerCase())
+    ? String(form.font_preset || "").toLowerCase()
+    : "classic";
   const sortedFields = [...form.fields].sort((left, right) => left.sort_order - right.sort_order);
   const hasBookingBlockField = sortedFields.some((field) => isBookingBlockField(field));
   const showDynamicBookingFields = Boolean(hasBookingBlockField || form.booking_dynamic_events_enabled);
@@ -408,7 +416,7 @@ export function FormPublicCanvas({
   const sortedAvailableBookingSlots = [...availableBookingSlots]
     .filter(Boolean)
     .map((slot) => String(slot).slice(0, 5))
-    .sort((left, right) => left.localeCompare(right));
+    .filter((slot, index, list) => list.indexOf(slot) === index);
   const timeSlotOptions = sortedAvailableBookingSlots.length > 0 ? sortedAvailableBookingSlots : timeSlots;
   const matchingSeriesForTime = selectedTime
     ? bookingEvents.filter((eventItem) =>
@@ -432,6 +440,34 @@ export function FormPublicCanvas({
 
     .form-public-canvas-container[data-page-style="spotlight"] {
       color-scheme: dark;
+    }
+
+    .form-public-canvas-container[data-font-preset="modern"] {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .form-public-canvas-container[data-font-preset="modern"] .form-public-canvas__title,
+    .form-public-canvas-container[data-font-preset="modern"] .form-public-canvas__section-title {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+      letter-spacing: 0;
+    }
+
+    .form-public-canvas-container[data-font-preset="serif"] {
+      font-family: Georgia, "Times New Roman", ui-serif, serif;
+    }
+
+    .form-public-canvas-container[data-font-preset="serif"] input,
+    .form-public-canvas-container[data-font-preset="serif"] select,
+    .form-public-canvas-container[data-font-preset="serif"] textarea,
+    .form-public-canvas-container[data-font-preset="serif"] button,
+    .form-public-canvas-container[data-font-preset="serif"] .form-public-canvas__label {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .form-public-canvas-container[data-font-preset="serif"] .form-public-canvas__title,
+    .form-public-canvas-container[data-font-preset="serif"] .form-public-canvas__section-title {
+      font-family: Georgia, "Times New Roman", ui-serif, serif !important;
+      letter-spacing: 0;
     }
 
     .form-public-canvas-container:not([data-page-style="spotlight"]) input:not([type="checkbox"]):not([type="radio"]),
@@ -580,10 +616,27 @@ export function FormPublicCanvas({
 
     .form-public-canvas-container .form-public-canvas__dynamic-booking {
       container-type: inline-size;
+      max-width: 100%;
+      min-width: 0;
     }
 
     .form-public-canvas-container .form-public-canvas__dynamic-booking-grid {
       grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .form-public-canvas-container .form-public-canvas__dynamic-booking-grid > *,
+    .form-public-canvas-container .form-public-canvas__field,
+    .form-public-canvas-container input,
+    .form-public-canvas-container select,
+    .form-public-canvas-container textarea {
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+
+    .form-public-canvas-container input[type="date"] {
+      -webkit-appearance: none;
+      appearance: none;
     }
 
     @container (max-width: 560px) {
@@ -619,6 +672,15 @@ export function FormPublicCanvas({
 
   const renderDynamicBookingBlock = (key = "dynamic-booking-block", field?: AssociationFormField) => {
     const copy = getBookingBlockCopy(field);
+    const formatBookingDateOption = (value: string) => {
+      const [year, month, day] = value.split("-").map(Number);
+      if (!year || !month || !day) return value;
+      return new Intl.DateTimeFormat("it-IT", {
+        weekday: "short",
+        day: "2-digit",
+        month: "short",
+      }).format(new Date(year, month - 1, day));
+    };
     return (
     <div key={key} className="form-public-canvas__dynamic-booking w-full">
       <div className="mb-4">
@@ -630,17 +692,31 @@ export function FormPublicCanvas({
       <div className="form-public-canvas__dynamic-booking-grid grid gap-4">
         <label className="form-public-canvas__field block">
           <span className="form-public-canvas__label mb-1 block text-sm font-semibold text-neutral-800">{copy.dateLabel} *</span>
-          <input
+          <select
             className={baseInputClass}
-            type="date"
             required
-            disabled={!interactive}
+            disabled={!interactive || bookingDatesLoading || bookingDateOptions.length === 0}
             value={String(values.__booking_date || "")}
             onChange={(event) => {
               onValueChange?.("__booking_date", event.target.value);
+              onValueChange?.("__booking_event_time", "");
               onValueChange?.("__booking_event_series_id", "");
             }}
-          />
+          >
+            <option value="">
+              {bookingDatesLoading ? "Controllo giorni..." : "Scegli giorno"}
+            </option>
+            {bookingDateOptions.map((item) => (
+              <option key={item.date} value={item.date}>
+                {formatBookingDateOption(item.date)}
+              </option>
+            ))}
+          </select>
+          {!bookingDatesLoading && bookingDateOptions.length === 0 ? (
+            <span className="mt-2 block text-xs font-semibold text-rose-600">
+              Nessun giorno disponibile.
+            </span>
+          ) : null}
         </label>
         <label className="form-public-canvas__field block">
           <span className="form-public-canvas__label mb-1 block text-sm font-semibold text-neutral-800">{copy.timeLabel} *</span>
@@ -696,6 +772,7 @@ export function FormPublicCanvas({
     <div
       className={`form-public-canvas-container w-full min-h-full ${theme.shell} transition-colors duration-300`}
       data-page-style={pageStyle}
+      data-font-preset={fontPreset}
       style={canvasStyle}
     >
       <style>{customFocusStyle}</style>

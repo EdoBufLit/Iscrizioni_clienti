@@ -70,6 +70,12 @@ const whatsappVariableGroups: Array<{
   },
 ];
 
+const bookingActionVariables: Array<{ label: string; placeholder: string; hint: string }> = [
+  { label: "Link conferma", placeholder: "{{link_conferma_prenotazione}}", hint: "Apre conferma rapida della prenotazione" },
+  { label: "Link annulla", placeholder: "{{link_annulla_prenotazione}}", hint: "Permette al cliente di disdire" },
+  { label: "Link note", placeholder: "{{link_note_prenotazione}}", hint: "Permette di inviare modifiche o note" },
+];
+
 function emptyAutomationDraft() {
   return {
     id: null as number | null,
@@ -303,6 +309,18 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
       };
     });
     window.requestAnimationFrame(() => templateTextareaRef.current?.focus());
+  }
+
+  function insertReminderVariable(placeholder: string) {
+    setSettings((current) => {
+      if (!current) return current;
+      const message = current.booking_whatsapp_reminder_template || "";
+      const needsSpace = message.length > 0 && !/\s$/.test(message);
+      return {
+        ...current,
+        booking_whatsapp_reminder_template: `${message}${needsSpace ? " " : ""}${placeholder}`,
+      };
+    });
   }
 
   async function loadData(preselectedFormId?: number | null) {
@@ -637,6 +655,24 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
                 }
                 placeholder="Ciao {{nome_contatto}}, ti ricordiamo la prenotazione per {{nome_associazione}} {{data_prenotazione}} alle {{orario_prenotazione}}."
               />
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-700">Link rapidi</span>
+                {bookingActionVariables.map((item) => (
+                  <button
+                    key={item.placeholder}
+                    type="button"
+                    className="rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    title={item.hint}
+                    disabled={communicationsLocked}
+                    onClick={() => insertReminderVariable(item.placeholder)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-xs leading-5 text-slate-500">
+                Conferma, annulla e note sono link personalizzati della singola prenotazione.
+              </p>
             </label>
             <button
               type="button"

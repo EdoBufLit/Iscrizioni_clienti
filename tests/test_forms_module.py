@@ -12,6 +12,7 @@ from app.models import (
     AdminRole,
     AdminUser,
     Booking,
+    BookingEvent,
     EmailOutbox,
     EmailTemplate,
     Form,
@@ -931,6 +932,20 @@ def test_booking_submit_sends_one_whatsapp_and_uses_org_event_details(client, db
         assert booking.booking_date.isoformat() == "2026-06-18"
         assert booking.booking_time == "21:15"
         assert "Ingresso principale" in (booking.notes or "")
+        dispatch_event = (
+            db.query(BookingEvent)
+            .filter(
+                BookingEvent.booking_id == booking.id,
+                BookingEvent.event_type == "form_whatsapp_dispatch_result",
+            )
+            .one()
+        )
+        dispatch_payload = dispatch_event.payload_json
+        assert dispatch_payload["candidate"]["phone_number"] == "+393331112233"
+        assert dispatch_payload["results"][0]["kind"] == "form_auto_reply"
+        assert dispatch_payload["results"][0]["result"]["reason"] == "submitter_automation_configured"
+        assert dispatch_payload["results"][1]["kind"] == "form_automations"
+        assert dispatch_payload["results"][1]["result"]["sent"] == 1
     finally:
         settings.ENABLE_WHATSAPP_EVOLUTION = original_enabled
 
@@ -1077,6 +1092,184 @@ def test_dynamic_booking_events_fall_back_to_default_and_keep_free_time(client, 
     assert booking["event_summary"] == "Ingresso libero\nPrenotazione standard"
     persisted_booking = db.query(Booking).filter(Booking.id == booking["id"]).one()
     assert "Ingresso libero" in (persisted_booking.notes or "")
+
+
+def test_booking_event_closures_override_default_and_available_dates(client, db):
+    org, admin = _create_org_admin(db)
+    _login_org_admin(client, db, admin.id)
+
+    default_res = client.post(
+        "/api/org-admin/booking-event-series",
+        json={
+            "name": "Default sala",
+            "recurrence_type": "weekly",
+            "weekday": 0,
+            "is_active": True,
+            "is_default": True,
+            "time_slots": ["20:30", "21:00"],
+        },
+    )
+    assert default_res.status_code == 201, default_res.text
+
+    weekly_closed_res = client.post(
+        "/api/org-admin/booking-event-series",
+        json={
+            "name": "Martedi chiuso",
+            "recurrence_type": "weekly",
+            "weekday": 1,
+            "is_active": True,
+            "is_closed": True,
+            "time_slots": [],
+        },
+    )
+    assert weekly_closed_res.status_code == 201, weekly_closed_res.text
+    assert weekly_closed_res.json()["series"]["is_closed"] is True
+    assert weekly_closed_res.json()["series"]["time_slots"] == []
+
+    date_closed_res = client.post(
+        "/api/org-admin/booking-event-series",
+        json={
+            "name": "Chiusura privata",
+            "recurrence_type": "date",
+            "specific_date": "2026-06-18",
+            "is_active": True,
+            "is_closed": True,
+            "time_slots": [],
+        },
+    )
+    assert date_closed_res.status_code == 201, date_closed_res.text
+
+    public_slug = f"prenotazione-chiusure-{uuid.uuid4().hex[:6]}"
+    form_res = client.post(
+        "/api/org-admin/forms",
+        json={
+            "title": "Prenotazione chiusure",
+            "public_slug": public_slug,
+            "is_active": True,
+            "visibility": "public",
+            "form_type": "booking",
+            "booking_enabled": True,
+            "booking_dynamic_events_enabled": True,
+            "booking_notification_enabled": False,
+        },
+    )
+    assert form_res.status_code == 201, form_res.text
+
+    tuesday_res = client.get(f"/api/forms/{org.slug}/{public_slug}/booking-events?date=2026-06-16")
+    assert tuesday_res.status_code == 200, tuesday_res.text
+    assert tuesday_res.json()["date_closed"] is True
+    assert tuesday_res.json()["date_open"] is False
+    assert tuesday_res.json()["available_slots"] == []
+
+    wednesday_res = client.get(f"/api/forms/{org.slug}/{public_slug}/booking-events?date=2026-06-17")
+    assert wednesday_res.status_code == 200, wednesday_res.text
+    assert wednesday_res.json()["date_closed"] is False
+    assert wednesday_res.json()["using_default"] is True
+    assert wednesday_res.json()["available_slots"] == ["20:30", "21:00"]
+
+    specific_closed_res = client.get(f"/api/forms/{org.slug}/{public_slug}/booking-events?date=2026-06-18")
+    assert specific_closed_res.status_code == 200, specific_closed_res.text
+    assert specific_closed_res.json()["date_closed"] is True
+    assert specific_closed_res.json()["items"] == []
+
+    dates_res = client.get(
+        f"/api/forms/{org.slug}/{public_slug}/booking-available-dates?start=2026-06-16&days=3"
+    )
+    assert dates_res.status_code == 200, dates_res.text
+    assert [item["date"] for item in dates_res.json()["items"]] == ["2026-06-17"]
+
+    submit_closed_res = client.post(
+        f"/api/forms/{org.slug}/{public_slug}/submit",
+        json={
+            "__booking_date": "2026-06-16",
+            "__booking_event_time": "20:30",
+            "__booking_event_series_id": "",
+        },
+    )
+    assert submit_closed_res.status_code == 422, submit_closed_res.text
+    assert "giorno" in submit_closed_res.json()["detail"]
+
+
+def test_selected_booking_availability_ignores_default_on_other_days(client, db):
+    org, admin = _create_org_admin(db)
+    _login_org_admin(client, db, admin.id)
+
+    default_res = client.post(
+        "/api/org-admin/booking-event-series",
+        json={
+            "name": "Default generale",
+            "recurrence_type": "weekly",
+            "weekday": 0,
+            "is_active": True,
+            "is_default": True,
+            "time_slots": ["20:30"],
+        },
+    )
+    assert default_res.status_code == 201, default_res.text
+
+    thursday_res = client.post(
+        "/api/org-admin/booking-event-series",
+        json={
+            "name": "Offerta giovedi",
+            "recurrence_type": "weekly",
+            "weekday": 3,
+            "is_active": True,
+            "time_slots": ["21:15"],
+        },
+    )
+    assert thursday_res.status_code == 201, thursday_res.text
+    thursday_series_id = thursday_res.json()["series"]["id"]
+
+    public_slug = f"prenotazione-giovedi-{uuid.uuid4().hex[:6]}"
+    form_res = client.post(
+        "/api/org-admin/forms",
+        json={
+            "title": "Offerta giovedi",
+            "public_slug": public_slug,
+            "is_active": True,
+            "visibility": "public",
+            "form_type": "booking",
+            "booking_enabled": True,
+            "booking_dynamic_events_enabled": True,
+            "booking_availability_mode": "selected",
+            "booking_event_series_ids": [thursday_series_id],
+            "booking_notification_enabled": False,
+        },
+    )
+    assert form_res.status_code == 201, form_res.text
+    assert form_res.json()["form"]["booking_availability_mode"] == "selected"
+    assert form_res.json()["form"]["booking_event_series_ids"] == [thursday_series_id]
+
+    thursday_events_res = client.get(f"/api/forms/{org.slug}/{public_slug}/booking-events?date=2026-06-18")
+    assert thursday_events_res.status_code == 200, thursday_events_res.text
+    thursday_payload = thursday_events_res.json()
+    assert thursday_payload["date_open"] is True
+    assert thursday_payload["available_slots"] == ["21:15"]
+    assert [item["id"] for item in thursday_payload["items"]] == [thursday_series_id]
+
+    friday_events_res = client.get(f"/api/forms/{org.slug}/{public_slug}/booking-events?date=2026-06-19")
+    assert friday_events_res.status_code == 200, friday_events_res.text
+    friday_payload = friday_events_res.json()
+    assert friday_payload["date_open"] is False
+    assert friday_payload["available_slots"] == []
+    assert friday_payload["items"] == []
+
+    dates_res = client.get(
+        f"/api/forms/{org.slug}/{public_slug}/booking-available-dates?start=2026-06-18&days=2"
+    )
+    assert dates_res.status_code == 200, dates_res.text
+    assert [item["date"] for item in dates_res.json()["items"]] == ["2026-06-18"]
+
+    default_day_submit_res = client.post(
+        f"/api/forms/{org.slug}/{public_slug}/submit",
+        json={
+            "__booking_date": "2026-06-19",
+            "__booking_event_time": "20:30",
+            "__booking_event_series_id": "",
+        },
+    )
+    assert default_day_submit_res.status_code == 422, default_day_submit_res.text
+    assert "non e disponibile" in default_day_submit_res.json()["detail"]
 
 
 def test_dynamic_booking_events_keep_block_position_and_resolve_series_from_time(client, db):
@@ -1563,7 +1756,21 @@ def test_booking_request_skips_form_emails_when_admin_tests_with_customer_email(
     org, admin = _create_org_admin(db)
     test_email = f"booking-self-{uuid.uuid4().hex[:8]}@example.com"
     admin.email = test_email
+    user_template = EmailTemplate(
+        association_id=org.id,
+        is_system=False,
+        name="Template booking pending",
+        category="forms",
+        subject="Template booking {{titolo_form}}",
+        body_text="Ciao {{nome_contatto}}, richiesta per {{data_prenotazione}} alle {{orario_prenotazione}}.",
+        body_html="<p>Ciao {{nome_contatto}}, richiesta per {{data_prenotazione}} alle {{orario_prenotazione}}.</p>",
+        channel="email",
+        is_active=True,
+        created_by_user_id=admin.id,
+    )
+    db.add(user_template)
     db.commit()
+    db.refresh(user_template)
     _login_org_admin(client, db, admin.id)
     public_slug = f"prenota-self-{uuid.uuid4().hex[:6]}"
 
@@ -1578,6 +1785,7 @@ def test_booking_request_skips_form_emails_when_admin_tests_with_customer_email(
             "booking_enabled": True,
             "booking_requires_manual_confirmation": True,
             "booking_notification_enabled": True,
+            "user_confirmation_template_id": user_template.id,
             "booking_field_mapping": {
                 "customer_name": "nome_cliente",
                 "customer_email": "email",
@@ -1626,6 +1834,15 @@ def test_booking_request_skips_form_emails_when_admin_tests_with_customer_email(
             .all()
         )
         assert [row[0] for row in rows] == ["booking_pending_confirmation"]
+        pending_email = (
+            verification_db.query(EmailOutbox)
+            .filter(EmailOutbox.to_email == test_email)
+            .one()
+        )
+        assert pending_email.subject == "Template booking Prenotazione self test"
+        assert "Ciao Mario Admin" in pending_email.payload_json["text_body"]
+        assert "25/06/2026" in pending_email.payload_json["text_body"]
+        assert "20:30" in pending_email.payload_json["text_body"]
     finally:
         verification_db.close()
 
@@ -2243,7 +2460,10 @@ def test_booking_rooms_tables_and_assignment_flow(client, db):
     map_res = client.get(f"/api/org-admin/rooms/{room_id}/map?date=2026-03-26&time=21:00")
     assert map_res.status_code == 200, map_res.text
     map_payload = map_res.json()
-    assert map_payload["totals"]["reserved"] == 1
+    assert map_payload["totals"]["semi_free"] == 1
+    assert map_payload["tables"][0]["occupancy_state"] == "semi_free"
+    assert map_payload["tables"][0]["occupied_seats"] == 6
+    assert map_payload["tables"][0]["remaining_seats"] == 2
     assert map_payload["tables"][0]["active_booking"]["customer_name"] == "Elena Verdi"
 
     edit_res = client.patch(
@@ -2268,8 +2488,51 @@ def test_booking_rooms_tables_and_assignment_flow(client, db):
     new_slot_map_res = client.get(f"/api/org-admin/rooms/{room_id}/map?date=2026-03-26&time=22:00")
     assert new_slot_map_res.status_code == 200, new_slot_map_res.text
     new_slot_map_payload = new_slot_map_res.json()
-    assert new_slot_map_payload["totals"]["reserved"] == 1
+    assert new_slot_map_payload["totals"]["semi_free"] == 1
+    assert new_slot_map_payload["tables"][0]["occupancy_state"] == "semi_free"
+    assert new_slot_map_payload["tables"][0]["remaining_seats"] == 1
     assert new_slot_map_payload["tables"][0]["active_booking"]["party_size"] == 7
+
+    fill_res = client.post(
+        f"/api/forms/{org.slug}/{public_slug}/submit",
+        json={
+            "nome_cliente": "Posto residuo",
+            "data_prenotazione": "2026-03-26",
+            "orario_prenotazione": "22:00",
+            "numero_persone": 1,
+        },
+    )
+    assert fill_res.status_code == 200, fill_res.text
+    fill_booking_id = fill_res.json()["booking"]["id"]
+    fill_assign_res = client.post(
+        f"/api/org-admin/bookings/{fill_booking_id}/assignment",
+        json={"room_id": room_id, "table_id": table_id},
+    )
+    assert fill_assign_res.status_code == 200, fill_assign_res.text
+
+    full_map_res = client.get(f"/api/org-admin/rooms/{room_id}/map?date=2026-03-26&time=22:00")
+    assert full_map_res.status_code == 200, full_map_res.text
+    full_table = full_map_res.json()["tables"][0]
+    assert full_table["occupancy_state"] == "occupied"
+    assert full_table["occupied_seats"] == 8
+    assert len(full_table["active_bookings"]) == 2
+
+    overflow_res = client.post(
+        f"/api/forms/{org.slug}/{public_slug}/submit",
+        json={
+            "nome_cliente": "Troppi posti",
+            "data_prenotazione": "2026-03-26",
+            "orario_prenotazione": "22:00",
+            "numero_persone": 1,
+        },
+    )
+    assert overflow_res.status_code == 200, overflow_res.text
+    overflow_assign_res = client.post(
+        f"/api/org-admin/bookings/{overflow_res.json()['booking']['id']}/assignment",
+        json={"room_id": room_id, "table_id": table_id},
+    )
+    assert overflow_assign_res.status_code == 409, overflow_assign_res.text
+    assert "posti residui" in overflow_assign_res.json()["detail"]
 
     move_res = client.put(
         f"/api/org-admin/rooms/{room_id}/map",
@@ -2369,4 +2632,6 @@ def test_booking_form_can_auto_assign_first_available_table(client, db):
 
     map_res = client.get(f"/api/org-admin/rooms/{room_id}/map?date=2026-03-27&time=20:00")
     assert map_res.status_code == 200, map_res.text
+    assert map_res.json()["tables"][0]["occupancy_state"] == "semi_free"
+    assert map_res.json()["tables"][0]["remaining_seats"] == 2
     assert map_res.json()["tables"][0]["active_booking"]["customer_name"] == "Auto Assign"

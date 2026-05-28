@@ -18,6 +18,14 @@ from app.services.booking_rooms import (
     resolve_assignment_targets,
     validate_booking_assignment,
 )
+from app.services.booking_event_availability import (
+    booking_event_series_slot_times,
+    find_form_booking_series_for_time,
+    form_allows_booking_event_series,
+    form_has_active_booking_slot_rules,
+    is_form_date_closed,
+    series_matches_date,
+)
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 from app.services.email_templates import build_template_context, render_template_string
@@ -449,12 +457,15 @@ def _resolve_dynamic_booking_event(
         raise HTTPException(status_code=422, detail="Seleziona un orario valido.")
     booking_time = booking_time[:5]
 
+    if is_form_date_closed(db, form=form, date_value=booking_date):
+        raise HTTPException(status_code=422, detail="Il giorno selezionato non e disponibile.")
+
     raw_series_id = (
         validated_payload.get("__booking_event_series_id")
         or validated_payload.get("booking_event_series_id")
     )
     if raw_series_id in (None, ""):
-        resolved_series = _find_dynamic_booking_series(
+        resolved_series = find_form_booking_series_for_time(
             db,
             form=form,
             booking_date=booking_date,
@@ -466,7 +477,7 @@ def _resolve_dynamic_booking_event(
                 "booking_time": booking_time,
                 "event_details": _booking_event_series_details(resolved_series),
             }
-        if _has_active_booking_event_rules(db, form=form):
+        if form_has_active_booking_slot_rules(db, form=form):
             raise HTTPException(status_code=422, detail="La data o l'orario selezionato non e disponibile.")
         return {
             "booking_date": booking_date,
@@ -486,13 +497,14 @@ def _resolve_dynamic_booking_event(
             BookingEventSeries.id == series_id,
             BookingEventSeries.association_id == form.association_id,
             BookingEventSeries.is_active.is_(True),
+            BookingEventSeries.is_closed.is_(False),
         )
         .first()
     )
-    if series is None:
+    if series is None or not form_allows_booking_event_series(form, series):
         raise HTTPException(status_code=422, detail="La serata selezionata non e disponibile.")
     if bool(getattr(series, "is_default", False)):
-        valid_slots = _booking_event_series_slot_times(series)
+        valid_slots = set(booking_event_series_slot_times(series))
         if valid_slots and booking_time not in valid_slots:
             raise HTTPException(status_code=422, detail="L'orario selezionato non e disponibile per questa serata.")
         return {
@@ -500,10 +512,10 @@ def _resolve_dynamic_booking_event(
             "booking_time": booking_time,
             "event_details": _booking_event_series_details(series),
         }
-    if not _series_matches_date(series, booking_date):
+    if not series_matches_date(series, booking_date):
         raise HTTPException(status_code=422, detail="La serata selezionata non e disponibile per questa data.")
 
-    valid_slots = _booking_event_series_slot_times(series)
+    valid_slots = set(booking_event_series_slot_times(series))
     if booking_time not in valid_slots:
         raise HTTPException(status_code=422, detail="L'orario selezionato non e disponibile per questa serata.")
 
@@ -667,6 +679,62 @@ def _enqueue_booking_email(
         ),
         priority=4,
     )
+
+
+def _strip_html_to_text(value: str | None) -> str:
+    if not value:
+        return ""
+    text = re.sub(r"<br\s*/?>", "\n", value, flags=re.IGNORECASE)
+    text = re.sub(r"</p\s*>", "\n\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
+    return html.unescape(text).strip()
+
+
+def _enqueue_booking_user_template_email(
+    db: Session,
+    *,
+    booking: Booking,
+    template: Any,
+    email_type: str,
+    default_subject: str,
+    default_text: str,
+) -> bool:
+    if not booking.customer_email or template is None:
+        return False
+    context = _booking_template_context(booking)
+    subject = (
+        render_template_string(getattr(template, "subject", None), context=context)
+        or default_subject
+    ).strip()[:240]
+    body_text = render_template_string(getattr(template, "body_text", None), context=context)
+    body_html_source = getattr(template, "body_html", None) or getattr(template, "compiled_html", None)
+    body_html = render_template_string(body_html_source, context=context, escape_html_values=True)
+    if not body_text and body_html:
+        body_text = _strip_html_to_text(body_html)
+    if not body_text and not body_html:
+        body_text = default_text
+    enqueue_email(
+        db,
+        email_type=email_type,
+        to_email=booking.customer_email,
+        subject=subject or default_subject,
+        payload=build_email_payload(
+            text_body=body_text or "",
+            html_body=body_html,
+            sender=build_sender_payload(
+                mode="association",
+                association=getattr(booking, "organization", None) or getattr(getattr(booking, "form", None), "organization", None),
+            ),
+            meta={
+                "booking_id": booking.id,
+                "form_id": booking.form_id,
+                "association_id": booking.association_id,
+                "template_id": getattr(template, "id", None),
+            },
+        ),
+        priority=4,
+    )
+    return True
 
 
 def _booking_admin_confirmation_email_enabled(booking: Booking) -> bool:
@@ -913,7 +981,32 @@ def create_booking_from_submission(
     )
 
     if bool(getattr(form, "booking_notification_enabled", True)) and booking.customer_email:
+        user_template = getattr(form, "user_confirmation_template", None)
         if status == BookingStatus.PENDING.value:
+            template_enqueued = _enqueue_booking_user_template_email(
+                db,
+                booking=booking,
+                template=user_template,
+                email_type="booking_pending_confirmation",
+                default_subject=f"Prenotazione ricevuta: {form.title}",
+                default_text=(
+                    f"Abbiamo ricevuto la tua prenotazione per '{form.title}'.\n\n"
+                    "La richiesta e in attesa di conferma da parte della segreteria."
+                ),
+            )
+        else:
+            template_enqueued = _enqueue_booking_user_template_email(
+                db,
+                booking=booking,
+                template=user_template,
+                email_type="booking_confirmed",
+                default_subject=f"Prenotazione confermata: {form.title}",
+                default_text=(
+                    f"La tua prenotazione per '{form.title}' e stata confermata.\n\n"
+                    "Ti aspettiamo all'orario indicato."
+                ),
+            )
+        if not template_enqueued and status == BookingStatus.PENDING.value:
             _enqueue_booking_email(
                 db,
                 booking=booking,
@@ -922,7 +1015,7 @@ def create_booking_from_submission(
                 action_message="La richiesta è in attesa di conferma da parte della segreteria.",
                 email_type="booking_pending_confirmation",
             )
-        else:
+        elif not template_enqueued:
             _enqueue_booking_email(
                 db,
                 booking=booking,

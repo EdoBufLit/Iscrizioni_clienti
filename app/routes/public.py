@@ -11,11 +11,11 @@ from time import monotonic
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse, FileResponse, Response, HTMLResponse
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import (
     AccountingShareLink,
-    BookingEventSeries,
+    BookingEvent,
     Member,
     Organization,
     Form as AssociationForm,
@@ -42,6 +42,10 @@ from app.services.forms import (
     validate_form_submission_payload,
 )
 from app.services.bookings import serialize_booking
+from app.services.booking_event_availability import (
+    public_booking_available_dates_payload,
+    public_booking_events_payload,
+)
 from app.services.whatsapp_automation import (
     maybe_send_form_submission_whatsapp_automations,
     maybe_send_form_submission_whatsapp_message,
@@ -634,6 +638,26 @@ def get_public_form_booking_events_scoped(
     return _public_booking_events_payload(db, form=form, date_value=date_value, time_value=time_value)
 
 
+@router.get("/api/forms/{org_slug}/{slug}/booking-available-dates")
+def get_public_form_booking_available_dates_scoped(
+    org_slug: str,
+    slug: str,
+    request: Request,
+    start_date: date | None = Query(default=None, alias="start"),
+    days: int = Query(default=60, ge=1, le=180),
+    db: Session = Depends(get_db),
+):
+    member = get_current_member(request, db)
+    form = _load_public_form(db, org_slug=org_slug, slug=slug)
+    _ensure_form_is_visible(form, member)
+    return public_booking_available_dates_payload(
+        db,
+        form=form,
+        start_date=start_date or date.today(),
+        days=days,
+    )
+
+
 @router.get("/api/forms/{slug}")
 def get_public_form(slug: str, request: Request, db: Session = Depends(get_db)):
     member = get_current_member(request, db)
@@ -656,6 +680,25 @@ def get_public_form_booking_events(
     return _public_booking_events_payload(db, form=form, date_value=date_value, time_value=time_value)
 
 
+@router.get("/api/forms/{slug}/booking-available-dates")
+def get_public_form_booking_available_dates(
+    slug: str,
+    request: Request,
+    start_date: date | None = Query(default=None, alias="start"),
+    days: int = Query(default=60, ge=1, le=180),
+    db: Session = Depends(get_db),
+):
+    member = get_current_member(request, db)
+    form = _load_public_form(db, slug=slug)
+    _ensure_form_is_visible(form, member)
+    return public_booking_available_dates_payload(
+        db,
+        form=form,
+        start_date=start_date or date.today(),
+        days=days,
+    )
+
+
 def _public_booking_events_payload(
     db: Session,
     *,
@@ -663,114 +706,12 @@ def _public_booking_events_payload(
     date_value: date,
     time_value: str | None = None,
 ) -> dict[str, object]:
-    inactive_payload = {
-        "items": [],
-        "using_default": False,
-        "has_active_rules": False,
-        "date_open": True,
-        "available_slots": [],
-    }
-    if not bool(getattr(form, "booking_dynamic_events_enabled", False)):
-        return inactive_payload
-    normalized_time = _normalize_public_booking_time(time_value)
-    has_active_rules = (
-        db.query(BookingEventSeries.id)
-        .filter(
-            BookingEventSeries.association_id == form.association_id,
-            BookingEventSeries.is_active.is_(True),
-        )
-        .first()
-        is not None
+    return public_booking_events_payload(
+        db,
+        form=form,
+        date_value=date_value,
+        time_value=time_value,
     )
-    items = (
-        db.query(BookingEventSeries)
-        .options(joinedload(BookingEventSeries.time_slots))
-        .filter(
-            BookingEventSeries.association_id == form.association_id,
-            BookingEventSeries.is_active.is_(True),
-            or_(
-                BookingEventSeries.event_date == date_value,
-                BookingEventSeries.weekday == date_value.weekday(),
-                BookingEventSeries.is_default.is_(True),
-            ),
-        )
-        .order_by(BookingEventSeries.is_default.desc(), BookingEventSeries.title.asc(), BookingEventSeries.id.asc())
-        .all()
-    )
-    matching_items = [
-        item
-        for item in items
-        if (
-            not bool(getattr(item, "is_default", False))
-            and (item.event_date == date_value or item.weekday == date_value.weekday())
-            and _series_has_public_time(item, normalized_time)
-        )
-    ]
-    default_items = [item for item in items if bool(getattr(item, "is_default", False))]
-    response_items = matching_items + [
-        item
-        for item in default_items[:1]
-        if item not in matching_items and (normalized_time is None or _series_has_public_time(item, normalized_time))
-    ]
-    available_slots: list[str] = []
-    seen_available_slots: set[str] = set()
-    for item in response_items:
-        for slot in list(item.time_slots or []):
-            slot_time = str(slot.start_time or "")[:5]
-            if not bool(getattr(slot, "is_active", True)) or not slot_time or slot_time in seen_available_slots:
-                continue
-            seen_available_slots.add(slot_time)
-            available_slots.append(slot_time)
-    return {
-        "using_default": not bool(matching_items) and bool(response_items),
-        "has_active_rules": has_active_rules,
-        "date_open": (not has_active_rules) or bool(available_slots),
-        "available_slots": available_slots,
-        "items": [
-            {
-                "id": item.id,
-                "title": item.title,
-                "name": item.title,
-                "description": item.description,
-                "recurrence_type": item.recurrence_type,
-                "weekday": item.weekday,
-                "event_date": item.event_date.isoformat() if item.event_date else None,
-                "specific_date": item.event_date.isoformat() if item.event_date else None,
-                "is_default": bool(getattr(item, "is_default", False)),
-                "time_slots": [
-                    {
-                        "id": slot.id,
-                        "event_series_id": item.id,
-                        "start_time": slot.start_time,
-                        "time": str(slot.start_time)[:5],
-                        "is_active": bool(getattr(slot, "is_active", True)),
-                        "sort_order": slot.sort_order,
-                    }
-                    for slot in list(item.time_slots or [])
-                    if bool(getattr(slot, "is_active", True))
-                ],
-            }
-            for item in response_items
-        ]
-    }
-
-
-def _normalize_public_booking_time(value: str | None) -> str | None:
-    normalized = str(value or "").strip()[:5]
-    if not normalized:
-        return None
-    return normalized if re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", normalized) else None
-
-
-def _series_has_public_time(series: BookingEventSeries, time_value: str | None) -> bool:
-    if not time_value:
-        return True
-    valid_slots = {
-        str(slot.start_time or "")[:5]
-        for slot in list(series.time_slots or [])
-        if bool(getattr(slot, "is_active", True))
-    }
-    return time_value in valid_slots
 
 
 def _submit_public_form(
@@ -814,27 +755,51 @@ def _submit_public_form(
         member=member,
         booking=booking,
     )
+    whatsapp_dispatch_results: list[dict[str, object]] = []
     try:
-        maybe_send_form_submission_whatsapp_message(
+        legacy_whatsapp_result = maybe_send_form_submission_whatsapp_message(
             db,
             form=form,
             submission=submission,
             member=member,
             booking=booking,
         )
-        maybe_send_form_submission_whatsapp_automations(
+    except Exception as exc:
+        logger.exception(
+            "submit_public_form_whatsapp_auto_reply_failed form_id=%s submission_id=%s",
+            getattr(form, "id", None),
+            submission.id,
+        )
+        legacy_whatsapp_result = {"sent": False, "reason": "exception", "error": str(exc)}
+    whatsapp_dispatch_results.append({"kind": "form_auto_reply", "result": legacy_whatsapp_result})
+    try:
+        automation_whatsapp_result = maybe_send_form_submission_whatsapp_automations(
             db,
             form=form,
             submission=submission,
             member=member,
             booking=booking,
         )
-    except Exception:
+    except Exception as exc:
         logger.exception(
             "submit_public_form_whatsapp_automation_failed form_id=%s submission_id=%s",
             getattr(form, "id", None),
             submission.id,
         )
+        automation_whatsapp_result = {"sent": 0, "processed": 0, "reason": "exception", "error": str(exc), "results": []}
+    whatsapp_dispatch_results.append({"kind": "form_automations", "result": automation_whatsapp_result})
+    if booking is not None:
+        db.add(
+            BookingEvent(
+                booking_id=booking.id,
+                event_type="form_whatsapp_dispatch_result",
+                payload_json={
+                    "candidate": _future_whatsapp_candidate,
+                    "results": whatsapp_dispatch_results,
+                },
+            )
+        )
+        db.flush()
     enqueue_submission_notifications(
         db,
         form=form,

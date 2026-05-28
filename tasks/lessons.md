@@ -295,3 +295,7 @@ After touching mobile/admin UI strings, grep the changed files for mojibake mark
 ## May 27, 2026 - Do not leave dead feature flags visible
 
 If a block or workflow remains active because it is represented by an explicit builder field, do not expose a separate settings flag that appears to disable it. Use explicit mapping choices or field presence as the source of truth, and keep hidden compatibility flags derived from those choices only for backend behavior.
+
+## May 28, 2026 - Booking closures must be explicit rules, not missing slots
+
+Do not interpret "date without slots" as closed when a default booking schedule exists. Model operational closures as explicit serate rules (`is_closed`) with weekday/date scope, give them precedence over defaults, and keep form-level restrictions as an allow-list of selected open serate.

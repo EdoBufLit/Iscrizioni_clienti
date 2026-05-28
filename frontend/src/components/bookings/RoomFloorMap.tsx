@@ -19,6 +19,8 @@ type DragState = {
 
 function occupancyTone(state: AssociationRoomTable["occupancy_state"]) {
   switch (state) {
+    case "semi_free":
+      return "bg-[#fff2cf] text-[#493713] ring-[#f3b83f] border-[#f0a71f]";
     case "reserved":
       return "bg-[#fff2cf] text-[#493713] ring-[#f3b83f] border-[#f0a71f]";
     case "occupied":
@@ -32,6 +34,8 @@ function occupancyTone(state: AssociationRoomTable["occupancy_state"]) {
 
 function occupancyLabel(state: AssociationRoomTable["occupancy_state"]) {
   switch (state) {
+    case "semi_free":
+      return "Semi-libero";
     case "reserved":
       return "Riservato";
     case "occupied":
@@ -178,7 +182,7 @@ export function RoomFloorMap({
             >
               <span className="text-sm font-bold tracking-tight">{table.name}</span>
               <span className="mt-1 text-[11px] font-semibold uppercase tracking-[0.18em] opacity-70">
-                {table.capacity} posti
+                {table.occupied_seats ?? 0}/{table.capacity} posti
               </span>
               {table.active_booking ? (
                 <span className="mt-2 max-w-full truncate rounded-full bg-white/80 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-700">
@@ -206,6 +210,7 @@ export function RoomFloorMap({
                 {table.name}
                 <span className="block text-[11px] uppercase tracking-[0.16em] opacity-70">
                   {table.capacity} posti
+                  {table.occupancy_state === "semi_free" ? `, ${table.remaining_seats ?? 0} residui` : ""}
                 </span>
               </span>
               <span>{occupancyLabel(table.occupancy_state)}</span>
@@ -215,7 +220,7 @@ export function RoomFloorMap({
       ) : null}
 
       <div className="room-floor-map__legend grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        {(["free", "reserved", "occupied", "out_of_service"] as AssociationRoomTable["occupancy_state"][]).map((state) => (
+        {(["free", "semi_free", "occupied", "out_of_service"] as AssociationRoomTable["occupancy_state"][]).map((state) => (
           <div key={state} className={`rounded-[1rem] border bg-gradient-to-br px-3 py-3 text-sm font-semibold ${occupancyTone(state)}`}>
             <p>{occupancyLabel(state)}</p>
             <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.18em] opacity-70">{state}</p>

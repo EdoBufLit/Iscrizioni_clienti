@@ -5576,3 +5576,22 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Blocco prenotazione reso verticale nei canvas stretti tramite container query; agenda mobile aggiornata con quadrotti giorno.
 - Verifiche OK: grep vecchi testi/callback/mojibake, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `npm --prefix frontend run test:run`, `git diff --check`.
 - Commit/push OK: `de0b8acc`; deploy GitHub Actions `26541590200` completato con successo.
+
+## Plan (Disponibilita serate, tavoli, link e form mobile - May 28, 2026)
+- [x] Aggiungere chiusure esplicite nelle serate con precedenza sul default orario.
+- [x] Aggiungere disponibilita form `all/selected` con lista serate selezionate.
+- [x] Esporre date disponibili pubbliche e usare solo giorni/orari validi nel form.
+- [x] Aggiornare tavoli con capienza residua e stato `Libero/Semi-libero/Occupato`.
+- [x] Rendere l'assegnazione tavolo parte del flusso prima della conferma, quando possibile.
+- [x] Rendere chiari i link WhatsApp conferma/disdetta/note nel template reminder.
+- [x] Far rispettare i template email booking e tracciare gli esiti WhatsApp utili.
+- [x] Correggere layout mobile del form pubblico e aggiungere preset font.
+- [x] Verificare backend, frontend, mobile smoke e diff finale.
+
+## Review (Disponibilita serate, tavoli, link e form mobile - May 28, 2026)
+- Serate: aggiunto `is_closed` con regole settimanali o per data; le chiusure bloccano default e form selezionati.
+- Form: aggiunta disponibilita `all/selected`, lista serate selezionabili e endpoint pubblico date disponibili; il campo giorno pubblico ora mostra solo date valide.
+- Tavoli: mappa e assegnazione usano capienza residua con stati `Libero`, `Semi-libero`, `Occupato`; conferma richiesta porta prima all'assegnazione se manca il tavolo.
+- Notifiche: reminder WhatsApp espone chip per link conferma/disdetta/note; le mail booking usano il template utente selezionato e il submit registra gli esiti WhatsApp sulla prenotazione.
+- Mobile: form pubblico senza overflow a 390px, privacy dentro contenitore, preset font salvato/renderizzato.
+- Verifiche OK: `python -m compileall app init_db.py`, `pytest tests/test_forms_module.py -k "booking_event or dynamic_booking or booking_submit_sends_one_whatsapp or booking_request_skips_form_emails or booking_rooms or auto_assign"`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`, smoke Playwright 390px.

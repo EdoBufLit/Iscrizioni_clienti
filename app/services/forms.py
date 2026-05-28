@@ -29,6 +29,10 @@ from app.services.bookings import (
     normalize_booking_field_mapping,
     normalize_form_type,
 )
+from app.services.booking_event_availability import (
+    normalize_booking_availability_mode,
+    normalize_booking_event_series_ids,
+)
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 from app.services.email_templates import render_template_content
@@ -43,6 +47,8 @@ ALLOWED_FORM_VISIBILITY = {
 }
 DEFAULT_FORM_PAGE_STYLE = "editorial"
 ALLOWED_FORM_PAGE_STYLES = {"editorial", "minimal", "spotlight"}
+DEFAULT_FORM_FONT_PRESET = "classic"
+ALLOWED_FORM_FONT_PRESETS = {"classic", "modern", "serif"}
 FIELD_TYPE_CONSENT = "consent"
 ALLOWED_FORM_FIELD_TYPES = {
     "short_text",
@@ -261,6 +267,16 @@ def normalize_form_page_style(value: Any) -> str:
     lowered = normalized.lower()
     if lowered not in ALLOWED_FORM_PAGE_STYLES:
         raise HTTPException(status_code=422, detail="Stile pagina non valido.")
+    return lowered
+
+
+def normalize_form_font_preset(value: Any) -> str:
+    normalized = _normalize_text(value)
+    if normalized is None:
+        return DEFAULT_FORM_FONT_PRESET
+    lowered = normalized.lower()
+    if lowered not in ALLOWED_FORM_FONT_PRESETS:
+        raise HTTPException(status_code=422, detail="Font form non valido.")
     return lowered
 
 
@@ -500,6 +516,7 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
         "show_logo": bool(getattr(form, "show_logo", True)),
         "cover_image_url": getattr(form, "cover_image_url", None),
         "page_style": getattr(form, "page_style", DEFAULT_FORM_PAGE_STYLE),
+        "font_preset": getattr(form, "font_preset", DEFAULT_FORM_FONT_PRESET),
         "public_slug": form.public_slug,
         "is_active": bool(form.is_active),
         "visibility": form.visibility,
@@ -537,6 +554,12 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
         "booking_event_time": getattr(form, "booking_event_time", None),
         "booking_event_details": getattr(form, "booking_event_details", None),
         "booking_dynamic_events_enabled": bool(getattr(form, "booking_dynamic_events_enabled", False)),
+        "booking_availability_mode": normalize_booking_availability_mode(
+            getattr(form, "booking_availability_mode", None)
+        ),
+        "booking_event_series_ids": normalize_booking_event_series_ids(
+            getattr(form, "booking_event_series_ids", None)
+        ),
         "survey_post_event_enabled": bool(getattr(form, "survey_post_event_enabled", False)),
         "survey_post_event_delay_hours": int(getattr(form, "survey_post_event_delay_hours", 2) or 2),
         "survey_post_event_message_template": getattr(form, "survey_post_event_message_template", None),
@@ -574,6 +597,7 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
             "show_logo": bool(getattr(form, "show_logo", True)),
             "cover_image_url": getattr(form, "cover_image_url", None),
             "page_style": getattr(form, "page_style", DEFAULT_FORM_PAGE_STYLE),
+            "font_preset": getattr(form, "font_preset", DEFAULT_FORM_FONT_PRESET),
         },
         "actions": {
             "save_submission": True,
@@ -617,6 +641,12 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
             "booking_event_time": getattr(form, "booking_event_time", None),
             "booking_event_details": getattr(form, "booking_event_details", None),
             "booking_dynamic_events_enabled": bool(getattr(form, "booking_dynamic_events_enabled", False)),
+            "booking_availability_mode": normalize_booking_availability_mode(
+                getattr(form, "booking_availability_mode", None)
+            ),
+            "booking_event_series_ids": normalize_booking_event_series_ids(
+                getattr(form, "booking_event_series_ids", None)
+            ),
             "survey_post_event_enabled": bool(getattr(form, "survey_post_event_enabled", False)),
             "survey_post_event_delay_hours": int(getattr(form, "survey_post_event_delay_hours", 2) or 2),
             "survey_post_event_message_template": getattr(form, "survey_post_event_message_template", None),
@@ -710,6 +740,7 @@ def apply_form_updates(
     show_logo: bool,
     cover_image_url: Any,
     page_style: Any,
+    font_preset: Any,
     public_slug: Any,
     is_active: bool,
     visibility: Any,
@@ -730,6 +761,8 @@ def apply_form_updates(
     booking_event_time: Any,
     booking_event_details: Any,
     booking_dynamic_events_enabled: bool,
+    booking_availability_mode: Any,
+    booking_event_series_ids: Any,
     survey_post_event_enabled: bool,
     survey_post_event_delay_hours: int | None,
     survey_post_event_message_template: Any,
@@ -755,6 +788,7 @@ def apply_form_updates(
     form.show_logo = bool(show_logo)
     form.cover_image_url = normalize_form_cover_image_url(cover_image_url)
     form.page_style = normalize_form_page_style(page_style)
+    form.font_preset = normalize_form_font_preset(font_preset)
     form.public_slug = build_unique_form_slug(
         db,
         base_slug=requested_slug,
@@ -782,6 +816,8 @@ def apply_form_updates(
     form.booking_event_time = normalize_booking_event_time(booking_event_time)
     form.booking_event_details = _normalize_multiline_text(booking_event_details)
     form.booking_dynamic_events_enabled = bool(booking_dynamic_events_enabled)
+    form.booking_availability_mode = normalize_booking_availability_mode(booking_availability_mode)
+    form.booking_event_series_ids = normalize_booking_event_series_ids(booking_event_series_ids)
     form.survey_post_event_enabled = bool(survey_post_event_enabled)
     try:
         normalized_delay = int(survey_post_event_delay_hours or 2)

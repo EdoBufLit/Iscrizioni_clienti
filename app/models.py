@@ -1456,6 +1456,11 @@ class Form(Base):
     booking_dynamic_events_enabled = Column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    booking_availability_mode = Column(
+        String, nullable=False, default="all", server_default="all"
+    )
+    booking_event_series_ids = Column(GENERIC_JSON_TYPE, nullable=True)
+    font_preset = Column(String, nullable=False, default="classic", server_default="classic")
     survey_post_event_enabled = Column(
         Boolean, nullable=False, default=False, server_default="false", index=True
     )
@@ -1696,6 +1701,7 @@ class BookingEventSeries(Base):
     event_date = Column(Date, nullable=True, index=True)
     is_active = Column(Boolean, nullable=False, default=True, server_default="true", index=True)
     is_default = Column(Boolean, nullable=False, default=False, server_default="false", index=True)
+    is_closed = Column(Boolean, nullable=False, default=False, server_default="false", index=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

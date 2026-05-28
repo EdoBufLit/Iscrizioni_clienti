@@ -418,6 +418,9 @@ def init_db():
             _add_column_if_missing(conn, "forms", "booking_event_time", "TEXT")
             _add_column_if_missing(conn, "forms", "booking_event_details", "TEXT")
             _add_column_if_missing(conn, "forms", "booking_dynamic_events_enabled", "INTEGER DEFAULT 0")
+            _add_column_if_missing(conn, "forms", "booking_availability_mode", "TEXT DEFAULT 'all'")
+            _add_column_if_missing(conn, "forms", "booking_event_series_ids", "TEXT")
+            _add_column_if_missing(conn, "forms", "font_preset", "TEXT DEFAULT 'classic'")
             _add_column_if_missing(conn, "forms", "survey_post_event_enabled", "INTEGER DEFAULT 0")
             _add_column_if_missing(conn, "forms", "survey_post_event_delay_hours", "INTEGER DEFAULT 2")
             _add_column_if_missing(conn, "forms", "survey_post_event_message_template", "TEXT")
@@ -468,6 +471,7 @@ def init_db():
             )
         if "booking_event_series" in table_names:
             _add_column_if_missing(conn, "booking_event_series", "is_default", "INTEGER DEFAULT 0")
+            _add_column_if_missing(conn, "booking_event_series", "is_closed", "INTEGER DEFAULT 0")
         if "form_submissions" in table_names:
             _add_column_if_missing(conn, "form_submissions", "reviewed_at", "DATETIME")
             _add_column_if_missing(conn, "form_submissions", "reviewed_by_admin_id", "INTEGER")

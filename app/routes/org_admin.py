@@ -2389,6 +2389,7 @@ class CreateAssociationFormBody(BaseModel):
     show_logo: bool = True
     cover_image_url: Optional[str] = None
     page_style: Optional[str] = Field(default="editorial", max_length=40)
+    font_preset: Optional[str] = Field(default="classic", max_length=40)
     public_slug: Optional[str] = Field(default=None, max_length=120)
     is_active: bool = False
     visibility: str = Field(default="public", max_length=40)
@@ -2409,6 +2410,8 @@ class CreateAssociationFormBody(BaseModel):
     booking_event_time: Optional[str] = Field(default=None, max_length=16)
     booking_event_details: Optional[str] = None
     booking_dynamic_events_enabled: bool = False
+    booking_availability_mode: str = Field(default="all", max_length=20)
+    booking_event_series_ids: list[int] = Field(default_factory=list)
     survey_post_event_enabled: bool = False
     survey_post_event_delay_hours: int = Field(default=2, ge=0, le=336)
     survey_post_event_message_template: Optional[str] = None
@@ -2432,6 +2435,7 @@ class UpdateAssociationFormBody(BaseModel):
     show_logo: bool = True
     cover_image_url: Optional[str] = None
     page_style: Optional[str] = Field(default="editorial", max_length=40)
+    font_preset: Optional[str] = Field(default="classic", max_length=40)
     public_slug: Optional[str] = Field(default=None, max_length=120)
     is_active: bool = False
     visibility: str = Field(default="public", max_length=40)
@@ -2452,6 +2456,8 @@ class UpdateAssociationFormBody(BaseModel):
     booking_event_time: Optional[str] = Field(default=None, max_length=16)
     booking_event_details: Optional[str] = None
     booking_dynamic_events_enabled: bool = False
+    booking_availability_mode: str = Field(default="all", max_length=20)
+    booking_event_series_ids: list[int] = Field(default_factory=list)
     survey_post_event_enabled: bool = False
     survey_post_event_delay_hours: int = Field(default=2, ge=0, le=336)
     survey_post_event_message_template: Optional[str] = None
@@ -2517,6 +2523,7 @@ class UpsertBookingEventSeriesBody(BaseModel):
     specific_date: Optional[date] = None
     is_active: bool = True
     is_default: bool = False
+    is_closed: bool = False
     time_slots: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -2592,6 +2599,7 @@ def _serialize_booking_event_series(series: BookingEventSeries) -> dict[str, obj
         "specific_date": series.event_date.isoformat() if series.event_date else None,
         "is_active": bool(series.is_active),
         "is_default": bool(getattr(series, "is_default", False)),
+        "is_closed": bool(getattr(series, "is_closed", False)),
         "time_slots": [
             {
                 "id": slot.id,
@@ -6549,6 +6557,7 @@ def create_association_form(
         show_logo=body.show_logo,
         cover_image_url=body.cover_image_url,
         page_style=body.page_style,
+        font_preset=body.font_preset,
         public_slug=form.public_slug,
         is_active=body.is_active,
         visibility=body.visibility,
@@ -6569,6 +6578,8 @@ def create_association_form(
         booking_event_time=body.booking_event_time,
         booking_event_details=body.booking_event_details,
         booking_dynamic_events_enabled=body.booking_dynamic_events_enabled,
+        booking_availability_mode=body.booking_availability_mode,
+        booking_event_series_ids=body.booking_event_series_ids,
         survey_post_event_enabled=body.survey_post_event_enabled,
         survey_post_event_delay_hours=body.survey_post_event_delay_hours,
         survey_post_event_message_template=body.survey_post_event_message_template,
@@ -6625,6 +6636,7 @@ def update_association_form(
         show_logo=body.show_logo,
         cover_image_url=body.cover_image_url,
         page_style=body.page_style,
+        font_preset=body.font_preset,
         public_slug=body.public_slug or body.title,
         is_active=body.is_active,
         visibility=body.visibility,
@@ -6645,6 +6657,8 @@ def update_association_form(
         booking_event_time=body.booking_event_time,
         booking_event_details=body.booking_event_details,
         booking_dynamic_events_enabled=body.booking_dynamic_events_enabled,
+        booking_availability_mode=body.booking_availability_mode,
+        booking_event_series_ids=body.booking_event_series_ids,
         survey_post_event_enabled=body.survey_post_event_enabled,
         survey_post_event_delay_hours=body.survey_post_event_delay_hours,
         survey_post_event_message_template=body.survey_post_event_message_template,
@@ -6706,6 +6720,7 @@ def duplicate_association_form(
         show_logo=bool(source_form.show_logo),
         cover_image_url=source_form.cover_image_url,
         page_style=source_form.page_style,
+        font_preset=getattr(source_form, "font_preset", "classic"),
         public_slug=duplicate_slug,
         is_active=False,
         visibility=source_form.visibility,
@@ -6733,6 +6748,8 @@ def duplicate_association_form(
         booking_event_time=getattr(source_form, "booking_event_time", None),
         booking_event_details=getattr(source_form, "booking_event_details", None),
         booking_dynamic_events_enabled=bool(getattr(source_form, "booking_dynamic_events_enabled", False)),
+        booking_availability_mode=getattr(source_form, "booking_availability_mode", "all"),
+        booking_event_series_ids=getattr(source_form, "booking_event_series_ids", None) or [],
         notify_admin_on_submit=bool(source_form.notify_admin_on_submit),
         send_user_confirmation=bool(source_form.send_user_confirmation),
         whatsapp_auto_reply_enabled=bool(getattr(source_form, "whatsapp_auto_reply_enabled", False)),
@@ -7514,7 +7531,8 @@ def _apply_booking_event_series_updates(series: BookingEventSeries, body: Upsert
     series.weekday = body.weekday if recurrence_type == "weekly" else None
     series.event_date = event_date if recurrence_type == "date" else None
     series.is_active = bool(body.is_active)
-    series.is_default = bool(body.is_default)
+    series.is_closed = bool(body.is_closed)
+    series.is_default = bool(body.is_default) and not bool(body.is_closed)
     series.updated_at = datetime.utcnow()
 
 
@@ -7539,7 +7557,7 @@ def _replace_booking_event_series_slots(
         slot = _normalize_event_slot_time(raw_slot)
         if slot not in normalized_slots:
             normalized_slots.append(slot)
-    if not normalized_slots:
+    if not normalized_slots and not bool(getattr(series, "is_closed", False)):
         raise HTTPException(status_code=422, detail="Inserisci almeno un orario disponibile.")
     for existing in list(series.time_slots or []):
         db.delete(existing)

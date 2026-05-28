@@ -2,9 +2,11 @@ import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
   fetchPublicForm,
+  fetchPublicFormBookingAvailableDates,
   fetchPublicFormBookingEvents,
   submitPublicForm,
   type OrgAdminBookingEventSeries,
+  type PublicBookingAvailableDate,
   type PublicAssociationForm,
 } from "../lib/api";
 import { applySeo } from "../lib/seo";
@@ -41,7 +43,14 @@ function pickBookingSeriesForTime(items: OrgAdminBookingEventSeries[], timeValue
 }
 
 function uniqueBookingSlots(items: OrgAdminBookingEventSeries[]): string[] {
-  return Array.from(new Set(items.flatMap(getSeriesSlotTimes))).sort();
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  items.flatMap(getSeriesSlotTimes).forEach((slot) => {
+    if (!slot || seen.has(slot)) return;
+    seen.add(slot);
+    ordered.push(slot);
+  });
+  return ordered;
 }
 
 function buildInitialValues(form: PublicAssociationForm): Record<string, unknown> {
@@ -68,8 +77,10 @@ const PublicFormPage = () => {
   const [form, setForm] = useState<PublicAssociationForm | null>(null);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [bookingEvents, setBookingEvents] = useState<OrgAdminBookingEventSeries[]>([]);
+  const [bookingDateOptions, setBookingDateOptions] = useState<PublicBookingAvailableDate[]>([]);
   const [bookingAvailability, setBookingAvailability] = useState(DEFAULT_BOOKING_AVAILABILITY);
   const [bookingEventsLoading, setBookingEventsLoading] = useState(false);
+  const [bookingDatesLoading, setBookingDatesLoading] = useState(false);
 
   useEffect(() => {
     if (!slug) return;
@@ -94,6 +105,46 @@ const PublicFormPage = () => {
       })
       .finally(() => setLoading(false));
   }, [orgSlug, slug]);
+
+  useEffect(() => {
+    if (!slug || !form?.booking_dynamic_events_enabled) {
+      setBookingDateOptions([]);
+      setBookingDatesLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setBookingDatesLoading(true);
+    const start = new Date().toISOString().slice(0, 10);
+    const request = orgSlug
+      ? fetchPublicFormBookingAvailableDates(orgSlug, slug, { start, days: 90 })
+      : fetchPublicFormBookingAvailableDates(slug, { start, days: 90 });
+    request
+      .then((response) => {
+        if (cancelled) return;
+        setBookingDateOptions(response.items);
+        setValues((current) => {
+          const currentDate = String(current.__booking_date || "");
+          const currentStillValid = response.items.some((item) => item.date === currentDate);
+          const nextDate = currentStillValid ? currentDate : response.items[0]?.date || "";
+          if (currentDate === nextDate) return current;
+          return {
+            ...current,
+            __booking_date: nextDate,
+            __booking_event_time: "",
+            __booking_event_series_id: "",
+          };
+        });
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Giorni disponibili non caricati.");
+      })
+      .finally(() => {
+        if (!cancelled) setBookingDatesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [form?.booking_dynamic_events_enabled, orgSlug, slug]);
 
   useEffect(() => {
     if (!slug || !form?.booking_dynamic_events_enabled) {
@@ -250,6 +301,8 @@ const PublicFormPage = () => {
           interactive
           bookingEvents={bookingEvents}
           bookingEventsLoading={bookingEventsLoading}
+          bookingDateOptions={bookingDateOptions}
+          bookingDatesLoading={bookingDatesLoading}
           bookingRulesActive={bookingAvailability.hasActiveRules}
           bookingDateOpen={bookingAvailability.dateOpen}
           availableBookingSlots={bookingAvailability.availableSlots}

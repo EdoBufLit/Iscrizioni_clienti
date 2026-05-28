@@ -101,12 +101,27 @@ def _serialize_booking_summary(booking: Booking | None) -> dict[str, Any] | None
     }
 
 
+def _booking_capacity_usage(booking: Booking, *, table_capacity: int) -> int:
+    try:
+        party_size = int(booking.party_size or 0)
+    except (TypeError, ValueError):
+        party_size = 0
+    if party_size <= 0:
+        return max(1, int(table_capacity or 1))
+    return max(1, party_size)
+
+
 def serialize_room_table(
     table: RoomTable,
     *,
     occupancy_state: str = "free",
     active_booking: Booking | None = None,
+    active_bookings: list[Booking] | None = None,
+    occupied_seats: int = 0,
 ) -> dict[str, Any]:
+    capacity = max(1, int(table.capacity or 1))
+    active_items = list(active_bookings or ([] if active_booking is None else [active_booking]))
+    used_seats = max(0, int(occupied_seats or 0))
     return {
         "id": table.id,
         "association_id": table.association_id,
@@ -124,6 +139,9 @@ def serialize_room_table(
         "updated_at": table.updated_at.isoformat() if table.updated_at else None,
         "occupancy_state": occupancy_state,
         "active_booking": _serialize_booking_summary(active_booking),
+        "active_bookings": [_serialize_booking_summary(item) for item in active_items],
+        "occupied_seats": used_seats,
+        "remaining_seats": max(0, capacity - used_seats),
     }
 
 
@@ -221,7 +239,7 @@ def _active_bookings_by_table(
     room_id: int,
     focus_date: date | None = None,
     focus_time: str | None = None,
-) -> dict[int, Booking]:
+) -> dict[int, list[Booking]]:
     query = (
         db.query(Booking)
         .options(joinedload(Booking.form))
@@ -241,11 +259,11 @@ def _active_bookings_by_table(
         Booking.booking_time.asc().nulls_last(),
         Booking.created_at.asc(),
     ).all()
-    by_table: dict[int, Booking] = {}
+    by_table: dict[int, list[Booking]] = {}
     for booking in bookings:
         table_id = int(booking.table_id or 0)
-        if table_id and table_id not in by_table:
-            by_table[table_id] = booking
+        if table_id:
+            by_table.setdefault(table_id, []).append(booking)
     return by_table
 
 
@@ -267,20 +285,26 @@ def room_map_payload(
     )
     tables_payload = []
     for table in sorted(room.tables or [], key=lambda item: (item.pos_y, item.pos_x, item.id)):
-        booking = active_by_table.get(table.id)
+        active_bookings = active_by_table.get(table.id, [])
+        occupied_seats = sum(
+            _booking_capacity_usage(item, table_capacity=int(table.capacity or 1))
+            for item in active_bookings
+        )
         if bool(table.is_out_of_service):
             occupancy = "out_of_service"
-        elif booking is None:
+        elif not active_bookings:
             occupancy = "free"
-        elif booking.status == BookingStatus.SEATED.value:
+        elif occupied_seats >= int(table.capacity or 1):
             occupancy = "occupied"
         else:
-            occupancy = "reserved"
+            occupancy = "semi_free"
         tables_payload.append(
             serialize_room_table(
                 table,
                 occupancy_state=occupancy,
-                active_booking=booking,
+                active_booking=active_bookings[0] if active_bookings else None,
+                active_bookings=active_bookings,
+                occupied_seats=occupied_seats,
             )
         )
     return {
@@ -292,6 +316,7 @@ def room_map_payload(
             "tables": len(tables_payload),
             "free": sum(1 for item in tables_payload if item["occupancy_state"] == "free"),
             "reserved": sum(1 for item in tables_payload if item["occupancy_state"] == "reserved"),
+            "semi_free": sum(1 for item in tables_payload if item["occupancy_state"] == "semi_free"),
             "occupied": sum(1 for item in tables_payload if item["occupancy_state"] == "occupied"),
             "out_of_service": sum(1 for item in tables_payload if item["occupancy_state"] == "out_of_service"),
         },
@@ -337,7 +362,7 @@ def validate_booking_assignment(
         return
     if booking.booking_date is None:
         return
-    conflict_query = (
+    existing_query = (
         db.query(Booking)
         .filter(
             Booking.association_id == booking.association_id,
@@ -348,11 +373,20 @@ def validate_booking_assignment(
         )
     )
     if booking.booking_time:
-        conflict_query = conflict_query.filter(
+        existing_query = existing_query.filter(
             (Booking.booking_time == booking.booking_time) | (Booking.booking_time.is_(None))
         )
-    conflict = conflict_query.first()
-    if conflict is not None:
+    existing_bookings = existing_query.order_by(Booking.created_at.asc(), Booking.id.asc()).all()
+    table_capacity = max(1, int(table.capacity or 1))
+    existing_seats = sum(_booking_capacity_usage(item, table_capacity=table_capacity) for item in existing_bookings)
+    candidate_seats = _booking_capacity_usage(booking, table_capacity=table_capacity)
+    if existing_seats + candidate_seats > table_capacity:
+        conflict = existing_bookings[0] if existing_bookings else None
+        suffix = f" perche gia assegnato a {conflict.customer_name}" if conflict is not None else ""
+        raise HTTPException(
+            status_code=409,
+            detail=f"Il tavolo {table.name} non ha abbastanza posti residui{suffix}.",
+        )
         raise HTTPException(
             status_code=409,
             detail=(
@@ -396,11 +430,18 @@ def auto_assign_booking_table(
             ),
         )
         for table in ordered_tables:
+            table_capacity = int(table.capacity or 1)
+            candidate_seats = _booking_capacity_usage(booking, table_capacity=table_capacity)
             if not bool(table.is_active) or bool(table.is_out_of_service):
                 continue
-            if int(table.capacity or 0) < required_capacity:
+            if table_capacity < candidate_seats:
                 continue
-            if table.id in active_by_table:
+            existing_bookings = active_by_table.get(table.id, [])
+            used_seats = sum(
+                _booking_capacity_usage(item, table_capacity=table_capacity)
+                for item in existing_bookings
+            )
+            if used_seats + candidate_seats > table_capacity:
                 continue
             validate_booking_assignment(
                 db,

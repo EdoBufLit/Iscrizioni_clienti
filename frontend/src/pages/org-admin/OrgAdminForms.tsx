@@ -7,6 +7,7 @@ import {
   createOrgAdminFormField,
   deleteOrgAdminForm,
   deleteOrgAdminFormField,
+  fetchOrgAdminBookingEventSeries,
   fetchOrgAdminForm,
   fetchOrgAdminForms,
   fetchOrgAdminFormSubmission,
@@ -23,6 +24,7 @@ import {
   type AssociationFormType,
   type AssociationFormSubmission,
   type AssociationFormVisibility,
+  type OrgAdminBookingEventSeries,
   type OrgAdminEmailTemplate,
 } from "../../lib/api";
 import { applySeo } from "../../lib/seo";
@@ -111,6 +113,16 @@ const pageStyleOptions: Array<{
   { value: "spotlight", label: "Spotlight", hint: "Più scenografico, con hero forte." },
 ];
 
+const fontPresetOptions: Array<{
+  value: "classic" | "modern" | "serif";
+  label: string;
+  hint: string;
+}> = [
+  { value: "classic", label: "Classico", hint: "Titoli editoriali e testo morbido." },
+  { value: "modern", label: "Moderno", hint: "Sans pulito, piu compatto e operativo." },
+  { value: "serif", label: "Elegante", hint: "Serif piu marcato per eventi premium." },
+];
+
 const fieldTypeOptions: Array<{
   value: AssociationFormFieldType;
   label: string;
@@ -141,6 +153,31 @@ const bookingMappingTargets: Array<{ key: BookingMappingTarget; label: string; h
   { key: "party_size", label: "Numero persone", hint: "Dimensione gruppo o coperti." },
   { key: "notes", label: "Note", hint: "Richieste speciali o dettagli utili." },
 ];
+
+const weekdayLabels = ["Lunedi", "Martedi", "Mercoledi", "Giovedi", "Venerdi", "Sabato", "Domenica"];
+
+function formatBookingSeriesWhen(series: OrgAdminBookingEventSeries): string {
+  if (series.recurrence_type === "weekly" && series.weekday !== null && series.weekday !== undefined) {
+    return weekdayLabels[Number(series.weekday)] || `Giorno ${Number(series.weekday) + 1}`;
+  }
+  if (series.specific_date || series.event_date) {
+    const rawDate = series.specific_date || series.event_date || "";
+    const parsedDate = new Date(`${rawDate}T00:00:00`);
+    if (!Number.isNaN(parsedDate.getTime())) {
+      return parsedDate.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" });
+    }
+    return rawDate;
+  }
+  return "Regola";
+}
+
+function formatBookingSeriesSlots(series: OrgAdminBookingEventSeries): string {
+  if (series.is_closed) return "Chiusura";
+  const slots = (series.time_slots || [])
+    .map((slot) => String(slot.time || slot.start_time || "").slice(0, 5))
+    .filter(Boolean);
+  return slots.length ? slots.join(", ") : "Nessuno slot";
+}
 
 const submissionStatusMeta: Record<string, { label: string; className: string }> = {
   pending: { label: "In attesa", className: "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200" },
@@ -223,6 +260,7 @@ function emptyFormDraft() {
     show_logo: true,
     cover_image_url: "",
     page_style: "editorial" as PageStyleOption,
+    font_preset: "classic" as "classic" | "modern" | "serif" | string,
     public_slug: "",
     is_active: false,
     visibility: "public" as AssociationFormVisibility,
@@ -243,6 +281,8 @@ function emptyFormDraft() {
     booking_event_time: "",
     booking_event_details: "",
     booking_dynamic_events_enabled: false,
+    booking_availability_mode: "all" as "all" | "selected" | string,
+    booking_event_series_ids: [] as number[],
     survey_post_event_enabled: false,
     survey_post_event_delay_hours: 2,
     survey_post_event_message_template: "",
@@ -281,6 +321,7 @@ function draftFromAssociationForm(form: AssociationForm) {
     show_logo: Boolean(form.show_logo),
     cover_image_url: form.cover_image_url || "",
     page_style: (form.page_style as PageStyleOption) || "editorial",
+    font_preset: form.font_preset || form.design?.font_preset || "classic",
     public_slug: form.public_slug || "",
     is_active: Boolean(form.is_active),
     visibility: form.visibility,
@@ -301,6 +342,12 @@ function draftFromAssociationForm(form: AssociationForm) {
     booking_event_time: form.booking_event_time || "",
     booking_event_details: form.booking_event_details || "",
     booking_dynamic_events_enabled: Boolean(form.booking_dynamic_events_enabled),
+    booking_availability_mode: form.booking_availability_mode || form.actions?.booking_availability_mode || "all",
+    booking_event_series_ids: Array.isArray(form.booking_event_series_ids)
+      ? form.booking_event_series_ids
+      : Array.isArray(form.actions?.booking_event_series_ids)
+        ? form.actions.booking_event_series_ids
+        : [],
     survey_post_event_enabled: Boolean(form.survey_post_event_enabled),
     survey_post_event_delay_hours: form.survey_post_event_delay_hours || 2,
     survey_post_event_message_template: form.survey_post_event_message_template || "",
@@ -523,6 +570,9 @@ export function OrgAdminFormsWorkspace({
   const [builderDraftFields, setBuilderDraftFields] = useState<BuilderField[]>([]);
   const [formDraft, setFormDraft] = useState(emptyFormDraft());
   const [savingForm, setSavingForm] = useState(false);
+  const [bookingEventSeries, setBookingEventSeries] = useState<OrgAdminBookingEventSeries[]>([]);
+  const [bookingEventSeriesLoading, setBookingEventSeriesLoading] = useState(false);
+  const [bookingEventSeriesError, setBookingEventSeriesError] = useState("");
 
   const [realPreviewOpen, setRealPreviewOpen] = useState(false);
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
@@ -588,6 +638,26 @@ export function OrgAdminFormsWorkspace({
       return;
     }
     void loadForms();
+  }, [adminLoading, admin, locked]);
+
+  useEffect(() => {
+    if (adminLoading || !admin || locked) {
+      setBookingEventSeries([]);
+      setBookingEventSeriesError("");
+      setBookingEventSeriesLoading(false);
+      return;
+    }
+    setBookingEventSeriesLoading(true);
+    setBookingEventSeriesError("");
+    fetchOrgAdminBookingEventSeries()
+      .then((response) => {
+        setBookingEventSeries(response.items || []);
+      })
+      .catch((err) => {
+        setBookingEventSeries([]);
+        setBookingEventSeriesError(err instanceof Error ? err.message : "Errore caricamento serate.");
+      })
+      .finally(() => setBookingEventSeriesLoading(false));
   }, [adminLoading, admin, locked]);
 
   useEffect(() => {
@@ -693,6 +763,18 @@ export function OrgAdminFormsWorkspace({
       formDraft.booking_field_mapping?.booking_date === BOOKING_BLOCK_MAPPING_VALUE
       || formDraft.booking_field_mapping?.booking_time === BOOKING_BLOCK_MAPPING_VALUE,
     [formDraft.booking_field_mapping],
+  );
+  const bookingSelectableSeries = useMemo(
+    () => bookingEventSeries.filter((item) => item.is_active !== false && !item.is_closed),
+    [bookingEventSeries],
+  );
+  const selectedBookingSeriesIds = useMemo(
+    () => new Set((formDraft.booking_event_series_ids || []).map((value) => Number(value)).filter((value) => Number.isFinite(value))),
+    [formDraft.booking_event_series_ids],
+  );
+  const selectedBookingSeriesCount = useMemo(
+    () => bookingSelectableSeries.filter((item) => selectedBookingSeriesIds.has(item.id)).length,
+    [bookingSelectableSeries, selectedBookingSeriesIds],
   );
   useEffect(() => {
     if (!formDraft.booking_enabled || (bookingMappingFieldOptions.length === 0 && !hasBookingBlockField)) return;
@@ -1077,6 +1159,21 @@ export function OrgAdminFormsWorkspace({
     });
   }
 
+  function toggleBookingSeriesSelection(seriesId: number, checked: boolean) {
+    setFormDraft((current) => {
+      const currentIds = (current.booking_event_series_ids || [])
+        .map((value) => Number(value))
+        .filter((value) => Number.isFinite(value));
+      const nextIds = checked
+        ? Array.from(new Set([...currentIds, seriesId]))
+        : currentIds.filter((value) => value !== seriesId);
+      return {
+        ...current,
+        booking_event_series_ids: nextIds,
+      };
+    });
+  }
+
   function ensureBookingBlockInDraft() {
     setBuilderDraftFields((current) => {
       if (current.some((field) => isBookingBlockField(field))) return current;
@@ -1167,6 +1264,20 @@ export function OrgAdminFormsWorkspace({
         bookingFieldMapping.booking_date === BOOKING_BLOCK_MAPPING_VALUE
         || bookingFieldMapping.booking_time === BOOKING_BLOCK_MAPPING_VALUE;
       const bookingBlockEventsEnabled = Boolean(hasBookingBlockField && usesBookingBlockMapping);
+      const bookingAvailabilityMode = formDraft.booking_availability_mode === "selected" ? "selected" : "all";
+      const selectableSeriesIds = new Set(bookingSelectableSeries.map((item) => item.id));
+      const selectedSeriesIds = (formDraft.booking_event_series_ids || [])
+        .map((value) => Number(value))
+        .filter((value) => selectableSeriesIds.has(value));
+      if (bookingBlockEventsEnabled && bookingAvailabilityMode === "selected" && selectedSeriesIds.length === 0) {
+        setActiveTab("settings");
+        showToast({
+          tone: "error",
+          title: "Serate richieste",
+          message: "Se scegli solo serate selezionate, seleziona almeno una serata prenotabile.",
+        });
+        return;
+      }
       const payload = {
         ...formDraft,
         title: normalizedTitle,
@@ -1174,6 +1285,7 @@ export function OrgAdminFormsWorkspace({
         accent_color: formDraft.accent_color || null,
         submit_button_text: formDraft.submit_button_text || null,
         cover_image_url: formDraft.cover_image_url || null,
+        font_preset: formDraft.font_preset || "classic",
         public_slug: formDraft.public_slug || null,
         success_message: formDraft.success_message || null,
         notification_email: formDraft.notification_email || null,
@@ -1188,6 +1300,8 @@ export function OrgAdminFormsWorkspace({
         booking_event_time: null,
         booking_event_details: null,
         booking_dynamic_events_enabled: bookingBlockEventsEnabled,
+        booking_availability_mode: bookingBlockEventsEnabled ? bookingAvailabilityMode : "all",
+        booking_event_series_ids: bookingBlockEventsEnabled && bookingAvailabilityMode === "selected" ? selectedSeriesIds : [],
         form_type: mode === "surveys" ? "survey" : formDraft.form_type,
         survey_post_event_enabled: formDraft.survey_post_event_enabled,
         survey_post_event_delay_hours: formDraft.survey_post_event_delay_hours,
@@ -1690,9 +1804,12 @@ export function OrgAdminFormsWorkspace({
       show_logo: formDraft.show_logo,
       cover_image_url: formDraft.cover_image_url || null,
       page_style: formDraft.page_style,
+      font_preset: formDraft.font_preset || "classic",
       visibility: formDraft.visibility,
       is_active: formDraft.is_active,
       booking_dynamic_events_enabled: Boolean(hasBookingBlockField && bookingBlockMappingActive),
+      booking_availability_mode: formDraft.booking_availability_mode || "all",
+      booking_event_series_ids: formDraft.booking_event_series_ids || [],
       booking_enabled: formDraft.booking_enabled,
       create_booking: formDraft.create_booking,
       form_type: formDraft.form_type,
@@ -1843,6 +1960,36 @@ export function OrgAdminFormsWorkspace({
                     <div>
                       <div className="text-sm font-semibold text-neutral-900">{option.label}</div>
                       <div className="text-[11px] font-medium text-neutral-500 mt-0.5">{option.hint}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className={labelClass}>Font</label>
+              <div className="grid gap-2 mt-2">
+                {fontPresetOptions.map((option) => (
+                  <label
+                    key={option.value}
+                    className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors ${
+                      formDraft.font_preset === option.value
+                        ? "border-brand bg-brand/5 ring-1 ring-brand/20"
+                        : "border-neutral-200 bg-white hover:bg-neutral-50"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="font_preset"
+                      value={option.value}
+                      checked={formDraft.font_preset === option.value}
+                      onChange={() => syncFormDraft("font_preset", option.value)}
+                      className="border-neutral-300 text-brand focus:ring-brand"
+                      disabled={locked}
+                    />
+                    <div>
+                      <div className="text-sm font-semibold text-neutral-900">{option.label}</div>
+                      <div className="mt-0.5 text-[11px] font-medium text-neutral-500">{option.hint}</div>
                     </div>
                   </label>
                 ))}
@@ -2022,6 +2169,94 @@ export function OrgAdminFormsWorkspace({
                 >
                   Gestisci serate e default
                 </a>
+              </div>
+              <div className="space-y-3 rounded-[1rem] border border-neutral-200 bg-white p-4">
+                <div>
+                  <p className="text-sm font-semibold text-neutral-900">Disponibilita del form</p>
+                  <p className="mt-1 text-xs font-medium leading-5 text-neutral-500">
+                    Le chiusure configurate in Prenotazioni restano sempre rispettate.
+                  </p>
+                </div>
+                <div className="grid gap-2">
+                  {[
+                    {
+                      value: "all",
+                      label: "Usa tutte le serate/default disponibili",
+                      hint: "Il form segue il default orario e le serate aperte.",
+                    },
+                    {
+                      value: "selected",
+                      label: "Usa solo serate selezionate",
+                      hint: "Per offerte dedicate a un giorno o evento specifico.",
+                    },
+                  ].map((option) => (
+                    <label
+                      key={option.value}
+                      className={`flex cursor-pointer gap-3 rounded-xl border p-3 transition-colors ${
+                        formDraft.booking_availability_mode === option.value
+                          ? "border-emerald-300 bg-emerald-50"
+                          : "border-neutral-200 bg-neutral-50 hover:bg-white"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="booking_availability_mode"
+                        value={option.value}
+                        checked={formDraft.booking_availability_mode === option.value}
+                        onChange={() => syncFormDraft("booking_availability_mode", option.value)}
+                        disabled={locked}
+                        className="mt-1 border-neutral-300 text-emerald-700 focus:ring-emerald-700"
+                      />
+                      <span>
+                        <span className="block text-sm font-semibold text-neutral-900">{option.label}</span>
+                        <span className="mt-1 block text-xs font-medium leading-5 text-neutral-500">{option.hint}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                {formDraft.booking_availability_mode === "selected" ? (
+                  <div className="space-y-2 rounded-xl border border-neutral-200 bg-neutral-50 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs font-bold uppercase tracking-[0.14em] text-neutral-500">Serate selezionate</span>
+                      <span className="text-xs font-semibold text-neutral-500">
+                        {selectedBookingSeriesCount}/{bookingSelectableSeries.length}
+                      </span>
+                    </div>
+                    {bookingEventSeriesLoading ? (
+                      <p className="text-xs font-medium text-neutral-500">Caricamento serate...</p>
+                    ) : bookingEventSeriesError ? (
+                      <p className="text-xs font-semibold text-rose-700">{bookingEventSeriesError}</p>
+                    ) : bookingSelectableSeries.length === 0 ? (
+                      <p className="text-xs font-medium text-neutral-500">Nessuna serata prenotabile attiva. Aggiungila da Prenotazioni.</p>
+                    ) : (
+                      <div className="grid max-h-64 gap-2 overflow-y-auto pr-1">
+                        {bookingSelectableSeries.map((series) => (
+                          <label
+                            key={series.id}
+                            className="flex cursor-pointer gap-3 rounded-xl border border-neutral-200 bg-white p-3 transition hover:border-emerald-200 hover:bg-emerald-50/40"
+                          >
+                            <input
+                              type="checkbox"
+                              disabled={locked}
+                              checked={selectedBookingSeriesIds.has(series.id)}
+                              onChange={(event) => toggleBookingSeriesSelection(series.id, event.target.checked)}
+                              className="mt-1 rounded border-neutral-300 text-emerald-700 focus:ring-emerald-700"
+                            />
+                            <span className="min-w-0">
+                              <span className="block truncate text-sm font-semibold text-neutral-900">
+                                {series.title || series.name || `Serata ${series.id}`}
+                              </span>
+                              <span className="mt-1 block text-xs font-medium leading-5 text-neutral-500">
+                                {formatBookingSeriesWhen(series)} - {formatBookingSeriesSlots(series)}
+                                {series.is_default ? " - Default" : ""}
+                              </span>
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
               </div>
               <div className="space-y-3 rounded-[1rem] border border-neutral-200 bg-neutral-50 p-4">
                 {bookingMappingTargets.map((target) => {
