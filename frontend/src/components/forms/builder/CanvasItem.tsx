@@ -129,7 +129,7 @@ function CanvasItemFrame({
     <div
       ref={nodeRef}
       style={style}
-      className={`form-builder-item group relative flex flex-col rounded-[0.85rem] transition-all cursor-pointer ${
+      className={`form-builder-item group relative flex flex-col rounded-[0.85rem] transition-all cursor-pointer active:scale-[0.995] ${
         isSelected
           ? "ring-2 ring-brand shadow-[0_4px_20px_rgba(15,118,110,0.15)] z-10"
           : "ring-1 ring-black/5 hover:ring-black/15 shadow-sm hover:shadow-md"
@@ -139,11 +139,11 @@ function CanvasItemFrame({
         onSelect();
       }}
     >
-      <div className="absolute left-0 top-0 bottom-0 w-8 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
+      <div className="form-builder-drag-handle absolute left-0 top-0 bottom-0 w-8 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
         <div
           {...attributes}
           {...listeners}
-          className="p-1 cursor-grab active:cursor-grabbing text-neutral-400 hover:text-neutral-700 bg-white rounded shadow-sm border border-neutral-100"
+          className="p-1.5 cursor-grab active:cursor-grabbing text-neutral-400 hover:text-neutral-700 bg-white rounded shadow-sm border border-neutral-100"
           onClick={(e) => e.stopPropagation()} // prevent select when clicking drag handle
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

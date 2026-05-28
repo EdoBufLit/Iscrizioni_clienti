@@ -46,6 +46,9 @@ import SubmissionDecisionModal from "../../components/ui/SubmissionDecisionModal
 import Skeleton from "../../components/ui/Skeleton";
 import { useUnsavedChangesGuard } from "../../components/ui/UnsavedChangesProvider";
 import { EmptyState, KpiCard, SectionPanel, StatusChip } from "./components/OrgAdminPrimitives";
+import AccordionGroup from "../../components/ui/AccordionGroup";
+import MobileScrollTabs from "../../components/ui/MobileScrollTabs";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 
 const inputClass =
   "mt-1 w-full rounded-[1.1rem] border border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-neutral-900/40 focus:ring-2 focus:ring-neutral-900/10";
@@ -560,6 +563,7 @@ export function OrgAdminFormsWorkspace({
   const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
 
+  const isMobile = useMediaQuery("(max-width: 1023px)");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [forms, setForms] = useState<AssociationForm[]>([]);
@@ -2015,506 +2019,363 @@ export function OrgAdminFormsWorkspace({
     </div>
   );
 
-  const automationsTab = (
-    <div className="form-settings-tab space-y-5 overflow-y-auto custom-scrollbar pb-10">
-      <div>
-        <section className="rounded-[1.45rem] border border-[#e6dccb] bg-white p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.18)]">
-          <div className="border-b border-[#efe8db] pb-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8a948d]">Accesso e notifiche</p>
-          </div>
-
-          <div className="mt-4 space-y-4">
-            <div>
-              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Link pubblico</label>
-              <div className="mt-2 flex items-center gap-2">
-                <input
-                  className="h-11 flex-1 rounded-[0.95rem] border border-[#ddd5c9] bg-white px-4 text-sm text-[#182126] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/12"
-                  readOnly
-                  value={selectedFormUrl || publicUrl || ""}
-                  placeholder="Salva per generare il link"
-                />
-                <button
-                  type="button"
-                  className="inline-flex h-11 items-center justify-center rounded-[0.95rem] bg-[#0f5e5d] px-4 text-sm font-semibold text-white transition hover:bg-[#0c4d4d] disabled:cursor-not-allowed disabled:opacity-50"
-                  onClick={() => void copyPublicLink(selectedFormUrl || publicUrl)}
-                  disabled={!selectedFormUrl && !publicUrl}
-                >
-                  Copia
-                </button>
-              </div>
-            </div>
-
-            <label className="block">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Personalizza URL</span>
-              <input
-                className="mt-2 h-11 w-full rounded-[0.95rem] border border-[#ddd5c9] bg-white px-4 text-sm text-[#182126] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/12"
-                disabled={locked}
-                value={formDraft.public_slug}
-                onChange={(event) => syncFormDraft("public_slug", derivePublicSlug(event.target.value))}
-                placeholder="iscrizione-corso"
-              />
-            </label>
-
-            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
-              <label className="block">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Visibilità</span>
-                <select
-                  className="mt-2 h-11 w-full rounded-[0.95rem] border border-[#ddd5c9] bg-white px-4 text-sm text-[#182126] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/12"
-                  disabled={locked}
-                  value={formDraft.visibility}
-                  onChange={(event) => syncFormDraft("visibility", event.target.value as AssociationFormVisibility)}
-                >
-                  <option value="public">Pubblico</option>
-                  <option value="members_only">Solo soci</option>
-                </select>
-              </label>
-
-              <div className="rounded-[1rem] border border-[#ece5d8] bg-[#fcfbf7] px-4 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Pagina attiva</p>
-                    <p className="mt-1 text-sm font-medium text-[#182126]">{formDraft.is_active ? "Attiva" : "Disattiva"}</p>
-                  </div>
-                  <label className="relative inline-flex cursor-pointer items-center">
-                    <input
-                      type="checkbox"
-                      disabled={locked}
-                      checked={formDraft.is_active}
-                      onChange={(event) => syncFormDraft("is_active", event.target.checked)}
-                      className="peer sr-only"
-                    />
-                    <span className="h-6 w-11 rounded-full bg-[#d6d6d6] transition peer-checked:bg-[#0f5e5d]" />
-                    <span className="absolute left-1 h-4 w-4 rounded-full bg-white transition peer-checked:translate-x-5" />
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Email notifiche</label>
-              <input
-                className="mt-2 h-11 w-full rounded-[0.95rem] border border-[#ddd5c9] bg-white px-4 text-sm text-[#182126] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/12"
-                type="email"
-                disabled={locked}
-                value={formDraft.notification_email}
-                onChange={(event) => syncFormDraft("notification_email", event.target.value)}
-                placeholder="Es. segreteria@associazione.it"
-              />
-            </div>
-
-            <div className="rounded-[1rem] border border-[#ece5d8] bg-[#fcfbf7] px-4 py-4">
-              <div className="grid gap-2 text-sm text-[#182126]">
-                <label className="inline-flex items-center gap-2">
-                  <input type="checkbox" disabled={locked} checked={formDraft.notify_admin_on_submit} onChange={(event) => syncFormDraft("notify_admin_on_submit", event.target.checked)} className="rounded border-neutral-300 text-brand" />
-                  Notifica segreteria
-                </label>
-                <label className="inline-flex items-center gap-2">
-                  <input type="checkbox" disabled={locked} checked={formDraft.send_user_confirmation} onChange={(event) => syncFormDraft("send_user_confirmation", event.target.checked)} className="rounded border-neutral-300 text-brand" />
-                  Conferma utente
-                </label>
-                <label className="inline-flex items-center gap-2">
-                  <input type="checkbox" disabled={locked} checked={formDraft.allow_multiple_submissions} onChange={(event) => syncFormDraft("allow_multiple_submissions", event.target.checked)} className="rounded border-neutral-300 text-brand" />
-                  Invii multipli
-                </label>
-              </div>
-            </div>
-          </div>
-        </section>
+  const settingsAccessPanel = (
+    <section className="rounded-[1.45rem] border border-[#e6dccb] bg-white p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.18)]">
+      <div className="border-b border-[#efe8db] pb-4">
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8a948d]">Accesso e notifiche</p>
       </div>
+      <div className="mt-4 space-y-4">
+        <div>
+          <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Link pubblico</label>
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              className="h-11 flex-1 rounded-[0.95rem] border border-[#ddd5c9] bg-white px-4 text-sm text-[#182126] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/12"
+              readOnly
+              value={selectedFormUrl || publicUrl || ""}
+              placeholder="Salva per generare il link"
+            />
+            <button
+              type="button"
+              className="inline-flex h-11 items-center justify-center rounded-[0.95rem] bg-[#0f5e5d] px-4 text-sm font-semibold text-white transition hover:bg-[#0c4d4d] disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => void copyPublicLink(selectedFormUrl || publicUrl)}
+              disabled={!selectedFormUrl && !publicUrl}
+            >
+              Copia
+            </button>
+          </div>
+        </div>
+        <label className="block">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Personalizza URL</span>
+          <input
+            className="mt-2 h-11 w-full rounded-[0.95rem] border border-[#ddd5c9] bg-white px-4 text-sm text-[#182126] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/12"
+            disabled={locked}
+            value={formDraft.public_slug}
+            onChange={(event) => syncFormDraft("public_slug", derivePublicSlug(event.target.value))}
+            placeholder="iscrizione-corso"
+          />
+        </label>
+        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
+          <label className="block">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Visibilità</span>
+            <select
+              className="mt-2 h-11 w-full rounded-[0.95rem] border border-[#ddd5c9] bg-white px-4 text-sm text-[#182126] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/12"
+              disabled={locked}
+              value={formDraft.visibility}
+              onChange={(event) => syncFormDraft("visibility", event.target.value as AssociationFormVisibility)}
+            >
+              <option value="public">Pubblico</option>
+              <option value="members_only">Solo soci</option>
+            </select>
+          </label>
+          <div className="rounded-[1rem] border border-[#ece5d8] bg-[#fcfbf7] px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Pagina attiva</p>
+                <p className="mt-1 text-sm font-medium text-[#182126]">{formDraft.is_active ? "Attiva" : "Disattiva"}</p>
+              </div>
+              <label className="relative inline-flex cursor-pointer items-center">
+                <input type="checkbox" disabled={locked} checked={formDraft.is_active} onChange={(event) => syncFormDraft("is_active", event.target.checked)} className="peer sr-only" />
+                <span className="h-6 w-11 rounded-full bg-[#d6d6d6] transition peer-checked:bg-[#0f5e5d]" />
+                <span className="absolute left-1 h-4 w-4 rounded-full bg-white transition peer-checked:translate-x-5" />
+              </label>
+            </div>
+          </div>
+        </div>
+        <div>
+          <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6b72]">Email notifiche</label>
+          <input
+            className="mt-2 h-11 w-full rounded-[0.95rem] border border-[#ddd5c9] bg-white px-4 text-sm text-[#182126] outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/12"
+            type="email"
+            disabled={locked}
+            value={formDraft.notification_email}
+            onChange={(event) => syncFormDraft("notification_email", event.target.value)}
+            placeholder="Es. segreteria@associazione.it"
+          />
+        </div>
+        <div className="rounded-[1rem] border border-[#ece5d8] bg-[#fcfbf7] px-4 py-4">
+          <div className="grid gap-2 text-sm text-[#182126]">
+            <label className="inline-flex items-center gap-2">
+              <input type="checkbox" disabled={locked} checked={formDraft.notify_admin_on_submit} onChange={(event) => syncFormDraft("notify_admin_on_submit", event.target.checked)} className="rounded border-neutral-300 text-brand" />
+              Notifica segreteria
+            </label>
+            <label className="inline-flex items-center gap-2">
+              <input type="checkbox" disabled={locked} checked={formDraft.send_user_confirmation} onChange={(event) => syncFormDraft("send_user_confirmation", event.target.checked)} className="rounded border-neutral-300 text-brand" />
+              Conferma utente
+            </label>
+            <label className="inline-flex items-center gap-2">
+              <input type="checkbox" disabled={locked} checked={formDraft.allow_multiple_submissions} onChange={(event) => syncFormDraft("allow_multiple_submissions", event.target.checked)} className="rounded border-neutral-300 text-brand" />
+              Invii multipli
+            </label>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
 
-      <div className="grid gap-5 xl:grid-cols-2">
-        <section className="rounded-[1.35rem] border border-neutral-200 bg-white p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.16)]">
+  const settingsBookingPanel = (
+    <>
+      <section className="rounded-[1.35rem] border border-neutral-200 bg-white p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.16)]">
+        <div className="flex items-center justify-between gap-4">
+          <h3 className="text-sm font-semibold text-neutral-900">Prenotazioni</h3>
+          <label className="relative inline-flex cursor-pointer items-center">
+            <input type="checkbox" disabled={locked} checked={formDraft.booking_enabled} onChange={(event) => syncFormDraft("booking_enabled", event.target.checked)} className="peer sr-only" />
+            <span className="h-6 w-11 rounded-full bg-neutral-200 transition peer-checked:bg-brand" />
+            <span className="absolute left-1 h-4 w-4 rounded-full bg-white transition peer-checked:translate-x-5" />
+          </label>
+        </div>
+        {formDraft.booking_enabled ? (
+          <div className="mt-4 space-y-4">
+            <div className="grid gap-2 text-sm text-neutral-700">
+              <label className="inline-flex items-center gap-2">
+                <input type="checkbox" disabled={locked} checked={formDraft.booking_requires_manual_confirmation} onChange={(event) => syncFormDraft("booking_requires_manual_confirmation", event.target.checked)} className="rounded border-neutral-300 text-brand" />
+                Richiede conferma manuale
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input type="checkbox" disabled={locked} checked={formDraft.booking_notification_enabled} onChange={(event) => syncFormDraft("booking_notification_enabled", event.target.checked)} className="rounded border-neutral-300 text-brand" />
+                Invia email stato booking
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input type="checkbox" disabled={locked} checked={formDraft.booking_auto_assign_enabled} onChange={(event) => syncFormDraft("booking_auto_assign_enabled", event.target.checked)} className="rounded border-neutral-300 text-brand" />
+                Auto assegna tavolo
+              </label>
+            </div>
+            <div className="space-y-3 rounded-[1rem] border border-emerald-200 bg-emerald-50/60 p-4">
+              <div className="rounded-xl border border-emerald-200 bg-white/70 p-3 text-sm text-neutral-700">
+                <p className="font-semibold text-neutral-900">Serate e orari dal blocco prenotazione</p>
+                <p className="mt-1 text-xs font-medium leading-5 text-neutral-500">
+                  Inserisci il blocco Prenotazione nel builder e seleziona "Blocco prenotazione (serate)" nei menu Data/Ora. Il form utilizza le serate configurate quando disponibili, altrimenti la prenotazione libera.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="inline-flex rounded-xl bg-white px-3 py-2 text-sm font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-200 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-55"
+                disabled={locked || hasBookingBlockField}
+                onClick={ensureBookingBlockInDraft}
+              >
+                {hasBookingBlockField ? "Blocco inserito" : "Inserisci blocco"}
+              </button>
+              <a className="inline-flex rounded-xl bg-white px-3 py-2 text-sm font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-200 transition hover:bg-emerald-50" href="/org-admin/prenotazioni?section=events">
+                Gestisci serate e default
+              </a>
+            </div>
+            <div className="space-y-3 rounded-[1rem] border border-neutral-200 bg-white p-4">
+              <div>
+                <p className="text-sm font-semibold text-neutral-900">Disponibilita del form</p>
+                <p className="mt-1 text-xs font-medium leading-5 text-neutral-500">Le chiusure configurate in Prenotazioni restano sempre rispettate.</p>
+              </div>
+              <div className="grid gap-2">
+                {[
+                  { value: "all", label: "Usa tutte le serate/default disponibili", hint: "Il form segue il default orario e le serate aperte." },
+                  { value: "selected", label: "Usa solo serate selezionate", hint: "Per offerte dedicate a un giorno o evento specifico." },
+                ].map((option) => (
+                  <label key={option.value} className={`flex cursor-pointer gap-3 rounded-xl border p-3 transition-colors ${formDraft.booking_availability_mode === option.value ? "border-emerald-300 bg-emerald-50" : "border-neutral-200 bg-neutral-50 hover:bg-white"}`}>
+                    <input type="radio" name="booking_availability_mode" value={option.value} checked={formDraft.booking_availability_mode === option.value} onChange={() => syncFormDraft("booking_availability_mode", option.value)} disabled={locked} className="mt-1 border-neutral-300 text-emerald-700 focus:ring-emerald-700" />
+                    <span>
+                      <span className="block text-sm font-semibold text-neutral-900">{option.label}</span>
+                      <span className="mt-1 block text-xs font-medium leading-5 text-neutral-500">{option.hint}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              {formDraft.booking_availability_mode === "selected" ? (
+                <div className="space-y-2 rounded-xl border border-neutral-200 bg-neutral-50 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-bold uppercase tracking-[0.14em] text-neutral-500">Serate selezionate</span>
+                    <span className="text-xs font-semibold text-neutral-500">{selectedBookingSeriesCount}/{bookingSelectableSeries.length}</span>
+                  </div>
+                  {bookingEventSeriesLoading ? (
+                    <p className="text-xs font-medium text-neutral-500">Caricamento serate...</p>
+                  ) : bookingEventSeriesError ? (
+                    <p className="text-xs font-semibold text-rose-700">{bookingEventSeriesError}</p>
+                  ) : bookingSelectableSeries.length === 0 ? (
+                    <p className="text-xs font-medium text-neutral-500">Nessuna serata prenotabile attiva. Aggiungila da Prenotazioni.</p>
+                  ) : (
+                    <div className="grid max-h-64 gap-2 overflow-y-auto pr-1">
+                      {bookingSelectableSeries.map((series) => (
+                        <label key={series.id} className="flex cursor-pointer gap-3 rounded-xl border border-neutral-200 bg-white p-3 transition hover:border-emerald-200 hover:bg-emerald-50/40">
+                          <input type="checkbox" disabled={locked} checked={selectedBookingSeriesIds.has(series.id)} onChange={(event) => toggleBookingSeriesSelection(series.id, event.target.checked)} className="mt-1 rounded border-neutral-300 text-emerald-700 focus:ring-emerald-700" />
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-semibold text-neutral-900">{series.title || series.name || `Serata ${series.id}`}</span>
+                            <span className="mt-1 block text-xs font-medium leading-5 text-neutral-500">{formatBookingSeriesWhen(series)} - {formatBookingSeriesSlots(series)}{series.is_default ? " - Default" : ""}</span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+            <div className="space-y-3 rounded-[1rem] border border-neutral-200 bg-neutral-50 p-4">
+              {bookingMappingTargets.map((target) => {
+                const canUseBookingBlock = hasBookingBlockField && (target.key === "booking_date" || target.key === "booking_time");
+                return (
+                  <div key={target.key} className="grid gap-2 md:grid-cols-[170px_minmax(0,1fr)] md:items-center">
+                    <span className="text-xs font-medium text-neutral-700">{target.label}</span>
+                    <select className={`${inputClass} !mt-0 !py-2`} disabled={locked || (bookingMappingFieldOptions.length === 0 && !canUseBookingBlock)} value={formDraft.booking_field_mapping[target.key] || ""} onChange={(event) => syncBookingFieldMapping(target.key, event.target.value)}>
+                      <option value="">-- Non collegato --</option>
+                      {canUseBookingBlock ? <option value={BOOKING_BLOCK_MAPPING_VALUE}>Blocco prenotazione (serate)</option> : null}
+                      {bookingMappingFieldOptions.map((option) => <option key={`${target.key}-${option.value}`} value={option.value}>{option.label}</option>)}
+                    </select>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+      </section>
+      {mode === "surveys" ? (
+        <section className="rounded-[1.35rem] border border-emerald-200 bg-emerald-50/60 p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.12)]">
           <div className="flex items-center justify-between gap-4">
-            <h3 className="text-sm font-semibold text-neutral-900">Prenotazioni</h3>
+            <div>
+              <h3 className="text-sm font-semibold text-neutral-900">Invio post evento</h3>
+              <p className="mt-1 text-xs leading-5 text-neutral-600">Invia automaticamente questo sondaggio via email alle prenotazioni segnate come presenti in agenda.</p>
+            </div>
             <label className="relative inline-flex cursor-pointer items-center">
-              <input type="checkbox" disabled={locked} checked={formDraft.booking_enabled} onChange={(event) => syncFormDraft("booking_enabled", event.target.checked)} className="peer sr-only" />
+              <input type="checkbox" disabled={locked} checked={formDraft.survey_post_event_enabled} onChange={(event) => syncFormDraft("survey_post_event_enabled", event.target.checked)} className="peer sr-only" />
               <span className="h-6 w-11 rounded-full bg-neutral-200 transition peer-checked:bg-brand" />
               <span className="absolute left-1 h-4 w-4 rounded-full bg-white transition peer-checked:translate-x-5" />
             </label>
           </div>
-          {formDraft.booking_enabled ? (
-            <div className="mt-4 space-y-4">
-              <div className="grid gap-2 text-sm text-neutral-700">
-                <label className="inline-flex items-center gap-2">
-                  <input type="checkbox" disabled={locked} checked={formDraft.booking_requires_manual_confirmation} onChange={(event) => syncFormDraft("booking_requires_manual_confirmation", event.target.checked)} className="rounded border-neutral-300 text-brand" />
-                  Richiede conferma manuale
-                </label>
-                <label className="inline-flex items-center gap-2">
-                  <input type="checkbox" disabled={locked} checked={formDraft.booking_notification_enabled} onChange={(event) => syncFormDraft("booking_notification_enabled", event.target.checked)} className="rounded border-neutral-300 text-brand" />
-                  Invia email stato booking
-                </label>
-                <label className="inline-flex items-center gap-2">
-                  <input type="checkbox" disabled={locked} checked={formDraft.booking_auto_assign_enabled} onChange={(event) => syncFormDraft("booking_auto_assign_enabled", event.target.checked)} className="rounded border-neutral-300 text-brand" />
-                  Auto assegna tavolo
-                </label>
-              </div>
-              <div className="space-y-3 rounded-[1rem] border border-emerald-200 bg-emerald-50/60 p-4">
-                <div className="rounded-xl border border-emerald-200 bg-white/70 p-3 text-sm text-neutral-700">
-                  <p className="font-semibold text-neutral-900">Serate e orari dal blocco prenotazione</p>
-                  <p className="mt-1 text-xs font-medium leading-5 text-neutral-500">
-                    Inserisci il blocco Prenotazione nel builder e seleziona "Blocco prenotazione (serate)" nei menu Data/Ora. Il form utilizza le serate configurate quando disponibili, altrimenti la prenotazione libera.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="inline-flex rounded-xl bg-white px-3 py-2 text-sm font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-200 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-55"
-                  disabled={locked || hasBookingBlockField}
-                  onClick={ensureBookingBlockInDraft}
-                >
-                  {hasBookingBlockField ? "Blocco inserito" : "Inserisci blocco"}
-                </button>
-                <a
-                  className="inline-flex rounded-xl bg-white px-3 py-2 text-sm font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-200 transition hover:bg-emerald-50"
-                  href="/org-admin/prenotazioni?section=events"
-                >
-                  Gestisci serate e default
-                </a>
-              </div>
-              <div className="space-y-3 rounded-[1rem] border border-neutral-200 bg-white p-4">
-                <div>
-                  <p className="text-sm font-semibold text-neutral-900">Disponibilita del form</p>
-                  <p className="mt-1 text-xs font-medium leading-5 text-neutral-500">
-                    Le chiusure configurate in Prenotazioni restano sempre rispettate.
-                  </p>
-                </div>
-                <div className="grid gap-2">
-                  {[
-                    {
-                      value: "all",
-                      label: "Usa tutte le serate/default disponibili",
-                      hint: "Il form segue il default orario e le serate aperte.",
-                    },
-                    {
-                      value: "selected",
-                      label: "Usa solo serate selezionate",
-                      hint: "Per offerte dedicate a un giorno o evento specifico.",
-                    },
-                  ].map((option) => (
-                    <label
-                      key={option.value}
-                      className={`flex cursor-pointer gap-3 rounded-xl border p-3 transition-colors ${
-                        formDraft.booking_availability_mode === option.value
-                          ? "border-emerald-300 bg-emerald-50"
-                          : "border-neutral-200 bg-neutral-50 hover:bg-white"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="booking_availability_mode"
-                        value={option.value}
-                        checked={formDraft.booking_availability_mode === option.value}
-                        onChange={() => syncFormDraft("booking_availability_mode", option.value)}
-                        disabled={locked}
-                        className="mt-1 border-neutral-300 text-emerald-700 focus:ring-emerald-700"
-                      />
-                      <span>
-                        <span className="block text-sm font-semibold text-neutral-900">{option.label}</span>
-                        <span className="mt-1 block text-xs font-medium leading-5 text-neutral-500">{option.hint}</span>
-                      </span>
-                    </label>
-                  ))}
-                </div>
-                {formDraft.booking_availability_mode === "selected" ? (
-                  <div className="space-y-2 rounded-xl border border-neutral-200 bg-neutral-50 p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-xs font-bold uppercase tracking-[0.14em] text-neutral-500">Serate selezionate</span>
-                      <span className="text-xs font-semibold text-neutral-500">
-                        {selectedBookingSeriesCount}/{bookingSelectableSeries.length}
-                      </span>
-                    </div>
-                    {bookingEventSeriesLoading ? (
-                      <p className="text-xs font-medium text-neutral-500">Caricamento serate...</p>
-                    ) : bookingEventSeriesError ? (
-                      <p className="text-xs font-semibold text-rose-700">{bookingEventSeriesError}</p>
-                    ) : bookingSelectableSeries.length === 0 ? (
-                      <p className="text-xs font-medium text-neutral-500">Nessuna serata prenotabile attiva. Aggiungila da Prenotazioni.</p>
-                    ) : (
-                      <div className="grid max-h-64 gap-2 overflow-y-auto pr-1">
-                        {bookingSelectableSeries.map((series) => (
-                          <label
-                            key={series.id}
-                            className="flex cursor-pointer gap-3 rounded-xl border border-neutral-200 bg-white p-3 transition hover:border-emerald-200 hover:bg-emerald-50/40"
-                          >
-                            <input
-                              type="checkbox"
-                              disabled={locked}
-                              checked={selectedBookingSeriesIds.has(series.id)}
-                              onChange={(event) => toggleBookingSeriesSelection(series.id, event.target.checked)}
-                              className="mt-1 rounded border-neutral-300 text-emerald-700 focus:ring-emerald-700"
-                            />
-                            <span className="min-w-0">
-                              <span className="block truncate text-sm font-semibold text-neutral-900">
-                                {series.title || series.name || `Serata ${series.id}`}
-                              </span>
-                              <span className="mt-1 block text-xs font-medium leading-5 text-neutral-500">
-                                {formatBookingSeriesWhen(series)} - {formatBookingSeriesSlots(series)}
-                                {series.is_default ? " - Default" : ""}
-                              </span>
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-              <div className="space-y-3 rounded-[1rem] border border-neutral-200 bg-neutral-50 p-4">
-                {bookingMappingTargets.map((target) => {
-                  const canUseBookingBlock = hasBookingBlockField && (target.key === "booking_date" || target.key === "booking_time");
-                  return (
-                    <div key={target.key} className="grid gap-2 md:grid-cols-[170px_minmax(0,1fr)] md:items-center">
-                      <span className="text-xs font-medium text-neutral-700">{target.label}</span>
-                      <select
-                        className={`${inputClass} !mt-0 !py-2`}
-                        disabled={locked || (bookingMappingFieldOptions.length === 0 && !canUseBookingBlock)}
-                        value={formDraft.booking_field_mapping[target.key] || ""}
-                        onChange={(event) => syncBookingFieldMapping(target.key, event.target.value)}
-                      >
-                        <option value="">-- Non collegato --</option>
-                        {canUseBookingBlock ? (
-                          <option value={BOOKING_BLOCK_MAPPING_VALUE}>Blocco prenotazione (serate)</option>
-                        ) : null}
-                        {bookingMappingFieldOptions.map((option) => (
-                          <option key={`${target.key}-${option.value}`} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
+          <div className="mt-4 grid gap-4">
+            <label className={labelClass}>
+              Ore dopo l'evento
+              <input className={inputClass} type="number" min={0} max={336} disabled={locked} value={formDraft.survey_post_event_delay_hours} onChange={(event) => syncFormDraft("survey_post_event_delay_hours", Number(event.target.value || 2))} />
+            </label>
+            <label className={labelClass}>
+              Messaggio email
+              <textarea className={`${inputClass} min-h-[96px] resize-none`} disabled={locked} value={formDraft.survey_post_event_message_template} onChange={(event) => syncFormDraft("survey_post_event_message_template", event.target.value)} placeholder="Ciao {{nome_contatto}}, grazie per aver partecipato. Ci aiuti con un breve sondaggio? {{link_sondaggio}}" />
+            </label>
+          </div>
         </section>
+      ) : null}
+    </>
+  );
 
-        {mode === "surveys" ? (
-          <section className="rounded-[1.35rem] border border-emerald-200 bg-emerald-50/60 p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.12)]">
-            <div className="flex items-center justify-between gap-4">
+  const settingsEmailPanel = (
+    <section className="rounded-[1.35rem] border border-neutral-200 bg-white p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.16)]">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-neutral-900">Notifiche email</h3>
+          <p className="mt-1 text-xs leading-5 text-neutral-500">Seleziona, modifica e controlla la mail che riceve chi compila il form.</p>
+        </div>
+        {formDraft.send_user_confirmation ? (
+          <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-700">Conferma attiva</span>
+        ) : (
+          <span className="rounded-full bg-neutral-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-neutral-500">Conferma disattiva</span>
+        )}
+      </div>
+      <div className="mt-4 space-y-4">
+        <label className={labelClass}>
+          Template notifica admin
+          <select className={inputClass} disabled={locked} value={formDraft.admin_notification_template_id ?? ""} onChange={(event) => syncFormDraft("admin_notification_template_id", event.target.value ? Number(event.target.value) : null)}>
+            <option value="">Riepilogo automatico standard</option>
+            {activeTemplates.map((template) => (<option key={`admin-${template.id}`} value={template.id}>{template.name}</option>))}
+          </select>
+        </label>
+        <label className={labelClass}>
+          Template conferma utente
+          <select className={inputClass} disabled={locked} value={formDraft.user_confirmation_template_id ?? ""} onChange={(event) => syncFormDraft("user_confirmation_template_id", event.target.value ? Number(event.target.value) : null)}>
+            <option value="">Conferma automatica standard</option>
+            {activeTemplates.map((template) => (<option key={`user-${template.id}`} value={template.id}>{template.name}</option>))}
+          </select>
+        </label>
+        {formDraft.booking_enabled ? (
+          <div className="rounded-[1.1rem] border border-emerald-200 bg-emerald-50/60 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h3 className="text-sm font-semibold text-neutral-900">Invio post evento</h3>
-                <p className="mt-1 text-xs leading-5 text-neutral-600">
-                  Invia automaticamente questo sondaggio via email alle prenotazioni segnate come presenti in agenda.
-                </p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-800">Email dopo conferma admin</p>
+                <p className="mt-1 text-xs leading-5 text-emerald-900/75">Questa e separata dalla conferma di invio form e dai sondaggi. Disattivala se vuoi usare solo WhatsApp.</p>
               </div>
               <label className="relative inline-flex cursor-pointer items-center">
-                <input
-                  type="checkbox"
-                  disabled={locked}
-                  checked={formDraft.survey_post_event_enabled}
-                  onChange={(event) => syncFormDraft("survey_post_event_enabled", event.target.checked)}
-                  className="peer sr-only"
-                />
-                <span className="h-6 w-11 rounded-full bg-neutral-200 transition peer-checked:bg-brand" />
+                <input type="checkbox" disabled={locked} checked={formDraft.booking_admin_confirmation_email_enabled} onChange={(event) => syncFormDraft("booking_admin_confirmation_email_enabled", event.target.checked)} className="peer sr-only" />
+                <span className="h-6 w-11 rounded-full bg-emerald-100 transition peer-checked:bg-brand" />
                 <span className="absolute left-1 h-4 w-4 rounded-full bg-white transition peer-checked:translate-x-5" />
               </label>
             </div>
-            <div className="mt-4 grid gap-4">
-              <label className={labelClass}>
-                Ore dopo l'evento
-                <input
-                  className={inputClass}
-                  type="number"
-                  min={0}
-                  max={336}
-                  disabled={locked}
-                  value={formDraft.survey_post_event_delay_hours}
-                  onChange={(event) => syncFormDraft("survey_post_event_delay_hours", Number(event.target.value || 2))}
-                />
-              </label>
-              <label className={labelClass}>
-                Messaggio email
-                <textarea
-                  className={`${inputClass} min-h-[96px] resize-none`}
-                  disabled={locked}
-                  value={formDraft.survey_post_event_message_template}
-                  onChange={(event) => syncFormDraft("survey_post_event_message_template", event.target.value)}
-                  placeholder="Ciao {{nome_contatto}}, grazie per aver partecipato. Ci aiuti con un breve sondaggio? {{link_sondaggio}}"
-                />
-              </label>
-            </div>
-          </section>
-        ) : null}
-
-        <section className="rounded-[1.35rem] border border-neutral-200 bg-white p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.16)]">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-semibold text-neutral-900">Notifiche email</h3>
-              <p className="mt-1 text-xs leading-5 text-neutral-500">
-                Seleziona, modifica e controlla la mail che riceve chi compila il form.
-              </p>
-            </div>
-            {formDraft.send_user_confirmation ? (
-              <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-700">
-                Conferma attiva
-              </span>
-            ) : (
-              <span className="rounded-full bg-neutral-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-neutral-500">
-                Conferma disattiva
-              </span>
-            )}
-          </div>
-          <div className="mt-4 space-y-4">
-            <label className={labelClass}>
-              Template notifica admin
-              <select className={inputClass} disabled={locked} value={formDraft.admin_notification_template_id ?? ""} onChange={(event) => syncFormDraft("admin_notification_template_id", event.target.value ? Number(event.target.value) : null)}>
-                <option value="">Riepilogo automatico standard</option>
-                {activeTemplates.map((template) => (<option key={`admin-${template.id}`} value={template.id}>{template.name}</option>))}
-              </select>
-            </label>
-            <label className={labelClass}>
-              Template conferma utente
-              <select className={inputClass} disabled={locked} value={formDraft.user_confirmation_template_id ?? ""} onChange={(event) => syncFormDraft("user_confirmation_template_id", event.target.value ? Number(event.target.value) : null)}>
-                <option value="">Conferma automatica standard</option>
-                {activeTemplates.map((template) => (<option key={`user-${template.id}`} value={template.id}>{template.name}</option>))}
-              </select>
-            </label>
-            {formDraft.booking_enabled ? (
-              <div className="rounded-[1.1rem] border border-emerald-200 bg-emerald-50/60 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-800">Email dopo conferma admin</p>
-                    <p className="mt-1 text-xs leading-5 text-emerald-900/75">
-                      Questa e separata dalla conferma di invio form e dai sondaggi. Disattivala se vuoi usare solo WhatsApp.
-                    </p>
-                  </div>
-                  <label className="relative inline-flex cursor-pointer items-center">
-                    <input
-                      type="checkbox"
-                      disabled={locked}
-                      checked={formDraft.booking_admin_confirmation_email_enabled}
-                      onChange={(event) => syncFormDraft("booking_admin_confirmation_email_enabled", event.target.checked)}
-                      className="peer sr-only"
-                    />
-                    <span className="h-6 w-11 rounded-full bg-emerald-100 transition peer-checked:bg-brand" />
-                    <span className="absolute left-1 h-4 w-4 rounded-full bg-white transition peer-checked:translate-x-5" />
-                  </label>
-                </div>
-                {formDraft.booking_admin_confirmation_email_enabled ? (
-                  <div className="mt-4 grid gap-3">
-                    <label className={labelClass}>
-                      Oggetto
-                      <input
-                        className={inputClass}
-                        disabled={locked}
-                        value={formDraft.booking_admin_confirmation_email_subject}
-                        onChange={(event) => syncFormDraft("booking_admin_confirmation_email_subject", event.target.value)}
-                        placeholder="Prenotazione confermata: {{titolo_form}}"
-                      />
-                    </label>
-                    <label className={labelClass}>
-                      Testo email
-                      <textarea
-                        className={`${inputClass} min-h-[132px] resize-y leading-6`}
-                        disabled={locked}
-                        value={formDraft.booking_admin_confirmation_email_body}
-                        onChange={(event) => syncFormDraft("booking_admin_confirmation_email_body", event.target.value)}
-                        placeholder={"La tua prenotazione e stata confermata.\n\nNome: {{nome_contatto}}\nData: {{data_prenotazione}}\nOrario: {{orario_prenotazione}}\nPersone: {{numero_persone}}\n\nTi aspettiamo all'orario indicato."}
-                      />
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {["{{nome_contatto}}", "{{data_prenotazione}}", "{{orario_prenotazione}}", "{{numero_persone}}", "{{riepilogo_prenotazione}}"].map((placeholder) => (
-                        <button
-                          key={`booking-confirm-${placeholder}`}
-                          type="button"
-                          className="rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-800 transition hover:border-emerald-300"
-                          disabled={locked}
-                          onClick={() => syncFormDraft("booking_admin_confirmation_email_body", `${formDraft.booking_admin_confirmation_email_body}${formDraft.booking_admin_confirmation_email_body.endsWith(" ") || formDraft.booking_admin_confirmation_email_body.endsWith("\n") ? "" : " "}${placeholder}`)}
-                        >
-                          {placeholder}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-            <div className="form-settings-mail-editor grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(420px,1.2fr)]">
-              <div className="space-y-3">
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-500">Editor rapido conferma utente</p>
-                  <p className="mt-1 text-xs leading-5 text-neutral-500">
-                    I template di sistema vengono salvati come copia modificabile dell'associazione.
-                  </p>
-                </div>
-                <label className={labelClass}>
-                  Nome modello
-                  <input
-                    className={inputClass}
-                    disabled={locked}
-                    value={userEmailDraft.name}
-                    onChange={(event) => setUserEmailDraft((current) => ({ ...current, name: event.target.value }))}
-                  />
-                </label>
+            {formDraft.booking_admin_confirmation_email_enabled ? (
+              <div className="mt-4 grid gap-3">
                 <label className={labelClass}>
                   Oggetto
-                  <input
-                    className={inputClass}
-                    disabled={locked}
-                    value={userEmailDraft.subject}
-                    onChange={(event) => setUserEmailDraft((current) => ({ ...current, subject: event.target.value }))}
-                  />
+                  <input className={inputClass} disabled={locked} value={formDraft.booking_admin_confirmation_email_subject} onChange={(event) => syncFormDraft("booking_admin_confirmation_email_subject", event.target.value)} placeholder="Prenotazione confermata: {{titolo_form}}" />
                 </label>
                 <label className={labelClass}>
                   Testo email
-                  <textarea
-                    className={`${inputClass} min-h-[180px] resize-y leading-6`}
-                    disabled={locked}
-                    value={userEmailDraft.bodyText}
-                    onChange={(event) => setUserEmailDraft((current) => ({ ...current, bodyText: event.target.value }))}
-                  />
+                  <textarea className={`${inputClass} min-h-[132px] resize-y leading-6`} disabled={locked} value={formDraft.booking_admin_confirmation_email_body} onChange={(event) => syncFormDraft("booking_admin_confirmation_email_body", event.target.value)} placeholder={"La tua prenotazione e stata confermata.\n\nNome: {{nome_contatto}}\nData: {{data_prenotazione}}\nOrario: {{orario_prenotazione}}\nPersone: {{numero_persone}}\n\nTi aspettiamo all'orario indicato."} />
                 </label>
-                <div className="flex flex-wrap items-center gap-2">
-                  {["{{nome_socio}}", "{{titolo_form}}", "{{nome_associazione}}", "{{email_destinatario}}"].map((placeholder) => (
-                    <button
-                      key={placeholder}
-                      type="button"
-                      className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900"
-                      disabled={locked}
-                      onClick={() => setUserEmailDraft((current) => ({ ...current, bodyText: `${current.bodyText}${current.bodyText.endsWith(" ") || current.bodyText.endsWith("\n") ? "" : " "}${placeholder}` }))}
-                    >
-                      {placeholder}
-                    </button>
+                <div className="flex flex-wrap gap-2">
+                  {["{{nome_contatto}}", "{{data_prenotazione}}", "{{orario_prenotazione}}", "{{numero_persone}}", "{{riepilogo_prenotazione}}"].map((placeholder) => (
+                    <button key={`booking-confirm-${placeholder}`} type="button" className="rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-800 transition hover:border-emerald-300" disabled={locked} onClick={() => syncFormDraft("booking_admin_confirmation_email_body", `${formDraft.booking_admin_confirmation_email_body}${formDraft.booking_admin_confirmation_email_body.endsWith(" ") || formDraft.booking_admin_confirmation_email_body.endsWith("\n") ? "" : " "}${placeholder}`)}>{placeholder}</button>
                   ))}
                 </div>
-                <button
-                  type="button"
-                  className="btn-primary w-full justify-center py-2.5 text-sm disabled:opacity-60"
-                  disabled={locked || savingUserEmailTemplate}
-                  onClick={() => void handleSaveUserConfirmationTemplate()}
-                >
-                  {savingUserEmailTemplate ? "Salvataggio..." : userEmailDraft.id ? "Salva modifiche mail" : "Crea mail modificabile"}
-                </button>
               </div>
-              <div className="form-settings-mail-preview">
-                <div className="flex items-start justify-between gap-3 border-b border-neutral-100 pb-3">
-                  <div>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-500">Anteprima reale</p>
-                    <p className="mt-1 text-sm font-semibold text-neutral-950">
-                      {userEmailPreview?.subject || userEmailDraft.subject || "Oggetto email"}
-                    </p>
-                  </div>
-                  {userEmailPreviewLoading ? <span className="text-xs font-semibold text-neutral-400">Aggiorno...</span> : null}
-                </div>
-                <div className="form-settings-mail-preview__frame">
-                  {userEmailPreview?.bodyHtml ? (
-                    <iframe
-                      title="Anteprima mail conferma utente"
-                      className="h-full w-full bg-white"
-                      sandbox=""
-                      srcDoc={userEmailPreview.bodyHtml}
-                    />
-                  ) : (
-                    <div className="h-full overflow-auto whitespace-pre-wrap p-4 text-sm leading-6 text-neutral-700">
-                      {userEmailPreview?.bodyText || userEmailDraft.bodyText || "Compila il testo per vedere la preview."}
-                    </div>
-                  )}
-                </div>
+            ) : null}
+          </div>
+        ) : null}
+        <div className="form-settings-mail-editor grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(420px,1.2fr)]">
+          <div className="space-y-3">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-500">Editor rapido conferma utente</p>
+              <p className="mt-1 text-xs leading-5 text-neutral-500">I template di sistema vengono salvati come copia modificabile dell'associazione.</p>
+            </div>
+            <label className={labelClass}>
+              Nome modello
+              <input className={inputClass} disabled={locked} value={userEmailDraft.name} onChange={(event) => setUserEmailDraft((current) => ({ ...current, name: event.target.value }))} />
+            </label>
+            <label className={labelClass}>
+              Oggetto
+              <input className={inputClass} disabled={locked} value={userEmailDraft.subject} onChange={(event) => setUserEmailDraft((current) => ({ ...current, subject: event.target.value }))} />
+            </label>
+            <label className={labelClass}>
+              Testo email
+              <textarea className={`${inputClass} min-h-[180px] resize-y leading-6`} disabled={locked} value={userEmailDraft.bodyText} onChange={(event) => setUserEmailDraft((current) => ({ ...current, bodyText: event.target.value }))} />
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              {["{{nome_socio}}", "{{titolo_form}}", "{{nome_associazione}}", "{{email_destinatario}}"].map((placeholder) => (
+                <button key={placeholder} type="button" className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-600 transition hover:border-neutral-300 hover:text-neutral-900" disabled={locked} onClick={() => setUserEmailDraft((current) => ({ ...current, bodyText: `${current.bodyText}${current.bodyText.endsWith(" ") || current.bodyText.endsWith("\n") ? "" : " "}${placeholder}` }))}>{placeholder}</button>
+              ))}
+            </div>
+            <button type="button" className="btn-primary w-full justify-center py-2.5 text-sm disabled:opacity-60" disabled={locked || savingUserEmailTemplate} onClick={() => void handleSaveUserConfirmationTemplate()}>
+              {savingUserEmailTemplate ? "Salvataggio..." : userEmailDraft.id ? "Salva modifiche mail" : "Crea mail modificabile"}
+            </button>
+          </div>
+          <div className="form-settings-mail-preview">
+            <div className="flex items-start justify-between gap-3 border-b border-neutral-100 pb-3">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-neutral-500">Anteprima reale</p>
+                <p className="mt-1 text-sm font-semibold text-neutral-950">{userEmailPreview?.subject || userEmailDraft.subject || "Oggetto email"}</p>
               </div>
+              {userEmailPreviewLoading ? <span className="text-xs font-semibold text-neutral-400">Aggiorno...</span> : null}
+            </div>
+            <div className="form-settings-mail-preview__frame">
+              {userEmailPreview?.bodyHtml ? (
+                <iframe title="Anteprima mail conferma utente" className="h-full w-full bg-white" sandbox="" srcDoc={userEmailPreview.bodyHtml} />
+              ) : (
+                <div className="h-full overflow-auto whitespace-pre-wrap p-4 text-sm leading-6 text-neutral-700">{userEmailPreview?.bodyText || userEmailDraft.bodyText || "Compila il testo per vedere la preview."}</div>
+              )}
             </div>
           </div>
-        </section>
+        </div>
       </div>
+    </section>
+  );
+
+  const automationsTab = (
+    <div className="form-settings-tab space-y-5 overflow-y-auto custom-scrollbar pb-10">
+      {isMobile ? (
+        <AccordionGroup
+          items={[
+            { id: "access", title: "Accesso e notifiche", subtitle: "Link, visibilità, email", children: settingsAccessPanel },
+            { id: "booking", title: "Prenotazioni", subtitle: "Serate, mapping, auto-assegna", children: settingsBookingPanel },
+            { id: "email", title: "Notifiche email", subtitle: "Template e conferme", children: settingsEmailPanel },
+          ]}
+        />
+      ) : (
+        <>
+          <div>{settingsAccessPanel}</div>
+          <div className="grid gap-5 xl:grid-cols-2">{settingsBookingPanel}</div>
+          {settingsEmailPanel}
+        </>
+      )}
     </div>
   );
   const surveyResponsesTab = (
@@ -3216,30 +3077,42 @@ export function OrgAdminFormsWorkspace({
               ) : null}
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {editorTabs.map((tab) => (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => handleEditorTabChange(tab.key)}
-                  className={`rounded-[1.15rem] border px-4 py-4 text-left transition ${
-                    activeTab === tab.key
-                      ? "border-[#0f5e5d] bg-[#0f5e5d] text-white shadow-[0_18px_36px_-24px_rgba(15,94,93,0.45)]"
-                      : "border-[#e5dccd] bg-white text-[#182126] hover:border-[#cdbfa8] hover:bg-[#faf7ef]"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className={`inline-flex h-9 w-9 items-center justify-center rounded-[0.95rem] ${activeTab === tab.key ? "bg-white/12 text-white" : "bg-[#f4efe4] text-[#425359]"}`}>
-                      {editorTabIcon(tab.key)}
-                    </span>
-                    <div>
-                      <p className="text-sm font-semibold">{tab.label}</p>
-                      <p className={`mt-1 text-[11px] ${activeTab === tab.key ? "text-white/72" : "text-[#7a8485]"}`}>{tab.hint}</p>
+            {isMobile ? (
+              <MobileScrollTabs
+                tabs={editorTabs.map((tab) => ({
+                  key: tab.key,
+                  label: tab.label,
+                  icon: editorTabIcon(tab.key),
+                }))}
+                active={activeTab}
+                onChange={(key) => handleEditorTabChange(key as EditorTab)}
+              />
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {editorTabs.map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => handleEditorTabChange(tab.key)}
+                    className={`rounded-[1.15rem] border px-4 py-4 text-left transition ${
+                      activeTab === tab.key
+                        ? "border-[#0f5e5d] bg-[#0f5e5d] text-white shadow-[0_18px_36px_-24px_rgba(15,94,93,0.45)]"
+                        : "border-[#e5dccd] bg-white text-[#182126] hover:border-[#cdbfa8] hover:bg-[#faf7ef]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className={`inline-flex h-9 w-9 items-center justify-center rounded-[0.95rem] ${activeTab === tab.key ? "bg-white/12 text-white" : "bg-[#f4efe4] text-[#425359]"}`}>
+                        {editorTabIcon(tab.key)}
+                      </span>
+                      <div>
+                        <p className="text-sm font-semibold">{tab.label}</p>
+                        <p className={`mt-1 text-[11px] ${activeTab === tab.key ? "text-white/72" : "text-[#7a8485]"}`}>{tab.hint}</p>
+                      </div>
                     </div>
-                  </div>
-                </button>
-              ))}
-            </div>
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="flex items-center justify-end">
               {selectedForm ? (

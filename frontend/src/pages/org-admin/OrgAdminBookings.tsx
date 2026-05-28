@@ -34,6 +34,7 @@ import {
 } from "../../lib/api";
 import { applySeo } from "../../lib/seo";
 import { DESTRUCTIVE_ACTION_COPY, formatActionObject } from "../../lib/statusLabels";
+import BottomSheet from "../../components/ui/BottomSheet";
 import ConfirmModal from "../../components/ui/ConfirmModal";
 import ModalShell from "../../components/ui/ModalShell";
 import Skeleton from "../../components/ui/Skeleton";
@@ -1469,7 +1470,8 @@ export default function OrgAdminBookings() {
           </div>
         </section>
 
-        {section === "agenda" && (
+        <div key={section} className="booking-tab-enter">
+          {section === "agenda" && (
           <div className="booking-admin-section booking-admin-section--agenda space-y-6">
             <AgendaSection
               agendaMonth={agendaMonth}
@@ -1679,8 +1681,46 @@ export default function OrgAdminBookings() {
                 )}
               </div>
             </aside>
+
+            {isMobileAgendaViewport && selectedMapTable && (
+              <BottomSheet open={true} onClose={() => setSelectedMapTableId(null)} title={selectedMapTable.name}>
+                <div className="space-y-3 pb-6">
+                  <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-inset ring-slate-200/60 text-sm text-slate-700">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Stato</p>
+                    <p className="mt-1 font-medium text-slate-900">{occupancyLabel(selectedMapTable.occupancy_state)}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-inset ring-slate-200/60 text-sm text-slate-700">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Forma</p>
+                      <p className="mt-1 font-medium text-slate-900 capitalize">{selectedMapTable.shape}</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-inset ring-slate-200/60 text-sm text-slate-700">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Capienza</p>
+                      <p className="mt-1 font-medium text-slate-900">{selectedMapTable.capacity} posti</p>
+                    </div>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-inset ring-slate-200/60 text-sm text-slate-700">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Occupazione</p>
+                    <p className="mt-1 font-medium text-slate-900">{selectedMapTable.occupied_seats ?? 0}/{selectedMapTable.capacity} occupati, {selectedMapTable.remaining_seats ?? selectedMapTable.capacity} residui</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-inset ring-slate-200/60 text-sm text-slate-700">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Booking live</p>
+                    <p className="mt-1 font-medium text-slate-900">{selectedMapTable.active_booking?.customer_name || "Nessuno"}</p>
+                  </div>
+                  <button type="button" onClick={handleMapSave} disabled={saving === "map" || !selectedRoomId} className="btn-primary w-full">
+                    Salva posizione tavoli
+                  </button>
+                  <div className="grid grid-cols-2 gap-2">
+                    {["free", "semi_free", "occupied", "out_of_service"].map((state) => (
+                      <div key={state} className={`rounded-lg border px-2 py-2 text-xs font-semibold text-center ${occupancyTone(state)}`}>{occupancyLabel(state)}</div>
+                    ))}
+                  </div>
+                </div>
+              </BottomSheet>
+            )}
           </section>
         )}
+      </div>
       </div>
 
       <ModalShell open={isCreatingManual} onClose={() => setIsCreatingManual(false)} title="Nuova prenotazione">
@@ -2179,6 +2219,8 @@ function AgendaSection(props: {
   const selectedDayItems = props.bookingsByDay.get(selectedDateKey) ?? [];
   const selectedDayPending = selectedDayItems.filter(isPendingBookingRequest).length;
   const selectedDayConfirmed = selectedDayItems.filter((item) => item.status === "confirmed").length;
+  const [detailSheetOpen, setDetailSheetOpen] = useState(false);
+
   const selectDay = (dateKey: string, expandFirstBooking = false) => {
     const items = props.bookingsByDay.get(dateKey) ?? [];
     props.setSelectedCalendarDate(dateKey);
@@ -2189,6 +2231,21 @@ function AgendaSection(props: {
         document.querySelector(".booking-day-panel")?.scrollIntoView({ block: "start", behavior: "auto" });
       });
     }
+  };
+
+  const handleSelectBooking = (bookingId: number) => {
+    if (props.isMobileAgendaViewport) {
+      props.setSelectedBookingId(bookingId);
+      setDetailSheetOpen(true);
+    } else {
+      const isExpanded = props.selectedBookingId === bookingId;
+      props.setSelectedBookingId(isExpanded ? null : bookingId);
+    }
+  };
+
+  const closeDetailSheet = () => {
+    setDetailSheetOpen(false);
+    props.setSelectedBookingId(null);
   };
 
   return (
@@ -2362,7 +2419,7 @@ function AgendaSection(props: {
                 />
               ) : (
                 filteredDayItems.map((booking) => {
-                  const isExpanded = props.selectedBookingId === booking.id;
+                  const isExpanded = !props.isMobileAgendaViewport && props.selectedBookingId === booking.id;
                   const isDetailLoaded = props.selectedBooking?.id === booking.id;
                   return (
                     <DayBookingRow
@@ -2370,9 +2427,9 @@ function AgendaSection(props: {
                       booking={booking}
                       expanded={isExpanded}
                       selectedBooking={isDetailLoaded ? props.selectedBooking : null}
-                      onSelect={() => props.setSelectedBookingId(isExpanded ? null : booking.id)}
+                      onSelect={() => handleSelectBooking(booking.id)}
                       detail={
-                        isDetailLoaded ? (
+                        isDetailLoaded && !props.isMobileAgendaViewport ? (
                           <BookingDetailPanel
                             selectedBooking={props.selectedBooking}
                             rooms={props.rooms}
@@ -2402,9 +2459,35 @@ function AgendaSection(props: {
                 })
               )}
             </div>
-          </section>
+           </section>
         ) : null}
 
+        {props.isMobileAgendaViewport && detailSheetOpen && props.selectedBooking ? (
+          <BottomSheet open={detailSheetOpen} onClose={closeDetailSheet} title="Dettaglio prenotazione">
+            <div className="space-y-4 pb-6">
+              <BookingDetailPanel
+                selectedBooking={props.selectedBooking}
+                rooms={props.rooms}
+                assignmentRoomId={props.assignmentRoomId}
+                setAssignmentRoomId={props.setAssignmentRoomId}
+                assignmentTableId={props.assignmentTableId}
+                setAssignmentTableId={props.setAssignmentTableId}
+                assignmentTables={props.assignmentTables}
+                onStatusChange={props.onStatusChange}
+                onRejectWithoutMessage={props.onRejectWithoutMessage}
+                onMarkCustomerNoteRead={props.onMarkCustomerNoteRead}
+                onSaveDetails={props.onSaveDetails}
+                onSaveAssignment={props.onSaveAssignment}
+                onClearAssignment={props.onClearAssignment}
+                requestActionState={props.requestActionState}
+                onOpenRequestConfirm={props.onOpenRequestConfirm}
+                onOpenRequestReject={props.onOpenRequestReject}
+                saving={props.saving}
+                mobileOnly
+              />
+            </div>
+          </BottomSheet>
+        ) : null}
       </section>
   );
 }

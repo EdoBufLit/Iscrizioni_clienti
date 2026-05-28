@@ -8964,6 +8964,47 @@ body.dashboard-perf-mode .btn-ghost:hover {
     min-width: 7.25rem;
   }
 
+  .org-admin-v2 .booking-management-editor-hint {
+    display: none;
+  }
+
+  .org-admin-v2 .booking-management-row {
+    min-height: 3.25rem;
+    padding: 0.95rem 1rem;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    transition: transform 120ms ease, box-shadow 120ms ease, border-color 160ms ease, background 160ms ease;
+  }
+
+  .org-admin-v2 .booking-management-row:active {
+    transform: scale(0.995);
+  }
+
+  /* ModalShell bottom-sheet on mobile */
+  .org-admin-v2 .modal-overlay {
+    align-items: flex-end !important;
+    justify-content: center !important;
+    padding: 0 !important;
+  }
+
+  .org-admin-v2 .modal-panel {
+    border-radius: 1.25rem 1.25rem 0 0 !important;
+    max-height: 92vh !important;
+    overflow-y: auto !important;
+    animation: modal-slide-up 260ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+
+  @keyframes modal-slide-up {
+    from {
+      transform: translateY(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
   .org-admin-v2 .form-settings-mail-editor {
     display: grid;
     border-top: 0;
@@ -9151,6 +9192,280 @@ body.dashboard-perf-mode .btn-ghost:hover {
   .org-admin-v2 .org-admin-communications-page .builder-media-card {
     border-radius: 10px;
     box-shadow: none !important;
+    transform: none !important;
+  }
+}
+
+/* Mobile-first app-like enhancements */
+
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+.form-builder-fab {
+  position: fixed;
+  right: 1rem;
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  z-index: 60;
+  display: inline-flex;
+  height: 3.5rem;
+  width: 3.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--oa-brand, #005247);
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(0, 82, 71, 0.45);
+  transition: transform 150ms ease, background 150ms ease;
+}
+
+.form-builder-fab:active {
+  transform: scale(0.94);
+}
+
+@media (min-width: 1024px) {
+  .form-builder-fab {
+    display: none;
+  }
+}
+
+/* Mobile canvas as vertical list */
+@media (max-width: 1023px) {
+  .form-builder-canvas > .flex-wrap {
+    flex-direction: column;
+    flex-wrap: nowrap;
+  }
+
+  .form-builder-canvas .form-builder-item {
+    width: 100% !important;
+    margin-top: 0.5rem;
+  }
+
+  .form-builder-canvas .form-builder-item:first-child {
+    margin-top: 0;
+  }
+
+  .form-builder-item-actions {
+    position: static !important;
+    margin: 0.5rem 0.75rem 0.75rem;
+    width: auto;
+    justify-content: flex-end;
+  }
+
+  .form-builder-rail {
+    display: none;
+  }
+
+  .form-builder-properties {
+    display: none;
+  }
+
+  .form-builder-properties--mobile-open {
+    display: block;
+  }
+
+  .form-builder-shell {
+    display: block;
+  }
+}
+
+/* BottomSheet dark mode inside org-admin */
+:root[data-theme="dark"] .org-admin-v2 .bottom-sheet-panel {
+  background: var(--oa-panel, #172332);
+  color: var(--oa-text, #edf3f7);
+}
+
+/* Snap scroll for day rail and tabs */
+.snap-x-mandatory {
+  scroll-snap-type: x mandatory;
+}
+.snap-start {
+  scroll-snap-align: start;
+}
+
+/* Touch targets */
+.touch-target-min {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Safe area padding for bottom nav */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Mobile drag handle always visible */
+@media (max-width: 1023px) {
+  .form-builder-drag-handle {
+    opacity: 1 !important;
+  }
+
+  .form-builder-item {
+    touch-action: pan-y;
+  }
+
+  .form-builder-empty {
+    padding: 3rem 1.5rem;
+  }
+
+  .form-builder-empty svg {
+    width: 3.5rem;
+    height: 3.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .form-builder-empty p.text-sm {
+    font-size: 1rem;
+  }
+
+  .form-builder-empty p.text-xs {
+    font-size: 0.875rem;
+  }
+}
+
+/* Pop-in animation for newly added fields */
+@keyframes fb-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.form-builder-item--pop-in {
+  animation: fb-pop-in 280ms ease-out;
+}
+
+/* Active press effect */
+.form-builder-item:active {
+  transform: scale(0.995);
+}
+
+/* Bottom sheet categories sticky header */
+.bottom-sheet-category-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: inherit;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+/* Mobile Agenda Snap Rail + Card improvements */
+@media (max-width: 1023px) {
+  .org-admin-v2 .booking-mobile-day-rail {
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    gap: 0.5rem;
+    padding-inline: 0.5rem;
+  }
+
+  .org-admin-v2 .booking-mobile-day-rail__item {
+    scroll-snap-align: start;
+    flex-shrink: 0;
+    min-width: 4.6rem;
+    touch-action: pan-x;
+    transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+  }
+
+  .org-admin-v2 .booking-mobile-day-rail__item:active {
+    transform: scale(0.96);
+  }
+
+  .org-admin-v2 .booking-day-row {
+    transition: transform 120ms ease, box-shadow 120ms ease;
+  }
+
+  .org-admin-v2 .booking-day-row:active {
+    transform: scale(0.995);
+  }
+
+  .org-admin-v2 .booking-day-row__summary {
+    min-height: 3.25rem;
+  }
+
+  .org-admin-v2 .booking-day-row__expanded {
+    display: none !important;
+  }
+
+  .org-admin-v2 .booking-day-row.is-expanded .booking-day-row__chevron {
+    transform: rotate(180deg);
+  }
+
+  .org-admin-v2 .booking-day-row__chevron {
+    transition: transform 180ms ease;
+  }
+}
+
+/* ── Tab enter animation ─────────────────────── */
+.booking-tab-enter {
+  animation: tab-enter 220ms ease-out;
+}
+
+@keyframes tab-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Consistent focus-visible ────────────────── */
+.org-admin-v2 button:focus-visible,
+.org-admin-v2 a:focus-visible,
+.org-admin-v2 select:focus-visible,
+.org-admin-v2 input:focus-visible,
+.org-admin-v2 textarea:focus-visible {
+  outline: 2px solid var(--oa-brand, #0f766e);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.12);
+}
+
+/* ── Reduced motion ──────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .booking-tab-enter {
+    animation: none;
+  }
+
+  .modal-slide-up {
+    animation: none;
+  }
+
+  .org-admin-v2 .booking-day-row,
+  .org-admin-v2 .booking-management-row,
+  .org-admin-v2 .booking-mobile-day-rail__item,
+  .org-admin-v2 .form-builder-item,
+  .form-builder-item--pop-in {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  .org-admin-v2 .booking-day-row__chevron {
+    transition: none !important;
+  }
+
+  .org-admin-v2 .booking-management-row {
+    transform: none !important;
+  }
+
+  .org-admin-v2 .modal-panel {
+    animation: none !important;
+  }
+
+  .org-admin-v2 .booking-mobile-day-rail__item:active,
+  .org-admin-v2 .booking-day-row:active,
+  .org-admin-v2 .booking-management-row:active,
+  .org-admin-v2 .form-builder-item:active {
     transform: none !important;
   }
 }

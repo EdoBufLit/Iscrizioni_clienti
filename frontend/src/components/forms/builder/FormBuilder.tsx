@@ -37,6 +37,8 @@ import {
 import { PaletteItem, StaticPaletteItem } from "./PaletteItem";
 import { CanvasItem, StaticCanvasItem } from "./CanvasItem";
 import { PropertiesPanel } from "./PropertiesPanel";
+import BottomSheet from "../../ui/BottomSheet";
+import { useMediaQuery } from "../../../hooks/useMediaQuery";
 
 type Props = {
   fields: BuilderField[];
@@ -49,6 +51,67 @@ type Props = {
   mode?: "forms" | "surveys";
   bookingEnabled?: boolean;
 };
+
+type PaletteBottomSheetProps = {
+  mode: "forms" | "surveys";
+  onSelect: (type: VirtualFieldType, label: string) => void;
+};
+
+const PALETTE_GROUPS: Record<
+  "forms" | "surveys",
+  Array<{ title: string; types: VirtualFieldType[] }>
+> = {
+  forms: [
+    { title: "Base", types: ["short_text", "long_text", "email", "phone", "number", "date", "time"] },
+    { title: "Scelta", types: ["select", "radio", "checkbox"] },
+    { title: "Prenotazione", types: ["booking_block"] },
+    { title: "Layout", types: ["section_title", "free_text", "divider", "spacer"] },
+    { title: "Altro", types: ["file_upload", "consent"] },
+  ],
+  surveys: [
+    { title: "Base", types: ["section_title", "short_text", "long_text"] },
+    { title: "Scelta", types: ["radio", "checkbox", "select"] },
+    { title: "Valutazione", types: ["rating_1_5", "nps_0_10"] },
+    { title: "Altro", types: ["date", "time", "consent"] },
+  ],
+};
+
+function PaletteBottomSheetContent({ mode, onSelect }: PaletteBottomSheetProps) {
+  const allItems = getPaletteItems(mode);
+  const groups = PALETTE_GROUPS[mode];
+  return (
+    <div className="space-y-6">
+      {groups.map((group) => {
+        const items = group.types
+          .map((t) => allItems.find((i) => i.type === t))
+          .filter((item): item is NonNullable<typeof item> => Boolean(item));
+        if (items.length === 0) return null;
+        return (
+          <div key={group.title}>
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-neutral-400">
+              {group.title}
+            </p>
+            <div className="grid grid-cols-1 gap-2">
+              {items.map((item) => (
+                <button
+                  key={item.type}
+                  type="button"
+                  className="flex w-full items-center gap-3 rounded-xl border border-neutral-200 bg-white p-3 text-left transition active:scale-[0.98] hover:border-brand hover:bg-brand/5"
+                  onClick={() => onSelect(item.type, item.label)}
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 text-sm font-bold">
+                    {item.icon}
+                  </span>
+                  <p className="text-sm font-semibold text-neutral-900">{item.label}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 type BuilderCanvasProps = {
   items: BuilderField[];
@@ -181,6 +244,8 @@ export function FormBuilder({
 }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const isMobile = useMediaQuery("(max-width: 1023px)");
   const [lastKnownOverId, setLastKnownOverId] = useState<string | null>(null);
   const [creatingFieldKeys, setCreatingFieldKeys] = useState<string[]>([]);
   const lastKnownOverIdRef = useRef<string | null>(null);
@@ -499,22 +564,24 @@ export function FormBuilder({
       onDragEnd={handleDragEnd}
     >
       <div className="form-builder-shell grid grid-cols-1 items-start gap-6 lg:grid-cols-[260px_minmax(0,1fr)_320px]">
-        <div className="form-builder-rail sticky top-6 flex max-h-[85vh] flex-col gap-4 overflow-hidden rounded-[0.85rem] border p-4 shadow-sm">
-          <div className="form-builder-rail__header border-b px-1 pb-3">
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Libreria campi</p>
-            <h3 className="mt-2 text-base font-semibold text-slate-950">Aggiungi al modulo</h3>
-            <p className="mt-1 text-xs leading-5 text-slate-500">Tocca per aggiungere. Da desktop puoi anche trascinare nel canvas.</p>
+        {!isMobile && (
+          <div className="form-builder-rail sticky top-6 flex max-h-[85vh] flex-col gap-4 overflow-hidden rounded-[0.85rem] border p-4 shadow-sm">
+            <div className="form-builder-rail__header border-b px-1 pb-3">
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Libreria campi</p>
+              <h3 className="mt-2 text-base font-semibold text-slate-950">Aggiungi al modulo</h3>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Tocca per aggiungere. Da desktop puoi anche trascinare nel canvas.</p>
+            </div>
+            <div className="flex flex-col gap-2 max-h-[70vh] overflow-y-auto custom-scrollbar pr-2">
+              {paletteItems.map((item) => (
+                <PaletteItem
+                  key={item.type}
+                  item={item}
+                  onAdd={(paletteItem) => void handleAddFieldFromPalette(paletteItem.type, paletteItem.label)}
+                />
+              ))}
+            </div>
           </div>
-          <div className="flex flex-col gap-2 max-h-[70vh] overflow-y-auto custom-scrollbar pr-2">
-            {paletteItems.map((item) => (
-              <PaletteItem
-                key={item.type}
-                item={item}
-                onAdd={(paletteItem) => void handleAddFieldFromPalette(paletteItem.type, paletteItem.label)}
-              />
-            ))}
-          </div>
-        </div>
+        )}
 
         <BuilderCanvas
           items={items}
@@ -529,14 +596,53 @@ export function FormBuilder({
           locked={locked}
         />
 
-        <div className="form-builder-properties sticky top-6 max-h-[85vh] overflow-y-auto rounded-[0.85rem] border p-5 shadow-sm custom-scrollbar">
-          <PropertiesPanel
-            selectedField={selectedField}
-            onChange={handleUpdateSelected}
-            locked={Boolean(locked) || (persistEnabled && creatingFieldKeys.includes(selectedId || ""))}
-          />
-        </div>
+        {!isMobile && (
+          <div className="form-builder-properties sticky top-6 max-h-[85vh] overflow-y-auto rounded-[0.85rem] border p-5 shadow-sm custom-scrollbar">
+            <PropertiesPanel
+              selectedField={selectedField}
+              onChange={handleUpdateSelected}
+              locked={Boolean(locked) || (persistEnabled && creatingFieldKeys.includes(selectedId || ""))}
+            />
+          </div>
+        )}
       </div>
+
+      {isMobile && (
+        <>
+          <button
+            type="button"
+            className="form-builder-fab"
+            onClick={() => setPaletteOpen(true)}
+            aria-label="Aggiungi campo"
+          >
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
+
+          <BottomSheet open={paletteOpen} onClose={() => setPaletteOpen(false)} title="Aggiungi campo">
+            <PaletteBottomSheetContent
+              mode={mode}
+              onSelect={(type, label) => {
+                void handleAddFieldFromPalette(type, label);
+                setPaletteOpen(false);
+              }}
+            />
+          </BottomSheet>
+
+          <BottomSheet
+            open={Boolean(selectedId)}
+            onClose={() => setSelectedId(null)}
+            title="Proprietà campo"
+          >
+            <PropertiesPanel
+              selectedField={selectedField}
+              onChange={handleUpdateSelected}
+              locked={Boolean(locked) || (persistEnabled && creatingFieldKeys.includes(selectedId || ""))}
+            />
+          </BottomSheet>
+        </>
+      )}
 
       <DragOverlay dropAnimation={dropAnimation}>
         {activeItem?.type === "palette" ? (
