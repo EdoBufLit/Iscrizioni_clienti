@@ -17,6 +17,7 @@ BOOKING_AVAILABILITY_MODES = {
     BOOKING_AVAILABILITY_MODE_ALL,
     BOOKING_AVAILABILITY_MODE_SELECTED,
 }
+BOOKING_BLOCK_FIELD_KEY_PREFIXES = ("__booking_block__", "booking_block_")
 
 
 def normalize_booking_availability_mode(value: Any) -> str:
@@ -53,6 +54,18 @@ def normalize_booking_event_series_ids(value: Any) -> list[int]:
 
 def selected_booking_event_series_ids(form: Form) -> list[int]:
     return normalize_booking_event_series_ids(getattr(form, "booking_event_series_ids", None))
+
+
+def form_has_booking_block(form: Form) -> bool:
+    for field in list(getattr(form, "fields", []) or []):
+        field_key = str(getattr(field, "field_key", "") or "").strip().lower()
+        if any(field_key.startswith(prefix) for prefix in BOOKING_BLOCK_FIELD_KEY_PREFIXES):
+            return True
+    return False
+
+
+def form_uses_dynamic_booking_controls(form: Form) -> bool:
+    return bool(getattr(form, "booking_dynamic_events_enabled", False)) or form_has_booking_block(form)
 
 
 def booking_event_series_slot_times(series: BookingEventSeries) -> list[str]:
@@ -243,13 +256,17 @@ def public_booking_available_dates_payload(
     for offset in range(bounded_days):
         date_value = start_date + timedelta(days=offset)
         day_payload = public_booking_events_payload(db, form=form, date_value=date_value)
-        if bool(day_payload.get("date_open", True)):
+        date_open = bool(day_payload.get("date_open", True))
+        date_closed = bool(day_payload.get("date_closed", False))
+        if date_open or date_closed:
             items.append(
                 {
                     "date": date_value.isoformat(),
                     "available_slots": day_payload.get("available_slots", []),
                     "using_default": bool(day_payload.get("using_default", False)),
                     "has_active_rules": bool(day_payload.get("has_active_rules", False)),
+                    "date_open": date_open,
+                    "date_closed": date_closed,
                 }
             )
     return {

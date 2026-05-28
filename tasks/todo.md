@@ -1,3 +1,17 @@
+## Plan (Fix booking block legacy flag pubblico - May 28, 2026)
+- [x] Attivare il caricamento date/orari quando il form contiene un campo `__booking_block__`, anche se `booking_dynamic_events_enabled` e false.
+- [x] Preservare i campi tecnici `__booking_date`, `__booking_event_time`, `__booking_event_series_id` al submit per questi form legacy.
+- [x] Usare la risoluzione dinamica booking anche lato backend quando il blocco e presente nel form.
+- [x] Mostrare i giorni di chiusura nella lista giorni come opzioni disabilitate con testo `giorno di chiusura`.
+- [x] Aggiungere test backend per form con blocco prenotazione e flag dinamico spento.
+- [x] Eseguire typecheck/build frontend, push/deploy e smoke live su `oasi-2/prenota`.
+
+## Review (Fix booking block legacy flag pubblico - May 28, 2026)
+- Root cause live: `oasi-2/prenota` contiene il campo `__booking_block__a58duh`, ma ha `booking_dynamic_events_enabled=false`; il frontend quindi mostrava il blocco booking senza caricare le date.
+- Fix: il blocco `__booking_block__` e ora sorgente sufficiente per attivare caricamento date/orari, preservare i campi tecnici al submit e creare la booking con data/orario scelti.
+- Date calendario: i giorni liberi restano selezionabili; i giorni di chiusura restano visibili ma disabilitati con label `giorno di chiusura`.
+- Verifiche OK: `pytest tests/test_forms_module.py`, `python -m compileall app`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`. Resta solo il warning Vite preesistente sui chunk grandi.
+
 ## Plan (Fix disponibilita form booking e font - May 28, 2026)
 - [x] Correggere il resolver date pubbliche: in modalita `all` ogni giorno non chiuso deve essere selezionabile anche se non ha una serata specifica o un default configurato.
 - [x] Mantenere la modalita `selected` per offerte dedicate: solo le serate selezionate devono aprire disponibilita, sempre rispettando le chiusure.

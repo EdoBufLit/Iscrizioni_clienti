@@ -1465,6 +1465,8 @@ export type PublicBookingAvailableDate = {
   available_slots: string[];
   using_default: boolean;
   has_active_rules: boolean;
+  date_open: boolean;
+  date_closed: boolean;
 };
 
 export type PublicBookingAvailableDatesResponse = {
@@ -2574,6 +2576,8 @@ export async function fetchPublicFormBookingAvailableDates(
             : [],
           using_default: Boolean(item?.using_default),
           has_active_rules: Boolean(item?.has_active_rules),
+          date_open: item?.date_open !== false,
+          date_closed: Boolean(item?.date_closed),
         }))
         .filter((item: PublicBookingAvailableDate) => item.date)
     : [];

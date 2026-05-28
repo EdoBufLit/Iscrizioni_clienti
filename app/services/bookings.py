@@ -24,6 +24,7 @@ from app.services.booking_event_availability import (
     form_allows_booking_event_series,
     form_date_has_bookable_slot_rules,
     form_requires_booking_series_match,
+    form_uses_dynamic_booking_controls,
     is_form_date_closed,
     series_matches_date,
 )
@@ -904,7 +905,7 @@ def create_booking_from_submission(
     booking_time = _normalize_booking_time(getattr(form, "booking_event_time", None)) or _normalize_booking_time(
         _mapped_payload_value(mapping, "booking_time", validated_payload)
     )
-    if bool(getattr(form, "booking_dynamic_events_enabled", False)):
+    if form_uses_dynamic_booking_controls(form):
         dynamic_event = _resolve_dynamic_booking_event(
             db,
             form=form,

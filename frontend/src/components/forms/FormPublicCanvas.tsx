@@ -407,6 +407,9 @@ export function FormPublicCanvas({
   const hasBookingBlockField = sortedFields.some((field) => isBookingBlockField(field));
   const showDynamicBookingFields = Boolean(hasBookingBlockField || form.booking_dynamic_events_enabled);
   const selectedTime = String(values.__booking_event_time || "");
+  const hasSelectableBookingDates = bookingDateOptions.some(
+    (item) => item.date_open !== false && !item.date_closed,
+  );
   const timeSlots = Array.from({ length: 48 }, (_, index) => {
     const totalMinutes = index * 30;
     const hours = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
@@ -705,7 +708,7 @@ export function FormPublicCanvas({
           <select
             className={baseInputClass}
             required
-            disabled={!interactive || bookingDatesLoading || bookingDateOptions.length === 0}
+            disabled={!interactive || bookingDatesLoading || !hasSelectableBookingDates}
             value={String(values.__booking_date || "")}
             onChange={(event) => {
               onValueChange?.("__booking_date", event.target.value);
@@ -717,14 +720,21 @@ export function FormPublicCanvas({
               {bookingDatesLoading ? "Controllo giorni..." : "Scegli giorno"}
             </option>
             {bookingDateOptions.map((item) => (
-              <option key={item.date} value={item.date}>
+              <option
+                key={item.date}
+                value={item.date}
+                disabled={item.date_open === false || item.date_closed}
+              >
                 {formatBookingDateOption(item.date)}
+                {item.date_closed ? " - giorno di chiusura" : ""}
               </option>
             ))}
           </select>
-          {!bookingDatesLoading && bookingDateOptions.length === 0 ? (
+          {!bookingDatesLoading && !hasSelectableBookingDates ? (
             <span className="mt-2 block text-xs font-semibold text-rose-600">
-              Nessun giorno disponibile.
+              {bookingDateOptions.length > 0
+                ? "Sono presenti solo giorni di chiusura."
+                : "Nessun giorno disponibile."}
             </span>
           ) : null}
         </label>

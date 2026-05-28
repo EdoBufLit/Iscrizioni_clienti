@@ -11,6 +11,7 @@ import {
 } from "../lib/api";
 import { applySeo } from "../lib/seo";
 import { FormPublicCanvas } from "../components/forms/FormPublicCanvas";
+import { isBookingBlockField } from "../components/forms/builder/utils";
 
 function getSeriesSlotTimes(item: OrgAdminBookingEventSeries): string[] {
   return (item.time_slots || [])
@@ -53,6 +54,18 @@ function uniqueBookingSlots(items: OrgAdminBookingEventSeries[]): string[] {
   return ordered;
 }
 
+function formUsesDynamicBookingControls(form: PublicAssociationForm | null | undefined): boolean {
+  if (!form) return false;
+  return Boolean(
+    form.booking_dynamic_events_enabled ||
+      (form.fields || []).some((field) => isBookingBlockField(field)),
+  );
+}
+
+function isSelectableBookingDate(item: PublicBookingAvailableDate): boolean {
+  return item.date_open !== false && !item.date_closed;
+}
+
 function buildInitialValues(form: PublicAssociationForm): Record<string, unknown> {
   const values: Record<string, unknown> = {};
   for (const field of form.fields) {
@@ -60,7 +73,7 @@ function buildInitialValues(form: PublicAssociationForm): Record<string, unknown
     else if (field.field_type === "consent") values[field.field_key] = false;
     else values[field.field_key] = "";
   }
-  if (form.booking_dynamic_events_enabled && (form.booking_enabled || form.create_booking || form.form_type === "booking")) {
+  if (formUsesDynamicBookingControls(form) && (form.booking_enabled || form.create_booking || form.form_type === "booking")) {
     values.__booking_date = new Date().toISOString().slice(0, 10);
     values.__booking_event_series_id = "";
     values.__booking_event_time = "";
@@ -81,6 +94,7 @@ const PublicFormPage = () => {
   const [bookingAvailability, setBookingAvailability] = useState(DEFAULT_BOOKING_AVAILABILITY);
   const [bookingEventsLoading, setBookingEventsLoading] = useState(false);
   const [bookingDatesLoading, setBookingDatesLoading] = useState(false);
+  const bookingControlsActive = formUsesDynamicBookingControls(form);
 
   useEffect(() => {
     if (!slug) return;
@@ -107,7 +121,7 @@ const PublicFormPage = () => {
   }, [orgSlug, slug]);
 
   useEffect(() => {
-    if (!slug || !form?.booking_dynamic_events_enabled) {
+    if (!slug || !bookingControlsActive) {
       setBookingDateOptions([]);
       setBookingDatesLoading(false);
       return;
@@ -124,8 +138,12 @@ const PublicFormPage = () => {
         setBookingDateOptions(response.items);
         setValues((current) => {
           const currentDate = String(current.__booking_date || "");
-          const currentStillValid = response.items.some((item) => item.date === currentDate);
-          const nextDate = currentStillValid ? currentDate : response.items[0]?.date || "";
+          const currentStillValid = response.items.some(
+            (item) => item.date === currentDate && isSelectableBookingDate(item),
+          );
+          const nextDate = currentStillValid
+            ? currentDate
+            : response.items.find(isSelectableBookingDate)?.date || "";
           if (currentDate === nextDate) return current;
           return {
             ...current,
@@ -144,10 +162,10 @@ const PublicFormPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [form?.booking_dynamic_events_enabled, orgSlug, slug]);
+  }, [bookingControlsActive, orgSlug, slug]);
 
   useEffect(() => {
-    if (!slug || !form?.booking_dynamic_events_enabled) {
+    if (!slug || !bookingControlsActive) {
       setBookingEvents([]);
       setBookingAvailability(DEFAULT_BOOKING_AVAILABILITY);
       return;
@@ -193,10 +211,10 @@ const PublicFormPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [form?.booking_dynamic_events_enabled, orgSlug, slug, values.__booking_date]);
+  }, [bookingControlsActive, orgSlug, slug, values.__booking_date]);
 
   useEffect(() => {
-    if (!form?.booking_dynamic_events_enabled || bookingEventsLoading) return;
+    if (!bookingControlsActive || bookingEventsLoading) return;
     setValues((current) => {
       const timeValue = String(current.__booking_event_time || "");
       const preferred = pickBookingSeriesForTime(bookingEvents, timeValue);
@@ -204,7 +222,7 @@ const PublicFormPage = () => {
       if (String(current.__booking_event_series_id || "") === nextSeriesId) return current;
       return { ...current, __booking_event_series_id: nextSeriesId };
     });
-  }, [bookingEvents, bookingEventsLoading, form?.booking_dynamic_events_enabled, values.__booking_event_time]);
+  }, [bookingControlsActive, bookingEvents, bookingEventsLoading, values.__booking_event_time]);
 
   function updateValue(fieldKey: string, nextValue: unknown) {
     setValues((current) => ({ ...current, [fieldKey]: nextValue }));

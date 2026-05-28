@@ -43,6 +43,7 @@ from app.services.forms import (
 )
 from app.services.bookings import serialize_booking
 from app.services.booking_event_availability import (
+    form_uses_dynamic_booking_controls,
     public_booking_available_dates_payload,
     public_booking_events_payload,
 )
@@ -727,7 +728,7 @@ def _submit_public_form(
     form = _load_public_form(db, org_slug=org_slug, slug=form_slug)
     _ensure_form_is_visible(form, member)
     validated_submission = validate_form_submission_payload(form=form, raw_payload=payload)
-    if bool(getattr(form, "booking_dynamic_events_enabled", False)):
+    if form_uses_dynamic_booking_controls(form):
         for dynamic_key in ("__booking_date", "__booking_event_series_id", "__booking_event_time"):
             if dynamic_key in payload:
                 validated_submission.payload[dynamic_key] = payload.get(dynamic_key)

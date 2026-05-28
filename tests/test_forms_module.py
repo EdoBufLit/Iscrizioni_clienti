@@ -1179,7 +1179,14 @@ def test_booking_event_closures_override_default_and_available_dates(client, db)
         f"/api/forms/{org.slug}/{public_slug}/booking-available-dates?start=2026-06-16&days=3"
     )
     assert dates_res.status_code == 200, dates_res.text
-    assert [item["date"] for item in dates_res.json()["items"]] == ["2026-06-17"]
+    date_items = dates_res.json()["items"]
+    assert [item["date"] for item in date_items] == ["2026-06-16", "2026-06-17", "2026-06-18"]
+    assert date_items[0]["date_closed"] is True
+    assert date_items[0]["date_open"] is False
+    assert date_items[1]["date_closed"] is False
+    assert date_items[1]["date_open"] is True
+    assert date_items[2]["date_closed"] is True
+    assert date_items[2]["date_open"] is False
 
     submit_closed_res = client.post(
         f"/api/forms/{org.slug}/{public_slug}/submit",
@@ -1243,11 +1250,13 @@ def test_all_booking_availability_keeps_free_days_when_rules_are_elsewhere(clien
     )
     assert dates_res.status_code == 200, dates_res.text
     date_items = dates_res.json()["items"]
-    assert [item["date"] for item in date_items] == ["2026-06-17", "2026-06-18", "2026-06-19"]
-    assert date_items[0]["available_slots"] == []
-    assert date_items[0]["has_active_rules"] is False
-    assert date_items[2]["available_slots"] == ["21:00"]
-    assert date_items[2]["has_active_rules"] is True
+    assert [item["date"] for item in date_items] == ["2026-06-16", "2026-06-17", "2026-06-18", "2026-06-19"]
+    assert date_items[0]["date_closed"] is True
+    assert date_items[0]["date_open"] is False
+    assert date_items[1]["available_slots"] == []
+    assert date_items[1]["has_active_rules"] is False
+    assert date_items[3]["available_slots"] == ["21:00"]
+    assert date_items[3]["has_active_rules"] is True
 
     free_day_events_res = client.get(f"/api/forms/{org.slug}/{public_slug}/booking-events?date=2026-06-17")
     assert free_day_events_res.status_code == 200, free_day_events_res.text
@@ -1535,6 +1544,67 @@ def test_dynamic_booking_allows_half_hour_time_when_day_has_no_events(client, db
     booking = submit_res.json()["booking"]
     assert booking["booking_date"] == "2026-06-21"
     assert booking["booking_time"] == "21:30"
+    assert booking["event_summary"] is None
+
+
+def test_booking_block_field_activates_dynamic_dates_without_legacy_flag(client, db):
+    org, admin = _create_org_admin(db)
+    _login_org_admin(client, db, admin.id)
+
+    public_slug = f"prenota-legacy-block-{uuid.uuid4().hex[:6]}"
+    form_res = client.post(
+        "/api/org-admin/forms",
+        json={
+            "title": "Prenota legacy block",
+            "public_slug": public_slug,
+            "is_active": True,
+            "visibility": "public",
+            "form_type": "booking",
+            "booking_enabled": True,
+            "booking_dynamic_events_enabled": False,
+            "booking_requires_manual_confirmation": True,
+            "booking_notification_enabled": False,
+        },
+    )
+    assert form_res.status_code == 201, form_res.text
+    form_id = form_res.json()["form"]["id"]
+
+    field_res = client.post(
+        f"/api/org-admin/forms/{form_id}/fields",
+        json={
+            "field_type": "long_text",
+            "field_key": "__booking_block__legacy",
+            "label": "Info prenotazione",
+            "is_required": False,
+            "sort_order": 0,
+        },
+    )
+    assert field_res.status_code == 201, field_res.text
+
+    public_res = client.get(f"/api/forms/{org.slug}/{public_slug}")
+    assert public_res.status_code == 200, public_res.text
+    assert public_res.json()["form"]["booking_dynamic_events_enabled"] is False
+    assert public_res.json()["form"]["fields"][0]["field_key"] == "__booking_block__legacy"
+
+    dates_res = client.get(
+        f"/api/forms/{org.slug}/{public_slug}/booking-available-dates?start=2026-05-29&days=1"
+    )
+    assert dates_res.status_code == 200, dates_res.text
+    assert dates_res.json()["items"][0]["date"] == "2026-05-29"
+    assert dates_res.json()["items"][0]["available_slots"] == []
+
+    submit_res = client.post(
+        f"/api/forms/{org.slug}/{public_slug}/submit",
+        json={
+            "__booking_date": "2026-05-29",
+            "__booking_event_time": "20:30",
+            "__booking_event_series_id": "",
+        },
+    )
+    assert submit_res.status_code == 200, submit_res.text
+    booking = submit_res.json()["booking"]
+    assert booking["booking_date"] == "2026-05-29"
+    assert booking["booking_time"] == "20:30"
     assert booking["event_summary"] is None
 
 
