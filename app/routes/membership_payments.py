@@ -521,6 +521,11 @@ def handle_sumup_webhook(
         logger.warning("sumup_webhook_ignored reason=missing_identifiers payload=%s", payload)
         return {"ok": True, "ignored": True}
 
+    try:
+        query = query.with_for_update()
+    except Exception as exc:
+        logger.debug("SumUp webhook payment lock unavailable: %s", exc)
+
     payment = query.order_by(MembershipPayment.id.desc()).first()
     if not payment:
         logger.warning(

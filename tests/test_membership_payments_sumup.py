@@ -17,6 +17,7 @@ from app.security import get_password_hash
 from app.services.membership_payments import (
     create_sumup_hosted_checkout,
     encrypt_sumup_api_key,
+    maybe_fulfill_member_card,
 )
 from tests.signup_payloads import build_join_submit_data
 
@@ -360,6 +361,77 @@ def test_sumup_webhook_queues_standard_card_email_and_status_exposes_card_page(
     assert f"/associazioni/{org.slug}/tessera?card_token=" in payload["active_card_page_url"]
     assert payload["card_download_url"].endswith(".pdf")
     assert payload["card_wallet_google_url"].endswith("/wallet/google")
+
+
+def test_fulfillment_refreshes_stale_member_before_allocating_second_card(db):
+    org = _build_sumup_org(db, f"sumup-stale-{uuid.uuid4().hex[:8]}")
+    org.auto_approve_signup = True
+    year = datetime.utcnow().year
+    batch = CardBatch(org_id=org.id, year=year, start_no=1200, end_no=1210, next_no=1200)
+    db.add(batch)
+    member = Member(
+        org_id=org.id,
+        first_name="Race",
+        last_name="Member",
+        email=f"race-{uuid.uuid4().hex[:8]}@example.com",
+        password_hash=get_password_hash("Pass1234!"),
+        status=MemberStatus.PENDING_CARDS,
+        payment_required=True,
+        payment_status=MembershipPaymentStatus.COMPLETED.value,
+        payment_completed_at=datetime.utcnow(),
+        signup_ip="127.0.0.1",
+        signup_user_agent="pytest",
+    )
+    db.add(member)
+    db.commit()
+    member_id = member.id
+    org_id = org.id
+    batch_id = batch.id
+
+    stale_db = SessionLocal()
+    stale_db.expire_on_commit = False
+    writer_db = SessionLocal()
+    check_db = SessionLocal()
+    try:
+        stale_member = stale_db.query(Member).filter(Member.id == member_id).first()
+        stale_org = stale_db.query(Organization).filter(Organization.id == org_id).first()
+        assert stale_member is not None
+        assert stale_org is not None
+        assert stale_member.card_no is None
+        stale_db.commit()
+
+        live_member = writer_db.query(Member).filter(Member.id == member_id).first()
+        live_batch = writer_db.query(CardBatch).filter(CardBatch.id == batch_id).first()
+        assert live_member is not None
+        assert live_batch is not None
+        live_member.card_no = 1200
+        live_member.card_year = year
+        live_member.batch_id = live_batch.id
+        live_member.status = MemberStatus.ACTIVE
+        live_member.joined_at = datetime.utcnow()
+        live_batch.next_no = 1201
+        writer_db.commit()
+
+        result = maybe_fulfill_member_card(
+            db=stale_db,
+            member=stale_member,
+            org=stale_org,
+            request=None,
+        )
+        stale_db.commit()
+
+        refreshed_member = check_db.query(Member).filter(Member.id == member_id).first()
+        refreshed_batch = check_db.query(CardBatch).filter(CardBatch.id == batch_id).first()
+        assert refreshed_member is not None
+        assert refreshed_batch is not None
+        assert result.issued_card is False
+        assert result.reason == "already_fulfilled"
+        assert refreshed_member.card_no == 1200
+        assert refreshed_batch.next_no == 1201
+    finally:
+        stale_db.close()
+        writer_db.close()
+        check_db.close()
 
 
 def test_join_submit_legacy_endpoint_is_blocked_when_online_payment_required(client, db):

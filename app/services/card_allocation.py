@@ -61,6 +61,9 @@ def _acquire_allocation_lock(
     if dialect == "sqlite":
         db.execute(text("PRAGMA busy_timeout = 5000"))
         if immediate_sqlite:
+            if db.in_transaction():
+                logger.debug("sqlite_allocation_lock_skipped_existing_transaction")
+                return
             db.execute(text("BEGIN IMMEDIATE"))
 
 

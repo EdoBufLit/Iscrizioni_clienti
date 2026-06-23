@@ -1,3 +1,17 @@
+## Plan (Fix pagamento online tessere Mondo Nuovo - Jun 23, 2026)
+- [x] Mappare il flusso SumUp/online payment: create checkout, webhook/verify, aggiornamento pagamento, assegnazione tessera e invio email.
+- [x] Verificare su Hetzner in sola lettura il caso Mondo Nuovo: stato pagamento, socio, tessera, outbox/email e log recenti.
+- [x] Correggere la causa della mancata emissione post-pagamento e della doppia assegnazione/email, mantenendo fulfillment idempotente lato server.
+- [x] Aggiungere test regressione per pagamento confermato che emette una sola tessera e una sola email anche con webhook/verify duplicati.
+- [x] Eseguire test mirati, compile/typecheck se coinvolti, e aggiornare questa sezione con review/esito.
+
+## Review (Fix pagamento online tessere Mondo Nuovo - Jun 23, 2026)
+- Root cause live: SumUp invia spesso due webhook `CHECKOUT_STATUS_CHANGED` quasi simultanei per lo stesso checkout; senza lock sul socio, due request vedevano `card_no=NULL` e assegnavano due numeri consecutivi allo stesso socio.
+- Evidenza caso allegato: pagamento Mondo Nuovo del 2026-06-21 02:17 UTC ha ricevuto due webhook a millisecondi di distanza e ha accodato due email tessera con due numeri diversi.
+- Fix: il webhook blocca la riga `membership_payments` con `FOR UPDATE`; il fulfillment blocca e ricarica la riga `members` prima di allocare, cosi una seconda request vede la tessera gia assegnata e non consuma un altro numero.
+- Compatibilita test: il lock SQLite locale evita `BEGIN IMMEDIATE` annidato quando una transazione e gia aperta; Postgres live continua a usare row lock e advisory lock.
+- Verifiche locali OK: `python -m pytest tests\test_membership_payments_sumup.py -q`, `python -m pytest tests\test_org_admin_manual_payment.py -q`, `python -m compileall -q app init_db.py`, `git diff --check`.
+
 ## Plan (Fix chiusure form eventi live - May 29, 2026)
 - [x] Riprodurre su live `golden-filippini-qualificati-srls/eventi` la data chiusa che resta prenotabile, confrontando payload date/orari e regole Serate.
 - [x] Verificare se la chiusura viene ignorata per modalita `selected`, per chiusura non inclusa nelle serate selezionate, o per validazione submit.

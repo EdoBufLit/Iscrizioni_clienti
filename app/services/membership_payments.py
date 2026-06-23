@@ -361,6 +361,29 @@ def _workflow_ready_for_fulfillment(member: Member, org: Organization) -> bool:
     return member.decision_at is not None
 
 
+def _lock_member_for_fulfillment(db: Session, member: Member) -> Member:
+    member_id = getattr(member, "id", None)
+    if member_id is None:
+        db.flush()
+        member_id = getattr(member, "id", None)
+    if member_id is None:
+        return member
+
+    db.flush()
+    query = db.query(Member).filter(Member.id == member_id)
+    try:
+        query = query.with_for_update()
+    except Exception as exc:
+        logger.debug("Member fulfillment lock unavailable: %s", exc)
+
+    locked_member = query.first()
+    if locked_member is None:
+        return member
+
+    db.refresh(locked_member)
+    return locked_member
+
+
 def maybe_fulfill_member_card(
     *,
     db: Session,
@@ -368,6 +391,8 @@ def maybe_fulfill_member_card(
     org: Organization,
     request: Request | None = None,
 ) -> FulfillmentResult:
+    member = _lock_member_for_fulfillment(db, member)
+
     if organization_requires_membership_payment(org) and not payment_status_is_paid(
         member.payment_status
     ):
@@ -378,6 +403,7 @@ def maybe_fulfill_member_card(
     if not _workflow_ready_for_fulfillment(member, org):
         return FulfillmentResult(issued_card=False, reason="workflow_not_ready")
 
+    issued_new_card = False
     if member.card_no is None:
         try:
             allocation = allocate_next_card(
@@ -389,6 +415,7 @@ def maybe_fulfill_member_card(
             member.batch_id = allocation.batch_id
             member.card_year = allocation.year
             member.numbering_scope_id = allocation.numbering_scope_id
+            issued_new_card = True
         except HTTPException as exc:
             if exc.status_code == 409:
                 member.status = MemberStatus.PENDING_CARDS
@@ -448,7 +475,10 @@ def maybe_fulfill_member_card(
                 member.id,
                 member.org_id,
             )
-    return FulfillmentResult(issued_card=True, reason="fulfilled")
+    return FulfillmentResult(
+        issued_card=issued_new_card,
+        reason="fulfilled" if issued_new_card else "already_fulfilled",
+    )
 
 
 def apply_membership_payment_completion(
