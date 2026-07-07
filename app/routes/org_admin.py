@@ -243,6 +243,7 @@ from app.services.wallet_asset_upload import (
     save_wallet_hero_image_file,
     save_wallet_logo_file,
 )
+from app.services.whatsapp_provider import whatsapp_feature_enabled
 from app.config import settings
 from app.log_redaction import hash_identifier, redact_for_log, redact_url
 from app.middleware import auth_limiter, get_client_ip
@@ -662,9 +663,12 @@ def _serialize_org_admin_communications_settings(
 ) -> dict[str, object]:
     system_sender = resolve_email_sender(mode="system")
     association_sender = resolve_email_sender(mode="association", association=org)
+    whatsapp_enabled = whatsapp_feature_enabled()
     return {
         "communications_enabled": bool(org.communications_enabled),
-        "whatsapp_evolution_enabled": bool(settings.ENABLE_WHATSAPP_EVOLUTION),
+        "whatsapp_enabled": whatsapp_enabled,
+        "whatsapp_provider": settings.WHATSAPP_PROVIDER,
+        "whatsapp_evolution_enabled": whatsapp_enabled,
         "sender_email_local_part": org.sender_email_local_part,
         "email_from_name_override": org.email_from_name_override,
         "reply_to_email": org.reply_to_email,

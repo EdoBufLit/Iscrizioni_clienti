@@ -11,10 +11,13 @@ from app.config import settings
 from app.db import get_db
 from app.models import AdminUser, WhatsAppConnection
 from app.services.org_admin_sessions import get_current_org_admin_from_request
-from app.services.whatsapp_evolution import (
-    EvolutionApiError,
-    EvolutionLiteClient,
-    normalize_phone,
+from app.services.whatsapp_evolution import EvolutionLiteClient, normalize_phone
+from app.services.whatsapp_provider import (
+    WHATSAPP_PROVIDER_GREEN_API,
+    WhatsAppProviderError,
+    get_provider_for_connection,
+    verify_webhook_secret,
+    whatsapp_feature_enabled,
 )
 from app.services.whatsapp_sync import (
     apply_connection_snapshot,
@@ -22,6 +25,7 @@ from app.services.whatsapp_sync import (
     create_pending_outbound_message,
     finalize_outbound_send,
     get_chat_for_connection,
+    get_connection_by_provider_instance_id,
     get_messages_for_chat,
     get_or_create_chat_for_number,
     get_or_create_connection,
@@ -65,8 +69,8 @@ def _get_current_org_admin(request: Request, db: Session) -> AdminUser | None:
 
 
 def _require_whatsapp_feature_enabled() -> None:
-    if not settings.ENABLE_WHATSAPP_EVOLUTION:
-        raise HTTPException(status_code=404, detail="Feature WhatsApp Evolution non disponibile.")
+    if not whatsapp_feature_enabled():
+        raise HTTPException(status_code=404, detail="Feature WhatsApp non disponibile.")
 
 
 def _require_org_admin_access(request: Request, db: Session) -> AdminUser:
@@ -112,13 +116,12 @@ def connect_whatsapp(
     connection = get_or_create_connection(db, admin.organization)
     db.commit()
     db.refresh(connection)
-    client = EvolutionLiteClient()
+    provider = get_provider_for_connection(connection)
     try:
-        client.ensure_instance(org_id=admin.organization.id)
-        snapshot = client.connect(connection.instance_name)
-    except EvolutionApiError as exc:
+        snapshot = provider.connect(connection)
+    except WhatsAppProviderError as exc:
         db.rollback()
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise HTTPException(status_code=503 if exc.retryable else 400, detail=str(exc)) from exc
 
     db.refresh(connection)
     apply_connection_snapshot(connection, snapshot)
@@ -138,11 +141,11 @@ def get_whatsapp_qr(
     if connection is None:
         return serialize_connection(None)
     if not connection.qr_code and connection.status != "connected":
-        client = EvolutionLiteClient()
+        provider = get_provider_for_connection(connection)
         try:
-            snapshot = client.get_qr(connection.instance_name)
-        except EvolutionApiError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+            snapshot = provider.get_qr(connection)
+        except WhatsAppProviderError as exc:
+            raise HTTPException(status_code=503 if exc.retryable else 400, detail=str(exc)) from exc
         apply_connection_snapshot(connection, snapshot)
         db.commit()
         db.refresh(connection)
@@ -159,11 +162,11 @@ def disconnect_whatsapp(
     connection = _get_existing_connection(db, org_id=admin.organization.id)
     if connection is None:
         return {"ok": True, "connection": serialize_connection(None)}
-    client = EvolutionLiteClient()
+    provider = get_provider_for_connection(connection)
     try:
-        client.logout(connection.instance_name)
-    except EvolutionApiError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        provider.logout(connection)
+    except WhatsAppProviderError as exc:
+        raise HTTPException(status_code=503 if exc.retryable else 400, detail=str(exc)) from exc
 
     connection.status = "not_connected"
     connection.qr_code = None
@@ -178,19 +181,20 @@ def reset_whatsapp_connection(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    admin = _require_org_admin(request, db)
+    _require_whatsapp_feature_enabled()
+    admin = _require_org_admin_access(request, db)
     connection = _get_existing_connection(db, org_id=admin.organization.id)
     if connection is None:
         return {"ok": True, "connection": serialize_connection(None)}
-    client = EvolutionLiteClient()
+    provider = get_provider_for_connection(connection)
     errors: list[str] = []
     try:
-        client.logout(connection.instance_name)
-    except EvolutionApiError as exc:
+        provider.logout(connection)
+    except WhatsAppProviderError as exc:
         errors.append(str(exc))
     try:
-        client.delete_instance(connection.instance_name)
-    except EvolutionApiError as exc:
+        provider.delete_instance(connection)
+    except WhatsAppProviderError as exc:
         errors.append(str(exc))
     connection.status = "not_connected"
     connection.qr_code = None
@@ -322,20 +326,20 @@ def send_whatsapp_message(
         chat=chat,
         text_body=text,
     )
-    client = EvolutionLiteClient()
+    provider = get_provider_for_connection(connection)
     try:
-        send_result = client.send_text(
-            connection.instance_name,
+        send_result = provider.send_text(
+            connection,
             number=normalize_phone(chat.external_chat_id) or chat.external_chat_id,
             text=text,
         )
         finalize_outbound_send(pending_message, send_result)
         db.commit()
         db.refresh(pending_message)
-    except EvolutionApiError as exc:
+    except WhatsAppProviderError as exc:
         mark_outbound_message_failed(pending_message, error_message=str(exc))
         db.commit()
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise HTTPException(status_code=503 if exc.retryable else 400, detail=str(exc)) from exc
 
     return {"ok": True, "message": serialize_message(pending_message)}
 
@@ -375,10 +379,10 @@ def start_whatsapp_chat(
         chat=chat,
         text_body=text,
     )
-    client = EvolutionLiteClient()
+    provider = get_provider_for_connection(connection)
     try:
-        send_result = client.send_text(
-            connection.instance_name,
+        send_result = provider.send_text(
+            connection,
             number=normalized_number,
             text=text,
         )
@@ -386,10 +390,10 @@ def start_whatsapp_chat(
         db.commit()
         db.refresh(chat)
         db.refresh(pending_message)
-    except EvolutionApiError as exc:
+    except WhatsAppProviderError as exc:
         mark_outbound_message_failed(pending_message, error_message=str(exc))
         db.commit()
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise HTTPException(status_code=503 if exc.retryable else 400, detail=str(exc)) from exc
 
     return {
         "ok": True,
@@ -420,6 +424,52 @@ def receive_evolution_webhook(
 
     logger.info(
         "whatsapp_evolution_webhook_enqueued event=%s instance=%s outbox_id=%s status=%s",
+        event.event_name,
+        event.instance_name,
+        event.id,
+        event.status,
+    )
+    return {"ok": True, "queued": True, "event_id": event.id}
+
+
+@internal_router.post("/green-api")
+def receive_green_api_webhook(
+    payload: Any = Body(...),
+    db: Session = Depends(get_db),
+    x_green_api_secret: str | None = Header(default=None, alias="X-Green-Api-Secret"),
+    x_webhook_secret: str | None = Header(default=None, alias="X-Webhook-Secret"),
+):
+    _require_whatsapp_feature_enabled()
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Payload webhook non valido.")
+
+    instance_data = payload.get("instanceData")
+    instance_id = ""
+    if isinstance(instance_data, dict):
+        instance_id = str(instance_data.get("idInstance") or "").strip()
+    if not instance_id:
+        raise HTTPException(status_code=400, detail="Webhook Green API senza idInstance.")
+
+    connection = get_connection_by_provider_instance_id(
+        db,
+        provider=WHATSAPP_PROVIDER_GREEN_API,
+        provider_instance_id=instance_id,
+    )
+    if connection is not None and not verify_webhook_secret(
+        x_green_api_secret or x_webhook_secret,
+        connection.provider_webhook_secret_hash,
+    ):
+        raise HTTPException(status_code=403, detail="Invalid Green API webhook credentials.")
+
+    try:
+        event = enqueue_whatsapp_webhook_event(db, payload=payload)
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    logger.info(
+        "whatsapp_green_api_webhook_enqueued event=%s instance=%s outbox_id=%s status=%s",
         event.event_name,
         event.instance_name,
         event.id,

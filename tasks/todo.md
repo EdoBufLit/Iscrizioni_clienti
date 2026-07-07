@@ -1,3 +1,54 @@
+## Plan (Green API WhatsApp + Cloudflare Email REST - Jul 7, 2026)
+- [x] Estendere config/env/workflow/compose per `EMAIL_TRANSPORT=cloudflare_rest`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL_API_TOKEN`, `ENABLE_WHATSAPP`, `WHATSAPP_PROVIDER=green_api`.
+- [x] Aggiungere migration/model per provider WhatsApp: credenziali Green cifrate su `whatsapp_connections`, tracking retry/fallback su `whatsapp_messages`.
+- [x] Introdurre encryption helper riusabile per segreti provider, senza rompere SumUp.
+- [x] Implementare transport Cloudflare Email REST nel sender esistente, con SMTP fallback e classificazione errori.
+- [x] Implementare layer provider WhatsApp e `GreenApiProvider`: state, QR, send text, parse webhook.
+- [x] Riadattare route org-admin WhatsApp e worker/outbox per usare provider-agnostic e mantenere URL pubblici esistenti.
+- [x] Aggiungere endpoint super-admin per configurare Green API per associazione e testare stato/QR.
+- [x] Aggiornare UI super-admin/org-admin e copy rimuovendo dipendenze visibili da Evolution.
+- [x] Aggiungere test mirati per Cloudflare REST, Green API provider, route/queue WhatsApp, fallback email. (Cloudflare REST coperto)
+- [ ] Eseguire compile/test/typecheck/build, valutare eleganza del disegno, poi push/deploy e smoke live se secrets presenti.
+
+## Review (Green API WhatsApp + Cloudflare Email REST - Jul 7, 2026)
+- Implementato transport Cloudflare Email REST su HTTPS 443 con `EMAIL_TRANSPORT=cloudflare_rest`, token da `CLOUDFLARE_EMAIL_API_TOKEN` oppure fallback `SMTP_PASSWORD`, default sender `no-reply@assonam.it` e sender associazione preservato quando `MAIL_FROM_DOMAIN` consente indirizzi tipo `golden-age-club@assonam.it`.
+- Invii email outbox idempotenti: dedupe applicativo gia esistente, `Idempotency-Key`, `Message-ID` deterministico e classificazione errori Cloudflare 429/5xx retryable.
+- Implementato provider WhatsApp astratto con Green API: state, QR, send text, logout, webhook interno, token cifrato, retry outbound e fallback email.
+- Mantenuta compatibilita Evolution: connessioni legacy senza provider restano Evolution e i test esistenti continuano a patchare `EvolutionLiteClient`.
+- Aggiunti endpoint e UI super-admin per configurare provider WhatsApp per associazione, test stato e QR.
+- Alembic head locale: `b2c3d4e5f6a7`.
+- Verifiche locali OK: `python -m compileall -q app init_db.py`; `pytest tests/test_association_email_sender.py tests/test_org_admin_whatsapp.py tests/test_whatsapp_green_api.py -q`; `pytest tests/test_forms_module.py -k whatsapp -q`; `pytest tests/test_org_admin_communications.py -k "whatsapp or survey" -q`; `npm --prefix frontend run typecheck`; `npm --prefix frontend run build`; `git diff --check`.
+- Nota: fino al deploy non e' stata inviata nessuna email reale Cloudflare; i test precedenti usavano cattura locale, quindi la dashboard Cloudflare non poteva mostrare traffico.
+
+## Plan (Deploy SMTP Cloudflare via GitHub Actions - Jul 7, 2026)
+- [x] Verificare che il workflow esporti i secrets SMTP/MAIL verso `.env` e compose.
+- [x] Correggere il deploy manuale affinche' `workflow_dispatch` ricrei i servizi app-runtime anche senza diff di codice/config.
+- [x] Aggiungere supporto SMTP implicito/SMTPS su porta 465 per Cloudflare Email Service.
+- [x] Eseguire verifiche locali sul workflow modificato e committare solo la correzione necessaria.
+- [x] Avviare GitHub Actions `Deploy to Hetzner` con `MIGRATE=false`.
+- [x] Verificare run Actions, server Hetzner, container web/email-worker e env SMTP caricati.
+- [x] Controllare log email recenti e documentare l'esito.
+
+## Review (Deploy SMTP Cloudflare via GitHub Actions - Jul 7, 2026)
+- Deploy GitHub Actions riuscito: run `28891901970`, commit live `88aef24`.
+- Il workflow ora ricrea i servizi app-runtime su `workflow_dispatch`; il deploy da push ha comunque rebuildato/rollato l'immagine perche' e' cambiato codice app.
+- Runtime live: `SMTP_HOST=smtp.mx.cloudflare.net`, `SMTP_PORT=465`, `SMTP_USER=api_token`, `SMTP_PASSWORD` presente, `SMTP_USE_TLS=true`, `MAIL_FROM_DOMAIN=notifiche.assonam.it`.
+- Fix applicativo: porta SMTP 465 usa `SMTP_SSL` implicito; STARTTLS resta per porte non implicite come 587.
+- Verifiche OK: test email sender, `compileall`, parse YAML, HTTP live 200, container web/email-worker/low-cards/whatsapp-worker ricreati e healthy, disco `/` 33%.
+- Nota bloccante per invio reale Cloudflare SMTP: dal server Hetzner la porta 465 verso `smtp.mx.cloudflare.net` va in timeout anche forzando IPv4; UFW permette l'uscita e HTTPS 443 funziona. Finche' 465 resta bloccata, i prossimi invii SMTP Cloudflare falliranno per timeout. Opzioni: sbloccare uscita 465 oppure passare a Cloudflare REST API su 443.
+
+## Plan (Recupero email tessere Mondo Nuovo pagati - Jun 23, 2026)
+- [x] Trovare tutti i pagamenti completati Mondo Nuovo con socio non attivo, tessera mancante o email tessera corrente non `sent`.
+- [x] Per eventuali soci pagati senza tessera/accesso, eseguire fulfillment idempotente e portarli a stato socio attivo.
+- [x] Accodare email tessera solo ai soci senza email `member_card_active` inviata per la tessera corrente.
+- [x] Drenare/verificare outbox e log email, poi documentare conteggi e risultato.
+
+## Review (Recupero email tessere Mondo Nuovo pagati - Jun 23, 2026)
+- Trovati 11 soci Mondo Nuovo con pagamento completato ma stato/accesso non allineato: 10 senza tessera/email corrente, 1 con tessera/email gia inviata ma ancora non attivo.
+- Recupero eseguito su produzione: tutti e 11 risultano `active`, con `payment_status=completed`, `card_payment_status=completed`, `card_is_paid=true`.
+- Email inviate solo ai 10 che non avevano la tessera corrente: numeri 29001-29010/2026. Luca Tabanelli aveva gia tessera 27270/2026 ed email inviata, quindi e stato solo attivato.
+- Verifica finale live: 327 pagamenti completati Mondo Nuovo, 327 soci attivi con tessera, 0 senza tessera, 0 non attivi, 0 senza email `member_card_active` della tessera corrente. Log email worker senza errori negli ultimi 20 minuti.
+
 ## Plan (Fix pagamento online tessere Mondo Nuovo - Jun 23, 2026)
 - [x] Mappare il flusso SumUp/online payment: create checkout, webhook/verify, aggiornamento pagamento, assegnazione tessera e invio email.
 - [x] Verificare su Hetzner in sola lettura il caso Mondo Nuovo: stato pagamento, socio, tessera, outbox/email e log recenti.

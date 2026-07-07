@@ -17,6 +17,8 @@ from app.utils import (
     clear_captured_emails,
     get_captured_emails,
     hash_token,
+    PermanentEmailDeliveryError,
+    RetryableEmailDeliveryError,
     send_email_via_transport_low_level,
 )
 
@@ -360,6 +362,224 @@ def test_smtp_transport_uses_implicit_tls_for_port_465(monkeypatch) -> None:
         settings.SMTP_USER = original_user
         settings.SMTP_PASSWORD = original_password
         settings.SMTP_USE_TLS = original_use_tls
+
+
+def test_cloudflare_rest_transport_uses_smtp_password_and_association_sender(monkeypatch) -> None:
+    original_mode = settings.EMAIL_MODE
+    original_transport = settings.EMAIL_TRANSPORT
+    original_account_id = settings.CLOUDFLARE_ACCOUNT_ID
+    original_api_token = settings.CLOUDFLARE_EMAIL_API_TOKEN
+    original_api_base_url = settings.CLOUDFLARE_EMAIL_API_BASE_URL
+    original_smtp_password = settings.SMTP_PASSWORD
+    original_domain = settings.MAIL_FROM_DOMAIN
+    records: dict[str, object] = {}
+
+    class FakeResponse:
+        status_code = 200
+        ok = True
+        reason = "OK"
+        text = ""
+
+        def json(self):
+            return {
+                "success": True,
+                "errors": [],
+                "messages": [],
+                "result": {
+                    "delivered": ["member@example.com"],
+                    "permanent_bounces": [],
+                    "queued": [],
+                },
+            }
+
+    def fake_post(url, *, headers, json, timeout):
+        records["url"] = url
+        records["headers"] = headers
+        records["json"] = json
+        records["timeout"] = timeout
+        return FakeResponse()
+
+    monkeypatch.setattr("app.utils.requests.post", fake_post)
+
+    settings.EMAIL_MODE = "normal"
+    settings.EMAIL_TRANSPORT = "cloudflare_rest"
+    settings.CLOUDFLARE_ACCOUNT_ID = "acct_123"
+    settings.CLOUDFLARE_EMAIL_API_TOKEN = ""
+    settings.CLOUDFLARE_EMAIL_API_BASE_URL = "https://api.cloudflare.com/client/v4"
+    settings.SMTP_PASSWORD = "cf-token-from-smtp-password"
+    settings.MAIL_FROM_DOMAIN = "assonam.it"
+
+    try:
+        provider_message_id = send_email_via_transport_low_level(
+            to_email="member@example.com",
+            subject="Promo Golden",
+            text_body="hello",
+            html_body="<p>hello</p><img src=\"cid:card_front@assonam\" />",
+            inline_images=[
+                {
+                    "cid": "card_front@assonam",
+                    "content_type": "image/png",
+                    "filename": "tessera.png",
+                    "data": b"png-binary",
+                }
+            ],
+            mode="association",
+            association={
+                "id": 7,
+                "name": "Golden Age Club",
+                "communications_enabled": True,
+                "sender_email_local_part": "golden-age-club",
+                "email_from_name_override": "Golden Age Club",
+                "reply_to_email": "segreteria@goldenage.it",
+            },
+            idempotency_key="campaign:42:member@example.com",
+        )
+
+        payload = records["json"]
+        headers = records["headers"]
+        assert provider_message_id == "cloudflare:campaign:42:member@example.com"
+        assert records["url"] == "https://api.cloudflare.com/client/v4/accounts/acct_123/email/sending/send"
+        assert records["timeout"] == 20
+        assert headers["Authorization"] == "Bearer cf-token-from-smtp-password"
+        assert headers["Idempotency-Key"] == "campaign:42:member@example.com"
+        assert payload["from"] == "golden-age-club@assonam.it"
+        assert payload["to"] == "member@example.com"
+        assert payload["subject"] == "Promo Golden"
+        assert payload["headers"]["X-ASSONAM-Outbox-ID"] == "campaign:42:member@example.com"
+        assert payload["headers"]["Reply-To"] == "segreteria@goldenage.it"
+        assert payload["headers"]["Message-ID"] == "<campaign-42-member-example.com@assonam-outbox>"
+        assert payload["attachments"][0]["disposition"] == "inline"
+        assert payload["attachments"][0]["content_id"] == "card_front@assonam"
+    finally:
+        settings.EMAIL_MODE = original_mode
+        settings.EMAIL_TRANSPORT = original_transport
+        settings.CLOUDFLARE_ACCOUNT_ID = original_account_id
+        settings.CLOUDFLARE_EMAIL_API_TOKEN = original_api_token
+        settings.CLOUDFLARE_EMAIL_API_BASE_URL = original_api_base_url
+        settings.SMTP_PASSWORD = original_smtp_password
+        settings.MAIL_FROM_DOMAIN = original_domain
+
+
+def test_cloudflare_rest_system_sender_defaults_to_no_reply(monkeypatch) -> None:
+    original_mode = settings.EMAIL_MODE
+    original_transport = settings.EMAIL_TRANSPORT
+    original_account_id = settings.CLOUDFLARE_ACCOUNT_ID
+    original_api_token = settings.CLOUDFLARE_EMAIL_API_TOKEN
+    original_smtp_password = settings.SMTP_PASSWORD
+    original_email_from = settings.EMAIL_FROM
+    original_smtp_from = settings.SMTP_FROM
+    records: dict[str, object] = {}
+
+    class FakeResponse:
+        status_code = 200
+        ok = True
+        reason = "OK"
+        text = ""
+
+        def json(self):
+            return {"success": True, "result": {"delivered": ["official@example.com"]}}
+
+    def fake_post(url, *, headers, json, timeout):
+        records["json"] = json
+        return FakeResponse()
+
+    monkeypatch.setattr("app.utils.requests.post", fake_post)
+
+    settings.EMAIL_MODE = "normal"
+    settings.EMAIL_TRANSPORT = "cloudflare_rest"
+    settings.CLOUDFLARE_ACCOUNT_ID = "acct_123"
+    settings.CLOUDFLARE_EMAIL_API_TOKEN = ""
+    settings.SMTP_PASSWORD = "cf-token"
+    settings.EMAIL_FROM = ""
+    settings.SMTP_FROM = ""
+
+    try:
+        send_email_via_transport_low_level(
+            to_email="official@example.com",
+            subject="System",
+            text_body="hello",
+            mode="system",
+            idempotency_key="system:1",
+        )
+
+        assert records["json"]["from"] == "no-reply@assonam.it"
+    finally:
+        settings.EMAIL_MODE = original_mode
+        settings.EMAIL_TRANSPORT = original_transport
+        settings.CLOUDFLARE_ACCOUNT_ID = original_account_id
+        settings.CLOUDFLARE_EMAIL_API_TOKEN = original_api_token
+        settings.SMTP_PASSWORD = original_smtp_password
+        settings.EMAIL_FROM = original_email_from
+        settings.SMTP_FROM = original_smtp_from
+
+
+def test_cloudflare_rest_error_classification(monkeypatch) -> None:
+    original_mode = settings.EMAIL_MODE
+    original_transport = settings.EMAIL_TRANSPORT
+    original_account_id = settings.CLOUDFLARE_ACCOUNT_ID
+    original_api_token = settings.CLOUDFLARE_EMAIL_API_TOKEN
+    original_smtp_password = settings.SMTP_PASSWORD
+    status_code = {"value": 429}
+
+    class FakeResponse:
+        ok = False
+        reason = "provider error"
+        text = ""
+
+        @property
+        def status_code(self):
+            return status_code["value"]
+
+        def json(self):
+            return {
+                "success": False,
+                "errors": [{"code": 10004, "message": "email.sending.error.throttled"}],
+            }
+
+    def fake_post(url, *, headers, json, timeout):
+        return FakeResponse()
+
+    monkeypatch.setattr("app.utils.requests.post", fake_post)
+
+    settings.EMAIL_MODE = "normal"
+    settings.EMAIL_TRANSPORT = "cloudflare_rest"
+    settings.CLOUDFLARE_ACCOUNT_ID = "acct_123"
+    settings.CLOUDFLARE_EMAIL_API_TOKEN = ""
+    settings.SMTP_PASSWORD = "cf-token"
+
+    try:
+        try:
+            send_email_via_transport_low_level(
+                to_email="member@example.com",
+                subject="Retry",
+                text_body="hello",
+                mode="system",
+                idempotency_key="retry:1",
+            )
+        except RetryableEmailDeliveryError as exc:
+            assert "429" in str(exc)
+        else:
+            raise AssertionError("429 must be retryable")
+
+        status_code["value"] = 401
+        try:
+            send_email_via_transport_low_level(
+                to_email="member@example.com",
+                subject="Permanent",
+                text_body="hello",
+                mode="system",
+                idempotency_key="permanent:1",
+            )
+        except PermanentEmailDeliveryError as exc:
+            assert "401" in str(exc)
+        else:
+            raise AssertionError("401 must be permanent")
+    finally:
+        settings.EMAIL_MODE = original_mode
+        settings.EMAIL_TRANSPORT = original_transport
+        settings.CLOUDFLARE_ACCOUNT_ID = original_account_id
+        settings.CLOUDFLARE_EMAIL_API_TOKEN = original_api_token
+        settings.SMTP_PASSWORD = original_smtp_password
 
 
 def test_org_admin_patch_organization_email_settings_returns_preview(client) -> None:

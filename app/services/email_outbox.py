@@ -36,6 +36,7 @@ class ClaimedEmailOutboxJob:
     payload_json: dict[str, Any]
     attempts: int
     priority: int
+    dedupe_key: str | None
 
 
 def utcnow_aware() -> datetime:
@@ -326,6 +327,7 @@ def claim_due_email_batch(limit: int | None = None) -> list[ClaimedEmailOutboxJo
                     payload_json=copy.deepcopy(row.payload_json or {}),
                     attempts=attempts,
                     priority=row.priority,
+                    dedupe_key=row.dedupe_key,
                 )
             )
         db.commit()
@@ -434,6 +436,7 @@ def _send_claimed_job(job: ClaimedEmailOutboxJob) -> str:
         mode=sender_mode,
         association=association,
         reply_to=reply_to,
+        idempotency_key=job.dedupe_key or job.id,
     )
 
 

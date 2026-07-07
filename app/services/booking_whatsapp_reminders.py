@@ -17,6 +17,7 @@ from app.services.email_sender import build_sender_payload
 from app.services.email_templates import build_template_context, render_template_string
 from app.services.whatsapp_automation import _send_whatsapp_text
 from app.services.whatsapp_evolution import normalize_phone
+from app.services.whatsapp_provider import whatsapp_feature_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,8 @@ def process_booking_whatsapp_reminders(
 ) -> dict[str, int]:
     current = _as_utc_datetime(now or datetime.now(timezone.utc))
     stats = {"checked": 0, "sent": 0, "skipped": 0, "failed": 0}
+    if not whatsapp_feature_enabled():
+        return stats
 
     bookings = (
         db.query(Booking)
@@ -155,8 +158,6 @@ def process_post_event_survey_email(
 ) -> dict[str, int]:
     current = _as_utc_datetime(now or datetime.now(timezone.utc))
     stats = {"checked": 0, "sent": 0, "skipped": 0, "failed": 0}
-    if not settings.ENABLE_WHATSAPP_EVOLUTION:
-        return stats
 
     survey_forms = (
         db.query(Form)

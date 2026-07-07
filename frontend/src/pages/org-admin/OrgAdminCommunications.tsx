@@ -78,7 +78,7 @@ export default function OrgAdminCommunications() {
       .then((settings) => {
         if (!cancelled) {
           setCommunicationsLocked(!settings.communications_enabled);
-          setWhatsappEnabled(Boolean(settings.whatsapp_evolution_enabled));
+          setWhatsappEnabled(Boolean(settings.whatsapp_enabled ?? settings.whatsapp_evolution_enabled));
         }
       })
       .catch(() => {

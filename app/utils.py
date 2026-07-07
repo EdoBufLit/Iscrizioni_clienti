@@ -26,6 +26,7 @@ from .services.email_sender import (
 
 logger = logging.getLogger(__name__)
 _MAILTRAP_SEND_API_URL = "https://send.api.mailtrap.io/api/send"
+_CLOUDFLARE_EMAIL_SEND_PATH = "/accounts/{account_id}/email/sending/send"
 
 # Global list for email capture in tests
 _captured_emails = []
@@ -377,6 +378,11 @@ def _provider_body_text(response: requests.Response) -> str:
 
 def _extract_provider_message_id(payload: object, fallback: str) -> str:
     if isinstance(payload, dict):
+        result = payload.get("result")
+        if isinstance(result, dict):
+            nested = _extract_provider_message_id(result, "")
+            if nested:
+                return nested
         for key in ("message_id", "id"):
             value = payload.get(key)
             if isinstance(value, str) and value.strip():
@@ -431,6 +437,199 @@ def _build_mailtrap_attachments(
             }
         )
     return built_attachments
+
+
+def _build_cloudflare_attachments(
+    inline_images: list[dict] | None,
+    file_attachments: list[dict] | None = None,
+) -> list[dict]:
+    return _build_mailtrap_attachments(inline_images, file_attachments)
+
+
+def _cloudflare_api_token() -> str:
+    return (settings.CLOUDFLARE_EMAIL_API_TOKEN or settings.SMTP_PASSWORD or "").strip()
+
+
+def _cloudflare_send_url() -> str:
+    account_id = (settings.CLOUDFLARE_ACCOUNT_ID or "").strip()
+    base_url = (settings.CLOUDFLARE_EMAIL_API_BASE_URL or "https://api.cloudflare.com/client/v4").rstrip("/")
+    return f"{base_url}{_CLOUDFLARE_EMAIL_SEND_PATH.format(account_id=account_id)}"
+
+
+def _cloudflare_provider_message_id(
+    *,
+    idempotency_key: str | None,
+    fallback: str,
+    payload: object,
+) -> str:
+    extracted = _extract_provider_message_id(payload, "")
+    if extracted:
+        return extracted
+    normalized_key = (idempotency_key or "").strip()
+    if normalized_key:
+        return f"cloudflare:{normalized_key}"
+    return fallback
+
+
+def send_email_via_cloudflare_rest(
+    *,
+    to_email: str,
+    subject: str,
+    text_body: str,
+    html_body: Optional[str] = None,
+    inline_images: Optional[List[dict]] = None,
+    attachments: Optional[List[dict]] = None,
+    mode: str = "system",
+    association: object | None = None,
+    reply_to: Optional[str] = None,
+    sender_selection: EmailSenderSelection | None = None,
+    association_snapshot: dict[str, object] | None = None,
+    idempotency_key: str | None = None,
+) -> str:
+    association_snapshot = (
+        association_snapshot
+        if association_snapshot is not None
+        else serialize_association_sender(association)
+    )
+    sender_selection = sender_selection or resolve_email_sender(
+        mode=mode,
+        association=association,
+        reply_to=reply_to,
+    )
+    _log_transport_selection(
+        transport="cloudflare_rest",
+        sender_selection=sender_selection,
+        association_snapshot=association_snapshot,
+    )
+    provider_message_id = make_msgid()
+    normalized_idempotency_key = (idempotency_key or provider_message_id).strip()
+    message_id = provider_message_id
+    if normalized_idempotency_key:
+        safe_key = "".join(
+            ch if ch.isalnum() or ch in "._-" else "-"
+            for ch in normalized_idempotency_key
+        ).strip("-")[:160]
+        if safe_key:
+            message_id = f"<{safe_key}@assonam-outbox>"
+
+    if settings.EMAIL_MODE == "test":
+        _capture_email_for_tests(
+            to_email=to_email,
+            subject=subject,
+            text_body=text_body,
+            html_body=html_body,
+            inline_images=inline_images or None,
+            attachments=attachments or None,
+            sender_selection=sender_selection,
+            provider_message_id=_cloudflare_provider_message_id(
+                idempotency_key=normalized_idempotency_key,
+                fallback=provider_message_id,
+                payload={},
+            ),
+            transport="cloudflare_rest",
+        )
+        return _cloudflare_provider_message_id(
+            idempotency_key=normalized_idempotency_key,
+            fallback=provider_message_id,
+            payload={},
+        )
+
+    missing = []
+    if not (settings.CLOUDFLARE_ACCOUNT_ID or "").strip():
+        missing.append("CLOUDFLARE_ACCOUNT_ID")
+    if not _cloudflare_api_token():
+        missing.append("CLOUDFLARE_EMAIL_API_TOKEN/SMTP_PASSWORD")
+    if missing:
+        raise PermanentEmailDeliveryError(
+            f"Cloudflare Email REST configuration incomplete: missing {', '.join(missing)}"
+        )
+
+    headers_payload = {
+        "Message-ID": message_id,
+        "X-ASSONAM-Outbox-ID": normalized_idempotency_key,
+    }
+    if sender_selection.reply_to:
+        headers_payload["Reply-To"] = sender_selection.reply_to
+
+    payload: dict[str, object] = {
+        "to": _sanitize_header_value(to_email),
+        "from": sender_selection.from_email,
+        "subject": _sanitize_header_value(subject),
+        "text": text_body,
+        "headers": headers_payload,
+    }
+    if html_body:
+        payload["html"] = html_body
+    cloudflare_attachments = _build_cloudflare_attachments(
+        inline_images or None,
+        attachments or None,
+    )
+    if cloudflare_attachments:
+        payload["attachments"] = cloudflare_attachments
+
+    request_headers = {
+        "Authorization": f"Bearer {_cloudflare_api_token()}",
+        "Content-Type": "application/json",
+        "Idempotency-Key": normalized_idempotency_key,
+    }
+
+    try:
+        response = requests.post(
+            _cloudflare_send_url(),
+            headers=request_headers,
+            json=payload,
+            timeout=20,
+        )
+    except (requests.Timeout, requests.ConnectionError) as exc:
+        logger.warning(
+            "cloudflare_email_rest_call_finished result=retryable_failed status=network_error error=%s",
+            exc,
+        )
+        raise RetryableEmailDeliveryError(
+            f"Cloudflare Email REST temporaneamente non raggiungibile: {exc}"
+        ) from exc
+    except requests.RequestException as exc:
+        logger.warning(
+            "cloudflare_email_rest_call_finished result=retryable_failed status=request_exception error=%s",
+            exc,
+        )
+        raise RetryableEmailDeliveryError(str(exc) or exc.__class__.__name__) from exc
+
+    provider_error_body = _provider_body_text(response)
+    logger.info(
+        "cloudflare_email_rest_response_status status=%s ok=%s provider_error_body=%s",
+        response.status_code,
+        response.ok,
+        provider_error_body or "",
+    )
+
+    try:
+        response_payload = response.json()
+    except ValueError:
+        response_payload = None
+
+    if response.ok:
+        result = response_payload.get("result") if isinstance(response_payload, dict) else None
+        permanent_bounces = []
+        if isinstance(result, dict) and isinstance(result.get("permanent_bounces"), list):
+            permanent_bounces = result["permanent_bounces"]
+        if permanent_bounces:
+            raise PermanentEmailDeliveryError(
+                f"Cloudflare Email REST permanent bounce: {', '.join(map(str, permanent_bounces))}"
+            )
+        return _cloudflare_provider_message_id(
+            idempotency_key=normalized_idempotency_key,
+            fallback=provider_message_id,
+            payload=response_payload,
+        )
+
+    error_text = (
+        f"Cloudflare Email REST {response.status_code}: "
+        f"{provider_error_body or response.reason or 'Errore provider senza dettaglio.'}"
+    )
+    if _is_retryable_http_status(response.status_code):
+        raise RetryableEmailDeliveryError(error_text)
+    raise PermanentEmailDeliveryError(error_text)
 
 
 def _is_retryable_http_status(status_code: int) -> bool:
@@ -748,6 +947,7 @@ def send_email_via_transport_low_level(
     mode: str = "system",
     association: object | None = None,
     reply_to: Optional[str] = None,
+    idempotency_key: Optional[str] = None,
 ) -> str:
     association_snapshot = serialize_association_sender(association)
     sender_selection = resolve_email_sender(
@@ -755,16 +955,49 @@ def send_email_via_transport_low_level(
         association=association,
         reply_to=reply_to,
     )
-    selected_transport = (
-        "mailtrap_api"
-        if sender_selection.selected_mode == "association" and not sender_selection.fallback_used
-        else "smtp"
+    configured_transport = (settings.EMAIL_TRANSPORT or "auto").strip().lower()
+    cloudflare_configured = bool(
+        (settings.CLOUDFLARE_ACCOUNT_ID or "").strip()
+        and _cloudflare_api_token()
     )
+    if configured_transport in {"cloudflare", "cloudflare_rest"}:
+        selected_transport = "cloudflare_rest"
+    elif configured_transport == "smtp":
+        selected_transport = "smtp"
+    elif configured_transport == "mailtrap_api":
+        selected_transport = (
+            "mailtrap_api"
+            if sender_selection.selected_mode == "association" and not sender_selection.fallback_used
+            else "smtp"
+        )
+    elif cloudflare_configured:
+        selected_transport = "cloudflare_rest"
+    else:
+        selected_transport = (
+            "mailtrap_api"
+            if sender_selection.selected_mode == "association" and not sender_selection.fallback_used
+            else "smtp"
+        )
     _log_transport_selection(
         transport=selected_transport,
         sender_selection=sender_selection,
         association_snapshot=association_snapshot,
     )
+    if selected_transport == "cloudflare_rest":
+        return send_email_via_cloudflare_rest(
+            to_email=to_email,
+            subject=subject,
+            text_body=text_body,
+            html_body=html_body,
+            inline_images=inline_images,
+            attachments=attachments,
+            mode=mode,
+            association=association,
+            reply_to=reply_to,
+            sender_selection=sender_selection,
+            association_snapshot=association_snapshot,
+            idempotency_key=idempotency_key,
+        )
     if selected_transport == "mailtrap_api":
         return send_association_email_via_mailtrap_api(
             to_email=to_email,

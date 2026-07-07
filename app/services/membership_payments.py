@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import base64
-import hashlib
 import json
 import logging
 import uuid
@@ -11,7 +9,6 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 import requests
-from cryptography.fernet import Fernet, InvalidToken
 from fastapi import HTTPException, Request
 from sqlalchemy.orm import Session
 
@@ -40,6 +37,7 @@ from app.services.member_card_delivery import (
     build_member_card_access_payload,
     queue_member_card_email,
 )
+from app.services.credential_crypto import decrypt_secret, encrypt_secret
 
 logger = logging.getLogger(__name__)
 
@@ -61,39 +59,21 @@ class FulfillmentResult:
     reason: str
 
 
-def _derive_fernet_key(raw_secret: str) -> bytes:
-    digest = hashlib.sha256(raw_secret.encode("utf-8")).digest()
-    return base64.urlsafe_b64encode(digest)
-
-
-def _get_fernet() -> Fernet:
-    raw_secret = (settings.SUMUP_CREDENTIALS_ENCRYPTION_KEY or "").strip()
-    if not raw_secret:
-        raise HTTPException(
-            status_code=503,
-            detail="Configurazione cifratura credenziali SumUp non disponibile.",
-        )
-    return Fernet(_derive_fernet_key(raw_secret))
-
-
 def encrypt_sumup_api_key(raw_key: str) -> str:
-    normalized = (raw_key or "").strip()
-    if not normalized:
-        raise HTTPException(status_code=400, detail="Chiave API SumUp obbligatoria.")
-    return _get_fernet().encrypt(normalized.encode("utf-8")).decode("utf-8")
+    return encrypt_secret(
+        raw_key,
+        empty_detail="Chiave API SumUp obbligatoria.",
+        config_detail="Configurazione cifratura credenziali SumUp non disponibile.",
+    )
 
 
 def decrypt_sumup_api_key(encrypted_key: str | None) -> str:
-    normalized = (encrypted_key or "").strip()
-    if not normalized:
-        raise HTTPException(status_code=400, detail="Chiave API SumUp non configurata.")
-    try:
-        return _get_fernet().decrypt(normalized.encode("utf-8")).decode("utf-8")
-    except InvalidToken as exc:
-        raise HTTPException(
-            status_code=500,
-            detail="Chiave API SumUp non decifrabile. Riconfigurare la chiave.",
-        ) from exc
+    return decrypt_secret(
+        encrypted_key,
+        missing_detail="Chiave API SumUp non configurata.",
+        invalid_detail="Chiave API SumUp non decifrabile. Riconfigurare la chiave.",
+        config_detail="Configurazione cifratura credenziali SumUp non disponibile.",
+    )
 
 
 def decimal_to_str(value: Decimal | float | int | str | None) -> str | None:

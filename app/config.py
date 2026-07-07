@@ -113,9 +113,18 @@ class Settings:
     SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
     SMTP_USER: str = os.getenv("SMTP_USER", "")
     SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
-    SMTP_FROM: str = os.getenv("SMTP_FROM", "noreply@assonam.it")
-    EMAIL_FROM: str = os.getenv("EMAIL_FROM", os.getenv("SMTP_FROM", "noreply@assonam.it"))
+    SMTP_FROM: str = os.getenv("SMTP_FROM", "no-reply@assonam.it")
+    EMAIL_FROM: str = os.getenv("EMAIL_FROM", os.getenv("SMTP_FROM", "no-reply@assonam.it"))
     SMTP_USE_TLS: bool = os.getenv("SMTP_USE_TLS", "true").lower() in ("true", "1", "yes")
+    EMAIL_TRANSPORT: str = os.getenv("EMAIL_TRANSPORT", "auto").strip().lower() or "auto"
+    CLOUDFLARE_ACCOUNT_ID: str = os.getenv("CLOUDFLARE_ACCOUNT_ID", "")
+    CLOUDFLARE_EMAIL_API_TOKEN: str = (
+        os.getenv("CLOUDFLARE_EMAIL_API_TOKEN") or os.getenv("SMTP_PASSWORD", "")
+    )
+    CLOUDFLARE_EMAIL_API_BASE_URL: str = os.getenv(
+        "CLOUDFLARE_EMAIL_API_BASE_URL",
+        "https://api.cloudflare.com/client/v4",
+    )
     MAIL_FROM_DOMAIN: str = os.getenv("MAIL_FROM_DOMAIN", "")
     ASSOCIATION_MAIL_API_TOKEN: str = os.getenv("ASSOCIATION_MAIL_API_TOKEN", "")
 
@@ -131,6 +140,13 @@ class Settings:
     TG_BOT_TOKEN: str = os.getenv("TG_BOT_TOKEN", "")
     TG_CHAT_ID: str = os.getenv("TG_CHAT_ID", "")
     ENABLE_WHATSAPP_EVOLUTION: bool = _env_bool("ENABLE_WHATSAPP_EVOLUTION", default=False)
+    ENABLE_WHATSAPP: bool = _env_bool("ENABLE_WHATSAPP", default=ENABLE_WHATSAPP_EVOLUTION)
+    WHATSAPP_PROVIDER_EXPLICIT: bool = "WHATSAPP_PROVIDER" in os.environ
+    WHATSAPP_PROVIDER: str = os.getenv(
+        "WHATSAPP_PROVIDER",
+        "evolution" if ENABLE_WHATSAPP_EVOLUTION else "green_api",
+    ).strip().lower()
+    GREEN_API_BASE_URL: str = os.getenv("GREEN_API_BASE_URL", "https://api.green-api.com")
     EVOLUTION_API_BASE_URL: str = os.getenv(
         "EVOLUTION_API_BASE_URL",
         "http://evolution-api:8080",
@@ -145,6 +161,10 @@ class Settings:
     WHATSAPP_OUTBOUND_BATCH_SIZE: int = int(os.getenv("WHATSAPP_OUTBOUND_BATCH_SIZE", "20"))
     WHATSAPP_OUTBOUND_MIN_INTERVAL_SECONDS: int = int(
         os.getenv("WHATSAPP_OUTBOUND_MIN_INTERVAL_SECONDS", "60")
+    )
+    WHATSAPP_OUTBOUND_MAX_ATTEMPTS: int = int(os.getenv("WHATSAPP_OUTBOUND_MAX_ATTEMPTS", "3"))
+    WHATSAPP_OUTBOUND_RETRY_BASE_SECONDS: int = int(
+        os.getenv("WHATSAPP_OUTBOUND_RETRY_BASE_SECONDS", "60")
     )
     LOW_CARDS_ALERT_JOB_INTERVAL_SECONDS: int = int(
         os.getenv("LOW_CARDS_ALERT_JOB_INTERVAL_SECONDS", "300")
@@ -260,4 +280,10 @@ if settings.ENABLE_WHATSAPP_EVOLUTION and not settings.EVOLUTION_API_KEY:
     logger.warning(
         "ENABLE_WHATSAPP_EVOLUTION=true but EVOLUTION_API_KEY is empty. "
         "Evolution calls will not authenticate correctly."
+    )
+
+if settings.ENABLE_WHATSAPP and settings.WHATSAPP_PROVIDER == "green_api" and not settings.SUMUP_CREDENTIALS_ENCRYPTION_KEY:
+    logger.warning(
+        "ENABLE_WHATSAPP=true with WHATSAPP_PROVIDER=green_api but "
+        "SUMUP_CREDENTIALS_ENCRYPTION_KEY is empty. Green API tokens cannot be decrypted."
     )

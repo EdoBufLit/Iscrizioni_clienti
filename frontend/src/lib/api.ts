@@ -801,6 +801,8 @@ export type OrgAdminCardStyle = {
 
 export type OrgAdminCommunicationSettings = {
   communications_enabled: boolean;
+  whatsapp_enabled?: boolean;
+  whatsapp_provider?: string | null;
   whatsapp_evolution_enabled: boolean;
   sender_email_local_part: string | null;
   email_from_name_override: string | null;
@@ -833,12 +835,27 @@ export type OrgAdminWhatsAppConnectionStatus =
 
 export type OrgAdminWhatsAppConnection = {
   status: OrgAdminWhatsAppConnectionStatus;
+  provider?: string | null;
+  provider_instance_id?: string | null;
+  provider_configured?: boolean;
   phone_number: string | null;
   profile_name: string | null;
   has_qr: boolean;
   qr_code: string | null;
   last_error: string | null;
+  last_healthcheck_at?: string | null;
   updated_at: string | null;
+};
+
+export type WhatsAppProviderName = "evolution" | "green_api";
+
+export type SuperAdminWhatsAppProviderSettings = OrgAdminWhatsAppConnection & {
+  provider: WhatsAppProviderName | string;
+  provider_instance_id: string | null;
+  provider_configured: boolean;
+  provider_token_configured: boolean;
+  webhook_secret_configured: boolean;
+  provider_api_url: string | null;
 };
 
 export type OrgAdminWhatsAppChat = {
@@ -5352,6 +5369,66 @@ export async function deleteSuperAdminSumUpApiKey(
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (res.status === 404) throw new Error("Organizzazione non trovata");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore rimozione chiave SumUp"));
+  return res.json();
+}
+
+export async function fetchSuperAdminWhatsAppProviderSettings(
+  orgId: number,
+): Promise<SuperAdminWhatsAppProviderSettings> {
+  const res = await fetch(`/api/super-admin/organizations/${orgId}/whatsapp-provider-settings`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Organizzazione non trovata");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento impostazioni WhatsApp"));
+  return res.json();
+}
+
+export async function patchSuperAdminWhatsAppProviderSettings(
+  orgId: number,
+  payload: {
+    provider: WhatsAppProviderName;
+    provider_instance_id?: string | null;
+    provider_api_url?: string | null;
+    provider_token?: string | null;
+    webhook_secret?: string | null;
+    clear_provider_token?: boolean;
+    clear_webhook_secret?: boolean;
+  },
+): Promise<SuperAdminWhatsAppProviderSettings> {
+  const res = await fetch(`/api/super-admin/organizations/${orgId}/whatsapp-provider-settings`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Organizzazione non trovata");
+  if (res.status === 409) {
+    throw new Error(await parseApiErrorDetail(res, "Istanza Green API gia configurata su un'altra associazione"));
+  }
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore salvataggio impostazioni WhatsApp"));
+  return res.json();
+}
+
+export async function refreshSuperAdminWhatsAppProviderState(
+  orgId: number,
+): Promise<SuperAdminWhatsAppProviderSettings> {
+  const res = await fetch(`/api/super-admin/organizations/${orgId}/whatsapp-provider-settings/state`, {
+    method: "POST",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Connessione WhatsApp non configurata");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore verifica stato WhatsApp"));
+  return res.json();
+}
+
+export async function refreshSuperAdminWhatsAppProviderQr(
+  orgId: number,
+): Promise<SuperAdminWhatsAppProviderSettings> {
+  const res = await fetch(`/api/super-admin/organizations/${orgId}/whatsapp-provider-settings/qr`, {
+    method: "POST",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 404) throw new Error("Connessione WhatsApp non configurata");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento QR WhatsApp"));
   return res.json();
 }
 

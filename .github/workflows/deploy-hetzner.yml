@@ -329,6 +329,14 @@ jobs:
             DATABASE_URL='${{ secrets.DATABASE_URL }}'
             POSTGRES_PASSWORD='${{ secrets.POSTGRES_PASSWORD }}'
             EVOLUTION_API_KEY='${{ secrets.EVOLUTION_API_KEY }}'
+            EMAIL_TRANSPORT_VALUE='${{ secrets.EMAIL_TRANSPORT }}'
+            CLOUDFLARE_ACCOUNT_ID_VALUE='${{ secrets.CLOUDFLARE_ACCOUNT_ID }}'
+            CLOUDFLARE_EMAIL_API_TOKEN_VALUE='${{ secrets.CLOUDFLARE_EMAIL_API_TOKEN }}'
+            SMTP_PASSWORD_VALUE='${{ secrets.SMTP_PASSWORD }}'
+            ENABLE_WHATSAPP_VALUE='${{ secrets.ENABLE_WHATSAPP }}'
+            WHATSAPP_PROVIDER_VALUE='${{ secrets.WHATSAPP_PROVIDER }}'
+            GREEN_API_BASE_URL_VALUE='${{ secrets.GREEN_API_BASE_URL }}'
+            SUMUP_CREDENTIALS_ENCRYPTION_KEY_VALUE='${{ secrets.SUMUP_CREDENTIALS_ENCRYPTION_KEY }}'
             BUILD_TIME="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
             GHCR_USERNAME='${{ github.actor }}'
             GHCR_TOKEN='${{ github.token }}'
@@ -370,6 +378,10 @@ jobs:
             SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
             SMTP_FROM=${{ secrets.SMTP_FROM }}
             SMTP_USE_TLS=${{ secrets.SMTP_USE_TLS }}
+            EMAIL_TRANSPORT=${{ secrets.EMAIL_TRANSPORT }}
+            CLOUDFLARE_ACCOUNT_ID=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+            CLOUDFLARE_EMAIL_API_TOKEN=${{ secrets.CLOUDFLARE_EMAIL_API_TOKEN }}
+            CLOUDFLARE_EMAIL_API_BASE_URL=${{ secrets.CLOUDFLARE_EMAIL_API_BASE_URL }}
             MAIL_FROM_DOMAIN=${{ secrets.MAIL_FROM_DOMAIN }}
             ASSOCIATION_MAIL_API_TOKEN=${{ secrets.ASSOCIATION_MAIL_API_TOKEN }}
             TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }}
@@ -395,6 +407,9 @@ jobs:
             AFFILIATION_VIDEO_WORKER_ENABLED=${{ secrets.AFFILIATION_VIDEO_WORKER_ENABLED }}
             AFFILIATION_VIDEO_ENABLED=${{ secrets.AFFILIATION_VIDEO_ENABLED }}
             ENABLE_WHATSAPP_EVOLUTION=${{ secrets.ENABLE_WHATSAPP_EVOLUTION }}
+            ENABLE_WHATSAPP=${{ secrets.ENABLE_WHATSAPP }}
+            WHATSAPP_PROVIDER=${{ secrets.WHATSAPP_PROVIDER }}
+            GREEN_API_BASE_URL=${{ secrets.GREEN_API_BASE_URL }}
             EVOLUTION_API_BASE_URL=http://evolution-api:8080
             EVOLUTION_API_KEY=${{ secrets.EVOLUTION_API_KEY }}
             SUMUP_CREDENTIALS_ENCRYPTION_KEY=${{ secrets.SUMUP_CREDENTIALS_ENCRYPTION_KEY }}
@@ -420,6 +435,33 @@ jobs:
             else
               printf 'ENABLE_WHATSAPP_EVOLUTION=%s\n' "$ENABLE_WHATSAPP_EVOLUTION" >> .env
             fi
+            ENABLE_WHATSAPP="$(echo "${ENABLE_WHATSAPP_VALUE:-false}" | tr '[:upper:]' '[:lower:]')"
+            if [ -z "${ENABLE_WHATSAPP:-}" ]; then
+              ENABLE_WHATSAPP="false"
+            fi
+            if grep -q '^ENABLE_WHATSAPP=' .env; then
+              sed -i "s/^ENABLE_WHATSAPP=.*/ENABLE_WHATSAPP=${ENABLE_WHATSAPP}/" .env
+            else
+              printf 'ENABLE_WHATSAPP=%s\n' "$ENABLE_WHATSAPP" >> .env
+            fi
+            WHATSAPP_PROVIDER="$(echo "${WHATSAPP_PROVIDER_VALUE:-green_api}" | tr '[:upper:]' '[:lower:]' | tr '-' '_')"
+            if [ -z "${WHATSAPP_PROVIDER:-}" ]; then
+              WHATSAPP_PROVIDER="green_api"
+            fi
+            if grep -q '^WHATSAPP_PROVIDER=' .env; then
+              sed -i "s/^WHATSAPP_PROVIDER=.*/WHATSAPP_PROVIDER=${WHATSAPP_PROVIDER}/" .env
+            else
+              printf 'WHATSAPP_PROVIDER=%s\n' "$WHATSAPP_PROVIDER" >> .env
+            fi
+            GREEN_API_BASE_URL="${GREEN_API_BASE_URL_VALUE:-https://api.green-api.com}"
+            if [ -z "${GREEN_API_BASE_URL:-}" ]; then
+              GREEN_API_BASE_URL="https://api.green-api.com"
+            fi
+            if grep -q '^GREEN_API_BASE_URL=' .env; then
+              sed -i "s#^GREEN_API_BASE_URL=.*#GREEN_API_BASE_URL=${GREEN_API_BASE_URL}#" .env
+            else
+              printf 'GREEN_API_BASE_URL=%s\n' "$GREEN_API_BASE_URL" >> .env
+            fi
             if ! grep -q '^AFFILIATION_VIDEO_WORKER_ENABLED=' .env; then
               printf 'AFFILIATION_VIDEO_WORKER_ENABLED=false\n' >> .env
             fi
@@ -427,6 +469,25 @@ jobs:
               printf 'AFFILIATION_VIDEO_ENABLED=true\n' >> .env
             fi
             chmod 600 .env
+
+            EMAIL_TRANSPORT_VALUE="$(echo "${EMAIL_TRANSPORT_VALUE:-cloudflare_rest}" | tr '[:upper:]' '[:lower:]')"
+            if [ -z "${EMAIL_TRANSPORT_VALUE:-}" ]; then
+              EMAIL_TRANSPORT_VALUE="cloudflare_rest"
+            fi
+            if [ "$EMAIL_TRANSPORT_VALUE" = "cloudflare" ] || [ "$EMAIL_TRANSPORT_VALUE" = "cloudflare_rest" ]; then
+              if [ -z "${CLOUDFLARE_ACCOUNT_ID_VALUE:-}" ]; then
+                echo "::error::EMAIL_TRANSPORT=cloudflare_rest but CLOUDFLARE_ACCOUNT_ID secret is empty"
+                exit 1
+              fi
+              if [ -z "${CLOUDFLARE_EMAIL_API_TOKEN_VALUE:-}" ] && [ -z "${SMTP_PASSWORD_VALUE:-}" ]; then
+                echo "::error::EMAIL_TRANSPORT=cloudflare_rest but both CLOUDFLARE_EMAIL_API_TOKEN and SMTP_PASSWORD secrets are empty"
+                exit 1
+              fi
+            fi
+            if [ "$ENABLE_WHATSAPP" = "true" ] && [ "$WHATSAPP_PROVIDER" = "green_api" ] && [ -z "${SUMUP_CREDENTIALS_ENCRYPTION_KEY_VALUE:-}" ]; then
+              echo "::error::ENABLE_WHATSAPP=true with WHATSAPP_PROVIDER=green_api requires SUMUP_CREDENTIALS_ENCRYPTION_KEY secret for encrypted provider tokens"
+              exit 1
+            fi
 
             AFFILIATION_VIDEO_WORKER_ENABLED='${{ secrets.AFFILIATION_VIDEO_WORKER_ENABLED }}'
             if [ -z "${AFFILIATION_VIDEO_WORKER_ENABLED:-}" ]; then

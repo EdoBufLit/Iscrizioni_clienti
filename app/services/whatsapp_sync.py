@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
+import html
 import json
 import logging
 import uuid
 from typing import Any
 
+from sqlalchemy import or_
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session, joinedload
@@ -23,7 +25,6 @@ from app.models import (
 )
 from app.services.booking_customer_actions import apply_booking_text_reply
 from app.services.whatsapp_evolution import (
-    EvolutionApiError,
     EvolutionChat,
     EvolutionContact,
     EvolutionConnectionSnapshot,
@@ -35,6 +36,14 @@ from app.services.whatsapp_evolution import (
     is_whatsapp_group_jid,
     normalize_phone,
     resolve_connection_status,
+)
+from app.services.whatsapp_provider import (
+    WHATSAPP_PROVIDER_GREEN_API,
+    WhatsAppProviderError,
+    default_whatsapp_provider_name,
+    ensure_connection_provider_defaults,
+    get_provider_for_connection,
+    provider_name_for_connection,
 )
 
 logger = logging.getLogger(__name__)
@@ -56,13 +65,17 @@ def get_or_create_connection(db: Session, org: Organization) -> WhatsAppConnecti
     )
     if connection is not None:
         expected_name = build_evolution_instance_name(org.id)
-        if connection.instance_name != expected_name:
+        if not connection.instance_name:
             connection.instance_name = expected_name
+        ensure_connection_provider_defaults(connection)
         return connection
 
+    provider = default_whatsapp_provider_name()
     connection = WhatsAppConnection(
         org_id=org.id,
         instance_name=build_evolution_instance_name(org.id),
+        provider=provider,
+        provider_api_url=settings.GREEN_API_BASE_URL if provider == WHATSAPP_PROVIDER_GREEN_API else None,
         status="not_connected",
     )
     db.add(connection)
@@ -78,6 +91,26 @@ def get_connection_by_instance_name(
     return (
         db.query(WhatsAppConnection)
         .filter(WhatsAppConnection.instance_name == instance_name)
+        .first()
+    )
+
+
+def get_connection_by_provider_instance_id(
+    db: Session,
+    *,
+    provider: str,
+    provider_instance_id: str,
+) -> WhatsAppConnection | None:
+    normalized_instance_id = str(provider_instance_id or "").strip()
+    if not normalized_instance_id:
+        return None
+    return (
+        db.query(WhatsAppConnection)
+        .filter(
+            WhatsAppConnection.provider == provider,
+            WhatsAppConnection.provider_instance_id == normalized_instance_id,
+        )
+        .order_by(WhatsAppConnection.id.desc())
         .first()
     )
 
@@ -113,20 +146,36 @@ def serialize_connection(connection: WhatsAppConnection | None) -> dict[str, Any
     if connection is None:
         return {
             "status": "not_connected",
+            "provider": default_whatsapp_provider_name(),
+            "provider_instance_id": None,
+            "provider_configured": False,
             "phone_number": None,
             "profile_name": None,
             "has_qr": False,
             "qr_code": None,
             "last_error": None,
+            "last_healthcheck_at": None,
             "updated_at": None,
         }
+    provider = provider_name_for_connection(connection)
     return {
         "status": connection.status or "not_connected",
+        "provider": provider,
+        "provider_instance_id": connection.provider_instance_id,
+        "provider_configured": bool(
+            provider != WHATSAPP_PROVIDER_GREEN_API
+            or (connection.provider_instance_id and connection.provider_token_encrypted)
+        ),
         "phone_number": connection.phone_number,
         "profile_name": connection.profile_name,
         "has_qr": bool(connection.qr_code),
         "qr_code": connection.qr_code,
         "last_error": connection.last_error,
+        "last_healthcheck_at": (
+            connection.last_healthcheck_at.isoformat()
+            if connection.last_healthcheck_at
+            else None
+        ),
         "updated_at": connection.updated_at.isoformat() if connection.updated_at else None,
     }
 
@@ -151,6 +200,11 @@ def serialize_message(message: WhatsAppMessage) -> dict[str, Any]:
         "sender_phone": message.sender_phone,
         "recipient_phone": message.recipient_phone,
         "text_body": message.text_body,
+        "send_attempts": int(message.send_attempts or 0),
+        "next_retry_at": message.next_retry_at.isoformat() if message.next_retry_at else None,
+        "last_error": message.last_error,
+        "fallback_email_to": message.fallback_email_to,
+        "fallback_email_outbox_id": message.fallback_email_outbox_id,
         "sent_at": message.sent_at.isoformat() if message.sent_at else None,
         "delivered_at": message.delivered_at.isoformat() if message.delivered_at else None,
         "read_at": message.read_at.isoformat() if message.read_at else None,
@@ -379,6 +433,8 @@ def create_pending_outbound_message(
     connection: WhatsAppConnection,
     chat: WhatsAppChat,
     text_body: str,
+    fallback_email_to: str | None = None,
+    fallback_email_subject: str | None = None,
 ) -> WhatsAppMessage:
     recipient_phone = normalize_phone(chat.external_chat_id)
     message = WhatsAppMessage(
@@ -391,6 +447,8 @@ def create_pending_outbound_message(
         sender_phone=connection.phone_number,
         recipient_phone=recipient_phone,
         text_body=text_body,
+        fallback_email_to=(fallback_email_to or "").strip() or None,
+        fallback_email_subject=(fallback_email_subject or "").strip() or None,
         sent_at=utcnow(),
     )
     db.add(message)
@@ -410,15 +468,20 @@ def queue_outbound_message(
     connection: WhatsAppConnection,
     chat: WhatsAppChat,
     text_body: str,
+    fallback_email_to: str | None = None,
+    fallback_email_subject: str | None = None,
 ) -> WhatsAppMessage:
     message = create_pending_outbound_message(
         db,
         connection=connection,
         chat=chat,
         text_body=text_body,
+        fallback_email_to=fallback_email_to,
+        fallback_email_subject=fallback_email_subject,
     )
     message.status = OUTBOUND_STATUS_QUEUED
     message.sent_at = None
+    message.next_retry_at = None
     db.flush()
     return message
 
@@ -432,7 +495,14 @@ def process_queued_outbound_messages(
     current = _as_naive_utc(now or utcnow())
     batch_size = max(1, int(limit or settings.WHATSAPP_OUTBOUND_BATCH_SIZE or 20))
     min_interval = max(0, int(settings.WHATSAPP_OUTBOUND_MIN_INTERVAL_SECONDS or 0))
-    stats = {"checked": 0, "sent": 0, "skipped": 0, "failed": 0}
+    stats = {
+        "checked": 0,
+        "sent": 0,
+        "skipped": 0,
+        "failed": 0,
+        "retry_scheduled": 0,
+        "fallback_email": 0,
+    }
 
     queued_messages = (
         db.query(WhatsAppMessage)
@@ -443,18 +513,31 @@ def process_queued_outbound_messages(
         .filter(
             WhatsAppMessage.direction == "outbound",
             WhatsAppMessage.status == OUTBOUND_STATUS_QUEUED,
+            or_(
+                WhatsAppMessage.next_retry_at.is_(None),
+                WhatsAppMessage.next_retry_at <= current,
+            ),
         )
         .order_by(WhatsAppMessage.created_at.asc(), WhatsAppMessage.id.asc())
         .limit(batch_size)
         .all()
     )
-    client: EvolutionLiteClient | None = None
     sent_connection_ids: set[int] = set()
     for message in queued_messages:
         stats["checked"] += 1
         connection = message.connection
         if connection is None or connection.status != "connected":
-            stats["skipped"] += 1
+            if _fail_or_fallback_outbound_message(
+                db,
+                message,
+                error_message="connection_not_connected",
+                current=current,
+                retryable=False,
+            ):
+                stats["fallback_email"] += 1
+            else:
+                stats["failed"] += 1
+            db.commit()
             continue
         if min_interval > 0:
             if connection.id in sent_connection_ids:
@@ -478,22 +561,36 @@ def process_queued_outbound_messages(
 
         message.status = OUTBOUND_STATUS_SENDING
         db.flush()
-        client = client or EvolutionLiteClient()
         try:
-            send_result = client.send_text(
-                connection.instance_name,
+            provider = get_provider_for_connection(connection)
+            send_result = provider.send_text(
+                connection,
                 number=recipient_phone,
                 text=text_body,
             )
             message.sent_at = current
             finalize_outbound_send(message, send_result)
+            message.send_attempts = int(message.send_attempts or 0) + 1
+            message.last_error = None
+            message.next_retry_at = None
             db.commit()
             sent_connection_ids.add(connection.id)
             stats["sent"] += 1
-        except EvolutionApiError as exc:
-            mark_outbound_message_failed(message, error_message=str(exc))
+        except WhatsAppProviderError as exc:
+            fallback_sent = _fail_or_fallback_outbound_message(
+                db,
+                message,
+                error_message=str(exc),
+                current=current,
+                retryable=exc.retryable,
+            )
             db.commit()
-            stats["failed"] += 1
+            if fallback_sent:
+                stats["fallback_email"] += 1
+            elif message.status == OUTBOUND_STATUS_QUEUED:
+                stats["retry_scheduled"] += 1
+            else:
+                stats["failed"] += 1
             logger.warning(
                 "whatsapp_outbound_queue_send_failed message_id=%s connection_id=%s error=%s",
                 message.id,
@@ -551,18 +648,26 @@ def _as_naive_utc(value: datetime) -> datetime:
 
 def finalize_outbound_send(
     pending_message: WhatsAppMessage,
-    send_result: EvolutionSendTextResult,
+    send_result: EvolutionSendTextResult | Any,
 ) -> None:
     external_message_id = send_result.external_message_id
     if external_message_id:
+        connection = getattr(pending_message, "connection", None)
+        instance_name = (
+            getattr(connection, "instance_name", None)
+            or getattr(connection, "provider_instance_id", None)
+            or f"connection-{pending_message.connection_id}"
+        )
         pending_message.external_message_id = external_message_id
         pending_message.dedupe_key = _build_message_dedupe_key(
-            instance_name=None,
+            instance_name=instance_name,
             external_message_id=external_message_id,
             payload=None,
         )
     pending_message.status = _normalize_message_status(send_result.status)
     pending_message.failed_at = None
+    pending_message.last_error = None
+    pending_message.next_retry_at = None
 
 
 def mark_outbound_message_failed(
@@ -572,8 +677,241 @@ def mark_outbound_message_failed(
 ) -> None:
     pending_message.status = "failed"
     pending_message.failed_at = utcnow()
+    pending_message.last_error = (error_message or "").strip()[:4000] or None
+    pending_message.next_retry_at = None
     if error_message and not pending_message.text_body:
         pending_message.text_body = ""
+
+
+def _fail_or_fallback_outbound_message(
+    db: Session,
+    pending_message: WhatsAppMessage,
+    *,
+    error_message: str,
+    current: datetime,
+    retryable: bool,
+) -> bool:
+    attempts = int(pending_message.send_attempts or 0) + 1
+    pending_message.send_attempts = attempts
+    pending_message.last_error = (error_message or "").strip()[:4000] or None
+    max_attempts = max(1, int(settings.WHATSAPP_OUTBOUND_MAX_ATTEMPTS or 3))
+    if retryable and attempts < max_attempts:
+        pending_message.status = OUTBOUND_STATUS_QUEUED
+        pending_message.failed_at = None
+        pending_message.next_retry_at = current + _outbound_retry_delay(attempts)
+        return False
+
+    fallback_sent = _enqueue_outbound_fallback_email(
+        db,
+        pending_message,
+        error_message=error_message,
+    )
+    mark_outbound_message_failed(pending_message, error_message=error_message)
+    return fallback_sent
+
+
+def _outbound_retry_delay(attempts: int) -> timedelta:
+    base_seconds = max(5, int(settings.WHATSAPP_OUTBOUND_RETRY_BASE_SECONDS or 60))
+    return timedelta(seconds=min(base_seconds * (2 ** max(0, attempts - 1)), 3600))
+
+
+def _enqueue_outbound_fallback_email(
+    db: Session,
+    pending_message: WhatsAppMessage,
+    *,
+    error_message: str,
+) -> bool:
+    to_email = (pending_message.fallback_email_to or "").strip()
+    if not to_email or pending_message.fallback_email_outbox_id:
+        return False
+    try:
+        from app.services.email_outbox import build_email_payload, enqueue_email
+        from app.services.email_sender import build_sender_payload
+
+        association = (
+            db.query(Organization)
+            .filter(Organization.id == pending_message.org_id)
+            .first()
+        )
+        text_body = str(pending_message.text_body or "").strip()
+        if not text_body:
+            return False
+        subject = (
+            pending_message.fallback_email_subject
+            or f"Messaggio da {getattr(association, 'name', None) or 'associazione'}"
+        )
+        outbox_id = enqueue_email(
+            db,
+            email_type="whatsapp_fallback",
+            to_email=to_email,
+            subject=subject,
+            payload=build_email_payload(
+                text_body=text_body,
+                html_body=f"<p>{html.escape(text_body).replace(chr(10), '<br>')}</p>",
+                sender=build_sender_payload(mode="association", association=association),
+                meta={
+                    "whatsapp_message_id": pending_message.id,
+                    "association_id": pending_message.org_id,
+                    "whatsapp_error": error_message,
+                },
+            ),
+            priority=4,
+            dedupe_key=f"whatsapp-fallback:{pending_message.id}",
+        )
+        pending_message.fallback_email_outbox_id = outbox_id
+        return True
+    except Exception:
+        logger.exception(
+            "whatsapp_outbound_fallback_email_enqueue_failed message_id=%s",
+            pending_message.id,
+        )
+        return False
+
+
+def ingest_whatsapp_webhook(
+    db: Session,
+    *,
+    payload: dict[str, Any],
+) -> None:
+    if isinstance(payload, dict) and payload.get("typeWebhook"):
+        ingest_green_api_webhook(db, payload=payload)
+        return
+    ingest_evolution_webhook(db, payload=payload)
+
+
+def ingest_green_api_webhook(
+    db: Session,
+    *,
+    payload: dict[str, Any],
+) -> None:
+    event_name = str(payload.get("typeWebhook") or "").strip()
+    instance_data = payload.get("instanceData")
+    instance_id = ""
+    if isinstance(instance_data, dict):
+        instance_id = str(instance_data.get("idInstance") or "").strip()
+    if not event_name or not instance_id:
+        return
+
+    connection = get_connection_by_provider_instance_id(
+        db,
+        provider=WHATSAPP_PROVIDER_GREEN_API,
+        provider_instance_id=instance_id,
+    )
+    if connection is None:
+        logger.warning(
+            "whatsapp_green_api_unknown_instance instance=%s event=%s",
+            instance_id,
+            event_name,
+        )
+        return
+
+    event_time = _timestamp_to_datetime(payload.get("timestamp")) or utcnow()
+    normalized_event = event_name.strip().lower()
+    if normalized_event == "stateinstancechanged":
+        state = str(payload.get("stateInstance") or "").strip()
+        apply_connection_snapshot(
+            connection,
+            EvolutionConnectionSnapshot(
+                raw_state=state,
+                status=resolve_connection_status(
+                    state,
+                    has_qr=bool(connection.qr_code),
+                    last_error=None,
+                ),
+                qr_code=None,
+                phone_number=connection.phone_number,
+                profile_name=connection.profile_name,
+                last_error=(
+                    f"Stato Green API: {state}"
+                    if state.lower() in {"blocked", "yellowcard", "suspended"}
+                    else None
+                ),
+                connected_at=event_time if state.lower() == "authorized" else None,
+                raw=payload,
+            ),
+            event_time=event_time,
+        )
+        return
+
+    if normalized_event in {
+        "incomingmessagereceived",
+        "outgoingapimessagereceived",
+        "outgoingmessagereceived",
+    }:
+        transformed_message = _transform_green_message_payload(
+            payload,
+            from_me=normalized_event != "incomingmessagereceived",
+        )
+        if transformed_message is None:
+            return
+        _ingest_message_batch(
+            db,
+            connection=connection,
+            event_name="send.message" if transformed_message.get("fromMe") else "messages.upsert",
+            data=transformed_message,
+            event_time=event_time,
+        )
+
+
+def _transform_green_message_payload(
+    payload: dict[str, Any],
+    *,
+    from_me: bool,
+) -> dict[str, Any] | None:
+    sender_data = payload.get("senderData")
+    if not isinstance(sender_data, dict):
+        sender_data = {}
+    message_data = payload.get("messageData")
+    if not isinstance(message_data, dict):
+        message_data = {}
+
+    chat_id = ""
+    for candidate in (
+        sender_data.get("chatId"),
+        sender_data.get("sender"),
+        payload.get("chatId"),
+    ):
+        if isinstance(candidate, str) and candidate.strip():
+            chat_id = candidate.strip()
+            break
+    if not chat_id:
+        return None
+
+    text_body = _extract_green_text_body(message_data)
+    external_message_id = str(payload.get("idMessage") or "").strip() or None
+    return {
+        "key": {
+            "remoteJid": chat_id,
+            "id": external_message_id,
+            "fromMe": from_me,
+        },
+        "id": external_message_id,
+        "chatId": chat_id,
+        "sender": sender_data.get("sender"),
+        "senderName": sender_data.get("senderName") or sender_data.get("senderContactName"),
+        "fromMe": from_me,
+        "text": text_body,
+        "message": {"conversation": text_body or ""},
+        "messageTimestamp": payload.get("timestamp"),
+        "status": "sent" if from_me else None,
+    }
+
+
+def _extract_green_text_body(message_data: dict[str, Any]) -> str | None:
+    for container_key, text_key in (
+        ("textMessageData", "textMessage"),
+        ("extendedTextMessageData", "text"),
+        ("quotedMessage", "textMessage"),
+    ):
+        container = message_data.get(container_key)
+        if isinstance(container, dict):
+            value = container.get(text_key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    for candidate in (message_data.get("textMessage"), message_data.get("caption")):
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    return None
 
 
 def ingest_evolution_webhook(

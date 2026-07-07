@@ -35,6 +35,7 @@ from app.models import (
     AccountingDocument,
     AccountingFolder,
     AccountingShareLink,
+    WhatsAppConnection,
 )
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.security import hash_api_key, verify_password
@@ -88,6 +89,17 @@ from app.services.membership_payments import (
     serialize_super_admin_membership_payment_settings,
     verify_sumup_api_key,
 )
+from app.services.whatsapp_evolution import build_evolution_instance_name
+from app.services.whatsapp_provider import (
+    SUPPORTED_WHATSAPP_PROVIDERS,
+    WHATSAPP_PROVIDER_GREEN_API,
+    WhatsAppProviderError,
+    encrypt_green_api_token,
+    get_provider_for_connection,
+    hash_webhook_secret,
+    normalize_provider_name,
+)
+from app.services.whatsapp_sync import apply_connection_snapshot, serialize_connection
 from app.services.org_branding import sanitize_card_email_subject_template
 from app.services.card_lot_registry import (
     build_card_lots_workbook,
@@ -608,6 +620,16 @@ class PatchMembershipPaymentSettingsBody(BaseModel):
 
 class SumUpApiKeyBody(BaseModel):
     api_key: str = Field(..., min_length=1)
+
+
+class PatchWhatsAppProviderSettingsBody(BaseModel):
+    provider: Literal["evolution", "green_api"] = "green_api"
+    provider_instance_id: Optional[str] = None
+    provider_api_url: Optional[str] = None
+    provider_token: Optional[str] = None
+    webhook_secret: Optional[str] = None
+    clear_provider_token: bool = False
+    clear_webhook_secret: bool = False
 
 
 class CreateAccountingFolderBody(BaseModel):
@@ -2447,6 +2469,204 @@ def delete_organization_sumup_api_key(
     db.commit()
     db.refresh(org)
     return serialize_super_admin_membership_payment_settings(org)
+
+
+def _get_or_create_whatsapp_connection_for_org(db: Session, org: Organization) -> WhatsAppConnection:
+    connection = (
+        db.query(WhatsAppConnection)
+        .filter(WhatsAppConnection.org_id == org.id)
+        .first()
+    )
+    if connection is None:
+        connection = WhatsAppConnection(
+            org_id=org.id,
+            instance_name=build_evolution_instance_name(org.id),
+            provider=WHATSAPP_PROVIDER_GREEN_API,
+            provider_api_url=settings.GREEN_API_BASE_URL,
+            status="not_connected",
+        )
+        db.add(connection)
+        db.flush()
+    elif not connection.instance_name:
+        connection.instance_name = build_evolution_instance_name(org.id)
+    return connection
+
+
+def _serialize_super_admin_whatsapp_settings(connection: WhatsAppConnection | None) -> dict[str, object]:
+    payload = serialize_connection(connection)
+    payload.update(
+        {
+            "provider_token_configured": bool(
+                getattr(connection, "provider_token_encrypted", None)
+            )
+            if connection is not None
+            else False,
+            "webhook_secret_configured": bool(
+                getattr(connection, "provider_webhook_secret_hash", None)
+            )
+            if connection is not None
+            else False,
+            "provider_api_url": getattr(connection, "provider_api_url", None)
+            if connection is not None
+            else None,
+        }
+    )
+    return payload
+
+
+@router.get("/organizations/{org_id}/whatsapp-provider-settings")
+def get_organization_whatsapp_provider_settings(
+    request: Request,
+    org_id: int,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    connection = (
+        db.query(WhatsAppConnection)
+        .filter(WhatsAppConnection.org_id == org.id)
+        .first()
+    )
+    return _serialize_super_admin_whatsapp_settings(connection)
+
+
+@router.patch("/organizations/{org_id}/whatsapp-provider-settings")
+def patch_organization_whatsapp_provider_settings(
+    request: Request,
+    org_id: int,
+    body: PatchWhatsAppProviderSettingsBody,
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    provider = normalize_provider_name(body.provider)
+    if provider not in SUPPORTED_WHATSAPP_PROVIDERS:
+        raise HTTPException(status_code=400, detail="Provider WhatsApp non supportato.")
+
+    connection = _get_or_create_whatsapp_connection_for_org(db, org)
+    connection.provider = provider
+    if provider == WHATSAPP_PROVIDER_GREEN_API:
+        instance_id = (body.provider_instance_id or connection.provider_instance_id or "").strip()
+        if not instance_id:
+            raise HTTPException(status_code=400, detail="ID istanza Green API obbligatorio.")
+        duplicate = (
+            db.query(WhatsAppConnection)
+            .filter(
+                WhatsAppConnection.provider == WHATSAPP_PROVIDER_GREEN_API,
+                WhatsAppConnection.provider_instance_id == instance_id,
+                WhatsAppConnection.org_id != org.id,
+            )
+            .first()
+        )
+        if duplicate is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="ID istanza Green API gia configurato su un'altra associazione.",
+            )
+        connection.provider_instance_id = instance_id
+        connection.provider_api_url = (
+            (body.provider_api_url or "").strip()
+            or connection.provider_api_url
+            or settings.GREEN_API_BASE_URL
+        )
+        if body.clear_provider_token:
+            connection.provider_token_encrypted = None
+        if body.provider_token and body.provider_token.strip():
+            connection.provider_token_encrypted = encrypt_green_api_token(body.provider_token)
+        if not connection.provider_token_encrypted:
+            raise HTTPException(status_code=400, detail="Token Green API obbligatorio.")
+        if body.clear_webhook_secret:
+            connection.provider_webhook_secret_hash = None
+        if body.webhook_secret and body.webhook_secret.strip():
+            connection.provider_webhook_secret_hash = hash_webhook_secret(body.webhook_secret)
+    else:
+        connection.provider_instance_id = None
+        connection.provider_api_url = None
+        if body.clear_provider_token:
+            connection.provider_token_encrypted = None
+        if body.clear_webhook_secret:
+            connection.provider_webhook_secret_hash = None
+
+    audit.log_operation(
+        db,
+        action="org.whatsapp_provider_settings.updated",
+        entity_type="organization",
+        entity_id=org.id,
+        actor_admin_id=admin.id,
+        actor_role=AdminRole.SUPER_ADMIN.value,
+        metadata={
+            "provider": connection.provider,
+            "provider_instance_id": connection.provider_instance_id,
+            "provider_api_url": connection.provider_api_url,
+            "provider_token_configured": bool(connection.provider_token_encrypted),
+            "webhook_secret_configured": bool(connection.provider_webhook_secret_hash),
+        },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    db.refresh(connection)
+    return _serialize_super_admin_whatsapp_settings(connection)
+
+
+@router.post("/organizations/{org_id}/whatsapp-provider-settings/state")
+def refresh_organization_whatsapp_provider_state(
+    request: Request,
+    org_id: int,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    connection = (
+        db.query(WhatsAppConnection)
+        .filter(WhatsAppConnection.org_id == org.id)
+        .first()
+    )
+    if connection is None:
+        raise HTTPException(status_code=404, detail="Connessione WhatsApp non configurata.")
+    try:
+        snapshot = get_provider_for_connection(connection).get_state(connection)
+    except WhatsAppProviderError as exc:
+        raise HTTPException(status_code=503 if exc.retryable else 400, detail=str(exc)) from exc
+    apply_connection_snapshot(connection, snapshot)
+    connection.last_healthcheck_at = datetime.utcnow()
+    db.commit()
+    db.refresh(connection)
+    return _serialize_super_admin_whatsapp_settings(connection)
+
+
+@router.post("/organizations/{org_id}/whatsapp-provider-settings/qr")
+def refresh_organization_whatsapp_provider_qr(
+    request: Request,
+    org_id: int,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    connection = (
+        db.query(WhatsAppConnection)
+        .filter(WhatsAppConnection.org_id == org.id)
+        .first()
+    )
+    if connection is None:
+        raise HTTPException(status_code=404, detail="Connessione WhatsApp non configurata.")
+    try:
+        snapshot = get_provider_for_connection(connection).get_qr(connection)
+    except WhatsAppProviderError as exc:
+        raise HTTPException(status_code=503 if exc.retryable else 400, detail=str(exc)) from exc
+    apply_connection_snapshot(connection, snapshot)
+    db.commit()
+    db.refresh(connection)
+    return _serialize_super_admin_whatsapp_settings(connection)
 
 
 @router.get("/organizations/{org_id}/numbering")

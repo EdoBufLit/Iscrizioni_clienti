@@ -154,12 +154,14 @@ def resolve_connection_status(
     last_error: str | None = None,
 ) -> str:
     state = (raw_state or "").strip().lower()
-    if state == "open":
+    if state in {"open", "authorized"}:
         return "connected"
-    if state in {"connecting", "pairing"}:
+    if state in {"connecting", "pairing", "notauthorized"}:
         return "qr_required"
-    if state in {"close", "closed", "logout"}:
+    if state in {"close", "closed", "logout", "starting", "sleepmode"}:
         return "qr_required" if has_qr else "not_connected"
+    if state in {"blocked", "yellowcard", "suspended"}:
+        return "error"
     if last_error:
         return "error"
     return "qr_required" if has_qr else "not_connected"

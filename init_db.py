@@ -164,6 +164,14 @@ def init_db():
             "run 'alembic upgrade head' to align schema history."
         )
         WhatsAppConnection.__table__.create(bind=engine, checkfirst=True)
+    else:
+        with engine.begin() as conn:
+            _add_column_if_missing(conn, "whatsapp_connections", "provider", "VARCHAR DEFAULT 'evolution' NOT NULL")
+            _add_column_if_missing(conn, "whatsapp_connections", "provider_instance_id", "VARCHAR")
+            _add_column_if_missing(conn, "whatsapp_connections", "provider_token_encrypted", "TEXT")
+            _add_column_if_missing(conn, "whatsapp_connections", "provider_api_url", "VARCHAR")
+            _add_column_if_missing(conn, "whatsapp_connections", "provider_webhook_secret_hash", "VARCHAR")
+            _add_column_if_missing(conn, "whatsapp_connections", "last_healthcheck_at", "DATETIME")
 
     if "whatsapp_chats" not in inspect(engine).get_table_names():
         logger.warning(
@@ -178,6 +186,14 @@ def init_db():
             "run 'alembic upgrade head' to align schema history."
         )
         WhatsAppMessage.__table__.create(bind=engine, checkfirst=True)
+    else:
+        with engine.begin() as conn:
+            _add_column_if_missing(conn, "whatsapp_messages", "send_attempts", "INTEGER DEFAULT 0 NOT NULL")
+            _add_column_if_missing(conn, "whatsapp_messages", "next_retry_at", "DATETIME")
+            _add_column_if_missing(conn, "whatsapp_messages", "last_error", "TEXT")
+            _add_column_if_missing(conn, "whatsapp_messages", "fallback_email_to", "VARCHAR")
+            _add_column_if_missing(conn, "whatsapp_messages", "fallback_email_subject", "VARCHAR")
+            _add_column_if_missing(conn, "whatsapp_messages", "fallback_email_outbox_id", "VARCHAR(36)")
 
     if "recharge_requests" not in inspect(engine).get_table_names():
         logger.warning(

@@ -4,9 +4,13 @@ import {
   deleteSuperAdminSumUpApiKey,
   fetchOrganizationNumberingConfig,
   fetchSuperAdminMembershipPaymentSettings,
+  fetchSuperAdminWhatsAppProviderSettings,
   patchSuperAdminOrganization,
   patchSuperAdminMembershipPaymentSettings,
+  patchSuperAdminWhatsAppProviderSettings,
   patchOrganizationNumberingConfig,
+  refreshSuperAdminWhatsAppProviderQr,
+  refreshSuperAdminWhatsAppProviderState,
   saveSuperAdminSumUpApiKey,
   setOrganizationCardRange,
   addOrgCardBatch,
@@ -19,6 +23,8 @@ import {
   type OrgBatch,
   type OrganizationNumberingConfig,
   type SuperAdminMembershipPaymentSettings,
+  type SuperAdminWhatsAppProviderSettings,
+  type WhatsAppProviderName,
 } from "../../../lib/api";
 import ConfirmModal from "../../../components/ui/ConfirmModal";
 import { SuperAdminIcon, type SuperAdminIconName } from "./SuperAdminPrimitives";
@@ -79,6 +85,20 @@ type MembershipPaymentFormData = {
   show_sumup_api_key: boolean;
 };
 
+type WhatsAppProviderFormData = {
+  provider: WhatsAppProviderName;
+  provider_instance_id: string;
+  provider_api_url: string;
+  provider_token: string;
+  webhook_secret: string;
+  provider_token_configured: boolean;
+  webhook_secret_configured: boolean;
+  clear_provider_token: boolean;
+  clear_webhook_secret: boolean;
+  show_provider_token: boolean;
+  show_webhook_secret: boolean;
+};
+
 const createInitialFormData = (): ModalFormData => ({
   name: "",
   slug: "",
@@ -124,6 +144,20 @@ const createInitialMembershipPaymentFormData = (): MembershipPaymentFormData => 
   show_sumup_api_key: false,
 });
 
+const createInitialWhatsAppProviderFormData = (): WhatsAppProviderFormData => ({
+  provider: "green_api",
+  provider_instance_id: "",
+  provider_api_url: "",
+  provider_token: "",
+  webhook_secret: "",
+  provider_token_configured: false,
+  webhook_secret_configured: false,
+  clear_provider_token: false,
+  clear_webhook_secret: false,
+  show_provider_token: false,
+  show_webhook_secret: false,
+});
+
 const mapMembershipPaymentSettingsToForm = (
   settings: SuperAdminMembershipPaymentSettings,
 ): MembershipPaymentFormData => ({
@@ -141,6 +175,22 @@ const mapMembershipPaymentSettingsToForm = (
   sumup_api_key_configured_at: settings.sumup_api_key_configured_at,
   remove_sumup_api_key: false,
   show_sumup_api_key: false,
+});
+
+const mapWhatsAppProviderSettingsToForm = (
+  settings: SuperAdminWhatsAppProviderSettings,
+): WhatsAppProviderFormData => ({
+  provider: settings.provider === "evolution" ? "evolution" : "green_api",
+  provider_instance_id: settings.provider_instance_id ?? "",
+  provider_api_url: settings.provider_api_url ?? "",
+  provider_token: "",
+  webhook_secret: "",
+  provider_token_configured: settings.provider_token_configured,
+  webhook_secret_configured: settings.webhook_secret_configured,
+  clear_provider_token: false,
+  clear_webhook_secret: false,
+  show_provider_token: false,
+  show_webhook_secret: false,
 });
 
 const BATCH_DELETE_CONFIRMATION_TEXT = "ELIMINA";
@@ -197,6 +247,15 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
   );
   const [loadingMembershipPayment, setLoadingMembershipPayment] = useState(false);
   const [membershipPaymentMessage, setMembershipPaymentMessage] = useState("");
+  const [whatsAppProviderSettings, setWhatsAppProviderSettings] =
+    useState<SuperAdminWhatsAppProviderSettings | null>(null);
+  const [whatsAppProviderFormData, setWhatsAppProviderFormData] = useState<WhatsAppProviderFormData>(
+    createInitialWhatsAppProviderFormData,
+  );
+  const [whatsAppProviderTouched, setWhatsAppProviderTouched] = useState(false);
+  const [loadingWhatsAppProvider, setLoadingWhatsAppProvider] = useState(false);
+  const [whatsAppProviderMessage, setWhatsAppProviderMessage] = useState("");
+  const [whatsAppProviderActionLoading, setWhatsAppProviderActionLoading] = useState<"state" | "qr" | null>(null);
   const [setupTab, setSetupTab] = useState<"general" | "numbering" | "signup" | "branding" | "communications">("general");
   const currentBrandingNumberingMode =
     numberingConfig?.numbering_mode === "dedicated" ? "dedicated" : "shared_assonam";
@@ -209,6 +268,53 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
   const normalizeOptionalString = (value: string): string | null => {
     const normalized = value.trim();
     return normalized.length > 0 ? normalized : null;
+  };
+
+  const updateWhatsAppProviderForm = (patch: Partial<WhatsAppProviderFormData>) => {
+    setWhatsAppProviderTouched(true);
+    setWhatsAppProviderMessage("");
+    setWhatsAppProviderFormData((prev) => ({ ...prev, ...patch }));
+  };
+
+  const shouldSaveWhatsAppProviderSettings = (): boolean => {
+    if (!whatsAppProviderTouched) {
+      return false;
+    }
+    if (!whatsAppProviderSettings) {
+      return true;
+    }
+    return (
+      whatsAppProviderFormData.provider !== whatsAppProviderSettings.provider ||
+      whatsAppProviderFormData.provider_instance_id.trim() !==
+        (whatsAppProviderSettings.provider_instance_id ?? "") ||
+      whatsAppProviderFormData.provider_api_url.trim() !==
+        (whatsAppProviderSettings.provider_api_url ?? "") ||
+      whatsAppProviderFormData.provider_token.trim().length > 0 ||
+      whatsAppProviderFormData.webhook_secret.trim().length > 0 ||
+      whatsAppProviderFormData.clear_provider_token ||
+      whatsAppProviderFormData.clear_webhook_secret
+    );
+  };
+
+  const runWhatsAppProviderCheck = async (kind: "state" | "qr") => {
+    if (!selectedOrg || whatsAppProviderActionLoading) return;
+    setWhatsAppProviderActionLoading(kind);
+    setSubmitError("");
+    setWhatsAppProviderMessage("");
+    try {
+      const result =
+        kind === "state"
+          ? await refreshSuperAdminWhatsAppProviderState(selectedOrg.id)
+          : await refreshSuperAdminWhatsAppProviderQr(selectedOrg.id);
+      setWhatsAppProviderSettings(result);
+      setWhatsAppProviderFormData(mapWhatsAppProviderSettingsToForm(result));
+      setWhatsAppProviderTouched(false);
+      setWhatsAppProviderMessage(kind === "state" ? "Stato WhatsApp aggiornato." : "QR WhatsApp aggiornato.");
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Errore verifica WhatsApp");
+    } finally {
+      setWhatsAppProviderActionLoading(null);
+    }
   };
 
   const refreshBatches = async (orgId: number) => {
@@ -284,6 +390,12 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
     setMembershipPaymentFormData(createInitialMembershipPaymentFormData());
     setLoadingMembershipPayment(false);
     setMembershipPaymentMessage("");
+    setWhatsAppProviderSettings(null);
+    setWhatsAppProviderFormData(createInitialWhatsAppProviderFormData());
+    setWhatsAppProviderTouched(false);
+    setLoadingWhatsAppProvider(false);
+    setWhatsAppProviderMessage("");
+    setWhatsAppProviderActionLoading(null);
     setSetupTab("general");
   }, [open, modalType, selectedOrg?.id]);
 
@@ -332,6 +444,33 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
       .finally(() => {
         if (!active) return;
         setLoadingNumbering(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [open, modalType, selectedOrg]);
+
+  useEffect(() => {
+    if (!open || !selectedOrg || modalType !== "branding") {
+      return;
+    }
+    let active = true;
+    setLoadingWhatsAppProvider(true);
+    fetchSuperAdminWhatsAppProviderSettings(selectedOrg.id)
+      .then((result) => {
+        if (!active) return;
+        setWhatsAppProviderSettings(result);
+        setWhatsAppProviderFormData(mapWhatsAppProviderSettingsToForm(result));
+        setWhatsAppProviderTouched(false);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setSubmitError(err instanceof Error ? err.message : "Errore caricamento impostazioni WhatsApp");
+      })
+      .finally(() => {
+        if (!active) return;
+        setLoadingWhatsAppProvider(false);
       });
 
     return () => {
@@ -446,6 +585,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
     setSubmitting(true);
     setSubmitError("");
     setMembershipPaymentMessage("");
+    setWhatsAppProviderMessage("");
     setNumberingConfirmOpen(false);
 
     try {
@@ -559,6 +699,41 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
         }
         setMembershipPaymentFormData(mapMembershipPaymentSettingsToForm(nextMembershipSettings));
         setMembershipPaymentMessage("Configurazione pagamento quota salvata.");
+
+        if (shouldSaveWhatsAppProviderSettings()) {
+          const provider = whatsAppProviderFormData.provider;
+          const providerInstanceId = normalizeOptionalString(whatsAppProviderFormData.provider_instance_id);
+          const providerApiUrl = normalizeOptionalString(whatsAppProviderFormData.provider_api_url);
+          const providerToken = normalizeOptionalString(whatsAppProviderFormData.provider_token);
+          const webhookSecret = normalizeOptionalString(whatsAppProviderFormData.webhook_secret);
+          const hasStoredToken = whatsAppProviderFormData.provider_token_configured;
+
+          if (provider === "green_api") {
+            if (!providerInstanceId) {
+              throw new Error("Inserisci l'ID istanza Green API.");
+            }
+            if (!providerToken && !hasStoredToken) {
+              throw new Error("Inserisci il token Green API.");
+            }
+            if (whatsAppProviderFormData.clear_provider_token && !providerToken) {
+              throw new Error("Per rimuovere il token Green API devi inserire un nuovo token o passare a Evolution.");
+            }
+          }
+
+          const nextWhatsAppSettings = await patchSuperAdminWhatsAppProviderSettings(selectedOrg.id, {
+            provider,
+            provider_instance_id: provider === "green_api" ? providerInstanceId : null,
+            provider_api_url: provider === "green_api" ? providerApiUrl : null,
+            provider_token: providerToken,
+            webhook_secret: webhookSecret,
+            clear_provider_token: whatsAppProviderFormData.clear_provider_token,
+            clear_webhook_secret: whatsAppProviderFormData.clear_webhook_secret,
+          });
+          setWhatsAppProviderSettings(nextWhatsAppSettings);
+          setWhatsAppProviderFormData(mapWhatsAppProviderSettingsToForm(nextWhatsAppSettings));
+          setWhatsAppProviderTouched(false);
+          setWhatsAppProviderMessage("Configurazione WhatsApp salvata.");
+        }
 
         if (formData.numbering_mode !== currentBrandingNumberingMode) {
           const result = await patchOrganizationNumberingConfig(selectedOrg.id, formData.numbering_mode);
@@ -1814,6 +1989,238 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
 
                 {membershipPaymentMessage ? (
                   <p className="mt-4 text-sm text-emerald-700">{membershipPaymentMessage}</p>
+                ) : null}
+              </div>
+
+              <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-600">
+                      WhatsApp provider
+                    </p>
+                    <p className="mt-1 text-sm text-neutral-600">
+                      Green API sostituisce Evolution per notifiche, conferme e rigetti. Le impostazioni vengono salvate solo se modifichi questa sezione.
+                    </p>
+                  </div>
+                  {loadingWhatsAppProvider ? (
+                    <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-neutral-500">
+                      Caricamento...
+                    </span>
+                  ) : whatsAppProviderSettings?.provider_configured ? (
+                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                      Configurato
+                    </span>
+                  ) : (
+                    <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                      Da configurare
+                    </span>
+                  )}
+                </div>
+
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600">Provider</label>
+                    <select
+                      className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
+                      value={whatsAppProviderFormData.provider}
+                      onChange={(event) =>
+                        updateWhatsAppProviderForm({
+                          provider: event.target.value as WhatsAppProviderName,
+                        })
+                      }
+                    >
+                      <option value="green_api">Green API</option>
+                      <option value="evolution">Evolution legacy</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600">Stato salvato</label>
+                    <div className="mt-1 rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700">
+                      {whatsAppProviderSettings?.status ?? "not_connected"}
+                      {whatsAppProviderSettings?.last_healthcheck_at
+                        ? ` - ${new Date(whatsAppProviderSettings.last_healthcheck_at).toLocaleString("it-IT")}`
+                        : ""}
+                    </div>
+                  </div>
+                </div>
+
+                {whatsAppProviderFormData.provider === "green_api" ? (
+                  <div className="mt-4 grid gap-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <label className="block text-xs font-medium text-neutral-600">ID istanza Green API</label>
+                        <input
+                          type="text"
+                          className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
+                          value={whatsAppProviderFormData.provider_instance_id}
+                          onChange={(event) =>
+                            updateWhatsAppProviderForm({
+                              provider_instance_id: event.target.value,
+                            })
+                          }
+                          placeholder="1101234567"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-neutral-600">API URL</label>
+                        <input
+                          type="text"
+                          className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
+                          value={whatsAppProviderFormData.provider_api_url}
+                          onChange={(event) =>
+                            updateWhatsAppProviderForm({
+                              provider_api_url: event.target.value,
+                            })
+                          }
+                          placeholder="https://api.green-api.com"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="block text-xs font-medium text-neutral-600">Token istanza</label>
+                          <button
+                            type="button"
+                            className="text-xs font-semibold text-brand"
+                            onClick={() =>
+                              setWhatsAppProviderFormData((prev) => ({
+                                ...prev,
+                                show_provider_token: !prev.show_provider_token,
+                              }))
+                            }
+                          >
+                            {whatsAppProviderFormData.show_provider_token ? "Nascondi" : "Mostra"}
+                          </button>
+                        </div>
+                        <input
+                          type={whatsAppProviderFormData.show_provider_token ? "text" : "password"}
+                          className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
+                          value={whatsAppProviderFormData.provider_token}
+                          onChange={(event) =>
+                            updateWhatsAppProviderForm({
+                              provider_token: event.target.value,
+                              clear_provider_token: false,
+                            })
+                          }
+                          placeholder={
+                            whatsAppProviderFormData.provider_token_configured
+                              ? "Lascia vuoto per mantenere il token salvato"
+                              : "Token Green API"
+                          }
+                        />
+                        <label className="mt-2 inline-flex items-center gap-2 text-xs text-neutral-500">
+                          <input
+                            type="checkbox"
+                            checked={whatsAppProviderFormData.clear_provider_token}
+                            disabled={!whatsAppProviderFormData.provider_token_configured}
+                            onChange={(event) =>
+                              updateWhatsAppProviderForm({
+                                clear_provider_token: event.target.checked,
+                                provider_token: event.target.checked ? "" : whatsAppProviderFormData.provider_token,
+                              })
+                            }
+                          />
+                          Rimuovi token salvato
+                        </label>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="block text-xs font-medium text-neutral-600">Webhook secret</label>
+                          <button
+                            type="button"
+                            className="text-xs font-semibold text-brand"
+                            onClick={() =>
+                              setWhatsAppProviderFormData((prev) => ({
+                                ...prev,
+                                show_webhook_secret: !prev.show_webhook_secret,
+                              }))
+                            }
+                          >
+                            {whatsAppProviderFormData.show_webhook_secret ? "Nascondi" : "Mostra"}
+                          </button>
+                        </div>
+                        <input
+                          type={whatsAppProviderFormData.show_webhook_secret ? "text" : "password"}
+                          className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
+                          value={whatsAppProviderFormData.webhook_secret}
+                          onChange={(event) =>
+                            updateWhatsAppProviderForm({
+                              webhook_secret: event.target.value,
+                              clear_webhook_secret: false,
+                            })
+                          }
+                          placeholder={
+                            whatsAppProviderFormData.webhook_secret_configured
+                              ? "Lascia vuoto per mantenere il secret salvato"
+                              : "Secret opzionale per webhook"
+                          }
+                        />
+                        <label className="mt-2 inline-flex items-center gap-2 text-xs text-neutral-500">
+                          <input
+                            type="checkbox"
+                            checked={whatsAppProviderFormData.clear_webhook_secret}
+                            disabled={!whatsAppProviderFormData.webhook_secret_configured}
+                            onChange={(event) =>
+                              updateWhatsAppProviderForm({
+                                clear_webhook_secret: event.target.checked,
+                                webhook_secret: event.target.checked ? "" : whatsAppProviderFormData.webhook_secret,
+                              })
+                            }
+                          />
+                          Rimuovi secret salvato
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-xl border border-neutral-200 bg-white px-4 py-4 text-sm text-neutral-500">
+                    Evolution resta disponibile come legacy. Usa Green API per nuove associazioni e migrazioni.
+                  </div>
+                )}
+
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    className="rounded-md border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 transition hover:border-neutral-300 hover:text-neutral-900 disabled:opacity-50"
+                    disabled={!whatsAppProviderSettings?.provider_configured || whatsAppProviderActionLoading !== null}
+                    onClick={() => runWhatsAppProviderCheck("state")}
+                  >
+                    {whatsAppProviderActionLoading === "state" ? "Verifica..." : "Verifica stato"}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-md border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 transition hover:border-neutral-300 hover:text-neutral-900 disabled:opacity-50"
+                    disabled={!whatsAppProviderSettings?.provider_configured || whatsAppProviderActionLoading !== null}
+                    onClick={() => runWhatsAppProviderCheck("qr")}
+                  >
+                    {whatsAppProviderActionLoading === "qr" ? "Caricamento..." : "Aggiorna QR"}
+                  </button>
+                  {whatsAppProviderSettings?.provider_token_configured ? (
+                    <span className="text-xs text-neutral-500">Token salvato</span>
+                  ) : null}
+                  {whatsAppProviderSettings?.webhook_secret_configured ? (
+                    <span className="text-xs text-neutral-500">Webhook secret salvato</span>
+                  ) : null}
+                </div>
+
+                {whatsAppProviderSettings?.has_qr && whatsAppProviderSettings.qr_code ? (
+                  <div className="mt-4 inline-flex rounded-xl border border-neutral-200 bg-white p-3">
+                    <img
+                      src={whatsAppProviderSettings.qr_code}
+                      alt="QR WhatsApp Green API"
+                      className="h-40 w-40 rounded-lg object-contain"
+                    />
+                  </div>
+                ) : null}
+
+                {whatsAppProviderSettings?.last_error ? (
+                  <p className="mt-4 text-sm text-red-700">{whatsAppProviderSettings.last_error}</p>
+                ) : null}
+                {whatsAppProviderMessage ? (
+                  <p className="mt-4 text-sm text-emerald-700">{whatsAppProviderMessage}</p>
                 ) : null}
               </div>
             </div>

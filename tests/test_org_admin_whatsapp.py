@@ -41,13 +41,19 @@ def db():
 @pytest.fixture(autouse=True)
 def _restore_whatsapp_settings():
     original_enabled = settings.ENABLE_WHATSAPP_EVOLUTION
+    original_generic_enabled = settings.ENABLE_WHATSAPP
+    original_provider = settings.WHATSAPP_PROVIDER
     original_api_key = settings.EVOLUTION_API_KEY
     try:
         settings.ENABLE_WHATSAPP_EVOLUTION = True
+        settings.ENABLE_WHATSAPP = True
+        settings.WHATSAPP_PROVIDER = "evolution"
         settings.EVOLUTION_API_KEY = "test-evolution-key"
         yield
     finally:
         settings.ENABLE_WHATSAPP_EVOLUTION = original_enabled
+        settings.ENABLE_WHATSAPP = original_generic_enabled
+        settings.WHATSAPP_PROVIDER = original_provider
         settings.EVOLUTION_API_KEY = original_api_key
 
 
@@ -102,13 +108,14 @@ def _post_evolution_webhook(client, payload: dict, *, drain: bool = True):
 
 def test_whatsapp_feature_flag_disabled_returns_not_found(client, db):
     settings.ENABLE_WHATSAPP_EVOLUTION = False
+    settings.ENABLE_WHATSAPP = False
     org, admin = _create_org_admin(db, communications_enabled=True)
     _login_org_admin(client, db, admin.id)
 
     response = client.get("/api/org-admin/communications/whatsapp/connection")
 
     assert response.status_code == 404, response.text
-    assert "Feature WhatsApp Evolution" in response.json()["detail"]
+    assert "Feature WhatsApp" in response.json()["detail"]
 
 
 def test_whatsapp_module_locked_returns_403(client, db):

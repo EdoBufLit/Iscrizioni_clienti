@@ -18,7 +18,12 @@ from app.models import (
 )
 from app.services.bookings import normalize_booking_field_mapping
 from app.services.email_templates import build_template_context, render_template_string
-from app.services.whatsapp_evolution import EvolutionApiError, EvolutionLiteClient, normalize_phone
+from app.services.whatsapp_evolution import EvolutionLiteClient, normalize_phone
+from app.services.whatsapp_provider import (
+    WhatsAppProviderError,
+    get_provider_for_connection,
+    whatsapp_feature_enabled,
+)
 from app.services.whatsapp_sync import (
     create_pending_outbound_message,
     finalize_outbound_send,
@@ -127,7 +132,7 @@ def maybe_send_form_submission_whatsapp_message(
     member: Member | None,
     booking: Booking | None,
 ) -> dict[str, Any]:
-    if not settings.ENABLE_WHATSAPP_EVOLUTION:
+    if not whatsapp_feature_enabled():
         return {"sent": False, "reason": "feature_disabled"}
     if not bool(getattr(form, "whatsapp_auto_reply_enabled", False)):
         return {"sent": False, "reason": "form_disabled"}
@@ -234,7 +239,7 @@ def maybe_send_form_submission_whatsapp_automations(
     member: Member | None,
     booking: Booking | None,
 ) -> dict[str, Any]:
-    if not settings.ENABLE_WHATSAPP_EVOLUTION:
+    if not whatsapp_feature_enabled():
         return {"sent": 0, "processed": 0, "reason": "feature_disabled", "results": []}
 
     organization = getattr(form, "organization", None)
@@ -374,7 +379,7 @@ def maybe_send_form_submission_decision_whatsapp_automations(
         return {"sent": 0, "processed": 0, "reason": "unsupported_status", "results": []}
     if booking is None:
         return {"sent": 0, "processed": 0, "reason": "not_booking", "results": []}
-    if not settings.ENABLE_WHATSAPP_EVOLUTION:
+    if not whatsapp_feature_enabled():
         return {"sent": 0, "processed": 0, "reason": "feature_disabled", "results": []}
 
     organization = getattr(form, "organization", None)
@@ -544,7 +549,7 @@ def maybe_send_form_submission_decision_whatsapp_message(
     normalized_decision = str(decision_status or "").strip().lower()
     if normalized_decision not in {"confirmed", "rejected"}:
         return {"sent": False, "reason": "unsupported_status"}
-    if not settings.ENABLE_WHATSAPP_EVOLUTION:
+    if not whatsapp_feature_enabled():
         return {"sent": False, "reason": "feature_disabled"}
 
     organization = getattr(form, "organization", None)
@@ -874,10 +879,10 @@ def _send_whatsapp_text(
         chat=chat,
         text_body=text,
     )
-    client = EvolutionLiteClient()
+    provider = get_provider_for_connection(connection)
     try:
-        send_result = client.send_text(
-            connection.instance_name,
+        send_result = provider.send_text(
+            connection,
             number=phone_number,
             text=text,
         )
@@ -887,7 +892,7 @@ def _send_whatsapp_text(
             "chat_id": chat.id,
             "message_id": pending_message.id,
         }
-    except EvolutionApiError as exc:
+    except WhatsAppProviderError as exc:
         mark_outbound_message_failed(pending_message, error_message=str(exc))
         return {"sent": False, "reason": "send_failed", "error": str(exc)}
 

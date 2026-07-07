@@ -131,7 +131,7 @@ def build_sender_payload(
 
 
 def _build_system_selection(*, reply_to: str | None = None) -> EmailSenderSelection:
-    raw_from = _normalize_text(settings.EMAIL_FROM) or _normalize_text(settings.SMTP_FROM) or "noreply@assonam.it"
+    raw_from = _normalize_text(settings.EMAIL_FROM) or _normalize_text(settings.SMTP_FROM) or "no-reply@assonam.it"
     parsed_name, parsed_email = parseaddr(raw_from)
     from_email = parsed_email or raw_from
     from_name = _normalize_text(parsed_name)

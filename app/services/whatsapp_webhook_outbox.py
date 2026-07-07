@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import SessionLocal
 from app.models import WhatsAppWebhookEvent, WhatsAppWebhookEventStatus
-from app.services.whatsapp_sync import ingest_evolution_webhook
+from app.services.whatsapp_sync import ingest_whatsapp_webhook as ingest_evolution_webhook
 
 logger = logging.getLogger(__name__)
 
@@ -59,12 +59,16 @@ def build_whatsapp_webhook_dedupe_key(payload: dict[str, Any]) -> str:
 
 
 def enqueue_whatsapp_webhook_event(db: Session, *, payload: dict[str, Any]) -> WhatsAppWebhookEvent:
-    event_name = normalize_event_name(payload.get("event"))
+    event_name = normalize_event_name(payload.get("event") or payload.get("typeWebhook"))
     instance_name = normalize_instance_name(payload.get("instance"))
-    if not event_name:
-        raise ValueError("Webhook Evolution senza event.")
     if not instance_name:
-        raise ValueError("Webhook Evolution senza instance.")
+        instance_data = payload.get("instanceData")
+        if isinstance(instance_data, dict):
+            instance_name = normalize_instance_name(instance_data.get("idInstance"))
+    if not event_name:
+        raise ValueError("Webhook WhatsApp senza event.")
+    if not instance_name:
+        raise ValueError("Webhook WhatsApp senza instance.")
 
     dedupe_key = build_whatsapp_webhook_dedupe_key(payload)
     existing = (
@@ -333,9 +337,9 @@ def drain_webhook_outbox_for_tests(*, max_loops: int = 20, limit: int | None = N
 
 
 def _event_priority(event_name: str) -> int:
-    if event_name in {"qrcode.updated", "connection.update"}:
+    if event_name in {"qrcode.updated", "connection.update", "stateinstancechanged"}:
         return 1
-    if event_name in {"messages.upsert", "send.message"}:
+    if event_name in {"messages.upsert", "send.message", "incomingmessagereceived", "outgoingapimessagereceived", "outgoingmessagereceived"}:
         return 2
     if event_name == "messages.update":
         return 3
