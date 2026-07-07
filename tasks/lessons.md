@@ -3,6 +3,7 @@
 - Quando il cliente chiede fedelta esatta a mockup admin, non basta un re-skin: prima della consegna servono screenshot viewport-to-viewport delle superfici critiche, inclusi drawer/modali fixed. Inoltre le integrazioni esistenti nel dettaglio (es. SumUp) vanno preservate esplicitamente nella nuova IA e verificate nello screenshot.
 # Lessons
 
+- Jul 7, 2026: in ogni deploy/smoke Hetzner controllare sempre anche spazio disco, inode e footprint Docker (`df -h`, `df -ih`, `docker system df`) prima di chiudere il task.
 - May 29, 2026: quando un form usa il blocco prenotazione `__booking_block__`, tutti i resolver pubblici devono passare da `form_uses_dynamic_booking_controls(form)`. Non basta correggere submit/frontend: anche `booking-events` e `booking-available-dates` devono riconoscere il blocco, altrimenti le chiusure live risultano aperte.
 - May 28, 2026: quando il cliente chiede date "libere" da calendario, non nascondere i giorni chiusi: devono restare visibili come stato non selezionabile (`giorno di chiusura`) per spiegare perche non si puo prenotare.
 - May 28, 2026: nei form pubblici il blocco prenotazione reale e il campo `__booking_block__`, non solo il flag `booking_dynamic_events_enabled`. Le chiamate date/orari, il submit e la creazione booking devono riconoscere anche i form legacy con blocco presente ma flag spento.
