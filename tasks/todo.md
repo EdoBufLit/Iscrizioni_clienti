@@ -1,3 +1,16 @@
+## Plan (Debug email tessera Golden Filippini - Jul 7, 2026)
+- [x] Verificare salute server Hetzner: disco, inode, servizi e worker email.
+- [x] Cercare nel DB live il socio/tessera e le righe `email_outbox` per subject "La tua tessera Golden filippini qualificati srls".
+- [x] Capire se l'email non e' stata accodata, e' fallita, e' in retry oppure e' stata accettata da Cloudflare.
+- [x] Se serve, correggere il bug e/o ritentare l'invio in modo idempotente, poi verificare con log/provider id.
+
+## Review (Debug email tessera Golden Filippini - Jul 7, 2026)
+- Root cause: `MAIL_FROM_DOMAIN` live era `notifiche.assonam.it`; Cloudflare REST ha rifiutato il mittente associazione `golden-filippini-qualificati-srls@notifiche.assonam.it` con `email.sending.error.email.invalid`.
+- Verifica isolata: `no-reply@assonam.it` con inline image funziona, e il mittente associazione funziona impostando `MAIL_FROM_DOMAIN=assonam.it`.
+- Correzione applicata: GitHub secret `MAIL_FROM_DOMAIN=assonam.it`, deploy run `28897561000` riuscito, container live confermato con `MAIL_FROM_DOMAIN=assonam.it`.
+- Email socio ritentata: outbox `09122dba-4886-4960-ba88-be0e48b4cd86` passata da `failed` a `sent`, provider id `<JG5saT05BbkC1exwINIjK4EI96hMWtbtE5Bf@assonam.it>`, member `4580` aggiornato con `card_email_sent_at/card_delivered_at`.
+- Verifiche finali: `invalid_failed_last_2_days=0`; disco `/` 48%, inode 17%, Docker images 10.94GB con 4.13GB reclaimable.
+
 ## Plan (Green API WhatsApp + Cloudflare Email REST - Jul 7, 2026)
 - [x] Estendere config/env/workflow/compose per `EMAIL_TRANSPORT=cloudflare_rest`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL_API_TOKEN`, `ENABLE_WHATSAPP`, `WHATSAPP_PROVIDER=green_api`.
 - [x] Aggiungere migration/model per provider WhatsApp: credenziali Green cifrate su `whatsapp_connections`, tracking retry/fallback su `whatsapp_messages`.

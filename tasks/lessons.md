@@ -3,6 +3,7 @@
 - Quando il cliente chiede fedelta esatta a mockup admin, non basta un re-skin: prima della consegna servono screenshot viewport-to-viewport delle superfici critiche, inclusi drawer/modali fixed. Inoltre le integrazioni esistenti nel dettaglio (es. SumUp) vanno preservate esplicitamente nella nuova IA e verificate nello screenshot.
 # Lessons
 
+- Jul 7, 2026: quando si valida Cloudflare REST non basta il test system `no-reply@assonam.it`: testare anche un invio con sender associazione reale. `MAIL_FROM_DOMAIN` deve puntare a un dominio/sender verificato da Cloudflare, altrimenti gli invii tessera falliscono con `email.sending.error.email.invalid`.
 - Jul 7, 2026: in ogni deploy/smoke Hetzner controllare sempre anche spazio disco, inode e footprint Docker (`df -h`, `df -ih`, `docker system df`) prima di chiudere il task.
 - May 29, 2026: quando un form usa il blocco prenotazione `__booking_block__`, tutti i resolver pubblici devono passare da `form_uses_dynamic_booking_controls(form)`. Non basta correggere submit/frontend: anche `booking-events` e `booking-available-dates` devono riconoscere il blocco, altrimenti le chiusure live risultano aperte.
 - May 28, 2026: quando il cliente chiede date "libere" da calendario, non nascondere i giorni chiusi: devono restare visibili come stato non selezionabile (`giorno di chiusura`) per spiegare perche non si puo prenotare.
