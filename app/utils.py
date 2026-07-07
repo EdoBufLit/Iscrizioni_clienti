@@ -503,14 +503,6 @@ def send_email_via_cloudflare_rest(
     )
     provider_message_id = make_msgid()
     normalized_idempotency_key = (idempotency_key or provider_message_id).strip()
-    message_id = provider_message_id
-    if normalized_idempotency_key:
-        safe_key = "".join(
-            ch if ch.isalnum() or ch in "._-" else "-"
-            for ch in normalized_idempotency_key
-        ).strip("-")[:160]
-        if safe_key:
-            message_id = f"<{safe_key}@assonam-outbox>"
 
     if settings.EMAIL_MODE == "test":
         _capture_email_for_tests(
@@ -544,20 +536,17 @@ def send_email_via_cloudflare_rest(
             f"Cloudflare Email REST configuration incomplete: missing {', '.join(missing)}"
         )
 
-    headers_payload = {
-        "Message-ID": message_id,
-        "X-ASSONAM-Outbox-ID": normalized_idempotency_key,
-    }
-    if sender_selection.reply_to:
-        headers_payload["Reply-To"] = sender_selection.reply_to
-
     payload: dict[str, object] = {
         "to": _sanitize_header_value(to_email),
         "from": sender_selection.from_email,
         "subject": _sanitize_header_value(subject),
         "text": text_body,
-        "headers": headers_payload,
+        "headers": {
+            "X-ASSONAM-Outbox-ID": normalized_idempotency_key,
+        },
     }
+    if sender_selection.reply_to:
+        payload["reply_to"] = sender_selection.reply_to
     if html_body:
         payload["html"] = html_body
     cloudflare_attachments = _build_cloudflare_attachments(

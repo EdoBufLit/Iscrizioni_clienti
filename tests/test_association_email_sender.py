@@ -446,8 +446,9 @@ def test_cloudflare_rest_transport_uses_smtp_password_and_association_sender(mon
         assert payload["to"] == "member@example.com"
         assert payload["subject"] == "Promo Golden"
         assert payload["headers"]["X-ASSONAM-Outbox-ID"] == "campaign:42:member@example.com"
-        assert payload["headers"]["Reply-To"] == "segreteria@goldenage.it"
-        assert payload["headers"]["Message-ID"] == "<campaign-42-member-example.com@assonam-outbox>"
+        assert payload["reply_to"] == "segreteria@goldenage.it"
+        assert "Reply-To" not in payload["headers"]
+        assert "Message-ID" not in payload["headers"]
         assert payload["attachments"][0]["disposition"] == "inline"
         assert payload["attachments"][0]["content_id"] == "card_front@assonam"
     finally:
@@ -490,7 +491,7 @@ def test_cloudflare_rest_system_sender_defaults_to_no_reply(monkeypatch) -> None
     settings.CLOUDFLARE_ACCOUNT_ID = "acct_123"
     settings.CLOUDFLARE_EMAIL_API_TOKEN = ""
     settings.SMTP_PASSWORD = "cf-token"
-    settings.EMAIL_FROM = ""
+    settings.EMAIL_FROM = "ASSONAM <no-reply@assonam.it>"
     settings.SMTP_FROM = ""
 
     try:
@@ -503,6 +504,7 @@ def test_cloudflare_rest_system_sender_defaults_to_no_reply(monkeypatch) -> None
         )
 
         assert records["json"]["from"] == "no-reply@assonam.it"
+        assert "Message-ID" not in records["json"]["headers"]
     finally:
         settings.EMAIL_MODE = original_mode
         settings.EMAIL_TRANSPORT = original_transport

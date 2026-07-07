@@ -8,17 +8,18 @@
 - [x] Aggiungere endpoint super-admin per configurare Green API per associazione e testare stato/QR.
 - [x] Aggiornare UI super-admin/org-admin e copy rimuovendo dipendenze visibili da Evolution.
 - [x] Aggiungere test mirati per Cloudflare REST, Green API provider, route/queue WhatsApp, fallback email. (Cloudflare REST coperto)
+- [x] Correggere payload live Cloudflare REST: niente header platform-controlled, `reply_to` come campo REST e `from` indirizzo puro.
 - [ ] Eseguire compile/test/typecheck/build, valutare eleganza del disegno, poi push/deploy e smoke live se secrets presenti.
 
 ## Review (Green API WhatsApp + Cloudflare Email REST - Jul 7, 2026)
 - Implementato transport Cloudflare Email REST su HTTPS 443 con `EMAIL_TRANSPORT=cloudflare_rest`, token da `CLOUDFLARE_EMAIL_API_TOKEN` oppure fallback `SMTP_PASSWORD`, default sender `no-reply@assonam.it` e sender associazione preservato quando `MAIL_FROM_DOMAIN` consente indirizzi tipo `golden-age-club@assonam.it`.
-- Invii email outbox idempotenti: dedupe applicativo gia esistente, `Idempotency-Key`, `Message-ID` deterministico e classificazione errori Cloudflare 429/5xx retryable.
+- Invii email outbox idempotenti: dedupe applicativo gia esistente, `Idempotency-Key`, `X-ASSONAM-Outbox-ID` e classificazione errori Cloudflare 429/5xx retryable; `Message-ID` resta generato da Cloudflare come richiesto dal provider.
 - Implementato provider WhatsApp astratto con Green API: state, QR, send text, logout, webhook interno, token cifrato, retry outbound e fallback email.
 - Mantenuta compatibilita Evolution: connessioni legacy senza provider restano Evolution e i test esistenti continuano a patchare `EvolutionLiteClient`.
 - Aggiunti endpoint e UI super-admin per configurare provider WhatsApp per associazione, test stato e QR.
 - Alembic head locale: `b2c3d4e5f6a7`.
 - Verifiche locali OK: `python -m compileall -q app init_db.py`; `pytest tests/test_association_email_sender.py tests/test_org_admin_whatsapp.py tests/test_whatsapp_green_api.py -q`; `pytest tests/test_forms_module.py -k whatsapp -q`; `pytest tests/test_org_admin_communications.py -k "whatsapp or survey" -q`; `npm --prefix frontend run typecheck`; `npm --prefix frontend run build`; `git diff --check`.
-- Nota: fino al deploy non e' stata inviata nessuna email reale Cloudflare; i test precedenti usavano cattura locale, quindi la dashboard Cloudflare non poteva mostrare traffico.
+- Smoke live Cloudflare: il primo invio reale ha evidenziato che il provider rifiuta header platform-controlled; payload corretto per non inviare `Message-ID` e per usare `reply_to` come campo REST.
 
 ## Plan (Deploy SMTP Cloudflare via GitHub Actions - Jul 7, 2026)
 - [x] Verificare che il workflow esporti i secrets SMTP/MAIL verso `.env` e compose.
