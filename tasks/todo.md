@@ -9,7 +9,7 @@
 - [x] Aggiornare UI super-admin/org-admin e copy rimuovendo dipendenze visibili da Evolution.
 - [x] Aggiungere test mirati per Cloudflare REST, Green API provider, route/queue WhatsApp, fallback email. (Cloudflare REST coperto)
 - [x] Correggere payload live Cloudflare REST: niente header platform-controlled, `reply_to` come campo REST e `from` indirizzo puro.
-- [ ] Eseguire compile/test/typecheck/build, valutare eleganza del disegno, poi push/deploy e smoke live se secrets presenti.
+- [x] Eseguire compile/test/typecheck/build, valutare eleganza del disegno, poi push/deploy e smoke live se secrets presenti.
 
 ## Review (Green API WhatsApp + Cloudflare Email REST - Jul 7, 2026)
 - Implementato transport Cloudflare Email REST su HTTPS 443 con `EMAIL_TRANSPORT=cloudflare_rest`, token da `CLOUDFLARE_EMAIL_API_TOKEN` oppure fallback `SMTP_PASSWORD`, default sender `no-reply@assonam.it` e sender associazione preservato quando `MAIL_FROM_DOMAIN` consente indirizzi tipo `golden-age-club@assonam.it`.
@@ -20,6 +20,8 @@
 - Alembic head locale: `b2c3d4e5f6a7`.
 - Verifiche locali OK: `python -m compileall -q app init_db.py`; `pytest tests/test_association_email_sender.py tests/test_org_admin_whatsapp.py tests/test_whatsapp_green_api.py -q`; `pytest tests/test_forms_module.py -k whatsapp -q`; `pytest tests/test_org_admin_communications.py -k "whatsapp or survey" -q`; `npm --prefix frontend run typecheck`; `npm --prefix frontend run build`; `git diff --check`.
 - Smoke live Cloudflare: il primo invio reale ha evidenziato che il provider rifiuta header platform-controlled; payload corretto per non inviare `Message-ID` e per usare `reply_to` come campo REST.
+- Deploy live OK: GitHub Actions run `28896264677`, commit `c31114c`, Alembic `b2c3d4e5f6a7`.
+- Smoke live Cloudflare OK: invio reale a `edo.buffa9898@gmail.com`, provider id `<xqPZFwnjCc0YIDGecIfL0t0VA0h4OCTYt3dy@assonam.it>`.
 
 ## Plan (Deploy SMTP Cloudflare via GitHub Actions - Jul 7, 2026)
 - [x] Verificare che il workflow esporti i secrets SMTP/MAIL verso `.env` e compose.
