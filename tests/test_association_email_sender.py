@@ -290,6 +290,78 @@ def test_smtp_transport_still_used_for_system_mode(monkeypatch) -> None:
         settings.SMTP_USE_TLS = original_use_tls
 
 
+def test_smtp_transport_uses_implicit_tls_for_port_465(monkeypatch) -> None:
+    original_mode = settings.EMAIL_MODE
+    original_email_from = settings.EMAIL_FROM
+    original_host = settings.SMTP_HOST
+    original_port = settings.SMTP_PORT
+    original_user = settings.SMTP_USER
+    original_password = settings.SMTP_PASSWORD
+    original_use_tls = settings.SMTP_USE_TLS
+    records: dict[str, object] = {}
+
+    class FakeSMTPSSL:
+        def __init__(self, host, port, timeout):
+            records["connect_ssl"] = (host, port, timeout)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def ehlo(self):
+            records["ehlo"] = int(records.get("ehlo", 0)) + 1
+
+        def starttls(self):
+            records["starttls"] = True
+
+        def login(self, user, password):
+            records["login"] = (user, password)
+
+        def sendmail(self, from_addr, to_addrs, message):
+            records["from_addr"] = from_addr
+            records["to_addrs"] = to_addrs
+            records["message"] = message
+
+    def fail_plain_smtp(*args, **kwargs):
+        raise AssertionError("Port 465 must use SMTP_SSL")
+
+    monkeypatch.setattr("app.utils.smtplib.SMTP_SSL", FakeSMTPSSL)
+    monkeypatch.setattr("app.utils.smtplib.SMTP", fail_plain_smtp)
+
+    settings.EMAIL_MODE = "normal"
+    settings.EMAIL_FROM = "ASSONAM <noreply@assonam.it>"
+    settings.SMTP_HOST = "smtp.mx.cloudflare.net"
+    settings.SMTP_PORT = 465
+    settings.SMTP_USER = "api_token"
+    settings.SMTP_PASSWORD = "cf-token"
+    settings.SMTP_USE_TLS = True
+
+    try:
+        provider_message_id = send_email_via_transport_low_level(
+            to_email="official@example.com",
+            subject="Cloudflare sender",
+            text_body="hello",
+            mode="system",
+        )
+
+        assert provider_message_id
+        assert records["connect_ssl"] == ("smtp.mx.cloudflare.net", 465, 15)
+        assert records["login"] == ("api_token", "cf-token")
+        assert records["from_addr"] == "noreply@assonam.it"
+        assert records["to_addrs"] == ["official@example.com"]
+        assert "starttls" not in records
+    finally:
+        settings.EMAIL_MODE = original_mode
+        settings.EMAIL_FROM = original_email_from
+        settings.SMTP_HOST = original_host
+        settings.SMTP_PORT = original_port
+        settings.SMTP_USER = original_user
+        settings.SMTP_PASSWORD = original_password
+        settings.SMTP_USE_TLS = original_use_tls
+
+
 def test_org_admin_patch_organization_email_settings_returns_preview(client) -> None:
     db = SessionLocal()
     original_domain = settings.MAIL_FROM_DOMAIN

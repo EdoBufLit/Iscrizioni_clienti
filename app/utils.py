@@ -31,6 +31,10 @@ _MAILTRAP_SEND_API_URL = "https://send.api.mailtrap.io/api/send"
 _captured_emails = []
 
 
+def _smtp_uses_implicit_tls(port: int) -> bool:
+    return int(port) == 465
+
+
 class EmailDeliveryError(Exception):
     """Base class for SMTP delivery errors."""
 
@@ -667,13 +671,15 @@ def send_email_via_smtp_low_level(
         )
 
     try:
-        with smtplib.SMTP(
+        uses_implicit_tls = _smtp_uses_implicit_tls(settings.SMTP_PORT)
+        smtp_client = smtplib.SMTP_SSL if uses_implicit_tls else smtplib.SMTP
+        with smtp_client(
             settings.SMTP_HOST,
             settings.SMTP_PORT,
             timeout=15,
         ) as server:
             server.ehlo()
-            if settings.SMTP_USE_TLS:
+            if settings.SMTP_USE_TLS and not uses_implicit_tls:
                 server.starttls()
                 server.ehlo()
             server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
