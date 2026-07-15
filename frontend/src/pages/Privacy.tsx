@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { applySeo } from "../lib/seo";
 
-export const PRIVACY_NOTICE_VERSION = "2026-07-15.1";
+export const PRIVACY_NOTICE_VERSION = "2026-07-15.2";
 
 type PrivacySection = {
   title: string;
@@ -42,7 +42,7 @@ const SECTIONS: PrivacySection[] = [
     paragraphs: [
       `${CONTACT_DETAILS.organization}, P.IVA ${CONTACT_DETAILS.vatNumber} e C.F. ${CONTACT_DETAILS.fiscalCode}, con sede in ${CONTACT_DETAILS.address}, opera quale Titolare per le finalità proprie di affiliazione e amministrazione centrale, gestione degli account e della piattaforma, sicurezza, prevenzione degli abusi, adempimenti di legge e tutela dei propri diritti. Per questi ambiti è contattabile all'indirizzo ${CONTACT_DETAILS.email} o al numero ${CONTACT_DETAILS.phone}.`,
       "Per l'ammissione alla singola associazione, il relativo libro soci, la quota, le attività locali e le campagne decise autonomamente, il Titolare è di regola l'associazione, il circolo o il club al quale l'interessato chiede di iscriversi. I suoi riferimenti sono indicati nella pagina dell'associazione e nelle comunicazioni ricevute.",
-      "Quando mette a disposizione la piattaforma per tali finalità locali, ASSO.N.A.M. tratta i dati per conto dell'associazione e opera quale Responsabile del trattamento secondo l'articolo 28 GDPR e le istruzioni documentate applicabili.",
+      "Quando mette a disposizione la piattaforma per tali finalità locali, ASSO.N.A.M. tratta i dati per conto dell'associazione. Questo rapporto deve essere disciplinato ai sensi dell'articolo 28 GDPR, con istruzioni documentate e gli altri contenuti obbligatori previsti dalla norma.",
       "Un'associazione può invece operare quale Responsabile di ASSO.N.A.M. soltanto per attività circoscritte svolte esclusivamente per conto di ASSO.N.A.M. e sulla base di istruzioni documentate, senza perseguire finalità proprie.",
       "Qualora una finalità e i relativi mezzi essenziali siano determinati congiuntamente, i soggetti interessati disciplinano le rispettive responsabilità ai sensi dell'articolo 26 GDPR e ne rendono disponibile il contenuto essenziale.",
     ],
@@ -120,19 +120,21 @@ const SECTIONS: PrivacySection[] = [
     paragraphs: [
       "Il database e i file applicativi primari del portale sono ospitati su infrastruttura Hetzner nella località NBG1, Norimberga, Germania, quindi nello Spazio Economico Europeo. Non sono ospitati in Italia.",
       "Servizi tecnici quali protezione della rete, posta elettronica, messaggistica, pagamenti, wallet digitale e assistenza possono tuttavia comportare trattamenti o accessi ai dati anche al di fuori dello SEE, secondo la configurazione e le condizioni del fornitore utilizzato.",
-      "In questi casi il trasferimento è gestito mediante una decisione di adeguatezza, clausole contrattuali standard o un altro strumento previsto dal GDPR, accompagnato dalle valutazioni e misure necessarie in relazione al servizio utilizzato.",
+      "La verifica e la formalizzazione delle garanzie applicabili ai singoli fornitori sono in corso. Quando un servizio comporta un trasferimento extra SEE, il titolare deve individuare e documentare una base valida, come una decisione di adeguatezza o le clausole contrattuali standard, svolgere le valutazioni richieste e adottare le eventuali misure supplementari. L'interessato può chiedere informazioni sulle garanzie applicabili al proprio caso.",
     ],
   },
   {
     title: "9. Periodo di conservazione",
+    intro:
+      "I termini massimi organizzativi definiti nel piano interno sono riportati di seguito. La loro applicazione è oggi in parte automatizzata e in parte affidata a controlli organizzativi da completare e documentare; quando un job automatico non è ancora disponibile, il titolare competente deve comunque effettuare la revisione e la cancellazione secondo questi termini. Un obbligo di legge, un contenzioso o un legal hold documentato può sospendere la cancellazione per il solo tempo necessario.",
     bullets: [
-      "una pratica soltanto iniziata e non presentata è cancellata entro 30 giorni dall'ultima attività; una pratica presentata e poi rifiutata o chiusa è conservata per 180 giorni, salvo contestazioni o obblighi documentati;",
-      "la copia del documento di identità, quando richiesta, è eliminata entro 30 giorni dalla verifica o decisione finale, mantenendo soltanto l'esito minimo necessario, salvo uno specifico obbligo di legge;",
+      "per una pratica soltanto iniziata e non presentata il termine massimo previsto è di 30 giorni dall'ultima attività; per una pratica presentata e poi rifiutata o chiusa è di 180 giorni, salvo contestazioni o obblighi documentati;",
+      "per la copia del documento di identità, quando richiesta, è previsto un termine massimo di 30 giorni dalla verifica o decisione finale, mantenendo soltanto l'esito minimo necessario, salvo uno specifico obbligo di legge;",
       "i dati operativi del socio sono conservati per la durata del rapporto e per i 12 mesi successivi; lo storico minimo necessario del libro soci e della tessera può essere conservato per 10 anni dalla cessazione;",
       "i documenti e i riferimenti contabili sono conservati per 10 anni dall'ultima registrazione, o più a lungo quando necessario per un accertamento o un contenzioso in corso;",
       "il consenso promozionale non è più utilizzato dopo la revoca e viene riesaminato in caso di inattività protratta; la prova minimizzata di consenso, revoca e ultimi invii è conservata per 5 anni dall'ultimo utilizzo o dalla revoca;",
-      "i log applicativi ordinari sono conservati per 30 giorni, quelli di sicurezza per 90 giorni e l'audit amministrativo per 24 mesi, salvo incidente o legal hold documentato;",
-      "i backup rolling hanno un ciclo massimo ordinario di 60 giorni; gli ulteriori periodi per moduli, prenotazioni, messaggi, webhook e provider sono descritti nel piano di conservazione interno.",
+      "i termini previsti sono 30 giorni per i log applicativi ordinari, 90 giorni per quelli di sicurezza e 24 mesi per l'audit amministrativo, salvo incidente o legal hold documentato;",
+      "per i backup rolling è definito un ciclo massimo ordinario di 60 giorni; gli ulteriori periodi per moduli, prenotazioni, messaggi, webhook e provider sono descritti nel piano di conservazione interno.",
     ],
   },
   {

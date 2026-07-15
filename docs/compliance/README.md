@@ -36,11 +36,11 @@ L'indicazione iniziale “ASSO.N.A.M. titolare e associazione responsabile” è
 
 Non è possibile dichiarare “dati soltanto in Italia” o “nessun trasferimento extra SEE”. L'hosting primario è nel SEE, ma alcuni fornitori possono comportare accessi o trasferimenti internazionali. Il registro fornitori indica le verifiche contrattuali ancora necessarie.
 
-## Policy di conservazione adottata
+## Proposta di policy di conservazione
 
-La policy risk-based è dettagliata in [05-conservazione.md](05-conservazione.md). I termini principali sono: 30 giorni per pratiche abbandonate, 180 giorni per pratiche chiuse/rifiutate, 30 giorni dopo la verifica per copie dei documenti, rapporto + 12 mesi per dati operativi socio, 10 anni per storico minimo e contabilità, 7 giorni per webhook grezzi e 60 giorni per backup rolling.
+La proposta risk-based è dettagliata in [05-conservazione.md](05-conservazione.md). I termini principali sono: 30 giorni per pratiche abbandonate, 180 giorni per pratiche chiuse/rifiutate, 30 giorni dopo la verifica per copie dei documenti, rapporto + 12 mesi per dati operativi socio, 10 anni per storico minimo e contabilità, 7 giorni per webhook grezzi e 60 giorni per backup rolling.
 
-La policy è approvata come obiettivo operativo del progetto, ma non è ancora interamente automatizzata. Prima di schedulare cancellazioni va corretta/verificata anche la manutenzione annuale esistente, che può anonimizzare dati del socio prima di aver separato lo storico minimo necessario.
+La proposta costituisce l'obiettivo operativo del progetto, ma richiede ancora approvazione formale e non è interamente automatizzata. Prima di schedulare cancellazioni va corretta e verificata anche la manutenzione annuale esistente, che può anonimizzare dati del socio prima di aver separato lo storico minimo necessario.
 
 ## Documenti del fascicolo
 

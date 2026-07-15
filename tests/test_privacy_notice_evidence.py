@@ -22,5 +22,5 @@ def test_published_privacy_notice_matches_versioned_digest():
     ).replace("\r", "\n")
     actual_digest = hashlib.sha256(normalized_source.encode("utf-8")).hexdigest()
 
-    assert PRIVACY_NOTICE_VERSION == "2026-07-15.1"
+    assert PRIVACY_NOTICE_VERSION == "2026-07-15.2"
     assert actual_digest == PRIVACY_NOTICE_SHA256

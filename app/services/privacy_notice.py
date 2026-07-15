@@ -10,9 +10,9 @@ from app.models import Member
 # This digest is the SHA-256 of Privacy.tsx after normalising line endings to LF.
 # The repository test makes any unnoticed text change fail until legal/technical
 # reviewers intentionally publish a new version and digest.
-PRIVACY_NOTICE_VERSION = "2026-07-15.1"
+PRIVACY_NOTICE_VERSION = "2026-07-15.2"
 PRIVACY_NOTICE_SHA256 = (
-    "3512b52e445781485c03a9c135607413ce3663dcf99bda610869cb0787f7a647"
+    "a003fa011da6c0a13adc3a52e1eed1444c9f5d3b613234db43c2ed25a057a553"
 )
 
 

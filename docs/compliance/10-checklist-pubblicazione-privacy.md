@@ -41,9 +41,9 @@
 
 ## Versione pubblicata
 
-- Versione informativa piattaforma: `2026-07-15.1`.
+- Versione informativa piattaforma: `2026-07-15.2`.
 - Efficacia: 15 luglio 2026.
-- SHA-256 del sorgente normalizzato: `3512b52e445781485c03a9c135607413ce3663dcf99bda610869cb0787f7a647`.
+- SHA-256 del sorgente normalizzato: `a003fa011da6c0a13adc3a52e1eed1444c9f5d3b613234db43c2ed25a057a553`.
 - Evidenza tecnica: `app/services/privacy_notice.py` e `tests/test_privacy_notice_evidence.py`.
 - Versione privacy specifica dell'associazione registrata separatamente.
 

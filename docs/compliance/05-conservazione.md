@@ -1,8 +1,8 @@
 # Piano di conservazione e cancellazione
 
-> Policy interna provvisoria adottata il 15 luglio 2026. I valori sono criteri risk-based; il termine contabile decennale va coordinato con art. 2220 c.c. e disciplina fiscale. Validazione formale: legale rappresentante/commercialista/DPO o consulente privacy.
+> Proposta tecnica interna del 15 luglio 2026, da approvare formalmente prima di considerarla policy dell'ente. I valori sono criteri risk-based; il termine contabile decennale va coordinato con art. 2220 c.c. e disciplina fiscale. Validazione richiesta: legale rappresentante, commercialista e DPO o consulente privacy, se nominati.
 
-| Categoria | Evento iniziale | Termine adottato | Metodo/eccezioni | Attuazione |
+| Categoria | Evento iniziale | Termine proposto | Metodo/eccezioni | Attuazione |
 |---|---|---:|---|---|
 | Pratica iniziata ma non presentata | Ultima attività | 30 giorni | Cancellazione, salvo richiesta/hold | Da automatizzare |
 | Pratica presentata e chiusa/rifiutata | Decisione finale | 180 giorni | Cancellazione/anomizzazione; hold per contestazione | Parziale |

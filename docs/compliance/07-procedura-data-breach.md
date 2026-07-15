@@ -30,7 +30,7 @@ ASSO.N.A.M. decide le notifiche per i propri trattamenti da titolare. Quando ope
 - rischio di frode, discriminazione, danno reputazionale o perdita di controllo;
 - probabilità e gravità residue dopo il contenimento.
 
-Il titolare documenta sempre la decisione. Se il rischio è probabile, notifica il Garante entro 72 ore; se il rischio è elevato, valuta la comunicazione agli interessati. Informazioni mancanti possono essere integrate progressivamente.
+Il titolare documenta sempre la decisione. Se il rischio è probabile, notifica il Garante senza ingiustificato ritardo e, ove possibile, entro 72 ore. Se il rischio è elevato, comunica la violazione agli interessati senza ingiustificato ritardo, salvo che ricorra e sia documentata una delle eccezioni previste dall'articolo 34 GDPR. Informazioni mancanti possono essere integrate progressivamente.
 
 ## Registro incidente
 

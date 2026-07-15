@@ -15,7 +15,7 @@
 
 ### Esito
 
-**APPROFONDIMENTO/DPIA RACCOMANDATA** per il perimetro combinato documenti + WhatsApp/AI + minori potenziali + fornitori internazionali. Una DPIA completa diventa obbligatoria prima di introdurre categorie particolari, monitoraggio/profilazione, AI decisionale o crescita a scala/rischio elevati.
+**VALUTAZIONE FORMALE IMMEDIATA RICHIESTA** per stabilire se il perimetro attuale combinato — documenti, WhatsApp/AI, minori potenziali e fornitori internazionali — presenti già un rischio elevato probabile e renda obbligatoria la DPIA prima di proseguire il trattamento. In ogni caso la DPIA deve precedere l'introduzione di categorie particolari, monitoraggio o profilazione sistematici, AI decisionale o ulteriore crescita a scala/rischio elevati.
 
 Misure preliminari: minimizzare prompt AI, vietare categorie particolari nei form, definire minori, completare TIA/DPA fornitori, retention, MFA e monitoraggio.
 
