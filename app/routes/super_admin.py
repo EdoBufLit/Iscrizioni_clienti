@@ -38,11 +38,13 @@ from app.models import (
     WhatsAppConnection,
 )
 from app.services.email_outbox import build_email_payload, enqueue_email
+from app.services.file_deletion import enqueue_file_deletion
 from app.security import hash_api_key, verify_password
 from app.utils import generate_token, hash_token, save_upload_file
 from app.config import settings
 from app.log_redaction import hash_identifier, redact_for_log
-from app.middleware import auth_limiter, get_client_ip
+from app.middleware import get_client_ip
+from app.services.security_rate_limits import enforce_auth_rate_limit
 from app import audit
 from app.services.association_delete import delete_association_and_release_range
 from app.services.low_cards_alerts import run_low_cards_alert_job
@@ -89,6 +91,7 @@ from app.services.membership_payments import (
     serialize_super_admin_membership_payment_settings,
     verify_sumup_api_key,
 )
+from app.services.accounting_capability import accounting_share_token
 from app.services.whatsapp_evolution import build_evolution_instance_name
 from app.services.whatsapp_provider import (
     SUPPORTED_WHATSAPP_PROVIDERS,
@@ -783,10 +786,11 @@ def _serialize_accounting_share_link(
     link: AccountingShareLink,
 ) -> dict[str, object]:
     base_url = str(request.base_url).rstrip("/")
+    raw_token = accounting_share_token(link)
     return {
         "id": link.id,
-        "token": link.token,
-        "url": f"{base_url}/api/public/accounting-share/{link.token}",
+        "token": raw_token,
+        "url": f"{base_url}/api/public/accounting-share/{raw_token}",
         "expires_at": link.expires_at.isoformat() if link.expires_at else None,
         "revoked_at": link.revoked_at.isoformat() if link.revoked_at else None,
         "created_at": link.created_at.isoformat() if link.created_at else None,
@@ -1110,7 +1114,7 @@ def super_admin_login(
     body: LoginBody,
     db: Session = Depends(get_db),
 ):
-    auth_limiter.check(get_client_ip(request))
+    enforce_auth_rate_limit(db, client_ip=get_client_ip(request))
     admin = (
         db.query(AdminUser)
         .filter(
@@ -3392,12 +3396,15 @@ async def update_accounting_document(
     if is_share_enabled is not None:
         document.is_share_enabled = bool(is_share_enabled)
     if file is not None:
+        previous_storage_key = document.storage_key
         rel_path, size_bytes, sha256 = await save_accounting_upload_file(file)
         document.storage_key = rel_path
         document.original_filename = file.filename or os.path.basename(rel_path)
         document.mime_type = file.content_type
         document.file_size = size_bytes
         document.sha256 = sha256
+        if previous_storage_key != rel_path:
+            enqueue_file_deletion(db, previous_storage_key)
     db.add(document)
     db.commit()
     document = _get_accounting_document_or_404(db, document.id)
@@ -3417,6 +3424,7 @@ def delete_accounting_document(
 ):
     _require_super_admin(request, db)
     document = _get_accounting_document_or_404(db, document_id)
+    enqueue_file_deletion(db, document.storage_key)
     db.delete(document)
     db.commit()
     return {"ok": True, "deleted_document_id": document_id}

@@ -153,6 +153,34 @@ def test_org_admin_wallet_assets_upload_accepts_logo_and_hero(client, db):
             pass
 
 
+def test_org_admin_wallet_assets_upload_accepts_sanitized_svg_logo(client, db):
+    org, admin = _create_org_admin(db)
+    _login_org_admin(client, db, admin.id)
+    safe_svg = b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+      <defs><linearGradient id="g"><stop stop-color="#123456"/></linearGradient></defs>
+      <path fill="url(#g)" d="M1 1h18v18H1z"/>
+    </svg>"""
+
+    response = client.post(
+        "/api/org-admin/organization/wallet-assets",
+        files={"logo": ("logo.svg", safe_svg, "image/svg+xml")},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["wallet_logo_url"].endswith(".svg")
+    db.refresh(org)
+    rel_path = org.wallet_logo_url.replace("/uploads/", "", 1).replace("/", os.sep)
+    full_path = os.path.join(settings.UPLOAD_DIR, rel_path)
+    with open(full_path, "rb") as uploaded:
+        stored = uploaded.read()
+    assert b"<script" not in stored.lower()
+    assert b"url(#g)" in stored
+    try:
+        os.remove(full_path)
+    except OSError:
+        pass
+
+
 def test_org_admin_wallet_assets_upload_rejects_invalid_logo_type(client, db):
     _org, admin = _create_org_admin(db)
     _login_org_admin(client, db, admin.id)
@@ -165,3 +193,22 @@ def test_org_admin_wallet_assets_upload_rejects_invalid_logo_type(client, db):
     assert response.status_code == 415, response.text
     payload = response.json()
     assert "logo" in payload["detail"].lower()
+
+
+def test_org_admin_wallet_assets_upload_rejects_active_svg_content(client, db):
+    _org, admin = _create_org_admin(db)
+    _login_org_admin(client, db, admin.id)
+
+    response = client.post(
+        "/api/org-admin/organization/wallet-assets",
+        files={
+            "logo": (
+                "logo.svg",
+                b"<svg xmlns='http://www.w3.org/2000/svg'><script>alert(1)</script></svg>",
+                "image/svg+xml",
+            )
+        },
+    )
+
+    assert response.status_code == 415, response.text
+    assert "logo" in response.json()["detail"].lower()

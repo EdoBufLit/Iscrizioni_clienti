@@ -5,9 +5,13 @@ so that the SQLAlchemy engine connects to the right database.
 """
 
 import os
+from pathlib import Path
+import tempfile
 
 # Must be set before importing anything from app.*
-os.environ["DATABASE_URL"] = "sqlite:///test_qa.db"
+_TEST_DB_PATH = Path(tempfile.gettempdir()) / f"assonam-pytest-{os.getpid()}.db"
+os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_DB_PATH.as_posix()}"
+os.environ["APP_ENV"] = "test"
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-qa")
 os.environ.setdefault("BASE_URL", "http://localhost:8000")
 os.environ.setdefault("UPLOAD_DIR", "data/uploads")
@@ -26,7 +30,7 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch
 
-from app.db import SessionLocal
+from app.db import SessionLocal, engine
 from app.main import app
 from app.models import EmailOutbox
 from app.services.email_outbox import drain_outbox_for_tests
@@ -43,13 +47,25 @@ def client():
     """Create a TestClient whose lifespan triggers DB init + seed data.
     Also patches rate limiter to avoid 429 in tests.
     """
-    with patch("app.middleware.RateLimiter.check"):
+    with patch("app.middleware.RateLimiter.check"), patch(
+        "app.services.security_rate_limits.enforce_db_rate_limit"
+    ):
         with TestClient(app) as c:
             yield c
 
     # Cleanup
     try:
-        os.remove("test_qa.db")
+        _TEST_DB_PATH.unlink()
+    except OSError:
+        pass
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Leave no shared SQLite state that can contaminate the next test run."""
+
+    engine.dispose()
+    try:
+        _TEST_DB_PATH.unlink()
     except OSError:
         pass
 

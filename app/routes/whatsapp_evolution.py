@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -9,14 +10,18 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import get_db
+from app.log_redaction import hash_identifier
+from app.middleware import get_client_ip
 from app.models import AdminUser, WhatsAppConnection
 from app.services.org_admin_sessions import get_current_org_admin_from_request
 from app.services.whatsapp_evolution import EvolutionLiteClient, normalize_phone
 from app.services.whatsapp_provider import (
     WHATSAPP_PROVIDER_GREEN_API,
     WhatsAppProviderError,
+    green_api_webhook_source_ip_allowed,
     get_provider_for_connection,
     verify_webhook_secret,
+    webhook_bearer_secret,
     whatsapp_feature_enabled,
 )
 from app.services.whatsapp_sync import (
@@ -423,9 +428,9 @@ def receive_evolution_webhook(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     logger.info(
-        "whatsapp_evolution_webhook_enqueued event=%s instance=%s outbox_id=%s status=%s",
+        "whatsapp_evolution_webhook_enqueued event=%s instance_hash=%s outbox_id=%s status=%s",
         event.event_name,
-        event.instance_name,
+        hash_identifier(event.instance_name),
         event.id,
         event.status,
     )
@@ -434,14 +439,25 @@ def receive_evolution_webhook(
 
 @internal_router.post("/green-api")
 def receive_green_api_webhook(
+    request: Request,
     payload: Any = Body(...),
     db: Session = Depends(get_db),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    content_length: int | None = Header(default=None, alias="Content-Length"),
     x_green_api_secret: str | None = Header(default=None, alias="X-Green-Api-Secret"),
     x_webhook_secret: str | None = Header(default=None, alias="X-Webhook-Secret"),
 ):
     _require_whatsapp_feature_enabled()
+    max_body_bytes = settings.WHATSAPP_WEBHOOK_MAX_BODY_BYTES
+    if content_length is not None and content_length > max_body_bytes:
+        raise HTTPException(status_code=413, detail="Webhook payload too large.")
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="Payload webhook non valido.")
+    canonical_size = len(
+        json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    )
+    if canonical_size > max_body_bytes:
+        raise HTTPException(status_code=413, detail="Webhook payload too large.")
 
     instance_data = payload.get("instanceData")
     instance_id = ""
@@ -455,10 +471,50 @@ def receive_green_api_webhook(
         provider=WHATSAPP_PROVIDER_GREEN_API,
         provider_instance_id=instance_id,
     )
-    if connection is not None and not verify_webhook_secret(
-        x_green_api_secret or x_webhook_secret,
-        connection.provider_webhook_secret_hash,
+    organization = getattr(connection, "organization", None) if connection is not None else None
+    if (
+        connection is None
+        or organization is None
+        or not bool(getattr(organization, "is_active", False))
+        or not bool(getattr(organization, "communications_enabled", False))
     ):
+        logger.warning(
+            "whatsapp_green_api_webhook_rejected instance_hash=%s reason=unknown_or_inactive",
+            hash_identifier(instance_id),
+        )
+        raise HTTPException(status_code=403, detail="Invalid Green API webhook credentials.")
+
+    candidate_secret = (
+        webhook_bearer_secret(authorization)
+        or x_green_api_secret
+        or x_webhook_secret
+    )
+    source_ip = get_client_ip(request)
+    secret_configured = bool(
+        (connection.provider_webhook_secret_hash or "").strip()
+        or (settings.GREEN_API_WEBHOOK_SECRET or "").strip()
+    )
+    if secret_configured:
+        authenticated = verify_webhook_secret(
+            candidate_secret,
+            connection.provider_webhook_secret_hash,
+            fallback_secret=settings.GREEN_API_WEBHOOK_SECRET,
+        )
+        rejection_reason = "invalid_secret"
+    elif settings.GREEN_API_WEBHOOK_REQUIRE_SECRET:
+        authenticated = False
+        rejection_reason = "required_secret_not_configured"
+    else:
+        authenticated = green_api_webhook_source_ip_allowed(source_ip)
+        rejection_reason = "source_ip_not_allowed"
+
+    if not authenticated:
+        logger.warning(
+            "whatsapp_green_api_webhook_rejected instance_hash=%s source_ip_hash=%s reason=%s",
+            hash_identifier(instance_id),
+            hash_identifier(source_ip),
+            rejection_reason,
+        )
         raise HTTPException(status_code=403, detail="Invalid Green API webhook credentials.")
 
     try:
@@ -469,9 +525,9 @@ def receive_green_api_webhook(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     logger.info(
-        "whatsapp_green_api_webhook_enqueued event=%s instance=%s outbox_id=%s status=%s",
+        "whatsapp_green_api_webhook_enqueued event=%s instance_hash=%s outbox_id=%s status=%s",
         event.event_name,
-        event.instance_name,
+        hash_identifier(event.instance_name),
         event.id,
         event.status,
     )

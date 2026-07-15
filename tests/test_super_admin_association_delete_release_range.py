@@ -47,14 +47,16 @@ def _set_card_range(client, org_id: int, start_no: int, end_no: int):
 
 
 def _next_free_range(db, *, size: int = 300) -> tuple[int, int]:
-    max_end = db.query(func.max(CardBatch.end_no)).filter(CardBatch.released_at.is_(None)).scalar()
+    # Archived lots remain historical reservations, so test data must advance
+    # beyond both active and released batches.
+    max_end = db.query(func.max(CardBatch.end_no)).scalar()
     base = int(max_end) if max_end is not None else 20000
     start_no = base + 100
     end_no = start_no + size - 1
     return start_no, end_no
 
 
-def test_archive_association_releases_range_and_range_is_reusable(client, db):
+def test_archive_association_releases_lot_but_preserves_historical_range_reservation(client, db):
     _login_super_admin(client)
 
     org = _create_org(db, "archive-org", active=False)
@@ -87,7 +89,8 @@ def test_archive_association_releases_range_and_range_is_reusable(client, db):
         f"/api/super-admin/organizations/{other_org.id}/card-range",
         json={"from_no": start_no, "to_no": end_no},
     )
-    assert reuse_response.status_code == 200, reuse_response.text
+    assert reuse_response.status_code == 409, reuse_response.text
+    assert "intervallo tessere in conflitto" in reuse_response.json()["detail"].lower()
 
 
 def test_delete_association_requires_super_admin(client, db):

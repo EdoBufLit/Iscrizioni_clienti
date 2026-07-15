@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, status, UploadFile, File
 from fastapi.responses import RedirectResponse, FileResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import func
+from sqlalchemy import func, update
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timedelta
 from app.db import get_db
@@ -11,7 +11,8 @@ from app.services.email_sender import build_sender_payload
 from app.utils import generate_token, hash_token, save_upload_file
 from app.security import MIN_MEMBER_PASSWORD_LENGTH, get_password_hash, verify_password
 from app.config import settings
-from app.middleware import auth_limiter, get_client_ip
+from app.middleware import get_client_ip
+from app.services.security_rate_limits import enforce_auth_rate_limit
 from app.services.card_verification import build_card_verification_token
 from app.services.google_wallet import (
     GoogleWalletApiError,
@@ -19,7 +20,6 @@ from app.services.google_wallet import (
     generate_google_wallet_save_link_for_member,
 )
 from app.services.member_activity import get_member_inactive_reason, is_card_active, is_member_active
-from app.services.member_cleanup import cleanup_deleted_member_traces, purge_deleted_members_permanently
 from app.services.member_membership import (
     membership_type_label,
     resolve_member_membership_type,
@@ -44,6 +44,7 @@ _PASSWORD_RESET_GENERIC_MESSAGE = (
 
 _ALLOWED_PAYMENT_METHODS = {PaymentMethod.CASH.value, PaymentMethod.BONIFICO.value}
 _ACCOUNT_NOT_ACTIVE_DETAIL = "account non attivo"
+_REGISTRATION_CONTINUATION_SESSION_KEY = "registration_continuations"
 
 
 class MemberBookingNoteBody(BaseModel):
@@ -80,6 +81,88 @@ def _serialize_payment_method(value) -> str | None:
     return upper if upper in _ALLOWED_PAYMENT_METHODS else text
 
 
+def _peek_registration_continuation(
+    request: Request,
+    *,
+    member_id: int,
+) -> str | None:
+    current = request.session.get(_REGISTRATION_CONTINUATION_SESSION_KEY)
+    if not isinstance(current, dict):
+        return None
+
+    raw_token = current.get(str(member_id))
+    return raw_token if isinstance(raw_token, str) and raw_token else None
+
+
+def _remove_registration_continuation(
+    request: Request,
+    *,
+    member_id: int,
+    expected_token: str,
+) -> None:
+    current = request.session.get(_REGISTRATION_CONTINUATION_SESSION_KEY)
+    if not isinstance(current, dict):
+        return
+
+    continuations = dict(current)
+    member_key = str(member_id)
+    if continuations.get(member_key) != expected_token:
+        return
+    continuations.pop(member_key, None)
+    if continuations:
+        request.session[_REGISTRATION_CONTINUATION_SESSION_KEY] = continuations
+    else:
+        request.session.pop(_REGISTRATION_CONTINUATION_SESSION_KEY, None)
+
+
+def _enqueue_member_password_reset(
+    request: Request,
+    db: Session,
+    member: Member,
+    *,
+    now: datetime,
+) -> None:
+    token_str = generate_token()
+    db.add(
+        Token(
+            member_id=member.id,
+            purpose=TokenType.PASSWORD_RESET,
+            token_hash=hash_token(token_str),
+            expires_at=now + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES),
+        )
+    )
+    db.flush()
+
+    frontend_base = settings.FRONTEND_URL.rstrip("/")
+    if not frontend_base:
+        frontend_base = str(request.base_url).rstrip("/")
+
+    link = f"{frontend_base}/recupera-password?token={token_str}"
+    logger.info("Generated member password reset link: %s", redact_url(link))
+    enqueue_email(
+        db,
+        email_type="member_password_reset",
+        to_email=member.email,
+        subject="Recupero password Area Riservata - ASSO.N.A.M.",
+        payload=build_email_payload(
+            text_body=(
+                f"Clicca qui per reimpostare la password della tua area riservata: {link}\n\n"
+                f"Il link scade tra {settings.LOGIN_TOKEN_EXPIRE_MINUTES} minuti. "
+                "Se non hai richiesto tu il recupero, puoi ignorare questa email."
+            ),
+            sender=build_sender_payload(
+                mode="association",
+                association=member.organization,
+            ),
+            meta={
+                "member_id": member.id,
+                "token_purpose": TokenType.PASSWORD_RESET.value,
+            },
+        ),
+        priority=1,
+    )
+
+
 def get_current_member(request: Request, db: Session):
     member_id = request.session.get("member_id")
     if not member_id:
@@ -102,7 +185,7 @@ def login_page(request: Request, org: str = None, db: Session = Depends(get_db))
 
 @router.get("/member/auth")
 def auth_magic_link(request: Request, token: str, db: Session = Depends(get_db)):
-    auth_limiter.check(get_client_ip(request))
+    enforce_auth_rate_limit(db, client_ip=get_client_ip(request))
     token_hash = hash_token(token)
     now = datetime.utcnow()
 
@@ -471,7 +554,7 @@ def api_auth_login(request: Request, email: str = Form(...), password: str = For
     Login: if password is provided, try password auth. Otherwise send a magic-link.
     Unknown emails keep anti-enumeration behavior; known non-active members get 403.
     """
-    auth_limiter.check(get_client_ip(request))
+    enforce_auth_rate_limit(db, client_ip=get_client_ip(request))
 
     email_norm = email.strip().lower()
     now = datetime.utcnow()
@@ -554,7 +637,7 @@ def api_auth_password_reset_request(
     db: Session = Depends(get_db),
 ):
     """Request a one-time password reset link for active member accounts only."""
-    auth_limiter.check(get_client_ip(request))
+    enforce_auth_rate_limit(db, client_ip=get_client_ip(request))
 
     email_norm = email.strip().lower()
     now = datetime.utcnow()
@@ -570,45 +653,7 @@ def api_auth_password_reset_request(
     )
 
     if member:
-        token_str = generate_token()
-        token = Token(
-            member_id=member.id,
-            purpose=TokenType.PASSWORD_RESET,
-            token_hash=hash_token(token_str),
-            expires_at=now + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES),
-        )
-        db.add(token)
-        db.flush()
-
-        frontend_base = settings.FRONTEND_URL.rstrip("/")
-        if not frontend_base:
-            frontend_base = str(request.base_url).rstrip("/")
-
-        link = f"{frontend_base}/recupera-password?token={token_str}"
-        logger.info("Generated member password reset link: %s", redact_url(link))
-
-        enqueue_email(
-            db,
-            email_type="member_password_reset",
-            to_email=member.email,
-            subject="Recupero password Area Riservata - ASSO.N.A.M.",
-            payload=build_email_payload(
-                text_body=(
-                    f"Clicca qui per reimpostare la password della tua area riservata: {link}\n\n"
-                    f"Il link scade tra {settings.LOGIN_TOKEN_EXPIRE_MINUTES} minuti. "
-                    "Se non hai richiesto tu il recupero, puoi ignorare questa email."
-                ),
-                sender=build_sender_payload(
-                    mode="association",
-                    association=member.organization,
-                ),
-                meta={
-                    "member_id": member.id,
-                    "token_purpose": TokenType.PASSWORD_RESET.value,
-                },
-            ),
-            priority=1,
-        )
+        _enqueue_member_password_reset(request, db, member, now=now)
         db.commit()
 
     return {"status": "ok", "message": _PASSWORD_RESET_GENERIC_MESSAGE}
@@ -623,7 +668,7 @@ def api_auth_password_reset_confirm(
     db: Session = Depends(get_db),
 ):
     """Consume a one-time password reset token and update the member password."""
-    auth_limiter.check(get_client_ip(request))
+    enforce_auth_rate_limit(db, client_ip=get_client_ip(request))
 
     if len(new_password) < MIN_MEMBER_PASSWORD_LENGTH:
         raise HTTPException(status_code=400, detail=f"La password deve avere almeno {MIN_MEMBER_PASSWORD_LENGTH} caratteri.")
@@ -632,8 +677,6 @@ def api_auth_password_reset_confirm(
 
     token_hash = hash_token(token)
     now = datetime.utcnow()
-
-    from sqlalchemy import update
 
     result = db.execute(
         update(Token)
@@ -681,7 +724,7 @@ def api_auth_register(
     """
     from fastapi import HTTPException
 
-    auth_limiter.check(get_client_ip(request))
+    enforce_auth_rate_limit(db, client_ip=get_client_ip(request))
 
     # Registration requires a valid organization
     if not org_slug:
@@ -696,27 +739,9 @@ def api_auth_register(
 
     normalized_payment_method = _normalize_payment_method(payment_method)
     email_norm = email.strip().lower()
-    fiscal_code_norm = fiscal_code.strip().upper() if fiscal_code else None
 
-    purged = purge_deleted_members_permanently(
-        db,
-        org_id=org.id,
-        email=email_norm,
-        fiscal_code=fiscal_code_norm,
-    )
-    if purged:
-        db.commit()
-
-    cleaned = cleanup_deleted_member_traces(
-        db,
-        org_id=org.id,
-        email=email_norm,
-        fiscal_code=fiscal_code_norm,
-    )
-    if cleaned:
-        db.commit()
-
-    # Check if member already exists
+    # This is the second, transparent wizard step. Public profile fields are
+    # never sufficient proof to create or claim a member account.
     existing = (
         db.query(Member)
         .filter(
@@ -728,45 +753,69 @@ def api_auth_register(
         .first()
     )
     if existing:
-        # If existing but no password, allow setting password
-        if not existing.password_hash:
-            existing.password_hash = get_password_hash(password)
-            if not existing.signup_source:
-                existing.signup_source = SignupSource.ASSONAM_FORM.value
-            if normalized_payment_method is not None:
-                existing.payment_method = normalized_payment_method
+        now = datetime.utcnow()
+        continuation = _peek_registration_continuation(
+            request,
+            member_id=existing.id,
+        )
+        if continuation is not None:
+            consume_result = db.execute(
+                update(Token)
+                .where(
+                    Token.member_id == existing.id,
+                    Token.token_hash == hash_token(continuation),
+                    Token.purpose == TokenType.REGISTRATION_CONTINUATION,
+                    Token.expires_at > now,
+                    Token.used_at.is_(None),
+                )
+                .values(used_at=now)
+            )
+            if consume_result.rowcount == 1:
+                existing.password_hash = get_password_hash(password)
+                if not existing.signup_source:
+                    existing.signup_source = SignupSource.ASSONAM_FORM.value
+                if normalized_payment_method is not None:
+                    existing.payment_method = normalized_payment_method
+                db.commit()
+                _remove_registration_continuation(
+                    request,
+                    member_id=existing.id,
+                    expected_token=continuation,
+                )
+
+                if is_member_active(existing, now=now):
+                    request.session["member_id"] = existing.id
+                    audit.member_verified(
+                        member_id=existing.id,
+                        ip=get_client_ip(request),
+                    )
+                    return {
+                        "status": "ok",
+                        "message": "Account attivato.",
+                        "authenticated": True,
+                    }
+                return {
+                    "status": "ok",
+                    "message": "Registrazione ricevuta.",
+                    "authenticated": False,
+                }
+            db.rollback()
+
+        # A pre-existing account without an unconsumed internal proof is never
+        # modified. Active members receive the standard non-enumerating reset.
+        if is_member_active(existing, now=now):
+            _enqueue_member_password_reset(request, db, existing, now=now)
             db.commit()
-            if is_member_active(existing, now=datetime.utcnow()):
-                request.session["member_id"] = existing.id
-                return {"status": "ok", "message": "Account attivato.", "authenticated": True}
-            return {"status": "ok", "message": "Registrazione ricevuta.", "authenticated": False}
-        # Already registered — don't reveal
-        return {"status": "ok", "message": "Registrazione ricevuta."}
-
-    member = Member(
-        org_id=org.id,
-        first_name=first_name,
-        last_name=last_name,
-        email=email_norm,
-        phone=phone,
-        fiscal_code=fiscal_code,
-        payment_method=normalized_payment_method,
-        password_hash=get_password_hash(password),
-        status=MemberStatus.PENDING_DOCS,
-        signup_source=SignupSource.ASSONAM_FORM.value,
-        signup_ip=request.client.host if request.client else "unknown",
-        signup_user_agent=request.headers.get("user-agent"),
-    )
-    db.add(member)
-    db.commit()
-    db.refresh(member)
-
-    if is_member_active(member, now=datetime.utcnow()):
-        request.session["member_id"] = member.id
-        audit.member_verified(member_id=member.id, ip=get_client_ip(request))
-        return {"status": "ok", "message": "Registrazione completata.", "authenticated": True}
-
-    return {"status": "ok", "message": "Registrazione ricevuta.", "authenticated": False}
+        return {
+            "status": "ok",
+            "message": "Registrazione ricevuta.",
+            "authenticated": False,
+        }
+    return {
+        "status": "ok",
+        "message": "Registrazione ricevuta.",
+        "authenticated": False,
+    }
 
 
 @router.post("/api/auth/logout")

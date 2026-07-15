@@ -4,6 +4,7 @@ services:
   web:
     environment:
       PYTHONUNBUFFERED: "1"
+      APP_ENV: production
       GOOGLE_WALLET_ISSUER_ID: ${GOOGLE_WALLET_ISSUER_ID}
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google_wallet_sa.json
     volumes:
@@ -12,6 +13,7 @@ services:
   email-worker:
     environment:
       PYTHONUNBUFFERED: "1"
+      APP_ENV: production
       GOOGLE_WALLET_ISSUER_ID: ${GOOGLE_WALLET_ISSUER_ID}
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google_wallet_sa.json
     volumes:
@@ -20,7 +22,24 @@ services:
   low-cards-worker:
     environment:
       PYTHONUNBUFFERED: "1"
+      APP_ENV: production
       GOOGLE_WALLET_ISSUER_ID: ${GOOGLE_WALLET_ISSUER_ID}
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google_wallet_sa.json
     volumes:
       - ./secrets/google-wallet-sa.json:/run/secrets/google_wallet_sa.json:ro
+
+  migrate:
+    environment:
+      APP_ENV: production
+
+  file-deletion-worker:
+    environment:
+      APP_ENV: production
+
+  whatsapp-webhook-worker:
+    environment:
+      APP_ENV: production
+
+  affiliation-video-worker:
+    environment:
+      APP_ENV: production

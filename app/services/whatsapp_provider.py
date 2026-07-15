@@ -4,13 +4,15 @@ from dataclasses import dataclass
 from datetime import datetime
 import hashlib
 import hmac
+import ipaddress
 import logging
 from typing import Any, Protocol
 
 import requests
 from fastapi import HTTPException
 
-from app.config import settings
+from app.config import parse_ip_network_allowlist, settings
+from app.log_redaction import redact_for_log
 from app.models import WhatsAppConnection
 from app.services.credential_crypto import decrypt_secret, encrypt_secret
 from app.services.whatsapp_evolution import (
@@ -141,14 +143,63 @@ def hash_webhook_secret(secret: str | None) -> str | None:
     return hashlib.sha256(f"{normalized}{settings.SECRET_KEY}".encode("utf-8")).hexdigest()
 
 
-def verify_webhook_secret(secret: str | None, stored_hash: str | None) -> bool:
+def verify_webhook_secret(
+    secret: str | None,
+    stored_hash: str | None,
+    *,
+    fallback_secret: str | None = None,
+) -> bool:
     normalized_hash = (stored_hash or "").strip()
     if not normalized_hash:
-        return True
+        normalized_hash = hash_webhook_secret(fallback_secret) or ""
+    if not normalized_hash:
+        return False
     candidate_hash = hash_webhook_secret(secret)
     if not candidate_hash:
         return False
     return hmac.compare_digest(candidate_hash, normalized_hash)
+
+
+def webhook_bearer_secret(authorization: str | None) -> str | None:
+    raw = str(authorization or "").strip()
+    if not raw:
+        return None
+    scheme, separator, credential = raw.partition(" ")
+    if not separator or scheme.strip().lower() != "bearer":
+        return None
+    normalized = credential.strip()
+    return normalized or None
+
+
+def green_api_webhook_source_ip_allowed(
+    source_ip: str | None,
+    allowed_networks: str | tuple[str, ...] | list[str] | None = None,
+) -> bool:
+    """Return whether a proxy-resolved source belongs to the configured allowlist."""
+
+    try:
+        address = ipaddress.ip_address(str(source_ip or "").strip())
+    except ValueError:
+        return False
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
+        address = address.ipv4_mapped
+
+    configured = (
+        settings.GREEN_API_WEBHOOK_ALLOWED_IPS
+        if allowed_networks is None
+        else allowed_networks
+    )
+    try:
+        normalized_networks = parse_ip_network_allowlist(configured)
+    except ValueError:
+        logger.error("Invalid GREEN_API_WEBHOOK_ALLOWED_IPS configuration; rejecting webhook")
+        return False
+
+    for raw_network in normalized_networks:
+        network = ipaddress.ip_network(raw_network, strict=False)
+        if network.version == address.version and address in network:
+            return True
+    return False
 
 
 class EvolutionProviderAdapter:
@@ -321,8 +372,10 @@ class GreenApiProvider:
                 headers={"Content-Type": "application/json"},
                 timeout=self.timeout_seconds,
             )
-        except requests.RequestException as exc:
-            raise WhatsAppProviderError("Green API non raggiungibile.", retryable=True) from exc
+        except requests.RequestException:
+            # Requests exceptions may embed the URL, whose last path segment is
+            # the Green API token. Never chain that provider exception into logs.
+            raise WhatsAppProviderError("Green API non raggiungibile.", retryable=True) from None
 
         try:
             payload = response.json()
@@ -332,7 +385,8 @@ class GreenApiProvider:
         if response.ok:
             return payload if isinstance(payload, dict) else {}
 
-        detail = _provider_error_detail(payload) or response.text[:500] or response.reason or "Errore Green API"
+        provider_detail = _provider_error_detail(payload) or response.reason or "Errore Green API"
+        detail = str(redact_for_log(provider_detail))
         retryable = response.status_code in {408, 429} or response.status_code >= 500
         raise WhatsAppProviderError(
             f"Green API {response.status_code}: {detail}",

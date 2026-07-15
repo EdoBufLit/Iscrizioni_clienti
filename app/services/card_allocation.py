@@ -59,12 +59,37 @@ def _acquire_allocation_lock(
         )
         return
     if dialect == "sqlite":
-        db.execute(text("PRAGMA busy_timeout = 5000"))
         if immediate_sqlite:
             if db.in_transaction():
                 logger.debug("sqlite_allocation_lock_skipped_existing_transaction")
                 return
-            db.execute(text("BEGIN IMMEDIATE"))
+            # Acquire the SQLite writer lock before the first ORM SELECT.  A
+            # Session.execute(PRAGMA ...) auto-begins the SQLAlchemy
+            # transaction, which previously made the guard above skip
+            # ``BEGIN IMMEDIATE`` on every call and allowed parallel workers
+            # to read the same ``next_no`` value.
+            connection = db.connection()
+            connection.exec_driver_sql("PRAGMA busy_timeout = 5000")
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+            return
+        db.execute(text("PRAGMA busy_timeout = 5000"))
+
+
+def _acquire_sqlite_allocation_lock_before_read(db: Session) -> None:
+    """Serialize SQLite allocation before resolving the organization.
+
+    PostgreSQL uses the narrower advisory lock once the numbering domain is
+    known.  SQLite only supports a database-level writer lock, so taking it
+    before the first SELECT is both the smallest safe critical section and
+    the only way to avoid a deferred read transaction racing another worker.
+    """
+
+    bind = db.get_bind()
+    if bind is None or bind.dialect.name != "sqlite" or db.in_transaction():
+        return
+    connection = db.connection()
+    connection.exec_driver_sql("PRAGMA busy_timeout = 5000")
+    connection.exec_driver_sql("BEGIN IMMEDIATE")
 
 
 def _ordered_legacy_batches_query(org_id: int, year: int):
@@ -374,6 +399,7 @@ def allocate_next_card(db: Session, org_id: int, year: int) -> CardAllocationRes
     if year <= 0:
         raise HTTPException(status_code=400, detail="card_year non valido")
 
+    _acquire_sqlite_allocation_lock_before_read(db)
     org = db.query(Organization).filter(Organization.id == org_id).first()
     if org is None:
         raise HTTPException(status_code=404, detail="Organization not found")

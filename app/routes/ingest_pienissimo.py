@@ -19,6 +19,9 @@ from app.services.integration_issuer import (
     IssueMemberCommand,
     issue_member_from_ingest,
 )
+from app.services.sqlite_card_allocation_guard import (
+    sqlite_card_allocation_request_guard,
+)
 from app.services.db_rate_limit import enforce_db_rate_limit
 
 logger = logging.getLogger(__name__)
@@ -279,7 +282,11 @@ def _has_deleted_member_with_email(
     return deleted_member is not None
 
 
-@router.post("/{org_slug}", response_model=PienissimoIngestResponse)
+@router.post(
+    "/{org_slug}",
+    response_model=PienissimoIngestResponse,
+    dependencies=[Depends(sqlite_card_allocation_request_guard)],
+)
 def ingest_pienissimo_member(
     org_slug: str,
     request: Request,

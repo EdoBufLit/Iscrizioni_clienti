@@ -2,19 +2,25 @@ from datetime import datetime, timedelta
 import uuid
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import func
 
 from app.config import settings
 from app.db import SessionLocal
+from app.main import app
 from app.models import (
     CardBatch,
     EmailOutbox,
     Member,
+    MemberDocument,
     MemberStatus,
     Organization,
     PaymentMethod,
     SignupSource,
+    Token,
+    TokenType,
 )
+from app.security import get_password_hash, verify_password
 from app.utils import clear_captured_emails, get_captured_emails
 from tests.signup_payloads import build_join_submit_data
 
@@ -96,6 +102,7 @@ def _join_submit(client, slug: str, email: str):
 
 
 def test_tag_signup_auto_issues_active_card_and_returns_active_page(client, db, drain_email_outbox):
+    client.post("/api/auth/logout")
     org = _ensure_org(db, "t-a-g-culture", with_batch=True)
     email = f"tag-auto-{uuid.uuid4().hex[:8]}@example.com"
 
@@ -143,6 +150,32 @@ def test_tag_signup_auto_issues_active_card_and_returns_active_page(client, db, 
         assert member.decision_notes == "Auto-approved via web signup"
         assert member.card_email_sent_at is None
         assert member.card_delivered_at is None
+
+        registration = client.post(
+            "/api/auth/register",
+            data={
+                "email": email,
+                "password": "AutoIssuePass123!",
+                "first_name": "Tag",
+                "last_name": "Culture",
+                "phone": member.phone or "",
+                "fiscal_code": member.fiscal_code or "",
+                "payment_method": "BONIFICO",
+                "org_slug": org.slug,
+            },
+        )
+        assert registration.status_code == 200, registration.text
+        assert registration.json()["authenticated"] is True
+
+        db.refresh(member)
+        assert verify_password("AutoIssuePass123!", member.password_hash)
+        assert member.status == MemberStatus.ACTIVE
+        assert member.card_no is not None
+
+        me = client.get("/api/auth/me")
+        assert me.status_code == 200, me.text
+        assert me.json()["id"] == member.id
+        assert me.json()["card_no"] == member.card_no
 
         drain_email_outbox()
         db.refresh(member)
@@ -328,6 +361,7 @@ def test_join_submit_uses_active_card_status_when_card_already_exists(client, db
         email=email,
         phone="3331112222",
         fiscal_code=f"RC{uuid.uuid4().hex[:14].upper()}",
+        password_hash=get_password_hash("ExistingCardPass123!"),
         status=MemberStatus.PENDING_VERIFICATION,
         card_no=int(batch.start_no),
         card_year=current_year,
@@ -337,7 +371,19 @@ def test_join_submit_uses_active_card_status_when_card_already_exists(client, db
     db.add(member)
     db.commit()
 
-    response = _join_submit(client, str(org.slug), email)
+    existing_card_payload = build_join_submit_data(
+        first_name="Reuse",
+        last_name="Card",
+        email=email,
+        payment_method="BONIFICO",
+        accept_statute="true",
+        accept_privacy="true",
+    )
+    existing_card_payload["password"] = "ExistingCardPass123!"
+    response = client.post(
+        f"/api/join/{org.slug}/submit",
+        data=existing_card_payload,
+    )
     assert response.status_code == 200, response.text
     payload = response.json()
     assert payload["status"] == "issued"
@@ -472,3 +518,202 @@ def test_public_signup_can_issue_temporary_membership_when_enabled(client, db):
     assert member.valid_from is not None
     assert member.valid_until is not None
     assert member.valid_until - member.valid_from == timedelta(hours=4)
+
+
+def test_pending_signup_cannot_be_taken_over_from_a_second_browser(client, db):
+    client.cookies.clear()
+    org = _ensure_org(db, f"join-owner-{uuid.uuid4().hex[:6]}", with_batch=False)
+    org.auto_approve_signup = False
+    db.commit()
+
+    email = f"join-owner-{uuid.uuid4().hex[:8]}@example.com"
+    signup = build_join_submit_data(
+        first_name="Mario",
+        last_name="Rossi",
+        email=email,
+        phone="3331112222",
+    )
+    signup["password"] = "OwnerPass123!"
+    first = client.post(
+        f"/api/join/{org.slug}/submit",
+        data=signup,
+        files={
+            "id_document": (
+                "owner-id.pdf",
+                b"%PDF-1.4 owner identity",
+                "application/pdf",
+            )
+        },
+    )
+    assert first.status_code == 200, first.text
+
+    db.expire_all()
+    member = db.query(Member).filter(Member.org_id == org.id, Member.email == email).one()
+    original_document = (
+        db.query(MemberDocument)
+        .filter(
+            MemberDocument.member_id == member.id,
+            MemberDocument.doc_type == "identity",
+        )
+        .one()
+    )
+    original_document_id = original_document.id
+    original_document_path = original_document.rel_path
+    continuation_count = (
+        db.query(Token)
+        .filter(
+            Token.member_id == member.id,
+            Token.purpose == TokenType.REGISTRATION_CONTINUATION,
+        )
+        .count()
+    )
+
+    attack = dict(signup)
+    attack["phone"] = "3999999999"
+    attack["password"] = "AttackerPass123!"
+    with TestClient(app) as attacker:
+        attacked = attacker.post(
+            f"/api/join/{org.slug}/submit",
+            data=attack,
+            files={
+                "id_document": (
+                    "attacker-id.pdf",
+                    b"%PDF-1.4 attacker identity",
+                    "application/pdf",
+                )
+            },
+        )
+
+    assert attacked.status_code == 409, attacked.text
+    assert attacked.json()["detail"] == "Esiste già una iscrizione associata a questi dati."
+    db.expire_all()
+    protected_member = db.query(Member).filter(Member.id == member.id).one()
+    protected_document = (
+        db.query(MemberDocument)
+        .filter(MemberDocument.member_id == member.id)
+        .one()
+    )
+    assert protected_member.phone == "3331112222"
+    assert protected_member.status == MemberStatus.PENDING_VERIFICATION
+    assert protected_member.card_no is None
+    assert protected_document.id == original_document_id
+    assert protected_document.rel_path == original_document_path
+    assert (
+        db.query(Token)
+        .filter(
+            Token.member_id == member.id,
+            Token.purpose == TokenType.REGISTRATION_CONTINUATION,
+        )
+        .count()
+        == continuation_count
+    )
+
+
+def test_same_browser_can_retry_after_auto_issue_fails_post_commit(
+    client,
+    db,
+    monkeypatch,
+):
+    client.cookies.clear()
+    slug = f"join-retry-{uuid.uuid4().hex[:6]}"
+    org = _ensure_org(db, slug, with_batch=True)
+    org.auto_approve_signup = True
+    db.commit()
+
+    from app.routes import join as join_routes
+
+    real_issuer = join_routes.issue_member_from_integration
+    issuer_calls = 0
+
+    def flaky_issuer(session, command):
+        nonlocal issuer_calls
+        issuer_calls += 1
+        if issuer_calls == 1:
+            raise RuntimeError("simulated post-prepare-commit failure")
+        return real_issuer(session, command)
+
+    monkeypatch.setattr(join_routes, "issue_member_from_integration", flaky_issuer)
+
+    email = f"join-retry-{uuid.uuid4().hex[:8]}@example.com"
+    signup = build_join_submit_data(email=email, payment_method="BONIFICO")
+    signup["password"] = "RetryPass123!"
+
+    failed = client.post(f"/api/join/{org.slug}/submit", data=signup)
+    assert failed.status_code == 500, failed.text
+    db.expire_all()
+    member = db.query(Member).filter(Member.org_id == org.id, Member.email == email).one()
+    assert member.status == MemberStatus.PENDING_VERIFICATION
+    assert member.card_no is None
+    continuation = (
+        db.query(Token)
+        .filter(
+            Token.member_id == member.id,
+            Token.purpose == TokenType.REGISTRATION_CONTINUATION,
+            Token.used_at.is_(None),
+        )
+        .one()
+    )
+    assert continuation.expires_at > datetime.utcnow()
+
+    with TestClient(app) as attacker:
+        blocked = attacker.post(f"/api/join/{org.slug}/submit", data=signup)
+    assert blocked.status_code == 409, blocked.text
+
+    retried = client.post(f"/api/join/{org.slug}/submit", data=signup)
+    assert retried.status_code == 200, retried.text
+    assert retried.json()["status"] == "issued"
+    assert retried.json()["active_card_page_url"]
+    assert retried.json()["card_verification_token"]
+
+    registered = client.post(
+        "/api/auth/register",
+        data={
+            "email": email,
+            "password": "RetryPass123!",
+            "first_name": "Mario",
+            "last_name": "Rossi",
+            "org_slug": org.slug,
+        },
+    )
+    assert registered.status_code == 200, registered.text
+    assert registered.json()["authenticated"] is True
+
+    db.expire_all()
+    issued_member = db.query(Member).filter(Member.id == member.id).one()
+    used_continuation = db.query(Token).filter(Token.id == continuation.id).one()
+    assert issuer_calls == 2
+    assert issued_member.status == MemberStatus.ACTIVE
+    assert issued_member.card_no is not None
+    assert verify_password("RetryPass123!", issued_member.password_hash)
+    assert used_continuation.used_at is not None
+
+
+def test_existing_pending_signup_can_resume_with_its_valid_password(client, db):
+    client.cookies.clear()
+    org = _ensure_org(db, f"join-password-{uuid.uuid4().hex[:6]}", with_batch=False)
+    org.auto_approve_signup = False
+    db.commit()
+
+    email = f"join-password-{uuid.uuid4().hex[:8]}@example.com"
+    payload = build_join_submit_data(email=email, phone="3331112222")
+    member = Member(
+        org_id=org.id,
+        first_name="Existing",
+        last_name="Pending",
+        email=email,
+        phone="3330000000",
+        fiscal_code=payload["fiscal_code"],
+        password_hash=get_password_hash("ExistingPass123!"),
+        status=MemberStatus.PENDING_VERIFICATION,
+        signup_source=SignupSource.ASSONAM_FORM.value,
+    )
+    db.add(member)
+    db.commit()
+
+    payload["password"] = "ExistingPass123!"
+    resumed = client.post(f"/api/join/{org.slug}/submit", data=payload)
+
+    assert resumed.status_code == 200, resumed.text
+    db.refresh(member)
+    assert member.phone == "3331112222"
+    assert verify_password("ExistingPass123!", member.password_hash)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 import html
 import json
@@ -11,16 +11,22 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.models import EmailCampaign, EmailCampaignRecipient, Form, Member, Organization
+from app.models import EmailCampaign, EmailCampaignRecipient, EmailTemplate, Form, Member, Organization
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 from app.services.email_templates import (
+    EMAIL_TEMPLATE_TYPE_EVENT,
+    EMAIL_TEMPLATE_TYPE_NEWSLETTER,
+    EMAIL_TEMPLATE_TYPE_GENERIC_NOTICE,
+    RenderedTemplateContent,
     build_linked_form_url,
     decorate_rendered_email,
     normalize_email_design,
+    normalize_email_template_type,
     render_template_content,
 )
 from app.services.member_activity import get_member_lifecycle_status, is_member_active
+from app.services.marketing_consent import build_marketing_unsubscribe_url
 from app.utils import send_email_via_transport_low_level
 
 
@@ -51,12 +57,77 @@ RECIPIENT_STATUS_PROCESSING = "processing"
 RECIPIENT_STATUS_SENT = "sent"
 RECIPIENT_STATUS_FAILED = "failed"
 
+COMMUNICATION_PURPOSE_PROMOTIONAL = "promotional"
+COMMUNICATION_PURPOSE_SERVICE = "service"
+COMMUNICATION_PURPOSES = {
+    COMMUNICATION_PURPOSE_PROMOTIONAL,
+    COMMUNICATION_PURPOSE_SERVICE,
+}
+
+# Newsletter and event invitations are promotional.  Renewal, booking and
+# generic operational notices are service communications and must not depend
+# on the optional marketing consent.
+PROMOTIONAL_EMAIL_TEMPLATE_TYPES = frozenset(
+    {
+        EMAIL_TEMPLATE_TYPE_NEWSLETTER,
+        EMAIL_TEMPLATE_TYPE_EVENT,
+    }
+)
+
 
 @dataclass(frozen=True)
 class AudienceRecipient:
     member: Member | None
     recipient_email: str
     recipient_name: str | None
+
+
+def communication_purpose_for_template_type(template_type: str | None) -> str:
+    normalized_type = normalize_email_template_type(
+        template_type or EMAIL_TEMPLATE_TYPE_GENERIC_NOTICE
+    )
+    if normalized_type in PROMOTIONAL_EMAIL_TEMPLATE_TYPES:
+        return COMMUNICATION_PURPOSE_PROMOTIONAL
+    return COMMUNICATION_PURPOSE_SERVICE
+
+
+def campaign_template_type(campaign: EmailCampaign) -> str:
+    stored_type = _normalize_text(getattr(campaign, "template_type", None))
+    if stored_type:
+        return normalize_email_template_type(stored_type)
+    source_template = getattr(campaign, "source_template", None)
+    return normalize_email_template_type(
+        getattr(source_template, "template_type", None)
+        or getattr(source_template, "category", None)
+        or EMAIL_TEMPLATE_TYPE_GENERIC_NOTICE
+    )
+
+
+def campaign_communication_purpose(campaign: EmailCampaign) -> str:
+    return communication_purpose_for_template_type(campaign_template_type(campaign))
+
+
+def _resolve_campaign_template_type(
+    db: Session,
+    *,
+    source_template_id: int | None,
+    requested_template_type: str | None,
+) -> str:
+    if source_template_id is not None:
+        source_template = (
+            db.query(EmailTemplate)
+            .filter(EmailTemplate.id == int(source_template_id))
+            .first()
+        )
+        if source_template is None:
+            raise HTTPException(status_code=422, detail="Template sorgente non valido.")
+        return normalize_email_template_type(
+            getattr(source_template, "template_type", None)
+            or getattr(source_template, "category", None)
+        )
+    return normalize_email_template_type(
+        requested_template_type or EMAIL_TEMPLATE_TYPE_GENERIC_NOTICE
+    )
 
 
 def _normalize_text(value: str | None) -> str | None:
@@ -165,6 +236,43 @@ def _html_to_plain_text(value: str) -> str:
     return normalized.strip()
 
 
+def _append_marketing_unsubscribe_footer(
+    rendered: RenderedTemplateContent,
+    *,
+    member: Member,
+) -> RenderedTemplateContent:
+    unsubscribe_url = build_marketing_unsubscribe_url(member)
+    safe_url = html.escape(unsubscribe_url, quote=True)
+    html_footer = (
+        '<div style="max-width:640px;margin:0 auto;padding:18px 32px 28px;'
+        'box-sizing:border-box;color:#52666d;font-size:12px;line-height:1.6;'
+        'font-family:Arial,sans-serif">'
+        'Ricevi questa email perché hai acconsentito alle comunicazioni promozionali. '
+        f'<a href="{safe_url}" style="color:#0f766e;text-decoration:underline">'
+        "Disattiva le email promozionali</a>. Le comunicazioni di servizio restano attive."
+        "</div>"
+    )
+    text_footer = (
+        "Ricevi questa email perché hai acconsentito alle comunicazioni promozionali.\n"
+        f"Disattiva le email promozionali: {unsubscribe_url}\n"
+        "Le comunicazioni di servizio restano attive."
+    )
+    html_body = rendered.body_html or ""
+    lowered_html = html_body.lower()
+    insert_at = lowered_html.rfind("</body>")
+    if insert_at < 0:
+        insert_at = lowered_html.rfind("</html>")
+    if insert_at >= 0:
+        html_body = f"{html_body[:insert_at]}{html_footer}{html_body[insert_at:]}"
+    else:
+        html_body = f"{html_body}{html_footer}"
+    return replace(
+        rendered,
+        body_html=html_body,
+        body_text=f"{rendered.body_text or ''}\n\n---\n{text_footer}".strip(),
+    )
+
+
 def normalize_campaign_bodies(
     *,
     body_html: str | None,
@@ -205,19 +313,22 @@ def resolve_audience_recipients(
     association_id: int,
     audience_type: str,
     now: datetime | None = None,
+    require_marketing_consent: bool = True,
 ) -> list[AudienceRecipient]:
     normalized_audience = _normalize_text(audience_type)
     if normalized_audience not in ALLOWED_AUDIENCE_TYPES:
         raise HTTPException(status_code=422, detail="Audience non valida.")
 
     current_time = now or datetime.utcnow()
+    query = db.query(Member).filter(
+        Member.org_id == association_id,
+        Member.deleted_at.is_(None),
+        Member.email.isnot(None),
+    )
+    if require_marketing_consent:
+        query = query.filter(Member.marketing_email_consent.is_(True))
     members = (
-        db.query(Member)
-        .filter(
-            Member.org_id == association_id,
-            Member.deleted_at.is_(None),
-            Member.email.isnot(None),
-        )
+        query
         .order_by(Member.id.desc())
         .all()
     )
@@ -246,6 +357,7 @@ def resolve_selected_member_recipients(
     *,
     association_id: int,
     member_ids: Iterable[int],
+    require_marketing_consent: bool = True,
 ) -> list[AudienceRecipient]:
     normalized_member_ids = normalize_selected_member_ids(
         member_ids,
@@ -273,6 +385,10 @@ def resolve_selected_member_recipients(
     seen_emails: set[str] = set()
     for member_id in normalized_member_ids:
         member = members_by_id[member_id]
+        if require_marketing_consent and not bool(
+            getattr(member, "marketing_email_consent", False)
+        ):
+            continue
         email = _normalize_email(member.email)
         if email is None:
             raise HTTPException(
@@ -298,17 +414,23 @@ def resolve_campaign_recipients(
     campaign: EmailCampaign,
     association_id: int,
 ) -> list[AudienceRecipient]:
+    require_marketing_consent = (
+        campaign_communication_purpose(campaign)
+        == COMMUNICATION_PURPOSE_PROMOTIONAL
+    )
     recipient_mode = normalize_recipient_mode(getattr(campaign, "recipient_mode", None) or RECIPIENT_MODE_ALL_MEMBERS)
     if recipient_mode == RECIPIENT_MODE_SELECTED_MEMBERS:
         return resolve_selected_member_recipients(
             db,
             association_id=association_id,
             member_ids=deserialize_selected_member_ids(campaign.selected_member_ids_json),
+            require_marketing_consent=require_marketing_consent,
         )
     return resolve_audience_recipients(
         db,
         association_id=association_id,
         audience_type=campaign.audience_type,
+        require_marketing_consent=require_marketing_consent,
     )
 
 
@@ -336,6 +458,7 @@ def create_campaign_draft(
     design: dict[str, Any] | None = None,
     linked_form: Form | None = None,
     source_template_id: int | None = None,
+    template_type: str | None = None,
     editor_status: str | None = None,
     grapesjs_project_json: dict[str, Any] | None = None,
     mjml_source: str | None = None,
@@ -365,11 +488,17 @@ def create_campaign_draft(
         body_text=body_text,
     )
     normalized_scheduled_at = normalize_scheduled_at(scheduled_at)
+    normalized_template_type = _resolve_campaign_template_type(
+        db,
+        source_template_id=source_template_id,
+        requested_template_type=template_type,
+    )
     now = datetime.utcnow()
     campaign = EmailCampaign(
         association_id=organization.id,
         name=_normalize_text(name),
         source_template_id=source_template_id,
+        template_type=normalized_template_type,
         subject=normalized_subject,
         body_html=compiled_html or normalized_body_html,
         body_text=normalized_body_text,
@@ -413,6 +542,7 @@ def update_campaign_draft(
     design: dict[str, Any] | None = None,
     linked_form: Form | None = None,
     source_template_id: int | None = None,
+    template_type: str | None = None,
     editor_status: str | None = None,
     grapesjs_project_json: dict[str, Any] | None = None,
     mjml_source: str | None = None,
@@ -453,10 +583,16 @@ def update_campaign_draft(
         body_text=body_text,
     )
     normalized_scheduled_at = normalize_scheduled_at(scheduled_at)
+    normalized_template_type = _resolve_campaign_template_type(
+        db,
+        source_template_id=source_template_id,
+        requested_template_type=template_type,
+    )
     now = datetime.utcnow()
 
     campaign.name = _normalize_text(name)
     campaign.source_template_id = source_template_id
+    campaign.template_type = normalized_template_type
     campaign.subject = normalized_subject
     campaign.body_html = compiled_html or normalized_body_html
     campaign.body_text = normalized_body_text
@@ -537,15 +673,19 @@ def send_campaign(
         )
 
     now = datetime.utcnow()
+    communication_purpose = campaign_communication_purpose(campaign)
+    normalized_template_type = campaign_template_type(campaign)
     campaign.status = CAMPAIGN_STATUS_SENDING
     campaign.sent_at = now
     db.flush()
 
     for recipient in recipients:
+        if recipient.member is None:  # Defensive: campaigns always target members.
+            continue
         recipient_row = EmailCampaignRecipient(
             campaign_id=campaign.id,
             association_id=organization.id,
-            user_id=recipient.member.id if recipient.member is not None else None,
+            user_id=recipient.member.id,
             recipient_email=recipient.recipient_email,
             recipient_name=recipient.recipient_name,
             delivery_status=RECIPIENT_STATUS_QUEUED,
@@ -572,6 +712,11 @@ def send_campaign(
             design=getattr(campaign, "design_json", None),
             linked_form=getattr(campaign, "linked_form", None),
         )
+        if communication_purpose == COMMUNICATION_PURPOSE_PROMOTIONAL:
+            rendered_content = _append_marketing_unsubscribe_footer(
+                rendered_content,
+                member=recipient.member,
+            )
         enqueue_email(
             db,
             email_type="association_campaign",
@@ -585,6 +730,9 @@ def send_campaign(
                     "campaign_id": campaign.id,
                     "campaign_recipient_id": recipient_row.id,
                     "org_id": organization.id,
+                    "member_id": recipient.member.id,
+                    "communication_purpose": communication_purpose,
+                    "campaign_template_type": normalized_template_type,
                 },
             ),
             priority=4,

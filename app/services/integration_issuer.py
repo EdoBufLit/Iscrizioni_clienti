@@ -14,6 +14,7 @@ import os
 
 from app import audit
 from app.config import settings
+from app.log_redaction import hash_identifier
 from app.email_templates.member_card_email import build_member_card_email
 from app.models import (
     Member,
@@ -311,12 +312,12 @@ def issue_member_from_integration(
         _normalize_text(command.decision_note) or "Auto-approved via integration"
     )
     logger.info(
-        "integration_issue_start request_id=%s git_sha=%s org_id=%s org_slug=%s email=%s signup_source=%s integration_name=%s client_version=%s",
+        "integration_issue_start request_id=%s git_sha=%s org_id=%s org_slug=%s email_hash=%s signup_source=%s integration_name=%s client_version=%s",
         request_id,
         settings.GIT_SHA or "unknown",
         org.id,
         org.slug,
-        email,
+        hash_identifier(email),
         signup_source,
         command.integration_name,
         client_version,
@@ -370,10 +371,10 @@ def issue_member_from_integration(
         db.add(member)
         try:
             logger.info(
-                "integration_issue_commit_before request_id=%s phase=create_member org_id=%s email=%s",
+                "integration_issue_commit_before request_id=%s phase=create_member org_id=%s email_hash=%s",
                 request_id,
                 org.id,
-                email,
+                hash_identifier(email),
             )
             db.commit()
             logger.info(
@@ -515,12 +516,12 @@ def issue_member_from_integration(
 
     if should_send_email:
         logger.info(
-            "integration_issue_email_before_send request_id=%s template=%s member_id=%s org_id=%s email=%s outcome=%s",
+            "integration_issue_email_before_send request_id=%s template=%s member_id=%s org_id=%s email_hash=%s outcome=%s",
             request_id,
             "card_active",
             member.id,
             org.id,
-            member.email,
+            hash_identifier(member.email),
             outcome,
         )
         magic_link_url = _build_magic_link(db, member.id, frontend_base)

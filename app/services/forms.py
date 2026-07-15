@@ -33,6 +33,7 @@ from app.services.booking_event_availability import (
     normalize_booking_availability_mode,
     normalize_booking_event_series_ids,
 )
+from app.services.csv_safety import neutralize_csv_formula
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 from app.services.email_templates import render_template_content
@@ -1438,7 +1439,7 @@ def export_submissions_csv(form: Form) -> io.StringIO:
     import csv
 
     writer = csv.DictWriter(output, fieldnames=fieldnames)
-    writer.writeheader()
+    writer.writerow({fieldname: neutralize_csv_formula(fieldname) for fieldname in fieldnames})
     for submission in submissions:
         row = {
             "submission_id": submission.id,
@@ -1457,6 +1458,11 @@ def export_submissions_csv(form: Form) -> io.StringIO:
                 row[field.field_key] = ""
             else:
                 row[field.field_key] = str(value)
-        writer.writerow(row)
+        writer.writerow(
+            {
+                fieldname: neutralize_csv_formula(row.get(fieldname, ""))
+                for fieldname in fieldnames
+            }
+        )
     output.seek(0)
     return output

@@ -160,22 +160,32 @@ def test_public_uploads_route_blocks_private_files_but_keeps_wallet_assets(clien
     uploads_dir = Path(settings.UPLOAD_DIR)
     blocked_file = uploads_dir / "security-audit-probe.txt"
     public_file = uploads_dir / "org" / "999999" / "wallet" / "security-logo.txt"
+    legacy_svg = uploads_dir / "org" / "999999" / "wallet" / "legacy-logo.svg"
 
     blocked_file.parent.mkdir(parents=True, exist_ok=True)
     public_file.parent.mkdir(parents=True, exist_ok=True)
     blocked_file.write_text("blocked", encoding="utf-8")
     public_file.write_text("public-wallet", encoding="utf-8")
+    legacy_svg.write_text(
+        "<svg xmlns='http://www.w3.org/2000/svg'><script>alert(1)</script></svg>",
+        encoding="utf-8",
+    )
 
     try:
         blocked = client.get("/uploads/security-audit-probe.txt")
         allowed = client.get("/uploads/org/999999/wallet/security-logo.txt")
+        sandboxed_svg = client.get("/uploads/org/999999/wallet/legacy-logo.svg")
 
         assert blocked.status_code == 404, blocked.text
         assert allowed.status_code == 200, allowed.text
         assert allowed.text == "public-wallet"
+        assert sandboxed_svg.status_code == 200, sandboxed_svg.text
+        assert "sandbox" in sandboxed_svg.headers.get("content-security-policy", "")
+        assert sandboxed_svg.headers.get("x-content-type-options") == "nosniff"
     finally:
         blocked_file.unlink(missing_ok=True)
         public_file.unlink(missing_ok=True)
+        legacy_svg.unlink(missing_ok=True)
 
 
 def test_legacy_admin_login_requires_active_super_admin(client):

@@ -161,7 +161,7 @@ def test_super_admin_blocks_range_update_on_assigned_lot_but_allows_status_and_n
         json={"range_start": batch.start_no + 10},
     )
     assert blocked_response.status_code == 409, blocked_response.text
-    assert "tessere gia assegnate" in blocked_response.json()["detail"]
+    assert "tessere già assegnate" in blocked_response.json()["detail"]
 
 
 def test_super_admin_can_delete_empty_card_lot_and_audit_it(client, db):
@@ -210,7 +210,7 @@ def test_super_admin_blocks_delete_when_lot_has_assigned_cards(client, db):
 
     response = client.delete(f"/api/admin/organizations/{org.id}/card-lots/{batch.id}")
     assert response.status_code == 409, response.text
-    assert response.json()["detail"] == "Impossibile eliminare: esistono tessere gia assegnate"
+    assert response.json()["detail"] == "Impossibile eliminare: esistono tessere già assegnate"
 
     db.expire_all()
     assert db.query(CardBatch).filter(CardBatch.id == batch.id).first() is not None

@@ -236,6 +236,7 @@ class AffiliationVideoMode(str, enum.Enum):
 
 class TokenType(str, enum.Enum):
     SIGNUP_CONTINUE = "signup_continue"
+    REGISTRATION_CONTINUATION = "registration_continuation"
     LOGIN_MAGIC_LINK = "login_magic_link"
     PASSWORD_RESET = "password_reset"
 
@@ -245,6 +246,7 @@ class EmailOutboxStatus(str, enum.Enum):
     SENDING = "sending"
     SENT = "sent"
     FAILED = "failed"
+    SUPPRESSED = "suppressed"
 
 
 class WhatsAppWebhookEventStatus(str, enum.Enum):
@@ -1129,6 +1131,11 @@ class AccountingShareLink(Base):
         Integer, ForeignKey("accounting_documents.id"), nullable=False, index=True
     )
     token = Column(String, nullable=False, unique=True, index=True)
+    # New links keep only a verifier at rest. ``token`` remains in place for
+    # rolling-deploy and legacy compatibility, but contains the same verifier
+    # (never the public bearer) when ``token_version`` is populated.
+    token_hash = Column(String(64), nullable=True, unique=True, index=True)
+    token_version = Column(Integer, nullable=True)
     expires_at = Column(DateTime, nullable=True, index=True)
     created_by_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
     revoked_at = Column(DateTime, nullable=True, index=True)
@@ -1243,6 +1250,17 @@ class EmailCampaign(Base):
     association_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     name = Column(String, nullable=True)
     source_template_id = Column(Integer, ForeignKey("email_templates.id"), nullable=True, index=True)
+    # Snapshot of the campaign's communication type.  Keeping it on the
+    # campaign (instead of resolving it from the mutable source template at
+    # delivery time) makes the promotional/service purpose deterministic for
+    # scheduled and already queued messages.
+    template_type = Column(
+        String,
+        nullable=False,
+        default="generic_notice",
+        server_default="generic_notice",
+        index=True,
+    )
     subject = Column(String, nullable=False)
     body_html = Column(Text, nullable=True)
     body_text = Column(Text, nullable=True)
@@ -1925,6 +1943,24 @@ class Member(Base):
 
     accepted_privacy_at = Column(DateTime, nullable=True)
     accepted_privacy_version = Column(String, nullable=True)
+    # Immutable evidence for the platform notice rendered at acknowledgement.
+    # The association-specific version above remains separate because the two
+    # controllers/notices can evolve independently.
+    accepted_privacy_notice_version = Column(String(length=32), nullable=True)
+    accepted_privacy_notice_sha256 = Column(String(length=64), nullable=True)
+
+    # Optional, purpose-specific consent. It is intentionally independent
+    # from the mandatory privacy-notice acknowledgement above.
+    marketing_email_consent = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=sa.false(),
+        index=True,
+    )
+    marketing_email_consent_at = Column(DateTime(timezone=True), nullable=True)
+    marketing_email_consent_withdrawn_at = Column(DateTime(timezone=True), nullable=True)
+    marketing_email_consent_version = Column(String(length=32), nullable=True)
 
     signup_source = Column(
         String, nullable=True, server_default=SignupSource.ASSONAM_FORM.value
@@ -1987,6 +2023,43 @@ class Member(Base):
             ),
         ),
         Index("ix_members_card_year_deleted", "card_year", "deleted_at"),
+    )
+
+
+class MarketingConsentEvent(Base):
+    """Append-only, pseudonymized proof of email-marketing preference changes."""
+
+    __tablename__ = "marketing_consent_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    association_id = Column(Integer, nullable=False, index=True)
+    subject_ref_hash = Column(String(length=64), nullable=False, index=True)
+    email_hash = Column(String(length=64), nullable=False, index=True)
+    channel = Column(
+        String(length=16), nullable=False, default="email", server_default="email"
+    )
+    event_action = Column(String(length=16), nullable=False, index=True)
+    notice_version = Column(String(length=32), nullable=False)
+    source = Column(String(length=64), nullable=False)
+    ip_hash = Column(String(length=64), nullable=True)
+    user_agent_hash = Column(String(length=64), nullable=True)
+    proof_version = Column(
+        String(length=32),
+        nullable=False,
+        default="hmac-sha256-v1",
+        server_default="hmac-sha256-v1",
+    )
+    occurred_at = Column(
+        DateTime(timezone=True), nullable=False, default=utcnow_aware, index=True
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_marketing_consent_events_org_action_time",
+            "association_id",
+            "event_action",
+            "occurred_at",
+        ),
     )
 
 
@@ -2097,6 +2170,11 @@ class MembershipPayment(Base):
     hosted_checkout_url = Column(Text, nullable=True)
     raw_create_response = Column(GENERIC_JSON_TYPE, nullable=True)
     raw_last_status_response = Column(GENERIC_JSON_TYPE, nullable=True)
+    # Capability used by the public checkout-result poller.  Only the keyed
+    # hash is persisted; the raw value lives in an HttpOnly, path-scoped
+    # browser cookie.
+    status_token_hash = Column(String, nullable=True, index=True)
+    status_token_expires_at = Column(DateTime(timezone=True), nullable=True)
     confirmed_at = Column(DateTime(timezone=True), nullable=True)
     manual_marked_paid_by_user_id = Column(
         Integer, ForeignKey("admin_users.id"), nullable=True
@@ -2211,6 +2289,11 @@ class AffiliationApplication(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     public_token = Column(String(64), nullable=False, unique=True, index=True)
+    # New affiliation links persist only a keyed hash. ``public_token`` stays
+    # for backwards compatibility with already-issued plaintext capabilities.
+    public_token_hash = Column(String(64), nullable=True, unique=True, index=True)
+    public_token_expires_at = Column(DateTime(timezone=True), nullable=True)
+    public_token_version = Column(Integer, nullable=True)
 
     status = Column(
         String,

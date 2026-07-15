@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import os
 import re
 import secrets
@@ -20,6 +21,13 @@ from app.models import (
     OrganizationSharedDocument,
     OrganizationSharedDocumentAssignment,
 )
+from app.services.accounting_capability import (
+    AccountingCapabilityIntegrityError,
+    accounting_share_token,
+    accounting_share_token_hash,
+    initialize_accounting_share_capability,
+)
+from app.utils import hash_token
 
 SYSTEM_ACCOUNTING_CATEGORIES: tuple[dict[str, object], ...] = (
     {"code": "vat", "name": "IVA", "sort_order": 100},
@@ -322,12 +330,16 @@ def create_accounting_share_link(
 
     link = AccountingShareLink(
         document_id=document.id,
-        token=secrets.token_urlsafe(24),
+        # Temporary non-public verifier, needed only because the legacy column
+        # is NOT NULL before the database allocates the row id.
+        token=hash_token(secrets.token_urlsafe(32)),
         expires_at=expires_at,
         created_by_admin_id=created_by_admin_id,
         revoked_at=None,
     )
     db.add(link)
+    db.flush()
+    initialize_accounting_share_capability(link)
     db.flush()
     return link
 
@@ -341,12 +353,39 @@ def resolve_accounting_share_link(
     if not normalized:
         raise HTTPException(status_code=404, detail="Link di condivisione non valido.")
 
+    candidate_hash = accounting_share_token_hash(normalized)
     link = (
         db.query(AccountingShareLink)
         .options(joinedload(AccountingShareLink.document))
-        .filter(AccountingShareLink.token == normalized)
+        .filter(
+            AccountingShareLink.token_hash == candidate_hash,
+            AccountingShareLink.token_version.is_not(None),
+        )
         .first()
     )
+    if link is not None:
+        try:
+            canonical_token = accounting_share_token(link)
+        except AccountingCapabilityIntegrityError:
+            raise HTTPException(
+                status_code=404,
+                detail="Link di condivisione non trovato.",
+            ) from None
+        if not hmac.compare_digest(canonical_token, normalized):
+            link = None
+    else:
+        # Compatibility is intentionally restricted to rows without capability
+        # metadata, so a leaked verifier from a new row is never a valid bearer.
+        link = (
+            db.query(AccountingShareLink)
+            .options(joinedload(AccountingShareLink.document))
+            .filter(
+                AccountingShareLink.token == normalized,
+                AccountingShareLink.token_hash.is_(None),
+                AccountingShareLink.token_version.is_(None),
+            )
+            .first()
+        )
     if link is None or link.document is None:
         raise HTTPException(status_code=404, detail="Link di condivisione non trovato.")
     if link.revoked_at is not None:

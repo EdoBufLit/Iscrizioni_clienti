@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from fastapi import HTTPException
+from sqlalchemy import text
 from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
@@ -71,19 +72,160 @@ def get_booking_action_token(db: Session, *, raw_token: str) -> BookingActionTok
     return token
 
 
+def _lock_and_reload_booking_transition(
+    db: Session,
+    *,
+    raw_token: str,
+    booking_id: int,
+) -> BookingActionToken:
+    """Serialize confirm/cancel for one booking until the caller commits."""
+
+    bind = db.get_bind()
+    dialect_name = str(
+        getattr(getattr(bind, "dialect", None), "name", "") or ""
+    ).lower()
+    if dialect_name == "sqlite":
+        # The capability lookup opened a read transaction. End it before taking
+        # SQLite's cross-process write reservation, then reload all state.
+        db.rollback()
+        db.execute(text("BEGIN IMMEDIATE"))
+    elif dialect_name == "postgresql":
+        db.execute(
+            text(
+                "SELECT pg_advisory_xact_lock("
+                "hashtext('booking_customer_action'), "
+                "CAST(:booking_id AS INTEGER))"
+            ),
+            {"booking_id": int(booking_id)},
+        )
+    else:
+        (
+            db.query(Booking.id)
+            .filter(Booking.id == int(booking_id))
+            .with_for_update()
+            .one()
+        )
+
+    db.expire_all()
+    return get_booking_action_token(db, raw_token=raw_token)
+
+
 def consume_booking_action_token(
     db: Session,
     *,
     raw_token: str,
     note: str | None = None,
 ) -> dict[str, Any]:
-    token = get_booking_action_token(db, raw_token=raw_token)
-    if token.expires_at <= datetime.utcnow():
-        return {"ok": False, "reason": "expired", "booking": token.booking}
-
+    normalized_token = (raw_token or "").strip()
+    if not normalized_token:
+        raise HTTPException(status_code=404, detail="Link prenotazione non valido.")
+    request_started_at = datetime.utcnow()
+    now = request_started_at
+    has_note = bool((note or "").strip())
+    token = get_booking_action_token(db, raw_token=normalized_token)
     booking = token.booking
     action = token.action
-    token.used_at = datetime.utcnow()
+
+    # Claim the token in the database before producing any side effect. The
+    # conditional UPDATE is atomic: concurrent transactions can load the same
+    # URL, but only one can transition used_at from NULL and continue. When no
+    # note was supplied, a note token is intentionally excluded so validation
+    # can fail without consuming it.
+    transition_claimed = True
+    if action in {BOOKING_ACTION_CONFIRM, BOOKING_ACTION_CANCEL}:
+        # Confirm and cancel are separate one-time capabilities: a customer may
+        # legitimately confirm and later change their mind via the cancel link.
+        # A transaction-scoped booking lock serializes opposing requests. If the
+        # sibling was consumed after this request began, this request overlapped
+        # the winner: leave its token unused so it can be deliberately retried.
+        token = _lock_and_reload_booking_transition(
+            db,
+            raw_token=normalized_token,
+            booking_id=int(booking.id),
+        )
+        booking = token.booking
+        action = token.action
+        now = datetime.utcnow()
+        opposing_action = (
+            BOOKING_ACTION_CANCEL
+            if action == BOOKING_ACTION_CONFIRM
+            else BOOKING_ACTION_CONFIRM
+        )
+        opposing_used_at = (
+            db.query(BookingActionToken.used_at)
+            .filter(
+                BookingActionToken.booking_id == booking.id,
+                BookingActionToken.action == opposing_action,
+                BookingActionToken.used_at.isnot(None),
+            )
+            .order_by(BookingActionToken.used_at.desc())
+            .scalar()
+        )
+        transition_claimed = not (
+            opposing_used_at is not None
+            and opposing_used_at >= request_started_at
+        )
+        if token.used_at is not None or token.expires_at <= now:
+            claimed = 0
+        elif transition_claimed:
+            claimed = (
+                db.query(BookingActionToken)
+                .filter(
+                    BookingActionToken.id == token.id,
+                    BookingActionToken.action == action,
+                    BookingActionToken.used_at.is_(None),
+                    BookingActionToken.expires_at > now,
+                )
+                .update(
+                    {BookingActionToken.used_at: now},
+                    synchronize_session=False,
+                )
+            )
+        else:
+            claimed = 0
+    else:
+        claim_query = db.query(BookingActionToken).filter(
+            BookingActionToken.id == token.id,
+            BookingActionToken.action == BOOKING_ACTION_NOTE,
+            BookingActionToken.used_at.is_(None),
+            BookingActionToken.expires_at > now,
+        )
+        if not has_note:
+            claim_query = claim_query.filter(BookingActionToken.id == -1)
+        claimed = claim_query.update(
+            {BookingActionToken.used_at: now},
+            synchronize_session=False,
+        )
+
+    db.refresh(token)
+    if claimed < 1:
+        if token.expires_at <= now:
+            reason = "expired"
+        elif token.used_at is not None:
+            reason = "used"
+        elif action == BOOKING_ACTION_NOTE and not has_note:
+            raise HTTPException(
+                status_code=422,
+                detail="Inserisci una nota per la prenotazione.",
+            )
+        elif action in {BOOKING_ACTION_CONFIRM, BOOKING_ACTION_CANCEL} and not transition_claimed:
+            reason = "conflict"
+        else:
+            # Fail closed if the conditional claim was lost for any other
+            # reason; no status/event/notification is allowed in this branch.
+            reason = "used"
+        return {
+            "ok": False,
+            "reason": reason,
+            "action": action,
+            "booking": booking,
+        }
+
+    if action == BOOKING_ACTION_NOTE and not has_note:
+        # Defensive guard: the UPDATE excludes this state, so reaching it would
+        # indicate an unexpected database/ORM inconsistency.
+        raise HTTPException(status_code=422, detail="Inserisci una nota per la prenotazione.")
+
     if action == BOOKING_ACTION_CONFIRM:
         update_booking_status(
             db,
@@ -242,7 +384,9 @@ def render_booking_action_page(*, token: BookingActionToken, error: str | None =
         BOOKING_ACTION_CANCEL: "Annulla prenotazione",
         BOOKING_ACTION_NOTE: "Modifica o note",
     }.get(action, "Prenotazione")
-    disabled = token.expires_at <= datetime.utcnow()
+    used = token.used_at is not None
+    expired = token.expires_at <= datetime.utcnow()
+    disabled = used or expired
     summary = _booking_summary_lines(booking)
     if action == BOOKING_ACTION_NOTE and not disabled:
         form = (
@@ -253,6 +397,8 @@ def render_booking_action_page(*, token: BookingActionToken, error: str | None =
             "<button type='submit'>Invia nota</button>"
             "</form>"
         )
+    elif used:
+        form = "<p class='muted'>Questa risposta e' gia' stata registrata.</p>"
     elif disabled:
         form = "<p class='muted'>Questo link e' scaduto.</p>"
     else:
@@ -276,22 +422,34 @@ def render_booking_action_auto_submit_page(*, token: BookingActionToken) -> str:
         BOOKING_ACTION_CANCEL: "Annulla prenotazione",
     }.get(token.action, "Prenotazione")
     summary = _booking_summary_lines(booking)
+    if token.used_at is not None:
+        return _page_shell(
+            title=action_label,
+            body=(
+                f"<h1>{html.escape(action_label)}</h1>"
+                f"<div class='summary'>{summary}</div>"
+                "<p class='muted'>Questa risposta e' gia' stata registrata.</p>"
+            ),
+        )
+    if token.expires_at <= datetime.utcnow():
+        return _page_shell(
+            title=action_label,
+            body=(
+                f"<h1>{html.escape(action_label)}</h1>"
+                f"<div class='summary'>{summary}</div>"
+                "<p class='muted'>Questo link e' scaduto.</p>"
+            ),
+        )
     button_label = "Conferma adesso" if token.action == BOOKING_ACTION_CONFIRM else "Annulla adesso"
     return _page_shell(
         title=action_label,
         body=(
             f"<h1>{html.escape(action_label)}</h1>"
             f"<div class='summary'>{summary}</div>"
-            "<p class='muted'>Sto registrando la tua risposta...</p>"
+            "<p class='muted'>Controlla i dettagli e conferma esplicitamente l'azione.</p>"
             "<form method='post' id='booking-action-form'>"
             f"<button type='submit'>{html.escape(button_label)}</button>"
             "</form>"
-            "<script>"
-            "window.addEventListener('load',function(){"
-            "var form=document.getElementById('booking-action-form');"
-            "if(form&&window.navigator&&navigator.userAgent){setTimeout(function(){form.submit();},120);}"
-            "});"
-            "</script>"
         ),
     )
 

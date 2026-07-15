@@ -244,7 +244,10 @@ def generate_org_admin_welcome_guide_pdf(
         try:
             c.drawImage(ImageReader(logo_path), margin, page_h - 92, 88, 52, mask="auto", preserveAspectRatio=True)
         except Exception as exc:
-            logger.warning("Unable to draw org admin welcome guide logo path=%s: %s", logo_path, exc)
+            logger.warning(
+                "Unable to draw org admin welcome guide logo error_type=%s",
+                type(exc).__name__,
+            )
     c.setFillColor(colors.white)
     c.setFont("Helvetica-Bold", 24)
     c.drawString(margin, page_h - 116, "Guida rapida ASSO.N.A.M.")

@@ -426,7 +426,7 @@ def test_affiliation_draft_reports_video_not_ready_when_file_missing(
     assert payload["welcome_video_error"] is None
 
 
-def test_affiliation_create_reuses_recent_application_by_identity(client):
+def test_affiliation_create_reuses_recent_application_only_with_capability(client):
     email = f"draft-reuse-{uuid.uuid4().hex[:10]}@example.com"
     organization_name = f"Associazione Riuso {uuid.uuid4().hex[:8]}"
 
@@ -446,6 +446,7 @@ def test_affiliation_create_reuses_recent_application_by_identity(client):
             "applicant_email": email.upper(),
             "organization_name": f"  {organization_name}  ",
         },
+        headers={"X-Affiliation-Draft-Token": first_payload["public_token"]},
     )
     assert second_response.status_code == 200, second_response.text
     second_payload = second_response.json()

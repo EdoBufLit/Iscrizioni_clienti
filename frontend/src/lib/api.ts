@@ -345,6 +345,8 @@ export async function joinOrganization(
     accept_statute: boolean;
     accepted_statute_version: string | null;
     accept_privacy: boolean;
+    marketing_email_consent?: boolean;
+    password?: string;
     payment_method: "CASH" | "BONIFICO";
     membership_type?: "annual" | "temporary";
     id_document?: File | null;
@@ -378,6 +380,8 @@ export async function joinOrganization(
     body.append("accepted_statute_version", data.accepted_statute_version);
   }
   body.append("accept_privacy", String(data.accept_privacy));
+  body.append("marketing_email_consent", String(Boolean(data.marketing_email_consent)));
+  if (data.password) body.append("password", data.password);
   body.append("payment_method", data.payment_method);
   if (data.membership_type) body.append("membership_type", data.membership_type);
   body.append("client_version", clientVersion);
@@ -1039,6 +1043,8 @@ export type OrgAdminEmailCampaign = {
   association_id: number;
   name: string | null;
   source_template_id?: number | null;
+  template_type: OrgAdminEmailTemplateType;
+  communication_purpose: "promotional" | "service";
   subject: string;
   body_html?: string | null;
   body_text?: string | null;
@@ -1920,13 +1926,18 @@ export async function startOrgAdminWhatsAppChat(
 
 export async function fetchOrgAdminCommunicationAudienceEstimate(
   audienceType: OrgAdminCampaignAudienceType,
+  templateType?: OrgAdminEmailTemplateType,
 ): Promise<{
   audience_type: string;
   count: number;
+  template_type: OrgAdminEmailTemplateType;
+  communication_purpose: "promotional" | "service";
   available_audiences: string[];
 }> {
+  const params = new URLSearchParams({ audience_type: audienceType });
+  if (templateType) params.set("template_type", templateType);
   const res = await fetch(
-    `/api/org-admin/communications/audience-estimate?audience_type=${encodeURIComponent(audienceType)}`,
+    `/api/org-admin/communications/audience-estimate?${params.toString()}`,
   );
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore calcolo audience"));
@@ -1973,6 +1984,7 @@ export async function createOrgAdminEmailCampaign(data: {
   design?: Partial<OrgAdminEmailDesign> | null;
   linked_form_id?: number | null;
   source_template_id?: number | null;
+  template_type?: OrgAdminEmailTemplateType | null;
   editor_status?: OrgAdminEmailEditorStatus | null;
 }): Promise<{ ok: boolean; campaign: OrgAdminEmailCampaign }> {
   const res = await fetch("/api/org-admin/communications/campaigns", {
@@ -2002,6 +2014,7 @@ export async function updateOrgAdminEmailCampaign(
     design?: Partial<OrgAdminEmailDesign> | null;
     linked_form_id?: number | null;
     source_template_id?: number | null;
+    template_type?: OrgAdminEmailTemplateType | null;
     editor_status?: OrgAdminEmailEditorStatus | null;
   },
 ): Promise<{ ok: boolean; campaign: OrgAdminEmailCampaign }> {
@@ -2041,6 +2054,7 @@ export async function createMembershipPaymentCheckout(
     accept_statute: boolean;
     accepted_statute_version: string | null;
     accept_privacy: boolean;
+    marketing_email_consent?: boolean;
     membership_type?: "annual" | "temporary";
     id_document?: File | null;
   },
@@ -2062,6 +2076,7 @@ export async function createMembershipPaymentCheckout(
     body.append("accepted_statute_version", data.accepted_statute_version);
   }
   body.append("accept_privacy", String(data.accept_privacy));
+  body.append("marketing_email_consent", String(Boolean(data.marketing_email_consent)));
   if (data.membership_type) body.append("membership_type", data.membership_type);
   if (data.id_document) {
     body.append("id_document", data.id_document);

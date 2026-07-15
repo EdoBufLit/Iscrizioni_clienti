@@ -12,6 +12,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.log_redaction import redact_for_log
 from app.db import SessionLocal
 from app.models import EmailOutbox, EmailOutboxStatus, Member
 from app.services.email_sender import build_sender_payload
@@ -37,6 +38,10 @@ class ClaimedEmailOutboxJob:
     attempts: int
     priority: int
     dedupe_key: str | None
+
+
+class MarketingConsentSuppressedError(Exception):
+    """Internal control flow: a queued campaign lost delivery authorization."""
 
 
 def utcnow_aware() -> datetime:
@@ -269,6 +274,7 @@ def mark_sent(db: Session, outbox_id: str, provider_message_id: str | None) -> N
     outbox.last_error = None
     outbox.updated_at = sent_at
     _apply_post_send_effects(db, outbox, sent_at)
+    _scrub_completed_payload(outbox)
     db.flush()
 
 
@@ -284,12 +290,40 @@ def mark_failed(
     if outbox is None:
         raise ValueError(f"Outbox record not found: {outbox_id}")
     outbox.status = EmailOutboxStatus.FAILED.value
-    outbox.last_error = (error or "").strip() or "smtp_delivery_failed"
+    safe_error = str(redact_for_log((error or "").strip()))
+    outbox.last_error = safe_error or "smtp_delivery_failed"
     outbox.next_retry_at = next_retry_at
     outbox.updated_at = utcnow_aware()
     if final_failure:
         _apply_post_failure_effects(db, outbox, outbox.last_error)
+        _scrub_completed_payload(outbox)
     db.flush()
+
+
+def mark_suppressed(
+    db: Session,
+    outbox_id: str,
+    reason: str = "marketing_consent_withdrawn",
+) -> None:
+    outbox = db.query(EmailOutbox).filter(EmailOutbox.id == outbox_id).first()
+    if outbox is None:
+        raise ValueError(f"Outbox record not found: {outbox_id}")
+    outbox.status = EmailOutboxStatus.SUPPRESSED.value
+    outbox.last_error = reason
+    outbox.next_retry_at = utcnow_aware()
+    outbox.updated_at = utcnow_aware()
+    _apply_post_failure_effects(db, outbox, reason)
+    _scrub_completed_payload(outbox)
+    db.flush()
+
+
+def _scrub_completed_payload(outbox: EmailOutbox) -> None:
+    """Remove delivered/final email bodies, including raw capability links."""
+
+    outbox.payload_json = {
+        "redacted": True,
+        "delivery_finalized": True,
+    }
 
 
 def compute_backoff(attempts: int) -> datetime:
@@ -412,6 +446,50 @@ def _apply_post_failure_effects(
 
 def _send_claimed_job(job: ClaimedEmailOutboxJob) -> str:
     payload = job.payload_json or {}
+    if job.email_type == "association_campaign":
+        meta = payload.get("meta") if isinstance(payload, dict) else None
+        member_id = meta.get("member_id") if isinstance(meta, dict) else None
+        org_id = meta.get("org_id") if isinstance(meta, dict) else None
+        raw_purpose = (
+            str(meta.get("communication_purpose") or "").strip().lower()
+            if isinstance(meta, dict) and "communication_purpose" in meta
+            else None
+        )
+        # Queued rows created before purpose-aware campaigns have no purpose
+        # key.  They retain their historical service delivery behaviour.  New
+        # campaign jobs always carry an explicit purpose; malformed explicit
+        # values fail safely as promotional.
+        requires_marketing_consent = (
+            raw_purpose == "promotional"
+            or raw_purpose not in {None, "service", "promotional"}
+        )
+        allowed = False
+        if member_id is not None and org_id is not None:
+            try:
+                normalized_member_id = int(member_id)
+                normalized_org_id = int(org_id)
+            except (TypeError, ValueError):
+                normalized_member_id = 0
+                normalized_org_id = 0
+            if normalized_member_id > 0 and normalized_org_id > 0:
+                with SessionLocal() as db:
+                    member_query = db.query(Member).filter(
+                        Member.id == normalized_member_id,
+                        Member.org_id == normalized_org_id,
+                        Member.deleted_at.is_(None),
+                    )
+                    if requires_marketing_consent:
+                        member_query = member_query.filter(
+                            Member.marketing_email_consent.is_(True)
+                        )
+                    member = member_query.first()
+                    allowed = bool(
+                        member is not None
+                        and (member.email or "").strip().lower()
+                        == (job.to_email or "").strip().lower()
+                    )
+        if not allowed:
+            raise MarketingConsentSuppressedError("marketing_consent_withdrawn")
     text_body = str(payload.get("text_body") or "").strip()
     html_body = payload.get("html_body")
     inline_images = _deserialize_inline_images(payload.get("inline_images"))
@@ -447,6 +525,7 @@ def process_outbox_once(limit: int | None = None) -> dict[str, int]:
         "sent": 0,
         "retry_scheduled": 0,
         "permanent_failed": 0,
+        "suppressed": 0,
     }
     for job in jobs:
         try:
@@ -462,10 +541,22 @@ def process_outbox_once(limit: int | None = None) -> dict[str, int]:
                 job.attempts,
                 provider_message_id,
             )
+        except MarketingConsentSuppressedError:
+            with SessionLocal() as db:
+                mark_suppressed(db, job.id)
+                db.commit()
+            stats["suppressed"] += 1
+            logger.info(
+                "email_worker_result outbox_id=%s type=%s attempts=%s result=suppressed reason=marketing_consent_withdrawn",
+                job.id,
+                job.email_type,
+                job.attempts,
+            )
         except RetryableEmailDeliveryError as exc:
             next_retry_at = compute_backoff(job.attempts)
+            safe_error = str(redact_for_log(exc))
             with SessionLocal() as db:
-                mark_failed(db, job.id, str(exc), next_retry_at)
+                mark_failed(db, job.id, safe_error, next_retry_at)
                 db.commit()
             stats["retry_scheduled"] += 1
             logger.warning(
@@ -474,12 +565,13 @@ def process_outbox_once(limit: int | None = None) -> dict[str, int]:
                 job.email_type,
                 job.attempts,
                 next_retry_at.isoformat(),
-                exc,
+                safe_error,
             )
         except PermanentEmailDeliveryError as exc:
             next_retry_at = compute_permanent_failure_next_retry()
+            safe_error = str(redact_for_log(exc))
             with SessionLocal() as db:
-                mark_failed(db, job.id, str(exc), next_retry_at, final_failure=True)
+                mark_failed(db, job.id, safe_error, next_retry_at, final_failure=True)
                 db.commit()
             stats["permanent_failed"] += 1
             logger.error(
@@ -488,20 +580,22 @@ def process_outbox_once(limit: int | None = None) -> dict[str, int]:
                 job.email_type,
                 job.attempts,
                 next_retry_at.isoformat(),
-                exc,
+                safe_error,
             )
         except Exception as exc:
             next_retry_at = compute_backoff(job.attempts)
+            safe_error = f"{type(exc).__name__}: unexpected_email_delivery_error"
             with SessionLocal() as db:
-                mark_failed(db, job.id, str(exc), next_retry_at)
+                mark_failed(db, job.id, safe_error, next_retry_at)
                 db.commit()
             stats["retry_scheduled"] += 1
-            logger.exception(
-                "email_worker_result outbox_id=%s type=%s attempts=%s result=retry_unexpected next_retry_at=%s",
+            logger.error(
+                "email_worker_result outbox_id=%s type=%s attempts=%s result=retry_unexpected next_retry_at=%s error_type=%s",
                 job.id,
                 job.email_type,
                 job.attempts,
                 next_retry_at.isoformat(),
+                type(exc).__name__,
             )
     return stats
 
@@ -512,6 +606,7 @@ def drain_outbox_for_tests(*, max_loops: int = 20, limit: int | None = None) -> 
         "sent": 0,
         "retry_scheduled": 0,
         "permanent_failed": 0,
+        "suppressed": 0,
     }
     for _ in range(max_loops):
         stats = process_outbox_once(limit=limit)

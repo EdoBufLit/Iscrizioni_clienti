@@ -28,15 +28,23 @@ A minimal web application for association member signup, document upload, and me
    ```
 
 3. **Environment Variables**
-   Create a `.env` file or export these variables:
+   Create a `.env` file or export these variables. For development, explicitly
+   set `APP_ENV=local` before starting the app or Docker Compose:
+
+   ```bash
+   export APP_ENV=local
+   ```
 
    | Variable | Description | Default |
    |----------|-------------|---------|
+   | `APP_ENV` | Explicit runtime environment: `local`, `test`, `staging`, or `production` | `production` outside Compose; required by Compose |
    | `SECRET_KEY` | Secret for sessions and token hashing | `supersecretkey` |
    | `BASE_URL` | Public URL of the app (for emails) | `http://localhost:8000` |
    | `FRONTEND_URL` | Public URL of SPA (for member magic-link) | _(empty)_ |
    | `INGEST_RATE_LIMIT_MAX_REQUESTS` | Max requests per IP+org for public ingest window | `20` |
    | `INGEST_RATE_LIMIT_WINDOW_SECONDS` | Public ingest rate-limit window in seconds | `300` |
+   | `PUBLIC_FORM_RATE_LIMIT_MAX_REQUESTS` | Max submissions per IP+public form in the abuse window | `300` |
+   | `PUBLIC_FORM_RATE_LIMIT_WINDOW_SECONDS` | Public form abuse window in seconds | `300` |
    | `APP_DATA_DIR` | Base persistent data directory | `data` |
    | `UPLOAD_DIR` | Directory for uploaded files | `<APP_DATA_DIR>/uploads` |
    | `LOGIN_TOKEN_EXPIRE_MINUTES` | Login link validity | `15` |
@@ -93,6 +101,7 @@ docker compose --profile video-worker up -d --build affiliation-video-worker
 
 ```bash
 # 1. Set environment variable to disable create_all
+export APP_ENV=production
 export SKIP_CREATE_ALL=1
 
 # 2. Run Alembic migrations
@@ -101,6 +110,12 @@ alembic upgrade head
 # 3. Start application
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
+
+With `APP_ENV=production` or `APP_ENV=staging`, startup is fail-closed: `SECRET_KEY`
+must be a non-default value of at least 32 characters, `BASE_URL` and
+`FRONTEND_URL` must be public HTTPS origins, and both super-admin bootstrap
+credentials must be explicitly changed from their defaults. Local and test
+environments keep development defaults, but `local` must be selected explicitly.
 
 ### Why SKIP_CREATE_ALL?
 
@@ -164,6 +179,28 @@ docker logs -f email-worker
 ```
 
 Dettagli operativi e query utili sono in [`DEPLOY.md`](DEPLOY.md).
+
+### File Deletion Outbox Worker
+
+Le rimozioni di upload referenziati dal database vengono registrate nella stessa
+transazione in `file_deletion_outbox`. Il servizio `file-deletion-worker` le
+esegue solo dopo il commit, considera un file gia assente come successo e usa
+retry con backoff in caso di errore del filesystem.
+
+I soli percorsi ammessi sono relativi a `UPLOAD_DIR`; path assoluti, traversal,
+directory e symlink vengono rifiutati. Il deploy applica la migration prima di
+avviare il worker. Parametri opzionali:
+
+- `FILE_DELETION_BATCH_SIZE` (default `50`)
+- `FILE_DELETION_POLL_SECONDS` (default `5`)
+- `FILE_DELETION_STALE_AFTER_SECONDS` (default `300`)
+
+Esecuzione manuale di un solo batch:
+
+```bash
+docker compose exec -T file-deletion-worker \
+  python -m app.workers.file_deletion_worker --once
+```
 
 ### Association Email Sender Modes
 
@@ -265,16 +302,16 @@ DELETE /api/super-admin/orgs/{org_id}/integration-keys/{id}
 
 `raw_key` is returned only by `create` and `rotate` responses. In DB, only `key_hash` is stored.
 
-### Super-admin association delete/archive with card-range release
+### Super-admin association delete/archive with card-lot release
 
-To archive or purge a disabled association and release its card range for reuse:
+To archive or purge a disabled association and release its active card lots:
 
 ```http
 DELETE /api/admin/associations/{association_id}?mode=archive|purge&release_range=true&force=false|true
 ```
 
-- `mode=archive` (default): soft-archive (`is_active=false`, `deleted_at` set), keeps historical records, and releases assigned card batches.
-- `mode=purge`: hard-delete organization and related records.
+- `mode=archive` (default): soft-archive (`is_active=false`, `deleted_at` set), keeps historical records, and releases assigned card batches from future allocation. The historical number ranges remain reserved to prevent duplicate card numbers.
+- `mode=purge`: hard-delete organization and related records; deleted ranges can then be assigned again.
 - `force=true`: required for purge when dependencies exist.
 
 Response shape:

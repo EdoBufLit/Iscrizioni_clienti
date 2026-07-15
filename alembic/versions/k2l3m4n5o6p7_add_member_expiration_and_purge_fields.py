@@ -41,12 +41,40 @@ def _index_exists(table_name: str, index_name: str) -> bool:
     return any(idx.get("name") == index_name for idx in indexes)
 
 
+def _foreign_key_exists(table_name: str, constrained_columns: list[str]) -> bool:
+    try:
+        foreign_keys = _inspector().get_foreign_keys(table_name)
+    except Exception:
+        return False
+    expected = list(constrained_columns)
+    return any(foreign_key.get("constrained_columns") == expected for foreign_key in foreign_keys)
+
+
 def upgrade() -> None:
+    # These soft-delete fields historically existed only through the legacy
+    # create_all/bootstrap path. Add them here as well so an Alembic-only fresh
+    # install has the same Member schema before later migrations query it.
+    needs_deleted_by_fk = not _foreign_key_exists(
+        _TABLE, ["deleted_by_admin_id"]
+    )
     with op.batch_alter_table(_TABLE) as batch_op:
         if not _column_exists(_TABLE, "expired_at"):
             batch_op.add_column(sa.Column("expired_at", sa.DateTime(), nullable=True))
         if not _column_exists(_TABLE, "purged_at"):
             batch_op.add_column(sa.Column("purged_at", sa.DateTime(), nullable=True))
+        if not _column_exists(_TABLE, "deleted_at"):
+            batch_op.add_column(sa.Column("deleted_at", sa.DateTime(), nullable=True))
+        if not _column_exists(_TABLE, "deleted_by_admin_id"):
+            batch_op.add_column(
+                sa.Column("deleted_by_admin_id", sa.Integer(), nullable=True)
+            )
+        if needs_deleted_by_fk:
+            batch_op.create_foreign_key(
+                "fk_members_deleted_by_admin_id_admin_users",
+                "admin_users",
+                ["deleted_by_admin_id"],
+                ["id"],
+            )
 
     if not _index_exists(_TABLE, _INDEX_CARD_YEAR_DELETED):
         if _column_exists(_TABLE, "card_year") and _column_exists(_TABLE, "deleted_at"):
@@ -66,3 +94,6 @@ def downgrade() -> None:
             batch_op.drop_column("purged_at")
         if _column_exists(_TABLE, "expired_at"):
             batch_op.drop_column("expired_at")
+
+    # Keep the soft-delete fields on downgrade for compatibility with databases
+    # where the legacy bootstrap created them before this migration was stamped.

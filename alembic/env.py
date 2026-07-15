@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 from logging.config import fileConfig
@@ -11,6 +12,7 @@ sys.path.append(os.getcwd())
 
 from app.db import Base, SQLALCHEMY_DATABASE_URL
 from app import models  # Ensure models are registered
+from app import models_file_deletion  # Ensure file-deletion outbox is registered
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -18,8 +20,13 @@ config = context.config
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+if config.config_file_name is not None and not logging.getLogger().handlers:
+    # Alembic can run in-process during application startup and test database
+    # initialization.  Replacing an existing root configuration would remove
+    # framework/pytest handlers and make later security/operational events
+    # disappear depending on import order. Standalone Alembic still receives
+    # the logging configuration from alembic.ini.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # add your model's MetaData object here
 # for 'autogenerate' support

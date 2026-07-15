@@ -15,8 +15,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt requirements.lock ./
+# Install the reviewed, hash-locked dependency graph. requirements.txt stays
+# the human-maintained input; requirements.lock is the reproducible artifact
+# used by production builds.
+RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 
 COPY . .
 
@@ -25,4 +28,4 @@ COPY --from=frontend-build /frontend/dist /app/frontend/dist
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]

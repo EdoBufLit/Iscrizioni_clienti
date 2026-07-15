@@ -4,6 +4,7 @@ from datetime import datetime
 import uuid
 
 import pytest
+from sqlalchemy import func, or_
 
 from app.db import SessionLocal
 from app.models import CardBatch, Member, MemberStatus, NumberingScope, OperationLog, Organization
@@ -95,6 +96,30 @@ def _create_member(
     return member
 
 
+def _next_free_scope_start(db, scope_id: int, *, gap: int = 100) -> int:
+    """Return a range start that is not occupied by prior tests in a shared scope."""
+
+    batch_max = (
+        db.query(func.max(CardBatch.end_no))
+        .filter(CardBatch.numbering_scope_id == scope_id)
+        .scalar()
+    )
+    member_max = (
+        db.query(func.max(Member.card_no))
+        .outerjoin(CardBatch, Member.batch_id == CardBatch.id)
+        .filter(
+            Member.card_no.isnot(None),
+            or_(
+                Member.numbering_scope_id == scope_id,
+                CardBatch.numbering_scope_id == scope_id,
+            ),
+        )
+        .scalar()
+    )
+    highest_used = max(int(batch_max or 0), int(member_max or 0))
+    return highest_used + gap
+
+
 def test_allocate_uses_legacy_branch_when_scope_is_missing(db):
     year = datetime.utcnow().year
     org = _create_org(db, "numbering-legacy")
@@ -115,6 +140,7 @@ def test_allocate_shared_scope_uses_only_batches_of_the_emitting_org(db):
     year = datetime.utcnow().year
     central_scope = ensure_assonam_central_scope(db)
     db.commit()
+    base = _next_free_scope_start(db, central_scope.id)
 
     golden_age = _create_org(db, "numbering-shared-ga", numbering_scope_id=central_scope.id)
     tag = _create_org(db, "numbering-shared-tag", numbering_scope_id=central_scope.id)
@@ -123,16 +149,16 @@ def test_allocate_shared_scope_uses_only_batches_of_the_emitting_org(db):
         org_id=golden_age.id,
         numbering_scope_id=central_scope.id,
         year=year,
-        start_no=1,
-        end_no=10,
+        start_no=base,
+        end_no=base + 9,
     )
     _create_batch(
         db,
         org_id=tag.id,
         numbering_scope_id=central_scope.id,
         year=year,
-        start_no=100,
-        end_no=110,
+        start_no=base + 100,
+        end_no=base + 110,
     )
 
     first = allocate_next_card(db, golden_age.id, year)
@@ -140,8 +166,8 @@ def test_allocate_shared_scope_uses_only_batches_of_the_emitting_org(db):
     second = allocate_next_card(db, tag.id, year)
     db.commit()
 
-    assert first.card_no == 1
-    assert second.card_no == 100
+    assert first.card_no == base
+    assert second.card_no == base + 100
     assert first.numbering_scope_id == central_scope.id
     assert second.numbering_scope_id == central_scope.id
     assert first.batch_id != second.batch_id
@@ -203,6 +229,7 @@ def test_scoped_allocator_progresses_only_to_next_batch_of_same_org(db):
     year = datetime.utcnow().year
     central_scope = ensure_assonam_central_scope(db)
     db.commit()
+    base = _next_free_scope_start(db, central_scope.id)
 
     golden_age = _create_org(db, "numbering-shared-progress-ga", numbering_scope_id=central_scope.id)
     tag = _create_org(db, "numbering-shared-progress-tag", numbering_scope_id=central_scope.id)
@@ -211,24 +238,24 @@ def test_scoped_allocator_progresses_only_to_next_batch_of_same_org(db):
         org_id=golden_age.id,
         numbering_scope_id=central_scope.id,
         year=year,
-        start_no=1,
-        end_no=10,
+        start_no=base,
+        end_no=base + 9,
     )
     _create_batch(
         db,
         org_id=tag.id,
         numbering_scope_id=central_scope.id,
         year=year,
-        start_no=100,
-        end_no=101,
+        start_no=base + 100,
+        end_no=base + 101,
     )
     _create_batch(
         db,
         org_id=tag.id,
         numbering_scope_id=central_scope.id,
         year=year,
-        start_no=200,
-        end_no=201,
+        start_no=base + 200,
+        end_no=base + 201,
     )
 
     first = allocate_next_card(db, tag.id, year)
@@ -238,7 +265,11 @@ def test_scoped_allocator_progresses_only_to_next_batch_of_same_org(db):
     third = allocate_next_card(db, tag.id, year)
     db.commit()
 
-    assert [first.card_no, second.card_no, third.card_no] == [100, 101, 200]
+    assert [first.card_no, second.card_no, third.card_no] == [
+        base + 100,
+        base + 101,
+        base + 200,
+    ]
 
 
 def test_release_card_number_never_rewinds_batch_of_other_org_in_same_scope(db):

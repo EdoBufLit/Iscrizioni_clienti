@@ -68,6 +68,8 @@ from app.models_affiliation import (
     AffiliationPaymentStatus,
 )
 from app.services.email_outbox import build_email_payload, enqueue_email
+from app.services.file_deletion import enqueue_file_deletion
+from app.services.csv_safety import neutralize_csv_formula
 from app.services.email_sender import (
     build_sender_payload,
     resolve_email_sender,
@@ -76,6 +78,7 @@ from app.services.email_sender import (
 from app.services.email_campaigns import (
     ALLOWED_AUDIENCE_TYPES,
     ALLOWED_RECIPIENT_MODES,
+    communication_purpose_for_template_type,
     campaign_status_counts,
     create_campaign_draft,
     deserialize_selected_member_ids,
@@ -139,6 +142,7 @@ from app.services.forms import (
 from app.services.whatsapp_automation import (
     maybe_send_form_submission_decision_whatsapp_automations,
 )
+from app.services.accounting_capability import accounting_share_token
 from app.services.whatsapp_automations import (
     ALLOWED_WHATSAPP_PHONE_SOURCES,
     ALLOWED_WHATSAPP_RECIPIENTS,
@@ -171,6 +175,9 @@ from app.services.booking_rooms import (
     validate_booking_assignment,
 )
 from app.services.card_allocation import release_card_number
+from app.services.sqlite_card_allocation_guard import (
+    sqlite_card_allocation_request_guard,
+)
 from app.services.card_inventory import compute_org_card_stock
 from app.services.card_lot_registry import format_card_number
 from app.services.card_pdf import generate_card_pdf_bytes
@@ -246,7 +253,8 @@ from app.services.wallet_asset_upload import (
 from app.services.whatsapp_provider import whatsapp_feature_enabled
 from app.config import settings
 from app.log_redaction import hash_identifier, redact_for_log, redact_url
-from app.middleware import auth_limiter, get_client_ip
+from app.middleware import get_client_ip
+from app.services.security_rate_limits import enforce_auth_rate_limit
 from app import audit
 import logging
 
@@ -782,7 +790,7 @@ def _serialize_org_admin_accounting_share_link(
     base_url = str(request.base_url).rstrip("/")
     return {
         "id": link.id,
-        "url": f"{base_url}/api/public/accounting-share/{link.token}",
+        "url": f"{base_url}/api/public/accounting-share/{accounting_share_token(link)}",
         "expires_at": link.expires_at.isoformat() if link.expires_at else None,
         "revoked_at": link.revoked_at.isoformat() if link.revoked_at else None,
         "created_at": link.created_at.isoformat() if link.created_at else None,
@@ -939,6 +947,16 @@ def _serialize_email_campaign(
         "association_id": campaign.association_id,
         "name": campaign.name,
         "source_template_id": getattr(campaign, "source_template_id", None),
+        "template_type": normalize_email_template_type(
+            getattr(campaign, "template_type", None)
+            or getattr(getattr(campaign, "source_template", None), "template_type", None)
+            or EMAIL_TEMPLATE_TYPE_GENERIC_NOTICE
+        ),
+        "communication_purpose": communication_purpose_for_template_type(
+            getattr(campaign, "template_type", None)
+            or getattr(getattr(campaign, "source_template", None), "template_type", None)
+            or EMAIL_TEMPLATE_TYPE_GENERIC_NOTICE
+        ),
         "subject": campaign.subject,
         "audience_type": campaign.audience_type,
         "recipient_mode": recipient_mode,
@@ -1726,7 +1744,7 @@ def request_magic_link(
     Send a magic-link email to an active org admin.
     Always returns 200 to prevent email enumeration.
     """
-    auth_limiter.check(get_client_ip(request))
+    enforce_auth_rate_limit(db, client_ip=get_client_ip(request))
     client_ip = get_client_ip(request)
     normalized_email = _normalize_login_email(email)
     email_hash = _hash_email_for_log(normalized_email)
@@ -1812,10 +1830,9 @@ def request_magic_link(
         )
 
         logger.info(
-            "org_admin_magic_link_send_enqueuing email_hash=%s admin_id=%s normalized_to_email=%s",
+            "org_admin_magic_link_send_enqueuing email_hash=%s admin_id=%s",
             email_hash,
             admin.id,
-            redact_for_log(normalized_email),
         )
         outbox_id = enqueue_email(
             db,
@@ -1882,7 +1899,7 @@ def verify_magic_link(
     db: Session = Depends(get_db),
 ):
     """Verify a magic-link token and create an org-admin session."""
-    auth_limiter.check(get_client_ip(request))
+    enforce_auth_rate_limit(db, client_ip=get_client_ip(request))
     client_ip = get_client_ip(request)
     token_hash = hash_token(token)
     token_hash_prefix = token_hash[:12]
@@ -1974,7 +1991,7 @@ def verify_magic_code(
     db: Session = Depends(get_db),
 ):
     """Verify a short org-admin login code without leaving the app/PWA."""
-    auth_limiter.check(get_client_ip(request))
+    enforce_auth_rate_limit(db, client_ip=get_client_ip(request))
     client_ip = get_client_ip(request)
     normalized_email = _normalize_login_email(email)
     normalized_code = _normalize_org_admin_login_code(code)
@@ -2296,6 +2313,7 @@ class CreateEmailCampaignBody(BaseModel):
     design: Optional[dict[str, object]] = None
     linked_form_id: Optional[int] = None
     source_template_id: Optional[int] = None
+    template_type: Optional[str] = Field(default=None, max_length=80)
     editor_status: Optional[str] = Field(default=None, max_length=40)
 
 
@@ -3670,13 +3688,7 @@ def delete_communication_asset(
     if asset is None:
         raise HTTPException(status_code=404, detail="Asset non trovato.")
 
-    file_path = os.path.join(settings.UPLOAD_DIR, asset.storage_path)
-    if os.path.exists(file_path):
-        try:
-            os.remove(file_path)
-        except OSError:
-            logger.warning("Failed to delete communication asset file path=%s", redact_for_log(file_path))
-
+    enqueue_file_deletion(db, asset.storage_path)
     db.delete(asset)
     db.commit()
     return {"ok": True, "deleted_asset_id": asset_id}
@@ -3829,6 +3841,7 @@ def delete_whatsapp_automation(
 def get_communications_audience_estimate(
     request: Request,
     audience_type: str = Query(...),
+    template_type: Optional[str] = Query(default=None),
     db: Session = Depends(get_db),
 ):
     admin = _get_current_org_admin(request, db)
@@ -3837,14 +3850,26 @@ def get_communications_audience_estimate(
 
     _require_active_communications_module(admin.organization)
     normalized_audience = (audience_type or "").strip()
+    # Calls from older clients did not include a campaign type and historically
+    # received the marketing-consented estimate.  New clients pass the already
+    # selected type, so service-message estimates include all eligible members.
+    normalized_template_type = normalize_email_template_type(
+        template_type or "newsletter"
+    )
+    communication_purpose = communication_purpose_for_template_type(
+        normalized_template_type
+    )
     recipients = resolve_audience_recipients(
         db,
         association_id=admin.org_id,
         audience_type=normalized_audience,
+        require_marketing_consent=communication_purpose == "promotional",
     )
     return {
         "audience_type": normalized_audience,
         "count": len(recipients),
+        "template_type": normalized_template_type,
+        "communication_purpose": communication_purpose,
         "available_audiences": sorted(ALLOWED_AUDIENCE_TYPES),
     }
 
@@ -3938,6 +3963,7 @@ def create_communications_campaign_from_template(
             form_id=body.linked_form_id if body.linked_form_id is not None else template.linked_form_id,
         ),
         source_template_id=template.id,
+        template_type=getattr(template, "template_type", None),
         editor_status=EMAIL_EDITOR_STATUS_DRAFT,
         grapesjs_project_json=getattr(template, "grapesjs_project_json", None),
         mjml_source=getattr(template, "mjml_source", None),
@@ -4093,6 +4119,7 @@ def create_communications_campaign(
             if body.source_template_id
             else None
         ),
+        template_type=body.template_type,
         editor_status=body.editor_status,
         grapesjs_project_json=body.grapesjs_project_json,
         mjml_source=body.mjml_source,
@@ -4198,6 +4225,7 @@ def update_communications_campaign(
             if body.source_template_id
             else None
         ),
+        template_type=body.template_type,
         editor_status=body.editor_status,
         grapesjs_project_json=body.grapesjs_project_json,
         mjml_source=body.mjml_source,
@@ -5936,7 +5964,10 @@ def send_member_access(
     }
 
 
-@router.post("/members/{member_id}/decision")
+@router.post(
+    "/members/{member_id}/decision",
+    dependencies=[Depends(sqlite_card_allocation_request_guard)],
+)
 def member_decision(
     request: Request,
     member_id: int,
@@ -6011,7 +6042,10 @@ def member_decision(
     return {"ok": True, "status": member.status.value}
 
 
-@router.post("/members/{member_id}/payments/manual")
+@router.post(
+    "/members/{member_id}/payments/manual",
+    dependencies=[Depends(sqlite_card_allocation_request_guard)],
+)
 def create_manual_payment(
     request: Request,
     member_id: int,
@@ -6439,18 +6473,17 @@ def export_members_csv(
         ]
     )
     for m in members:
-        writer.writerow(
-            [
-                m.first_name or "",
-                m.last_name or "",
-                m.email or "",
-                m.fiscal_code or "",
-                m.phone or "",
-                m.status.value if m.status else "",
-                m.card_no if m.card_no is not None else "",
-                m.joined_at.strftime("%Y-%m-%d") if m.joined_at else "",
-            ]
-        )
+        values = [
+            m.first_name or "",
+            m.last_name or "",
+            m.email or "",
+            m.fiscal_code or "",
+            m.phone or "",
+            m.status.value if m.status else "",
+            m.card_no if m.card_no is not None else "",
+            m.joined_at.strftime("%Y-%m-%d") if m.joined_at else "",
+        ]
+        writer.writerow([neutralize_csv_formula(value) for value in values])
 
     buf.seek(0)
     return StreamingResponse(

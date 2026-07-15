@@ -222,6 +222,20 @@ def test_register_is_scoped_to_org_and_not_blocked_by_other_org_deleted_member(c
         card_no=93001,
     )
 
+    signup_payload = build_join_submit_data(
+        first_name="Nuovo",
+        last_name="Registro",
+        email=email,
+        phone="3334445555",
+        accept_statute="false",
+        accept_privacy="true",
+    )
+    signup = client.post(
+        f"/api/join/{org_b.slug}/submit",
+        data=signup_payload,
+    )
+    assert signup.status_code == 200, signup.text
+
     res = client.post(
         "/api/auth/register",
         data={
@@ -230,7 +244,7 @@ def test_register_is_scoped_to_org_and_not_blocked_by_other_org_deleted_member(c
             "first_name": "Nuovo",
             "last_name": "Registro",
             "phone": "3334445555",
-            "fiscal_code": f"RGB{suffix[:8].upper()}",
+            "fiscal_code": signup_payload["fiscal_code"],
             "org_slug": org_b.slug,
         },
     )

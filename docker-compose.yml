@@ -2,6 +2,7 @@ version: '3.8'
 
 x-app-env: &app-env
   PYTHONUNBUFFERED: "1"
+  APP_ENV: ${APP_ENV:?Set APP_ENV explicitly to local, test, staging, or production}
   DATABASE_URL: ${DATABASE_URL:-sqlite:////app/data/app.db}
   SKIP_CREATE_ALL: "1"
   SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL}
@@ -21,6 +22,9 @@ x-app-env: &app-env
   EMAIL_OUTBOX_BATCH_SIZE: ${EMAIL_OUTBOX_BATCH_SIZE:-50}
   EMAIL_OUTBOX_POLL_SECONDS: ${EMAIL_OUTBOX_POLL_SECONDS:-3}
   EMAIL_OUTBOX_STALE_AFTER_SECONDS: ${EMAIL_OUTBOX_STALE_AFTER_SECONDS:-300}
+  FILE_DELETION_BATCH_SIZE: ${FILE_DELETION_BATCH_SIZE:-50}
+  FILE_DELETION_POLL_SECONDS: ${FILE_DELETION_POLL_SECONDS:-5}
+  FILE_DELETION_STALE_AFTER_SECONDS: ${FILE_DELETION_STALE_AFTER_SECONDS:-300}
   BASE_URL: ${BASE_URL}
   FRONTEND_URL: ${FRONTEND_URL}
   SECRET_KEY: ${SECRET_KEY}
@@ -40,6 +44,10 @@ x-app-env: &app-env
   ENABLE_WHATSAPP: ${ENABLE_WHATSAPP:-false}
   WHATSAPP_PROVIDER: ${WHATSAPP_PROVIDER:-green_api}
   GREEN_API_BASE_URL: ${GREEN_API_BASE_URL:-https://api.green-api.com}
+  GREEN_API_WEBHOOK_SECRET: ${GREEN_API_WEBHOOK_SECRET:-}
+  GREEN_API_WEBHOOK_REQUIRE_SECRET: ${GREEN_API_WEBHOOK_REQUIRE_SECRET:-false}
+  GREEN_API_WEBHOOK_ALLOWED_IPS: ${GREEN_API_WEBHOOK_ALLOWED_IPS:-46.101.109.139,51.250.12.167,51.250.84.44,51.250.95.149,89.169.137.216,158.160.49.84,165.22.93.202,167.172.162.71,104.248.252.93,158.160.139.176,64.226.111.11,207.154.255.195}
+  WHATSAPP_WEBHOOK_MAX_BODY_BYTES: ${WHATSAPP_WEBHOOK_MAX_BODY_BYTES:-524288}
   EVOLUTION_API_BASE_URL: ${EVOLUTION_API_BASE_URL:-http://evolution-api:8080}
   EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-}
   WHATSAPP_WEBHOOK_BATCH_SIZE: ${WHATSAPP_WEBHOOK_BATCH_SIZE:-50}
@@ -71,6 +79,7 @@ x-app-env: &app-env
 
 x-video-worker-env: &video-worker-env
   PYTHONUNBUFFERED: "1"
+  APP_ENV: ${APP_ENV:?Set APP_ENV explicitly to local, test, staging, or production}
   DATABASE_URL: ${DATABASE_URL:-sqlite:////app/data/app.db}
   BASE_URL: ${BASE_URL}
   FRONTEND_URL: ${FRONTEND_URL}
@@ -107,7 +116,9 @@ services:
     depends_on:
       - db
     ports:
-      - "8000:8000"
+      # Nginx runs on the host and proxies to this loopback socket. Do not
+      # expose Uvicorn directly on every interface, bypassing TLS and limits.
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./data:/app/data
 
@@ -157,6 +168,22 @@ services:
       timeout: 5s
       retries: 3
     mem_limit: ${LOW_CARDS_WORKER_MEM_LIMIT:-512m}
+    restart: always
+
+  file-deletion-worker:
+    image: ${APP_RUNTIME_IMAGE:-assonam/app-runtime:local}
+    depends_on:
+      - db
+    command: python -m app.workers.file_deletion_worker
+    volumes:
+      - ./data:/app/data
+    environment: *app-env
+    healthcheck:
+      test: ["CMD", "python", "-c", "print('ok')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    mem_limit: ${FILE_DELETION_WORKER_MEM_LIMIT:-256m}
     restart: always
 
   whatsapp-webhook-worker:

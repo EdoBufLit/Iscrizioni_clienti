@@ -2128,7 +2128,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
 
                       <div>
                         <div className="flex items-center justify-between gap-2">
-                          <label className="block text-xs font-medium text-neutral-600">Webhook secret</label>
+                          <label className="block text-xs font-medium text-neutral-600">Webhook secret (opzionale)</label>
                           <button
                             type="button"
                             className="text-xs font-semibold text-brand"
@@ -2155,9 +2155,12 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                           placeholder={
                             whatsAppProviderFormData.webhook_secret_configured
                               ? "Lascia vuoto per mantenere il secret salvato"
-                              : "Secret opzionale per webhook"
+                              : "Senza secret viene verificato l'IP ufficiale Green API"
                           }
                         />
+                        <p className="mt-1.5 text-xs leading-5 text-neutral-500">
+                          Se impostato, il secret viene sempre richiesto. Senza secret sono accettati solo webhook da IP ufficiali Green API e da un&apos;istanza attiva configurata.
+                        </p>
                         <label className="mt-2 inline-flex items-center gap-2 text-xs text-neutral-500">
                           <input
                             type="checkbox"

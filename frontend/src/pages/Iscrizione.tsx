@@ -66,6 +66,7 @@ type FormData = {
   password: string;
   documentoIdentita: File | null;
   privacy: boolean;
+  marketingEmailConsent: boolean;
   statuto: boolean;
 };
 
@@ -85,6 +86,7 @@ const initial: FormData = {
   password: "",
   documentoIdentita: null,
   privacy: false,
+  marketingEmailConsent: false,
   statuto: false,
 };
 
@@ -106,8 +108,8 @@ function validateStep1(
   adultsOnlyEnabled: boolean,
 ): Record<string, string> {
   const e: Record<string, string> = {};
-  if (!f.nome.trim()) e.nome = "Il campo nome ? obbligatorio.";
-  if (!f.cognome.trim()) e.cognome = "Il campo cognome ? obbligatorio.";
+  if (!f.nome.trim()) e.nome = "Il campo nome è obbligatorio.";
+  if (!f.cognome.trim()) e.cognome = "Il campo cognome è obbligatorio.";
   if (!f.dataNascita) e.dataNascita = "Inserisci la data di nascita.";
   else if (adultsOnlyEnabled && !isAtLeast18YearsOld(f.dataNascita)) {
     e.dataNascita = "Per questa associazione l'iscrizione è consentita solo ai maggiori di 18 anni.";
@@ -118,12 +120,12 @@ function validateStep1(
       e.comuneNascita = "Seleziona lo stato estero di nascita.";
     }
   } else if (!f.comuneNascita.trim()) {
-    e.comuneNascita = "Il comune di nascita ? obbligatorio.";
+    e.comuneNascita = "Il comune di nascita è obbligatorio.";
   } else if (!f.comuneNascitaCode) {
     e.comuneNascita = "Seleziona un comune valido dall'elenco.";
   }
   if (!f.codiceFiscale.trim()) {
-    e.codiceFiscale = "Il codice fiscale ? obbligatorio.";
+    e.codiceFiscale = "Il codice fiscale è obbligatorio.";
   } else if (
     !validateCodiceFiscale({
       fiscalCode: f.codiceFiscale,
@@ -134,14 +136,14 @@ function validateStep1(
       birthPlaceCode: f.comuneNascitaCode,
     }).isFormallyValid
   ) {
-    e.codiceFiscale = "Il codice fiscale non ? valido. Verifica formato e checksum.";
+    e.codiceFiscale = "Il codice fiscale non è valido. Verifica formato e checksum.";
   }
   if (!f.email.trim()) {
-    e.email = "L'indirizzo email ? obbligatorio.";
+    e.email = "L'indirizzo email è obbligatorio.";
   } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email)) {
     e.email = "L'indirizzo email non sembra valido.";
   }
-  if (!f.telefono.trim()) e.telefono = "Il numero di telefono ? obbligatorio.";
+  if (!f.telefono.trim()) e.telefono = "Il numero di telefono è obbligatorio.";
   if (!requireOnlinePayment && !f.modalitaPagamento) {
     e.modalitaPagamento = "Seleziona la modalità di pagamento.";
   }
@@ -629,7 +631,7 @@ const Iscrizione = () => {
   });
   const liveFiscalCodeError =
     form.codiceFiscale.trim() && !fiscalCodeValidation.isFormallyValid
-      ? "Il codice fiscale non ? valido. Verifica formato e checksum."
+      ? "Il codice fiscale non è valido. Verifica formato e checksum."
       : "";
   const fiscalCodeWarning =
     form.codiceFiscale.trim() &&
@@ -699,7 +701,7 @@ const Iscrizione = () => {
   };
 
   const handleCheck =
-    (field: "privacy" | "statuto") =>
+    (field: "privacy" | "marketingEmailConsent" | "statuto") =>
     (event: ChangeEvent<HTMLInputElement>) =>
       updateField(field, event.target.checked);
 
@@ -852,6 +854,7 @@ const Iscrizione = () => {
           accept_statute: form.statuto,
           accepted_statute_version: org?.has_statute ? org.statute_version || null : null,
           accept_privacy: form.privacy,
+          marketing_email_consent: form.marketingEmailConsent,
           membership_type: form.membershipType,
           id_document: form.documentoIdentita,
         });
@@ -873,6 +876,8 @@ const Iscrizione = () => {
         accept_statute: form.statuto,
         accepted_statute_version: org?.has_statute ? org.statute_version || null : null,
         accept_privacy: form.privacy,
+        marketing_email_consent: form.marketingEmailConsent,
+        password: form.password,
         payment_method: form.modalitaPagamento as "CASH" | "BONIFICO",
         membership_type: form.membershipType,
         id_document: form.documentoIdentita,
@@ -985,7 +990,7 @@ const Iscrizione = () => {
           <div className="surface mx-auto max-w-2xl p-8">
             <h1 className="text-lg font-semibold text-neutral-900">Associazione non trovata</h1>
             <p className="mt-3 text-sm leading-7 text-neutral-600">
-              Il collegamento non ? corretto oppure l'associazione non è disponibile.
+              Il collegamento non è corretto oppure l'associazione non è disponibile.
             </p>
             <div className="mt-6">
               <Link className="btn-primary" to="/associazioni">
@@ -1432,7 +1437,7 @@ const Iscrizione = () => {
                         title="Documento di identità"
                         description={
                           membershipDocumentRequired
-                            ? "Carica una copia leggibile del documento in corso di validità. Questo passaggio ? obbligatorio."
+                            ? "Carica una copia leggibile del documento in corso di validità. Questo passaggio è obbligatorio."
                             : "Se preferisci, puoi allegare subito un documento valido. Il passaggio resta facoltativo."
                         }
                         rightSlot={
@@ -1531,8 +1536,8 @@ const Iscrizione = () => {
                     <div className="signup-wizard-card px-6 py-7 md:px-10 md:py-10">
                       <CardHeader
                         iconPath="M12 21c4.97-1.279 8.25-5.775 8.25-10.965V5.625l-8.25-3.375-8.25 3.375v4.41C3.75 15.225 7.03 19.721 12 21Zm0-11.25v3.75m0 3h.008v.008H12v-.008Z"
-                        title="Dichiarazioni obbligatorie"
-                        description="Per completare l'iscrizione devi confermare di aver preso visione delle informazioni richieste."
+                        title="Dichiarazioni e preferenze"
+                        description="Conferma le dichiarazioni richieste per l'iscrizione; la scelta sulle comunicazioni promozionali resta sempre facoltativa."
                       />
 
                       {!org.has_statute ? (
@@ -1545,7 +1550,7 @@ const Iscrizione = () => {
                         <CheckboxCard
                           checked={form.privacy}
                           error={errors.privacy}
-                          label="Informativa sulla privacy"
+                          label="Presa visione dell'informativa privacy"
                           onChange={handleCheck("privacy")}
                           description={
                             <>
@@ -1563,6 +1568,13 @@ const Iscrizione = () => {
                               </Link>
                             </>
                           }
+                        />
+
+                        <CheckboxCard
+                          checked={form.marketingEmailConsent}
+                          label="Comunicazioni promozionali via email (facoltativo)"
+                          onChange={handleCheck("marketingEmailConsent")}
+                          description="Acconsento a ricevere via email comunicazioni informative e promozionali su attività, eventi e iniziative dell'associazione. Posso revocare il consenso in qualsiasi momento tramite il link presente nelle email."
                         />
 
                         {org.has_statute ? (

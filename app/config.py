@@ -1,6 +1,48 @@
+import ipaddress
 import logging
 import os
 from urllib.parse import urlparse
+
+
+VALID_APP_ENVS = frozenset({"local", "test", "staging", "production"})
+DEPLOYED_APP_ENVS = frozenset({"staging", "production"})
+_INSECURE_SECRET_KEYS = frozenset(
+    {
+        "",
+        "supersecretkey",
+        "secret",
+        "changeme",
+        "change-me",
+        "replace-me",
+        "your-secret-key",
+        "default",
+    }
+)
+_DEFAULT_SUPER_ADMIN_EMAILS = frozenset(
+    {"", "admin@assonam.it", "admin@example.com", "root@example.com"}
+)
+_DEFAULT_SUPER_ADMIN_PASSWORDS = frozenset(
+    {"", "admin", "password", "changeme", "change-me", "default", "secret"}
+)
+
+# Published by Green API for WhatsApp Webhook Endpoint traffic. Keep the
+# deployment documentation and tests in sync when the provider changes it.
+# Source checked 2026-07-15:
+# https://green-api.com/en/docs/api/receiving/technology-webhook-endpoint/
+GREEN_API_OFFICIAL_WEBHOOK_IPS = (
+    "46.101.109.139",
+    "51.250.12.167",
+    "51.250.84.44",
+    "51.250.95.149",
+    "89.169.137.216",
+    "158.160.49.84",
+    "165.22.93.202",
+    "167.172.162.71",
+    "104.248.252.93",
+    "158.160.139.176",
+    "64.226.111.11",
+    "207.154.255.195",
+)
 
 
 def _env_bool(name: str, *, default: bool = False) -> bool:
@@ -18,6 +60,40 @@ def _env_optional(name: str) -> str | None:
     return normalized or None
 
 
+def parse_ip_network_allowlist(
+    value: str | tuple[str, ...] | list[str] | None,
+) -> tuple[str, ...]:
+    """Normalize an IP/CIDR allowlist and reject an accept-all network."""
+
+    if value is None:
+        return ()
+    raw_entries = value.replace("\n", ",").split(",") if isinstance(value, str) else value
+    normalized: list[str] = []
+    for raw_entry in raw_entries:
+        entry = str(raw_entry or "").strip()
+        if not entry:
+            continue
+        try:
+            network = ipaddress.ip_network(entry, strict=False)
+        except ValueError as exc:
+            raise ValueError(f"Invalid IP/CIDR in allowlist: {entry}") from exc
+        if network.prefixlen == 0:
+            raise ValueError("An accept-all IP network is not allowed")
+        canonical = str(network)
+        if canonical not in normalized:
+            normalized.append(canonical)
+    return tuple(normalized)
+
+
+def _env_app_env() -> str:
+    raw = os.getenv("APP_ENV")
+    if raw is None:
+        # A directly-run production image must never become local merely because
+        # its operator forgot APP_ENV. Local development is an explicit opt-in.
+        return "production"
+    return raw.strip().lower()
+
+
 def _url_hostname(raw_url: str | None) -> str:
     value = (raw_url or "").strip()
     if not value:
@@ -27,7 +103,57 @@ def _url_hostname(raw_url: str | None) -> str:
 
 
 def _is_local_hostname(hostname: str) -> bool:
-    return hostname in {"", "localhost", "127.0.0.1", "::1"}
+    normalized = (hostname or "").strip().lower().rstrip(".")
+    if normalized in {"", "localhost", "0.0.0.0", "127.0.0.1", "::1"}:
+        return True
+    if normalized.endswith((".localhost", ".local")):
+        return True
+
+    try:
+        address = ipaddress.ip_address(normalized)
+    except ValueError:
+        return False
+    return bool(
+        address.is_loopback
+        or address.is_private
+        or address.is_link_local
+        or address.is_unspecified
+        or address.is_reserved
+    )
+
+
+def _is_valid_deployed_url(raw_url: str | None) -> bool:
+    """Return whether a URL is a public HTTPS origin suitable for deployment."""
+
+    value = (raw_url or "").strip()
+    if not value:
+        return False
+
+    try:
+        parsed = urlparse(value)
+        # Accessing ``port`` validates malformed/out-of-range port declarations.
+        _ = parsed.port
+    except ValueError:
+        return False
+
+    hostname = (parsed.hostname or "").strip().lower().rstrip(".")
+    if parsed.scheme.lower() != "https" or not parsed.netloc or not hostname:
+        return False
+    if parsed.username is not None or parsed.password is not None:
+        return False
+    if parsed.path not in {"", "/"} or parsed.params or parsed.query or parsed.fragment:
+        return False
+    if _is_local_hostname(hostname):
+        return False
+    if hostname.endswith((".test", ".example", ".invalid")):
+        return False
+
+    try:
+        ipaddress.ip_address(hostname)
+    except ValueError:
+        # Deployment URLs must use a fully-qualified public hostname.
+        return "." in hostname and not hostname.startswith(".")
+    return True
 
 
 def is_stripe_configured(
@@ -68,6 +194,10 @@ class Settings:
     PROJECT_NAME: str = "Association Self-Serve"
     PROJECT_VERSION: str = "1.0.0"
 
+    # Environment classification is explicit. URL hostnames are never used to
+    # decide whether deployment security checks should run.
+    APP_ENV: str = _env_app_env()
+
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     APP_DATA_DIR: str = os.getenv("APP_DATA_DIR", os.path.join(BASE_DIR, "data"))
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", os.path.join(APP_DATA_DIR, "uploads"))
@@ -91,6 +221,14 @@ class Settings:
     )
     CARD_PUBLIC_RATE_LIMIT_WINDOW_SECONDS: int = int(
         os.getenv("CARD_PUBLIC_RATE_LIMIT_WINDOW_SECONDS", "300")
+    )
+    # Deliberately permissive: this is a last-resort distributed abuse guard,
+    # not a normal-user throttle. The bucket is scoped to IP + public form.
+    PUBLIC_FORM_RATE_LIMIT_MAX_REQUESTS: int = int(
+        os.getenv("PUBLIC_FORM_RATE_LIMIT_MAX_REQUESTS", "300")
+    )
+    PUBLIC_FORM_RATE_LIMIT_WINDOW_SECONDS: int = int(
+        os.getenv("PUBLIC_FORM_RATE_LIMIT_WINDOW_SECONDS", "300")
     )
 
     GIT_SHA: str = os.getenv("GIT_SHA", "")
@@ -147,6 +285,19 @@ class Settings:
         "evolution" if ENABLE_WHATSAPP_EVOLUTION else "green_api",
     ).strip().lower()
     GREEN_API_BASE_URL: str = os.getenv("GREEN_API_BASE_URL", "https://api.green-api.com")
+    GREEN_API_WEBHOOK_SECRET: str | None = _env_optional("GREEN_API_WEBHOOK_SECRET")
+    GREEN_API_WEBHOOK_REQUIRE_SECRET: bool = _env_bool(
+        "GREEN_API_WEBHOOK_REQUIRE_SECRET",
+        default=False,
+    )
+    GREEN_API_WEBHOOK_ALLOWED_IPS: tuple[str, ...] = parse_ip_network_allowlist(
+        _env_optional("GREEN_API_WEBHOOK_ALLOWED_IPS")
+        or ",".join(GREEN_API_OFFICIAL_WEBHOOK_IPS)
+    )
+    WHATSAPP_WEBHOOK_MAX_BODY_BYTES: int = max(
+        1024,
+        int(os.getenv("WHATSAPP_WEBHOOK_MAX_BODY_BYTES", str(512 * 1024))),
+    )
     EVOLUTION_API_BASE_URL: str = os.getenv(
         "EVOLUTION_API_BASE_URL",
         "http://evolution-api:8080",
@@ -241,6 +392,15 @@ class Settings:
     EMAIL_OUTBOX_STALE_AFTER_SECONDS: int = int(
         os.getenv("EMAIL_OUTBOX_STALE_AFTER_SECONDS", "300")
     )
+    FILE_DELETION_BATCH_SIZE: int = int(
+        os.getenv("FILE_DELETION_BATCH_SIZE", "50")
+    )
+    FILE_DELETION_POLL_SECONDS: int = int(
+        os.getenv("FILE_DELETION_POLL_SECONDS", "5")
+    )
+    FILE_DELETION_STALE_AFTER_SECONDS: int = int(
+        os.getenv("FILE_DELETION_STALE_AFTER_SECONDS", "300")
+    )
 
     @property
     def STRIPE_ENABLED(self) -> bool:
@@ -254,19 +414,83 @@ class Settings:
 
     @property
     def IS_LOCAL_ENV(self) -> bool:
-        base_host = _url_hostname(self.BASE_URL)
-        frontend_host = _url_hostname(self.FRONTEND_URL)
-        return _is_local_hostname(base_host) and _is_local_hostname(frontend_host)
+        return (self.APP_ENV or "").strip().lower() == "local"
+
+    @property
+    def IS_TEST_ENV(self) -> bool:
+        return (self.APP_ENV or "").strip().lower() == "test"
+
+    @property
+    def IS_DEPLOYED_ENV(self) -> bool:
+        return (self.APP_ENV or "").strip().lower() in DEPLOYED_APP_ENVS
 
     @property
     def USES_INSECURE_SECRET_KEY(self) -> bool:
-        return (self.SECRET_KEY or "").strip() in {"", "supersecretkey"}
+        value = (self.SECRET_KEY or "").strip()
+        return (
+            len(value) < 32
+            or len(set(value)) < 8
+            or value.lower() in _INSECURE_SECRET_KEYS
+        )
 
     @property
     def USES_DEFAULT_SUPER_ADMIN_BOOTSTRAP(self) -> bool:
+        email = (self.SUPER_ADMIN_EMAIL or "").strip().lower()
+        password = (self.SUPER_ADMIN_PASSWORD or "").strip().lower()
         return (
-            (self.SUPER_ADMIN_EMAIL or "").strip().lower() == "admin@assonam.it"
-            and (self.SUPER_ADMIN_PASSWORD or "") == "admin"
+            email in _DEFAULT_SUPER_ADMIN_EMAILS
+            or password in _DEFAULT_SUPER_ADMIN_PASSWORDS
+        )
+
+
+def validate_runtime_environment(runtime_settings: Settings) -> None:
+    """Fail closed on invalid security configuration in deployed environments."""
+
+    app_env = (runtime_settings.APP_ENV or "").strip().lower()
+    if app_env not in VALID_APP_ENVS:
+        valid_values = ", ".join(sorted(VALID_APP_ENVS))
+        raise RuntimeError(
+            f"Invalid APP_ENV '{app_env or '<empty>'}'. Expected one of: {valid_values}."
+        )
+
+    if app_env not in DEPLOYED_APP_ENVS:
+        return
+
+    errors: list[str] = []
+    if runtime_settings.USES_INSECURE_SECRET_KEY:
+        errors.append("SECRET_KEY must be a non-default secret of at least 32 characters")
+
+    for variable_name in ("BASE_URL", "FRONTEND_URL"):
+        if not _is_valid_deployed_url(getattr(runtime_settings, variable_name, "")):
+            errors.append(
+                f"{variable_name} must be a public HTTPS origin without path, query or credentials"
+            )
+
+    super_admin_email = (runtime_settings.SUPER_ADMIN_EMAIL or "").strip().lower()
+    if (
+        super_admin_email in _DEFAULT_SUPER_ADMIN_EMAILS
+        or "@" not in super_admin_email
+        or any(character.isspace() for character in super_admin_email)
+    ):
+        errors.append("SUPER_ADMIN_EMAIL must be configured and non-default")
+
+    super_admin_password = (runtime_settings.SUPER_ADMIN_PASSWORD or "").strip().lower()
+    if super_admin_password in _DEFAULT_SUPER_ADMIN_PASSWORDS:
+        errors.append("SUPER_ADMIN_PASSWORD must be configured and non-default")
+
+    try:
+        green_api_webhook_networks = parse_ip_network_allowlist(
+            runtime_settings.GREEN_API_WEBHOOK_ALLOWED_IPS
+        )
+    except ValueError as exc:
+        errors.append(f"GREEN_API_WEBHOOK_ALLOWED_IPS is invalid ({exc})")
+    else:
+        if not green_api_webhook_networks:
+            errors.append("GREEN_API_WEBHOOK_ALLOWED_IPS must not be empty")
+
+    if errors:
+        raise RuntimeError(
+            f"Refusing to start in APP_ENV={app_env}: " + "; ".join(errors) + "."
         )
 
 settings = Settings()

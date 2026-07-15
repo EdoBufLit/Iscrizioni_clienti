@@ -3,9 +3,12 @@
 from datetime import datetime
 
 import pytest
+from sqlalchemy import func
 
 from app.db import SessionLocal
-from app.models import Organization, Member, SignupSource
+from app.models import MemberStatus, Organization, Member, SignupSource
+from app.security import get_password_hash, verify_password
+from app.services.membership_payments import organization_requires_membership_payment
 from tests.signup_payloads import build_join_submit_data
 
 
@@ -87,6 +90,39 @@ def test_org_with_statute_requires_acceptance(client, db):
     assert "statuto" in resp.json()["detail"].lower()
 
 
+@pytest.mark.parametrize("endpoint_suffix", ["", "/submit"])
+def test_non_payment_signup_requires_privacy_before_writing(
+    client,
+    db,
+    endpoint_suffix,
+):
+    org = _ensure_org(
+        db,
+        f"privacy-required-{endpoint_suffix.replace('/', '') or 'legacy'}",
+        statute=False,
+    )
+    email = f"privacy-false-{endpoint_suffix.replace('/', '') or 'legacy'}@example.com"
+    payload = build_join_submit_data(
+        email=email,
+        accept_statute="false",
+        accept_privacy="false",
+    )
+
+    response = client.post(
+        f"/api/join/{org.slug}{endpoint_suffix}",
+        data=payload,
+    )
+
+    assert response.status_code == 400, response.text
+    assert "privacy" in response.json()["detail"].lower()
+    assert (
+        db.query(Member)
+        .filter(Member.org_id == org.id, Member.email == email)
+        .first()
+        is None
+    )
+
+
 def test_inactive_org_blocks_signup(client, db):
     """Inactive organizations should block signup."""
     org = _ensure_org(db, "inactive-test-org", active=False)
@@ -103,8 +139,8 @@ def test_nonexistent_slug_returns_404(client):
     assert resp.status_code == 404
 
 
-def test_all_active_orgs_accept_signup(client, db):
-    """Verify that ALL active organizations can accept a signup submission."""
+def test_all_active_orgs_enforce_their_signup_policy(client, db):
+    """Verify active organizations accept signup or enforce configured prerequisites."""
     # Session-scoped TestClient can keep admin cookies from previous tests.
     client.post("/api/org-admin/auth/logout")
     client.post("/api/super-admin/auth/logout")
@@ -118,8 +154,12 @@ def test_all_active_orgs_accept_signup(client, db):
         email = f"allorg-{org.slug}-{int(datetime.utcnow().timestamp() * 1000)}@example.com"
         accept = "true" if org.statute_pdf_path else "false"
         resp = _submit(client, org.slug, email, accept_statute=accept)
-        # Should be 200 (received) or 409 (already exists) - NOT 400/500
-        ok = resp.status_code in (200, 409)
+        if organization_requires_membership_payment(org):
+            ok = resp.status_code == 400 and "pagamento online" in resp.text.lower()
+        elif bool(getattr(org, "require_membership_document", False)):
+            ok = resp.status_code == 400 and "documento" in resp.text.lower()
+        else:
+            ok = resp.status_code in (200, 409)
         results.append((org.slug, resp.status_code, ok))
 
     failures = [(slug, code) for slug, code, ok in results if not ok]
@@ -137,6 +177,9 @@ def test_web_register_sets_signup_source_assonam_form(client, db):
     org = _ensure_org(db, "register-source-test-org", statute=False)
     email = f"register-source-{int(datetime.utcnow().timestamp() * 1000)}@example.com"
 
+    join_response = _submit(client, org.slug, email, accept_statute="false")
+    assert join_response.status_code == 200, join_response.text
+
     resp = client.post(
         "/api/auth/register",
         data={
@@ -152,6 +195,8 @@ def test_web_register_sets_signup_source_assonam_form(client, db):
     member = db.query(Member).filter(Member.org_id == org.id, Member.email == email).first()
     assert member is not None
     assert member.signup_source == SignupSource.ASSONAM_FORM.value
+    assert member.password_hash is not None
+    assert verify_password("TestPass123!", member.password_hash)
 
 
 def test_web_register_rejects_short_member_password(client, db):
@@ -170,3 +215,76 @@ def test_web_register_rejects_short_member_password(client, db):
 
     assert resp.status_code == 400, resp.text
     assert "almeno 8 caratteri" in resp.text
+
+
+def test_web_register_cannot_overwrite_preexisting_member_password(client, db):
+    org = _ensure_org(db, "register-takeover-test-org", statute=False)
+    email = f"takeover-{int(datetime.utcnow().timestamp() * 1000)}@example.com"
+    original_password = "OriginalPass123!"
+    card_no = (
+        db.query(func.max(Member.card_no))
+        .filter(Member.org_id == org.id)
+        .scalar()
+        or 900000
+    ) + 1
+    member = Member(
+        org_id=org.id,
+        first_name="Existing",
+        last_name="Member",
+        email=email,
+        password_hash=get_password_hash(original_password),
+        status=MemberStatus.ACTIVE,
+        card_no=card_no,
+        card_year=datetime.utcnow().year,
+        signup_source=SignupSource.ASSONAM_FORM.value,
+    )
+    db.add(member)
+    db.commit()
+    db.refresh(member)
+
+    response = client.post(
+        "/api/auth/register",
+        data={
+            "email": email,
+            "password": "AttackerPass123!",
+            "first_name": "Changed",
+            "last_name": "Name",
+            "org_slug": org.slug,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["authenticated"] is False
+    db.refresh(member)
+    assert verify_password(original_password, member.password_hash)
+    assert not verify_password("AttackerPass123!", member.password_hash)
+    assert member.first_name == "Existing"
+    assert member.last_name == "Member"
+
+
+def test_registration_continuation_is_one_time(client, db):
+    org = _ensure_org(db, "register-one-time-test-org", statute=False)
+    email = f"register-once-{int(datetime.utcnow().timestamp() * 1000)}@example.com"
+    join_response = _submit(client, org.slug, email, accept_statute="false")
+    assert join_response.status_code == 200, join_response.text
+
+    common = {
+        "email": email,
+        "first_name": "Test",
+        "last_name": "User",
+        "org_slug": org.slug,
+    }
+    first = client.post(
+        "/api/auth/register",
+        data={**common, "password": "FirstPass123!"},
+    )
+    replay = client.post(
+        "/api/auth/register",
+        data={**common, "password": "SecondPass123!"},
+    )
+
+    assert first.status_code == 200, first.text
+    assert replay.status_code == 200, replay.text
+    member = db.query(Member).filter(Member.org_id == org.id, Member.email == email).one()
+    assert verify_password("FirstPass123!", member.password_hash)
+    assert not verify_password("SecondPass123!", member.password_hash)

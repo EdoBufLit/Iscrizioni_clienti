@@ -72,6 +72,7 @@ jobs:
             app_runtime:
               - 'Dockerfile'
               - 'requirements.txt'
+              - 'requirements.lock'
               - 'init_db.py'
               - 'alembic/**'
               - 'app/**'
@@ -336,6 +337,7 @@ jobs:
             ENABLE_WHATSAPP_VALUE='${{ secrets.ENABLE_WHATSAPP }}'
             WHATSAPP_PROVIDER_VALUE='${{ secrets.WHATSAPP_PROVIDER }}'
             GREEN_API_BASE_URL_VALUE='${{ secrets.GREEN_API_BASE_URL }}'
+            GREEN_API_WEBHOOK_SECRET_VALUE='${{ secrets.GREEN_API_WEBHOOK_SECRET }}'
             SUMUP_CREDENTIALS_ENCRYPTION_KEY_VALUE='${{ secrets.SUMUP_CREDENTIALS_ENCRYPTION_KEY }}'
             BUILD_TIME="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
             GHCR_USERNAME='${{ github.actor }}'
@@ -360,6 +362,7 @@ jobs:
             fi
 
             cat > .env <<'EOF'
+            APP_ENV=production
             SECRET_KEY=${{ secrets.SECRET_KEY }}
             BASE_URL=${{ secrets.BASE_URL }}
             FRONTEND_URL=${{ secrets.FRONTEND_URL }}
@@ -410,6 +413,10 @@ jobs:
             ENABLE_WHATSAPP=${{ secrets.ENABLE_WHATSAPP }}
             WHATSAPP_PROVIDER=${{ secrets.WHATSAPP_PROVIDER }}
             GREEN_API_BASE_URL=${{ secrets.GREEN_API_BASE_URL }}
+            GREEN_API_WEBHOOK_SECRET=${{ secrets.GREEN_API_WEBHOOK_SECRET }}
+            GREEN_API_WEBHOOK_REQUIRE_SECRET=false
+            GREEN_API_WEBHOOK_ALLOWED_IPS=${{ secrets.GREEN_API_WEBHOOK_ALLOWED_IPS }}
+            WHATSAPP_WEBHOOK_MAX_BODY_BYTES=524288
             EVOLUTION_API_BASE_URL=http://evolution-api:8080
             EVOLUTION_API_KEY=${{ secrets.EVOLUTION_API_KEY }}
             SUMUP_CREDENTIALS_ENCRYPTION_KEY=${{ secrets.SUMUP_CREDENTIALS_ENCRYPTION_KEY }}
@@ -461,6 +468,15 @@ jobs:
               sed -i "s#^GREEN_API_BASE_URL=.*#GREEN_API_BASE_URL=${GREEN_API_BASE_URL}#" .env
             else
               printf 'GREEN_API_BASE_URL=%s\n' "$GREEN_API_BASE_URL" >> .env
+            fi
+            GREEN_API_WEBHOOK_REQUIRE_SECRET="false"
+            if [ -n "${GREEN_API_WEBHOOK_SECRET_VALUE:-}" ]; then
+              GREEN_API_WEBHOOK_REQUIRE_SECRET="true"
+            fi
+            if grep -q '^GREEN_API_WEBHOOK_REQUIRE_SECRET=' .env; then
+              sed -i "s/^GREEN_API_WEBHOOK_REQUIRE_SECRET=.*/GREEN_API_WEBHOOK_REQUIRE_SECRET=${GREEN_API_WEBHOOK_REQUIRE_SECRET}/" .env
+            else
+              printf 'GREEN_API_WEBHOOK_REQUIRE_SECRET=%s\n' "$GREEN_API_WEBHOOK_REQUIRE_SECRET" >> .env
             fi
             if ! grep -q '^AFFILIATION_VIDEO_WORKER_ENABLED=' .env; then
               printf 'AFFILIATION_VIDEO_WORKER_ENABLED=false\n' >> .env
@@ -630,7 +646,7 @@ jobs:
 
             if [ "$APP_RUNTIME_CHANGED" = "true" ]; then
               echo "[deploy] Pulling refreshed app-runtime image"
-              docker compose $COMPOSE_FILES --profile ops pull web email-worker low-cards-worker whatsapp-webhook-worker migrate
+              docker compose $COMPOSE_FILES --profile ops pull web email-worker low-cards-worker file-deletion-worker whatsapp-webhook-worker migrate
               log_memory_snapshot "after_app_pull"
 
               echo "[deploy] Running Alembic migrations from pulled runtime image"
@@ -642,9 +658,10 @@ jobs:
               echo "[deploy] Rolling out app-runtime services"
               docker compose $COMPOSE_FILES up -d --no-deps ${APP_RUNTIME_UP_FLAGS} web
               wait_for_service_ready "" web 120
-              docker compose $COMPOSE_FILES up -d --no-deps ${APP_RUNTIME_UP_FLAGS} email-worker low-cards-worker whatsapp-webhook-worker
+              docker compose $COMPOSE_FILES up -d --no-deps ${APP_RUNTIME_UP_FLAGS} email-worker low-cards-worker file-deletion-worker whatsapp-webhook-worker
               wait_for_service_ready "" email-worker 120
               wait_for_service_ready "" low-cards-worker 120
+              wait_for_service_ready "" file-deletion-worker 120
               wait_for_service_ready "" whatsapp-webhook-worker 120
               log_memory_snapshot "after_app_rollout"
             else

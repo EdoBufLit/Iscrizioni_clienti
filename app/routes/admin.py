@@ -5,6 +5,9 @@ from sqlalchemy import func
 from app.db import get_db
 from app.models import AdminUser, AdminRole, Member, CardBatch, MemberDocument, DocStatus, MemberStatus, Organization, PaymentMethod
 from app.services.card_allocation import allocate_next_card
+from app.services.sqlite_card_allocation_guard import (
+    sqlite_card_allocation_request_guard,
+)
 from app.services.member_card_delivery import maybe_send_member_card_ready_email
 from app import audit
 from app.config import settings
@@ -154,7 +157,10 @@ def member_detail(request: Request, member_id: int, db: Session = Depends(get_db
     return RedirectResponse(url="/admin")
 
 
-@router.post("/members/{member_id}/assign_card")
+@router.post(
+    "/members/{member_id}/assign_card",
+    dependencies=[Depends(sqlite_card_allocation_request_guard)],
+)
 def assign_card_manual(request: Request, member_id: int, db: Session = Depends(get_db)):
     admin = get_current_admin(request, db)
     if not admin:

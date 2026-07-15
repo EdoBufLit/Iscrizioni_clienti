@@ -54,18 +54,31 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "camera=(), microphone=(), geolocation=()"
         )
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
-        response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "base-uri 'self'; "
-            f"frame-ancestors {frame_ancestors}; "
-            "form-action 'self'; "
-            "img-src 'self' data: blob: https:; "
-            "font-src 'self' data: https://fonts.gstatic.com; "
-            "connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-            "script-src 'self' 'unsafe-inline'"
+        is_public_upload = request.url.path.startswith("/uploads/")
+        response.headers["Cross-Origin-Resource-Policy"] = (
+            "cross-origin" if is_public_upload else "same-origin"
         )
+        response_content_type = response.headers.get("content-type", "").split(";", 1)[0].lower()
+        is_svg_response = (
+            response_content_type == "image/svg+xml"
+            or (is_public_upload and request.url.path.lower().endswith(".svg"))
+        )
+        if is_svg_response:
+            response.headers["Content-Security-Policy"] = (
+                "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:"
+            )
+        else:
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; "
+                "base-uri 'self'; "
+                f"frame-ancestors {frame_ancestors}; "
+                "form-action 'self'; "
+                "img-src 'self' data: blob: https:; "
+                "font-src 'self' data: https://fonts.gstatic.com; "
+                "connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; "
+                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                "script-src 'self' 'unsafe-inline'"
+            )
         if request.url.scheme == "https":
             response.headers["Strict-Transport-Security"] = (
                 "max-age=31536000; includeSubDomains"
@@ -95,12 +108,6 @@ _CSRF_ALLOWED_ORIGINS = {
     if origin
 }
 _CSRF_UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
-_CSRF_PROTECTED_PATH_PREFIXES = (
-    "/api/auth/",
-    "/api/org-admin/",
-    "/api/super-admin/",
-    "/api/me/onboarding/",
-)
 _SESSION_AUTH_COOKIE_NAMES = {"session", "org_admin_session"}
 
 
@@ -113,7 +120,11 @@ class SessionCsrfMiddleware(BaseHTTPMiddleware):
 
         requires_check = (
             method in _CSRF_UNSAFE_METHODS
-            and path.startswith(_CSRF_PROTECTED_PATH_PREFIXES)
+            # Scope protection by authentication mechanism, not by a list of
+            # route prefixes that inevitably drifts as new member/admin APIs
+            # are added. Provider webhooks and public capability endpoints do
+            # not carry either session cookie and therefore remain unaffected.
+            and path.startswith("/api/")
             and bool(_SESSION_AUTH_COOKIE_NAMES.intersection(request.cookies.keys()))
             and bool(_CSRF_ALLOWED_ORIGINS)
         )

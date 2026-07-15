@@ -18,6 +18,8 @@ import requests
 from fastapi import HTTPException, UploadFile
 
 from .config import settings
+from .log_redaction import hash_identifier, redact_for_log
+from .services.svg_sanitizer import UnsafeSvgError, sanitize_svg_bytes
 from .services.email_sender import (
     EmailSenderSelection,
     resolve_email_sender,
@@ -123,11 +125,35 @@ async def save_upload_file(
     size_bytes = 0
 
     try:
+        if upload_file.content_type == "image/svg+xml":
+            raw_svg = bytearray()
+            while True:
+                chunk = await upload_file.read(64 * 1024)
+                if not chunk:
+                    break
+                if len(raw_svg) + len(chunk) > max_size:
+                    raise HTTPException(status_code=400, detail="File too large.")
+                raw_svg.extend(chunk)
+            if not raw_svg:
+                raise HTTPException(status_code=400, detail="Empty file.")
+            try:
+                stored_bytes = sanitize_svg_bytes(bytes(raw_svg))
+            except UnsafeSvgError as exc:
+                raise HTTPException(status_code=400, detail="Invalid SVG file.") from exc
+            with open(file_path, "wb") as buffer:
+                buffer.write(stored_bytes)
+            sha256_hash.update(stored_bytes)
+            size_bytes = len(stored_bytes)
+            rel_path = os.path.join(sub_directory, unique_filename)
+            return rel_path, size_bytes, sha256_hash.hexdigest()
+
         with open(file_path, "wb") as buffer:
             # Read first chunk for magic bytes
             chunk = await upload_file.read(4096)
             if not chunk:
                 raise HTTPException(status_code=400, detail="Empty file.")
+            if len(chunk) > max_size:
+                raise HTTPException(status_code=400, detail="File too large.")
 
             # Validate Magic Bytes
             if (
@@ -145,11 +171,6 @@ async def save_upload_file(
                 and not chunk.startswith(b"\x89PNG\r\n\x1a\n")
             ):
                 raise HTTPException(status_code=400, detail="Invalid PNG file.")
-            elif upload_file.content_type == "image/svg+xml":
-                s_chunk = chunk.strip()
-                if not (s_chunk.startswith(b"<svg") or s_chunk.startswith(b"<?xml")):
-                    raise HTTPException(status_code=400, detail="Invalid SVG file.")
-
             # Write first chunk
             buffer.write(chunk)
             sha256_hash.update(chunk)
@@ -572,7 +593,7 @@ def send_email_via_cloudflare_rest(
     except (requests.Timeout, requests.ConnectionError) as exc:
         logger.warning(
             "cloudflare_email_rest_call_finished result=retryable_failed status=network_error error=%s",
-            exc,
+            redact_for_log(exc),
         )
         raise RetryableEmailDeliveryError(
             f"Cloudflare Email REST temporaneamente non raggiungibile: {exc}"
@@ -580,16 +601,16 @@ def send_email_via_cloudflare_rest(
     except requests.RequestException as exc:
         logger.warning(
             "cloudflare_email_rest_call_finished result=retryable_failed status=request_exception error=%s",
-            exc,
+            redact_for_log(exc),
         )
         raise RetryableEmailDeliveryError(str(exc) or exc.__class__.__name__) from exc
 
     provider_error_body = _provider_body_text(response)
     logger.info(
-        "cloudflare_email_rest_response_status status=%s ok=%s provider_error_body=%s",
+        "cloudflare_email_rest_response_status status=%s ok=%s provider_error_present=%s",
         response.status_code,
         response.ok,
-        provider_error_body or "",
+        bool(provider_error_body),
     )
 
     try:
@@ -638,16 +659,14 @@ def _log_transport_selection(
     )
     mail_from_domain_present = bool((settings.MAIL_FROM_DOMAIN or "").strip())
     logger.info(
-        "email_transport_selected transport=%s requested_mode=%s selected_mode=%s communications_enabled=%s mail_from_domain_present=%s from_name=%s from_email=%s from_header=%s reply_to=%s fallback_used=%s",
+        "email_transport_selected transport=%s requested_mode=%s selected_mode=%s communications_enabled=%s mail_from_domain_present=%s sender_hash=%s reply_to_present=%s fallback_used=%s",
         transport,
         sender_selection.requested_mode,
         sender_selection.selected_mode,
         communications_enabled,
         mail_from_domain_present,
-        sender_selection.from_name or "",
-        sender_selection.from_email,
-        sender_selection.from_header,
-        sender_selection.reply_to or "",
+        hash_identifier(sender_selection.from_email),
+        bool(sender_selection.reply_to),
         sender_selection.fallback_used,
     )
 
@@ -664,11 +683,10 @@ def send_association_email_via_mailtrap_api(
 ) -> str:
     provider_message_id = make_msgid()
     logger.info(
-        "association_mailtrap_api_call_started to=%s subject=%s from_email=%s from_header=%s",
-        to_email,
-        subject,
-        sender_selection.from_email,
-        sender_selection.from_header,
+        "association_mailtrap_api_call_started to_hash=%s subject_hash=%s sender_hash=%s",
+        hash_identifier(to_email),
+        hash_identifier(subject),
+        hash_identifier(sender_selection.from_email),
     )
 
     if settings.EMAIL_MODE == "test":
@@ -731,7 +749,7 @@ def send_association_email_via_mailtrap_api(
     except (requests.Timeout, requests.ConnectionError) as exc:
         logger.warning(
             "association_mailtrap_api_call_finished result=retryable_failed status=network_error error=%s",
-            exc,
+            redact_for_log(exc),
         )
         raise RetryableEmailDeliveryError(
             f"Mailtrap API temporaneamente non raggiungibile: {exc}"
@@ -739,16 +757,16 @@ def send_association_email_via_mailtrap_api(
     except requests.RequestException as exc:
         logger.warning(
             "association_mailtrap_api_call_finished result=retryable_failed status=request_exception error=%s",
-            exc,
+            redact_for_log(exc),
         )
         raise RetryableEmailDeliveryError(str(exc) or exc.__class__.__name__) from exc
 
     provider_error_body = _provider_body_text(response)
     logger.info(
-        "association_mailtrap_api_response_status status=%s ok=%s provider_error_body=%s",
+        "association_mailtrap_api_response_status status=%s ok=%s provider_error_present=%s",
         response.status_code,
         response.ok,
-        provider_error_body or "",
+        bool(provider_error_body),
     )
 
     if response.ok:
@@ -771,14 +789,14 @@ def send_association_email_via_mailtrap_api(
         logger.warning(
             "association_mailtrap_api_call_finished result=retryable_failed status=%s error=%s",
             response.status_code,
-            error_text,
+            redact_for_log(error_text),
         )
         raise RetryableEmailDeliveryError(error_text)
 
     logger.error(
         "association_mailtrap_api_call_finished result=permanent_failed status=%s error=%s",
         response.status_code,
-        error_text,
+        redact_for_log(error_text),
     )
     raise PermanentEmailDeliveryError(error_text)
 
@@ -813,11 +831,11 @@ def send_email_via_smtp_low_level(
         association_snapshot=association_snapshot,
     )
     logger.info(
-        "smtp_send_start to=%s subject=%s selected_mode=%s envelope_from=%s",
-        to_email,
-        subject,
+        "smtp_send_start to_hash=%s subject_hash=%s selected_mode=%s sender_hash=%s",
+        hash_identifier(to_email),
+        hash_identifier(subject),
         sender_selection.selected_mode,
-        sender_selection.from_email,
+        hash_identifier(sender_selection.from_email),
     )
 
     msg, provider_message_id = _build_message(
@@ -877,8 +895,8 @@ def send_email_via_smtp_low_level(
                 msg.as_string(),
             )
         logger.info(
-            "smtp_send_ok to=%s provider_message_id=%s",
-            to_email,
+            "smtp_send_ok to_hash=%s provider_message_id=%s",
+            hash_identifier(to_email),
             provider_message_id,
         )
         return provider_message_id
@@ -921,7 +939,10 @@ def send_email_via_smtp_low_level(
     except ValueError as exc:
         raise PermanentEmailDeliveryError(str(exc)) from exc
     except Exception as exc:
-        logger.exception("smtp_send_unexpected_failure to=%s", to_email)
+        logger.exception(
+            "smtp_send_unexpected_failure to_hash=%s",
+            hash_identifier(to_email),
+        )
         raise RetryableEmailDeliveryError(str(exc) or exc.__class__.__name__) from exc
 
 
@@ -1042,17 +1063,17 @@ def send_email_html(
         return True
     except EmailDeliveryError as exc:
         logger.warning(
-            "send_email_html_failed to=%s subject=%s error=%s",
-            to_email,
-            subject,
-            exc,
+            "send_email_html_failed to_hash=%s subject_hash=%s error=%s",
+            hash_identifier(to_email),
+            hash_identifier(subject),
+            redact_for_log(exc),
         )
         return False
     except Exception:
         logger.exception(
-            "send_email_html_unexpected_failure to=%s subject=%s",
-            to_email,
-            subject,
+            "send_email_html_unexpected_failure to_hash=%s subject_hash=%s",
+            hash_identifier(to_email),
+            hash_identifier(subject),
         )
         return False
 
@@ -1082,16 +1103,16 @@ def send_email(
         return True
     except EmailDeliveryError as exc:
         logger.warning(
-            "send_email_failed to=%s subject=%s error=%s",
-            to_email,
-            subject,
-            exc,
+            "send_email_failed to_hash=%s subject_hash=%s error=%s",
+            hash_identifier(to_email),
+            hash_identifier(subject),
+            redact_for_log(exc),
         )
         return False
     except Exception:
         logger.exception(
-            "send_email_unexpected_failure to=%s subject=%s",
-            to_email,
-            subject,
+            "send_email_unexpected_failure to_hash=%s subject_hash=%s",
+            hash_identifier(to_email),
+            hash_identifier(subject),
         )
         return False

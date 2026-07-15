@@ -75,7 +75,7 @@ def test_app_main_imports_with_affiliazione_enabled_router_present():
             "-c",
             (
                 "import app.main; "
-                "paths={route.path for route in app.main.app.routes}; "
+                "paths=set(app.main.app.openapi()['paths']); "
                 "assert any(path.startswith('/api/affiliazione') for path in paths), paths; "
                 "print('affiliazione_router_ok')"
             ),
@@ -143,9 +143,9 @@ def test_stripe_disabled_without_env():
     assert settings.STRIPE_ENABLED is False
 
 
-def test_affiliazione_payment_ui_contains_stripe_disabled_label():
+def test_affiliazione_payment_ui_contains_stripe_disabled_message():
     content = Path("frontend/src/pages/Affiliazione.tsx").read_text(encoding="utf-8")
-    assert "Carta (Stripe) — presto disponibile" in content
+    assert "Pagamento con carta non disponibile al momento." in content
 
 
 def test_organization_detail(client):

@@ -73,18 +73,21 @@ def _load_font(
             return ImageFont.truetype(path, size)
         except Exception as exc:
             logger.debug(
-                "Unable to load card font candidate path=%s size=%s bold=%s: %s",
-                path,
+                "Unable to load card font candidate size=%s bold=%s error_type=%s",
                 size,
                 bold,
-                exc,
+                type(exc).__name__,
             )
             continue
 
     try:
         return ImageFont.load_default(size=size)
     except Exception as exc:
-        logger.debug("Unable to load sized default card font size=%s: %s", size, exc)
+        logger.debug(
+            "Unable to load sized default card font size=%s error_type=%s",
+            size,
+            type(exc).__name__,
+        )
         return ImageFont.load_default()
 
 
@@ -112,7 +115,10 @@ def _paste_logo(
         py = dest_y + (max_h - logo.height) // 2
         img.paste(logo, (px, py), logo)
     except Exception as exc:
-        logger.warning("Unable to paste card logo path=%s: %s", logo_path, exc)
+        logger.warning(
+            "Unable to paste card logo error_type=%s",
+            type(exc).__name__,
+        )
 
 
 def _normalize_hex(value: object, fallback: str) -> str:
@@ -202,7 +208,10 @@ def _load_logo_for_card(path: str, *, remove_background: bool = False) -> "Image
         logo = Image.open(path).convert("RGBA")
         return _remove_light_background(logo) if remove_background else logo
     except Exception as exc:
-        logger.warning("Unable to load card logo path=%s: %s", path, exc)
+        logger.warning(
+            "Unable to paste card logo error_type=%s",
+            type(exc).__name__,
+        )
         return None
 
 

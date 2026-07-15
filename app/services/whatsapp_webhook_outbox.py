@@ -7,6 +7,7 @@ import hashlib
 import json
 import logging
 import random
+import re
 import uuid
 from typing import Any
 
@@ -17,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import SessionLocal
+from app.log_redaction import hash_identifier
 from app.models import WhatsAppWebhookEvent, WhatsAppWebhookEventStatus
 from app.services.whatsapp_sync import ingest_whatsapp_webhook as ingest_evolution_webhook
 
@@ -30,6 +32,8 @@ SKIPPED_WEBHOOK_EVENTS = {
     "contacts.update",
 }
 _RETRY_SCHEDULE_SECONDS = [15, 30, 60, 120, 300, 600, 1200]
+_EVENT_NAME_RE = re.compile(r"^[a-z0-9._-]{1,100}$")
+_TERMINAL_PAYLOAD = {"redacted": True}
 
 
 @dataclass(frozen=True)
@@ -67,6 +71,8 @@ def enqueue_whatsapp_webhook_event(db: Session, *, payload: dict[str, Any]) -> W
             instance_name = normalize_instance_name(instance_data.get("idInstance"))
     if not event_name:
         raise ValueError("Webhook WhatsApp senza event.")
+    if not _EVENT_NAME_RE.fullmatch(event_name):
+        raise ValueError("Webhook WhatsApp con event non valido.")
     if not instance_name:
         raise ValueError("Webhook WhatsApp senza instance.")
 
@@ -217,6 +223,7 @@ def mark_processed(db: Session, event_id: str) -> None:
     event.processed_at = now
     event.next_retry_at = now
     event.last_error = None
+    event.payload_json = dict(_TERMINAL_PAYLOAD)
     event.updated_at = now
     db.flush()
 
@@ -228,6 +235,7 @@ def mark_skipped(db: Session, event_id: str, reason: str) -> None:
     event.processed_at = now
     event.next_retry_at = now
     event.last_error = reason
+    event.payload_json = dict(_TERMINAL_PAYLOAD)
     event.updated_at = now
     db.flush()
 
@@ -235,7 +243,7 @@ def mark_skipped(db: Session, event_id: str, reason: str) -> None:
 def mark_failed(db: Session, event_id: str, error: str, next_retry_at: datetime) -> None:
     event = _get_event(db, event_id)
     event.status = WhatsAppWebhookEventStatus.FAILED.value
-    event.last_error = (error or "").strip()[:4000] or "whatsapp_webhook_processing_failed"
+    event.last_error = (error or "").strip()[:255] or "whatsapp_webhook_processing_failed"
     event.next_retry_at = next_retry_at
     event.updated_at = utcnow_aware()
     db.flush()
@@ -267,10 +275,10 @@ def process_webhook_outbox_once(limit: int | None = None) -> dict[str, int]:
                 db.commit()
             stats["skipped"] += 1
             logger.info(
-                "whatsapp_webhook_worker_result event_id=%s event=%s instance=%s attempts=%s result=skipped",
+                "whatsapp_webhook_worker_result event_id=%s event=%s instance_hash=%s attempts=%s result=skipped",
                 job.id,
                 job.event_name,
-                job.instance_name,
+                hash_identifier(job.instance_name),
                 job.attempts,
             )
             continue
@@ -282,40 +290,47 @@ def process_webhook_outbox_once(limit: int | None = None) -> dict[str, int]:
                 db.commit()
             stats["processed"] += 1
             logger.info(
-                "whatsapp_webhook_worker_result event_id=%s event=%s instance=%s attempts=%s result=processed",
+                "whatsapp_webhook_worker_result event_id=%s event=%s instance_hash=%s attempts=%s result=processed",
                 job.id,
                 job.event_name,
-                job.instance_name,
+                hash_identifier(job.instance_name),
                 job.attempts,
             )
         except (IntegrityError, OperationalError) as exc:
             next_retry_at = compute_backoff(job.attempts)
+            safe_error = f"{type(exc).__name__}: database_processing_failed"
             with SessionLocal() as db:
-                mark_failed(db, job.id, str(exc), next_retry_at)
+                mark_failed(db, job.id, safe_error, next_retry_at)
                 db.commit()
             stats["retry_scheduled"] += 1
             logger.warning(
-                "whatsapp_webhook_worker_result event_id=%s event=%s instance=%s attempts=%s result=retry_db next_retry_at=%s error=%s",
+                "whatsapp_webhook_worker_result event_id=%s event=%s "
+                "instance_hash=%s attempts=%s result=retry_db "
+                "next_retry_at=%s error_type=%s",
                 job.id,
                 job.event_name,
-                job.instance_name,
+                hash_identifier(job.instance_name),
                 job.attempts,
                 next_retry_at.isoformat(),
-                exc,
+                type(exc).__name__,
             )
         except Exception as exc:
             next_retry_at = compute_backoff(job.attempts)
+            safe_error = f"{type(exc).__name__}: webhook_processing_failed"
             with SessionLocal() as db:
-                mark_failed(db, job.id, str(exc), next_retry_at)
+                mark_failed(db, job.id, safe_error, next_retry_at)
                 db.commit()
             stats["retry_scheduled"] += 1
-            logger.exception(
-                "whatsapp_webhook_worker_result event_id=%s event=%s instance=%s attempts=%s result=retry_unexpected next_retry_at=%s",
+            logger.error(
+                "whatsapp_webhook_worker_result event_id=%s event=%s "
+                "instance_hash=%s attempts=%s result=retry_unexpected "
+                "next_retry_at=%s error_type=%s",
                 job.id,
                 job.event_name,
-                job.instance_name,
+                hash_identifier(job.instance_name),
                 job.attempts,
                 next_retry_at.isoformat(),
+                type(exc).__name__,
             )
     return stats
 
@@ -339,7 +354,13 @@ def drain_webhook_outbox_for_tests(*, max_loops: int = 20, limit: int | None = N
 def _event_priority(event_name: str) -> int:
     if event_name in {"qrcode.updated", "connection.update", "stateinstancechanged"}:
         return 1
-    if event_name in {"messages.upsert", "send.message", "incomingmessagereceived", "outgoingapimessagereceived", "outgoingmessagereceived"}:
+    if event_name in {
+        "messages.upsert",
+        "send.message",
+        "incomingmessagereceived",
+        "outgoingapimessagereceived",
+        "outgoingmessagereceived",
+    }:
         return 2
     if event_name == "messages.update":
         return 3

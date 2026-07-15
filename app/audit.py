@@ -1,14 +1,16 @@
 """Structured audit logging for security-relevant events.
 
 Emits one JSON line per event to the ``audit`` logger at INFO level.
-No PII (emails) in plaintext — use truncated SHA-256 hashes instead.
+No PII in plaintext — identifiers are pseudonymized with keyed hashes.
 """
 
-import hashlib
 import json
 import logging
 from datetime import datetime, timezone
+
 from sqlalchemy.orm import Session
+
+from app.log_redaction import hash_identifier, redact_mapping
 from app.models import OperationLog
 
 _logger = logging.getLogger("audit")
@@ -25,11 +27,12 @@ def _emit(event: str, **kwargs):
         "event": event,
         **kwargs,
     }
-    _logger.info(json.dumps(record, default=str))
+    safe_record = redact_mapping(record) or {}
+    _logger.info(json.dumps(safe_record, default=str))
 
 
 def _hash_email(email: str) -> str:
-    return hashlib.sha256(email.lower().strip().encode()).hexdigest()[:16]
+    return hash_identifier(email)
 
 
 # ── Auth events ───────────────────────────────────────────────────
@@ -118,6 +121,12 @@ def log_operation(
     """
     Writes an audit entry to the database and emits to logger.
     """
+    safe_metadata = redact_mapping(metadata)
+    safe_ip = f"identifier_hash:{hash_identifier(ip)}" if ip else None
+    safe_user_agent = (
+        f"identifier_hash:{hash_identifier(user_agent)}" if user_agent else None
+    )
+
     # 1. DB Log
     op_log = OperationLog(
         action=action,
@@ -126,9 +135,9 @@ def log_operation(
         actor_admin_id=actor_admin_id,
         actor_member_id=actor_member_id,
         actor_role=actor_role,
-        metadata_json=metadata,
-        ip=ip,
-        user_agent=user_agent,
+        metadata_json=safe_metadata,
+        ip=safe_ip,
+        user_agent=safe_user_agent,
     )
     db.add(op_log)
 
@@ -138,6 +147,6 @@ def log_operation(
         entity_type=entity_type,
         entity_id=entity_id,
         actor_id=actor_admin_id or actor_member_id,
-        ip=ip,
-        metadata=metadata
+        ip_hash=safe_ip,
+        metadata=safe_metadata,
     )

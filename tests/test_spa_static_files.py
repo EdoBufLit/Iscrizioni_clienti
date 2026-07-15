@@ -6,6 +6,11 @@ from fastapi.testclient import TestClient
 from app.spa import SPAStaticFiles
 
 
+def _assert_javascript_content_type(response) -> None:
+    media_type = response.headers["content-type"].split(";", 1)[0]
+    assert media_type in {"text/javascript", "application/javascript"}
+
+
 def _build_spa_client(tmp_path: Path) -> TestClient:
     dist_dir = tmp_path / "dist"
     assets_dir = dist_dir / "assets"
@@ -53,7 +58,7 @@ def test_existing_asset_is_served_normally(tmp_path: Path):
 
     assert response.status_code == 200
     assert "console.log('ok');" in response.text
-    assert response.headers["content-type"].startswith("text/javascript")
+    _assert_javascript_content_type(response)
     assert "immutable" in response.headers.get("cache-control", "")
 
 
@@ -63,7 +68,7 @@ def test_legacy_index_hashed_js_is_served_from_current_index_asset(tmp_path: Pat
 
     assert response.status_code == 200
     assert "current-index-js" in response.text
-    assert response.headers["content-type"].startswith("text/javascript")
+    _assert_javascript_content_type(response)
     assert response.headers.get("x-asset-fallback") == "legacy-index-hash"
 
 

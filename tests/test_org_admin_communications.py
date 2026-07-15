@@ -206,6 +206,7 @@ def _create_member(
         card_no=card_no_seed,
         card_year=card_year,
         joined_at=datetime.utcnow(),
+        marketing_email_consent=True,
     )
     db.add(member)
     db.commit()
@@ -300,17 +301,18 @@ def test_org_admin_communications_settings_and_test_email(client, db):
 def test_org_admin_communications_usage_counts_current_month_overage(client, db, monkeypatch):
     monkeypatch.setattr(email_usage_service, "COMMUNICATIONS_MONTHLY_EMAIL_LIMIT", 2)
     org, admin = _create_org_admin(db, communications_enabled=True)
+    current_month_start, _current_month_end = email_usage_service.current_month_bounds()
     _create_sent_campaign_recipients(
         db,
         org_id=org.id,
         count=3,
-        sent_at=datetime(2026, 5, 3, 10, 0, 0),
+        sent_at=current_month_start + timedelta(hours=1),
     )
     _create_sent_campaign_recipients(
         db,
         org_id=org.id,
         count=4,
-        sent_at=datetime(2026, 4, 30, 10, 0, 0),
+        sent_at=current_month_start - timedelta(seconds=1),
     )
     _login_org_admin(client, db, admin.id)
 
@@ -647,11 +649,14 @@ def test_org_admin_campaign_send_snapshots_recipients_and_updates_history(client
                 "subject": "Rinnova la tua iscrizione, {{nome_socio}}",
                 "body_text": "Ciao {{nome_socio}}, tessera {{numero_tessera}} in scadenza il {{data_scadenza}}",
                 "audience_type": "active_members",
+                "template_type": "renewal_reminder",
             },
         )
         assert create_res.status_code == 201, create_res.text
         campaign = create_res.json()["campaign"]
         assert campaign["status"] == "draft"
+        assert campaign["template_type"] == "renewal_reminder"
+        assert campaign["communication_purpose"] == "service"
         campaign_id = campaign["id"]
 
         send_res = client.post(f"/api/org-admin/communications/campaigns/{campaign_id}/send")
@@ -669,6 +674,7 @@ def test_org_admin_campaign_send_snapshots_recipients_and_updates_history(client
         assert "Mario Rossi" in captured[0]["subject"]
         assert "{{nome_socio}}" not in captured[0]["body"]
         assert str(next_card) in captured[0]["body"]
+        assert "Disattiva le email promozionali" not in captured[0]["body"]
 
         detail_res = client.get(f"/api/org-admin/communications/campaigns/{campaign_id}")
         assert detail_res.status_code == 200, detail_res.text
@@ -1043,7 +1049,8 @@ def test_booking_reminder_links_are_short_and_update_booking_from_public_page(cl
         confirm_path = links[0].replace("https://example.test", "")
         get_response = client.get(confirm_path)
         assert get_response.status_code == 200, get_response.text
-        assert "Sto registrando la tua risposta" in get_response.text
+        assert "conferma esplicitamente" in get_response.text
+        assert "form.submit" not in get_response.text
         assert db.query(BookingActionToken).filter(
             BookingActionToken.booking_id == booking.id,
             BookingActionToken.used_at.isnot(None),
@@ -1073,11 +1080,11 @@ def test_booking_reminder_links_are_short_and_update_booking_from_public_page(cl
 
         repeat_response = client.post(confirm_path)
         assert repeat_response.status_code == 200, repeat_response.text
-        assert "Perfetto, prenotazione confermata" in repeat_response.text
+        assert "gia&#x27; stata registrata" in repeat_response.text
         assert db.query(BookingEvent).filter(
             BookingEvent.booking_id == booking.id,
             BookingEvent.event_type == "customer_reconfirmed_from_reminder",
-        ).count() == 2
+        ).count() == 1
 
         note_path = links[2].replace("https://example.test", "")
         note_payload = client.get(f"{note_path}/json")

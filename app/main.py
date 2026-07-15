@@ -15,7 +15,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.bootstrap import bootstrap_super_admin
-from app.config import settings
+from app.config import settings, validate_runtime_environment
 from app.db import get_db, SessionLocal, engine
 from app.middleware import (
     RequestIdMiddleware,
@@ -29,6 +29,7 @@ from app.routes import (
     ingest_pienissimo,
     integrations,
     join,
+    marketing_preferences,
     membership_payments,
     member,
     onboarding,
@@ -60,20 +61,15 @@ _cors_origins = sorted(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _validate_runtime_security()
     # Ensure upload directory exists
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     os.makedirs(settings.AFFILIATION_VIDEO_OUTPUT_DIR, exist_ok=True)
     try:
-        _validate_runtime_security()
         init_db()
 
         # Verify schema consistency (SQLite only)
-        try:
-            validate_schema(engine)
-        except RuntimeError as e:
-            # Re-raise to prevent startup if schema is invalid
-            logger.critical(str(e))
-            raise e
+        validate_schema(engine)
 
         # Bootstrap super admin after DB init
         db = SessionLocal()
@@ -81,11 +77,9 @@ async def lifespan(app: FastAPI):
             bootstrap_super_admin(db)
         finally:
             db.close()
-    except Exception as e:
-        logger.exception("Database initialization failed.")
-        # If it's the critical schema drift, we want to crash hard
-        if "SQLite schema drift detected" in str(e):
-            raise e
+    except Exception:
+        logger.exception("Application startup validation failed; refusing to start.")
+        raise
 
     if settings.AFFILIAZIONE_ENABLED and not settings.STRIPE_ENABLED:
         logger.warning("Stripe disabled: missing env vars")
@@ -203,14 +197,7 @@ app.add_middleware(
 
 
 def _validate_runtime_security() -> None:
-    if settings.IS_LOCAL_ENV:
-        return
-
-    if settings.USES_INSECURE_SECRET_KEY:
-        raise RuntimeError(
-            "Refusing to start outside local env with insecure SECRET_KEY. "
-            "Set a strong SECRET_KEY in the runtime environment."
-        )
+    validate_runtime_environment(settings)
 
 # 3. CSRF origin checks for unsafe session-auth requests
 app.add_middleware(SessionCsrfMiddleware)
@@ -272,6 +259,7 @@ def _include_affiliation_routers() -> None:
 # ── Routers ───────────────────────────────────────────────────────
 
 app.include_router(join.router)
+app.include_router(marketing_preferences.router)
 app.include_router(membership_payments.router)
 app.include_router(member.router)
 app.include_router(admin.router)

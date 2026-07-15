@@ -50,7 +50,8 @@ def test_card_image_logs_logo_failure_without_breaking_generation(tmp_path, capl
 
     assert png.startswith(b"\x89PNG")
     assert "Unable to paste card logo" in caplog.text
-    assert str(broken_logo) in caplog.text
+    assert "error_type=UnidentifiedImageError" in caplog.text
+    assert str(broken_logo) not in caplog.text
 
 
 class _NoLockQuery:
@@ -102,4 +103,5 @@ def test_org_admin_welcome_pdf_logs_logo_failure(tmp_path, monkeypatch, caplog):
 
     assert pdf.startswith(b"%PDF")
     assert "Unable to draw org admin welcome guide logo" in caplog.text
-    assert str(fake_logo) in caplog.text
+    assert "error_type=RuntimeError" in caplog.text
+    assert str(fake_logo) not in caplog.text

@@ -262,7 +262,7 @@ def test_document_approval_sends_card_email_once_for_active_member(client, db, d
 
         captured = get_captured_emails()
         assert len(captured) == 1
-        assert "ASSO.N.A.M." in (captured[0]["subject"] or "")
+        assert captured[0]["subject"] == f"La tua tessera {org.name}"
         assert (
             f"Ora puoi accedere alla tua area riservata con la tua email: {member.email}."
             in (captured[0]["text_body"] or "")

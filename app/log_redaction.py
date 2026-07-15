@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import re
 from collections.abc import Mapping, Sequence
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+from app.config import settings
 
 _REDACTED = "[REDACTED]"
 _MAX_STRING_LENGTH = 240
@@ -15,6 +18,7 @@ _SENSITIVE_KEY_PARTS = (
     "content",
     "document",
     "email",
+    "external_customer",
     "file",
     "filename",
     "fiscal",
@@ -28,6 +32,7 @@ _SENSITIVE_KEY_PARTS = (
     "payment",
     "payload",
     "phone",
+    "raw",
     "secret",
     "signed",
     "subject",
@@ -37,6 +42,37 @@ _SENSITIVE_KEY_PARTS = (
     "wallet",
     "whatsapp",
 )
+
+_IDENTITY_KEY_PARTS = (
+    "codice_fiscale",
+    "display_name",
+    "email",
+    "first_name",
+    "fiscal_code",
+    "last_name",
+    "phone",
+    "profile_name",
+    "provider_instance",
+    "message_sid",
+    "tax_code",
+    "user_agent",
+)
+
+_SAFE_OPERATIONAL_SUFFIXES = (
+    "_active",
+    "_configured",
+    "_count",
+    "_enabled",
+    "_hash",
+    "_sent",
+    "_status",
+)
+
+_SAFE_OPERATIONAL_KEYS = {
+    "mime",
+    "payment_method",
+    "payment_provider",
+}
 
 _SENSITIVE_QUERY_KEYS = {
     "authorization",
@@ -54,14 +90,17 @@ _SENSITIVE_QUERY_KEYS = {
 _EMAIL_RE = re.compile(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b")
 _FISCAL_CODE_RE = re.compile(r"\b[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]\b", re.I)
 _BEARER_RE = re.compile(r"(?i)\b(bearer|token|secret|password|api[_-]?key)\s*[:=]\s*[A-Za-z0-9._~+/=-]{8,}")
-_PHONE_RE = re.compile(r"(?<!\w)(?:\+?\d[\d\s().-]{7,}\d)(?!\w)")
+_PHONE_RE = re.compile(
+    r"(?<![\w:+])(?:\+?\d(?:[\s().-]*\d){7,14})(?![\w:-])"
+)
 
 
 def hash_identifier(value: object | None) -> str:
     normalized = str(value or "").strip().lower()
     if not normalized:
         return "unknown"
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+    key = (settings.SECRET_KEY or "local-log-redaction-key").encode("utf-8")
+    return hmac.new(key, normalized.encode("utf-8"), hashlib.sha256).hexdigest()[:16]
 
 
 def redact_url(value: object | None) -> str | None:
@@ -94,10 +133,7 @@ def redact_url(value: object | None) -> str | None:
 def redact_mapping(data: Mapping[object, object] | None) -> dict[str, object] | None:
     if data is None:
         return None
-    return {
-        str(key): (_REDACTED if _is_sensitive_key(str(key)) else redact_for_log(value))
-        for key, value in data.items()
-    }
+    return {str(key): _redact_mapping_value(str(key), value) for key, value in data.items()}
 
 
 def redact_for_log(value: object | None) -> object:
@@ -127,4 +163,38 @@ def redact_for_log(value: object | None) -> object:
 
 def _is_sensitive_key(key: str) -> bool:
     normalized = key.strip().lower().replace("-", "_")
+    if normalized in _SAFE_OPERATIONAL_KEYS or normalized.endswith(
+        _SAFE_OPERATIONAL_SUFFIXES
+    ):
+        return False
     return normalized in _SENSITIVE_QUERY_KEYS or any(part in normalized for part in _SENSITIVE_KEY_PARTS)
+
+
+def _is_identity_key(key: str) -> bool:
+    normalized = key.strip().lower().replace("-", "_")
+    if normalized.endswith(_SAFE_OPERATIONAL_SUFFIXES):
+        return False
+    if normalized == "ip" or normalized.endswith("_ip"):
+        return True
+    return any(part in normalized for part in _IDENTITY_KEY_PARTS)
+
+
+def _redact_mapping_value(key: str, value: object) -> object:
+    normalized_key = key.strip().lower().replace("-", "_")
+    if value is None or isinstance(value, bool):
+        return value
+    if _is_identity_key(key):
+        if isinstance(value, str) and value.startswith("identifier_hash:"):
+            return value
+        return f"identifier_hash:{hash_identifier(value)}"
+    if isinstance(value, int | float):
+        # Database IDs and counters are operational metadata. Other numeric
+        # values under a sensitive key (for example a numeric password) are not.
+        if _is_sensitive_key(key) and not normalized_key.endswith(
+            ("_cents", "_count", "_id", "_no", "_version", "_year")
+        ):
+            return _REDACTED
+        return value
+    if _is_sensitive_key(key):
+        return _REDACTED
+    return redact_for_log(value)

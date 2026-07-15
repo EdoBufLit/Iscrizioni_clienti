@@ -6,6 +6,7 @@ All environment variables used by the application. Variables marked **required**
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
+| `APP_ENV` | **Yes** | `production` outside Compose; required by Compose | Explicit environment: `local`, `test`, `staging`, or `production`. The Hetzner workflow writes `production`; local development must opt in with `APP_ENV=local`. |
 | `SECRET_KEY` | **Yes** | `supersecretkey` | Secret key for signing session cookies and tokens. Use a long random string in production. |
 | `BASE_URL` | **Yes** | `http://localhost:8000` | Public base URL of the application (e.g. `https://app.assonam.it`). Used for API redirects. |
 | `FRONTEND_URL` | **Yes** | _(empty)_ | Public URL of the frontend (e.g. `https://assonam.it`). Used for magic links. If missing, falls back to `BASE_URL` + `/app`. |
@@ -20,16 +21,26 @@ All environment variables used by the application. Variables marked **required**
 | `AFFILIAZIONE_ENABLED` | No | `false` | Enables public affiliation endpoints (`/api/affiliazione/*`). If `false`, public affiliation routes return `404`. |
 | `SUMUP_CREDENTIALS_ENCRYPTION_KEY` | **Yes** (SumUp feature) | _(empty)_ | Global server-side encryption key used to protect per-organization SumUp API keys stored in DB. Must be a long random secret and must stay stable across deploys. |
 
+Deployment validation is fail-closed for `APP_ENV=staging` and
+`APP_ENV=production`: `SECRET_KEY` must contain at least 32 characters and must
+not be a known default; `BASE_URL` and `FRONTEND_URL` must be public HTTPS
+origins without paths, credentials, query strings, or local/private hosts; and
+the super-admin email/password must not use bootstrap defaults. Environment
+classification never depends on URL hostnames.
+
 Note: frontend does not use a build-time affiliation flag. Public UI visibility is driven at runtime by `/api/capabilities` (backed by `AFFILIAZIONE_ENABLED`).
 
 ## Super Admin Credentials
 
-The super admin account is bootstrapped from environment variables (no database record).
+The super-admin account is stored in the database. These variables are used only
+to bootstrap it when no super-admin exists; changing them does not rotate an
+already persisted account. Verify separately that an existing account was not
+created with the historical default password.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `SUPER_ADMIN_EMAIL` | **Yes** | `admin@assonam.it` | Email address for the super admin login. |
-| `SUPER_ADMIN_PASSWORD` | **Yes** | `admin` | Password for the super admin login. Must be changed in production. |
+| `SUPER_ADMIN_EMAIL` | **Yes** | `admin@assonam.it` | Email address for the super admin login. The default is rejected in staging/production. |
+| `SUPER_ADMIN_PASSWORD` | **Yes** | `admin` | Password for the super admin login. The default is rejected in staging/production. |
 
 ## SMTP (Email)
 
@@ -68,6 +79,45 @@ Association-level storage:
 
 - `organizations.whatsapp_e164`: preferred destination number for low-cards alerts.
 - The low-cards alert worker sends only when `whatsapp_e164` is populated and valid.
+
+## WhatsApp / Green API
+
+Green API webhook authentication is dual and fail-closed. A configured
+per-association or global secret always takes precedence and must match; an
+official source IP never bypasses a missing or wrong configured secret. When no
+secret exists, the request is accepted only if its proxy-resolved source IP is
+allowed **and** `idInstance` belongs to an active configured association.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ENABLE_WHATSAPP` | No | `false` | Enables the WhatsApp communication runtime. |
+| `WHATSAPP_PROVIDER` | No | `green_api` | Default provider for new connections. |
+| `GREEN_API_BASE_URL` | No | `https://api.green-api.com` | Green API base URL. |
+| `GREEN_API_WEBHOOK_SECRET` | Recommended | _(empty)_ | Global fallback `webhookUrlToken`. If set, every connection without its own secret must present this Bearer token. |
+| `GREEN_API_WEBHOOK_REQUIRE_SECRET` | No | `false` | Explicit strict mode. With no global/per-association secret, `true` rejects every webhook; `false` uses the official-IP fallback. A configured secret is always required regardless of this flag. |
+| `GREEN_API_WEBHOOK_ALLOWED_IPS` | No | Current official Green API list below | Comma-separated IPv4/IPv6 addresses or CIDRs used only when no secret is configured. Invalid entries, an empty deployed list, and `0.0.0.0/0` or `::/0` fail closed. |
+| `WHATSAPP_WEBHOOK_MAX_BODY_BYTES` | No | `524288` | Maximum canonical Green API webhook payload size. |
+
+Default source addresses, checked on **15 July 2026** against the
+[Green API Webhook Endpoint documentation](https://green-api.com/en/docs/api/receiving/technology-webhook-endpoint/):
+
+```text
+46.101.109.139,51.250.12.167,51.250.84.44,51.250.95.149,89.169.137.216,158.160.49.84,165.22.93.202,167.172.162.71,104.248.252.93,158.160.139.176,64.226.111.11,207.154.255.195
+```
+
+Operational rules:
+
+- No provider restart or settings change is required to use the IP fallback.
+- To enable a secret, configure the same value as Green API `webhookUrlToken`
+  (console or `setSettings`) and in the association setup or global env.
+- The Hetzner workflow sets `GREEN_API_WEBHOOK_REQUIRE_SECRET=true` only when
+  the global GitHub secret is non-empty; otherwise it leaves the verified-IP
+  fallback active. Per-association secrets are still enforced automatically.
+- The backend is exposed only on host loopback. Nginx must forward the real
+  source through `X-Forwarded-For`; the application resolves it with
+  `get_client_ip` only when the direct peer is a trusted local/private proxy.
+- Re-check the provider document periodically. If Green API changes its
+  addresses, update this env before the old addresses are retired.
 
 ## WhatsApp / Evolution API Lite
 

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import uuid
 
@@ -13,7 +13,7 @@ from app.models import (
     MembershipPaymentStatus,
     Organization,
 )
-from app.security import get_password_hash
+from app.security import get_password_hash, verify_password
 from app.services.membership_payments import (
     create_sumup_hosted_checkout,
     encrypt_sumup_api_key,
@@ -230,6 +230,290 @@ def test_create_checkout_does_not_reuse_expired_checkout(client, db, monkeypatch
     assert new_payment.sumup_checkout_id == "checkout-fresh"
 
 
+def test_new_checkout_keeps_password_flow_and_requires_status_cookie(
+    client,
+    db,
+    monkeypatch,
+):
+    org = _build_sumup_org(db, f"sumup-capability-{uuid.uuid4().hex[:8]}")
+    monkeypatch.setattr(
+        "app.routes.membership_payments.create_sumup_hosted_checkout",
+        lambda **kwargs: {
+            "id": "checkout-capability",
+            "hosted_checkout_url": "https://sumup.example/capability",
+        },
+    )
+    email = f"capability-{uuid.uuid4().hex[:8]}@example.com"
+    signup = build_join_submit_data(
+        email=email,
+        accept_statute="true",
+        accept_privacy="true",
+    )
+    signup["password"] = "CheckoutPass123!"
+
+    checkout = client.post(
+        f"/api/public/orgs/{org.slug}/membership-payment/create-checkout",
+        data=signup,
+    )
+
+    assert checkout.status_code == 200, checkout.text
+    payment_id = checkout.json()["payment_id"]
+    payment = db.query(MembershipPayment).filter(MembershipPayment.id == payment_id).one()
+    member = db.query(Member).filter(Member.id == payment.socio_id).one()
+    assert verify_password("CheckoutPass123!", member.password_hash)
+    assert payment.status_token_hash
+    assert payment.status_token_expires_at
+
+    cookie_name = f"membership_payment_status_{payment_id}"
+    cookie_path = f"/api/public/membership-payments/{payment_id}/status"
+    cookie_value = client.cookies.get(cookie_name)
+    assert cookie_value
+    assert cookie_value not in payment.status_token_hash
+    set_cookie = checkout.headers.get("set-cookie", "")
+    assert cookie_name in set_cookie
+    assert "HttpOnly" in set_cookie
+    assert "SameSite=lax" in set_cookie
+    assert "Path=/api/public" in set_cookie
+
+    authorized = client.get(cookie_path)
+    assert authorized.status_code == 200, authorized.text
+    assert authorized.json()["payment_status"] == MembershipPaymentStatus.PENDING.value
+
+    client.cookies.delete(cookie_name, path="/api/public")
+    unauthorized = client.get(cookie_path)
+    assert unauthorized.status_code == 404
+
+
+def test_checkout_retry_reuses_broad_capability_without_rotating_it(
+    client,
+    db,
+    monkeypatch,
+):
+    org = _build_sumup_org(db, f"sumup-retry-{uuid.uuid4().hex[:8]}")
+    create_calls = []
+
+    def fake_create(**kwargs):
+        create_calls.append(kwargs["payment"].id)
+        return {
+            "id": "checkout-retry",
+            "hosted_checkout_url": "https://sumup.example/retry",
+        }
+
+    monkeypatch.setattr(
+        "app.routes.membership_payments.create_sumup_hosted_checkout",
+        fake_create,
+    )
+    monkeypatch.setattr(
+        "app.routes.membership_payments.verify_sumup_checkout",
+        lambda org, payment: {"status": "PENDING", "id": payment.sumup_checkout_id},
+    )
+    email = f"retry-{uuid.uuid4().hex[:8]}@example.com"
+    signup = build_join_submit_data(
+        email=email,
+        accept_statute="true",
+        accept_privacy="true",
+    )
+    signup["password"] = "CheckoutPass123!"
+
+    first = client.post(
+        f"/api/public/orgs/{org.slug}/membership-payment/create-checkout",
+        data=signup,
+    )
+    assert first.status_code == 200, first.text
+    payment_id = first.json()["payment_id"]
+    payment = db.query(MembershipPayment).filter_by(id=payment_id).one()
+    first_hash = payment.status_token_hash
+
+    retry_payload = dict(signup)
+    retry_payload.pop("password")
+    retry_payload["phone"] = "3339998888"
+    retried = client.post(
+        f"/api/public/orgs/{org.slug}/membership-payment/create-checkout",
+        data=retry_payload,
+    )
+
+    assert retried.status_code == 200, retried.text
+    assert retried.json() == first.json()
+    db.refresh(payment)
+    assert payment.status_token_hash == first_hash
+    assert create_calls == [payment_id]
+    member = db.query(Member).filter_by(id=payment.socio_id).one()
+    assert member.phone == "3339998888"
+
+
+def test_unauthenticated_checkout_retry_cannot_rotate_token_or_overwrite_member(
+    client,
+    db,
+    monkeypatch,
+):
+    org = _build_sumup_org(db, f"sumup-takeover-{uuid.uuid4().hex[:8]}")
+    monkeypatch.setattr(
+        "app.routes.membership_payments.create_sumup_hosted_checkout",
+        lambda **kwargs: {
+            "id": "checkout-takeover",
+            "hosted_checkout_url": "https://sumup.example/takeover",
+        },
+    )
+    monkeypatch.setattr(
+        "app.routes.membership_payments.verify_sumup_checkout",
+        lambda org, payment: {"status": "PENDING", "id": payment.sumup_checkout_id},
+    )
+    email = f"takeover-{uuid.uuid4().hex[:8]}@example.com"
+    signup = build_join_submit_data(
+        email=email,
+        phone="3331112222",
+        accept_statute="true",
+        accept_privacy="true",
+    )
+    signup["password"] = "CheckoutPass123!"
+    first = client.post(
+        f"/api/public/orgs/{org.slug}/membership-payment/create-checkout",
+        data=signup,
+    )
+    assert first.status_code == 200, first.text
+    payment = db.query(MembershipPayment).filter_by(id=first.json()["payment_id"]).one()
+    member = db.query(Member).filter_by(id=payment.socio_id).one()
+    first_hash = payment.status_token_hash
+
+    client.cookies.delete(
+        f"membership_payment_status_{payment.id}",
+        path="/api/public",
+    )
+    unauthenticated_retry = dict(signup)
+    unauthenticated_retry.pop("password")
+    unauthenticated_retry["phone"] = "3330000000"
+    retried = client.post(
+        f"/api/public/orgs/{org.slug}/membership-payment/create-checkout",
+        data=unauthenticated_retry,
+    )
+
+    assert retried.status_code == 200, retried.text
+    assert "set-cookie" not in retried.headers
+    db.refresh(payment)
+    db.refresh(member)
+    assert payment.status_token_hash == first_hash
+    assert member.phone == "3331112222"
+
+    conflicting_identity = build_join_submit_data(
+        first_name="Luigi",
+        email=email,
+        accept_statute="true",
+        accept_privacy="true",
+    )
+    conflict = client.post(
+        f"/api/public/orgs/{org.slug}/membership-payment/create-checkout",
+        data=conflicting_identity,
+    )
+    assert conflict.status_code == 409
+    db.refresh(payment)
+    db.refresh(member)
+    assert payment.status_token_hash == first_hash
+    assert member.first_name == "Mario"
+
+
+def test_checkout_does_not_replace_preexisting_member_password(client, db, monkeypatch):
+    org = _build_sumup_org(db, f"sumup-password-{uuid.uuid4().hex[:8]}")
+    member = _create_member(db, org, f"existing-{uuid.uuid4().hex[:8]}@example.com")
+    original_hash = member.password_hash
+    monkeypatch.setattr(
+        "app.routes.membership_payments.create_sumup_hosted_checkout",
+        lambda **kwargs: {
+            "id": "checkout-existing-password",
+            "hosted_checkout_url": "https://sumup.example/existing-password",
+        },
+    )
+    signup = build_join_submit_data(
+        email=member.email,
+        accept_statute="true",
+        accept_privacy="true",
+    )
+    signup["password"] = "ReplacementPass123!"
+
+    checkout = client.post(
+        f"/api/public/orgs/{org.slug}/membership-payment/create-checkout",
+        data=signup,
+    )
+
+    assert checkout.status_code == 200, checkout.text
+    db.refresh(member)
+    assert member.password_hash == original_hash
+    assert verify_password("Pass1234!", member.password_hash)
+    assert not verify_password("ReplacementPass123!", member.password_hash)
+
+
+def test_legacy_status_access_expires_after_compatibility_window(client, db):
+    org = _build_sumup_org(db, f"sumup-legacy-{uuid.uuid4().hex[:8]}")
+    member = _create_member(db, org, f"legacy-{uuid.uuid4().hex[:8]}@example.com")
+    payment = MembershipPayment(
+        org_id=org.id,
+        socio_id=member.id,
+        provider="sumup",
+        amount=Decimal("25.00"),
+        currency="EUR",
+        status=MembershipPaymentStatus.PENDING.value,
+        source="sumup",
+        checkout_reference=f"legacy-{uuid.uuid4().hex[:8]}",
+        sumup_checkout_id="legacy-checkout",
+        created_at=datetime.now(timezone.utc) - timedelta(days=8),
+        status_token_expires_at=datetime.now(timezone.utc) - timedelta(days=1),
+    )
+    db.add(payment)
+    db.commit()
+    db.refresh(payment)
+
+    response = client.get(f"/api/public/membership-payments/{payment.id}/status")
+    assert response.status_code == 404
+
+
+def test_recent_legacy_status_is_claimed_only_by_original_browser_context(client, db):
+    org = _build_sumup_org(db, f"sumup-legacy-claim-{uuid.uuid4().hex[:8]}")
+    email = f"legacy-claim-{uuid.uuid4().hex[:8]}@example.com"
+    member = _create_member(db, org, email)
+    member.signup_ip = "testclient"
+    member.signup_user_agent = "legacy-owner-browser"
+    payment = MembershipPayment(
+        org_id=org.id,
+        socio_id=member.id,
+        provider="sumup",
+        amount=Decimal("25.00"),
+        currency="EUR",
+        status=MembershipPaymentStatus.PENDING.value,
+        source="sumup",
+        checkout_reference=f"legacy-claim-{uuid.uuid4().hex[:8]}",
+        sumup_checkout_id="legacy-claim-checkout",
+        created_at=datetime.now(timezone.utc),
+        status_token_expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+    )
+    db.add(payment)
+    db.commit()
+    db.refresh(payment)
+
+    blocked = client.get(
+        f"/api/public/membership-payments/{payment.id}/status",
+        headers={"user-agent": "different-browser"},
+    )
+    assert blocked.status_code == 404
+    db.refresh(payment)
+    assert payment.status_token_hash is None
+
+    claimed = client.get(
+        f"/api/public/membership-payments/{payment.id}/status",
+        headers={"user-agent": "legacy-owner-browser"},
+    )
+    assert claimed.status_code == 200, claimed.text
+    db.refresh(payment)
+    assert payment.status_token_hash
+    assert payment.status_token_expires_at
+
+    # Once upgraded, technical context is no longer the credential: the
+    # HttpOnly random capability is, so ordinary network/UA changes keep working.
+    resumed = client.get(
+        f"/api/public/membership-payments/{payment.id}/status",
+        headers={"user-agent": "browser-after-network-change"},
+    )
+    assert resumed.status_code == 200, resumed.text
+
+
 def test_sumup_webhook_verifies_checkout_before_completion_and_is_idempotent(client, db, monkeypatch):
     org = _build_sumup_org(db, f"sumup-webhook-{uuid.uuid4().hex[:8]}")
     batch = CardBatch(org_id=org.id, start_no=800, end_no=810, next_no=800)
@@ -306,8 +590,10 @@ def test_sumup_webhook_queues_standard_card_email_and_status_exposes_card_page(
         decision_by_admin_id=1,
         payment_required=True,
         payment_status=MembershipPaymentStatus.PENDING.value,
-        signup_ip="127.0.0.1",
-        signup_user_agent="pytest",
+        # Represents an in-flight checkout created before the capability
+        # migration and returning in the same browser context.
+        signup_ip="testclient",
+        signup_user_agent="testclient",
     )
     db.add(member)
     db.flush()
@@ -321,6 +607,7 @@ def test_sumup_webhook_queues_standard_card_email_and_status_exposes_card_page(
         source="sumup",
         checkout_reference=f"ready-ref-{uuid.uuid4().hex[:8]}",
         sumup_checkout_id="ready-checkout",
+        status_token_expires_at=datetime.now(timezone.utc) + timedelta(days=7),
     )
     db.add(payment)
     db.commit()

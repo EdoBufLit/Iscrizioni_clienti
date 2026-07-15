@@ -17,6 +17,7 @@ from app.models import (
     AdminUser,
 )
 from app.services.email_outbox import build_email_payload, enqueue_email
+from app.services.file_deletion import enqueue_file_deletion
 from app.services.email_sender import build_sender_payload
 from app.utils import generate_token, save_upload_file, hash_token
 from app.services.card_allocation import allocate_next_card
@@ -38,17 +39,24 @@ from app.services.member_membership import (
     organization_membership_fee_amount,
 )
 from app.services.membership_payments import organization_requires_membership_payment
+from app.services.marketing_consent import grant_email_marketing_consent
+from app.services.privacy_notice import record_privacy_notice_acknowledgement
 from app.services.municipalities import (
     get_municipality_by_code,
     normalize_municipality_text,
 )
 from app.services.org_branding import resolve_club_display_name
+from app.security import verify_password
 from app.config import settings
-from app.middleware import join_limiter, get_client_ip, get_request_id
+from app.log_redaction import hash_identifier, redact_for_log
+from app.middleware import get_client_ip, get_request_id
+from app.services.security_rate_limits import enforce_join_rate_limit
+from app.services.sqlite_card_allocation_guard import (
+    sqlite_card_allocation_request_guard,
+)
 from app import audit
 import logging
 import os
-import hashlib
 import re
 from typing import Optional
 
@@ -69,6 +77,90 @@ _ALLOWED_PAYMENT_METHODS = {
 _AUTO_ISSUE_CARD_VIEW_TEMPLATE = (
     "/associazioni/{org_slug}/tessera?card_token={card_token}&status={status}&wallet=1"
 )
+_REGISTRATION_CONTINUATION_SESSION_KEY = "registration_continuations"
+_REGISTRATION_CONTINUATION_TTL_MINUTES = 10
+_EXISTING_SIGNUP_CONFLICT_DETAIL = (
+    "Esiste già una iscrizione associata a questi dati."
+)
+
+
+def _new_registration_continuation(db: Session, member: Member) -> str:
+    """Create the one-time proof consumed by the existing password setup call."""
+    token_value = generate_token()
+    db.add(
+        Token(
+            member_id=member.id,
+            purpose=TokenType.REGISTRATION_CONTINUATION,
+            token_hash=hash_token(token_value),
+            expires_at=datetime.utcnow()
+            + timedelta(minutes=_REGISTRATION_CONTINUATION_TTL_MINUTES),
+        )
+    )
+    return token_value
+
+
+def _store_registration_continuation(
+    request: Request,
+    *,
+    member_id: int,
+    token_value: str,
+) -> None:
+    """Keep the raw proof in the signed, HttpOnly session cookie only."""
+    current = request.session.get(_REGISTRATION_CONTINUATION_SESSION_KEY)
+    continuations = dict(current) if isinstance(current, dict) else {}
+    continuations[str(member_id)] = token_value
+    # Bound the signed cookie even if a browser opens several signup tabs.
+    request.session[_REGISTRATION_CONTINUATION_SESSION_KEY] = dict(
+        list(continuations.items())[-5:]
+    )
+
+
+def _get_registration_continuation(
+    request: Request,
+    *,
+    member_id: int,
+) -> str | None:
+    current = request.session.get(_REGISTRATION_CONTINUATION_SESSION_KEY)
+    if not isinstance(current, dict):
+        return None
+    raw_token = current.get(str(member_id))
+    return raw_token if isinstance(raw_token, str) and raw_token else None
+
+
+def _can_resume_existing_signup(
+    request: Request,
+    db: Session,
+    *,
+    member: Member,
+    password: str | None,
+) -> bool:
+    """Authorize a draft retry without treating public PII as proof."""
+    continuation = _get_registration_continuation(
+        request,
+        member_id=member.id,
+    )
+    if continuation is not None:
+        is_valid_continuation = (
+            db.query(Token.id)
+            .filter(
+                Token.member_id == member.id,
+                Token.token_hash == hash_token(continuation),
+                Token.purpose == TokenType.REGISTRATION_CONTINUATION,
+                Token.expires_at > datetime.utcnow(),
+                Token.used_at.is_(None),
+            )
+            .first()
+            is not None
+        )
+        if is_valid_continuation:
+            return True
+
+    if password and member.password_hash:
+        try:
+            return verify_password(password, member.password_hash)
+        except (TypeError, ValueError):
+            return False
+    return False
 
 
 def _normalize_payment_method(
@@ -232,15 +324,11 @@ def _validate_signup_fiscal_code(
 
     mismatch = validation.matches_expected is False
     if mismatch:
-        email_hash = hashlib.sha256(email.strip().lower().encode("utf-8")).hexdigest()[
-            :12
-        ]
         logger.info(
-            "Fiscal code mismatch accepted for web signup org_slug=%s email_hash=%s expected=%s provided=%s",
+            "Fiscal code mismatch accepted for web signup org_slug=%s email_hash=%s fiscal_code_hash=%s",
             org_slug,
-            email_hash,
-            validation.expected,
-            validation.normalized,
+            hash_identifier(email),
+            hash_identifier(validation.normalized),
         )
     return validation.normalized, mismatch
 
@@ -414,10 +502,11 @@ def api_join_start(
     fiscal_code: str = Form(...),
     accept_statute: bool = Form(...),
     accept_privacy: bool = Form(...),
+    marketing_email_consent: bool = Form(False),
     membership_type: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
-    join_limiter.check(get_client_ip(request))
+    enforce_join_rate_limit(db, client_ip=get_client_ip(request))
 
     org = db.query(Organization).filter(Organization.slug == org_slug).first()
     if not org:
@@ -440,6 +529,12 @@ def api_join_start(
         raise HTTPException(
             status_code=400,
             detail="Per questa associazione il pagamento online è obbligatorio. Usa il pulsante 'Paga con carta'.",
+        )
+
+    if not accept_privacy:
+        raise HTTPException(
+            status_code=400,
+            detail="È necessario dichiarare di aver letto l'informativa privacy.",
         )
 
     # Statute acceptance is required only when the org has a statute uploaded
@@ -465,13 +560,24 @@ def api_join_start(
         status=MemberStatus.PENDING_DOCS,
         accepted_statute_at=datetime.utcnow(),
         accepted_statute_version=org.statute_version,
-        accepted_privacy_at=datetime.utcnow(),
-        accepted_privacy_version=org.privacy_version,
         signup_source=SignupSource.ASSONAM_FORM.value,
         signup_ip=request.client.host,
         signup_user_agent=request.headers.get("user-agent"),
     )
+    record_privacy_notice_acknowledgement(
+        member,
+        association_privacy_version=org.privacy_version,
+    )
     db.add(member)
+    db.flush()
+    if marketing_email_consent:
+        grant_email_marketing_consent(
+            db,
+            member=member,
+            source="web_signup_start",
+            client_ip=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
     db.commit()
     db.refresh(member)
 
@@ -485,6 +591,7 @@ def api_join_start(
         + timedelta(minutes=settings.JOIN_TOKEN_EXPIRE_MINUTES),
     )
     db.add(token)
+    registration_continuation = _new_registration_continuation(db, member)
     db.flush()
 
     link = f"{settings.BASE_URL}/join/continue?token={token_str}"
@@ -504,13 +611,21 @@ def api_join_start(
         priority=5,
     )
     db.commit()
+    _store_registration_continuation(
+        request,
+        member_id=member.id,
+        token_value=registration_continuation,
+    )
 
     audit.join_submitted(org_slug=org_slug, org_id=org.id, ip=get_client_ip(request))
 
     return {"status": "started", "organization": display_name, "email_status": "queued"}
 
 
-@router.post("/api/join/continue")
+@router.post(
+    "/api/join/continue",
+    dependencies=[Depends(sqlite_card_allocation_request_guard)],
+)
 async def api_join_continue(
     request: Request,
     token: str = Form(...),
@@ -631,7 +746,9 @@ async def api_join_continue(
                 member.status = MemberStatus.PENDING_CARDS
                 assigned = None
                 logger.warning(
-                    f"Member {member.id} completed upload but no cards available: {exc.detail}"
+                    "Member %s completed upload but no cards available: %s",
+                    member.id,
+                    redact_for_log(exc.detail),
                 )
             else:
                 raise
@@ -682,21 +799,24 @@ async def api_join_continue(
                 except OSError:
                     pass
         db.rollback()
-        logger.error(f"Error during file upload: {e}")
+        logger.error("Error during file upload error_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=500, detail="Internal server error during upload"
         )
 
 
-@router.post("/api/join/{org_slug}/submit")
+@router.post(
+    "/api/join/{org_slug}/submit",
+    dependencies=[Depends(sqlite_card_allocation_request_guard)],
+)
 async def api_join_submit_multipart(
     request: Request,
     org_slug: str,
     first_name: str = Form(...),
     last_name: str = Form(...),
     birth_date: str = Form(...),
-    birth_place: str = Form(...),
-    birth_place_code: str = Form(...),
+    birth_place: str = Form(""),
+    birth_place_code: str = Form(""),
     birth_place_foreign: bool = Form(False),
     gender: str = Form(...),
     email: str = Form(...),
@@ -705,6 +825,8 @@ async def api_join_submit_multipart(
     accept_statute: bool = Form(...),
     accepted_statute_version: Optional[str] = Form(None),
     accept_privacy: bool = Form(...),
+    marketing_email_consent: bool = Form(False),
+    password: Optional[str] = Form(None),
     payment_method: Optional[str] = Form(None),
     membership_type: Optional[str] = Form(None),
     client_version: Optional[str] = Form(None),
@@ -713,7 +835,7 @@ async def api_join_submit_multipart(
     fiscal_code_document: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
-    join_limiter.check(get_client_ip(request))
+    enforce_join_rate_limit(db, client_ip=get_client_ip(request))
     request_id = get_request_id(request)
     request_user_agent = request.headers.get("user-agent")
     effective_client_version = _resolve_client_version(request, client_version)
@@ -757,6 +879,12 @@ async def api_join_submit_multipart(
                 detail="È necessario accettare lo statuto per procedere.",
             )
 
+    if not accept_privacy:
+        raise HTTPException(
+            status_code=400,
+            detail="È necessario dichiarare di aver letto l'informativa privacy.",
+        )
+
     normalized_payment_method = _normalize_payment_method(payment_method, required=True)
     auto_issue_enabled = _is_auto_issue_signup(org)
     client_ip = get_client_ip(request)
@@ -780,15 +908,15 @@ async def api_join_submit_multipart(
         email=normalized_email,
     )
     logger.info(
-        "join_submit_start request_id=%s git_sha=%s org_slug=%s org_id=%s auto_approve_signup=%s email=%s fiscal_code=%s user_agent=%s client_version=%s",
+        "join_submit_start request_id=%s git_sha=%s org_slug=%s org_id=%s auto_approve_signup=%s email_hash=%s fiscal_code_hash=%s user_agent_hash=%s client_version=%s",
         request_id,
         settings.GIT_SHA or "unknown",
         org.slug,
         org.id,
         auto_issue_enabled,
-        normalized_email,
-        normalized_fiscal_code,
-        request_user_agent,
+        hash_identifier(normalized_email),
+        hash_identifier(normalized_fiscal_code),
+        hash_identifier(request_user_agent),
         effective_client_version or "-",
     )
     logger.info(
@@ -806,6 +934,16 @@ async def api_join_submit_multipart(
         request,
         fiscal_code=normalized_fiscal_code,
     )
+    if existing and not _can_resume_existing_signup(
+        request,
+        db,
+        member=existing,
+        password=password,
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=_EXISTING_SIGNUP_CONFLICT_DETAIL,
+        )
     require_membership_document = bool(
         getattr(org, "require_membership_document", False)
     )
@@ -851,8 +989,10 @@ async def api_join_submit_multipart(
             member.accepted_statute_version = (
                 accepted_statute_version or org.statute_version
             )
-            member.accepted_privacy_at = datetime.utcnow()
-            member.accepted_privacy_version = org.privacy_version
+            record_privacy_notice_acknowledgement(
+                member,
+                association_privacy_version=org.privacy_version,
+            )
             if not member.signup_source:
                 member.signup_source = SignupSource.ASSONAM_FORM.value
             member.payment_method = normalized_payment_method
@@ -875,14 +1015,8 @@ async def api_join_submit_multipart(
                 .all()
             )
             for old_doc in old_docs:
-                try:
-                    old_path = os.path.join(settings.UPLOAD_DIR, old_doc.rel_path)
-                    if os.path.exists(old_path):
-                        os.remove(old_path)
-                except OSError:
-                    logger.warning(
-                        "Failed to delete old doc file: %s", old_doc.rel_path
-                    )
+                if old_doc.rel_path:
+                    enqueue_file_deletion(db, old_doc.rel_path)
                 db.delete(old_doc)
             db.flush()
         else:
@@ -903,14 +1037,30 @@ async def api_join_submit_multipart(
                 accepted_statute_at=datetime.utcnow(),
                 accepted_statute_version=accepted_statute_version
                 or org.statute_version,
-                accepted_privacy_at=datetime.utcnow(),
-                accepted_privacy_version=org.privacy_version,
                 signup_source=SignupSource.ASSONAM_FORM.value,
                 signup_ip=client_ip,
                 signup_user_agent=request_user_agent,
             )
+            record_privacy_notice_acknowledgement(
+                member,
+                association_privacy_version=org.privacy_version,
+            )
             db.add(member)
             db.flush()
+            if marketing_email_consent:
+                grant_email_marketing_consent(
+                    db,
+                    member=member,
+                    source="web_signup",
+                    client_ip=client_ip,
+                    user_agent=request_user_agent,
+                )
+            registration_continuation = _new_registration_continuation(db, member)
+            _store_registration_continuation(
+                request,
+                member_id=member.id,
+                token_value=registration_continuation,
+            )
             apply_membership_defaults(
                 member=member,
                 org=org,
@@ -1080,7 +1230,7 @@ async def api_join_submit_multipart(
             "join_submit_http_exception request_id=%s status_code=%s detail=%s rollback=1",
             request_id,
             exc.status_code,
-            exc.detail,
+            redact_for_log(exc.detail),
         )
         db.rollback()
         raise
@@ -1088,7 +1238,6 @@ async def api_join_submit_multipart(
         logger.warning(
             "join_submit_integrity_error request_id=%s rollback=1",
             request_id,
-            exc_info=True,
         )
         db.rollback()
         if not member_persisted:
@@ -1100,12 +1249,13 @@ async def api_join_submit_multipart(
                         pass
         raise HTTPException(
             status_code=409,
-            detail="Esiste già una iscrizione associata a questi dati.",
+            detail=_EXISTING_SIGNUP_CONFLICT_DETAIL,
         )
-    except Exception as e:
-        logger.exception(
-            "join_submit_unexpected_exception request_id=%s rollback=1",
+    except Exception as exc:
+        logger.error(
+            "join_submit_unexpected_exception request_id=%s error_type=%s rollback=1",
             request_id,
+            type(exc).__name__,
         )
         db.rollback()
         if not member_persisted:

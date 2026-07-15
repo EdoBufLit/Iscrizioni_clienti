@@ -21,6 +21,7 @@ from app.models import (
     Form as AssociationForm,
 )
 from app.config import settings
+from app.middleware import get_client_ip
 from app.routes.member import get_current_member
 from app.services.accounting import (
     build_accounting_file_response,
@@ -328,13 +329,29 @@ def _enforce_public_card_rate_limit(
     *,
     bucket: str,
 ) -> None:
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = get_client_ip(request)
     enforce_db_rate_limit(
         db,
         bucket=f"cards:{bucket}",
         client_ip=client_ip,
         window_seconds=settings.CARD_PUBLIC_RATE_LIMIT_WINDOW_SECONDS,
         max_requests=settings.CARD_PUBLIC_RATE_LIMIT_MAX_REQUESTS,
+    )
+
+
+def _enforce_public_form_submit_rate_limit(
+    db: Session,
+    request: Request,
+    *,
+    form: AssociationForm,
+) -> None:
+    client_ip = get_client_ip(request)
+    enforce_db_rate_limit(
+        db,
+        bucket=f"forms:submit:{form.id}",
+        client_ip=client_ip,
+        window_seconds=settings.PUBLIC_FORM_RATE_LIMIT_WINDOW_SECONDS,
+        max_requests=settings.PUBLIC_FORM_RATE_LIMIT_MAX_REQUESTS,
     )
 
 
@@ -541,6 +558,7 @@ def get_public_booking_response_json(token: str, db: Session = Depends(get_db)):
         "ok": True,
         "action": action_token.action,
         "expired": action_token.expires_at <= datetime.utcnow(),
+        "used": action_token.used_at is not None,
         "booking": {
             "customer_name": booking.customer_name,
             "booking_date": booking.booking_date.isoformat() if booking.booking_date else None,
@@ -560,22 +578,32 @@ def post_public_booking_response_page(
     db: Session = Depends(get_db),
 ):
     try:
-        action_token = get_booking_action_token(db, raw_token=token)
-    except HTTPException as exc:
-        return HTMLResponse(render_booking_action_missing(), status_code=exc.status_code)
-    try:
         result = consume_booking_action_token(db, raw_token=token, note=note)
     except HTTPException as exc:
+        if exc.status_code == 404:
+            return HTMLResponse(render_booking_action_missing(), status_code=exc.status_code)
+        try:
+            action_token = get_booking_action_token(db, raw_token=token)
+        except HTTPException:
+            return HTMLResponse(render_booking_action_missing(), status_code=404)
         return HTMLResponse(
             render_booking_action_page(token=action_token, error=str(exc.detail)),
             status_code=exc.status_code,
         )
     db.commit()
-    action = result.get("action") or action_token.action
+    action = result.get("action")
     if not result.get("ok"):
         reason = result.get("reason")
-        message = "Questo link e' scaduto." if reason == "expired" else "Questo link non e' disponibile."
-        return HTMLResponse(render_booking_action_result(title="Link non disponibile", message=message))
+        if reason == "expired":
+            title = "Link non disponibile"
+            message = "Questo link e' scaduto."
+        elif reason == "used":
+            title = "Risposta gia' registrata"
+            message = "Questa risposta e' gia' stata registrata."
+        else:
+            title = "Link non disponibile"
+            message = "Questo link non e' disponibile."
+        return HTMLResponse(render_booking_action_result(title=title, message=message))
     message = {
         "confirm": "Perfetto, prenotazione confermata. La segreteria e' stata avvisata.",
         "cancel": "Prenotazione annullata. La segreteria e' stata avvisata.",
@@ -592,16 +620,29 @@ def post_public_booking_response_json(
     db: Session = Depends(get_db),
 ):
     try:
-        action_token = get_booking_action_token(db, raw_token=token)
         result = consume_booking_action_token(db, raw_token=token, note=note)
     except HTTPException as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail)
     db.commit()
-    action = result.get("action") or action_token.action
+    action = result.get("action")
     if not result.get("ok"):
         reason = result.get("reason")
-        message = "Questo link e' scaduto." if reason == "expired" else "Questo link non e' disponibile."
-        return {"ok": False, "action": action, "title": "Link non disponibile", "message": message}
+        if reason == "expired":
+            title = "Link non disponibile"
+            message = "Questo link e' scaduto."
+        elif reason == "used":
+            title = "Risposta gia' registrata"
+            message = "Questa risposta e' gia' stata registrata."
+        else:
+            title = "Link non disponibile"
+            message = "Questo link non e' disponibile."
+        return {
+            "ok": False,
+            "action": action,
+            "reason": reason,
+            "title": title,
+            "message": message,
+        }
     messages = {
         "confirm": ("Prenotazione confermata", "Hai confermato la tua prenotazione con successo. La segreteria e' stata avvisata."),
         "cancel": ("Prenotazione annullata", "Hai annullato la tua prenotazione. La segreteria e' stata avvisata."),
@@ -727,6 +768,7 @@ def _submit_public_form(
     form_slug = normalize_form_slug(slug)
     form = _load_public_form(db, org_slug=org_slug, slug=form_slug)
     _ensure_form_is_visible(form, member)
+    _enforce_public_form_submit_rate_limit(db, request, form=form)
     validated_submission = validate_form_submission_payload(form=form, raw_payload=payload)
     if form_uses_dynamic_booking_controls(form):
         for dynamic_key in ("__booking_date", "__booking_event_series_id", "__booking_event_time"):

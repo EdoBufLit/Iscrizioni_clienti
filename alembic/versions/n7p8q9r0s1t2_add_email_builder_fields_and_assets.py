@@ -16,113 +16,116 @@ branch_labels = None
 depends_on = None
 
 
+def _table_names(bind) -> set[str]:
+    return set(sa.inspect(bind).get_table_names())
+
+
+def _column_names(bind, table_name: str) -> set[str]:
+    return {column["name"] for column in sa.inspect(bind).get_columns(table_name)}
+
+
+def _index_names(bind, table_name: str) -> set[str]:
+    return {index["name"] for index in sa.inspect(bind).get_indexes(table_name)}
+
+
+def _foreign_key_names(bind, table_name: str) -> set[str]:
+    return {
+        foreign_key["name"]
+        for foreign_key in sa.inspect(bind).get_foreign_keys(table_name)
+        if foreign_key.get("name")
+    }
+
+
 def upgrade() -> None:
-    op.add_column(
-        "email_templates",
+    bind = op.get_bind()
+    tables = _table_names(bind)
+    is_sqlite = bind.dialect.name == "sqlite"
+
+    template_columns = _column_names(bind, "email_templates")
+    template_additions = (
         sa.Column(
             "template_type",
             sa.String(),
             nullable=False,
             server_default="generic_notice",
         ),
-    )
-    op.add_column(
-        "email_templates",
         sa.Column(
             "editor_status",
             sa.String(),
             nullable=False,
             server_default="draft",
         ),
+        sa.Column("grapesjs_project_json", sa.JSON(), nullable=True),
+        sa.Column("mjml_source", sa.Text(), nullable=True),
+        sa.Column("compiled_html", sa.Text(), nullable=True),
     )
-    op.add_column("email_templates", sa.Column("grapesjs_project_json", sa.JSON(), nullable=True))
-    op.add_column("email_templates", sa.Column("mjml_source", sa.Text(), nullable=True))
-    op.add_column("email_templates", sa.Column("compiled_html", sa.Text(), nullable=True))
-    op.create_index(
-        op.f("ix_email_templates_template_type"),
-        "email_templates",
-        ["template_type"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_email_templates_editor_status"),
-        "email_templates",
-        ["editor_status"],
-        unique=False,
-    )
+    for column in template_additions:
+        if column.name not in template_columns:
+            op.add_column("email_templates", column)
+            template_columns.add(column.name)
 
-    op.add_column(
-        "email_campaigns",
+    template_indexes = _index_names(bind, "email_templates")
+    for index_name, columns in (
+        ("ix_email_templates_template_type", ["template_type"]),
+        ("ix_email_templates_editor_status", ["editor_status"]),
+    ):
+        if index_name not in template_indexes:
+            op.create_index(index_name, "email_templates", columns, unique=False)
+
+    campaign_columns = _column_names(bind, "email_campaigns")
+    campaign_additions = (
         sa.Column("source_template_id", sa.Integer(), nullable=True),
-    )
-    op.add_column(
-        "email_campaigns",
         sa.Column(
             "editor_status",
             sa.String(),
             nullable=False,
             server_default="draft",
         ),
+        sa.Column("grapesjs_project_json", sa.JSON(), nullable=True),
+        sa.Column("mjml_source", sa.Text(), nullable=True),
+        sa.Column("compiled_html", sa.Text(), nullable=True),
     )
-    op.add_column("email_campaigns", sa.Column("grapesjs_project_json", sa.JSON(), nullable=True))
-    op.add_column("email_campaigns", sa.Column("mjml_source", sa.Text(), nullable=True))
-    op.add_column("email_campaigns", sa.Column("compiled_html", sa.Text(), nullable=True))
-    op.create_index(
-        op.f("ix_email_campaigns_source_template_id"),
-        "email_campaigns",
-        ["source_template_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_email_campaigns_editor_status"),
-        "email_campaigns",
-        ["editor_status"],
-        unique=False,
-    )
-    op.create_foreign_key(
-        "fk_email_campaigns_source_template_id_email_templates",
-        "email_campaigns",
-        "email_templates",
-        ["source_template_id"],
-        ["id"],
-    )
+    for column in campaign_additions:
+        if column.name not in campaign_columns:
+            op.add_column("email_campaigns", column)
+            campaign_columns.add(column.name)
 
-    op.create_table(
-        "email_builder_assets",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("association_id", sa.Integer(), nullable=False),
-        sa.Column("created_by_user_id", sa.Integer(), nullable=True),
-        sa.Column("name", sa.String(), nullable=False),
-        sa.Column("file_name", sa.String(), nullable=False),
-        sa.Column("mime_type", sa.String(), nullable=False),
-        sa.Column("size_bytes", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("storage_path", sa.Text(), nullable=False),
-        sa.Column("public_url", sa.Text(), nullable=False),
-        sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), nullable=False),
-        sa.ForeignKeyConstraint(["association_id"], ["organizations.id"]),
-        sa.ForeignKeyConstraint(["created_by_user_id"], ["admin_users.id"]),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(op.f("ix_email_builder_assets_id"), "email_builder_assets", ["id"], unique=False)
-    op.create_index(
-        op.f("ix_email_builder_assets_association_id"),
-        "email_builder_assets",
-        ["association_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_email_builder_assets_created_by_user_id"),
-        "email_builder_assets",
-        ["created_by_user_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_email_builder_assets_created_at"),
-        "email_builder_assets",
-        ["created_at"],
-        unique=False,
-    )
+    campaign_indexes = _index_names(bind, "email_campaigns")
+    for index_name, columns in (
+        ("ix_email_campaigns_source_template_id", ["source_template_id"]),
+        ("ix_email_campaigns_editor_status", ["editor_status"]),
+    ):
+        if index_name not in campaign_indexes:
+            op.create_index(index_name, "email_campaigns", columns, unique=False)
+
+    if "email_builder_assets" not in tables:
+        op.create_table(
+            "email_builder_assets",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column("association_id", sa.Integer(), nullable=False),
+            sa.Column("created_by_user_id", sa.Integer(), nullable=True),
+            sa.Column("name", sa.String(), nullable=False),
+            sa.Column("file_name", sa.String(), nullable=False),
+            sa.Column("mime_type", sa.String(), nullable=False),
+            sa.Column("size_bytes", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column("storage_path", sa.Text(), nullable=False),
+            sa.Column("public_url", sa.Text(), nullable=False),
+            sa.Column("created_at", sa.DateTime(), nullable=False),
+            sa.Column("updated_at", sa.DateTime(), nullable=False),
+            sa.ForeignKeyConstraint(["association_id"], ["organizations.id"]),
+            sa.ForeignKeyConstraint(["created_by_user_id"], ["admin_users.id"]),
+            sa.PrimaryKeyConstraint("id"),
+        )
+
+    asset_indexes = _index_names(bind, "email_builder_assets")
+    for index_name, columns in (
+        ("ix_email_builder_assets_id", ["id"]),
+        ("ix_email_builder_assets_association_id", ["association_id"]),
+        ("ix_email_builder_assets_created_by_user_id", ["created_by_user_id"]),
+        ("ix_email_builder_assets_created_at", ["created_at"]),
+    ):
+        if index_name not in asset_indexes:
+            op.create_index(index_name, "email_builder_assets", columns, unique=False)
 
     op.execute(
         """
@@ -158,35 +161,118 @@ def upgrade() -> None:
         """
     )
 
-    op.alter_column("email_templates", "template_type", server_default=None)
-    op.alter_column("email_templates", "editor_status", server_default=None)
-    op.alter_column("email_campaigns", "editor_status", server_default=None)
+    foreign_key_name = "fk_email_campaigns_source_template_id_email_templates"
+    foreign_keys = _foreign_key_names(bind, "email_campaigns")
+    if is_sqlite:
+        with op.batch_alter_table("email_templates") as batch_op:
+            batch_op.alter_column(
+                "template_type", existing_type=sa.String(), server_default=None
+            )
+            batch_op.alter_column(
+                "editor_status", existing_type=sa.String(), server_default=None
+            )
+        with op.batch_alter_table("email_campaigns") as batch_op:
+            if foreign_key_name not in foreign_keys:
+                batch_op.create_foreign_key(
+                    foreign_key_name,
+                    "email_templates",
+                    ["source_template_id"],
+                    ["id"],
+                )
+            batch_op.alter_column(
+                "editor_status", existing_type=sa.String(), server_default=None
+            )
+    else:
+        if foreign_key_name not in foreign_keys:
+            op.create_foreign_key(
+                foreign_key_name,
+                "email_campaigns",
+                "email_templates",
+                ["source_template_id"],
+                ["id"],
+            )
+        op.alter_column("email_templates", "template_type", server_default=None)
+        op.alter_column("email_templates", "editor_status", server_default=None)
+        op.alter_column("email_campaigns", "editor_status", server_default=None)
 
 
 def downgrade() -> None:
-    op.drop_index(op.f("ix_email_builder_assets_created_at"), table_name="email_builder_assets")
-    op.drop_index(op.f("ix_email_builder_assets_created_by_user_id"), table_name="email_builder_assets")
-    op.drop_index(op.f("ix_email_builder_assets_association_id"), table_name="email_builder_assets")
-    op.drop_index(op.f("ix_email_builder_assets_id"), table_name="email_builder_assets")
-    op.drop_table("email_builder_assets")
+    bind = op.get_bind()
+    tables = _table_names(bind)
+    is_sqlite = bind.dialect.name == "sqlite"
 
-    op.drop_constraint(
-        "fk_email_campaigns_source_template_id_email_templates",
-        "email_campaigns",
-        type_="foreignkey",
-    )
-    op.drop_index(op.f("ix_email_campaigns_editor_status"), table_name="email_campaigns")
-    op.drop_index(op.f("ix_email_campaigns_source_template_id"), table_name="email_campaigns")
-    op.drop_column("email_campaigns", "compiled_html")
-    op.drop_column("email_campaigns", "mjml_source")
-    op.drop_column("email_campaigns", "grapesjs_project_json")
-    op.drop_column("email_campaigns", "editor_status")
-    op.drop_column("email_campaigns", "source_template_id")
+    if "email_builder_assets" in tables:
+        asset_indexes = _index_names(bind, "email_builder_assets")
+        for index_name in (
+            "ix_email_builder_assets_created_at",
+            "ix_email_builder_assets_created_by_user_id",
+            "ix_email_builder_assets_association_id",
+            "ix_email_builder_assets_id",
+        ):
+            if index_name in asset_indexes:
+                op.drop_index(index_name, table_name="email_builder_assets")
+        op.drop_table("email_builder_assets")
 
-    op.drop_index(op.f("ix_email_templates_editor_status"), table_name="email_templates")
-    op.drop_index(op.f("ix_email_templates_template_type"), table_name="email_templates")
-    op.drop_column("email_templates", "compiled_html")
-    op.drop_column("email_templates", "mjml_source")
-    op.drop_column("email_templates", "grapesjs_project_json")
-    op.drop_column("email_templates", "editor_status")
-    op.drop_column("email_templates", "template_type")
+    if "email_campaigns" in tables:
+        campaign_indexes = _index_names(bind, "email_campaigns")
+        for index_name in (
+            "ix_email_campaigns_editor_status",
+            "ix_email_campaigns_source_template_id",
+        ):
+            if index_name in campaign_indexes:
+                op.drop_index(index_name, table_name="email_campaigns")
+
+        campaign_columns = _column_names(bind, "email_campaigns")
+        foreign_key_name = "fk_email_campaigns_source_template_id_email_templates"
+        foreign_keys = _foreign_key_names(bind, "email_campaigns")
+        removable_campaign_columns = (
+            "compiled_html",
+            "mjml_source",
+            "grapesjs_project_json",
+            "editor_status",
+            "source_template_id",
+        )
+        if is_sqlite:
+            with op.batch_alter_table("email_campaigns") as batch_op:
+                if foreign_key_name in foreign_keys:
+                    batch_op.drop_constraint(foreign_key_name, type_="foreignkey")
+                for column_name in removable_campaign_columns:
+                    if column_name in campaign_columns:
+                        batch_op.drop_column(column_name)
+        else:
+            if foreign_key_name in foreign_keys:
+                op.drop_constraint(
+                    foreign_key_name,
+                    "email_campaigns",
+                    type_="foreignkey",
+                )
+            for column_name in removable_campaign_columns:
+                if column_name in campaign_columns:
+                    op.drop_column("email_campaigns", column_name)
+
+    if "email_templates" in tables:
+        template_indexes = _index_names(bind, "email_templates")
+        for index_name in (
+            "ix_email_templates_editor_status",
+            "ix_email_templates_template_type",
+        ):
+            if index_name in template_indexes:
+                op.drop_index(index_name, table_name="email_templates")
+
+        template_columns = _column_names(bind, "email_templates")
+        removable_template_columns = (
+            "compiled_html",
+            "mjml_source",
+            "grapesjs_project_json",
+            "editor_status",
+            "template_type",
+        )
+        if is_sqlite:
+            with op.batch_alter_table("email_templates") as batch_op:
+                for column_name in removable_template_columns:
+                    if column_name in template_columns:
+                        batch_op.drop_column(column_name)
+        else:
+            for column_name in removable_template_columns:
+                if column_name in template_columns:
+                    op.drop_column("email_templates", column_name)

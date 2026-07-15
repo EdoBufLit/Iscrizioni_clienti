@@ -12,6 +12,7 @@ from app.models import (
     OrgAdminToken,
     Organization,
 )
+from app.security import get_password_hash
 from app.utils import hash_token
 from tests.signup_payloads import build_join_submit_data
 
@@ -60,7 +61,10 @@ def _login_org_admin(client, db, org_id: int, suffix: str) -> AdminUser:
     return admin
 
 
-def test_join_submit_allows_resubmission_for_legacy_active_but_inactive_member(client, db):
+def test_join_submit_allows_proven_resubmission_for_legacy_active_but_inactive_member(
+    client,
+    db,
+):
     suffix = uuid.uuid4().hex[:8]
     org = _create_org(db, f"legacy-join-{suffix}")
     email = f"legacy-active-{suffix}@example.com"
@@ -80,18 +84,30 @@ def test_join_submit_allows_resubmission_for_legacy_active_but_inactive_member(c
     db.commit()
     db.refresh(stale_member)
 
-    res = client.post(
-        f"/api/join/{org.slug}/submit",
-        data=build_join_submit_data(
-            first_name="Nuovo",
-            last_name="Socio",
-            email=email,
-            phone="3331231234",
-            payment_method="CASH",
-            accept_statute="false",
-            accept_privacy="true",
-        ),
+    payload = build_join_submit_data(
+        first_name="Nuovo",
+        last_name="Socio",
+        email=email,
+        phone="3331231234",
+        payment_method="CASH",
+        accept_statute="false",
+        accept_privacy="true",
     )
+
+    unproven = client.post(
+        f"/api/join/{org.slug}/submit",
+        data=payload,
+    )
+    assert unproven.status_code == 409, unproven.text
+    db.refresh(stale_member)
+    assert stale_member.first_name == "Old"
+    assert stale_member.phone == "3330000000"
+
+    stale_member.password_hash = get_password_hash("LegacyMemberPass123!")
+    db.commit()
+    payload["password"] = "LegacyMemberPass123!"
+    res = client.post(f"/api/join/{org.slug}/submit", data=payload)
+
     assert res.status_code == 200, res.text
     payload = res.json()
     assert payload["id"] == stale_member.id

@@ -8,11 +8,12 @@ class PublicUploadsStaticFiles(StaticFiles):
     """Serve only explicitly public upload subtrees.
 
     This prevents accidental exposure of member documents while keeping
-    Wallet branding assets available at their existing URLs.
+    explicitly public Wallet and email-builder assets at their existing URLs.
     """
 
     _ALLOWED_PATTERNS = (
         re.compile(r"^org/\d+/wallet/[^/]+$"),
+        re.compile(r"^org/\d+/communications/[^/]+$"),
         re.compile(r"^affiliation-videos/[^/]+$"),
     )
 
@@ -25,4 +26,13 @@ class PublicUploadsStaticFiles(StaticFiles):
         normalized = path.lstrip("/").replace("\\", "/")
         if not self._is_public_upload_path(normalized):
             raise HTTPException(status_code=404)
-        return await super().get_response(normalized, scope)
+        response = await super().get_response(normalized, scope)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        if normalized.lower().endswith(".svg"):
+            # Legacy SVG assets may already exist. Sandboxing keeps them usable
+            # as images while preventing scripts or same-origin navigation when
+            # somebody opens the asset directly.
+            response.headers["Content-Security-Policy"] = (
+                "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:"
+            )
+        return response

@@ -186,7 +186,7 @@ def test_super_admin_blocks_accounting_document_if_any_target_lacks_accounting(c
     response = client.post("/api/super-admin/documents", data=data, files=files)
 
     assert response.status_code == 422, response.text
-    assert "contabilita attiva" in response.json()["detail"].lower()
+    assert "contabilità attiva" in response.json()["detail"].lower()
 
 
 def test_accounting_documents_are_visible_only_to_enabled_org_admins_and_downloadable(client, db):

@@ -13,6 +13,9 @@ from fastapi import HTTPException
 from app.db import SessionLocal
 from app.models import CardBatch, Organization
 from app.services.card_allocation import allocate_next_card, release_card_number
+from app.services.sqlite_card_allocation_guard import (
+    serialize_sqlite_card_allocation_requests,
+)
 
 
 @pytest.fixture
@@ -171,5 +174,43 @@ def test_allocate_is_concurrency_safe_for_10_parallel_requests(db):
         assigned_numbers = list(executor.map(lambda _idx: _worker(), range(10)))
 
     assert len(assigned_numbers) == 10
+    assert len(set(assigned_numbers)) == 10
+    assert sorted(assigned_numbers) == list(range(start_no, start_no + 10))
+
+
+def test_request_guard_serializes_allocation_after_realistic_prequery(db):
+    current_year = datetime.utcnow().year
+    org = _create_org(db, "card-alloc-prequery-concurrency")
+    org_id = org.id
+    start_no = 31000
+    _create_batch(
+        db,
+        org_id=org_id,
+        year=current_year,
+        start_no=start_no,
+        end_no=start_no + 20,
+        next_no=start_no,
+    )
+
+    barrier = threading.Barrier(10)
+
+    def _worker() -> int:
+        session = SessionLocal()
+        try:
+            barrier.wait(timeout=10)
+            with serialize_sqlite_card_allocation_requests():
+                # Real issue flows resolve the member/organization before they
+                # reach allocate_next_card(). The request guard must therefore
+                # be held before that first ORM read, not only inside allocation.
+                assert session.query(Organization.id).filter_by(id=org_id).scalar()
+                allocation = allocate_next_card(session, org_id, current_year)
+                session.commit()
+                return allocation.card_no
+        finally:
+            session.close()
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        assigned_numbers = list(executor.map(lambda _idx: _worker(), range(10)))
+
     assert len(set(assigned_numbers)) == 10
     assert sorted(assigned_numbers) == list(range(start_no, start_no + 10))

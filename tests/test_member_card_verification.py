@@ -183,6 +183,12 @@ def test_member_card_download_page_and_wallet_placeholder_endpoints(client, db):
     assert pdf_hint_res.status_code == 200, pdf_hint_res.text
     assert "PDF server-side non configurato" in pdf_hint_res.text
 
+    direct_pdf_res = client.get(f"/api/cards/{token}/download.pdf")
+    assert direct_pdf_res.status_code == 200, direct_pdf_res.text
+    assert direct_pdf_res.headers["content-type"].startswith("application/pdf")
+    assert "attachment;" in direct_pdf_res.headers["content-disposition"]
+    assert direct_pdf_res.content.startswith(b"%PDF-")
+
     apple_res = client.get(f"/api/cards/{token}/wallet/apple")
     assert apple_res.status_code == 404
     assert apple_res.json()["detail"] == "Wallet non configurato"

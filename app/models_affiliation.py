@@ -97,6 +97,9 @@ else:
 
         id = Column(Integer, primary_key=True, index=True)
         public_token = Column(String(64), nullable=False, unique=True, index=True)
+        public_token_hash = Column(String(64), nullable=True, unique=True, index=True)
+        public_token_expires_at = Column(DateTime(timezone=True), nullable=True)
+        public_token_version = Column(Integer, nullable=True)
 
         status = Column(
             String,

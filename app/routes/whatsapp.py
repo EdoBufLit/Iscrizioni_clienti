@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import get_db
+from app.log_redaction import hash_identifier, redact_url
 from app.services.whatsapp_bot import handle_whatsapp_bot_message
 
 router = APIRouter(prefix="/api/whatsapp", tags=["whatsapp"])
@@ -74,13 +75,6 @@ async def _read_webhook_payload(request: Request) -> dict[str, object]:
     return data
 
 
-def _truncate_body(value: str | None) -> str:
-    body = (value or "").strip()
-    if len(body) <= 200:
-        return body
-    return f"{body[:200]}..."
-
-
 def _resolve_webhook_url(request: Request) -> str:
     url = request.url
     proto = (request.headers.get("x-forwarded-proto") or url.scheme or "https").split(
@@ -124,7 +118,7 @@ async def _validate_twilio_signature(
         params = {str(key): str(value) for key, value in payload_data.items()}
 
     if not validator.validate(url, params, signature):
-        logger.warning("whatsapp_webhook_invalid_signature url=%s", url)
+        logger.warning("whatsapp_webhook_invalid_signature url=%s", redact_url(url))
         raise HTTPException(status_code=403, detail="Invalid Twilio signature")
 
 
@@ -143,24 +137,24 @@ async def whatsapp_bot(
         logger.warning(
             "whatsapp_webhook_parse_failed content_type=%s",
             request.headers.get("content-type"),
-            exc_info=True,
         )
         return {"ok": False}
 
     logger.info(
-        "whatsapp_webhook received from=%s to=%s message_sid=%s body=%s",
-        payload.from_,
-        payload.to,
-        payload.message_sid,
-        _truncate_body(payload.body),
+        "whatsapp_webhook_received sender_hash=%s recipient_hash=%s message_sid_hash=%s body_present=%s body_chars=%s",
+        hash_identifier(payload.from_),
+        hash_identifier(payload.to),
+        hash_identifier(payload.message_sid),
+        bool(payload.body),
+        len(payload.body or ""),
     )
 
     if not payload.from_ or not payload.body:
         logger.warning(
-            "whatsapp_webhook_missing_required_fields from=%s to=%s message_sid=%s",
-            payload.from_,
-            payload.to,
-            payload.message_sid,
+            "whatsapp_webhook_missing_required_fields has_sender=%s has_recipient=%s has_message_sid=%s",
+            bool(payload.from_),
+            bool(payload.to),
+            bool(payload.message_sid),
         )
         return {"ok": False}
 
@@ -171,12 +165,13 @@ async def whatsapp_bot(
             body=payload.body,
             profile_name=payload.profile_name,
         )
-    except Exception:
-        logger.exception(
-            "whatsapp_webhook_handler_failed from=%s to=%s message_sid=%s",
-            payload.from_,
-            payload.to,
-            payload.message_sid,
+    except Exception as exc:
+        logger.error(
+            "whatsapp_webhook_handler_failed sender_hash=%s recipient_hash=%s message_sid_hash=%s error_type=%s",
+            hash_identifier(payload.from_),
+            hash_identifier(payload.to),
+            hash_identifier(payload.message_sid),
+            type(exc).__name__,
         )
         return {"ok": False}
 

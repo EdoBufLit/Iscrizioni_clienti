@@ -10,6 +10,9 @@ from app.services.integration_issuer import (
     IssueMemberCommand,
     issue_member_from_integration,
 )
+from app.services.sqlite_card_allocation_guard import (
+    sqlite_card_allocation_request_guard,
+)
 
 router = APIRouter(prefix="/api/integrations", tags=["integrations"])
 
@@ -69,7 +72,11 @@ def _log_integration_security_event(
     db.commit()
 
 
-@router.post("/members/issue", response_model=IssueMemberResponse)
+@router.post(
+    "/members/issue",
+    response_model=IssueMemberResponse,
+    dependencies=[Depends(sqlite_card_allocation_request_guard)],
+)
 def issue_member(
     request: Request,
     body: IssueMemberBody,

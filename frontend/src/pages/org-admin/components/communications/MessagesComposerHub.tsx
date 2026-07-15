@@ -195,7 +195,7 @@ function mapTemplateToDraft(template: OrgAdminEmailTemplate): TemplateDraft {
 }
 
 function mapCampaignToDraft(campaign: OrgAdminEmailCampaign): CampaignDraft {
-  const templateType = campaign.source_template?.template_type || DEFAULT_TEMPLATE_TYPE;
+  const templateType = campaign.template_type || campaign.source_template?.template_type || DEFAULT_TEMPLATE_TYPE;
   return {
     id: campaign.id,
     sourceTemplateId: campaign.source_template_id ?? campaign.source_template?.id ?? null,
@@ -740,10 +740,13 @@ export function MessagesHub({
       setAudienceEstimate(selectedMembers.length);
       return;
     }
-    void fetchOrgAdminCommunicationAudienceEstimate(campaignDraft.audienceType)
+    void fetchOrgAdminCommunicationAudienceEstimate(
+      campaignDraft.audienceType,
+      campaignDraft.templateType,
+    )
       .then((res) => setAudienceEstimate(res.count))
       .catch(() => setAudienceEstimate(null));
-  }, [campaignDraft.audienceType, campaignDraft.recipientMode, selectedMembers.length, view.kind]);
+  }, [campaignDraft.audienceType, campaignDraft.recipientMode, campaignDraft.templateType, selectedMembers.length, view.kind]);
 
   useEffect(() => {
     if (
@@ -1114,6 +1117,7 @@ export function MessagesHub({
         scheduled_at: currentDraft.scheduledAt ? new Date(currentDraft.scheduledAt).toISOString() : null,
         linked_form_id: currentDraft.linkedFormId,
         source_template_id: currentDraft.sourceTemplateId,
+        template_type: currentDraft.templateType,
         editor_status: currentDraft.editorStatus,
       } as const;
 

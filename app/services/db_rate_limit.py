@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
+from sqlalchemy.engine import Connection, Engine
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -15,6 +16,23 @@ def _dialect_name(db: Session) -> str:
     if bind is None or getattr(bind, "dialect", None) is None:
         return ""
     return (bind.dialect.name or "").lower()
+
+
+def _independent_bind(db: Session) -> Engine:
+    """Return an engine so limiter commits cannot affect the caller transaction.
+
+    ``Session.get_bind()`` can return either an Engine or a Connection. Binding the
+    limiter session to the caller Connection would still share its transaction, so
+    unwrap Connections to their Engine and let SQLAlchemy check out another DB
+    connection.
+    """
+
+    bind = db.get_bind()
+    if isinstance(bind, Connection):
+        return bind.engine
+    if isinstance(bind, Engine):
+        return bind
+    raise RuntimeError("Rate limiter requires a database engine")
 
 
 def _begin_rate_limit_tx(db: Session) -> None:
@@ -68,15 +86,20 @@ def enforce_db_rate_limit(
     normalized_max = max(1, int(max_requests))
     normalized_bucket = (bucket or "global").strip().lower()[:255]
     normalized_ip = (client_ip or "unknown").strip()[:64]
-    dialect_name = _dialect_name(db)
+    limiter_db = Session(
+        bind=_independent_bind(db),
+        autoflush=False,
+        expire_on_commit=False,
+    )
+    dialect_name = _dialect_name(limiter_db)
     current_time = _now_for_dialect(dialect_name, now)
 
     try:
         max_attempts = 2 if dialect_name == "postgresql" else 1
         for attempt in range(max_attempts):
-            _begin_rate_limit_tx(db)
+            _begin_rate_limit_tx(limiter_db)
 
-            row_query = db.query(IngestRateLimit).filter(
+            row_query = limiter_db.query(IngestRateLimit).filter(
                 IngestRateLimit.org_slug == normalized_bucket,
                 IngestRateLimit.client_ip == normalized_ip,
             )
@@ -86,7 +109,7 @@ def enforce_db_rate_limit(
             row = row_query.first()
 
             if not row:
-                db.add(
+                limiter_db.add(
                     IngestRateLimit(
                         org_slug=normalized_bucket,
                         client_ip=normalized_ip,
@@ -95,10 +118,10 @@ def enforce_db_rate_limit(
                     )
                 )
                 try:
-                    db.commit()
+                    limiter_db.commit()
                     return
                 except IntegrityError:
-                    db.rollback()
+                    limiter_db.rollback()
                     if dialect_name == "postgresql" and attempt + 1 < max_attempts:
                         # Another concurrent request inserted the row first; retry and lock it.
                         continue
@@ -109,21 +132,23 @@ def enforce_db_rate_limit(
                 row.window_started_at = current_time
                 row.request_count = 1
                 row.updated_at = current_time
-                db.commit()
+                limiter_db.commit()
                 return
 
             if row.request_count >= normalized_max:
-                db.rollback()
+                limiter_db.rollback()
                 raise HTTPException(status_code=429, detail="Too many requests")
 
             row.request_count = row.request_count + 1
             row.updated_at = current_time
-            db.commit()
+            limiter_db.commit()
             return
 
         raise RuntimeError("Rate limiter update retry exhausted")
     except HTTPException:
         raise
     except Exception:
-        db.rollback()
+        limiter_db.rollback()
         raise
+    finally:
+        limiter_db.close()

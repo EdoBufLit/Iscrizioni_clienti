@@ -1,4 +1,5 @@
 from datetime import datetime
+import logging
 import uuid
 
 import pytest
@@ -372,7 +373,12 @@ def test_whatsapp_bot_uses_openai_fallback_when_configured(client, monkeypatch):
     assert response.json() == {"reply": "Risposta AI sintetica."}
 
 
-def test_whatsapp_bot_accepts_form_urlencoded_payload(client, monkeypatch):
+def test_whatsapp_bot_accepts_form_urlencoded_payload_without_logging_pii(
+    client,
+    monkeypatch,
+    caplog,
+):
+    caplog.set_level(logging.INFO, logger="app.routes.whatsapp")
     monkeypatch.setattr(
         whatsapp_route,
         "handle_whatsapp_bot_message",
@@ -381,10 +387,13 @@ def test_whatsapp_bot_accepts_form_urlencoded_payload(client, monkeypatch):
         ),
     )
 
+    phone_from = "+393891605511"
+    phone_to = "+390299914307"
+    private_body = "testo privato sentinella webhook"
     response = client.post(
         "/api/whatsapp/bot",
         data=(
-            "Body=ciao&From=whatsapp:+393891605511&To=whatsapp:+390299914307"
+            f"Body={private_body.replace(' ', '+')}&From=whatsapp:{phone_from}&To=whatsapp:{phone_to}"
             "&MessageSid=SM123&WaId=393891605511&ProfileName=Test&NumMedia=0"
         ),
         headers={"Content-Type": "application/x-www-form-urlencoded"},
@@ -392,8 +401,11 @@ def test_whatsapp_bot_accepts_form_urlencoded_payload(client, monkeypatch):
 
     assert response.status_code == 200, response.text
     assert response.json() == {
-        "reply": "echo:whatsapp:+393891605511:ciao:Test",
+        "reply": f"echo:whatsapp:{phone_from}:{private_body}:Test",
     }
+    assert phone_from not in caplog.text
+    assert phone_to not in caplog.text
+    assert private_body not in caplog.text
 
 
 def test_whatsapp_bot_returns_200_with_ok_false_when_form_parse_fails(client):

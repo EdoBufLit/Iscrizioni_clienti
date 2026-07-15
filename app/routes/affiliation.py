@@ -52,12 +52,21 @@ from app.services.affiliation_video import (
     resolve_welcome_video_state,
     serialize_video_job,
 )
+from app.services.affiliation_capability import (
+    AFFILIATION_PUBLIC_TOKEN_TTL_DAYS,
+    AffiliationCapabilityIntegrityError,
+    affiliation_capability_is_expired,
+    affiliation_public_token,
+    affiliation_public_token_hash,
+    initialize_affiliation_capability,
+)
 from app.services.affiliation_identity import (
     build_affiliation_idempotency_key,
     normalize_affiliation_email,
     sync_affiliation_identity_fields,
 )
 from app.services.email_outbox import enqueue_email
+from app.services.file_deletion import enqueue_file_deletion
 from app.services.org_admin_welcome_guide import build_org_admin_welcome_email_payload
 from app.utils import generate_token, hash_token, save_upload_file
 
@@ -102,7 +111,13 @@ ACTIVE_IDEMPOTENT_AFFILIATION_STATUSES = {
     AffiliationApplicationStatus.UNDER_REVIEW.value,
 }
 
-AFFILIATION_RESUME_LOOKBACK_DAYS = 30
+AFFILIATION_RESUME_LOOKBACK_DAYS = AFFILIATION_PUBLIC_TOKEN_TTL_DAYS
+
+AFFILIATION_RESUME_TOKEN_HEADER = "X-Affiliation-Draft-Token"
+AFFILIATION_RESUME_CONFLICT_DETAIL = (
+    "Impossibile creare o riprendere la bozza con questi dati. "
+    "Usa il link di ripresa già ricevuto."
+)
 
 PAYMENT_OK_STATUSES = {
     AffiliationPaymentStatus.PAID.value,
@@ -540,14 +555,71 @@ def _ensure_super_admin(request: Request, db: Session) -> AdminUser:
 
 
 def _find_application_by_token(db: Session, public_token: str) -> AffiliationApplication:
+    token_hash = affiliation_public_token_hash(public_token)
     application = (
         db.query(AffiliationApplication)
-        .filter(AffiliationApplication.public_token == public_token)
+        .filter(
+            or_(
+                AffiliationApplication.public_token_hash == token_hash,
+                (
+                    AffiliationApplication.public_token_hash.is_(None)
+                    & (AffiliationApplication.public_token == public_token)
+                ),
+            )
+        )
         .first()
     )
     if application is None:
         raise HTTPException(status_code=404, detail="Bozza affiliazione non trovata")
+    try:
+        expected_token = affiliation_public_token(application)
+    except AffiliationCapabilityIntegrityError:
+        logger.exception(
+            "affiliation_capability_integrity_error application_id=%s",
+            application.id,
+        )
+        raise HTTPException(status_code=404, detail="Bozza affiliazione non trovata")
+    if not hmac.compare_digest(expected_token, public_token):
+        raise HTTPException(status_code=404, detail="Bozza affiliazione non trovata")
+    if affiliation_capability_is_expired(application):
+        raise HTTPException(
+            status_code=410,
+            detail="Il link della bozza di affiliazione è scaduto.",
+        )
     return application
+
+
+def _require_reusable_application_capability(
+    application: AffiliationApplication,
+    presented_token: str | None,
+) -> str:
+    """Return the bearer only when the caller already possesses it.
+
+    Affiliation identity fields are an idempotency aid, not an authentication
+    factor: they are often public or easy to guess.  Keep every failure
+    deliberately identical so the endpoint cannot expose another applicant's
+    draft or reconstruct its capability from identity data alone.
+    """
+
+    candidate = (presented_token or "").strip()
+    if not candidate or len(candidate) > 128:
+        raise HTTPException(status_code=409, detail=AFFILIATION_RESUME_CONFLICT_DETAIL)
+
+    try:
+        expected_token = affiliation_public_token(application)
+    except AffiliationCapabilityIntegrityError:
+        logger.error(
+            "affiliation_reuse_capability_integrity_error application_id=%s",
+            application.id,
+        )
+        raise HTTPException(status_code=409, detail=AFFILIATION_RESUME_CONFLICT_DETAIL)
+
+    if affiliation_capability_is_expired(application) or not hmac.compare_digest(
+        expected_token,
+        candidate,
+    ):
+        raise HTTPException(status_code=409, detail=AFFILIATION_RESUME_CONFLICT_DETAIL)
+    return expected_token
 
 
 def _record_affiliation_event(
@@ -588,6 +660,7 @@ def _serialize_document_public(
     application: AffiliationApplication,
     document: AffiliationDocument,
 ) -> dict[str, Any]:
+    public_token = affiliation_public_token(application)
     return {
         "id": document.id,
         "doc_type": document.doc_type,
@@ -599,7 +672,7 @@ def _serialize_document_public(
         "rejection_note": document.rejection_note,
         "uploaded_at": _safe_iso(document.uploaded_at),
         "reviewed_at": _safe_iso(document.reviewed_at),
-        "download_url": f"/api/affiliazione/draft/{application.public_token}/documents/{document.id}",
+        "download_url": f"/api/affiliazione/draft/{public_token}/documents/{document.id}",
     }
 
 
@@ -675,6 +748,7 @@ def _serialize_affiliation(
     include_events: bool,
     admin_view: bool,
 ) -> dict[str, Any]:
+    public_token = None if admin_view else affiliation_public_token(application)
     latest_docs_map = _latest_documents_by_type(list(application.documents or []))
     latest_docs = list(latest_docs_map.values())
     latest_video_job = _find_latest_video_job(application)
@@ -685,7 +759,7 @@ def _serialize_affiliation(
 
     payload: dict[str, Any] = {
         "id": application.id,
-        "public_token": None if admin_view else application.public_token,
+        "public_token": public_token,
         "status": application.status,
         "docs_status": application.docs_status,
         "payment_method": application.payment_method,
@@ -721,7 +795,7 @@ def _serialize_affiliation(
         "resume_url": (
             None
             if admin_view
-            else f"/affiliazione?token={application.public_token}"
+            else f"/affiliazione?token={public_token}"
         ),
         "payment_config": {
             "stripe_enabled": bool(settings.STRIPE_ENABLED),
@@ -984,11 +1058,12 @@ def _create_stripe_checkout_session(
     stripe_price_id = (settings.STRIPE_PRICE_ID or "").strip()
 
     frontend_base = _resolve_frontend_base(request)
+    public_token = affiliation_public_token(application)
     success_url = (
-        f"{frontend_base}/affiliazione?token={application.public_token}&stripe=success"
+        f"{frontend_base}/affiliazione?token={public_token}&stripe=success"
     )
     cancel_url = (
-        f"{frontend_base}/affiliazione?token={application.public_token}&stripe=cancel"
+        f"{frontend_base}/affiliazione?token={public_token}&stripe=cancel"
     )
 
     body = {
@@ -999,7 +1074,7 @@ def _create_stripe_checkout_session(
         "line_items[0][price]": stripe_price_id,
         "line_items[0][quantity]": "1",
         "metadata[application_id]": str(application.id),
-        "metadata[public_token]": application.public_token,
+        "metadata[public_token]": public_token,
     }
 
     headers = {"Authorization": f"Bearer {stripe_secret_key}"}
@@ -1067,6 +1142,10 @@ def create_affiliation_draft(
     request: Request,
     body: CreateAffiliationDraftBody,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    resume_token: str | None = Header(
+        default=None,
+        alias=AFFILIATION_RESUME_TOKEN_HEADER,
+    ),
     db: Session = Depends(get_db),
 ):
     applicant_email = _normalize_optional_email(body.applicant_email)
@@ -1101,6 +1180,10 @@ def create_affiliation_draft(
         fallback_idempotency_key=idempotency_key,
     )
     if reusable_application is not None:
+        reusable_public_token = _require_reusable_application_capability(
+            reusable_application,
+            resume_token,
+        )
         _attach_referral_if_missing(
             db,
             application=reusable_application,
@@ -1117,15 +1200,16 @@ def create_affiliation_draft(
             admin_view=False,
         )
         payload["resume_url_absolute"] = (
-            f"{_resolve_frontend_base(request)}/affiliazione?token={reusable_application.public_token}"
+            f"{_resolve_frontend_base(request)}/affiliazione?token={reusable_public_token}"
         )
         return payload
 
     for _ in range(5):
-        public_token = secrets.token_urlsafe(24)
+        # Temporary uniqueness value only; it is never returned as a bearer.
+        public_token_placeholder = f"pending:{secrets.token_hex(16)}"
         exists = (
             db.query(AffiliationApplication.id)
-            .filter(AffiliationApplication.public_token == public_token)
+            .filter(AffiliationApplication.public_token == public_token_placeholder)
             .first()
         )
         if exists is None:
@@ -1134,7 +1218,7 @@ def create_affiliation_draft(
         raise HTTPException(status_code=500, detail="Impossibile generare token bozza")
 
     application = AffiliationApplication(
-        public_token=public_token,
+        public_token=public_token_placeholder,
         status=AffiliationApplicationStatus.DRAFT.value,
         docs_status=AffiliationDocsStatus.PENDING.value,
         payment_status=AffiliationPaymentStatus.UNPAID.value,
@@ -1149,6 +1233,7 @@ def create_affiliation_draft(
     _sync_application_identity(application)
     db.add(application)
     db.flush()
+    initialize_affiliation_capability(application)
 
     _attach_referral_if_missing(
         db,
@@ -1179,6 +1264,10 @@ def create_affiliation_draft(
         )
         if reusable_application is None:
             raise
+        reusable_public_token = _require_reusable_application_capability(
+            reusable_application,
+            resume_token,
+        )
         payload = _serialize_affiliation(
             reusable_application,
             include_people=True,
@@ -1187,7 +1276,7 @@ def create_affiliation_draft(
             admin_view=False,
         )
         payload["resume_url_absolute"] = (
-            f"{_resolve_frontend_base(request)}/affiliazione?token={reusable_application.public_token}"
+            f"{_resolve_frontend_base(request)}/affiliazione?token={reusable_public_token}"
         )
         return payload
 
@@ -1201,7 +1290,7 @@ def create_affiliation_draft(
         admin_view=False,
     )
     payload["resume_url_absolute"] = (
-        f"{_resolve_frontend_base(request)}/affiliazione?token={application.public_token}"
+        f"{_resolve_frontend_base(request)}/affiliazione?token={affiliation_public_token(application)}"
     )
     return payload
 
@@ -1237,36 +1326,38 @@ def patch_affiliation_draft(
         )
 
     changed_fields = _apply_patch_to_application(application, body)
-    if changed_fields:
-        _record_affiliation_event(
-            db,
-            application_id=application.id,
-            event_type="draft_autosaved",
-            actor_type="public",
-            payload={"fields": sorted(changed_fields.keys()), "ip": get_client_ip(request)},
-        )
-
+    attempted_identity = {
+        "applicant_email": application.applicant_email,
+        "organization_name": application.organization_name,
+        "organization_legal_name": application.organization_legal_name,
+        "tax_code": application.tax_code,
+        "vat_number": application.vat_number,
+    }
     try:
+        if changed_fields:
+            _record_affiliation_event(
+                db,
+                application_id=application.id,
+                event_type="draft_autosaved",
+                actor_type="public",
+                payload={"fields": sorted(changed_fields.keys()), "ip": get_client_ip(request)},
+            )
         db.commit()
     except IntegrityError:
         db.rollback()
         existing_application = _find_application_by_identity(
             db,
-            applicant_email=application.applicant_email,
-            organization_name=application.organization_name,
-            organization_legal_name=application.organization_legal_name,
-            tax_code=application.tax_code,
-            vat_number=application.vat_number,
+            applicant_email=attempted_identity["applicant_email"],
+            organization_name=attempted_identity["organization_name"],
+            organization_legal_name=attempted_identity["organization_legal_name"],
+            tax_code=attempted_identity["tax_code"],
+            vat_number=attempted_identity["vat_number"],
             exclude_application_id=application.id,
         )
         if existing_application is not None:
             raise HTTPException(
                 status_code=409,
-                detail={
-                    "message": "Esiste già una pratica in corso per questi dati.",
-                    "resume_url": f"/affiliazione?token={existing_application.public_token}",
-                    "public_token": existing_application.public_token,
-                },
+                detail=AFFILIATION_RESUME_CONFLICT_DETAIL,
             )
         raise
     db.refresh(application)
@@ -1407,16 +1498,8 @@ async def upload_affiliation_document(
         and latest_same_type.sha256 == sha256
         and latest_same_type.size_bytes == size_bytes
     ):
-        duplicate_full_path = os.path.join(settings.UPLOAD_DIR, rel_path)
-        try:
-            if os.path.exists(duplicate_full_path):
-                os.remove(duplicate_full_path)
-        except OSError:
-            logger.warning(
-                "affiliation_document_duplicate_cleanup_failed application_id=%s rel_path=%s",
-                application.id,
-                rel_path,
-            )
+        enqueue_file_deletion(db, rel_path)
+        db.commit()
         return {
             "ok": True,
             "document": _serialize_document_public(application, latest_same_type),
@@ -2312,6 +2395,8 @@ def delete_affiliation_draft(
             detail="La pratica risulta già inviata e non può essere eliminata.",
         )
 
+    for document in list(application.documents or []):
+        enqueue_file_deletion(db, document.rel_path)
     db.delete(application)
 
     audit.log_operation(

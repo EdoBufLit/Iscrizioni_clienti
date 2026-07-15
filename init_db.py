@@ -13,11 +13,15 @@ Deployment checklist:
 import logging
 import os
 from datetime import datetime
+from pathlib import Path
 
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import inspect, text
 
 from app.db import Base, SessionLocal, engine
 import app.models
+from app.models_file_deletion import FileDeletionTask
 from app.models import (
     Organization,
     NumberingScope,
@@ -96,46 +100,83 @@ def _column_type_name(conn, table: str, column: str) -> str:
     return ""
 
 
-def init_db():
-    """Initialize database schema and seed data.
+def _deployed_schema_mode() -> bool:
+    return bool(SKIP_CREATE_ALL or settings.IS_DEPLOYED_ENV)
 
-    In production (SKIP_CREATE_ALL=1), this only runs Alembic migrations.
-    In development, it also uses create_all() for convenience.
-    """
+
+def _single_code_alembic_head() -> str:
+    config_path = Path(__file__).resolve().with_name("alembic.ini")
+    alembic_cfg = Config(str(config_path))
+    heads = tuple(sorted(ScriptDirectory.from_config(alembic_cfg).get_heads()))
+    if len(heads) != 1:
+        rendered = ", ".join(heads) if heads else "<none>"
+        raise RuntimeError(
+            "Refusing deployed startup: the application must have exactly one "
+            f"Alembic head; found {rendered}."
+        )
+    return heads[0]
+
+
+def _validate_deployed_alembic_revision(target_engine=engine) -> str:
+    """Require the database revision to exactly match the sole code head."""
+
+    expected_head = _single_code_alembic_head()
+    try:
+        version_table_exists = inspect(target_engine).has_table("alembic_version")
+    except Exception as exc:
+        raise RuntimeError(
+            "Refusing deployed startup: unable to inspect the Alembic version table."
+        ) from exc
+    if not version_table_exists:
+        raise RuntimeError(
+            "Refusing deployed startup: alembic_version is missing; "
+            "run 'alembic upgrade head' before starting the application."
+        )
+
+    try:
+        with target_engine.connect() as conn:
+            database_heads = {
+                str(value).strip()
+                for value in conn.execute(
+                    text("SELECT version_num FROM alembic_version")
+                ).scalars()
+                if value is not None and str(value).strip()
+            }
+    except Exception as exc:
+        raise RuntimeError(
+            "Refusing deployed startup: unable to read the Alembic database revision."
+        ) from exc
+
+    if database_heads != {expected_head}:
+        rendered = ", ".join(sorted(database_heads)) if database_heads else "<none>"
+        raise RuntimeError(
+            "Refusing deployed startup: database Alembic revision does not exactly "
+            f"match code head {expected_head}; found {rendered}. "
+            "Run 'alembic upgrade head' before starting the application."
+        )
+    return expected_head
+
+
+def _run_legacy_table_bootstrap() -> None:
+    """Development/test-only create_all and legacy table compatibility."""
+
     inspector = inspect(engine)
     existing_tables = inspector.get_table_names()
 
-    if SKIP_CREATE_ALL:
-        # Production mode: schema managed by Alembic only
-        logger.info("SKIP_CREATE_ALL is set - skipping Base.metadata.create_all()")
-        logger.info("Ensure you have run: alembic upgrade head")
+    logger.info("Running Base.metadata.create_all() (dev mode)")
+    logger.info("Set SKIP_CREATE_ALL=1 in production to disable this.")
+    Base.metadata.create_all(bind=engine)
 
-        # Verify alembic_version table exists (migrations have been run)
-        if "alembic_version" not in existing_tables:
-            logger.warning(
-                "WARNING: alembic_version table not found! "
-                "Run 'alembic upgrade head' before starting the application."
-            )
-    else:
-        # Development mode: use create_all for convenience
-        logger.info("Running Base.metadata.create_all() (dev mode)")
-        logger.info("Set SKIP_CREATE_ALL=1 in production to disable this.")
-        Base.metadata.create_all(bind=engine)
+    # If this is a fresh install (tables created but no alembic version), stamp it
+    if "organizations" in existing_tables and "alembic_version" not in existing_tables:
+        logger.info("Fresh database detected. Stamping alembic head...")
+        from alembic import command
 
-        # If this is a fresh install (tables created but no alembic version), stamp it
-        if (
-            "organizations" in existing_tables
-            and "alembic_version" not in existing_tables
-        ):
-            logger.info("Fresh database detected. Stamping alembic head...")
-            from alembic.config import Config
-            from alembic import command
-
-            alembic_cfg = Config("alembic.ini")
-            try:
-                command.stamp(alembic_cfg, "head")
-            except Exception:
-                logger.exception("Failed to stamp alembic head.")
+        alembic_cfg = Config(str(Path(__file__).resolve().with_name("alembic.ini")))
+        try:
+            command.stamp(alembic_cfg, "head")
+        except Exception:
+            logger.exception("Failed to stamp alembic head.")
 
     if "email_outbox" not in inspect(engine).get_table_names():
         logger.warning(
@@ -349,7 +390,9 @@ def init_db():
         )
         OrgAdminSession.__table__.create(bind=engine, checkfirst=True)
 
-    # Legacy column migrations - DEPRECATED, kept for backwards compatibility
+def _run_legacy_column_migrations() -> None:
+    """Development/test-only legacy ALTER, index, and data compatibility."""
+
     with engine.begin() as conn:
         table_names = set(inspect(conn).get_table_names())
         _add_column_if_missing(
@@ -408,12 +451,47 @@ def init_db():
         _add_column_if_missing(
             conn,
             "members",
+            "marketing_email_consent",
+            "INTEGER DEFAULT 0 NOT NULL",
+        )
+        _add_column_if_missing(
+            conn, "members", "marketing_email_consent_at", "DATETIME"
+        )
+        _add_column_if_missing(
+            conn, "members", "marketing_email_consent_withdrawn_at", "DATETIME"
+        )
+        _add_column_if_missing(
+            conn, "members", "marketing_email_consent_version", "VARCHAR(32)"
+        )
+        _add_column_if_missing(
+            conn, "members", "accepted_privacy_notice_version", "VARCHAR(32)"
+        )
+        _add_column_if_missing(
+            conn, "members", "accepted_privacy_notice_sha256", "VARCHAR(64)"
+        )
+        _add_column_if_missing(
+            conn,
+            "members",
             "numbering_scope_id",
             "INTEGER REFERENCES numbering_scopes(id)",
         )
         _add_column_if_missing(conn, "referrals", "wheel_result", "TEXT")
         _add_column_if_missing(conn, "referrals", "wheel_spun_at", "DATETIME")
         _add_column_if_missing(conn, "referrals", "wheel_spun_by_org_admin_id", "INTEGER")
+        if "accounting_share_links" in table_names:
+            _add_column_if_missing(
+                conn, "accounting_share_links", "token_hash", "VARCHAR(64)"
+            )
+            _add_column_if_missing(
+                conn, "accounting_share_links", "token_version", "INTEGER"
+            )
+            conn.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS "
+                    "ix_accounting_share_links_token_hash "
+                    "ON accounting_share_links (token_hash)"
+                )
+            )
         if "forms" in table_names:
             _add_column_if_missing(conn, "forms", "accent_color", "TEXT")
             _add_column_if_missing(conn, "forms", "submit_button_text", "TEXT")
@@ -515,10 +593,29 @@ def init_db():
             _add_column_if_missing(conn, "email_campaigns", "design_json", "TEXT")
             _add_column_if_missing(conn, "email_campaigns", "linked_form_id", "INTEGER")
             _add_column_if_missing(conn, "email_campaigns", "source_template_id", "INTEGER")
+            _add_column_if_missing(conn, "email_campaigns", "template_type", "TEXT DEFAULT 'generic_notice'")
             _add_column_if_missing(conn, "email_campaigns", "editor_status", "TEXT DEFAULT 'draft'")
             _add_column_if_missing(conn, "email_campaigns", "grapesjs_project_json", "TEXT")
             _add_column_if_missing(conn, "email_campaigns", "mjml_source", "TEXT")
             _add_column_if_missing(conn, "email_campaigns", "compiled_html", "TEXT")
+            if "email_templates" in table_names:
+                conn.execute(
+                    text(
+                        """
+                        UPDATE email_campaigns
+                           SET template_type = COALESCE(
+                                (
+                                    SELECT email_templates.template_type
+                                      FROM email_templates
+                                     WHERE email_templates.id = email_campaigns.source_template_id
+                                ),
+                                template_type,
+                                'generic_notice'
+                           )
+                         WHERE source_template_id IS NOT NULL
+                        """
+                    )
+                )
         if "organizations" in table_names:
             _add_column_if_missing(
                 conn, "organizations", "stripe_connected_account_id", "TEXT"
@@ -982,6 +1079,7 @@ def init_db():
             },
         )
 
+def _seed_database() -> None:
     db = SessionLocal()
 
     try:
@@ -1123,6 +1221,27 @@ def init_db():
         logger.exception("Database seed failed.")
     finally:
         db.close()
+
+
+def init_db() -> None:
+    """Validate deployed schema or run local compatibility, then seed data.
+
+    Staging/production and explicit ``SKIP_CREATE_ALL`` mode are Alembic-only:
+    their database must already be at the sole code head before any seed query,
+    and none of the legacy CREATE/ALTER compatibility paths are executed.
+    """
+
+    if _deployed_schema_mode():
+        revision = _validate_deployed_alembic_revision(engine)
+        logger.info(
+            "Deployed schema matches Alembic head %s; legacy schema bootstrap disabled.",
+            revision,
+        )
+    else:
+        _run_legacy_table_bootstrap()
+        _run_legacy_column_migrations()
+
+    _seed_database()
 
 
 if __name__ == "__main__":

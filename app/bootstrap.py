@@ -5,6 +5,7 @@ from datetime import datetime
 from app.models import AdminUser, AdminRole
 from app.security import get_password_hash
 from app.config import settings
+from app.log_redaction import hash_identifier
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +23,9 @@ def bootstrap_super_admin(db: Session) -> None:
     if not sa_email or not sa_password:
         return
 
-    if not settings.IS_LOCAL_ENV and settings.USES_DEFAULT_SUPER_ADMIN_BOOTSTRAP:
+    if settings.IS_DEPLOYED_ENV and settings.USES_DEFAULT_SUPER_ADMIN_BOOTSTRAP:
         logger.critical(
-            "Skipping super admin bootstrap outside local env because default credentials are still configured."
+            "Skipping super admin bootstrap in deployed env because default credentials are still configured."
         )
         return
 
@@ -39,15 +40,15 @@ def bootstrap_super_admin(db: Session) -> None:
     existing_user = db.query(AdminUser).filter(AdminUser.email == sa_email).first()
     if existing_user:
         logger.warning(
-            "Cannot bootstrap super admin: Email '%s' is already taken by a non-super admin. "
+            "Cannot bootstrap super admin: email_hash=%s is already taken by a non-super admin. "
             "Skipping to avoid overwriting existing user.",
-            sa_email
+            hash_identifier(sa_email),
         )
         return
 
     # 3. Create the super admin
     try:
-        logger.info("Creating super admin user (%s)...", sa_email)
+        logger.info("Creating super admin user email_hash=%s", hash_identifier(sa_email))
         new_sa = AdminUser(
             email=sa_email,
             password_hash=get_password_hash(sa_password),
@@ -59,6 +60,6 @@ def bootstrap_super_admin(db: Session) -> None:
         db.add(new_sa)
         db.commit()
         logger.info("Super admin created from env")
-    except Exception as e:
-        logger.error("Failed to bootstrap super admin: %s", e)
+    except Exception as exc:
+        logger.error("Failed to bootstrap super admin error_type=%s", type(exc).__name__)
         db.rollback()

@@ -1,19 +1,21 @@
 from __future__ import annotations
 
 import logging
-import os
-from datetime import datetime
+import secrets
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import audit
+from app.config import settings
 from app.db import get_db
-from app.middleware import get_client_ip, get_request_id, join_limiter
+from app.log_redaction import hash_identifier, redact_for_log
+from app.middleware import get_client_ip, get_request_id
 from app.models import (
     Member,
     MemberDocument,
@@ -31,7 +33,11 @@ from app.routes.join import (
     _validate_signup_fiscal_code,
     check_signup_allowed,
 )
-from app.security import MIN_MEMBER_PASSWORD_LENGTH, get_password_hash
+from app.security import MIN_MEMBER_PASSWORD_LENGTH, get_password_hash, verify_password
+from app.services.security_rate_limits import (
+    enforce_join_rate_limit,
+    enforce_payment_status_rate_limit,
+)
 from app.services.membership_payments import (
     MembershipPaymentSource,
     build_membership_payment_status_payload,
@@ -55,11 +61,150 @@ from app.services.member_membership import (
     organization_allows_custom_membership_types,
     organization_membership_fee_amount,
 )
-from app.utils import save_upload_file
+from app.services.marketing_consent import grant_email_marketing_consent
+from app.services.privacy_notice import record_privacy_notice_acknowledgement
+from app.services.file_deletion import enqueue_file_deletion
+from app.services.sqlite_card_allocation_guard import (
+    sqlite_card_allocation_request_guard,
+)
+from app.utils import generate_token, hash_token, save_upload_file
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+_PAYMENT_STATUS_CAPABILITY_TTL = timedelta(days=7)
+
+
+def _payment_status_cookie_name(payment_id: int) -> str:
+    return f"membership_payment_status_{payment_id}"
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _set_payment_status_cookie(
+    response: Response,
+    request: Request,
+    *,
+    payment_id: int,
+    token_value: str,
+) -> None:
+    response.set_cookie(
+        key=_payment_status_cookie_name(payment_id),
+        value=token_value,
+        max_age=int(_PAYMENT_STATUS_CAPABILITY_TTL.total_seconds()),
+        httponly=True,
+        secure=(
+            request.url.scheme == "https"
+            or (settings.BASE_URL or "").strip().lower().startswith("https://")
+        ),
+        samesite="lax",
+        # The checkout endpoint needs this cookie too when the browser retries
+        # an already-created SumUp checkout. Keeping it on the old status-only
+        # path made a legitimate retry indistinguishable from an unauthenticated
+        # takeover attempt and caused the stored capability to be rotated.
+        path="/api/public",
+    )
+
+
+def _ensure_payment_status_capability(
+    payment: MembershipPayment,
+    *,
+    request: Request,
+    response: Response,
+) -> None:
+    cookie_name = _payment_status_cookie_name(payment.id)
+    presented = request.cookies.get(cookie_name)
+    expires_at = payment.status_token_expires_at
+    is_current = bool(
+        presented
+        and payment.status_token_hash
+        and expires_at
+        and _as_utc(expires_at) > datetime.now(timezone.utc)
+        and secrets.compare_digest(
+            payment.status_token_hash,
+            hash_token(presented),
+        )
+    )
+    token_value = presented if is_current else generate_token()
+    if not is_current:
+        payment.status_token_hash = hash_token(token_value)
+        payment.status_token_expires_at = (
+            datetime.now(timezone.utc) + _PAYMENT_STATUS_CAPABILITY_TTL
+        )
+    _set_payment_status_cookie(
+        response,
+        request,
+        payment_id=payment.id,
+        token_value=token_value,
+    )
+
+
+def _has_payment_status_capability(
+    payment: MembershipPayment,
+    *,
+    request: Request,
+) -> bool:
+    presented = request.cookies.get(_payment_status_cookie_name(payment.id))
+    if not presented or not payment.status_token_hash or not payment.status_token_expires_at:
+        return False
+    if _as_utc(payment.status_token_expires_at) <= datetime.now(timezone.utc):
+        return False
+    return secrets.compare_digest(payment.status_token_hash, hash_token(presented))
+
+
+def _password_proves_member_ownership(
+    member: Member | None,
+    password: str | None,
+) -> bool:
+    if not member or not password or not member.password_hash:
+        return False
+    try:
+        return verify_password(password, member.password_hash)
+    except (TypeError, ValueError):
+        return False
+
+
+def _is_recent_legacy_sumup_payment(payment: MembershipPayment) -> bool:
+    """Temporary compatibility for checkouts created before capability rollout."""
+    if payment.status_token_hash or payment.source != MembershipPaymentSource.SUMUP.value:
+        return False
+    if not payment.sumup_checkout_id or not payment.status_token_expires_at:
+        return False
+    return _as_utc(payment.status_token_expires_at) > datetime.now(timezone.utc)
+
+
+def _can_claim_recent_legacy_sumup_payment(
+    payment: MembershipPayment,
+    *,
+    request: Request,
+) -> bool:
+    """Bind an in-flight pre-capability checkout to its original browser context.
+
+    This compatibility path exists only for the bounded migration window.  A
+    successful claim immediately creates the normal random, hashed capability;
+    public knowledge of the sequential payment id is never sufficient by itself.
+    """
+
+    if not _is_recent_legacy_sumup_payment(payment):
+        return False
+    member = payment.member
+    if member is None:
+        return False
+    expected_ip = str(member.signup_ip or "").strip()
+    expected_user_agent = str(member.signup_user_agent or "").strip()
+    actual_ip = str(get_client_ip(request) or "").strip()
+    actual_user_agent = str(request.headers.get("user-agent") or "").strip()
+    if not expected_ip or not expected_user_agent:
+        return False
+    return secrets.compare_digest(expected_ip, actual_ip) and secrets.compare_digest(
+        expected_user_agent,
+        actual_user_agent,
+    )
 
 
 def _get_active_org_by_slug(db: Session, org_slug: str) -> Organization:
@@ -81,12 +226,8 @@ def _get_active_org_by_slug(db: Session, org_slug: str) -> Organization:
 def _clear_member_documents(db: Session, member: Member) -> None:
     old_docs = db.query(MemberDocument).filter(MemberDocument.member_id == member.id).all()
     for old_doc in old_docs:
-        try:
-            old_path = os.path.join(save_upload_file.__globals__["settings"].UPLOAD_DIR, old_doc.rel_path)
-            if os.path.exists(old_path):
-                os.remove(old_path)
-        except OSError:
-            logger.warning("Failed to delete old membership payment doc file: %s", old_doc.rel_path)
+        if old_doc.rel_path:
+            enqueue_file_deletion(db, old_doc.rel_path)
         db.delete(old_doc)
     db.flush()
 
@@ -111,8 +252,10 @@ async def _upsert_member_for_checkout(
     accept_statute: bool,
     accepted_statute_version: str | None,
     accept_privacy: bool,
+    marketing_email_consent: bool,
     id_document: UploadFile | None,
-) -> Member:
+    allow_existing_update: bool,
+) -> tuple[Member, bool]:
     if org.statute_pdf_path and not accept_statute:
         raise HTTPException(status_code=400, detail="È necessario accettare lo statuto per procedere.")
     if not accept_privacy:
@@ -180,30 +323,43 @@ async def _upsert_member_for_checkout(
     request_user_agent = request.headers.get("user-agent")
 
     if existing:
+        if (
+            existing.fiscal_code
+            and existing.fiscal_code.strip().upper() != normalized_fiscal_code
+        ):
+            # Do not reveal which field collided and, critically, never let a
+            # request identified only by an email overwrite an existing member.
+            raise HTTPException(
+                status_code=409,
+                detail="Iscrizione o pagamento gi\u00e0 presente per questi dati.",
+            )
         member = existing
-        member.first_name = first_name
-        member.last_name = last_name
-        member.email = normalized_email
-        member.phone = phone
-        member.fiscal_code = normalized_fiscal_code
-        member.birth_date = birth_date_value
-        member.birth_place = municipality["name"]
-        member.birth_place_code = municipality["code"]
-        member.gender = normalized_gender
-        member.status = MemberStatus.PENDING_VERIFICATION
-        member.accepted_statute_at = datetime.utcnow()
-        member.accepted_statute_version = accepted_statute_version or org.statute_version
-        member.accepted_privacy_at = datetime.utcnow()
-        member.accepted_privacy_version = org.privacy_version
-        member.signup_source = SignupSource.ASSONAM_FORM.value
-        member.signup_ip = client_ip
-        member.signup_user_agent = request_user_agent
-        member.payment_required = True
-        member.payment_status = MembershipPaymentStatus.PENDING.value
-        if password:
-            member.password_hash = get_password_hash(password)
-        if id_document:
-            _clear_member_documents(db, member)
+        if allow_existing_update:
+            member.first_name = first_name
+            member.last_name = last_name
+            member.email = normalized_email
+            member.phone = phone
+            member.fiscal_code = normalized_fiscal_code
+            member.birth_date = birth_date_value
+            member.birth_place = municipality["name"]
+            member.birth_place_code = municipality["code"]
+            member.gender = normalized_gender
+            member.status = MemberStatus.PENDING_VERIFICATION
+            member.accepted_statute_at = datetime.utcnow()
+            member.accepted_statute_version = (
+                accepted_statute_version or org.statute_version
+            )
+            record_privacy_notice_acknowledgement(
+                member,
+                association_privacy_version=org.privacy_version,
+            )
+            member.signup_source = SignupSource.ASSONAM_FORM.value
+            member.signup_ip = client_ip
+            member.signup_user_agent = request_user_agent
+            member.payment_required = True
+            member.payment_status = MembershipPaymentStatus.PENDING.value
+            if id_document:
+                _clear_member_documents(db, member)
     else:
         member = Member(
             org_id=org.id,
@@ -219,8 +375,6 @@ async def _upsert_member_for_checkout(
             status=MemberStatus.PENDING_VERIFICATION,
             accepted_statute_at=datetime.utcnow(),
             accepted_statute_version=accepted_statute_version or org.statute_version,
-            accepted_privacy_at=datetime.utcnow(),
-            accepted_privacy_version=org.privacy_version,
             signup_source=SignupSource.ASSONAM_FORM.value,
             signup_ip=client_ip,
             signup_user_agent=request_user_agent,
@@ -228,20 +382,33 @@ async def _upsert_member_for_checkout(
             payment_status=MembershipPaymentStatus.PENDING.value,
             password_hash=get_password_hash(password) if password else None,
         )
+        record_privacy_notice_acknowledgement(
+            member,
+            association_privacy_version=org.privacy_version,
+        )
         db.add(member)
         db.flush()
+        if marketing_email_consent:
+            grant_email_marketing_consent(
+                db,
+                member=member,
+                source="membership_payment_signup",
+                client_ip=client_ip,
+                user_agent=request_user_agent,
+            )
 
-    apply_membership_defaults(
-        member=member,
-        org=org,
-        membership_type=requested_membership_type,
-        reference_time=datetime.utcnow(),
-        membership_fee_snapshot=organization_membership_fee_amount(
-            org, requested_membership_type
-        ),
-    )
+    if not existing or allow_existing_update:
+        apply_membership_defaults(
+            member=member,
+            org=org,
+            membership_type=requested_membership_type,
+            reference_time=datetime.utcnow(),
+            membership_fee_snapshot=organization_membership_fee_amount(
+                org, requested_membership_type
+            ),
+        )
 
-    if id_document:
+    if id_document and (not existing or allow_existing_update):
         sub_path = f"{org.id}/{member.id}"
         rel_path_id, size_id, sha_id = await save_upload_file(
             id_document, sub_directory=sub_path
@@ -258,7 +425,7 @@ async def _upsert_member_for_checkout(
                 status="pending",
             )
         )
-    return member
+    return member, existing is not None
 
 
 def _extract_checkout_id(payload: dict[str, Any]) -> str | None:
@@ -288,9 +455,13 @@ def _extract_checkout_reference(payload: dict[str, Any]) -> str | None:
     return None
 
 
-@router.post("/api/public/orgs/{org_slug}/membership-payment/create-checkout")
+@router.post(
+    "/api/public/orgs/{org_slug}/membership-payment/create-checkout",
+    dependencies=[Depends(sqlite_card_allocation_request_guard)],
+)
 async def create_membership_payment_checkout(
     request: Request,
+    response: Response,
     org_slug: str,
     first_name: str = Form(...),
     last_name: str = Form(...),
@@ -307,6 +478,7 @@ async def create_membership_payment_checkout(
     accept_statute: bool = Form(...),
     accepted_statute_version: Optional[str] = Form(None),
     accept_privacy: bool = Form(...),
+    marketing_email_consent: bool = Form(False),
     id_document: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -314,18 +486,54 @@ async def create_membership_payment_checkout(
     client_ip = get_client_ip(request)
     user_agent = request.headers.get("user-agent")
     logger.info(
-        "membership_payment_checkout_start request_id=%s org_slug=%s ip=%s user_agent=%s",
+        "membership_payment_checkout_start request_id=%s org_slug=%s ip_hash=%s user_agent_hash=%s",
         request_id,
         org_slug,
-        client_ip,
-        user_agent,
+        hash_identifier(client_ip),
+        hash_identifier(user_agent),
     )
-    join_limiter.check(client_ip)
+    enforce_join_rate_limit(db, client_ip=client_ip)
     org = _get_active_org_by_slug(db, org_slug)
     if not organization_requires_membership_payment(org) or not organization_has_sumup_config(org):
         raise HTTPException(status_code=400, detail="Pagamento online non disponibile per questa associazione.")
 
-    member = await _upsert_member_for_checkout(
+    normalized_email = email.strip().lower()
+    preexisting_member = (
+        db.query(Member)
+        .filter(
+            Member.org_id == org.id,
+            func.lower(Member.email) == normalized_email,
+            Member.deleted_at.is_(None),
+        )
+        .order_by(Member.id.desc())
+        .first()
+    )
+    preexisting_payment = None
+    if preexisting_member:
+        preexisting_payment = (
+            db.query(MembershipPayment)
+            .filter(
+                MembershipPayment.org_id == org.id,
+                MembershipPayment.socio_id == preexisting_member.id,
+            )
+            .order_by(
+                MembershipPayment.created_at.desc(),
+                MembershipPayment.id.desc(),
+            )
+            .first()
+        )
+    existing_owner_verified = _password_proves_member_ownership(
+        preexisting_member,
+        password,
+    ) or bool(
+        preexisting_payment
+        and _has_payment_status_capability(
+            preexisting_payment,
+            request=request,
+        )
+    )
+
+    member, reused_existing_member = await _upsert_member_for_checkout(
         request=request,
         db=db,
         org=org,
@@ -344,7 +552,16 @@ async def create_membership_payment_checkout(
         accept_statute=accept_statute,
         accepted_statute_version=accepted_statute_version,
         accept_privacy=accept_privacy,
+        marketing_email_consent=marketing_email_consent,
         id_document=id_document,
+        allow_existing_update=existing_owner_verified,
+    )
+
+    existing_owner_verified = bool(
+        reused_existing_member
+        and preexisting_member
+        and preexisting_member.id == member.id
+        and existing_owner_verified
     )
 
     latest_payment = (
@@ -371,6 +588,12 @@ async def create_membership_payment_checkout(
                 db.commit()
                 raise HTTPException(status_code=409, detail="La quota associativa risulta già pagata.")
             if latest_payment.status == MembershipPaymentStatus.PENDING.value and latest_payment.hosted_checkout_url:
+                if existing_owner_verified:
+                    _ensure_payment_status_capability(
+                        latest_payment,
+                        request=request,
+                        response=response,
+                    )
                 db.commit()
                 logger.info(
                     "membership_payment_checkout_reused request_id=%s org_slug=%s org_id=%s member_id=%s payment_id=%s",
@@ -424,7 +647,7 @@ async def create_membership_payment_checkout(
             member.id,
             payment.id,
             exc.status_code,
-            exc.detail,
+            redact_for_log(exc.detail),
         )
         raise
     except Exception:
@@ -461,8 +684,15 @@ async def create_membership_payment_checkout(
     payment.sumup_checkout_id = str(sumup_checkout_id)
     payment.hosted_checkout_url = str(hosted_checkout_url)
     payment.raw_create_response = create_payload
-    member.payment_required = True
-    member.payment_status = MembershipPaymentStatus.PENDING.value
+    if not reused_existing_member or existing_owner_verified:
+        member.payment_required = True
+        member.payment_status = MembershipPaymentStatus.PENDING.value
+    if not reused_existing_member or existing_owner_verified:
+        _ensure_payment_status_capability(
+            payment,
+            request=request,
+            response=response,
+        )
 
     audit.log_operation(
         db,
@@ -494,16 +724,39 @@ async def create_membership_payment_checkout(
 @router.get("/api/public/membership-payments/{payment_id}/status")
 def get_membership_payment_status(
     request: Request,
+    response: Response,
     payment_id: int,
     db: Session = Depends(get_db),
 ):
+    enforce_payment_status_rate_limit(db, client_ip=get_client_ip(request))
     payment = db.query(MembershipPayment).filter(MembershipPayment.id == payment_id).first()
     if not payment:
         raise HTTPException(status_code=404, detail="Pagamento non trovato.")
+    has_capability = _has_payment_status_capability(
+        payment,
+        request=request,
+    )
+    if not has_capability and not _can_claim_recent_legacy_sumup_payment(
+        payment,
+        request=request,
+    ):
+        raise HTTPException(status_code=404, detail="Pagamento non trovato.")
+    if not has_capability:
+        # Lazy-upgrade only the legitimate browser that created the checkout.
+        # The migration fallback disappears automatically at its seven-day TTL.
+        _ensure_payment_status_capability(
+            payment,
+            request=request,
+            response=response,
+        )
+        db.commit()
     return build_membership_payment_status_payload(payment, request=request)
 
 
-@router.post("/api/webhooks/sumup")
+@router.post(
+    "/api/webhooks/sumup",
+    dependencies=[Depends(sqlite_card_allocation_request_guard)],
+)
 def handle_sumup_webhook(
     request: Request,
     payload: dict[str, Any],
@@ -518,20 +771,26 @@ def handle_sumup_webhook(
     elif checkout_reference:
         query = query.filter(MembershipPayment.checkout_reference == checkout_reference)
     else:
-        logger.warning("sumup_webhook_ignored reason=missing_identifiers payload=%s", payload)
+        logger.warning(
+            "sumup_webhook_ignored reason=missing_identifiers field_count=%s",
+            len(payload),
+        )
         return {"ok": True, "ignored": True}
 
     try:
         query = query.with_for_update()
     except Exception as exc:
-        logger.debug("SumUp webhook payment lock unavailable: %s", exc)
+        logger.debug(
+            "SumUp webhook payment lock unavailable error_type=%s",
+            type(exc).__name__,
+        )
 
     payment = query.order_by(MembershipPayment.id.desc()).first()
     if not payment:
         logger.warning(
-            "sumup_webhook_ignored reason=payment_not_found checkout_id=%s checkout_reference=%s",
-            checkout_id,
-            checkout_reference,
+            "sumup_webhook_ignored reason=payment_not_found checkout_id_hash=%s checkout_reference_hash=%s",
+            hash_identifier(checkout_id),
+            hash_identifier(checkout_reference),
         )
         return {"ok": True, "ignored": True}
 

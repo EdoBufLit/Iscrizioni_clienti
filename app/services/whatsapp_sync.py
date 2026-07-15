@@ -14,6 +14,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
+from app.log_redaction import hash_identifier
 from app.models import (
     Booking,
     BookingEvent,
@@ -592,10 +593,11 @@ def process_queued_outbound_messages(
             else:
                 stats["failed"] += 1
             logger.warning(
-                "whatsapp_outbound_queue_send_failed message_id=%s connection_id=%s error=%s",
+                "whatsapp_outbound_queue_send_failed message_id=%s connection_id=%s error_type=%s retryable=%s",
                 message.id,
                 connection.id,
-                exc,
+                type(exc).__name__,
+                exc.retryable,
             )
         except Exception:
             db.rollback()
@@ -799,8 +801,8 @@ def ingest_green_api_webhook(
     )
     if connection is None:
         logger.warning(
-            "whatsapp_green_api_unknown_instance instance=%s event=%s",
-            instance_id,
+            "whatsapp_green_api_unknown_instance instance_hash=%s event=%s",
+            hash_identifier(instance_id),
             event_name,
         )
         return

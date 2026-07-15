@@ -23,3 +23,4 @@ openai
 twilio
 stripe
 openpyxl
+tzdata==2026.2; sys_platform == "win32"

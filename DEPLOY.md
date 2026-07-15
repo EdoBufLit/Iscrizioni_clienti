@@ -12,6 +12,7 @@ Questo evita i picchi RAM causati da `docker compose build` sul nodo Hetzner dur
 
 Contenuto propagato nel file `.env`:
 
+- ambiente esplicito `APP_ENV=production` (valore fisso del workflow, non un secret)
 - env applicative gia esistenti (`SECRET_KEY`, `BASE_URL`, `FRONTEND_URL`, SMTP, Google Wallet, DB)
 - credenziali Twilio (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`)
 - nuove env WhatsApp/OpenAI:
@@ -25,6 +26,11 @@ Contenuto propagato nel file `.env`:
   - `TG_BOT_TOKEN`
   - `TG_CHAT_ID`
   - `SUMUP_CREDENTIALS_ENCRYPTION_KEY`
+  - `ENABLE_WHATSAPP`
+  - `WHATSAPP_PROVIDER`
+  - `GREEN_API_BASE_URL`
+  - `GREEN_API_WEBHOOK_SECRET`
+  - `GREEN_API_WEBHOOK_ALLOWED_IPS`
 
 Image refs scritti automaticamente dal workflow:
 
@@ -38,6 +44,20 @@ Metadata build:
 - `BUILD_TIME`
 
 ## GitHub Secrets
+
+Il deploy imposta direttamente `APP_ENV=production`. Prima del rollout il
+backend rifiuta l'avvio se secret, URL pubblici HTTPS o credenziali bootstrap
+super-admin sono mancanti/default; non viene dedotto un ambiente locale da
+`localhost` o da URL vuoti.
+
+Il Compose base richiede che `APP_ENV` sia valorizzato esplicitamente e quindi
+interrompe gia `docker compose config` se manca. Anche avviando direttamente
+l'immagine, l'assenza della variabile ricade su `production`, mai su `local`.
+
+Le variabili `SUPER_ADMIN_*` servono al bootstrap e non ruotano un account già
+presente nel database. Se l'istanza è nata con credenziali storiche di default,
+verificare e ruotare anche quell'account prima del rollout; il gate runtime
+controlla la configurazione, non può ricostruire la password dal relativo hash.
 
 Creare o verificare in GitHub:
 
@@ -68,6 +88,117 @@ Creare o verificare in GitHub:
 - `TWILIO_SMS_FROM`
 - `TG_BOT_TOKEN`
 - `TG_CHAT_ID`
+- `ENABLE_WHATSAPP`
+- `WHATSAPP_PROVIDER`
+- `SUMUP_CREDENTIALS_ENCRYPTION_KEY`
+
+Green API webhook secrets are optional. Add these GitHub secrets only when
+needed:
+
+- `GREEN_API_BASE_URL` (optional; defaults to `https://api.green-api.com`)
+- `GREEN_API_WEBHOOK_SECRET` (optional global `webhookUrlToken`)
+- `GREEN_API_WEBHOOK_ALLOWED_IPS` (optional override of the documented official list)
+
+The workflow derives `GREEN_API_WEBHOOK_REQUIRE_SECRET`: it writes `true` only
+when `GREEN_API_WEBHOOK_SECRET` is non-empty, otherwise `false`. It must not be
+hard-coded to `true`, because associations that have not configured
+`webhookUrlToken` use the fail-closed source-IP fallback and do not require a
+provider restart.
+
+### Green API webhook authentication
+
+The endpoint accepts a webhook only for a known active `idInstance` and then
+applies this order:
+
+1. if a per-association or global secret exists, the matching Bearer token is mandatory;
+2. if no secret exists and strict mode is off, the proxy-resolved source IP must match `GREEN_API_WEBHOOK_ALLOWED_IPS`;
+3. if strict mode is on but no secret exists, every request is rejected.
+
+An allowed IP never bypasses a configured secret. The default list was checked
+on 15 July 2026 against the
+[official Green API Webhook Endpoint page](https://green-api.com/en/docs/api/receiving/technology-webhook-endpoint/).
+To adopt a secret later, set the same value in Green API `webhookUrlToken` via
+console/`setSettings` and in ASSONAM; no org-admin workflow changes are needed.
+
+The host Nginx must forward `X-Forwarded-For`, and port 8000 must remain bound
+to `127.0.0.1`, so `get_client_ip` can trust only the local/private proxy peer
+instead of an arbitrary Internet header.
+
+### Preflight identita legacy (non eseguire automaticamente)
+
+Prima del rollout eseguire questa query **in sola lettura** sul PostgreSQL di
+produzione. Conta i pending creati prima della capability di continuazione che
+non hanno una password; quelli con tessera sono evidenziati separatamente.
+
+```sql
+SELECT
+  COUNT(*) AS pending_totali,
+  SUM(CASE WHEN password_hash IS NULL THEN 1 ELSE 0 END) AS pending_senza_password,
+  SUM(
+    CASE WHEN password_hash IS NULL AND card_no IS NOT NULL THEN 1 ELSE 0 END
+  ) AS pending_senza_password_con_tessera
+FROM members
+WHERE deleted_at IS NULL
+  AND LOWER(CAST(status AS text)) IN (
+    'pending_docs', 'pending_verification', 'pending_cards'
+  );
+
+SELECT id, org_id, email, status, card_no, card_year
+FROM members
+WHERE deleted_at IS NULL
+  AND password_hash IS NULL
+  AND LOWER(CAST(status AS text)) IN (
+    'pending_docs', 'pending_verification', 'pending_cards'
+  )
+ORDER BY (card_no IS NOT NULL) DESC, id ASC;
+```
+
+Se il conteggio non e zero, predisporre **prima** del deploy un recupero via
+email con capability monouso, scadenza breve e hash nel database. Non
+riabilitare il riuso della pratica basato sulla sola conoscenza dell'email o di
+altri dati anagrafici.
+
+Elencare anche gli account super-admin persistiti: la validazione delle env di
+bootstrap non sostituisce la password gia hashata nel database.
+
+```sql
+SELECT id, email, role, is_active, created_at
+FROM admin_users
+WHERE org_id IS NULL
+   OR LOWER(CAST(role AS text)) IN ('super_admin', 'superadmin')
+ORDER BY id;
+```
+
+Il controllo seguente e in sola lettura e non stampa hash o password; segnala
+se un account usa ancora la password bootstrap storica `admin`:
+
+```bash
+docker compose exec -T web python - <<'PY'
+from app.db import SessionLocal
+from app.models import AdminRole, AdminUser
+from app.security import verify_password
+
+db = SessionLocal()
+try:
+    admins = db.query(AdminUser).filter(AdminUser.role == AdminRole.SUPER_ADMIN).all()
+    for admin in admins:
+        historical_default = bool(
+            admin.password_hash and verify_password("admin", admin.password_hash)
+        )
+        print(
+            f"id={admin.id} email={admin.email} active={admin.is_active} "
+            f"historical_default_password={historical_default}"
+        )
+finally:
+    db.close()
+PY
+```
+
+Se compare `historical_default_password=True`, ruotare la password prima di
+proseguire usando una procedura amministrativa autenticata o uno script
+controllato che chiami `get_password_hash`; non copiare password in SQL, log,
+ticket o repository. Verificare poi il login con la nuova credenziale e
+chiudere le sessioni browser precedenti.
 
 ## Migrazioni
 
@@ -86,6 +217,7 @@ File server:
 ```bash
 cd /opt/assonam
 grep -E 'OPENAI|TWILIO_LOW_CARDS_FLOW_SID|TWILIO_ALERT_FLOW_SID|TWILIO_WHATSAPP_FROM|TG_BOT_TOKEN|TG_CHAT_ID' .env
+grep -E '^GREEN_API_(BASE_URL|WEBHOOK_SECRET|WEBHOOK_REQUIRE_SECRET|WEBHOOK_ALLOWED_IPS)=' .env
 ```
 
 Dentro il container backend:
@@ -94,6 +226,7 @@ Dentro il container backend:
 docker compose exec -T web /bin/sh -lc "printenv | grep OPENAI"
 docker compose exec -T web /bin/sh -lc "printenv | grep TWILIO"
 docker compose exec -T web /bin/sh -lc "printenv | grep TG_"
+docker compose exec -T web /bin/sh -lc "printenv | grep '^GREEN_API_'"
 ```
 
 ## Worker

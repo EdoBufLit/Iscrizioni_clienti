@@ -443,6 +443,9 @@ def test_org_admin_form_fields_persist_multiple_builder_blocks_in_order(client, 
 
 
 def test_members_only_public_form_requires_member_session(client, db):
+    # The shared test client may carry a member session from another scenario;
+    # this case specifically verifies a completely unauthenticated visitor.
+    client.cookies.clear()
     org, admin = _create_org_admin(db)
     _login_org_admin(client, db, admin.id)
     public_slug = f"richiesta-documento-{uuid.uuid4().hex[:6]}"

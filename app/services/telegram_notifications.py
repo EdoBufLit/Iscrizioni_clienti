@@ -5,6 +5,7 @@ import logging
 import requests
 
 from app.config import settings
+from app.log_redaction import hash_identifier, redact_for_log
 
 logger = logging.getLogger(__name__)
 
@@ -38,16 +39,19 @@ def send_telegram_message(text: str) -> str | None:
             timeout=_TELEGRAM_API_TIMEOUT_SECONDS,
         )
     except requests.RequestException:
-        logger.exception("telegram_notification_request_failed chat_id=%s", chat_id)
+        logger.error(
+            "telegram_notification_request_failed chat_id_hash=%s",
+            hash_identifier(chat_id),
+        )
         raise
 
     response_text = response.text.strip()
     if not response.ok:
         logger.error(
-            "telegram_notification_http_failed status=%s chat_id=%s body=%s",
+            "telegram_notification_http_failed status=%s chat_id_hash=%s body=%s",
             response.status_code,
-            chat_id,
-            response_text[:500],
+            hash_identifier(chat_id),
+            redact_for_log(response_text),
         )
         response.raise_for_status()
 
@@ -55,17 +59,17 @@ def send_telegram_message(text: str) -> str | None:
         payload = response.json()
     except ValueError:
         logger.error(
-            "telegram_notification_invalid_json chat_id=%s body=%s",
-            chat_id,
-            response_text[:500],
+            "telegram_notification_invalid_json chat_id_hash=%s body=%s",
+            hash_identifier(chat_id),
+            redact_for_log(response_text),
         )
         raise
 
     if not payload.get("ok"):
         logger.error(
-            "telegram_notification_api_failed chat_id=%s payload=%s",
-            chat_id,
-            payload,
+            "telegram_notification_api_failed chat_id_hash=%s payload=%s",
+            hash_identifier(chat_id),
+            redact_for_log(payload),
         )
         raise RuntimeError("Telegram API returned ok=false")
 
