@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
@@ -11,6 +12,22 @@ DEFAULT_DATABASE_PROVIDER = "postgresql"
 DEFAULT_DATABASE_NAME = "evolution"
 DEFAULT_CLIENT_NAME = "Chrome"
 DEFAULT_CLIENT_DEVICE = "Windows"
+
+
+def _read_env_values(source_env: Path, required: set[str]) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for raw_line in source_env.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in raw_line:
+            continue
+        key, value = raw_line.split("=", 1)
+        key = key.strip()
+        if key in required:
+            values[key] = value
+    missing = sorted(key for key in required if not values.get(key, "").strip())
+    if missing:
+        raise ValueError("Required deployment settings are missing")
+    return values
 
 
 def _build_evolution_database_uri(database_url: str, database_name: str) -> str:
@@ -72,17 +89,19 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Render the minimal Evolution API Lite .env file from the existing ASSONAM DATABASE_URL."
     )
-    parser.add_argument("--database-url", required=True)
-    parser.add_argument("--auth-api-key", required=True)
+    parser.add_argument("--source-env", required=True, type=Path)
     parser.add_argument("--output", required=True)
     parser.add_argument("--database-name", default=DEFAULT_DATABASE_NAME)
     parser.add_argument("--server-port", default=DEFAULT_SERVER_PORT)
     parser.add_argument("--server-url", default=DEFAULT_SERVER_URL)
     args = parser.parse_args()
 
+    source_values = _read_env_values(
+        args.source_env, {"DATABASE_URL", "EVOLUTION_API_KEY"}
+    )
     rendered = _render_env_file(
-        database_url=args.database_url,
-        auth_api_key=args.auth_api_key,
+        database_url=source_values["DATABASE_URL"],
+        auth_api_key=source_values["EVOLUTION_API_KEY"],
         database_name=args.database_name,
         server_port=args.server_port,
         server_url=args.server_url,
@@ -91,6 +110,7 @@ def main() -> int:
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(rendered, encoding="utf-8")
+    os.chmod(output_path, 0o600)
     return 0
 
 

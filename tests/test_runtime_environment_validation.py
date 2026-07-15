@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from app.config import _env_app_env, settings, validate_runtime_environment
+from scripts.prepare_deploy_bundle import build_app_env
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -57,22 +58,23 @@ def test_compose_requires_explicit_app_env_and_official_deploy_is_production() -
 
     assert compose_source.count("APP_ENV: ${APP_ENV:?") == 2
     assert "APP_ENV:-local" not in compose_source
-    assert "APP_ENV=production" in workflow_source
+    assert "scripts/prepare_deploy_bundle.py" in workflow_source
+    assert "APP_ENV=production" in build_app_env({})
     assert "ENV APP_ENV=local" not in dockerfile_source
 
 
 def test_green_api_deploy_uses_secret_only_when_configured_and_keeps_ip_fallback() -> None:
     compose_source = (REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
-    workflow_source = (
-        REPO_ROOT / ".github" / "workflows" / "deploy-hetzner.yml"
-    ).read_text(encoding="utf-8")
+    app_env_without_secret = build_app_env({"GREEN_API_WEBHOOK_SECRET": ""})
+    app_env_with_secret = build_app_env(
+        {"GREEN_API_WEBHOOK_SECRET": "configured-test-secret"}
+    )
 
     assert "GREEN_API_WEBHOOK_REQUIRE_SECRET: ${GREEN_API_WEBHOOK_REQUIRE_SECRET:-false}" in compose_source
     assert "GREEN_API_WEBHOOK_ALLOWED_IPS:" in compose_source
-    assert "GREEN_API_WEBHOOK_REQUIRE_SECRET=true" not in workflow_source
-    assert 'if [ -n "${GREEN_API_WEBHOOK_SECRET_VALUE:-}" ]; then' in workflow_source
-    assert 'GREEN_API_WEBHOOK_REQUIRE_SECRET="true"' in workflow_source
-    assert "GREEN_API_WEBHOOK_ALLOWED_IPS=${{ secrets.GREEN_API_WEBHOOK_ALLOWED_IPS }}" in workflow_source
+    assert "GREEN_API_WEBHOOK_REQUIRE_SECRET=false" in app_env_without_secret
+    assert "GREEN_API_WEBHOOK_REQUIRE_SECRET=true" in app_env_with_secret
+    assert "GREEN_API_WEBHOOK_ALLOWED_IPS=" in app_env_without_secret
 
 
 def test_environment_classification_is_not_inferred_from_urls(monkeypatch) -> None:

@@ -375,10 +375,9 @@ def test_unauthenticated_checkout_retry_cannot_rotate_token_or_overwrite_member(
     member = db.query(Member).filter_by(id=payment.socio_id).one()
     first_hash = payment.status_token_hash
 
-    client.cookies.delete(
-        f"membership_payment_status_{payment.id}",
-        path="/api/public",
-    )
+    # The shared TestClient can retain an admin/member session from earlier
+    # tests. Clear every capability so this retry is genuinely anonymous.
+    client.cookies.clear()
     unauthenticated_retry = dict(signup)
     unauthenticated_retry.pop("password")
     unauthenticated_retry["phone"] = "3330000000"

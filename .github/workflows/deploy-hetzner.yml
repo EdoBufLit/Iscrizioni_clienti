@@ -16,6 +16,10 @@ on:
           - "false"
           - "true"
 
+concurrency:
+  group: production-hetzner
+  cancel-in-progress: false
+
 jobs:
   build-images:
     runs-on: ubuntu-latest
@@ -28,8 +32,11 @@ jobs:
       video_worker_changed: ${{ steps.changes.outputs.video_worker }}
       evolution_changed: ${{ steps.changes.outputs.evolution }}
       app_runtime_image_branch: ${{ steps.image_vars.outputs.app_runtime_image_branch }}
+      app_runtime_image_sha: ${{ steps.image_vars.outputs.app_runtime_image_sha }}
       video_worker_image_branch: ${{ steps.image_vars.outputs.video_worker_image_branch }}
+      video_worker_image_sha: ${{ steps.image_vars.outputs.video_worker_image_sha }}
       evolution_image_branch: ${{ steps.image_vars.outputs.evolution_image_branch }}
+      evolution_image_sha: ${{ steps.image_vars.outputs.evolution_image_sha }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -49,17 +56,29 @@ jobs:
             echo "::error::Missing scripts/render_evolution_lite_env.py"
             exit 1
           fi
+          for deploy_file in \
+            scripts/prepare_deploy_bundle.py \
+            scripts/render_pgloader_load.py \
+            scripts/deploy_remote.sh; do
+            if [ ! -f "$deploy_file" ]; then
+              echo "::error::Missing $deploy_file"
+              exit 1
+            fi
+          done
 
       - name: Resolve changed-files base
         id: change_base
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
-          BEFORE="${{ github.event.before }}"
           ZERO_SHA="0000000000000000000000000000000000000000"
-          if [ "${{ github.event_name }}" = "push" ] && [ -n "$BEFORE" ] && [ "$BEFORE" != "$ZERO_SHA" ]; then
-            echo "base=$BEFORE" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT_NAME" = "push" ] && [ -n "$BEFORE_SHA" ] && [ "$BEFORE_SHA" != "$ZERO_SHA" ]; then
+            echo "base=$BEFORE_SHA" >> "$GITHUB_OUTPUT"
           else
-            echo "base=${{ github.event.repository.default_branch }}" >> "$GITHUB_OUTPUT"
+            echo "base=$DEFAULT_BRANCH" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Detect changed deploy targets
@@ -96,10 +115,13 @@ jobs:
 
       - name: Compute image tags
         id: image_vars
+        env:
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          OWNER_LC="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
-          BRANCH_TAG="$(echo '${{ github.ref_name }}' | tr '[:upper:]' '[:lower:]' | sed 's#[^a-z0-9._-]#-#g')"
+          OWNER_LC="$(printf '%s' "$REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          BRANCH_TAG="$(printf '%s' "$REF_NAME" | tr '[:upper:]' '[:lower:]' | sed 's#[^a-z0-9._-]#-#g')"
           echo "app_runtime_image_branch=ghcr.io/${OWNER_LC}/assonam-app-runtime:${BRANCH_TAG}" >> "$GITHUB_OUTPUT"
           echo "video_worker_image_branch=ghcr.io/${OWNER_LC}/assonam-affiliation-video-worker:${BRANCH_TAG}" >> "$GITHUB_OUTPUT"
           echo "evolution_image_branch=ghcr.io/${OWNER_LC}/assonam-evolution-api-lite:${BRANCH_TAG}" >> "$GITHUB_OUTPUT"
@@ -220,24 +242,41 @@ jobs:
             echo "::error::Missing scripts/render_evolution_lite_env.py"
             exit 1
           fi
+          for deploy_file in \
+            scripts/prepare_deploy_bundle.py \
+            scripts/render_pgloader_load.py \
+            scripts/deploy_remote.sh; do
+            if [ ! -f "$deploy_file" ]; then
+              echo "::error::Missing $deploy_file"
+              exit 1
+            fi
+          done
 
       - name: Wait for Hetzner SSH
         env:
           HETZNER_HOST: ${{ secrets.HETZNER_HOST }}
           HETZNER_USER: ${{ secrets.HETZNER_USER }}
           HETZNER_SSH_KEY: ${{ secrets.HETZNER_SSH_KEY }}
+          HETZNER_KNOWN_HOSTS: ${{ secrets.HETZNER_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
           KEY_FILE="$(mktemp)"
-          trap 'rm -f "$KEY_FILE"' EXIT
+          KNOWN_HOSTS_FILE="$(mktemp)"
+          trap 'rm -f "$KEY_FILE" "$KNOWN_HOSTS_FILE"' EXIT
           printf '%s\n' "$HETZNER_SSH_KEY" > "$KEY_FILE"
+          if [ -z "$HETZNER_KNOWN_HOSTS" ]; then
+            echo "::error::Pinned Hetzner host key is missing"
+            exit 1
+          fi
+          printf '%s\n' "$HETZNER_KNOWN_HOSTS" > "$KNOWN_HOSTS_FILE"
           chmod 600 "$KEY_FILE"
+          chmod 600 "$KNOWN_HOSTS_FILE"
 
           DEADLINE=$(( $(date +%s) + 1200 ))
           until ssh -i "$KEY_FILE" \
             -o BatchMode=yes \
-            -o StrictHostKeyChecking=no \
-            -o UserKnownHostsFile=/dev/null \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$KNOWN_HOSTS_FILE" \
             -o ConnectTimeout=10 \
             "$HETZNER_USER@$HETZNER_HOST" "echo ready" >/dev/null 2>&1; do
             if [ "$(date +%s)" -ge "$DEADLINE" ]; then
@@ -250,449 +289,145 @@ jobs:
 
           echo "[deploy] SSH handshake ready"
 
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.HETZNER_HOST }}
-          username: ${{ secrets.HETZNER_USER }}
-          key: ${{ secrets.HETZNER_SSH_KEY }}
-          command_timeout: 35m
-          script: |
-            set -euo pipefail
+      - name: Deploy via protected SSH stdin
+        timeout-minutes: 35
+        env:
+          HETZNER_HOST: ${{ secrets.HETZNER_HOST }}
+          HETZNER_USER: ${{ secrets.HETZNER_USER }}
+          HETZNER_SSH_KEY: ${{ secrets.HETZNER_SSH_KEY }}
+          HETZNER_KNOWN_HOSTS: ${{ secrets.HETZNER_KNOWN_HOSTS }}
+          APP_PATH: ${{ secrets.APP_PATH }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          BASE_URL: ${{ secrets.BASE_URL }}
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
+          SUPER_ADMIN_EMAIL: ${{ secrets.SUPER_ADMIN_EMAIL }}
+          SUPER_ADMIN_PASSWORD: ${{ secrets.SUPER_ADMIN_PASSWORD }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          UPLOAD_DIR: ${{ secrets.UPLOAD_DIR }}
+          SPA_DIR: ${{ secrets.SPA_DIR }}
+          GOOGLE_WALLET_ISSUER_ID: ${{ secrets.GOOGLE_WALLET_ISSUER_ID }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+          GOOGLE_WALLET_SA_B64: ${{ secrets.GOOGLE_WALLET_SA_B64 }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          SMTP_USE_TLS: ${{ secrets.SMTP_USE_TLS }}
+          EMAIL_TRANSPORT: ${{ secrets.EMAIL_TRANSPORT }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_EMAIL_API_TOKEN: ${{ secrets.CLOUDFLARE_EMAIL_API_TOKEN }}
+          CLOUDFLARE_EMAIL_API_BASE_URL: ${{ secrets.CLOUDFLARE_EMAIL_API_BASE_URL }}
+          MAIL_FROM_DOMAIN: ${{ secrets.MAIL_FROM_DOMAIN }}
+          ASSOCIATION_MAIL_API_TOKEN: ${{ secrets.ASSOCIATION_MAIL_API_TOKEN }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+          TWILIO_LOW_CARDS_FLOW_SID: ${{ secrets.TWILIO_LOW_CARDS_FLOW_SID }}
+          TWILIO_ALERT_FLOW_SID: ${{ secrets.TWILIO_ALERT_FLOW_SID }}
+          TWILIO_WHATSAPP_FROM: ${{ secrets.TWILIO_WHATSAPP_FROM }}
+          ADMIN_PHONE_E164: ${{ secrets.ADMIN_PHONE_E164 }}
+          TWILIO_SMS_FROM: ${{ secrets.TWILIO_SMS_FROM }}
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          STRIPE_PRICE_ID: ${{ secrets.STRIPE_PRICE_ID }}
+          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+          STRIPE_THIN_WEBHOOK_SECRET: ${{ secrets.STRIPE_THIN_WEBHOOK_SECRET }}
+          STRIPE_BILLING_WEBHOOK_SECRET: ${{ secrets.STRIPE_BILLING_WEBHOOK_SECRET }}
+          STRIPE_PLATFORM_PRICE_ID: ${{ secrets.STRIPE_PLATFORM_PRICE_ID }}
+          STRIPE_REQUIRE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_REQUIRE_PUBLISHABLE_KEY }}
+          ENABLE_STRIPE_CONNECT_DEMO: ${{ secrets.ENABLE_STRIPE_CONNECT_DEMO }}
+          AFFILIATION_VIDEO_WORKER_ENABLED: ${{ secrets.AFFILIATION_VIDEO_WORKER_ENABLED }}
+          AFFILIATION_VIDEO_ENABLED: ${{ secrets.AFFILIATION_VIDEO_ENABLED }}
+          ENABLE_WHATSAPP_EVOLUTION: ${{ secrets.ENABLE_WHATSAPP_EVOLUTION }}
+          ENABLE_WHATSAPP: ${{ secrets.ENABLE_WHATSAPP }}
+          WHATSAPP_PROVIDER: ${{ secrets.WHATSAPP_PROVIDER }}
+          GREEN_API_BASE_URL: ${{ secrets.GREEN_API_BASE_URL }}
+          GREEN_API_WEBHOOK_SECRET: ${{ secrets.GREEN_API_WEBHOOK_SECRET }}
+          GREEN_API_WEBHOOK_ALLOWED_IPS: ${{ secrets.GREEN_API_WEBHOOK_ALLOWED_IPS }}
+          EVOLUTION_API_KEY: ${{ secrets.EVOLUTION_API_KEY }}
+          SUMUP_CREDENTIALS_ENCRYPTION_KEY: ${{ secrets.SUMUP_CREDENTIALS_ENCRYPTION_KEY }}
+          AFFILIAZIONE_ENABLED: ${{ secrets.AFFILIAZIONE_ENABLED }}
+          GHCR_TOKEN: ${{ github.token }}
+          GHCR_USERNAME: ${{ github.actor }}
+          BRANCH: ${{ github.ref_name }}
+          GIT_SHA: ${{ github.sha }}
+          APP_RUNTIME_CHANGED: ${{ needs.build-images.outputs.app_runtime_changed }}
+          RUNTIME_CONFIG_CHANGED: ${{ needs.build-images.outputs.runtime_config_changed }}
+          VIDEO_WORKER_CHANGED: ${{ needs.build-images.outputs.video_worker_changed }}
+          EVOLUTION_CHANGED: ${{ needs.build-images.outputs.evolution_changed }}
+          APP_RUNTIME_IMAGE: ${{ needs.build-images.outputs.app_runtime_changed == 'true' && needs.build-images.outputs.app_runtime_image_sha || needs.build-images.outputs.app_runtime_image_branch }}
+          AFFILIATION_VIDEO_WORKER_IMAGE: ${{ needs.build-images.outputs.video_worker_changed == 'true' && needs.build-images.outputs.video_worker_image_sha || needs.build-images.outputs.video_worker_image_branch }}
+          EVOLUTION_API_IMAGE: ${{ needs.build-images.outputs.evolution_changed == 'true' && needs.build-images.outputs.evolution_image_sha || needs.build-images.outputs.evolution_image_branch }}
+          MIGRATE: ${{ github.event.inputs.MIGRATE || 'false' }}
+          WORKFLOW_EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          KEY_FILE="$(mktemp)"
+          KNOWN_HOSTS_FILE="$(mktemp)"
+          LOCAL_STAGE="$(mktemp -d)"
+          BUNDLE_DIR="$LOCAL_STAGE/bundle"
+          REMOTE_STAGE=""
+          chmod 700 "$LOCAL_STAGE"
 
-            cd "${{ secrets.APP_PATH }}"
-            if [ ! -f "docker-compose.yml" ]; then
-              echo "::error::docker-compose.yml not found in APP_PATH=${{ secrets.APP_PATH }}"
-              exit 1
+          SSH_OPTIONS=(
+            -i "$KEY_FILE"
+            -o BatchMode=yes
+            -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="$KNOWN_HOSTS_FILE"
+            -o ConnectTimeout=10
+          )
+
+          cleanup() {
+            if [ -n "$REMOTE_STAGE" ]; then
+              ssh "${SSH_OPTIONS[@]}" "$HETZNER_USER@$HETZNER_HOST" \
+                "rm -rf -- '$REMOTE_STAGE'" >/dev/null 2>&1 || true
+              REMOTE_STAGE=""
             fi
-            export COMPOSE_PROJECT_NAME="app"
-            echo "[deploy] COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}"
+            rm -rf -- "$LOCAL_STAGE"
+            rm -f -- "$KEY_FILE" "$KNOWN_HOSTS_FILE"
+          }
+          trap cleanup EXIT HUP INT TERM
 
-            repair_git_permissions() {
-              if [ ! -d ".git" ]; then
-                return
-              fi
+          printf '%s\n' "$HETZNER_SSH_KEY" > "$KEY_FILE"
+          if [ -z "$HETZNER_KNOWN_HOSTS" ]; then
+            echo "::error::Pinned Hetzner host key is missing"
+            exit 1
+          fi
+          printf '%s\n' "$HETZNER_KNOWN_HOSTS" > "$KNOWN_HOSTS_FILE"
+          chmod 600 "$KEY_FILE"
+          chmod 600 "$KNOWN_HOSTS_FILE"
+          export BUILD_TIME="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          python3 scripts/prepare_deploy_bundle.py --output-dir "$BUNDLE_DIR"
 
-              echo "[deploy] Checking persistent checkout permissions"
-              df -h /
-              df -ih /
+          REMOTE_STAGE="$(
+            ssh "${SSH_OPTIONS[@]}" "$HETZNER_USER@$HETZNER_HOST" \
+              'umask 077; install -d -m 700 "$HOME/.assonam-deploy"; mktemp -d "$HOME/.assonam-deploy/run.XXXXXX"'
+          )"
+          if [ -z "$REMOTE_STAGE" ]; then
+            echo "::error::Unable to create protected remote deployment stage"
+            exit 1
+          fi
+          if [[ ! "$REMOTE_STAGE" =~ ^/[A-Za-z0-9._/-]+/\.assonam-deploy/run\.[A-Za-z0-9]{6}$ ]] \
+            || [[ "$REMOTE_STAGE" == *"/../"* ]] \
+            || [[ "$REMOTE_STAGE" == *"/./"* ]] \
+            || [[ "$REMOTE_STAGE" == *"//"* ]]; then
+            REMOTE_STAGE=""
+            echo "::error::Remote deployment stage path is invalid"
+            exit 1
+          fi
 
-              current_owner="$(id -u):$(id -g)"
-              if [ "$(id -u)" = "0" ]; then
-                chown -R "$current_owner" .git
-              elif command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
-                sudo chown -R "$current_owner" .git
-              fi
-              chmod -R u+rwX .git || true
+          scp -p "${SSH_OPTIONS[@]}" \
+            "$BUNDLE_DIR/app.env" \
+            "$BUNDLE_DIR/control.env" \
+            "$BUNDLE_DIR/ghcr.token" \
+            "$HETZNER_USER@$HETZNER_HOST:$REMOTE_STAGE/"
 
-              if [ ! -w ".git/objects" ]; then
-                echo "::error::.git/objects is not writable by deploy user $(id -un). Fix ownership on $PWD before fetching."
-                stat -c '%U:%G %a %n' .git .git/objects || true
-                exit 1
-              fi
-
-              first_unwritable_dir="$(find .git/objects -type d ! -writable -print -quit 2>/dev/null || true)"
-              if [ -n "$first_unwritable_dir" ]; then
-                echo "::error::Git object directory is not writable by deploy user $(id -un): $first_unwritable_dir"
-                stat -c '%U:%G %a %n' "$first_unwritable_dir" || true
-                exit 1
-              fi
-            }
-
-            repair_git_permissions
-            git fetch --all
-
-            mkdir -p .git/info
-            if ! grep -qxF 'data/videos/' .git/info/exclude 2>/dev/null; then
-              printf '\n# Runtime-generated welcome videos\n%s\n' 'data/videos/' >> .git/info/exclude
-            fi
-
-            BRANCH="${{ github.ref_name }}"
-            if [ -n "$(git status --porcelain)" ]; then
-              BACKUP_ROOT="${HOME}/deploy-backups/assonam"
-              BACKUP_DIR="${BACKUP_ROOT}/$(date -u +'%Y%m%dT%H%M%SZ')"
-              echo "[deploy] working tree dirty, archiving local changes to ${BACKUP_DIR}"
-              mkdir -p "${BACKUP_DIR}"
-              git status --short > "${BACKUP_DIR}/status.txt" || true
-              git diff --binary > "${BACKUP_DIR}/tracked.patch" || true
-              git diff --cached --binary > "${BACKUP_DIR}/staged.patch" || true
-              UNTRACKED_FILES="$(git ls-files --others --exclude-standard)"
-              if [ -n "${UNTRACKED_FILES}" ]; then
-                printf '%s\n' "${UNTRACKED_FILES}" > "${BACKUP_DIR}/untracked.txt"
-                git ls-files --others --exclude-standard -z | tar --null -T - -czf "${BACKUP_DIR}/untracked.tar.gz"
-              fi
-            fi
-            git reset --hard
-            git clean -fd -e data/videos/
-            git checkout -B "$BRANCH" "origin/$BRANCH"
-            git reset --hard "origin/$BRANCH"
-
-            DATABASE_URL='${{ secrets.DATABASE_URL }}'
-            POSTGRES_PASSWORD='${{ secrets.POSTGRES_PASSWORD }}'
-            EVOLUTION_API_KEY='${{ secrets.EVOLUTION_API_KEY }}'
-            EMAIL_TRANSPORT_VALUE='${{ secrets.EMAIL_TRANSPORT }}'
-            CLOUDFLARE_ACCOUNT_ID_VALUE='${{ secrets.CLOUDFLARE_ACCOUNT_ID }}'
-            CLOUDFLARE_EMAIL_API_TOKEN_VALUE='${{ secrets.CLOUDFLARE_EMAIL_API_TOKEN }}'
-            SMTP_PASSWORD_VALUE='${{ secrets.SMTP_PASSWORD }}'
-            ENABLE_WHATSAPP_VALUE='${{ secrets.ENABLE_WHATSAPP }}'
-            WHATSAPP_PROVIDER_VALUE='${{ secrets.WHATSAPP_PROVIDER }}'
-            GREEN_API_BASE_URL_VALUE='${{ secrets.GREEN_API_BASE_URL }}'
-            GREEN_API_WEBHOOK_SECRET_VALUE='${{ secrets.GREEN_API_WEBHOOK_SECRET }}'
-            SUMUP_CREDENTIALS_ENCRYPTION_KEY_VALUE='${{ secrets.SUMUP_CREDENTIALS_ENCRYPTION_KEY }}'
-            BUILD_TIME="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-            GHCR_USERNAME='${{ github.actor }}'
-            GHCR_TOKEN='${{ github.token }}'
-            APP_RUNTIME_CHANGED='${{ needs.build-images.outputs.app_runtime_changed }}'
-            RUNTIME_CONFIG_CHANGED='${{ needs.build-images.outputs.runtime_config_changed }}'
-            VIDEO_WORKER_CHANGED='${{ needs.build-images.outputs.video_worker_changed }}'
-            EVOLUTION_CHANGED='${{ needs.build-images.outputs.evolution_changed }}'
-            APP_RUNTIME_IMAGE='${{ needs.build-images.outputs.app_runtime_image_branch }}'
-            AFFILIATION_VIDEO_WORKER_IMAGE='${{ needs.build-images.outputs.video_worker_image_branch }}'
-            EVOLUTION_API_IMAGE='${{ needs.build-images.outputs.evolution_image_branch }}'
-            MIGRATE='${{ github.event.inputs.MIGRATE || 'false' }}'
-            WORKFLOW_EVENT='${{ github.event_name }}'
-
-            APP_RUNTIME_ROLLOUT_NEEDED="false"
-            APP_RUNTIME_UP_FLAGS=""
-            if [ "$APP_RUNTIME_CHANGED" = "true" ] || [ "$RUNTIME_CONFIG_CHANGED" = "true" ] || [ "$WORKFLOW_EVENT" = "workflow_dispatch" ]; then
-              APP_RUNTIME_ROLLOUT_NEEDED="true"
-            fi
-            if [ "$WORKFLOW_EVENT" = "workflow_dispatch" ]; then
-              APP_RUNTIME_UP_FLAGS="--force-recreate"
-            fi
-
-            cat > .env <<'EOF'
-            APP_ENV=production
-            SECRET_KEY=${{ secrets.SECRET_KEY }}
-            BASE_URL=${{ secrets.BASE_URL }}
-            FRONTEND_URL=${{ secrets.FRONTEND_URL }}
-            SUPER_ADMIN_EMAIL=${{ secrets.SUPER_ADMIN_EMAIL }}
-            SUPER_ADMIN_PASSWORD=${{ secrets.SUPER_ADMIN_PASSWORD }}
-            DATABASE_URL=${{ secrets.DATABASE_URL }}
-            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-            UPLOAD_DIR=${{ secrets.UPLOAD_DIR }}
-            SPA_DIR=${{ secrets.SPA_DIR }}
-            GOOGLE_WALLET_ISSUER_ID=${{ secrets.GOOGLE_WALLET_ISSUER_ID }}
-            GOOGLE_APPLICATION_CREDENTIALS=${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
-            GOOGLE_WALLET_SA_B64=${{ secrets.GOOGLE_WALLET_SA_B64 }}
-            SMTP_HOST=${{ secrets.SMTP_HOST }}
-            SMTP_PORT=${{ secrets.SMTP_PORT }}
-            SMTP_USER=${{ secrets.SMTP_USER }}
-            SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
-            SMTP_FROM=${{ secrets.SMTP_FROM }}
-            SMTP_USE_TLS=${{ secrets.SMTP_USE_TLS }}
-            EMAIL_TRANSPORT=${{ secrets.EMAIL_TRANSPORT }}
-            CLOUDFLARE_ACCOUNT_ID=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-            CLOUDFLARE_EMAIL_API_TOKEN=${{ secrets.CLOUDFLARE_EMAIL_API_TOKEN }}
-            CLOUDFLARE_EMAIL_API_BASE_URL=${{ secrets.CLOUDFLARE_EMAIL_API_BASE_URL }}
-            MAIL_FROM_DOMAIN=${{ secrets.MAIL_FROM_DOMAIN }}
-            ASSOCIATION_MAIL_API_TOKEN=${{ secrets.ASSOCIATION_MAIL_API_TOKEN }}
-            TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }}
-            TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }}
-            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
-            OPENAI_MODEL=${{ secrets.OPENAI_MODEL }}
-            TWILIO_LOW_CARDS_FLOW_SID=${{ secrets.TWILIO_LOW_CARDS_FLOW_SID }}
-            TWILIO_ALERT_FLOW_SID=${{ secrets.TWILIO_ALERT_FLOW_SID }}
-            TWILIO_WHATSAPP_FROM=${{ secrets.TWILIO_WHATSAPP_FROM }}
-            ADMIN_PHONE_E164=${{ secrets.ADMIN_PHONE_E164 }}
-            TWILIO_SMS_FROM=${{ secrets.TWILIO_SMS_FROM }}
-            TG_BOT_TOKEN=${{ secrets.TG_BOT_TOKEN }}
-            TG_CHAT_ID=${{ secrets.TG_CHAT_ID }}
-            STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
-            STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}
-            STRIPE_PRICE_ID=${{ secrets.STRIPE_PRICE_ID }}
-            STRIPE_PUBLISHABLE_KEY=${{ secrets.STRIPE_PUBLISHABLE_KEY }}
-            STRIPE_THIN_WEBHOOK_SECRET=${{ secrets.STRIPE_THIN_WEBHOOK_SECRET }}
-            STRIPE_BILLING_WEBHOOK_SECRET=${{ secrets.STRIPE_BILLING_WEBHOOK_SECRET }}
-            STRIPE_PLATFORM_PRICE_ID=${{ secrets.STRIPE_PLATFORM_PRICE_ID }}
-            STRIPE_REQUIRE_PUBLISHABLE_KEY=${{ secrets.STRIPE_REQUIRE_PUBLISHABLE_KEY }}
-            ENABLE_STRIPE_CONNECT_DEMO=${{ secrets.ENABLE_STRIPE_CONNECT_DEMO }}
-            AFFILIATION_VIDEO_WORKER_ENABLED=${{ secrets.AFFILIATION_VIDEO_WORKER_ENABLED }}
-            AFFILIATION_VIDEO_ENABLED=${{ secrets.AFFILIATION_VIDEO_ENABLED }}
-            ENABLE_WHATSAPP_EVOLUTION=${{ secrets.ENABLE_WHATSAPP_EVOLUTION }}
-            ENABLE_WHATSAPP=${{ secrets.ENABLE_WHATSAPP }}
-            WHATSAPP_PROVIDER=${{ secrets.WHATSAPP_PROVIDER }}
-            GREEN_API_BASE_URL=${{ secrets.GREEN_API_BASE_URL }}
-            GREEN_API_WEBHOOK_SECRET=${{ secrets.GREEN_API_WEBHOOK_SECRET }}
-            GREEN_API_WEBHOOK_REQUIRE_SECRET=false
-            GREEN_API_WEBHOOK_ALLOWED_IPS=${{ secrets.GREEN_API_WEBHOOK_ALLOWED_IPS }}
-            WHATSAPP_WEBHOOK_MAX_BODY_BYTES=524288
-            EVOLUTION_API_BASE_URL=http://evolution-api:8080
-            EVOLUTION_API_KEY=${{ secrets.EVOLUTION_API_KEY }}
-            SUMUP_CREDENTIALS_ENCRYPTION_KEY=${{ secrets.SUMUP_CREDENTIALS_ENCRYPTION_KEY }}
-            APP_RUNTIME_IMAGE=${{ needs.build-images.outputs.app_runtime_image_branch }}
-            AFFILIATION_VIDEO_WORKER_IMAGE=${{ needs.build-images.outputs.video_worker_image_branch }}
-            EVOLUTION_API_IMAGE=${{ needs.build-images.outputs.evolution_image_branch }}
-            EOF
-            printf 'GIT_SHA=%s\n' '${{ github.sha }}' >> .env
-            printf 'BUILD_TIME=%s\n' "$BUILD_TIME" >> .env
-            AFFILIAZIONE_ENABLED='${{ secrets.AFFILIAZIONE_ENABLED }}'
-            if [ -z "${AFFILIAZIONE_ENABLED:-}" ]; then
-              AFFILIAZIONE_ENABLED="false"
-            fi
-            AFFILIAZIONE_ENABLED="$(echo "$AFFILIAZIONE_ENABLED" | tr '[:upper:]' '[:lower:]')"
-            printf 'AFFILIAZIONE_ENABLED=%s\n' "$AFFILIAZIONE_ENABLED" >> .env
-            ENABLE_WHATSAPP_EVOLUTION='${{ secrets.ENABLE_WHATSAPP_EVOLUTION }}'
-            if [ -z "${ENABLE_WHATSAPP_EVOLUTION:-}" ]; then
-              ENABLE_WHATSAPP_EVOLUTION="false"
-            fi
-            ENABLE_WHATSAPP_EVOLUTION="$(echo "$ENABLE_WHATSAPP_EVOLUTION" | tr '[:upper:]' '[:lower:]')"
-            if grep -q '^ENABLE_WHATSAPP_EVOLUTION=' .env; then
-              sed -i "s/^ENABLE_WHATSAPP_EVOLUTION=.*/ENABLE_WHATSAPP_EVOLUTION=${ENABLE_WHATSAPP_EVOLUTION}/" .env
-            else
-              printf 'ENABLE_WHATSAPP_EVOLUTION=%s\n' "$ENABLE_WHATSAPP_EVOLUTION" >> .env
-            fi
-            ENABLE_WHATSAPP="$(echo "${ENABLE_WHATSAPP_VALUE:-false}" | tr '[:upper:]' '[:lower:]')"
-            if [ -z "${ENABLE_WHATSAPP:-}" ]; then
-              ENABLE_WHATSAPP="false"
-            fi
-            if grep -q '^ENABLE_WHATSAPP=' .env; then
-              sed -i "s/^ENABLE_WHATSAPP=.*/ENABLE_WHATSAPP=${ENABLE_WHATSAPP}/" .env
-            else
-              printf 'ENABLE_WHATSAPP=%s\n' "$ENABLE_WHATSAPP" >> .env
-            fi
-            WHATSAPP_PROVIDER="$(echo "${WHATSAPP_PROVIDER_VALUE:-green_api}" | tr '[:upper:]' '[:lower:]' | tr '-' '_')"
-            if [ -z "${WHATSAPP_PROVIDER:-}" ]; then
-              WHATSAPP_PROVIDER="green_api"
-            fi
-            if grep -q '^WHATSAPP_PROVIDER=' .env; then
-              sed -i "s/^WHATSAPP_PROVIDER=.*/WHATSAPP_PROVIDER=${WHATSAPP_PROVIDER}/" .env
-            else
-              printf 'WHATSAPP_PROVIDER=%s\n' "$WHATSAPP_PROVIDER" >> .env
-            fi
-            GREEN_API_BASE_URL="${GREEN_API_BASE_URL_VALUE:-https://api.green-api.com}"
-            if [ -z "${GREEN_API_BASE_URL:-}" ]; then
-              GREEN_API_BASE_URL="https://api.green-api.com"
-            fi
-            if grep -q '^GREEN_API_BASE_URL=' .env; then
-              sed -i "s#^GREEN_API_BASE_URL=.*#GREEN_API_BASE_URL=${GREEN_API_BASE_URL}#" .env
-            else
-              printf 'GREEN_API_BASE_URL=%s\n' "$GREEN_API_BASE_URL" >> .env
-            fi
-            GREEN_API_WEBHOOK_REQUIRE_SECRET="false"
-            if [ -n "${GREEN_API_WEBHOOK_SECRET_VALUE:-}" ]; then
-              GREEN_API_WEBHOOK_REQUIRE_SECRET="true"
-            fi
-            if grep -q '^GREEN_API_WEBHOOK_REQUIRE_SECRET=' .env; then
-              sed -i "s/^GREEN_API_WEBHOOK_REQUIRE_SECRET=.*/GREEN_API_WEBHOOK_REQUIRE_SECRET=${GREEN_API_WEBHOOK_REQUIRE_SECRET}/" .env
-            else
-              printf 'GREEN_API_WEBHOOK_REQUIRE_SECRET=%s\n' "$GREEN_API_WEBHOOK_REQUIRE_SECRET" >> .env
-            fi
-            if ! grep -q '^AFFILIATION_VIDEO_WORKER_ENABLED=' .env; then
-              printf 'AFFILIATION_VIDEO_WORKER_ENABLED=false\n' >> .env
-            fi
-            if ! grep -q '^AFFILIATION_VIDEO_ENABLED=' .env; then
-              printf 'AFFILIATION_VIDEO_ENABLED=true\n' >> .env
-            fi
-            chmod 600 .env
-
-            EMAIL_TRANSPORT_VALUE="$(echo "${EMAIL_TRANSPORT_VALUE:-cloudflare_rest}" | tr '[:upper:]' '[:lower:]')"
-            if [ -z "${EMAIL_TRANSPORT_VALUE:-}" ]; then
-              EMAIL_TRANSPORT_VALUE="cloudflare_rest"
-            fi
-            if [ "$EMAIL_TRANSPORT_VALUE" = "cloudflare" ] || [ "$EMAIL_TRANSPORT_VALUE" = "cloudflare_rest" ]; then
-              if [ -z "${CLOUDFLARE_ACCOUNT_ID_VALUE:-}" ]; then
-                echo "::error::EMAIL_TRANSPORT=cloudflare_rest but CLOUDFLARE_ACCOUNT_ID secret is empty"
-                exit 1
-              fi
-              if [ -z "${CLOUDFLARE_EMAIL_API_TOKEN_VALUE:-}" ] && [ -z "${SMTP_PASSWORD_VALUE:-}" ]; then
-                echo "::error::EMAIL_TRANSPORT=cloudflare_rest but both CLOUDFLARE_EMAIL_API_TOKEN and SMTP_PASSWORD secrets are empty"
-                exit 1
-              fi
-            fi
-            if [ "$ENABLE_WHATSAPP" = "true" ] && [ "$WHATSAPP_PROVIDER" = "green_api" ] && [ -z "${SUMUP_CREDENTIALS_ENCRYPTION_KEY_VALUE:-}" ]; then
-              echo "::error::ENABLE_WHATSAPP=true with WHATSAPP_PROVIDER=green_api requires SUMUP_CREDENTIALS_ENCRYPTION_KEY secret for encrypted provider tokens"
-              exit 1
-            fi
-
-            AFFILIATION_VIDEO_WORKER_ENABLED='${{ secrets.AFFILIATION_VIDEO_WORKER_ENABLED }}'
-            if [ -z "${AFFILIATION_VIDEO_WORKER_ENABLED:-}" ]; then
-              AFFILIATION_VIDEO_WORKER_ENABLED="false"
-            fi
-            AFFILIATION_VIDEO_WORKER_ENABLED="$(echo "$AFFILIATION_VIDEO_WORKER_ENABLED" | tr '[:upper:]' '[:lower:]')"
-            AFFILIATION_VIDEO_ENABLED='${{ secrets.AFFILIATION_VIDEO_ENABLED }}'
-            if [ -z "${AFFILIATION_VIDEO_ENABLED:-}" ]; then
-              AFFILIATION_VIDEO_ENABLED="true"
-            fi
-            AFFILIATION_VIDEO_ENABLED="$(echo "$AFFILIATION_VIDEO_ENABLED" | tr '[:upper:]' '[:lower:]')"
-
-            COMPOSE_FILES="-f docker-compose.yml"
-            if [ -f "docker-compose.prod.yml" ] && [ -f "secrets/google-wallet-sa.json" ]; then
-              COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.prod.yml"
-            fi
-            if [ "$ENABLE_WHATSAPP_EVOLUTION" = "true" ]; then
-              if [ -z "${EVOLUTION_API_KEY:-}" ]; then
-                echo "::error::ENABLE_WHATSAPP_EVOLUTION=true but EVOLUTION_API_KEY secret is empty"
-                exit 1
-              fi
-              mkdir -p secrets
-              rm -f secrets/evolution-api-lite.env
-              EVOLUTION_ENV_TMP="$(mktemp secrets/evolution-api-lite.env.tmp.XXXXXX)"
-              python3 scripts/render_evolution_lite_env.py \
-                --database-url "$DATABASE_URL" \
-                --auth-api-key "$EVOLUTION_API_KEY" \
-                --output "$EVOLUTION_ENV_TMP"
-              chmod 600 "$EVOLUTION_ENV_TMP"
-              mv "$EVOLUTION_ENV_TMP" secrets/evolution-api-lite.env
-              COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.evolution-lite.yml"
-            else
-              rm -f secrets/evolution-api-lite.env || true
-            fi
-
-            log_memory_snapshot() {
-              label="$1"
-              echo "[deploy] memory_snapshot label=${label} ts=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-              free -m || true
-              docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}' || true
-              ps -eo pid,ppid,rss,comm --sort=-rss | head -n 15 || true
-            }
-
-            wait_for_postgres() {
-              echo "[deploy] Waiting for Postgres readiness (up to 60s)"
-              for i in $(seq 1 60); do
-                if docker compose -f docker-compose.yml exec -T db pg_isready -U assonam -d assonam; then
-                  echo "[deploy] Postgres is ready"
-                  return 0
-                fi
-                sleep 1
-              done
-              echo "[deploy] Postgres did not become ready within 60s"
-              exit 1
-            }
-
-            wait_for_service_ready() {
-              compose_args="$1"
-              service="$2"
-              timeout_seconds="${3:-120}"
-              elapsed=0
-              while [ "$elapsed" -lt "$timeout_seconds" ]; do
-                cid="$(docker compose $COMPOSE_FILES $compose_args ps -q "$service" || true)"
-                if [ -n "$cid" ]; then
-                  status="$(docker inspect --format '{{.State.Status}}' "$cid" 2>/dev/null || true)"
-                  health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$cid" 2>/dev/null || true)"
-                  if [ "$health" = "healthy" ]; then
-                    echo "[deploy] ${service} healthy"
-                    return 0
-                  fi
-                  if [ "$health" = "none" ] && [ "$status" = "running" ]; then
-                    echo "[deploy] ${service} running"
-                    return 0
-                  fi
-                fi
-                sleep 2
-                elapsed=$((elapsed + 2))
-              done
-              echo "::error::${service} did not become ready within ${timeout_seconds}s"
-              docker compose $COMPOSE_FILES $compose_args ps || true
-              docker compose $COMPOSE_FILES $compose_args logs --tail=200 "$service" || true
-              exit 1
-            }
-
-            ensure_evolution_database() {
-              if [ "$ENABLE_WHATSAPP_EVOLUTION" != "true" ]; then
-                return
-              fi
-
-              echo "[deploy] Ensuring PostgreSQL database evolution exists"
-              docker compose $COMPOSE_FILES up -d db
-              wait_for_postgres
-              EVOLUTION_DB_EXISTS="$(
-                docker compose -f docker-compose.yml exec -T db \
-                  psql -U assonam -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = 'evolution'"
-              )"
-              if [ "$EVOLUTION_DB_EXISTS" != "1" ]; then
-                docker compose -f docker-compose.yml exec -T db \
-                  psql -U assonam -d postgres -v ON_ERROR_STOP=1 \
-                  -c "CREATE DATABASE evolution"
-              fi
-            }
-
-            echo "[deploy] change_flags app_runtime=${APP_RUNTIME_CHANGED} runtime_config=${RUNTIME_CONFIG_CHANGED} video_worker=${VIDEO_WORKER_CHANGED} evolution=${EVOLUTION_CHANGED}"
-            echo "[deploy] rollout_flags app_runtime=${APP_RUNTIME_ROLLOUT_NEEDED} migrate=${MIGRATE}"
-            log_memory_snapshot "before_db"
-
-            docker compose $COMPOSE_FILES up -d db
-            wait_for_postgres
-            ensure_evolution_database
-
-            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
-            log_memory_snapshot "after_db"
-
-            if [ "$MIGRATE" = "true" ]; then
-              echo "[migrate] MIGRATE=true: starting Postgres service only"
-              echo "[migrate] Reminder: DATABASE_URL GitHub secret must already be set to the Postgres URL before cutover restart."
-
-              if [ -z "${POSTGRES_PASSWORD:-}" ]; then
-                echo "[migrate] POSTGRES_PASSWORD is empty. Set the GitHub secret and re-run."
-                exit 1
-              fi
-
-              SQLITE_SOURCE="$(pwd)/data/app.db"
-              if [ ! -f "$SQLITE_SOURCE" ]; then
-                SQLITE_SOURCE="/opt/assonam/app/data/app.db"
-              fi
-              if [ ! -f "$SQLITE_SOURCE" ]; then
-                echo "[migrate] SQLite source file not found (checked $(pwd)/data/app.db and /opt/assonam/app/data/app.db)"
-                exit 1
-              fi
-
-              echo "[migrate] Running pgloader import on network app_default from $SQLITE_SOURCE"
-              docker run --rm \
-                --network app_default \
-                -v "$SQLITE_SOURCE:/tmp/app.db:ro" \
-                dimitri/pgloader:latest \
-                pgloader "sqlite:///tmp/app.db" "postgresql://assonam:${POSTGRES_PASSWORD}@db:5432/assonam"
-            fi
-
-            if [ "$APP_RUNTIME_CHANGED" = "true" ]; then
-              echo "[deploy] Pulling refreshed app-runtime image"
-              docker compose $COMPOSE_FILES --profile ops pull web email-worker low-cards-worker file-deletion-worker whatsapp-webhook-worker migrate
-              log_memory_snapshot "after_app_pull"
-
-              echo "[deploy] Running Alembic migrations from pulled runtime image"
-              docker compose $COMPOSE_FILES --profile ops run -T --rm --no-deps migrate </dev/null
-              log_memory_snapshot "after_migrate"
-            fi
-
-            if [ "$APP_RUNTIME_ROLLOUT_NEEDED" = "true" ]; then
-              echo "[deploy] Rolling out app-runtime services"
-              docker compose $COMPOSE_FILES up -d --no-deps ${APP_RUNTIME_UP_FLAGS} web
-              wait_for_service_ready "" web 120
-              docker compose $COMPOSE_FILES up -d --no-deps ${APP_RUNTIME_UP_FLAGS} email-worker low-cards-worker file-deletion-worker whatsapp-webhook-worker
-              wait_for_service_ready "" email-worker 120
-              wait_for_service_ready "" low-cards-worker 120
-              wait_for_service_ready "" file-deletion-worker 120
-              wait_for_service_ready "" whatsapp-webhook-worker 120
-              log_memory_snapshot "after_app_rollout"
-            else
-              echo "[deploy] Skipping app-runtime rollout; no app image or compose changes detected."
-            fi
-
-            if [ "$AFFILIATION_VIDEO_WORKER_ENABLED" = "true" ] && [ "$VIDEO_WORKER_CHANGED" = "true" ]; then
-              echo "[deploy] Pulling refreshed affiliation-video-worker image"
-              docker compose $COMPOSE_FILES --profile video-worker pull affiliation-video-worker
-              docker compose $COMPOSE_FILES --profile video-worker up -d --no-deps affiliation-video-worker
-              log_memory_snapshot "after_video_rollout"
-            fi
-
-            if [ "$AFFILIATION_VIDEO_WORKER_ENABLED" = "true" ]; then
-              wait_for_service_ready "--profile video-worker" affiliation-video-worker 120
-            fi
-
-            if [ "$ENABLE_WHATSAPP_EVOLUTION" = "true" ] && [ "$EVOLUTION_CHANGED" = "true" ]; then
-              echo "[deploy] Pulling refreshed evolution-api image"
-              docker compose $COMPOSE_FILES pull evolution-api
-              docker compose $COMPOSE_FILES up -d --no-deps evolution-api
-              log_memory_snapshot "after_evolution_rollout"
-            fi
-
-            if [ "$ENABLE_WHATSAPP_EVOLUTION" = "true" ]; then
-              wait_for_service_ready "" evolution-api 180
-              docker compose $COMPOSE_FILES exec -T web python -c "import json, os, urllib.request; root = urllib.request.urlopen('http://evolution-api:8080/', timeout=10); verify_req = urllib.request.Request('http://evolution-api:8080/verify-creds', method='POST', headers={'apikey': os.environ['EVOLUTION_API_KEY']}); verify = urllib.request.urlopen(verify_req, timeout=10); print(json.dumps({'root_status': root.status, 'verify_status': verify.status, 'verify_body': json.loads(verify.read().decode())}))"
-            fi
-
-            docker compose $COMPOSE_FILES ps
-            sleep 60
-            log_memory_snapshot "post_deploy_60s"
-            sleep 120
-            log_memory_snapshot "post_deploy_180s"
+          ssh "${SSH_OPTIONS[@]}" "$HETZNER_USER@$HETZNER_HOST" \
+            "DEPLOY_STAGE='$REMOTE_STAGE' bash -se" \
+            < scripts/deploy_remote.sh
+          REMOTE_STAGE=""
