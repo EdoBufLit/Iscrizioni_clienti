@@ -40,7 +40,7 @@ find "$DEPLOY_ROOT" -mindepth 1 -maxdepth 1 -type d -name 'run.*' \
   -mmin +60 ! -samefile "$DEPLOY_STAGE" -exec rm -rf -- {} +
 
 chmod 700 "$DEPLOY_STAGE"
-for required_file in app.env control.env ghcr.token; do
+for required_file in app.env control.env ghcr.token deploy_remote.sh; do
   candidate="$DEPLOY_STAGE/$required_file"
   if [ ! -f "$candidate" ] || [ -L "$candidate" ]; then
     echo "::error::Protected deployment file is missing or unsafe: $required_file"

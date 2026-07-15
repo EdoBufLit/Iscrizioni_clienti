@@ -59,7 +59,9 @@ def test_workflow_keeps_secret_expressions_out_of_shell_bodies() -> None:
     assert "StrictHostKeyChecking=no" not in source
     assert "HETZNER_KNOWN_HOSTS" in source
     assert "group: production-hetzner" in source
-    assert "< scripts/deploy_remote.sh" in source
+    assert "scripts/deploy_remote.sh" in source
+    assert "bash '$REMOTE_STAGE/deploy_remote.sh'" in source
+    assert "bash -se" not in source
     assert "scripts/prepare_deploy_bundle.py" in source
 
 

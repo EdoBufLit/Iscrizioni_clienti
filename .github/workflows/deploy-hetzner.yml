@@ -425,9 +425,9 @@ jobs:
             "$BUNDLE_DIR/app.env" \
             "$BUNDLE_DIR/control.env" \
             "$BUNDLE_DIR/ghcr.token" \
+            scripts/deploy_remote.sh \
             "$HETZNER_USER@$HETZNER_HOST:$REMOTE_STAGE/"
 
           ssh "${SSH_OPTIONS[@]}" "$HETZNER_USER@$HETZNER_HOST" \
-            "DEPLOY_STAGE='$REMOTE_STAGE' bash -se" \
-            < scripts/deploy_remote.sh
+            "DEPLOY_STAGE='$REMOTE_STAGE' bash '$REMOTE_STAGE/deploy_remote.sh'"
           REMOTE_STAGE=""
